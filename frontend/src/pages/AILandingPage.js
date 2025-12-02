@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI } from '../services/api';
+import ActionSidebar from '../components/ActionSidebar';
 import './AILandingPage.css';
 // Note: EmailDropZone wrapper removed - App.js already wraps with EmailDropZone globally
 
@@ -56,6 +57,9 @@ function AILandingPage() {
   // Task selection state for checkboxes and bulk actions
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Action sidebar state (persistent right sidebar)
+  const [showActionSidebar, setShowActionSidebar] = useState(true);
 
   // Reconciliation sidebar state
   const [reconciliationItems, setReconciliationItems] = useState([]);
@@ -3121,6 +3125,31 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Persistent Action Sidebar - Always visible on right */}
+      {showActionSidebar && !showRightSidebar && !showReconciliationSidebar && (
+        <ActionSidebar
+          onTaskSelect={(item) => {
+            // When a task is selected from the sidebar, add context to the chat
+            if (item) {
+              const contextMessage = `I'm looking at a ${item.category} item: "${item.title}" for ${item.entity_name || 'a client'}. ${item.description || ''}`;
+              setInputValue(contextMessage);
+            }
+          }}
+          onClose={() => setShowActionSidebar(false)}
+        />
+      )}
+
+      {/* Toggle button to show action sidebar when hidden */}
+      {!showActionSidebar && !showRightSidebar && !showReconciliationSidebar && (
+        <button
+          className="action-sidebar-toggle-btn"
+          onClick={() => setShowActionSidebar(true)}
+          title="Show Action Center"
+        >
+          <span className="toggle-icon">📋</span>
+        </button>
       )}
 
     </div>

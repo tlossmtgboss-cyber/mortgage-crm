@@ -261,6 +261,68 @@ async def get_call_tasks(
                     'created_at': ai_task.created_at.isoformat() if ai_task.created_at else None
                 })
 
+    # Also include workflow tasks that have phone enabled
+    from workflow_config_routes import get_all_workflow_tasks_logic
+    try:
+        workflow_tasks = get_all_workflow_tasks_logic(db, current_user, days_ahead=14)
+        for wf_task in workflow_tasks:
+            # Only include tasks where phone is the preferred method (phone is first in communication_methods)
+            methods = wf_task.get('communication_methods', [])
+            if 'phone' not in methods:
+                continue
+            # Phone should be the preferred method (first in list or only method)
+            if methods and methods[0] != 'phone':
+                continue
+
+            phone = None
+            contact_name = wf_task.get('client_name')
+            entity_type = wf_task.get('client_type')
+            entity_id = wf_task.get('client_id')
+
+            # Get phone from Lead or Loan
+            if entity_type == 'lead' and entity_id:
+                try:
+                    lead = db.query(Lead).filter(Lead.id == entity_id).first()
+                    if lead and lead.phone:
+                        phone = lead.phone
+                except Exception:
+                    pass
+            elif entity_type == 'loan' and entity_id:
+                try:
+                    loan = db.query(Loan).filter(Loan.id == entity_id).first()
+                    if loan and loan.borrower_phone:
+                        phone = loan.borrower_phone
+                except Exception:
+                    pass
+
+            # Only include if we have a phone number
+            if phone:
+                call_tasks.append({
+                    'id': wf_task.get('id'),
+                    'task_type': 'workflow',
+                    'title': wf_task.get('title'),
+                    'description': wf_task.get('description'),
+                    'priority': wf_task.get('urgency', 'medium'),
+                    'status': wf_task.get('status', 'pending'),
+                    'due_date': wf_task.get('due_date'),
+                    'contact_name': contact_name,
+                    'contact_phone': phone,
+                    'lead_id': entity_id if entity_type == 'lead' else None,
+                    'loan_id': entity_id if entity_type == 'loan' else None,
+                    'lead_name': contact_name if entity_type == 'lead' else None,
+                    'loan_borrower_name': contact_name if entity_type == 'loan' else None,
+                    'lead_phone': phone if entity_type == 'lead' else None,
+                    'loan_borrower_phone': phone if entity_type == 'loan' else None,
+                    'entity_type': entity_type,
+                    'entity_id': entity_id,
+                    'workflow_name': wf_task.get('workflow_name'),
+                    'workflow_color': wf_task.get('workflow_color'),
+                    'days_until_due': wf_task.get('days_until_due'),
+                    'created_at': None
+                })
+    except Exception as e:
+        logger.warning(f"Could not fetch workflow tasks for Power Dialer: {e}")
+
     return {
         'tasks': call_tasks,
         'total': len(call_tasks),

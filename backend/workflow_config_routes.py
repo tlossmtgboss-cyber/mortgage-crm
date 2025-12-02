@@ -1625,6 +1625,217 @@ async def get_lead_workflow_tasks(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14) -> list:
+    """
+    Core logic to get aggregated workflow tasks for ALL leads and loans.
+    This function can be called from other modules (e.g., telephony router).
+    Returns a list of task dictionaries.
+    """
+    if _models is None:
+        return []
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    from main import Lead, Loan
+    from datetime import datetime, timedelta
+
+    all_tasks = []
+
+    # Stage to workflow mapping
+    stage_to_workflow = {
+        "New": "prospect",
+        "Attempted Contact": "prospect",
+        "Prospect": "prospect",
+        "Application": "prequal",
+        "Pre-Qualified": "prequal",
+        "Pre-Approved": "pre_approved",
+        "Under Contract": "under_contract",
+        "CTC": "last_mile",
+        "Funded": "post_close",
+        "Does Not Qualify": "credit_repair",
+        "Long-Term Nurture": "nurture",
+    }
+
+    # Cache workflows to avoid repeated queries
+    workflows_cache = {}
+    workflows = db.query(WorkflowConfiguration).filter(WorkflowConfiguration.is_active == True).all()
+    for wf in workflows:
+        workflows_cache[wf.workflow_key] = wf
+
+    # Get all active leads (not withdrawn, closed, etc.)
+    active_stages = ['New', 'Attempted Contact', 'Prospect', 'Application', 'Pre-Qualified',
+                    'Pre-Approved', 'Under Contract', 'CTC', 'Does Not Qualify', 'Long-Term Nurture']
+    leads = db.query(Lead).all()
+
+    for lead in leads:
+        lead_stage = lead.stage if lead.stage else "New"
+        if hasattr(lead_stage, 'value'):
+            lead_stage = lead_stage.value
+
+        # Skip leads in inactive stages
+        if lead_stage not in active_stages:
+            continue
+
+        workflow_key = stage_to_workflow.get(lead_stage, "prospect")
+        workflow = workflows_cache.get(workflow_key)
+
+        if not workflow:
+            continue
+
+        # Calculate days in stage
+        stage_date = getattr(lead, 'stage_changed_at', None) or lead.created_at
+        if stage_date:
+            if hasattr(stage_date, 'replace'):
+                days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+            else:
+                days_in_stage = 1
+        else:
+            days_in_stage = 1
+
+        # Get tasks for this lead within the days_ahead window
+        days = sorted([d for d in (workflow.days or []) if d.is_active], key=lambda x: (x.day_order or 0, x.day_value))
+
+        for day in days:
+            # Only include tasks that are due within the next N days
+            days_until_due = day.day_value - days_in_stage
+            if days_until_due < 0 or days_until_due > days_ahead:
+                continue
+
+            # Calculate due date
+            due_date = datetime.utcnow() + timedelta(days=days_until_due)
+
+            # Determine status
+            if days_until_due == 0:
+                status = "due_today"
+                urgency = "high"
+            elif days_until_due == 1:
+                status = "due_tomorrow"
+                urgency = "medium"
+            else:
+                status = "upcoming"
+                urgency = "low"
+
+            # Build communication methods list
+            methods = []
+            if day.phone_enabled:
+                methods.append("phone")
+            if day.text_enabled:
+                methods.append("text")
+            if day.email_enabled:
+                methods.append("email")
+
+            all_tasks.append({
+                "id": f"workflow-lead-{lead.id}-day-{day.id}",
+                "title": day.day_label,
+                "description": day.task_description or f"{day.day_label} - {workflow.workflow_name}",
+                "client_name": lead.name,
+                "client_type": "lead",
+                "client_id": lead.id,
+                "stage": lead_stage,
+                "workflow_name": workflow.workflow_name,
+                "workflow_key": workflow.workflow_key,
+                "workflow_color": workflow.color,
+                "day_value": day.day_value,
+                "days_in_stage": days_in_stage,
+                "days_until_due": days_until_due,
+                "due_date": due_date.isoformat(),
+                "status": status,
+                "urgency": urgency,
+                "communication_methods": methods,
+                "source": "Workflow",
+            })
+
+    # Get all active loans
+    loan_stage_to_workflow = {
+        "Application": "prequal",
+        "Processing": "under_contract",
+        "Underwriting": "under_contract",
+        "Conditional Approval": "under_contract",
+        "CTC": "last_mile",
+        "Clear to Close": "last_mile",
+        "Closing": "last_mile",
+        "Funded": "post_close",
+    }
+
+    loans = db.query(Loan).all()
+    for loan in loans:
+        loan_stage = loan.stage if loan.stage else "Application"
+        if hasattr(loan_stage, 'value'):
+            loan_stage = loan_stage.value
+
+        workflow_key = loan_stage_to_workflow.get(loan_stage)
+        if not workflow_key:
+            continue
+
+        workflow = workflows_cache.get(workflow_key)
+        if not workflow:
+            continue
+
+        # Calculate days in stage
+        stage_date = getattr(loan, 'stage_changed_at', None) or loan.created_at
+        if stage_date:
+            if hasattr(stage_date, 'replace'):
+                days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+            else:
+                days_in_stage = 1
+        else:
+            days_in_stage = 1
+
+        # Get tasks for this loan within the days_ahead window
+        days = sorted([d for d in (workflow.days or []) if d.is_active], key=lambda x: (x.day_order or 0, x.day_value))
+
+        for day in days:
+            days_until_due = day.day_value - days_in_stage
+            if days_until_due < 0 or days_until_due > days_ahead:
+                continue
+
+            due_date = datetime.utcnow() + timedelta(days=days_until_due)
+
+            if days_until_due == 0:
+                status = "due_today"
+                urgency = "high"
+            elif days_until_due == 1:
+                status = "due_tomorrow"
+                urgency = "medium"
+            else:
+                status = "upcoming"
+                urgency = "low"
+
+            methods = []
+            if day.phone_enabled:
+                methods.append("phone")
+            if day.text_enabled:
+                methods.append("text")
+            if day.email_enabled:
+                methods.append("email")
+
+            all_tasks.append({
+                "id": f"workflow-loan-{loan.id}-day-{day.id}",
+                "title": day.day_label,
+                "description": day.task_description or f"{day.day_label} - {workflow.workflow_name}",
+                "client_name": loan.borrower_name,
+                "client_type": "loan",
+                "client_id": loan.id,
+                "stage": loan_stage,
+                "workflow_name": workflow.workflow_name,
+                "workflow_key": workflow.workflow_key,
+                "workflow_color": workflow.color,
+                "day_value": day.day_value,
+                "days_in_stage": days_in_stage,
+                "days_until_due": days_until_due,
+                "due_date": due_date.isoformat(),
+                "status": status,
+                "urgency": urgency,
+                "communication_methods": methods,
+                "source": "Workflow",
+            })
+
+    # Sort tasks by due date (due_today first, then tomorrow, then upcoming)
+    urgency_order = {"high": 0, "medium": 1, "low": 2}
+    all_tasks.sort(key=lambda t: (urgency_order.get(t["urgency"], 3), t["days_until_due"], t["client_name"]))
+
+    return all_tasks
+
+
 @router.get("/all-workflow-tasks")
 async def get_all_workflow_tasks(
     request: Request,
@@ -1637,208 +1848,8 @@ async def get_all_workflow_tasks(
     Returns tasks that are due today, tomorrow, or within the next N days.
     This is used by the global Tasks page to show all outstanding workflow tasks.
     """
-    if _models is None:
-        raise HTTPException(status_code=500, detail="Models not initialized")
-
-    WorkflowConfiguration = _models['WorkflowConfiguration']
-    from main import Lead, Loan
-    from datetime import datetime, timedelta
-
     try:
-        all_tasks = []
-
-        # Stage to workflow mapping
-        stage_to_workflow = {
-            "New": "prospect",
-            "Attempted Contact": "prospect",
-            "Prospect": "prospect",
-            "Application": "prequal",
-            "Pre-Qualified": "prequal",
-            "Pre-Approved": "pre_approved",
-            "Under Contract": "under_contract",
-            "CTC": "last_mile",
-            "Funded": "post_close",
-            "Does Not Qualify": "credit_repair",
-            "Long-Term Nurture": "nurture",
-        }
-
-        # Cache workflows to avoid repeated queries
-        workflows_cache = {}
-        workflows = db.query(WorkflowConfiguration).filter(WorkflowConfiguration.is_active == True).all()
-        for wf in workflows:
-            workflows_cache[wf.workflow_key] = wf
-
-        # Get all active leads (not withdrawn, closed, etc.)
-        active_stages = ['New', 'Attempted Contact', 'Prospect', 'Application', 'Pre-Qualified',
-                        'Pre-Approved', 'Under Contract', 'CTC', 'Does Not Qualify', 'Long-Term Nurture']
-        leads = db.query(Lead).all()
-
-        for lead in leads:
-            lead_stage = lead.stage if lead.stage else "New"
-            if hasattr(lead_stage, 'value'):
-                lead_stage = lead_stage.value
-
-            # Skip leads in inactive stages
-            if lead_stage not in active_stages:
-                continue
-
-            workflow_key = stage_to_workflow.get(lead_stage, "prospect")
-            workflow = workflows_cache.get(workflow_key)
-
-            if not workflow:
-                continue
-
-            # Calculate days in stage
-            stage_date = getattr(lead, 'stage_changed_at', None) or lead.created_at
-            if stage_date:
-                if hasattr(stage_date, 'replace'):
-                    days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
-                else:
-                    days_in_stage = 1
-            else:
-                days_in_stage = 1
-
-            # Get tasks for this lead within the days_ahead window
-            days = sorted([d for d in (workflow.days or []) if d.is_active], key=lambda x: (x.day_order or 0, x.day_value))
-
-            for day in days:
-                # Only include tasks that are due within the next N days
-                days_until_due = day.day_value - days_in_stage
-                if days_until_due < 0 or days_until_due > days_ahead:
-                    continue
-
-                # Calculate due date
-                due_date = datetime.utcnow() + timedelta(days=days_until_due)
-
-                # Determine status
-                if days_until_due == 0:
-                    status = "due_today"
-                    urgency = "high"
-                elif days_until_due == 1:
-                    status = "due_tomorrow"
-                    urgency = "medium"
-                else:
-                    status = "upcoming"
-                    urgency = "low"
-
-                # Build communication methods list
-                methods = []
-                if day.phone_enabled:
-                    methods.append("phone")
-                if day.text_enabled:
-                    methods.append("text")
-                if day.email_enabled:
-                    methods.append("email")
-
-                all_tasks.append({
-                    "id": f"workflow-lead-{lead.id}-day-{day.id}",
-                    "title": day.day_label,
-                    "description": day.task_description or f"{day.day_label} - {workflow.workflow_name}",
-                    "client_name": lead.name,
-                    "client_type": "lead",
-                    "client_id": lead.id,
-                    "stage": lead_stage,
-                    "workflow_name": workflow.workflow_name,
-                    "workflow_key": workflow.workflow_key,
-                    "workflow_color": workflow.color,
-                    "day_value": day.day_value,
-                    "days_in_stage": days_in_stage,
-                    "days_until_due": days_until_due,
-                    "due_date": due_date.isoformat(),
-                    "status": status,
-                    "urgency": urgency,
-                    "communication_methods": methods,
-                    "source": "Workflow",
-                })
-
-        # Get all active loans
-        loan_stage_to_workflow = {
-            "Application": "prequal",
-            "Processing": "under_contract",
-            "Underwriting": "under_contract",
-            "Conditional Approval": "under_contract",
-            "CTC": "last_mile",
-            "Clear to Close": "last_mile",
-            "Closing": "last_mile",
-            "Funded": "post_close",
-        }
-
-        loans = db.query(Loan).all()
-        for loan in loans:
-            loan_stage = loan.stage if loan.stage else "Application"
-            if hasattr(loan_stage, 'value'):
-                loan_stage = loan_stage.value
-
-            workflow_key = loan_stage_to_workflow.get(loan_stage)
-            if not workflow_key:
-                continue
-
-            workflow = workflows_cache.get(workflow_key)
-            if not workflow:
-                continue
-
-            # Calculate days in stage
-            stage_date = getattr(loan, 'stage_changed_at', None) or loan.created_at
-            if stage_date:
-                if hasattr(stage_date, 'replace'):
-                    days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
-                else:
-                    days_in_stage = 1
-            else:
-                days_in_stage = 1
-
-            # Get tasks for this loan within the days_ahead window
-            days = sorted([d for d in (workflow.days or []) if d.is_active], key=lambda x: (x.day_order or 0, x.day_value))
-
-            for day in days:
-                days_until_due = day.day_value - days_in_stage
-                if days_until_due < 0 or days_until_due > days_ahead:
-                    continue
-
-                due_date = datetime.utcnow() + timedelta(days=days_until_due)
-
-                if days_until_due == 0:
-                    status = "due_today"
-                    urgency = "high"
-                elif days_until_due == 1:
-                    status = "due_tomorrow"
-                    urgency = "medium"
-                else:
-                    status = "upcoming"
-                    urgency = "low"
-
-                methods = []
-                if day.phone_enabled:
-                    methods.append("phone")
-                if day.text_enabled:
-                    methods.append("text")
-                if day.email_enabled:
-                    methods.append("email")
-
-                all_tasks.append({
-                    "id": f"workflow-loan-{loan.id}-day-{day.id}",
-                    "title": day.day_label,
-                    "description": day.task_description or f"{day.day_label} - {workflow.workflow_name}",
-                    "client_name": loan.borrower_name,
-                    "client_type": "loan",
-                    "client_id": loan.id,
-                    "stage": loan_stage,
-                    "workflow_name": workflow.workflow_name,
-                    "workflow_key": workflow.workflow_key,
-                    "workflow_color": workflow.color,
-                    "day_value": day.day_value,
-                    "days_in_stage": days_in_stage,
-                    "days_until_due": days_until_due,
-                    "due_date": due_date.isoformat(),
-                    "status": status,
-                    "urgency": urgency,
-                    "communication_methods": methods,
-                    "source": "Workflow",
-                })
-
-        # Sort tasks by due date (due_today first, then tomorrow, then upcoming)
-        urgency_order = {"high": 0, "medium": 1, "low": 2}
-        all_tasks.sort(key=lambda t: (urgency_order.get(t["urgency"], 3), t["days_until_due"], t["client_name"]))
+        all_tasks = get_all_workflow_tasks_logic(db, current_user, days_ahead)
 
         return {
             "tasks": all_tasks,

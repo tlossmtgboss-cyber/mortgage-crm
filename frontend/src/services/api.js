@@ -1433,6 +1433,15 @@ export const emailDropAPI = {
 };
 
 // Reconciliation API (AI Engine tasks)
+// Command Center API - Unified Action Items Dashboard
+export const commandCenterAPI = {
+  // Get all action items across the CRM
+  getAll: async () => {
+    const response = await api.get('/api/v1/command-center');
+    return response.data;
+  }
+};
+
 export const reconciliationAPI = {
   // Get pending reconciliation items (optionally filter by status)
   getPending: async (status = null) => {

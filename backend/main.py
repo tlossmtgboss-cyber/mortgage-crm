@@ -32394,6 +32394,7 @@ async def get_command_center(
         db.rollback()  # Reset transaction state
 
     # Get loans with upcoming deadlines (closing, lock expiration)
+    # Exclude funded loans (case insensitive) - they should only appear in Portfolio
     try:
         upcoming_deadlines = db.execute(text("""
             SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
@@ -32406,7 +32407,7 @@ async def get_command_center(
                        ELSE 'deadline'
                    END as deadline_type
             FROM loans l
-            WHERE l.stage::text NOT IN ('Funded')
+            WHERE UPPER(l.stage::text) NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
               AND (
                   (l.lock_expiration_date IS NOT NULL AND l.lock_expiration_date < NOW() + INTERVAL '5 days')
                   OR (l.closing_date IS NOT NULL AND l.closing_date < NOW() + INTERVAL '7 days')
@@ -32422,7 +32423,7 @@ async def get_command_center(
                        l.closing_date, l.lock_expiration_date as lock_expiration,
                        'active_loan' as deadline_type
                 FROM loans l
-                WHERE l.stage::text NOT IN ('Funded')
+                WHERE UPPER(l.stage::text) NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
                 ORDER BY l.created_at DESC
                 LIMIT 10
             """)).fetchall()
@@ -32457,7 +32458,37 @@ async def get_command_center(
         logger.warning(f"Command center - loan deadlines error: {e}")
         db.rollback()
 
-    # 4. PORTFOLIO - Touchpoints and refinance opportunities
+    # 4. PORTFOLIO - Funded loans and MUM clients (Mortgages Under Management)
+    # First, add funded loans from the loans table
+    try:
+        funded_loans = db.execute(text("""
+            SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
+                   l.funded_date, l.amount, l.closing_date
+            FROM loans l
+            WHERE UPPER(l.stage::text) = 'FUNDED'
+            ORDER BY COALESCE(l.funded_date, l.closing_date, l.updated_at) DESC
+            LIMIT 20
+        """)).fetchall()
+
+        for loan in funded_loans:
+            action_items["portfolio"].append({
+                "id": f"funded_loan_{loan.id}",
+                "type": "funded_loan",
+                "priority": "low",
+                "title": f"Funded: {loan.borrower_name}",
+                "description": f"Loan #{loan.loan_number or 'N/A'} - ${loan.amount:,.0f}" if loan.amount else f"Loan #{loan.loan_number or 'N/A'}",
+                "entity_type": "loan",
+                "entity_id": loan.id,
+                "entity_name": loan.borrower_name,
+                "loan_number": loan.loan_number,
+                "funded_date": loan.funded_date.isoformat() if loan.funded_date else None,
+                "url": f"/portfolio?loan={loan.id}"
+            })
+    except Exception as e:
+        logger.warning(f"Command center - funded loans error: {e}")
+        db.rollback()
+
+    # Then add MUM clients with touchpoints due
     try:
         portfolio_items = db.execute(text("""
             SELECT m.id, m.client_name, m.email, m.phone, m.loan_number,

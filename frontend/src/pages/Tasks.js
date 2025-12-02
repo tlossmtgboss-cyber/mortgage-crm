@@ -1,9 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI, tasksAPI, reconciliationAPI, aiAPI } from '../services/api';
+import { teamAPI, tasksAPI, reconciliationAPI, aiAPI, leadsAPI, loansAPI } from '../services/api';
 import MergeCenter from './MergeCenter';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import './Tasks.css';
+
+// Lead status options
+const LEAD_STAGES = [
+  { value: 'new', label: 'New', color: '#6366f1' },
+  { value: 'attempted_contact', label: 'Attempted Contact', color: '#8b5cf6' },
+  { value: 'contact_made', label: 'Contact Made', color: '#06b6d4' },
+  { value: 'needs_analysis', label: 'Needs Analysis', color: '#0ea5e9' },
+  { value: 'pre_approved', label: 'Pre-Approved', color: '#10b981' },
+  { value: 'application', label: 'Application', color: '#f59e0b' },
+  { value: 'processing', label: 'Processing', color: '#f97316' },
+  { value: 'closing', label: 'Closing', color: '#22c55e' },
+  { value: 'funded', label: 'Funded', color: '#16a34a' },
+  { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' },
+  { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
+];
 
 // Mock data functions
 const mockPrioritizedTasks = () => [
@@ -616,6 +631,9 @@ function Tasks() {
   const [sendingInstruction, setSendingInstruction] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [completingTask, setCompletingTask] = useState(false);
 
   // Layout fix hook
   const { containerRef, triggerRecalculation } = useLayoutFix([loading]);
@@ -761,8 +779,14 @@ function Tasks() {
         !t.email_subject
       );
 
-      // Combine workflow tasks with manual tasks
-      const allTasks = [...workflowTasks, ...manualTasks];
+      // Filter out phone-only workflow tasks - those go to Power Dialer
+      // A task is "phone-only" if phone is the preferred contact method
+      const nonPhoneWorkflowTasks = workflowTasks.filter(task =>
+        task.preferred_contact_method !== 'Phone'
+      );
+
+      // Combine workflow tasks (excluding phone tasks) with manual tasks
+      const allTasks = [...nonPhoneWorkflowTasks, ...manualTasks];
 
       // Deduplicate tasks by id
       const seen = new Set();
@@ -1261,19 +1285,85 @@ function Tasks() {
     return tasks;
   };
 
-  const handleComplete = (taskId) => {
-    setCompletedTasks(prev => {
-      const newCompleted = new Set(prev);
-      newCompleted.add(taskId);
-      return newCompleted;
-    });
+  const handleComplete = async (taskId) => {
+    setCompletingTask(true);
+    try {
+      // Check task type and call appropriate API
+      const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
+      const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
 
-    // If the completed task is the selected one, select the next task from current tab only
-    if (selectedTask && selectedTask.id === taskId) {
-      const tabTasks = getTasksForTab();
-      const currentIndex = tabTasks.findIndex(t => t.id === taskId);
-      const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
-      setSelectedTask(nextTask);
+      if (!isMockTask) {
+        if (typeof taskId === 'string' && taskId.startsWith('task-')) {
+          const numericId = taskId.replace('task-', '');
+          await tasksAPI.update(numericId, { status: 'completed' });
+        } else if (typeof taskId === 'string' && taskId.startsWith('workflow-')) {
+          // Workflow tasks - mark completed in backend if possible
+          const numericId = taskId.replace('workflow-', '');
+          try {
+            await tasksAPI.update(numericId, { status: 'completed' });
+          } catch (e) {
+            console.log('Workflow task completed locally:', taskId);
+          }
+        } else if (typeof taskId === 'number') {
+          await tasksAPI.update(taskId, { status: 'completed' });
+        }
+      }
+
+      // Update local state
+      setCompletedTasks(prev => {
+        const newCompleted = new Set(prev);
+        newCompleted.add(taskId);
+        return newCompleted;
+      });
+
+      // If the completed task is the selected one, select the next task from current tab only
+      if (selectedTask && selectedTask.id === taskId) {
+        const tabTasks = getTasksForTab();
+        const currentIndex = tabTasks.findIndex(t => t.id === taskId);
+        const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
+        setSelectedTask(nextTask);
+      }
+    } catch (error) {
+      console.error('Error completing task:', error);
+      // Still mark as completed locally even if API fails
+      setCompletedTasks(prev => {
+        const newCompleted = new Set(prev);
+        newCompleted.add(taskId);
+        return newCompleted;
+      });
+    } finally {
+      setCompletingTask(false);
+    }
+  };
+
+  // Handle changing lead/loan status
+  const handleChangeStatus = async (newStatus) => {
+    if (!selectedTask) return;
+
+    setUpdatingStatus(true);
+    try {
+      // Check if this task is associated with a lead or loan
+      const leadId = selectedTask.lead_id || selectedTask.leadId;
+      const loanId = selectedTask.loan_id || selectedTask.loanId;
+
+      if (leadId) {
+        await leadsAPI.update(leadId, { stage: newStatus });
+        // Update the selected task's stage locally
+        setSelectedTask(prev => ({ ...prev, stage: newStatus }));
+        alert(`Lead status updated to "${LEAD_STAGES.find(s => s.value === newStatus)?.label || newStatus}"`);
+      } else if (loanId) {
+        await loansAPI.update(loanId, { stage: newStatus });
+        setSelectedTask(prev => ({ ...prev, stage: newStatus }));
+        alert(`Loan status updated to "${newStatus}"`);
+      } else {
+        alert('No lead or loan associated with this task');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status. Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+      setShowStatusModal(false);
     }
   };
 
@@ -1796,6 +1886,12 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 </button>
               )}
               <button
+                className="btn-detail-status"
+                onClick={() => setShowStatusModal(true)}
+              >
+                📊 Change Status
+              </button>
+              <button
                 className="btn-detail-secondary"
                 onClick={() => handleSnooze(selectedTask.id)}
               >
@@ -1810,8 +1906,9 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
               <button
                 className="btn-detail-complete"
                 onClick={() => handleComplete(selectedTask.id)}
+                disabled={completingTask}
               >
-                ✓ Completed
+                {completingTask ? '⏳ Completing...' : '✓ Complete Task'}
               </button>
               <button
                 className="btn-detail-danger"
@@ -1827,6 +1924,37 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 🗑️ Delete
               </button>
             </div>
+
+            {/* Change Status Modal */}
+            {showStatusModal && (
+              <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
+                <div className="status-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="status-modal-header">
+                    <h3>Change Lead/Loan Status</h3>
+                    <button className="modal-close" onClick={() => setShowStatusModal(false)}>×</button>
+                  </div>
+                  <div className="status-modal-content">
+                    <p className="status-current">
+                      Current: <strong>{selectedTask.stage || 'Unknown'}</strong>
+                    </p>
+                    <div className="status-options">
+                      {LEAD_STAGES.map((stage) => (
+                        <button
+                          key={stage.value}
+                          className={`status-option ${selectedTask.stage?.toLowerCase().replace(/\s+/g, '_') === stage.value ? 'current' : ''}`}
+                          style={{ borderLeftColor: stage.color }}
+                          onClick={() => handleChangeStatus(stage.value)}
+                          disabled={updatingStatus}
+                        >
+                          <span className="status-dot" style={{ backgroundColor: stage.color }}></span>
+                          {stage.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="detail-empty">

@@ -3747,3 +3747,66 @@
     border-bottom: 1px solid #e5e7eb;
   }
 }
+
+/* ============================================
+   ACTION SIDEBAR - Persistent Right Sidebar
+   ============================================ */
+
+/* Adjust main content when action sidebar is visible */
+.ai-landing-page-new:has(.action-sidebar) .ai-main-content {
+  margin-right: 380px;
+}
+
+@media (max-width: 1400px) {
+  .ai-landing-page-new:has(.action-sidebar) .ai-main-content {
+    margin-right: 340px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .ai-landing-page-new:has(.action-sidebar) .ai-main-content {
+    margin-right: 320px;
+  }
+}
+
+@media (max-width: 900px) {
+  .ai-landing-page-new:has(.action-sidebar) .ai-main-content {
+    margin-right: 0;
+  }
+}
+
+/* Action Sidebar Toggle Button */
+.action-sidebar-toggle-btn {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  background: #217F8D;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(33, 127, 141, 0.3);
+  transition: all 0.2s ease;
+  z-index: 99;
+}
+
+.action-sidebar-toggle-btn:hover {
+  background: #1a6670;
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 6px 16px rgba(33, 127, 141, 0.4);
+}
+
+.action-sidebar-toggle-btn .toggle-icon {
+  font-size: 20px;
+}
+
+@media (max-width: 900px) {
+  .action-sidebar-toggle-btn {
+    display: none;
+  }
+}
