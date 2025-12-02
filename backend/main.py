@@ -5924,31 +5924,26 @@ async def import_document_notification_email(
 
         # 1. Create Activity record (this is what shows in email history on profile page)
         # Activity table uses 'content' not 'description', and 'type' is an enum
+        # Use ORM to properly handle the enum type conversion
         activity_content = f"From: {request.from_name} <{request.from_email}>\nSubject: {request.subject}\n\n{request.body}"
         if request.attachment_names:
             activity_content += f"\n\nAttachments: {', '.join(request.attachment_names)}"
 
         try:
-            activity_result = db.execute(text("""
-                INSERT INTO activities (
-                    lead_id, loan_id, type, content,
-                    created_at, user_id
-                ) VALUES (
-                    :lead_id, :loan_id, 'Email', :content,
-                    :created_at, :user_id
-                ) RETURNING id
-            """), {
-                "lead_id": request.lead_id,
-                "loan_id": request.loan_id,
-                "content": activity_content,
-                "created_at": received_at,
-                "user_id": user_id
-            })
-            activity_id = activity_result.fetchone()[0]
-            results["activity_created"] = True
-            results["activity_id"] = activity_id
+            new_activity = Activity(
+                lead_id=request.lead_id,
+                loan_id=request.loan_id,
+                type=ActivityType.EMAIL,
+                content=activity_content,
+                created_at=received_at,
+                user_id=user_id
+            )
+            db.add(new_activity)
             db.commit()
-            logger.info(f"Created activity {activity_id} for document email")
+            db.refresh(new_activity)
+            results["activity_created"] = True
+            results["activity_id"] = new_activity.id
+            logger.info(f"Created activity {new_activity.id} for document email")
         except Exception as e:
             logger.error(f"Failed to create activity: {e}")
             results["activity_error"] = str(e)
