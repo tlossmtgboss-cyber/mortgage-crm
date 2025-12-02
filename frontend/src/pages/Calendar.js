@@ -195,7 +195,6 @@ function Calendar() {
   };
 
   const handleDeleteEvent = async (eventId) => {
-    if (!window.confirm('Delete this event?')) return;
     try {
       await calendarAPI.delete(eventId);
       loadEvents();

@@ -102,7 +102,6 @@ function Portfolio() {
   };
 
   const handleDeleteClient = async (id) => {
-    if (!window.confirm('Delete this client?')) return;
     try {
       await mumAPI.delete(id);
       loadData();

@@ -94,7 +94,6 @@ function Users() {
   };
 
   const handleDeleteMember = (memberId) => {
-    if (!window.confirm('Are you sure you want to remove this team member?')) return;
     const updatedMembers = teamMembers.filter(member => member.id !== memberId);
     saveTeamMembers(updatedMembers);
   };
@@ -111,7 +110,6 @@ function Users() {
   };
 
   const handleDeleteRole = (roleId) => {
-    if (!window.confirm('Are you sure you want to delete this role?')) return;
     const updatedRoles = availableRoles.filter(role => role.id !== roleId);
     saveRoles(updatedRoles);
   };

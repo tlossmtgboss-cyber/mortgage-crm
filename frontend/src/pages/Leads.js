@@ -259,14 +259,12 @@ function Leads() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this lead?')) {
-      try {
-        await leadsAPI.delete(id);
-        loadLeads();
-      } catch (err) {
-        console.error('Failed to delete lead:', err);
-        alert('Failed to delete lead');
-      }
+    try {
+      await leadsAPI.delete(id);
+      loadLeads();
+    } catch (err) {
+      console.error('Failed to delete lead:', err);
+      alert('Failed to delete lead');
     }
   };
 

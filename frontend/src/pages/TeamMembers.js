@@ -191,10 +191,6 @@ function TeamMembers() {
   };
 
   const handleDeleteMember = async (memberId) => {
-    if (!window.confirm('Are you sure you want to remove this team member?')) {
-      return;
-    }
-
     try {
       await teamAPI.deleteMember(memberId);
       loadMembers();

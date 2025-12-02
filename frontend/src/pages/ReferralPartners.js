@@ -89,7 +89,6 @@ function ReferralPartners() {
 
   const handleDeletePartner = async (id, e) => {
     e.stopPropagation();
-    if (!window.confirm('Delete this referral partner?')) return;
     try {
       await partnersAPI.delete(id);
       loadPartners();

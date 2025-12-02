@@ -6842,6 +6842,7 @@ The Team menu item appears for managers and management roles.
             today = datetime.now().date()
 
             # Query ai_tasks table (the active task table) with assigned_to_id
+            # Use type::text to cast the enum to text for comparison
             task_query = text("""
                 SELECT t.id, t.title, t.due_date, t.type as status, t.priority, t.description,
                        COALESCE(t.borrower_name, ln.borrower_name, ld.name) as borrower_name,
@@ -6851,7 +6852,7 @@ The Team menu item appears for managers and management roles.
                 LEFT JOIN loans ln ON t.loan_id = ln.id
                 LEFT JOIN leads ld ON t.lead_id = ld.id
                 WHERE t.assigned_to_id = :user_id
-                AND t.type != 'Completed'
+                AND t.type::text != 'Completed'
                 ORDER BY
                     CASE WHEN t.priority = 'high' THEN 1 WHEN t.priority = 'medium' THEN 2 ELSE 3 END,
                     t.due_date ASC NULLS LAST

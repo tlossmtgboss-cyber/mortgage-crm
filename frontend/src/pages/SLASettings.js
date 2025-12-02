@@ -562,11 +562,7 @@ const SLASettings = () => {
             {measure.is_active ? 'Deactivate' : 'Activate'}
           </button>
           <button
-            onClick={() => {
-              if (window.confirm(`Are you sure you want to delete "${measure.name}"? This action cannot be undone.`)) {
-                deleteMeasure(measure.id);
-              }
-            }}
+            onClick={() => deleteMeasure(measure.id)}
             style={{
               padding: '6px 12px',
               background: '#fee2e2',

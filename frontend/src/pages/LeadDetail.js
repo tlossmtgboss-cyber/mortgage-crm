@@ -587,8 +587,6 @@ function LeadDetail() {
   const deleteDraft = async () => {
     if (!selectedDraft) return;
 
-    if (!window.confirm('Are you sure you want to delete this draft?')) return;
-
     setDraftLoading(true);
     try {
       const token = localStorage.getItem('token');

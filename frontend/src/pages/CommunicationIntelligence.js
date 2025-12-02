@@ -400,8 +400,6 @@ function CommunicationIntelligence() {
 
   // ================== DELETE HANDLERS ==================
   const handleDeleteConversation = async (conversationId) => {
-    if (!window.confirm('Are you sure you want to delete this conversation and all its messages?')) return;
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/ai-email/conversations/${conversationId}`,
@@ -424,8 +422,6 @@ function CommunicationIntelligence() {
   };
 
   const handleDeleteSms = async (smsId) => {
-    if (!window.confirm('Are you sure you want to delete this SMS?')) return;
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/sms-intelligence/queue/${smsId}`,
@@ -490,7 +486,6 @@ function CommunicationIntelligence() {
 
   const handleBulkDeleteConversations = async () => {
     if (selectedConversationIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedConversationIds.size} conversations? This cannot be undone.`)) return;
 
     setBulkDeleting(true);
     let successCount = 0;
@@ -521,7 +516,6 @@ function CommunicationIntelligence() {
 
   const handleBulkDeleteSms = async () => {
     if (selectedSmsIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedSmsIds.size} SMS messages? This cannot be undone.`)) return;
 
     setBulkDeleting(true);
     let successCount = 0;

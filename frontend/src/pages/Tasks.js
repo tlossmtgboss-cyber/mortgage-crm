@@ -871,11 +871,6 @@ function Tasks() {
   const handleBulkDelete = async () => {
     if (selectedTaskIds.size === 0) return;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedTaskIds.size} selected tasks? This cannot be undone.`
-    );
-    if (!confirmed) return;
-
     setBulkDeleting(true);
     let successCount = 0;
     let failCount = 0;

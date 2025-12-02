@@ -53,9 +53,6 @@ function AIFeedbackLog() {
   };
 
   const handleDelete = async (feedbackId) => {
-    if (!window.confirm('Are you sure you want to delete this feedback entry?')) {
-      return;
-    }
     try {
       await aiAPI.deleteFeedback(feedbackId);
       loadFeedbackData();

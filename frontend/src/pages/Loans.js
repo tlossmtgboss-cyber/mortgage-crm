@@ -198,13 +198,11 @@ function Loans() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this loan?')) {
-      try {
-        await loansAPI.delete(id);
-        loadLoans();
-      } catch (err) {
-        alert('Failed to delete loan');
-      }
+    try {
+      await loansAPI.delete(id);
+      loadLoans();
+    } catch (err) {
+      alert('Failed to delete loan');
     }
   };
 

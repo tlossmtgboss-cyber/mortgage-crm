@@ -765,10 +765,6 @@ function ReconciliationCenter() {
   };
 
   const handleDelete = async (itemId) => {
-    if (!window.confirm('Are you sure you want to permanently delete this item? This cannot be undone.')) {
-      return;
-    }
-
     try {
       setProcessingAction(true);
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {

@@ -172,8 +172,6 @@ const KnowledgeBase = () => {
   };
 
   const handleDeleteEntry = async (entryId) => {
-    if (!window.confirm('Are you sure you want to delete this entry?')) return;
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/ai/knowledge-base/${entryId}`,

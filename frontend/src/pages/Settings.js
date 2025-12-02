@@ -843,10 +843,6 @@ function Settings() {
   };
 
   const revokeApiKey = async (keyId, keyName) => {
-    if (!window.confirm(`Are you sure you want to revoke the API key "${keyName}"? This cannot be undone.`)) {
-      return;
-    }
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/api-keys/${keyId}`, {
         method: 'DELETE',
@@ -875,10 +871,6 @@ const API_BASE_URL = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
   const runDatabaseMigration = async () => {
-    if (!window.confirm('Run database migration to fix email sync?\n\nThis will add the missing external_message_id column.')) {
-      return;
-    }
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/migrations/add-external-message-id`, {
         method: 'POST',
@@ -902,10 +894,6 @@ const API_BASE_URL = isProduction
   };
 
   const createSampleTasks = async () => {
-    if (!window.confirm('Create 5 sample reconciliation tasks from emails?\n\nThese will appear in the Reconciliation tab for testing.')) {
-      return;
-    }
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/create-sample-tasks`, {
         method: 'POST',
@@ -1028,10 +1016,6 @@ const API_BASE_URL = isProduction
 
     if (currentUser.id === userId) {
       alert('You cannot delete your own account. Please contact another administrator.');
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return;
     }
 
@@ -4764,38 +4748,36 @@ const API_BASE_URL = isProduction
                 <button
                   className="btn-danger"
                   onClick={async () => {
-                    if (window.confirm('Are you absolutely sure you want to clear ALL dummy data?\n\nThis will delete:\n- All tasks\n- All pending approvals\n- All messages\n- All loans and leads\n- All activities\n\nThis action CANNOT be undone!')) {
-                      try {
-                        const response = await fetch(`${API_BASE_URL}/api/v1/admin/clear-sample-data`, {
-                          method: 'POST',
-                          headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                            'Content-Type': 'application/json'
-                          }
-                        });
-
-                        if (response.ok) {
-                          const result = await response.json();
-                          alert(`✅ Success! Cleared:\n` +
-                                `- ${result.deleted.tasks || 0} tasks\n` +
-                                `- ${result.deleted.ai_tasks || 0} AI tasks\n` +
-                                `- ${result.deleted.process_tasks || 0} process tasks\n` +
-                                `- ${result.deleted.reconciliation_events || 0} reconciliation events\n` +
-                                `- ${result.deleted.sms_messages || 0} SMS messages\n` +
-                                `- ${result.deleted.email_messages || 0} emails\n` +
-                                `- ${result.deleted.teams_messages || 0} Teams messages\n` +
-                                `- ${result.deleted.loans || 0} loans\n` +
-                                `- ${result.deleted.leads || 0} leads\n` +
-                                `- ${result.deleted.activities || 0} activities\n\n` +
-                                `Your CRM is now ready for workflow-based tasks!`);
-                        } else {
-                          const error = await response.json();
-                          alert(`❌ Error: ${error.detail || 'Failed to clear data'}`);
+                    try {
+                      const response = await fetch(`${API_BASE_URL}/api/v1/admin/clear-sample-data`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                          'Content-Type': 'application/json'
                         }
-                      } catch (error) {
-                        console.error('Error clearing data:', error);
-                        alert(`❌ Error clearing data: ${error.message}`);
+                      });
+
+                      if (response.ok) {
+                        const result = await response.json();
+                        alert(`✅ Success! Cleared:\n` +
+                              `- ${result.deleted.tasks || 0} tasks\n` +
+                              `- ${result.deleted.ai_tasks || 0} AI tasks\n` +
+                              `- ${result.deleted.process_tasks || 0} process tasks\n` +
+                              `- ${result.deleted.reconciliation_events || 0} reconciliation events\n` +
+                              `- ${result.deleted.sms_messages || 0} SMS messages\n` +
+                              `- ${result.deleted.email_messages || 0} emails\n` +
+                              `- ${result.deleted.teams_messages || 0} Teams messages\n` +
+                              `- ${result.deleted.loans || 0} loans\n` +
+                              `- ${result.deleted.leads || 0} leads\n` +
+                              `- ${result.deleted.activities || 0} activities\n\n` +
+                              `Your CRM is now ready for workflow-based tasks!`);
+                      } else {
+                        const error = await response.json();
+                        alert(`❌ Error: ${error.detail || 'Failed to clear data'}`);
                       }
+                    } catch (error) {
+                      console.error('Error clearing data:', error);
+                      alert(`❌ Error clearing data: ${error.message}`);
                     }
                   }}
                   style={{
