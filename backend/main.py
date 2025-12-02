@@ -6352,6 +6352,50 @@ The Team menu item appears for managers and management roles.
                     }
                 }
             },
+            # ========== LEAD PIPELINE INTELLIGENCE TOOLS ==========
+            {
+                "type": "function",
+                "function": {
+                    "name": "lead_status_insights",
+                    "description": "Get LEAD pipeline coaching and analytics. Use this for questions about lead pipeline health, lead bottlenecks, lead conversion rates, which leads to focus on, and lead coaching. Returns metrics by status (New, Prospect, Application, etc), bottlenecks, priority focus areas, and trend data. ALWAYS use this tool for lead-related questions instead of get_pipeline.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "include_statuses": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Statuses to analyze: new, attempted_contact, prospect, application, pre_qualified, pre_approved, nurture, withdrawn, does_not_qualify"
+                            },
+                            "time_bucket": {
+                                "type": "string",
+                                "enum": ["day", "week", "month"],
+                                "description": "Time aggregation for trend metrics"
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_leads_by_status",
+                    "description": "Get detailed lead lists by status for follow-up. Use when user asks 'who should I call', 'show me my new leads', 'list my prospects'. Returns lead names, contact info, days in status, loan details.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "description": "Status to filter: new, attempted_contact, prospect, application, pre_qualified, pre_approved, long_term_nurture, withdrawn, does_not_qualify"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Max leads to return (default 25)",
+                                "default": 25
+                            }
+                        }
+                    }
+                }
+            },
             {
                 "type": "function",
                 "function": {
@@ -11004,6 +11048,8 @@ When acting autonomously:
                         "search_loans": 180,          # 3 minutes
                         "search_leads": 180,          # 3 minutes
                         "get_tasks": 60,              # 1 minute
+                        "lead_status_insights": 120,  # 2 minutes - lead pipeline coaching
+                        "get_leads_by_status": 60,    # 1 minute - lead lists
                     }
 
                     # Try cache first for cacheable tools
