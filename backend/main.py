@@ -31705,7 +31705,7 @@ async def calculate_loan_referral_scores(loan_id: int, data: dict, db: Session =
 @app.post("/api/v1/mum/{client_id}/calculate-referral-scores")
 async def calculate_mum_referral_scores(client_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Calculate AI-based referral intelligence scores for a MUM client"""
-    client = db.query(MumClient).filter(MumClient.id == client_id).first()
+    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
 
@@ -48787,7 +48787,7 @@ async def get_workflow_stage_team_members(
     stage_map = {
         "lead": {"model": Lead, "status_field": "stage", "name": "lead"},
         "active_loan": {"model": Loan, "status_field": "stage", "name": "loan"},
-        "portfolio": {"model": MumClient if 'MumClient' in dir() else None, "status_field": None, "name": "client"}
+        "portfolio": {"model": MUMClient if 'MUMClient' in dir() else None, "status_field": None, "name": "client"}
     }
 
     if stage_key not in stage_map:
