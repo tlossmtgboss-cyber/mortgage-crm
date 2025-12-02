@@ -236,9 +236,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: calc(100vh - 250px);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 8px;
+  padding-bottom: 100px;
 }
 
 .items-list::-webkit-scrollbar {
@@ -349,9 +351,11 @@
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   padding: var(--space-xl);
-  max-height: calc(100vh - 250px);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   box-shadow: var(--shadow-sm);
+  padding-bottom: 100px;
 }
 
 .detail-panel::-webkit-scrollbar {
@@ -778,7 +782,8 @@
   }
 
   .items-list {
-    max-height: 400px;
+    /* Let content flow naturally on mobile */
+    max-height: none;
   }
 
   .detail-panel {
@@ -914,6 +919,31 @@
 .reconciliation-item.checked {
   background: rgba(79, 70, 229, 0.1);
   border-color: rgba(79, 70, 229, 0.3);
+}
+
+/* Delete button in list items */
+.item-delete-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  border-radius: 6px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+.reconciliation-item:hover .item-delete-btn {
+  opacity: 0.6;
+}
+
+.item-delete-btn:hover {
+  opacity: 1 !important;
+  background: #fee2e2;
+  transform: scale(1.1);
 }
 
 .item-checkbox {

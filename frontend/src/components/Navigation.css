@@ -110,6 +110,26 @@
   border-color: var(--color-primary);
 }
 
+/* Command Center Link - Primary landing page */
+.command-center-link {
+  background: linear-gradient(135deg, #218D8D 0%, #2aa3a3 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+  border: none;
+}
+
+.command-center-link:hover {
+  background: linear-gradient(135deg, #2aa3a3 0%, #218D8D 100%) !important;
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+.command-center-link.active {
+  background: linear-gradient(135deg, #1a7070 0%, #218D8D 100%) !important;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.4);
+}
+
 /* Coach Link Special Styling */
 .coach-link {
   background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%) !important;

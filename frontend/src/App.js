@@ -22,6 +22,7 @@ import Onboarding from './pages/Onboarding';
 
 // Lazy load all other pages for instant navigation
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CommandCenter = lazy(() => import('./pages/CommandCenter'));
 const OnboardingWizard = lazy(() => import('./components/onboarding/OnboardingWizard'));
 const Leads = lazy(() => import('./pages/Leads'));
 const LeadDetail = lazy(() => import('./pages/LeadDetail'));
@@ -539,6 +540,28 @@ function App() {
                       <OnboardingPrompt />
                     )}
                     <LazyPage><Dashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/command-center"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''} ${taskSidebarOpen ? 'with-task-sidebar' : ''}`}>
+                    <LazyPage><CommandCenter /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

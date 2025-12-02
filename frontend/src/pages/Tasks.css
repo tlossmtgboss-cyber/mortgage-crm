@@ -922,22 +922,14 @@
   gap: 0;
   flex: 1 1 auto;
   min-height: 500px;
-  /* Fallback for browsers without dvh support - use larger offset to account for browser chrome */
-  height: calc(100vh - 320px);
+  /* Let content flow naturally - use min-height instead of fixed height */
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  overflow: hidden;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-}
-
-/* Use dvh (dynamic viewport height) when supported for more accurate sizing */
-@supports (height: 100dvh) {
-  .email-layout {
-    height: calc(100dvh - 240px);
-  }
+  margin-bottom: 50px;
 }
 
 /* Ensure grid children take full height and handle overflow properly */
@@ -953,8 +945,8 @@
   display: flex;
   flex-direction: column;
   background: #f9fafb;
-  height: 100%;
-  overflow: hidden;
+  min-height: 500px;
+  overflow-y: auto;
 }
 
 .inbox-header {
@@ -1110,10 +1102,11 @@
   display: flex;
   flex-direction: column;
   background: white;
-  height: 100%;
-  overflow: hidden;
+  min-height: 500px;
+  overflow-y: auto;
   min-width: 0;
   max-width: 100%;
+  padding-bottom: 50px;
 }
 
 .detail-header {

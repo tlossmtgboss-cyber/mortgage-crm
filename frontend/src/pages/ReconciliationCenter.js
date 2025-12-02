@@ -1370,6 +1370,13 @@ function ReconciliationCenter() {
                       </div>
                     )}
                   </div>
+                  <button
+                    className="item-delete-btn"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
                 </div>
               ))}
             </div>
@@ -2455,6 +2462,13 @@ function ReconciliationCenter() {
                       </div>
                     )}
                   </div>
+                  <button
+                    className="item-delete-btn"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
                 </div>
               ))}
             </div>
@@ -3108,6 +3122,13 @@ function ReconciliationCenter() {
                       </div>
                     )}
                   </div>
+                  <button
+                    className="item-delete-btn"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
                 </div>
               ))}
             </div>

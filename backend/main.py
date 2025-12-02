@@ -31480,6 +31480,446 @@ async def global_search(
     }
 
 
+# ================================================================
+# COMMAND CENTER - Unified Action Items Dashboard
+# ================================================================
+
+@app.get("/api/v1/command-center")
+async def get_command_center(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Command Center - Aggregates all actionable items across the CRM.
+    Returns categorized action items for leads, loans, portfolio, emails, SMS, calls, and reconciliation.
+    """
+    user_id = current_user.id
+    now = datetime.now(timezone.utc)
+
+    action_items = {
+        "urgent": [],          # Critical/overdue items
+        "leads": [],           # Lead follow-ups and tasks
+        "loans": [],           # Active loan milestones and tasks
+        "portfolio": [],       # Portfolio touchpoints and opportunities
+        "emails": [],          # Unanswered emails
+        "sms": [],             # Unanswered SMS
+        "calls": [],           # Pending calls/voicemails
+        "reconciliation": [],  # Data reconciliation items
+        "approvals": [],       # AI actions pending approval
+        "summary": {}          # Counts and metrics
+    }
+
+    # 1. URGENT - SLA Alerts (at-risk and overdue milestones)
+    try:
+        sla_alerts = db.execute(text("""
+            SELECT sa.id, sa.alert_type, sa.milestone_type, sa.status, sa.created_at,
+                   sa.target_deadline, sa.loan_id, l.borrower_name, l.loan_number
+            FROM sla_alerts sa
+            LEFT JOIN loans l ON sa.loan_id = l.id
+            WHERE sa.status = 'active'
+            ORDER BY sa.alert_type DESC, sa.created_at ASC
+            LIMIT 20
+        """)).fetchall()
+
+        for alert in sla_alerts:
+            action_items["urgent"].append({
+                "id": f"sla_{alert.id}",
+                "type": "sla_alert",
+                "priority": "critical" if alert.alert_type == "critical" else "high",
+                "title": f"{alert.milestone_type} - {alert.alert_type.upper()}",
+                "description": f"Loan: {alert.borrower_name or 'Unknown'} ({alert.loan_number or 'N/A'})",
+                "entity_type": "loan",
+                "entity_id": alert.loan_id,
+                "entity_name": alert.borrower_name,
+                "due_date": alert.target_deadline.isoformat() if alert.target_deadline else None,
+                "url": f"/loans/{alert.loan_id}",
+                "created_at": alert.created_at.isoformat() if alert.created_at else None
+            })
+    except Exception as e:
+        logger.warning(f"Command center - SLA alerts error: {e}")
+
+    # 2. LEADS - Pending tasks and follow-ups
+    try:
+        lead_tasks = db.query(Task).filter(
+            Task.owner_id == user_id,
+            Task.status.in_(["pending", "in_progress"]),
+            Task.lead_id.isnot(None)
+        ).order_by(Task.due_date.asc().nullslast()).limit(30).all()
+
+        for task in lead_tasks:
+            lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+            is_overdue = task.due_date and task.due_date < now if task.due_date else False
+            priority = "critical" if is_overdue else (task.priority or "medium")
+
+            item = {
+                "id": f"task_{task.id}",
+                "type": "task",
+                "priority": priority,
+                "title": task.title,
+                "description": task.description,
+                "entity_type": "lead",
+                "entity_id": task.lead_id,
+                "entity_name": lead.name if lead else None,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "url": f"/leads/{task.lead_id}",
+                "status": task.status
+            }
+
+            if is_overdue:
+                action_items["urgent"].append(item)
+            else:
+                action_items["leads"].append(item)
+    except Exception as e:
+        logger.warning(f"Command center - lead tasks error: {e}")
+
+    # Also get leads needing follow-up (no contact in X days based on stage)
+    try:
+        stale_leads = db.execute(text("""
+            SELECT l.id, l.name, l.stage, l.last_contact, l.email, l.phone,
+                   EXTRACT(EPOCH FROM (NOW() - l.last_contact))/86400 as days_since_contact
+            FROM leads l
+            WHERE l.assigned_to = :user_id
+              AND l.stage NOT IN ('closed', 'disqualified', 'CLOSED', 'DISQUALIFIED')
+              AND (l.last_contact IS NULL OR l.last_contact < NOW() - INTERVAL '3 days')
+            ORDER BY l.last_contact ASC NULLS FIRST
+            LIMIT 15
+        """), {"user_id": user_id}).fetchall()
+
+        for lead in stale_leads:
+            days = int(lead.days_since_contact) if lead.days_since_contact else 999
+            priority = "critical" if days > 7 else "high" if days > 5 else "medium"
+            action_items["leads"].append({
+                "id": f"followup_lead_{lead.id}",
+                "type": "follow_up",
+                "priority": priority,
+                "title": f"Follow up with {lead.name}",
+                "description": f"No contact in {days} days" if days < 999 else "Never contacted",
+                "entity_type": "lead",
+                "entity_id": lead.id,
+                "entity_name": lead.name,
+                "stage": str(lead.stage) if lead.stage else None,
+                "url": f"/leads/{lead.id}",
+                "days_stale": days
+            })
+    except Exception as e:
+        logger.warning(f"Command center - stale leads error: {e}")
+
+    # 3. LOANS - Active milestones and tasks
+    try:
+        loan_tasks = db.query(Task).filter(
+            Task.owner_id == user_id,
+            Task.status.in_(["pending", "in_progress"]),
+            Task.loan_id.isnot(None)
+        ).order_by(Task.due_date.asc().nullslast()).limit(30).all()
+
+        for task in loan_tasks:
+            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+            is_overdue = task.due_date and task.due_date < now if task.due_date else False
+            priority = "critical" if is_overdue else (task.priority or "medium")
+
+            item = {
+                "id": f"task_{task.id}",
+                "type": "task",
+                "priority": priority,
+                "title": task.title,
+                "description": task.description,
+                "entity_type": "loan",
+                "entity_id": task.loan_id,
+                "entity_name": loan.borrower_name if loan else None,
+                "loan_number": loan.loan_number if loan else None,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "url": f"/loans/{task.loan_id}",
+                "status": task.status
+            }
+
+            if is_overdue:
+                action_items["urgent"].append(item)
+            else:
+                action_items["loans"].append(item)
+    except Exception as e:
+        logger.warning(f"Command center - loan tasks error: {e}")
+
+    # Get loans with upcoming deadlines (closing, lock expiration)
+    try:
+        upcoming_deadlines = db.execute(text("""
+            SELECT l.id, l.borrower_name, l.loan_number, l.status,
+                   l.closing_date, l.lock_expiration,
+                   CASE
+                       WHEN l.lock_expiration IS NOT NULL AND l.lock_expiration < NOW() + INTERVAL '3 days'
+                       THEN 'lock_expiring'
+                       WHEN l.closing_date IS NOT NULL AND l.closing_date < NOW() + INTERVAL '7 days'
+                       THEN 'closing_soon'
+                       ELSE 'deadline'
+                   END as deadline_type
+            FROM loans l
+            WHERE l.status NOT IN ('funded', 'closed', 'cancelled', 'denied')
+              AND (
+                  (l.lock_expiration IS NOT NULL AND l.lock_expiration < NOW() + INTERVAL '5 days')
+                  OR (l.closing_date IS NOT NULL AND l.closing_date < NOW() + INTERVAL '7 days')
+              )
+            ORDER BY COALESCE(l.lock_expiration, l.closing_date) ASC
+            LIMIT 15
+        """)).fetchall()
+
+        for loan in upcoming_deadlines:
+            deadline_date = loan.lock_expiration if loan.deadline_type == 'lock_expiring' else loan.closing_date
+            days_until = (deadline_date - now).days if deadline_date else 999
+            priority = "critical" if days_until <= 1 else "high" if days_until <= 3 else "medium"
+
+            title = "Rate Lock Expiring" if loan.deadline_type == 'lock_expiring' else "Closing Coming Up"
+            action_items["loans"].append({
+                "id": f"deadline_{loan.id}_{loan.deadline_type}",
+                "type": loan.deadline_type,
+                "priority": priority,
+                "title": f"{title}: {loan.borrower_name}",
+                "description": f"In {days_until} days - {loan.loan_number or 'N/A'}",
+                "entity_type": "loan",
+                "entity_id": loan.id,
+                "entity_name": loan.borrower_name,
+                "loan_number": loan.loan_number,
+                "due_date": deadline_date.isoformat() if deadline_date else None,
+                "url": f"/loans/{loan.id}",
+                "days_until": days_until
+            })
+    except Exception as e:
+        logger.warning(f"Command center - loan deadlines error: {e}")
+
+    # 4. PORTFOLIO - Touchpoints and refinance opportunities
+    try:
+        portfolio_items = db.execute(text("""
+            SELECT m.id, m.client_name, m.email, m.phone, m.loan_number,
+                   m.next_touchpoint, m.refinance_opportunity, m.estimated_savings,
+                   m.last_contact, m.interest_rate, m.current_loan_amount
+            FROM mum_clients m
+            WHERE m.next_touchpoint IS NOT NULL
+              AND m.next_touchpoint <= NOW() + INTERVAL '14 days'
+            ORDER BY m.next_touchpoint ASC
+            LIMIT 15
+        """)).fetchall()
+
+        for client in portfolio_items:
+            is_overdue = client.next_touchpoint < now if client.next_touchpoint else False
+            priority = "high" if is_overdue else "medium"
+
+            description = f"Touchpoint due"
+            if client.refinance_opportunity and client.estimated_savings:
+                description = f"Refi opportunity - save ${client.estimated_savings:,.0f}/mo"
+
+            action_items["portfolio"].append({
+                "id": f"portfolio_{client.id}",
+                "type": "touchpoint",
+                "priority": priority,
+                "title": f"Contact {client.client_name}",
+                "description": description,
+                "entity_type": "portfolio",
+                "entity_id": client.id,
+                "entity_name": client.client_name,
+                "loan_number": client.loan_number,
+                "due_date": client.next_touchpoint.isoformat() if client.next_touchpoint else None,
+                "url": f"/portfolio/{client.id}",
+                "refinance_opportunity": client.refinance_opportunity,
+                "estimated_savings": client.estimated_savings
+            })
+    except Exception as e:
+        logger.warning(f"Command center - portfolio error: {e}")
+
+    # 5. EMAILS - Unanswered/unprocessed emails
+    try:
+        pending_emails = db.execute(text("""
+            SELECT ei.id, ei.from_email, ei.subject, ei.received_at,
+                   ei.match_status, ei.loan_id, ei.lead_id,
+                   COALESCE(l.borrower_name, ld.name) as entity_name
+            FROM email_intakes ei
+            LEFT JOIN loans l ON ei.loan_id = l.id
+            LEFT JOIN leads ld ON ei.lead_id = ld.id
+            WHERE ei.processing_status = 'pending'
+               OR (ei.match_status = 'UNMATCHED' AND ei.received_at > NOW() - INTERVAL '7 days')
+            ORDER BY ei.received_at DESC
+            LIMIT 20
+        """)).fetchall()
+
+        for email in pending_emails:
+            hours_old = (now - email.received_at).total_seconds() / 3600 if email.received_at else 0
+            priority = "critical" if hours_old > 24 else "high" if hours_old > 4 else "medium"
+
+            action_items["emails"].append({
+                "id": f"email_{email.id}",
+                "type": "email_pending",
+                "priority": priority,
+                "title": email.subject or "(No subject)",
+                "description": f"From: {email.from_email}",
+                "entity_type": "loan" if email.loan_id else "lead" if email.lead_id else "email",
+                "entity_id": email.loan_id or email.lead_id or email.id,
+                "entity_name": email.entity_name,
+                "from_email": email.from_email,
+                "received_at": email.received_at.isoformat() if email.received_at else None,
+                "url": "/reconciliation",
+                "match_status": email.match_status,
+                "hours_old": round(hours_old, 1)
+            })
+    except Exception as e:
+        logger.warning(f"Command center - emails error: {e}")
+
+    # 6. SMS - Unanswered inbound messages
+    try:
+        unanswered_sms = db.execute(text("""
+            SELECT sc.id, sc.lead_id, sc.loan_id, sc.phone_number,
+                   sc.last_message_at, sc.unread_count,
+                   sm.content as last_message,
+                   COALESCE(l.borrower_name, ld.name) as entity_name
+            FROM sms_conversations sc
+            LEFT JOIN sms_messages sm ON sm.conversation_id = sc.id
+                AND sm.id = (SELECT MAX(id) FROM sms_messages WHERE conversation_id = sc.id AND sender = 'inbound')
+            LEFT JOIN loans l ON sc.loan_id = l.id
+            LEFT JOIN leads ld ON sc.lead_id = ld.id
+            WHERE sc.user_id = :user_id
+              AND sc.unread_count > 0
+            ORDER BY sc.last_message_at DESC
+            LIMIT 15
+        """), {"user_id": user_id}).fetchall()
+
+        for sms in unanswered_sms:
+            hours_old = (now - sms.last_message_at).total_seconds() / 3600 if sms.last_message_at else 0
+            priority = "critical" if hours_old > 4 else "high" if hours_old > 1 else "medium"
+
+            action_items["sms"].append({
+                "id": f"sms_{sms.id}",
+                "type": "sms_unanswered",
+                "priority": priority,
+                "title": f"SMS from {sms.entity_name or sms.phone_number}",
+                "description": (sms.last_message[:80] + "...") if sms.last_message and len(sms.last_message) > 80 else sms.last_message,
+                "entity_type": "loan" if sms.loan_id else "lead",
+                "entity_id": sms.loan_id or sms.lead_id,
+                "entity_name": sms.entity_name,
+                "phone_number": sms.phone_number,
+                "received_at": sms.last_message_at.isoformat() if sms.last_message_at else None,
+                "url": f"/{'loans' if sms.loan_id else 'leads'}/{sms.loan_id or sms.lead_id}",
+                "unread_count": sms.unread_count,
+                "hours_old": round(hours_old, 1)
+            })
+    except Exception as e:
+        logger.warning(f"Command center - SMS error: {e}")
+
+    # 7. CALLS - Pending voicemail drops and missed calls
+    try:
+        pending_calls = db.execute(text("""
+            SELECT vd.id, vd.lead_id, vd.loan_id, vd.phone_number,
+                   vd.status, vd.created_at, vd.message_text,
+                   COALESCE(l.borrower_name, ld.name) as entity_name
+            FROM voicemail_drops vd
+            LEFT JOIN loans l ON vd.loan_id = l.id
+            LEFT JOIN leads ld ON vd.lead_id = ld.id
+            WHERE vd.status IN ('pending', 'queued', 'human_answered')
+            ORDER BY vd.created_at DESC
+            LIMIT 15
+        """)).fetchall()
+
+        for call in pending_calls:
+            priority = "high" if call.status == 'human_answered' else "medium"
+            status_text = "Human answered - follow up!" if call.status == 'human_answered' else f"Status: {call.status}"
+
+            action_items["calls"].append({
+                "id": f"call_{call.id}",
+                "type": "voicemail",
+                "priority": priority,
+                "title": f"Call {call.entity_name or call.phone_number}",
+                "description": status_text,
+                "entity_type": "loan" if call.loan_id else "lead",
+                "entity_id": call.loan_id or call.lead_id,
+                "entity_name": call.entity_name,
+                "phone_number": call.phone_number,
+                "created_at": call.created_at.isoformat() if call.created_at else None,
+                "url": f"/{'loans' if call.loan_id else 'leads'}/{call.loan_id or call.lead_id}",
+                "call_status": call.status
+            })
+    except Exception as e:
+        logger.warning(f"Command center - calls error: {e}")
+
+    # 8. RECONCILIATION - Pending data matches
+    try:
+        reconciliation_items = db.execute(text("""
+            SELECT ed.id, ed.event_id, ed.source_type, ed.extracted_email,
+                   ed.extracted_name, ed.created_at, ed.is_processed,
+                   ide.raw_data
+            FROM extracted_data ed
+            LEFT JOIN incoming_data_events ide ON ed.event_id = ide.id
+            WHERE ed.is_processed = false
+              AND ed.created_at > NOW() - INTERVAL '14 days'
+            ORDER BY ed.created_at DESC
+            LIMIT 20
+        """)).fetchall()
+
+        for item in reconciliation_items:
+            hours_old = (now - item.created_at).total_seconds() / 3600 if item.created_at else 0
+            priority = "high" if hours_old > 24 else "medium"
+
+            action_items["reconciliation"].append({
+                "id": f"recon_{item.id}",
+                "type": "reconciliation",
+                "priority": priority,
+                "title": f"Match: {item.extracted_name or item.extracted_email or 'Unknown'}",
+                "description": f"Source: {item.source_type}",
+                "source_type": item.source_type,
+                "extracted_email": item.extracted_email,
+                "extracted_name": item.extracted_name,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "url": "/reconciliation",
+                "hours_old": round(hours_old, 1)
+            })
+    except Exception as e:
+        logger.warning(f"Command center - reconciliation error: {e}")
+
+    # 9. APPROVALS - AI actions pending approval
+    try:
+        pending_approvals = db.query(AIAction).filter(
+            AIAction.status == "pending"
+        ).order_by(AIAction.created_at.desc()).limit(15).all()
+
+        for action in pending_approvals:
+            action_items["approvals"].append({
+                "id": f"approval_{action.id}",
+                "type": "ai_approval",
+                "priority": "medium",
+                "title": f"AI Action: {action.action_type}",
+                "description": action.reasoning[:100] if action.reasoning else None,
+                "entity_type": action.entity_type,
+                "entity_id": action.entity_id,
+                "action_type": action.action_type,
+                "confidence": action.confidence,
+                "created_at": action.created_at.isoformat() if action.created_at else None,
+                "url": "/ai-actions"
+            })
+    except Exception as e:
+        logger.warning(f"Command center - approvals error: {e}")
+
+    # Calculate summary counts
+    action_items["summary"] = {
+        "urgent_count": len(action_items["urgent"]),
+        "leads_count": len(action_items["leads"]),
+        "loans_count": len(action_items["loans"]),
+        "portfolio_count": len(action_items["portfolio"]),
+        "emails_count": len(action_items["emails"]),
+        "sms_count": len(action_items["sms"]),
+        "calls_count": len(action_items["calls"]),
+        "reconciliation_count": len(action_items["reconciliation"]),
+        "approvals_count": len(action_items["approvals"]),
+        "total_action_items": sum([
+            len(action_items["urgent"]),
+            len(action_items["leads"]),
+            len(action_items["loans"]),
+            len(action_items["portfolio"]),
+            len(action_items["emails"]),
+            len(action_items["sms"]),
+            len(action_items["calls"]),
+            len(action_items["reconciliation"]),
+            len(action_items["approvals"])
+        ]),
+        "generated_at": now.isoformat()
+    }
+
+    return action_items
+
+
 @app.get("/api/v1/leads/{lead_id}")
 async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
