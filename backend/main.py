@@ -5923,23 +5923,24 @@ async def import_document_notification_email(
         }
 
         # 1. Create Activity record (this is what shows in email history on profile page)
-        activity_description = f"From: {request.from_name} <{request.from_email}>\nSubject: {request.subject}\n\n{request.body}"
+        # Activity table uses 'content' not 'description', and 'type' is an enum
+        activity_content = f"From: {request.from_name} <{request.from_email}>\nSubject: {request.subject}\n\n{request.body}"
         if request.attachment_names:
-            activity_description += f"\n\nAttachments: {', '.join(request.attachment_names)}"
+            activity_content += f"\n\nAttachments: {', '.join(request.attachment_names)}"
 
         try:
             activity_result = db.execute(text("""
                 INSERT INTO activities (
-                    lead_id, loan_id, type, description,
+                    lead_id, loan_id, type, content,
                     created_at, user_id
                 ) VALUES (
-                    :lead_id, :loan_id, 'email', :description,
+                    :lead_id, :loan_id, 'Email', :content,
                     :created_at, :user_id
                 ) RETURNING id
             """), {
                 "lead_id": request.lead_id,
                 "loan_id": request.loan_id,
-                "description": activity_description,
+                "content": activity_content,
                 "created_at": received_at,
                 "user_id": user_id
             })
