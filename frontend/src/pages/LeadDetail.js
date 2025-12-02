@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -108,6 +108,7 @@ function LeadDetail() {
     'Long-Term Nurture',
     'Withdrawn',
     'Does Not Qualify',
+    'Disclosed',  // Converts lead to active loan
   ];
 
   // Circle of Influence state
@@ -307,6 +308,38 @@ function LeadDetail() {
     setShowStatusDropdown(false);
 
     try {
+      // Special handling for "Disclosed" - converts lead to active loan
+      if (newStatus === 'Disclosed') {
+        // Create a new loan from the lead data
+        const loanData = {
+          borrower_name: lead?.name || formData?.name || `${formData?.first_name || ''} ${formData?.last_name || ''}`.trim(),
+          borrower_email: lead?.email || formData?.email,
+          borrower_phone: lead?.phone || formData?.phone,
+          amount: lead?.loan_amount || formData?.loan_amount || 0,
+          stage: 'Disclosed',  // Start at Disclosed stage in loan pipeline
+          lead_id: parseInt(id),  // Link back to original lead
+          property_address: lead?.property_address || formData?.property_address,
+          loan_type: lead?.loan_type || formData?.loan_type,
+        };
+
+        console.log('Converting lead to loan with data:', loanData);
+        const newLoan = await loansAPI.create(loanData);
+        console.log('Loan created:', newLoan);
+
+        // Update lead stage to indicate it's been converted
+        await leadsAPI.update(id, { stage: 'Disclosed', loan_id: newLoan.id });
+
+        // Clear caches
+        localStorage.removeItem('leads_data');
+        localStorage.removeItem('leads_data_time');
+        localStorage.removeItem('loans_data');
+        localStorage.removeItem('loans_data_time');
+
+        // Navigate to the new loan in Active Loans
+        navigate(`/loans/${newLoan.id}`);
+        return;
+      }
+
       // Update local state immediately
       setFormData(prev => ({ ...prev, stage: newStatus }));
       setLead(prev => ({ ...prev, stage: newStatus }));
@@ -341,6 +374,7 @@ function LeadDetail() {
       'Long-Term Nurture': '#607D8B',
       'Withdrawn': '#F44336',
       'Does Not Qualify': '#795548',
+      'Disclosed': '#00C853',  // Bright green - converts to active loan
     };
     return colors[status] || '#999';
   };

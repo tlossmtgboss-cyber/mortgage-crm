@@ -195,6 +195,7 @@ class LeadStage(str, enum.Enum):
     REFERRAL_SOURCE = "Referral Source"  # PRD: Circle of Cash Flow
     WITHDRAWN = "Withdrawn"
     DOES_NOT_QUALIFY = "Does Not Qualify"
+    DISCLOSED = "Disclosed"  # Lead converted to Active Loan
 
 class LoanStage(str, enum.Enum):
     DISCLOSED = "Disclosed"
