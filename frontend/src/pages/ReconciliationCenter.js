@@ -36,6 +36,10 @@ function ReconciliationCenter() {
   const [delegateToAI, setDelegateToAI] = useState(false);
   const [allowAutoProcess, setAllowAutoProcess] = useState(false); // Checkbox for "Allow AI to auto-process similar messages"
 
+  // Email inbox deletion settings
+  const [deleteFromInboxGlobal, setDeleteFromInboxGlobal] = useState(false); // Global setting from user preferences
+  const [deleteFromInboxOverride, setDeleteFromInboxOverride] = useState(null); // Per-email override: true/false/null (null means use global)
+
   // No-match dialog state
   const [showNoMatchDialog, setShowNoMatchDialog] = useState(false);
   const [noMatchItemId, setNoMatchItemId] = useState(null);
@@ -149,6 +153,7 @@ function ReconciliationCenter() {
     fetchPendingItems();
     fetchCompletedItems();
     fetchReferralPartners();
+    fetchEmailProcessingSettings();
     // Note: loadSampleData() removed - was overwriting real API data with samples
 
     // Auto-sync emails every 5 minutes
@@ -161,6 +166,28 @@ function ReconciliationCenter() {
 
     return () => clearInterval(syncInterval);
   }, []);
+
+  // Fetch email processing settings (global delete from inbox setting)
+  const fetchEmailProcessingSettings = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/user-settings/email-processing`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDeleteFromInboxGlobal(data.delete_from_inbox_after_processing || false);
+      }
+    } catch (error) {
+      console.error('Error fetching email processing settings:', error);
+    }
+  };
+
+  // Reset the override when a new item is selected
+  useEffect(() => {
+    setDeleteFromInboxOverride(null);
+  }, [selectedItem?.id]);
 
   // Force layout recalculation when content loads to fix scroll issues
   useEffect(() => {
@@ -530,6 +557,11 @@ function ReconciliationCenter() {
       const renamedFieldsObj = Object.keys(renamedFields).length > 0 ? renamedFields : null;
 
       // Build request body with entity type options
+      // Determine if we should delete from inbox
+      const shouldDeleteFromInbox = deleteFromInboxOverride !== null
+        ? deleteFromInboxOverride
+        : deleteFromInboxGlobal;
+
       const requestBody = {
         extracted_data_id: itemId,
         corrections: corrections,
@@ -538,7 +570,9 @@ function ReconciliationCenter() {
         delegate_to_ai: delegateToAI,
         allow_auto_process: allowAutoProcess, // Skip review for similar messages
         email_intent: selectedItem?.email_intent,
-        recommended_action: selectedItem?.recommended_action
+        recommended_action: selectedItem?.recommended_action,
+        delete_from_inbox: shouldDeleteFromInbox,
+        email_message_id: selectedItem?.email_message_id || selectedItem?.message_id
       };
 
       // Add entity type override if user selected one
@@ -733,6 +767,12 @@ function ReconciliationCenter() {
   const handleReject = async (itemId, reason) => {
     try {
       setProcessingAction(true);
+
+      // Determine if we should delete from inbox
+      const shouldDeleteFromInbox = deleteFromInboxOverride !== null
+        ? deleteFromInboxOverride
+        : deleteFromInboxGlobal;
+
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
         method: 'POST',
         headers: {
@@ -741,7 +781,9 @@ function ReconciliationCenter() {
         },
         body: JSON.stringify({
           extracted_data_id: itemId,
-          reason: reason
+          reason: reason,
+          delete_from_inbox: shouldDeleteFromInbox,
+          email_message_id: selectedItem?.email_message_id || selectedItem?.message_id
         })
       });
 
@@ -750,6 +792,7 @@ function ReconciliationCenter() {
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
+        setDeleteFromInboxOverride(null);
         // Refresh completed items to show the rejected item
         fetchCompletedItems();
       } else {
@@ -767,7 +810,20 @@ function ReconciliationCenter() {
   const handleDelete = async (itemId) => {
     try {
       setProcessingAction(true);
-      const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {
+
+      // Determine if we should delete from inbox
+      const shouldDeleteFromInbox = deleteFromInboxOverride !== null
+        ? deleteFromInboxOverride
+        : deleteFromInboxGlobal;
+
+      // Build URL with query params for delete_from_inbox option
+      const emailMessageId = selectedItem?.email_message_id || selectedItem?.message_id;
+      let url = `${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`;
+      if (shouldDeleteFromInbox && emailMessageId) {
+        url += `?delete_from_inbox=true&email_message_id=${encodeURIComponent(emailMessageId)}`;
+      }
+
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -782,6 +838,7 @@ function ReconciliationCenter() {
         setCompletedItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
+        setDeleteFromInboxOverride(null);
       } else {
         const errorData = await response.json().catch(() => ({}));
         alert(`Failed to delete item: ${errorData.detail || response.statusText}`);
@@ -1875,6 +1932,40 @@ function ReconciliationCenter() {
                         </span>
                         <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#78350f' }}>
                           When approved, AI will automatically handle similar "{selectedItem.email_intent || 'email'}" messages in the future without requiring your review.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Delete from Inbox Option */}
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '12px 16px',
+                    background: deleteFromInboxOverride === true || (deleteFromInboxOverride === null && deleteFromInboxGlobal) ? '#fef2f2' : '#f8fafc',
+                    borderRadius: '8px',
+                    border: `1px solid ${deleteFromInboxOverride === true || (deleteFromInboxOverride === null && deleteFromInboxGlobal) ? '#fecaca' : '#e2e8f0'}`
+                  }}>
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      cursor: 'pointer'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={deleteFromInboxOverride !== null ? deleteFromInboxOverride : deleteFromInboxGlobal}
+                        onChange={(e) => setDeleteFromInboxOverride(e.target.checked)}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <span style={{ fontWeight: '600', color: '#dc2626' }}>
+                          Also delete from inbox
+                        </span>
+                        <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#6b7280' }}>
+                          Move this email to trash in your email inbox after processing.
+                          {deleteFromInboxGlobal && deleteFromInboxOverride === null && (
+                            <span style={{ color: '#059669', fontStyle: 'italic' }}> (Enabled by default in Settings)</span>
+                          )}
                         </p>
                       </div>
                     </label>

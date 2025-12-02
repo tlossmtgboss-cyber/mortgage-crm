@@ -380,6 +380,12 @@ function Settings() {
   const [savingMicrosoftConfig, setSavingMicrosoftConfig] = useState(false);
   const [microsoftConfigMessage, setMicrosoftConfigMessage] = useState({ type: '', text: '' });
 
+  // Email processing settings
+  const [emailProcessingSettings, setEmailProcessingSettings] = useState({
+    delete_from_inbox_after_processing: false
+  });
+  const [savingEmailSettings, setSavingEmailSettings] = useState(false);
+
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
@@ -1936,6 +1942,46 @@ const API_BASE_URL = isProduction
     }
   };
 
+  // Email Processing Settings functions
+  const fetchEmailProcessingSettings = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/user-settings/email-processing`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEmailProcessingSettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching email processing settings:', error);
+    }
+  };
+
+  const saveEmailProcessingSettings = async (newSettings) => {
+    setSavingEmailSettings(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/user-settings/email-processing`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newSettings)
+      });
+      if (response.ok) {
+        setEmailProcessingSettings(newSettings);
+      } else {
+        console.error('Failed to save email processing settings');
+      }
+    } catch (error) {
+      console.error('Error saving email processing settings:', error);
+    } finally {
+      setSavingEmailSettings(false);
+    }
+  };
+
   const toggleIntegration = (integrationId) => {
     // Navigate to the individual integration detail page
     // Map integration IDs to their detail page section names
@@ -1984,6 +2030,7 @@ const API_BASE_URL = isProduction
     if (activeSection === 'outlook-email' || activeSection === 'outlook-calendar') {
       checkMicrosoftStatus();
       fetchMicrosoftOAuthConfig();
+      fetchEmailProcessingSettings();
     }
     if (activeSection === 'calendly') {
       fetchCalendlyEventTypes();
@@ -2715,6 +2762,78 @@ const API_BASE_URL = isProduction
                   </button>
                 </div>
               )}
+
+              {/* Email Processing Settings */}
+              <div className="email-processing-settings" style={{
+                marginTop: '24px',
+                padding: '20px',
+                background: '#f9fafb',
+                borderRadius: '12px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <h4 style={{margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: '#1f2937'}}>
+                  Email Processing Settings
+                </h4>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  cursor: 'pointer',
+                  padding: '12px',
+                  background: 'white',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={emailProcessingSettings.delete_from_inbox_after_processing}
+                    onChange={(e) => {
+                      const newSettings = {
+                        ...emailProcessingSettings,
+                        delete_from_inbox_after_processing: e.target.checked
+                      };
+                      saveEmailProcessingSettings(newSettings);
+                    }}
+                    disabled={savingEmailSettings}
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      marginTop: '2px',
+                      accentColor: '#218D8D'
+                    }}
+                  />
+                  <div>
+                    <span style={{fontWeight: '500', color: '#1f2937', display: 'block'}}>
+                      Delete emails from inbox after processing
+                    </span>
+                    <span style={{fontSize: '13px', color: '#6b7280', marginTop: '4px', display: 'block'}}>
+                      When you approve or reject emails in the Reconciliation Center, they will also be moved to trash in your inbox.
+                      You can override this per-email when processing.
+                    </span>
+                  </div>
+                </label>
+
+                {emailProcessingSettings.delete_from_inbox_after_processing && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '12px',
+                    background: '#fef3c7',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    color: '#92400e',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '8px'
+                  }}>
+                    <span>⚠️</span>
+                    <span>
+                      Emails will be moved to your Trash folder (not permanently deleted).
+                      You can recover them from Trash within 30 days.
+                    </span>
+                  </div>
+                )}
+              </div>
 
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>

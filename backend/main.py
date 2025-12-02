@@ -3859,10 +3859,16 @@ class ReconciliationApproval(BaseModel):
     create_new_loan: Optional[bool] = False  # Create a new loan from this data
     loan_stage: Optional[str] = None  # Stage for new loan (e.g., "PROCESSING", "UW_RECEIVED")
     update_status_to: Optional[str] = None  # Update entity status during approval (e.g., "PROCESSING")
+    # Delete from inbox options
+    delete_from_inbox: Optional[bool] = False  # If True, move email to trash after processing
+    email_message_id: Optional[str] = None  # Microsoft Graph message ID for deletion
 
 class ReconciliationRejection(BaseModel):
     extracted_data_id: int
     reason: Optional[str] = None
+    # Delete from inbox options
+    delete_from_inbox: Optional[bool] = False  # If True, move email to trash after processing
+    email_message_id: Optional[str] = None  # Microsoft Graph message ID for deletion
 
 class BlockSenderRequest(BaseModel):
     sender_email: str
@@ -20670,6 +20676,61 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
         logger.error(f"Error fetching Microsoft emails: {e}")
         return {"error": str(e)}
 
+
+async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: str, db: Session):
+    """Move an email to trash in Microsoft 365/Outlook"""
+    try:
+        # Check if token needs refresh
+        if oauth_record.token_expires_at:
+            token_expiry = oauth_record.token_expires_at
+            if token_expiry.tzinfo is None:
+                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+
+            if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
+                logger.info("Token expiring soon, refreshing before delete...")
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    return {
+                        "success": False,
+                        "error": refresh_result.get("error", "Failed to refresh token"),
+                        "needs_reauth": refresh_result.get("needs_reauth", False)
+                    }
+
+        access_token = decrypt_token(oauth_record.access_token)
+
+        # Microsoft Graph API endpoint to move email to trash (deletedItems folder)
+        # Using POST to /messages/{id}/move endpoint
+        graph_url = f"https://graph.microsoft.com/v1.0/me/messages/{message_id}/move"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Move to deletedItems (Trash folder)
+        body = {
+            "destinationId": "deleteditems"
+        }
+
+        response = requests.post(graph_url, headers=headers, json=body)
+
+        if response.status_code == 200 or response.status_code == 201:
+            logger.info(f"Successfully moved email {message_id} to trash for user {oauth_record.user_id}")
+            return {"success": True, "message_id": message_id}
+        elif response.status_code == 404:
+            # Email might have already been deleted
+            logger.warning(f"Email {message_id} not found - may have already been deleted")
+            return {"success": True, "message_id": message_id, "note": "already_deleted"}
+        else:
+            error_detail = response.text
+            logger.error(f"Failed to delete Microsoft email: {response.status_code} - {error_detail}")
+            return {"success": False, "error": f"Microsoft API error: {response.status_code}"}
+
+    except Exception as e:
+        logger.error(f"Error deleting Microsoft email: {e}")
+        return {"success": False, "error": str(e)}
+
+
 async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session):
     """Process a Microsoft Graph email and ingest into DRE"""
     try:
@@ -23717,6 +23778,28 @@ async def approve_reconciliation(
                 if lead_entity:
                     entity_name = lead_entity.name
 
+            # Delete email from inbox if requested
+            email_deleted = False
+            if approval.delete_from_inbox and approval.email_message_id:
+                try:
+                    # Get user's Microsoft OAuth token
+                    oauth_record = db.query(MicrosoftOAuthToken).filter(
+                        MicrosoftOAuthToken.user_id == current_user.id
+                    ).first()
+
+                    if oauth_record and oauth_record.access_token:
+                        delete_result = await delete_microsoft_email(oauth_record, approval.email_message_id, db)
+                        if delete_result.get("success"):
+                            email_deleted = True
+                            logger.info(f"Deleted email {approval.email_message_id} from inbox after approval")
+                        else:
+                            logger.warning(f"Failed to delete email from inbox: {delete_result.get('error')}")
+                    else:
+                        logger.warning("No Microsoft OAuth token found for email deletion")
+                except Exception as del_err:
+                    logger.error(f"Error deleting email from inbox: {del_err}")
+                    # Don't fail the approval if email deletion fails
+
             return {
                 "status": "success",
                 "message": "Data approved and applied to CRM",
@@ -23728,7 +23811,8 @@ async def approve_reconciliation(
                 "applied_fields": applied_fields,
                 "status_updated": status_updated,
                 "old_status": old_status,
-                "new_status": new_status
+                "new_status": new_status,
+                "email_deleted_from_inbox": email_deleted
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to apply data to CRM")
@@ -23793,10 +23877,33 @@ async def reject_reconciliation(
 
         logger.info(f"Rejected extracted data {extracted.id} by user {current_user.id}: {rejection.reason}")
 
+        # Delete email from inbox if requested
+        email_deleted = False
+        if rejection.delete_from_inbox and rejection.email_message_id:
+            try:
+                # Get user's Microsoft OAuth token
+                oauth_record = db.query(MicrosoftOAuthToken).filter(
+                    MicrosoftOAuthToken.user_id == current_user.id
+                ).first()
+
+                if oauth_record and oauth_record.access_token:
+                    delete_result = await delete_microsoft_email(oauth_record, rejection.email_message_id, db)
+                    if delete_result.get("success"):
+                        email_deleted = True
+                        logger.info(f"Deleted email {rejection.email_message_id} from inbox after rejection")
+                    else:
+                        logger.warning(f"Failed to delete email from inbox: {delete_result.get('error')}")
+                else:
+                    logger.warning("No Microsoft OAuth token found for email deletion")
+            except Exception as del_err:
+                logger.error(f"Error deleting email from inbox: {del_err}")
+                # Don't fail the rejection if email deletion fails
+
         return {
             "status": "success",
             "message": "Data rejected",
-            "extracted_data_id": extracted.id
+            "extracted_data_id": extracted.id,
+            "email_deleted_from_inbox": email_deleted
         }
     except HTTPException:
         raise
@@ -23996,6 +24103,8 @@ async def bulk_delete_reconciliation_items(
 @app.delete("/api/v1/reconciliation/items/{extracted_data_id}")
 async def delete_reconciliation_item(
     extracted_data_id: int,
+    delete_from_inbox: bool = False,
+    email_message_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -24038,10 +24147,33 @@ async def delete_reconciliation_item(
 
         logger.info(f"Deleted extracted data {extracted_data_id} by user {current_user.id}")
 
+        # Delete email from inbox if requested
+        email_deleted = False
+        if delete_from_inbox and email_message_id:
+            try:
+                # Get user's Microsoft OAuth token
+                oauth_record = db.query(MicrosoftOAuthToken).filter(
+                    MicrosoftOAuthToken.user_id == current_user.id
+                ).first()
+
+                if oauth_record and oauth_record.access_token:
+                    delete_result = await delete_microsoft_email(oauth_record, email_message_id, db)
+                    if delete_result.get("success"):
+                        email_deleted = True
+                        logger.info(f"Deleted email {email_message_id} from inbox after item deletion")
+                    else:
+                        logger.warning(f"Failed to delete email from inbox: {delete_result.get('error')}")
+                else:
+                    logger.warning("No Microsoft OAuth token found for email deletion")
+            except Exception as del_err:
+                logger.error(f"Error deleting email from inbox: {del_err}")
+                # Don't fail the deletion if email deletion fails
+
         return {
             "status": "success",
             "message": "Item permanently deleted",
-            "extracted_data_id": extracted_data_id
+            "extracted_data_id": extracted_data_id,
+            "email_deleted_from_inbox": email_deleted
         }
     except HTTPException:
         raise
@@ -25163,6 +25295,71 @@ async def assign_user_to_organization(
     except Exception as e:
         db.rollback()
         logger.error(f"Error assigning user to organization: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# USER SETTINGS ENDPOINTS
+# ============================================================================
+
+class EmailProcessingSettingsRequest(BaseModel):
+    delete_from_inbox_after_processing: bool = False
+
+class EmailProcessingSettingsResponse(BaseModel):
+    delete_from_inbox_after_processing: bool = False
+
+@app.get("/api/v1/user-settings/email-processing", response_model=EmailProcessingSettingsResponse)
+async def get_email_processing_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's email processing settings"""
+    try:
+        setting = db.query(UserSettings).filter(
+            UserSettings.user_id == current_user.id,
+            UserSettings.setting_key == "delete_from_inbox_after_processing"
+        ).first()
+
+        return EmailProcessingSettingsResponse(
+            delete_from_inbox_after_processing=setting.setting_value == "true" if setting else False
+        )
+    except Exception as e:
+        logger.error(f"Error getting email processing settings: {e}")
+        return EmailProcessingSettingsResponse(delete_from_inbox_after_processing=False)
+
+@app.put("/api/v1/user-settings/email-processing", response_model=EmailProcessingSettingsResponse)
+async def update_email_processing_settings(
+    settings: EmailProcessingSettingsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user's email processing settings"""
+    try:
+        # Find or create the setting
+        existing = db.query(UserSettings).filter(
+            UserSettings.user_id == current_user.id,
+            UserSettings.setting_key == "delete_from_inbox_after_processing"
+        ).first()
+
+        if existing:
+            existing.setting_value = "true" if settings.delete_from_inbox_after_processing else "false"
+            existing.updated_at = datetime.now(timezone.utc)
+        else:
+            new_setting = UserSettings(
+                user_id=current_user.id,
+                setting_key="delete_from_inbox_after_processing",
+                setting_value="true" if settings.delete_from_inbox_after_processing else "false"
+            )
+            db.add(new_setting)
+
+        db.commit()
+
+        return EmailProcessingSettingsResponse(
+            delete_from_inbox_after_processing=settings.delete_from_inbox_after_processing
+        )
+    except Exception as e:
+        logger.error(f"Error updating email processing settings: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -2878,22 +2878,30 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                     🔄
                   </button>
                 </div>
-                {reconciliationItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`reconciliation-item ${selectedReconciliationItem?.id === item.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedReconciliationItem(item)}
-                  >
-                    <div className="item-name">{item.borrower_name || 'Unknown'}</div>
-                    <div className="item-meta">
-                      <span className="item-type">{item.match_entity_type || 'New'}</span>
-                      {item.match_entity_id && (
-                        <span className="item-match">→ ID: {item.match_entity_id}</span>
-                      )}
+                {reconciliationItems.map((item) => {
+                  // Extract name from fields (handles nested {value, confidence} structure)
+                  const firstName = item.fields?.first_name?.value || item.fields?.first_name || '';
+                  const lastName = item.fields?.last_name?.value || item.fields?.last_name || '';
+                  const displayName = item.borrower_name || item.match_entity_name ||
+                    (firstName || lastName ? `${firstName} ${lastName}`.trim() : 'Unknown');
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`reconciliation-item ${selectedReconciliationItem?.id === item.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedReconciliationItem(item)}
+                    >
+                      <div className="item-name">{displayName}</div>
+                      <div className="item-meta">
+                        <span className="item-type">{item.match_entity_type || 'New'}</span>
+                        {item.match_entity_id && (
+                          <span className="item-match">→ ID: {item.match_entity_id}</span>
+                        )}
+                      </div>
+                      <div className="item-source">{item.source || 'Email'}</div>
                     </div>
-                    <div className="item-source">{item.source || 'Email'}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Item Detail */}
