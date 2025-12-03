@@ -43,8 +43,8 @@ def check_sla_status(
     if loan_id:
         # Check specific loan
         loan = execute_single("""
-            SELECT id, loan_number, borrower_name, status as stage,
-                   status_changed_at as stage_entered_at,
+            SELECT id, loan_number, borrower_name, stage,
+                   stage_changed_at as stage_entered_at,
                    created_at, expected_close_date as target_close_date
             FROM loans
             WHERE id = :id
@@ -64,18 +64,18 @@ def check_sla_status(
     filters = ["stage NOT IN ('Funded')"]
 
     if stage:
-        filters.append("status = :stage")
+        filters.append("stage = :stage")
         params["stage"] = stage
 
     where_sql = " AND ".join(filters)
 
     loans = execute_query(f"""
-        SELECT id, loan_number, borrower_name, status as stage,
-               status_changed_at as stage_entered_at,
+        SELECT id, loan_number, borrower_name, stage,
+               stage_changed_at as stage_entered_at,
                created_at, expected_close_date as target_close_date
         FROM loans
         WHERE {where_sql}
-        ORDER BY status_changed_at ASC
+        ORDER BY stage_changed_at ASC
     """, params)
 
     sla_results = {
@@ -135,7 +135,7 @@ def get_sla_alerts(
     filters = ["stage NOT IN ('Funded')"]
 
     if stage:
-        filters.append("status = :stage")
+        filters.append("stage = :stage")
         params["stage"] = stage
 
     if user_id:
@@ -145,12 +145,12 @@ def get_sla_alerts(
     where_sql = " AND ".join(filters)
 
     loans = execute_query(f"""
-        SELECT id, loan_number, borrower_name, status as stage,
-               status_changed_at as stage_entered_at,
+        SELECT id, loan_number, borrower_name, stage,
+               stage_changed_at as stage_entered_at,
                loan_officer_id, loan_amount
         FROM loans
         WHERE {where_sql}
-        ORDER BY status_changed_at ASC
+        ORDER BY stage_changed_at ASC
         LIMIT :limit
     """, params)
 
@@ -217,14 +217,14 @@ def calculate_stage_sla(
     sla_target = SLA_TARGETS.get(stage.lower(), 5)
 
     params = {"stage": stage, "sla_target": sla_target}
-    filters = ["(status = :stage OR previous_status = :stage)"]
+    filters = ["(stage = :stage OR previous_stage = :stage)"]
 
     if date_from:
-        filters.append("status_changed_at >= :date_from")
+        filters.append("stage_changed_at >= :date_from")
         params["date_from"] = date_from
 
     if date_to:
-        filters.append("status_changed_at <= :date_to")
+        filters.append("stage_changed_at <= :date_to")
         params["date_to"] = date_to
 
     if user_id:
@@ -237,16 +237,16 @@ def calculate_stage_sla(
         SELECT
             COUNT(*) as total_loans,
             AVG(EXTRACT(EPOCH FROM (
-                COALESCE(stage_exited_at, NOW()) - status_changed_at
+                COALESCE(stage_exited_at, NOW()) - stage_changed_at
             ))/86400) as avg_days,
             MIN(EXTRACT(EPOCH FROM (
-                COALESCE(stage_exited_at, NOW()) - status_changed_at
+                COALESCE(stage_exited_at, NOW()) - stage_changed_at
             ))/86400) as min_days,
             MAX(EXTRACT(EPOCH FROM (
-                COALESCE(stage_exited_at, NOW()) - status_changed_at
+                COALESCE(stage_exited_at, NOW()) - stage_changed_at
             ))/86400) as max_days,
             COUNT(CASE WHEN EXTRACT(EPOCH FROM (
-                COALESCE(stage_exited_at, NOW()) - status_changed_at
+                COALESCE(stage_exited_at, NOW()) - stage_changed_at
             ))/86400 <= :sla_target THEN 1 END) as within_sla
         FROM loans
         WHERE {where_sql}
@@ -305,14 +305,14 @@ def project_sla_breach(
     filters = ["stage NOT IN ('Funded')"]
 
     if stage:
-        filters.append("status = :stage")
+        filters.append("stage = :stage")
         params["stage"] = stage
 
     where_sql = " AND ".join(filters)
 
     loans = execute_query(f"""
-        SELECT id, loan_number, borrower_name, status as stage,
-               status_changed_at as stage_entered_at,
+        SELECT id, loan_number, borrower_name, stage,
+               stage_changed_at as stage_entered_at,
                loan_amount, loan_type, loan_officer_id
         FROM loans
         WHERE {where_sql}
@@ -406,9 +406,9 @@ def get_sla_report(
             "date_to": date_to,
         }
         filters = [
-            "(status = :stage OR previous_status = :stage)",
-            "status_changed_at >= :date_from",
-            "status_changed_at <= :date_to",
+            "(stage = :stage OR previous_stage = :stage)",
+            "stage_changed_at >= :date_from",
+            "stage_changed_at <= :date_to",
         ]
 
         if user_id:
@@ -421,10 +421,10 @@ def get_sla_report(
             SELECT
                 COUNT(*) as total,
                 COUNT(CASE WHEN EXTRACT(EPOCH FROM (
-                    COALESCE(stage_exited_at, NOW()) - status_changed_at
+                    COALESCE(stage_exited_at, NOW()) - stage_changed_at
                 ))/86400 <= :target THEN 1 END) as compliant,
                 AVG(EXTRACT(EPOCH FROM (
-                    COALESCE(stage_exited_at, NOW()) - status_changed_at
+                    COALESCE(stage_exited_at, NOW()) - stage_changed_at
                 ))/86400) as avg_days
             FROM loans
             WHERE {where_sql}
@@ -546,7 +546,7 @@ def escalate_sla_breach(
 ) -> ToolResult:
     """Escalate SLA breach."""
     loan = execute_single("""
-        SELECT id, loan_number, borrower_name, status as stage,
+        SELECT id, loan_number, borrower_name, stage,
                loan_officer_id, loan_amount
         FROM loans
         WHERE id = :id
@@ -631,8 +631,8 @@ def get_sla_dashboard(
 
     # Current pipeline status
     pipeline = execute_query(f"""
-        SELECT id, loan_number, borrower_name, status as stage,
-               status_changed_at as stage_entered_at, loan_amount
+        SELECT id, loan_number, borrower_name, stage,
+               stage_changed_at as stage_entered_at, loan_amount
         FROM loans
         WHERE {where_sql}
     """, params)
