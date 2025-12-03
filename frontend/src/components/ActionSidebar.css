@@ -140,6 +140,24 @@
   background: #f9fafb;
 }
 
+/* Split view when detail panel is shown */
+.action-content.with-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.action-content.with-detail .action-list {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow-y: auto;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.action-content.with-detail .action-detail-panel {
+  flex: 1;
+  overflow-y: auto;
+}
+
 /* Loading State */
 .action-loading {
   display: flex;
@@ -364,6 +382,363 @@
 
 .action-item .action-btn.navigate:hover {
   background: #bfdbfe;
+}
+
+/* Detail Panel */
+.action-detail-panel {
+  background: #ffffff;
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-header .detail-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.detail-header .detail-title-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+.detail-header .detail-category {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.detail-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.detail-close:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.detail-body {
+  margin-bottom: 16px;
+}
+
+.detail-field {
+  margin-bottom: 12px;
+}
+
+.detail-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.detail-field span,
+.detail-field p {
+  font-size: 14px;
+  color: #1f2937;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.detail-field .detail-value {
+  display: block;
+}
+
+.detail-field .client-name {
+  font-weight: 600;
+  color: #217F8D;
+  font-size: 15px;
+}
+
+.detail-field .phone-number {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  font-size: 14px;
+  color: #217F8D;
+}
+
+.detail-field.full-width {
+  margin-top: 16px;
+}
+
+.detail-field .detail-message {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.detail-field .detail-ai-message {
+  background: #f0f9fa;
+  border: 1px solid #b8e0e6;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.detail-field .status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.detail-field .phone-link {
+  color: #217F8D;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.detail-field .phone-link:hover {
+  text-decoration: underline;
+}
+
+.detail-message {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-message label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.detail-message p {
+  font-size: 13px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.detail-ai-message {
+  background: #f0f9fa;
+  border: 1px solid #b8e0e6;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-ai-message label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #217F8D;
+  margin-bottom: 8px;
+}
+
+.detail-ai-message p {
+  font-size: 13px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Detail Panel Actions */
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.detail-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.detail-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.detail-btn.complete-btn {
+  background: #16a34a;
+  color: white;
+}
+
+.detail-btn.complete-btn:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.detail-btn.complete-btn.primary {
+  flex: 2;
+  background: #16a34a;
+}
+
+.detail-btn.call-btn {
+  background: #217F8D;
+  color: white;
+}
+
+.detail-btn.call-btn:hover:not(:disabled) {
+  background: #1a6570;
+}
+
+.detail-btn.navigate-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.detail-btn.navigate-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+/* Power Dialer Controls */
+.power-dialer-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f0f9fa;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.select-all-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #217F8D;
+  cursor: pointer;
+}
+
+.power-dial-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #217F8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.power-dial-btn:hover:not(:disabled) {
+  background: #1a6570;
+}
+
+.power-dial-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.power-dial-btn.dialing {
+  background: #dc2626;
+}
+
+.power-dial-btn.dialing:hover {
+  background: #b91c1c;
+}
+
+/* Call checkbox in action items */
+.call-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px 12px 12px;
+  border-right: 1px solid #f3f4f6;
+}
+
+.call-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #217F8D;
+  cursor: pointer;
+}
+
+/* Adjust action item with checkbox */
+.action-item.with-checkbox .item-content {
+  padding-left: 8px;
+}
+
+/* Call in progress indicator */
+.action-item.call-in-progress {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.action-item.call-in-progress::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #16a34a;
 }
 
 /* Footer */

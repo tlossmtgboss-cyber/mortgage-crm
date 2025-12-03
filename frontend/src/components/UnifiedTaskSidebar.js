@@ -641,44 +641,6 @@ ${instruction ? `\nKey Point: ${instruction}\n` : ''}
                 )}
               </div>
 
-              {/* AI-Drafted Message Section */}
-              <div className="ai-message-section">
-                <div className="ai-message-header">
-                  <div className="ai-badge">
-                    <span className="ai-icon">🤖</span>
-                    <span>AI-Drafted Message</span>
-                  </div>
-                  <button
-                    className="edit-message-btn"
-                    onClick={() => setIsEditing(!isEditing)}
-                  >
-                    {isEditing ? '✓ Done' : '✏️ Edit Message'}
-                  </button>
-                </div>
-                {isEditing ? (
-                  <textarea
-                    className="ai-message-editor"
-                    value={editedResponse}
-                    onChange={(e) => setEditedResponse(e.target.value)}
-                  />
-                ) : (
-                  <div
-                    className="ai-message-content"
-                    dangerouslySetInnerHTML={{
-                      __html: (() => {
-                        const content = editedResponse || selectedTask.ai_suggested_response || 'No AI message generated yet.';
-                        // Check if content contains HTML tags (Calendly scheduling emails)
-                        if (content.includes('<div') || content.includes('<a href')) {
-                          return content;
-                        }
-                        // Plain text - convert newlines to breaks
-                        return content.replace(/\n/g, '<br />');
-                      })()
-                    }}
-                  />
-                )}
-              </div>
-
               {/* Communication History Accordion */}
               <div className="comm-history-section">
                 <button
