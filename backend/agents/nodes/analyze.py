@@ -1,17 +1,22 @@
 """
-Query Analyzer Node
+Query Analyzer Node (OPTIMIZED v2)
 
 This node analyzes the user's query to determine:
 - Intent classification
 - Entity extraction
 - Required tools
 - Urgency and complexity assessment
+
+OPTIMIZATION: Uses fast pattern matching for common queries to skip LLM call
+- Pattern match first: ~10ms for known patterns (vs ~5-7s for LLM)
+- Falls back to LLM for complex/ambiguous queries
 """
 
 import json
 import logging
+import re
 import time
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 from anthropic import Anthropic
 
 from ..state import (
@@ -32,7 +37,7 @@ AVAILABLE_TOOLS = [
     "search_leads",          # Search leads by name/email/phone
     "get_pipeline_metrics",  # Pipeline analytics
 
-    # Lead Pipeline Intelligence Tools (NEW)
+    # Lead Pipeline Intelligence Tools
     "lead_status_insights",  # Lead pipeline coaching/analytics/bottlenecks
     "get_leads_by_status",   # Detailed lead lists for specific statuses
 
@@ -44,6 +49,185 @@ AVAILABLE_TOOLS = [
     # Market Intelligence
     "get_rate_lock_advisory", # Rate lock recommendations
 ]
+
+
+# =============================================================================
+# FAST PATTERN MATCHING (skip LLM for common queries)
+# =============================================================================
+
+INTENT_PATTERNS = {
+    # Task/Priority queries - most common
+    "task_management": {
+        "patterns": [
+            r"(my |what are |show me )?(top |daily |today'?s? )?priorit(y|ies)",
+            r"what (should|do) i (do|focus on|work on)( first| today| next)?",
+            r"(my |today'?s? )?tasks?( for today| list)?",
+            r"what('?s| is) (on my|my) (plate|agenda|schedule|to-?do)",
+            r"(top|next) (items?|things?|actions?)( to do)?",
+            r"(daily |morning )?brief(ing)?",
+            r"(start|begin) (my|the) day",
+            r"what('?s| is) overdue",
+            r"urgent (items?|tasks?|things?)",
+        ],
+        "intent": QueryIntent.TASK_MANAGEMENT,
+        "tools": ["get_daily_priorities", "get_tasks"],
+        "urgency": "high",
+        "complexity": "simple",
+        "confidence": 0.95
+    },
+
+    # Lead pipeline queries
+    "lead_management": {
+        "patterns": [
+            r"(my |the |our )?(lead|leads) (pipeline|funnel|status)",
+            r"how (are|is) (my |the |our )?(leads?|prospects?)",
+            r"(lead|leads) (getting stuck|bottleneck|conversion)",
+            r"where are (my |the |our )?(leads?|prospects?) (stuck|stalling)",
+            r"(show|list|get) (my |the |our )?(new |hot )?(leads?|prospects?)",
+            r"who (should|do) i (call|contact|reach out)",
+            r"(lead|leads) coach(ing)?",
+            r"(speed|time) to lead",
+            r"lead (analytics?|metrics?|insights?)",
+            r"(nurture|follow.?up) (leads?|list)",
+        ],
+        "intent": QueryIntent.LEAD_MANAGEMENT,
+        "tools": ["lead_status_insights", "get_leads_by_status"],
+        "urgency": "medium",
+        "complexity": "moderate",
+        "confidence": 0.95
+    },
+
+    # Loan pipeline queries
+    "pipeline_status": {
+        "patterns": [
+            r"(my |the |our )?(loan|loans) (pipeline|funnel|status)",
+            r"(show|what'?s? in) (my |the |our )?pipeline",
+            r"how (are|is) (my |the |our )?(deals?|loans?|applications?)",
+            r"(pipeline|funnel) (summary|update|status|overview)",
+            r"(loans?|deals?) (in process|in progress|closing)",
+            r"(closing|funded) (this week|today|soon)",
+            r"what('?s| is) (in |my )?(pipeline|processing|underwriting)",
+            r"(deals?|loans?) (at risk|stuck|delayed)",
+            r"(pipeline|loan) (metrics?|analytics?|numbers?)",
+        ],
+        "intent": QueryIntent.PIPELINE_STATUS,
+        "tools": ["get_pipeline", "get_pipeline_metrics"],
+        "urgency": "medium",
+        "complexity": "moderate",
+        "confidence": 0.95
+    },
+
+    # Rate lock queries
+    "market_intelligence": {
+        "patterns": [
+            r"should (i|we) (lock|float)",
+            r"lock (or|vs|versus) float",
+            r"(rate|rates) (recommendation|advice|guidance)",
+            r"what('?s| is| are) (the |current )?(rate|rates|pricing)",
+            r"(rate|rates|market) (today|right now|this week)",
+            r"(lock|float) (recommendation|decision|advice)",
+            r"(interest )?rate (lock|advisory|outlook)",
+        ],
+        "intent": QueryIntent.MARKET_INTELLIGENCE,
+        "tools": ["get_rate_lock_advisory", "get_pipeline"],
+        "urgency": "high",
+        "complexity": "moderate",
+        "confidence": 0.95
+    },
+
+    # Team performance queries
+    "team_performance": {
+        "patterns": [
+            r"(my |our |team )?(performance|metrics|numbers|stats)",
+            r"how (am i|are we|is the team) doing",
+            r"(my |team )?scorecard",
+            r"(production|volume) (report|summary|numbers)",
+            r"(compare|comparison) (to |with )?(last month|benchmark)",
+        ],
+        "intent": QueryIntent.TEAM_PERFORMANCE,
+        "tools": ["get_pipeline_metrics", "get_pipeline"],
+        "urgency": "low",
+        "complexity": "moderate",
+        "confidence": 0.90
+    },
+}
+
+
+def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
+    """
+    Fast pattern matching for common intents.
+    Returns analysis dict if pattern matches, None otherwise.
+
+    This can skip the LLM call entirely for well-known query patterns,
+    saving ~5-7 seconds per request.
+    """
+    query_lower = query.lower().strip()
+
+    for intent_key, config in INTENT_PATTERNS.items():
+        for pattern in config["patterns"]:
+            if re.search(pattern, query_lower, re.IGNORECASE):
+                logger.info(f"[ANALYZE] FAST PATH: Pattern matched '{pattern}' -> {intent_key}")
+                return {
+                    "intent": config["intent"],
+                    "tools": config["tools"],
+                    "urgency": config["urgency"],
+                    "complexity": config["complexity"],
+                    "confidence": config["confidence"],
+                    "pattern_matched": pattern,
+                    "fast_path": True
+                }
+
+    return None
+
+
+def extract_entities(query: str) -> Dict[str, List]:
+    """
+    Simple entity extraction using regex patterns.
+    Extracts loan IDs, names, amounts, dates, etc.
+    """
+    entities = {
+        "loan_ids": [],
+        "borrower_names": [],
+        "amounts": [],
+        "dates": [],
+        "stages": [],
+        "team_members": []
+    }
+
+    # Extract loan/lead IDs (numeric)
+    id_matches = re.findall(r'\b(?:loan|lead|id|#)\s*(\d+)\b', query, re.IGNORECASE)
+    if id_matches:
+        entities["loan_ids"] = id_matches
+
+    # Extract amounts
+    amount_matches = re.findall(r'\$[\d,]+(?:\.\d{2})?|\b\d{3,}k?\b', query, re.IGNORECASE)
+    if amount_matches:
+        entities["amounts"] = amount_matches
+
+    # Extract date references
+    date_patterns = [
+        r'\b(today|tomorrow|yesterday)\b',
+        r'\b(this|next|last)\s+(week|month|quarter)\b',
+        r'\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b',
+    ]
+    for pattern in date_patterns:
+        matches = re.findall(pattern, query, re.IGNORECASE)
+        if matches:
+            entities["dates"].extend([m if isinstance(m, str) else ' '.join(m) for m in matches])
+
+    # Extract stage mentions
+    stages = ['new', 'disclosed', 'processing', 'submitted', 'underwriting',
+              'approved', 'ctc', 'clear to close', 'docs out', 'funded']
+    for stage in stages:
+        if re.search(rf'\b{stage}\b', query, re.IGNORECASE):
+            entities["stages"].append(stage)
+
+    return entities
+
+
+# =============================================================================
+# LLM-BASED ANALYSIS (fallback for complex queries)
+# =============================================================================
 
 ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Analyze user queries and select appropriate tools.
 
@@ -105,6 +289,10 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
     """
     Analyze the user's query to extract intent, entities, and required tools.
 
+    OPTIMIZATION: Uses fast pattern matching first, falls back to LLM only if needed.
+    - Pattern match: ~10ms (for 80%+ of common queries)
+    - LLM fallback: ~5-7s (for complex/ambiguous queries)
+
     Args:
         state: Current agent state
         anthropic_client: Optional pre-configured Anthropic client
@@ -118,6 +306,39 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
     try:
         user_message = state["user_message"]
         user_role = state.get("user_role", "loan_officer")
+
+        # =================================================================
+        # FAST PATH: Try pattern matching first (saves ~5-7 seconds)
+        # =================================================================
+        pattern_result = pattern_match_intent(user_message)
+
+        if pattern_result:
+            # Pattern matched - skip LLM entirely!
+            entities = extract_entities(user_message)
+
+            state = update_state(state, {
+                "query_intent": pattern_result["intent"],
+                "query_entities": entities,
+                "query_urgency": pattern_result["urgency"],
+                "query_complexity": pattern_result["complexity"],
+                "required_tools": pattern_result["tools"],
+                "requires_action": False,
+                "analysis_method": "pattern_match"
+            })
+
+            node_time = (time.time() - node_start) * 1000
+            logger.info(
+                f"[ANALYZE] ⚡ FAST PATH complete in {node_time:.0f}ms | "
+                f"intent={pattern_result['intent'].value}, tools={pattern_result['tools']}, "
+                f"pattern='{pattern_result['pattern_matched']}'"
+            )
+
+            return state
+
+        # =================================================================
+        # SLOW PATH: Use LLM for complex/ambiguous queries
+        # =================================================================
+        logger.info(f"[ANALYZE] No pattern match, falling back to LLM analysis")
 
         # Build the analysis prompt
         tools_list = "\n".join(f"- {tool}" for tool in AVAILABLE_TOOLS)
@@ -163,7 +384,6 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             response_text = response_text.strip()
 
         # Try to extract JSON from the response if it's mixed with text
-        # Use a more robust approach: find first { and last }
         first_brace = response_text.find('{')
         last_brace = response_text.rfind('}')
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
@@ -205,7 +425,8 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             "query_urgency": analysis.get("urgency", "medium"),
             "query_complexity": analysis.get("complexity", "moderate"),
             "required_tools": required_tools,
-            "requires_action": analysis.get("requires_action", False)
+            "requires_action": analysis.get("requires_action", False),
+            "analysis_method": "llm"
         })
 
         node_time = (time.time() - node_start) * 1000
@@ -222,8 +443,9 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             "query_entities": {},
             "query_urgency": "medium",
             "query_complexity": "moderate",
-            "required_tools": ["get_daily_priorities", "get_tasks", "get_pipeline"],  # Actual tool names
-            "requires_action": False
+            "required_tools": ["get_daily_priorities", "get_tasks", "get_pipeline"],
+            "requires_action": False,
+            "analysis_method": "fallback"
         })
 
     except Exception as e:
@@ -232,5 +454,6 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
         return update_state(state, {
             "query_intent": QueryIntent.TASK_MANAGEMENT,
             "required_tools": ["get_daily_priorities", "get_tasks", "get_pipeline"],
-            "requires_action": False
+            "requires_action": False,
+            "analysis_method": "fallback"
         })
