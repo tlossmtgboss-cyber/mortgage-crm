@@ -18761,6 +18761,22 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Cache Management routes not loaded: {e}")
 
+# Webhook routes (for cache invalidation from external systems)
+try:
+    from api.webhooks import router as webhooks_router
+    app.include_router(webhooks_router, prefix="/api/v1", tags=["Webhooks"])
+    logger.info("✅ Webhook routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Webhook routes not loaded: {e}")
+
+# Monitoring routes (cache health and performance metrics)
+try:
+    from api.monitoring import router as monitoring_router
+    app.include_router(monitoring_router, prefix="/api/v1", tags=["Monitoring"])
+    logger.info("✅ Monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Monitoring routes not loaded: {e}")
+
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")
 async def debug_tools_registry_status():
@@ -52073,16 +52089,47 @@ async def langgraph_orchestrator_chat(
         "message": "Your question or request",
         "autonomous_mode": true,  // Optional, default true
         "conversation_history": []  // Optional previous messages
+        "use_cache": true  // Optional, default true - enable response caching
     }
     """
+    import time
+    start_time = time.time()
+
     try:
         data = await request.json()
         message = data.get("message", "").strip()
         autonomous_mode = data.get("autonomous_mode", True)
         conversation_history = data.get("conversation_history", [])
+        use_cache = data.get("use_cache", True)
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
+
+        # === LAYER 1: Check response cache ===
+        if use_cache and not conversation_history:  # Only cache single-turn queries
+            try:
+                from utils.cache import cache as response_cache
+                cached_response = await response_cache.get(message, str(current_user.id))
+                if cached_response:
+                    logger.info(f"[RESPONSE CACHE HIT] {message[:50]}...")
+                    return {
+                        "response": cached_response.get("response", ""),
+                        "intent": cached_response.get("intent"),
+                        "confidence": cached_response.get("confidence"),
+                        "follow_up_suggestions": cached_response.get("follow_up_suggestions", []),
+                        "processing_time_seconds": round(time.time() - start_time, 3),
+                        "data_quality": cached_response.get("data_quality"),
+                        "warnings": cached_response.get("warnings", []),
+                        "actions_executed": [],
+                        "actions_pending": [],
+                        "engine": "langgraph",
+                        "cached": True,
+                        "cached_at": cached_response.get("cached_at")
+                    }
+            except ImportError:
+                pass  # Cache not available
+            except Exception as cache_e:
+                logger.warning(f"Response cache check failed: {cache_e}")
 
         # Import the LangGraph components
         from agents.orchestrator import run_orchestrator
@@ -52159,18 +52206,42 @@ async def langgraph_orchestrator_chat(
             status="completed"
         )
 
-        return {
+        # Build response
+        response_data = {
             "response": result.get("response", ""),
             "intent": result.get("intent"),
             "confidence": result.get("confidence"),
             "follow_up_suggestions": result.get("follow_up_suggestions", []),
-            "processing_time_seconds": result.get("processing_time_seconds"),
+            "processing_time_seconds": round(time.time() - start_time, 3),
             "data_quality": result.get("data_quality"),
             "warnings": result.get("warnings", []),
             "actions_executed": result.get("actions_executed", []),
             "actions_pending": result.get("actions_pending", []),
-            "engine": "langgraph"
+            "engine": "langgraph",
+            "cached": False
         }
+
+        # === Cache the response (only for high-confidence, single-turn, no-action queries) ===
+        if (use_cache
+            and not conversation_history
+            and result.get("confidence", 0) >= 0.7
+            and not result.get("actions_executed")
+            and not result.get("actions_pending")):
+            try:
+                from utils.cache import cache as response_cache
+                await response_cache.set(
+                    query=message,
+                    response=response_data,
+                    intent=result.get("intent", "general"),
+                    user_id=str(current_user.id)
+                )
+                logger.info(f"[RESPONSE CACHE SET] intent={result.get('intent')}")
+            except ImportError:
+                pass
+            except Exception as cache_e:
+                logger.warning(f"Response cache set failed: {cache_e}")
+
+        return response_data
 
     except HTTPException:
         raise
@@ -52179,15 +52250,140 @@ async def langgraph_orchestrator_chat(
         return {
             "response": "LangGraph agent is not available. Please ensure dependencies are installed.",
             "error": str(e),
-            "engine": "langgraph"
+            "engine": "langgraph",
+            "cached": False
         }
     except Exception as e:
         logger.error(f"LangGraph orchestrator error: {e}", exc_info=True)
         return {
             "response": f"An error occurred: {str(e)}",
             "error": str(e),
-            "engine": "langgraph"
+            "engine": "langgraph",
+            "cached": False
         }
+
+
+# ============================================================================
+# SIMPLIFIED CHAT ENDPOINTS WITH CACHING
+# ============================================================================
+
+class SimpleChatRequest(BaseModel):
+    message: str
+    user_id: Optional[str] = None
+
+
+@app.post("/api/v1/chat")
+async def simple_chat(
+    request: SimpleChatRequest,
+    use_cache: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Simplified chat endpoint with response caching.
+
+    This is a streamlined wrapper around the LangGraph orchestrator
+    with automatic caching for improved response times.
+
+    Query params:
+    - use_cache: bool (default True) - Set to false for fresh response
+    """
+    import time
+    start_time = time.time()
+
+    user_id = request.user_id or str(current_user.id)
+    message = request.message.strip()
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    # Check response cache first
+    if use_cache:
+        try:
+            from utils.cache import cache as response_cache
+            cached = await response_cache.get(message, user_id)
+            if cached:
+                logger.info(f"[CHAT CACHE HIT] {message[:50]}...")
+                return {
+                    "response": cached.get("response", ""),
+                    "intent": cached.get("intent"),
+                    "confidence": cached.get("confidence"),
+                    "cached": True,
+                    "response_time": round(time.time() - start_time, 3),
+                    "cached_at": cached.get("cached_at")
+                }
+        except Exception as e:
+            logger.warning(f"Cache check failed: {e}")
+
+    # Execute via LangGraph orchestrator
+    try:
+        from agents.orchestrator import run_orchestrator
+        from agents.service import create_tool_functions_from_main
+
+        tool_functions = create_tool_functions_from_main(db, current_user)
+
+        result = await run_orchestrator(
+            message=message,
+            user_id=user_id,
+            user_email=current_user.email,
+            user_role=getattr(current_user, 'role', 'loan_officer'),
+            tool_functions=tool_functions,
+            autonomous_mode=True,
+            conversation_history=[],
+            return_structured=True
+        )
+
+        response_data = {
+            "response": result.get("response", ""),
+            "intent": result.get("intent"),
+            "confidence": result.get("confidence"),
+            "cached": False,
+            "response_time": round(time.time() - start_time, 3),
+            "metadata": {
+                "follow_up_suggestions": result.get("follow_up_suggestions", []),
+                "data_quality": result.get("data_quality"),
+                "warnings": result.get("warnings", [])
+            }
+        }
+
+        # Cache high-confidence responses
+        if use_cache and result.get("confidence", 0) >= 0.7:
+            try:
+                from utils.cache import cache as response_cache
+                await response_cache.set(
+                    query=message,
+                    response=response_data,
+                    intent=result.get("intent", "general"),
+                    user_id=user_id
+                )
+            except Exception as e:
+                logger.warning(f"Cache set failed: {e}")
+
+        return response_data
+
+    except Exception as e:
+        logger.error(f"Chat error: {e}", exc_info=True)
+        return {
+            "response": f"I encountered an error processing your request: {str(e)}",
+            "intent": None,
+            "confidence": 0,
+            "cached": False,
+            "response_time": round(time.time() - start_time, 3),
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/chat/fresh")
+async def simple_chat_fresh(
+    request: SimpleChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Force fresh response (bypass cache).
+    Useful when you need real-time data or after making changes.
+    """
+    return await simple_chat(request, use_cache=False, db=db, current_user=current_user)
 
 
 @app.get("/api/v1/ai/langgraph-status")
