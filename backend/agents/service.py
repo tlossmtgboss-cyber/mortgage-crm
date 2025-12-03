@@ -1066,7 +1066,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        COUNT(*) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '7 days') as closing_7_days,
                        COUNT(*) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '30 days') as closing_30_days,
                        SUM(amount) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '30 days') as volume_30_days
-                       FROM loans WHERE loan_officer_id = :user_id AND stage != 'closed'"""),
+                       FROM loans WHERE loan_officer_id = :user_id AND stage::text != 'Funded'"""),
                 {"user_id": current_user.id}
             ).fetchone()
 
@@ -1094,14 +1094,14 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         days_to_close = args.get("days_to_close", 30)
 
         try:
-            # Get loans closing in the specified timeframe (use uppercase for LoanStage enum)
+            # Get loans closing in the specified timeframe (LoanStage enum values use title case like 'Funded')
             loans = db.execute(
                 text("""SELECT id, loan_number, borrower_name, amount, closing_date,
                        rate, lock_expiration_date
                        FROM loans
                        WHERE loan_officer_id = :user_id
                        AND closing_date <= CURRENT_DATE + INTERVAL ':days days'
-                       AND stage::text NOT IN ('CLOSED', 'DENIED', 'WITHDRAWN')
+                       AND stage::text NOT IN ('Funded')
                        ORDER BY closing_date ASC""".replace(':days', str(days_to_close))),
                 {"user_id": current_user.id}
             ).fetchall()
@@ -1190,13 +1190,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 {"user_id": current_user.id}
             ).fetchall()
 
-            # Get loans closing soon (use uppercase for LoanStage enum values)
+            # Get loans closing soon (use correct LoanStage enum values - 'Funded' not 'CLOSED')
             closing_soon = db.execute(
                 text("""SELECT id, loan_number, borrower_name, closing_date, stage, amount
                        FROM loans
                        WHERE loan_officer_id = :user_id
                        AND closing_date <= CURRENT_DATE + INTERVAL '7 days'
-                       AND stage::text NOT IN ('CLOSED', 'DENIED', 'WITHDRAWN')
+                       AND stage::text NOT IN ('Funded')
                        ORDER BY closing_date ASC
                        LIMIT 5"""),
                 {"user_id": current_user.id}
