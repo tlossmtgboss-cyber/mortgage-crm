@@ -40,29 +40,67 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     fetchData();
   };
 
+  // Helper to check if an item is phone/call related
+  const isPhoneTask = (item) => {
+    const phoneTypes = ['follow_up', 'call', 'voicemail', 'sms', 'phone'];
+    const phoneKeywords = ['call', 'phone', 'voicemail', 'sms', 'text', 'contact', 'follow up', 'follow-up'];
+
+    // Check by type
+    if (phoneTypes.includes(item.type?.toLowerCase())) return true;
+
+    // Check by title/description for call-related keywords
+    const title = (item.title || '').toLowerCase();
+    const desc = (item.description || '').toLowerCase();
+
+    return phoneKeywords.some(keyword => title.includes(keyword) || desc.includes(keyword));
+  };
+
+  // Helper to check if an item is email related
+  const isEmailTask = (item) => {
+    const emailTypes = ['email', 'email_pending', 'reconciliation'];
+    const emailKeywords = ['email', 'reconcil'];
+
+    // Check by type
+    if (emailTypes.includes(item.type?.toLowerCase())) return true;
+
+    // Check by title/description for email-related keywords
+    const title = (item.title || '').toLowerCase();
+    const desc = (item.description || '').toLowerCase();
+
+    return emailKeywords.some(keyword => title.includes(keyword) || desc.includes(keyword));
+  };
+
   // Get items for each tab
   const getTaskItems = () => {
     if (!data) return [];
     const items = [];
 
-    // Add urgent items
+    // Add urgent items (filter out phone and email tasks)
     if (data.urgent?.length) {
-      items.push(...data.urgent.map(item => ({ ...item, category: 'urgent' })));
+      items.push(...data.urgent
+        .filter(item => !isPhoneTask(item) && !isEmailTask(item))
+        .map(item => ({ ...item, category: 'urgent' })));
     }
 
-    // Add lead tasks
+    // Add lead tasks (filter out phone and email tasks)
     if (data.leads?.length) {
-      items.push(...data.leads.map(item => ({ ...item, category: 'leads' })));
+      items.push(...data.leads
+        .filter(item => !isPhoneTask(item) && !isEmailTask(item))
+        .map(item => ({ ...item, category: 'leads' })));
     }
 
-    // Add loan tasks
+    // Add loan tasks (filter out phone and email tasks)
     if (data.loans?.length) {
-      items.push(...data.loans.map(item => ({ ...item, category: 'loans' })));
+      items.push(...data.loans
+        .filter(item => !isPhoneTask(item) && !isEmailTask(item))
+        .map(item => ({ ...item, category: 'loans' })));
     }
 
-    // Add portfolio touchpoints
+    // Add portfolio touchpoints (filter out phone and email tasks)
     if (data.portfolio?.length) {
-      items.push(...data.portfolio.map(item => ({ ...item, category: 'portfolio' })));
+      items.push(...data.portfolio
+        .filter(item => !isPhoneTask(item) && !isEmailTask(item))
+        .map(item => ({ ...item, category: 'portfolio' })));
     }
 
     return items;
@@ -72,7 +110,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     if (!data) return [];
     const items = [];
 
-    // Add email items
+    // Add email items from dedicated emails array
     if (data.emails?.length) {
       items.push(...data.emails.map(item => ({ ...item, category: 'emails' })));
     }
@@ -82,6 +120,17 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       items.push(...data.reconciliation.map(item => ({ ...item, category: 'reconciliation' })));
     }
 
+    // Also include email tasks from other arrays
+    if (data.urgent?.length) {
+      items.push(...data.urgent.filter(isEmailTask).map(item => ({ ...item, category: 'urgent' })));
+    }
+    if (data.leads?.length) {
+      items.push(...data.leads.filter(isEmailTask).map(item => ({ ...item, category: 'leads' })));
+    }
+    if (data.loans?.length) {
+      items.push(...data.loans.filter(isEmailTask).map(item => ({ ...item, category: 'loans' })));
+    }
+
     return items;
   };
 
@@ -89,7 +138,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     if (!data) return [];
     const items = [];
 
-    // Add call/voicemail items
+    // Add call/voicemail items from dedicated calls array
     if (data.calls?.length) {
       items.push(...data.calls.map(item => ({ ...item, category: 'calls' })));
     }
@@ -97,6 +146,20 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     // Add SMS items
     if (data.sms?.length) {
       items.push(...data.sms.map(item => ({ ...item, category: 'sms' })));
+    }
+
+    // Also include phone tasks from other arrays (leads, loans, urgent)
+    if (data.urgent?.length) {
+      items.push(...data.urgent.filter(isPhoneTask).map(item => ({ ...item, category: 'urgent' })));
+    }
+    if (data.leads?.length) {
+      items.push(...data.leads.filter(isPhoneTask).map(item => ({ ...item, category: 'leads' })));
+    }
+    if (data.loans?.length) {
+      items.push(...data.loans.filter(isPhoneTask).map(item => ({ ...item, category: 'loans' })));
+    }
+    if (data.portfolio?.length) {
+      items.push(...data.portfolio.filter(isPhoneTask).map(item => ({ ...item, category: 'portfolio' })));
     }
 
     return items;
