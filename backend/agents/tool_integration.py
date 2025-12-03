@@ -1,0 +1,612 @@
+"""
+Perennia AI - Tool Integration Layer
+====================================
+Connects agent tools to the AI orchestrator and LangChain workflow.
+Provides tool binding, execution management, and result processing.
+"""
+
+from typing import Any, Callable, Dict, List, Optional, Union
+from dataclasses import dataclass, field
+from datetime import datetime
+import logging
+import asyncio
+import json
+
+from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.messages import ToolMessage
+from pydantic import BaseModel, Field
+
+from .tools import (
+    tool_registry,
+    ToolResult,
+    ToolError,
+    execute_tool,
+    get_tools_for_agent,
+    ALL_TOOLS,
+)
+from .tools.base import LoanStatus, LoanType
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# AGENT ROLE DEFINITIONS
+# =============================================================================
+
+@dataclass
+class AgentToolConfig:
+    """Configuration for an agent's tool access."""
+    role: str
+    name: str
+    description: str
+    tool_names: List[str]
+    max_concurrent_tools: int = 3
+    tool_timeout_seconds: int = 30
+    requires_approval_for: List[str] = field(default_factory=list)
+
+
+AGENT_CONFIGS = {
+    "pipeline_analyst": AgentToolConfig(
+        role="pipeline_analyst",
+        name="Pipeline Analyst",
+        description="Analyzes loan pipeline metrics and performance",
+        tool_names=[
+            "get_pipeline_metrics",
+            "get_loans_by_status",
+            "get_loan_aging_report",
+            "calculate_conversion_rates",
+            "predict_closing_timeline",
+            "get_bottleneck_analysis",
+            "compare_to_benchmark",
+            "get_lo_pipeline_breakdown",
+        ],
+        max_concurrent_tools=5,
+    ),
+    "compliance_checker": AgentToolConfig(
+        role="compliance_checker",
+        name="Compliance Checker",
+        description="Validates regulatory compliance for loans",
+        tool_names=[
+            "check_trid_compliance",
+            "check_respa_compliance",
+            "check_fair_lending",
+            "get_state_requirements",
+            "audit_loan_file",
+            "get_disclosure_timeline",
+            "check_tolerance_violations",
+            "get_compliance_history",
+        ],
+        requires_approval_for=["override_compliance_flag"],
+    ),
+    "lead_nurturer": AgentToolConfig(
+        role="lead_nurturer",
+        name="Lead Nurturer",
+        description="Manages lead engagement and conversion",
+        tool_names=[
+            "get_lead_details",
+            "get_engagement_history",
+            "score_lead",
+            "suggest_followup",
+            "draft_message",
+            "schedule_outreach",
+            "get_similar_converted_leads",
+            "get_optimal_contact_time",
+        ],
+        requires_approval_for=["send_email", "send_sms", "make_call"],
+    ),
+    "document_tracker": AgentToolConfig(
+        role="document_tracker",
+        name="Document Tracker",
+        description="Tracks and manages loan documentation",
+        tool_names=[
+            "get_missing_documents",
+            "get_loan_conditions",
+            "track_document_request",
+            "send_document_reminder",
+            "escalate_issue",
+            "get_document_timeline",
+            "check_document_expiration",
+            "get_third_party_status",
+        ],
+        requires_approval_for=["send_document_reminder"],
+    ),
+    "profitability_analyst": AgentToolConfig(
+        role="profitability_analyst",
+        name="Profitability Analyst",
+        description="Analyzes loan and portfolio profitability",
+        tool_names=[
+            "calculate_loan_profitability",
+            "analyze_margins_by_segment",
+            "forecast_revenue",
+            "compare_lo_profitability",
+            "optimize_pricing",
+            "get_cost_breakdown",
+            "calculate_pull_through_impact",
+            "get_profitability_trends",
+        ],
+    ),
+    "rate_advisor": AgentToolConfig(
+        role="rate_advisor",
+        name="Rate Advisor",
+        description="Advises on rate locks and market conditions",
+        tool_names=[
+            "get_current_rates",
+            "analyze_rate_trends",
+            "calculate_lock_cost",
+            "recommend_lock_strategy",
+            "monitor_float_position",
+            "get_extension_pricing",
+            "compare_rate_scenarios",
+            "get_market_events",
+        ],
+        requires_approval_for=["lock_rate"],
+    ),
+    "team_coach": AgentToolConfig(
+        role="team_coach",
+        name="Team Coach",
+        description="Provides coaching and performance insights",
+        tool_names=[
+            "get_lo_metrics",
+            "compare_to_peers",
+            "identify_training_needs",
+            "generate_coaching_plan",
+            "track_improvement",
+            "get_best_practices",
+            "get_performance_trends",
+            "set_performance_goals",
+        ],
+    ),
+    "customer_intelligence": AgentToolConfig(
+        role="customer_intelligence",
+        name="Customer Intelligence",
+        description="Analyzes customer relationships and opportunities",
+        tool_names=[
+            "get_customer_360",
+            "map_relationships",
+            "calculate_ltv",
+            "assess_churn_risk",
+            "find_opportunities",
+            "get_interaction_history",
+            "get_referral_network",
+            "get_market_comparison",
+        ],
+    ),
+}
+
+
+# =============================================================================
+# TOOL EXECUTOR
+# =============================================================================
+
+class ToolExecutionResult(BaseModel):
+    """Result from tool execution."""
+    tool_name: str
+    success: bool
+    data: Any = None
+    message: str = ""
+    error: Optional[str] = None
+    execution_time_ms: int = 0
+    requires_approval: bool = False
+    approval_id: Optional[str] = None
+
+
+class AgentToolExecutor:
+    """
+    Manages tool execution for agents.
+    Handles concurrency, timeouts, and approval workflows.
+    """
+
+    def __init__(self, agent_role: str):
+        self.agent_role = agent_role
+        self.config = AGENT_CONFIGS.get(agent_role)
+        if not self.config:
+            raise ValueError(f"Unknown agent role: {agent_role}")
+
+        self._execution_history: List[Dict] = []
+        self._pending_approvals: Dict[str, Dict] = {}
+
+    def get_available_tools(self) -> List[str]:
+        """Get list of tools available to this agent."""
+        return self.config.tool_names.copy()
+
+    def get_langchain_tools(self) -> List[BaseTool]:
+        """Get LangChain-compatible tools for this agent."""
+        return tool_registry.get_langchain_tools(self.agent_role)
+
+    async def execute(
+        self,
+        tool_name: str,
+        params: Dict[str, Any],
+        user_id: Optional[str] = None,
+        skip_approval: bool = False,
+    ) -> ToolExecutionResult:
+        """
+        Execute a tool with given parameters.
+
+        Args:
+            tool_name: Name of the tool to execute
+            params: Parameters to pass to the tool
+            user_id: User executing the tool (for audit)
+            skip_approval: Skip approval check (for pre-approved actions)
+
+        Returns:
+            ToolExecutionResult with data or error
+        """
+        start_time = datetime.utcnow()
+
+        # Validate tool is available to this agent
+        if tool_name not in self.config.tool_names:
+            return ToolExecutionResult(
+                tool_name=tool_name,
+                success=False,
+                error=f"Tool {tool_name} not available to {self.agent_role}",
+            )
+
+        # Check if approval required
+        if not skip_approval and tool_name in self.config.requires_approval_for:
+            approval_id = f"approval_{tool_name}_{datetime.utcnow().timestamp()}"
+            self._pending_approvals[approval_id] = {
+                "tool_name": tool_name,
+                "params": params,
+                "user_id": user_id,
+                "created_at": datetime.utcnow(),
+            }
+            return ToolExecutionResult(
+                tool_name=tool_name,
+                success=False,
+                message=f"Tool {tool_name} requires approval",
+                requires_approval=True,
+                approval_id=approval_id,
+            )
+
+        # Execute the tool
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(execute_tool, tool_name, **params),
+                timeout=self.config.tool_timeout_seconds
+            )
+
+            execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+
+            if isinstance(result, ToolResult):
+                execution_result = ToolExecutionResult(
+                    tool_name=tool_name,
+                    success=result.status.value == "success",
+                    data=result.data,
+                    message=result.message,
+                    error=result.errors[0] if result.errors else None,
+                    execution_time_ms=execution_time,
+                )
+            else:
+                execution_result = ToolExecutionResult(
+                    tool_name=tool_name,
+                    success=True,
+                    data=result,
+                    execution_time_ms=execution_time,
+                )
+
+            # Record execution
+            self._execution_history.append({
+                "tool_name": tool_name,
+                "params": params,
+                "success": execution_result.success,
+                "execution_time_ms": execution_time,
+                "timestamp": start_time,
+            })
+
+            return execution_result
+
+        except asyncio.TimeoutError:
+            return ToolExecutionResult(
+                tool_name=tool_name,
+                success=False,
+                error=f"Tool execution timed out after {self.config.tool_timeout_seconds}s",
+            )
+        except Exception as e:
+            logger.exception(f"Tool {tool_name} failed")
+            return ToolExecutionResult(
+                tool_name=tool_name,
+                success=False,
+                error=str(e),
+            )
+
+    async def execute_many(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        user_id: Optional[str] = None,
+    ) -> List[ToolExecutionResult]:
+        """
+        Execute multiple tools, respecting concurrency limits.
+
+        Args:
+            tool_calls: List of {tool_name, params} dicts
+            user_id: User executing the tools
+
+        Returns:
+            List of ToolExecutionResults in same order
+        """
+        results = []
+
+        # Process in batches based on max_concurrent
+        for i in range(0, len(tool_calls), self.config.max_concurrent_tools):
+            batch = tool_calls[i:i + self.config.max_concurrent_tools]
+
+            batch_tasks = [
+                self.execute(
+                    call["tool_name"],
+                    call.get("params", {}),
+                    user_id=user_id,
+                )
+                for call in batch
+            ]
+
+            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+            for j, result in enumerate(batch_results):
+                if isinstance(result, Exception):
+                    results.append(ToolExecutionResult(
+                        tool_name=batch[j]["tool_name"],
+                        success=False,
+                        error=str(result),
+                    ))
+                else:
+                    results.append(result)
+
+        return results
+
+    def approve(self, approval_id: str, approved_by: str) -> Optional[Dict]:
+        """Approve a pending tool execution."""
+        if approval_id not in self._pending_approvals:
+            return None
+
+        approval = self._pending_approvals.pop(approval_id)
+        approval["approved_by"] = approved_by
+        approval["approved_at"] = datetime.utcnow()
+        return approval
+
+    def reject(self, approval_id: str, rejected_by: str, reason: str) -> Optional[Dict]:
+        """Reject a pending tool execution."""
+        if approval_id not in self._pending_approvals:
+            return None
+
+        approval = self._pending_approvals.pop(approval_id)
+        approval["rejected_by"] = rejected_by
+        approval["rejected_at"] = datetime.utcnow()
+        approval["rejection_reason"] = reason
+        return approval
+
+    def get_pending_approvals(self) -> List[Dict]:
+        """Get all pending approvals for this executor."""
+        return list(self._pending_approvals.values())
+
+    def get_execution_stats(self) -> Dict:
+        """Get execution statistics."""
+        if not self._execution_history:
+            return {"total_executions": 0}
+
+        total = len(self._execution_history)
+        successes = sum(1 for e in self._execution_history if e["success"])
+        avg_time = sum(e["execution_time_ms"] for e in self._execution_history) / total
+
+        # Tool usage counts
+        tool_counts = {}
+        for e in self._execution_history:
+            name = e["tool_name"]
+            tool_counts[name] = tool_counts.get(name, 0) + 1
+
+        return {
+            "total_executions": total,
+            "success_count": successes,
+            "failure_count": total - successes,
+            "success_rate": round(successes / total * 100, 1),
+            "avg_execution_time_ms": round(avg_time, 1),
+            "tool_usage": tool_counts,
+        }
+
+
+# =============================================================================
+# TOOL BINDING FOR LANGGRAPH
+# =============================================================================
+
+def create_tool_node(agent_role: str):
+    """
+    Create a LangGraph tool node for an agent.
+
+    Usage in LangGraph workflow:
+        from backend.agents.tool_integration import create_tool_node
+
+        tool_node = create_tool_node("pipeline_analyst")
+        workflow.add_node("tools", tool_node)
+    """
+    executor = AgentToolExecutor(agent_role)
+
+    async def tool_node(state: Dict) -> Dict:
+        """Process tool calls from the agent."""
+        messages = state.get("messages", [])
+
+        # Get the last message with tool calls
+        last_message = messages[-1] if messages else None
+        if not last_message or not hasattr(last_message, "tool_calls"):
+            return state
+
+        tool_calls = last_message.tool_calls
+        if not tool_calls:
+            return state
+
+        # Execute each tool call
+        tool_messages = []
+        for tool_call in tool_calls:
+            result = await executor.execute(
+                tool_name=tool_call["name"],
+                params=tool_call.get("args", {}),
+                user_id=state.get("user_id"),
+            )
+
+            # Format result as ToolMessage
+            content = json.dumps(result.data, default=str) if result.success else result.error
+            tool_messages.append(
+                ToolMessage(
+                    content=content,
+                    tool_call_id=tool_call["id"],
+                    name=tool_call["name"],
+                )
+            )
+
+        return {
+            **state,
+            "messages": messages + tool_messages,
+            "tool_results": [msg.content for msg in tool_messages],
+        }
+
+    return tool_node
+
+
+def get_tool_descriptions(agent_role: str) -> str:
+    """
+    Get formatted tool descriptions for agent prompts.
+
+    Returns a string suitable for including in system prompts.
+    """
+    config = AGENT_CONFIGS.get(agent_role)
+    if not config:
+        return ""
+
+    lines = [f"You have access to the following tools:\n"]
+
+    for tool_name in config.tool_names:
+        defn = tool_registry.get(tool_name)
+        if defn:
+            lines.append(f"- **{tool_name}**: {defn.description}")
+            if defn.risk_level in ("HIGH", "CRITICAL"):
+                lines.append(f"  Warning: This tool requires approval before execution.")
+
+    return "\n".join(lines)
+
+
+def bind_tools_to_model(model, agent_role: str):
+    """
+    Bind tools to a LangChain model for function calling.
+
+    Usage:
+        from langchain_anthropic import ChatAnthropic
+        from backend.agents.tool_integration import bind_tools_to_model
+
+        model = ChatAnthropic(model="claude-sonnet-4-20250514")
+        model_with_tools = bind_tools_to_model(model, "pipeline_analyst")
+    """
+    executor = AgentToolExecutor(agent_role)
+    tools = executor.get_langchain_tools()
+    return model.bind_tools(tools)
+
+
+# =============================================================================
+# TOOL RESULT FORMATTERS
+# =============================================================================
+
+def format_tool_result_for_agent(result: ToolExecutionResult) -> str:
+    """Format tool result as a natural language response for agents."""
+    if not result.success:
+        if result.requires_approval:
+            return f"The action '{result.tool_name}' requires approval before it can be executed."
+        return f"Error executing {result.tool_name}: {result.error}"
+
+    if isinstance(result.data, dict):
+        # Try to use the message if available
+        if "message" in result.data:
+            return f"{result.data['message']}"
+
+        # Format key metrics
+        lines = [f"{result.tool_name} completed:"]
+        for key, value in result.data.items():
+            if isinstance(value, (int, float, str)) and not key.startswith("_"):
+                lines.append(f"  - {key}: {value}")
+        return "\n".join(lines[:10])  # Limit output
+
+    return f"{result.message or result.tool_name + ' completed'}"
+
+
+def format_tool_results_summary(results: List[ToolExecutionResult]) -> str:
+    """Format multiple tool results as a summary."""
+    if not results:
+        return "No tools were executed."
+
+    successes = [r for r in results if r.success]
+    failures = [r for r in results if not r.success]
+    pending = [r for r in results if r.requires_approval]
+
+    lines = []
+
+    if successes:
+        lines.append(f"{len(successes)} tool(s) executed successfully")
+    if failures:
+        lines.append(f"{len(failures)} tool(s) failed")
+    if pending:
+        lines.append(f"{len(pending)} tool(s) awaiting approval")
+
+    # Add details for each
+    for result in results:
+        lines.append(f"\n{result.tool_name}:")
+        if result.success and result.message:
+            lines.append(f"  {result.message}")
+        elif result.error:
+            lines.append(f"  Error: {result.error}")
+        elif result.requires_approval:
+            lines.append(f"  Requires approval (ID: {result.approval_id})")
+
+    return "\n".join(lines)
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+def get_all_agent_tools() -> Dict[str, List[str]]:
+    """Get all tools organized by agent role."""
+    return {role: config.tool_names for role, config in AGENT_CONFIGS.items()}
+
+
+def get_tool_risk_levels() -> Dict[str, str]:
+    """Get risk levels for all registered tools."""
+    levels = {}
+    for tool_name in get_all_tool_names():
+        defn = tool_registry.get(tool_name)
+        if defn:
+            levels[tool_name] = defn.risk_level
+    return levels
+
+
+def get_all_tool_names() -> List[str]:
+    """Get flat list of all tool names."""
+    names = []
+    for config in AGENT_CONFIGS.values():
+        names.extend(config.tool_names)
+    return list(set(names))  # Remove duplicates
+
+
+# =============================================================================
+# EXPORTS
+# =============================================================================
+
+__all__ = [
+    # Config
+    "AgentToolConfig",
+    "AGENT_CONFIGS",
+
+    # Executor
+    "ToolExecutionResult",
+    "AgentToolExecutor",
+
+    # LangGraph integration
+    "create_tool_node",
+    "get_tool_descriptions",
+    "bind_tools_to_model",
+
+    # Formatters
+    "format_tool_result_for_agent",
+    "format_tool_results_summary",
+
+    # Utilities
+    "get_all_agent_tools",
+    "get_tool_risk_levels",
+    "get_all_tool_names",
+]

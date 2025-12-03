@@ -337,6 +337,18 @@ class ToolRegistry:
         instance = cls()
         instance._tools.clear()
 
+    def __contains__(self, name: str) -> bool:
+        """Check if a tool is registered."""
+        return name in self._tools
+
+    def __len__(self) -> int:
+        """Return number of registered tools."""
+        return len(self._tools)
+
+    def __iter__(self):
+        """Iterate over tool names."""
+        return iter(self._tools)
+
 
 # =============================================================================
 # Tool Decorator
@@ -494,3 +506,37 @@ def is_loan_active(status: str) -> bool:
 def get_sla_for_stage(stage: str) -> int:
     """Get SLA target days for a loan stage."""
     return SLA_TARGETS.get(stage.lower(), 5)  # Default 5 days
+
+
+# =============================================================================
+# Singleton Registry Instance and Convenience Functions
+# =============================================================================
+
+# Global singleton instance
+tool_registry = ToolRegistry()
+
+
+def get_tools_for_agent(agent_role: str) -> List[ToolDefinition]:
+    """Get all tools available for a specific agent role."""
+    return tool_registry.get_for_agent(agent_role)
+
+
+def execute_tool(tool_name: str, **kwargs) -> ToolResult:
+    """
+    Execute a tool by name with given parameters.
+
+    Args:
+        tool_name: Name of the tool to execute
+        **kwargs: Parameters to pass to the tool
+
+    Returns:
+        ToolResult from tool execution
+    """
+    tool_def = tool_registry.get(tool_name)
+    if not tool_def:
+        return ToolResult.error(f"Tool '{tool_name}' not found")
+
+    try:
+        return tool_def.func(**kwargs)
+    except Exception as e:
+        return ToolResult.error(f"Error executing {tool_name}: {str(e)}")
