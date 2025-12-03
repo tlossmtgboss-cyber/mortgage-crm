@@ -4,6 +4,8 @@ import { teamAPI, tasksAPI, reconciliationAPI, aiAPI, leadsAPI, loansAPI, API_BA
 import MergeCenter from './MergeCenter';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import TaskDetailPanel from '../components/shared/TaskDetailPanel';
+import ReconciliationDetailPanel from '../components/shared/ReconciliationDetailPanel';
+import CallDetailPanel from '../components/shared/CallDetailPanel';
 import './Tasks.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -1896,123 +1898,14 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           </div>
         </div>
 
-        {/* Email Detail (Right Side) */}
-        <div className="task-detail-pane">
-          {selectedEmail ? (
-            <>
-              <div className="detail-header">
-                <div className="detail-title-section">
-                  <div className="detail-source">
-                    <span className="source-icon-large">📧</span>
-                    <span className="source-name">Email</span>
-                  </div>
-                  <h2 className="detail-title">{selectedEmail.subject || '(No Subject)'}</h2>
-                </div>
-              </div>
-
-              <div className="detail-body">
-                <div className="detail-info-grid">
-                  <div className="detail-info-item">
-                    <span className="detail-label">From</span>
-                    <span className="detail-value">{selectedEmail.from_name || selectedEmail.from_email}</span>
-                  </div>
-                  <div className="detail-info-item">
-                    <span className="detail-label">Email</span>
-                    <span className="detail-value">{selectedEmail.from_email}</span>
-                  </div>
-                  <div className="detail-info-item">
-                    <span className="detail-label">Date</span>
-                    <span className="detail-value">{new Date(selectedEmail.sent_date).toLocaleString()}</span>
-                  </div>
-                  <div className="detail-info-item">
-                    <span className="detail-label">Status</span>
-                    <span className={`detail-value status-badge ${selectedEmail.status}`}>{selectedEmail.status}</span>
-                  </div>
-                  {selectedEmail.matched_loan_id && (
-                    <div className="detail-info-item">
-                      <span className="detail-label">Matched Loan</span>
-                      <span className="detail-value client-link" onClick={() => navigate(`/loans/${selectedEmail.matched_loan_id}`)}>
-                        Loan #{selectedEmail.matched_loan_id}
-                      </span>
-                    </div>
-                  )}
-                  {selectedEmail.matched_lead_id && (
-                    <div className="detail-info-item">
-                      <span className="detail-label">Matched Lead</span>
-                      <span className="detail-value client-link" onClick={() => navigate(`/leads/${selectedEmail.matched_lead_id}`)}>
-                        Lead #{selectedEmail.matched_lead_id}
-                      </span>
-                    </div>
-                  )}
-                  {selectedEmail.has_attachments && (
-                    <div className="detail-info-item">
-                      <span className="detail-label">Attachments</span>
-                      <span className="detail-value">📎 {selectedEmail.attachment_count} files</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* AI Analysis */}
-                {selectedEmail.ai_analysis && (
-                  <div className="ai-message-section">
-                    <div className="ai-message-header">
-                      <span>🤖 AI Analysis</span>
-                    </div>
-                    <div className="ai-message-content">
-                      <p><strong>Disposition:</strong> {selectedEmail.ai_analysis.disposition || 'Not analyzed'}</p>
-                      {selectedEmail.ai_analysis.summary && (
-                        <p><strong>Summary:</strong> {selectedEmail.ai_analysis.summary}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Email Body */}
-                <div className="ai-message-section">
-                  <div className="ai-message-header">
-                    <span>📄 Email Content</span>
-                  </div>
-                  <div className="ai-message-content">
-                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                      {selectedEmail.body_preview || selectedEmail.body || 'No content'}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-
-              <div className="detail-actions">
-                {selectedEmail.status === 'pending' && (
-                  <button
-                    className="btn-detail-primary"
-                    onClick={() => handleOpenDisposition(selectedEmail)}
-                  >
-                    ⚡ Process Email
-                  </button>
-                )}
-                {selectedEmail.matched_loan_id && (
-                  <button
-                    className="btn-detail-secondary"
-                    onClick={() => navigate(`/loans/${selectedEmail.matched_loan_id}`)}
-                  >
-                    📋 View Loan
-                  </button>
-                )}
-                {selectedEmail.matched_lead_id && (
-                  <button
-                    className="btn-detail-secondary"
-                    onClick={() => navigate(`/leads/${selectedEmail.matched_lead_id}`)}
-                  >
-                    👤 View Lead
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="detail-empty">
-              <p>Select an email to view details</p>
-            </div>
-          )}
-        </div>
+        {/* Email Detail (Right Side) - Using shared component */}
+        <ReconciliationDetailPanel
+          email={selectedEmail}
+          onProcess={(email) => handleOpenDisposition(email)}
+          onViewLoan={(loanId) => navigate(`/loans/${loanId}`)}
+          onViewLead={(leadId) => navigate(`/leads/${leadId}`)}
+          onClose={() => setSelectedEmail(null)}
+        />
       </div>
     );
   };
@@ -2114,169 +2007,31 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           </div>
         </div>
 
-        {/* Phone Task Detail (Right Side) */}
-        <div className="task-detail-pane">
-          {selectedPhoneTask ? (
-            <>
-              <div className="detail-header">
-                <div className="detail-title-section">
-                  <div className="detail-source">
-                    <span className="source-icon-large">📞</span>
-                    <span className="source-name">{selectedPhoneTask.task_type === 'workflow' ? 'Workflow' : 'Call Task'}</span>
-                  </div>
-                  <h2 className="detail-title">{selectedPhoneTask.title}</h2>
-                </div>
-              </div>
-
-              <div className="detail-body">
-                <div className="detail-info-grid">
-                  <div className="detail-info-item">
-                    <span className="detail-label">Contact</span>
-                    <span
-                      className="detail-value client-link"
-                      onClick={() => {
-                        if (selectedPhoneTask.lead_id) {
-                          navigate(`/leads/${selectedPhoneTask.lead_id}`);
-                        } else if (selectedPhoneTask.loan_id) {
-                          navigate(`/loans/${selectedPhoneTask.loan_id}`);
-                        }
-                      }}
-                    >
-                      {selectedPhoneTask.contact_name}
-                    </span>
-                  </div>
-                  <div className="detail-info-item">
-                    <span className="detail-label">Phone</span>
-                    <span className="detail-value phone-number">{selectedPhoneTask.contact_phone}</span>
-                  </div>
-                  <div className="detail-info-item">
-                    <span className="detail-label">Type</span>
-                    <span className="detail-value">{selectedPhoneTask.entity_type === 'lead' ? 'Lead' : 'Loan'}</span>
-                  </div>
-                  <div className="detail-info-item">
-                    <span className="detail-label">Priority</span>
-                    <span className={`detail-value priority-badge ${selectedPhoneTask.priority}`}>
-                      {selectedPhoneTask.priority || 'Normal'}
-                    </span>
-                  </div>
-                  {selectedPhoneTask.workflow_name && (
-                    <div className="detail-info-item">
-                      <span className="detail-label">Workflow</span>
-                      <span className="detail-value">{selectedPhoneTask.workflow_name}</span>
-                    </div>
-                  )}
-                  {selectedPhoneTask.due_date && (
-                    <div className="detail-info-item">
-                      <span className="detail-label">Due Date</span>
-                      <span className="detail-value">{new Date(selectedPhoneTask.due_date).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Task Description */}
-                {selectedPhoneTask.description && (
-                  <div className="ai-message-section">
-                    <div className="ai-message-header">
-                      <span>📝 Task Details</span>
-                    </div>
-                    <div className="ai-message-content">
-                      <p>{selectedPhoneTask.description}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Call Status */}
-                <div className="ai-message-section">
-                  <div className="ai-message-header">
-                    <span>📞 Call Status</span>
-                  </div>
-                  <div className="ai-message-content" style={{ textAlign: 'center', padding: '20px' }}>
-                    {callStatus === 'idle' && (
-                      <p style={{ color: '#6b7280' }}>Ready to dial</p>
-                    )}
-                    {callStatus === 'dialing' && (
-                      <p style={{ color: '#f59e0b' }}>⏳ Dialing...</p>
-                    )}
-                    {callStatus === 'in-progress' && (
-                      <p style={{ color: '#10b981' }}>🔴 Call in progress</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="detail-actions">
-                {callStatus === 'idle' && !powerDialActive && (
-                  <button
-                    className="btn-detail-primary"
-                    onClick={() => handleClickToDial(selectedPhoneTask)}
-                    style={{ backgroundColor: '#10b981' }}
-                  >
-                    📞 Click to Dial
-                  </button>
-                )}
-                {callStatus === 'in-progress' && (
-                  <button
-                    className="btn-detail-danger"
-                    onClick={handleEndCall}
-                  >
-                    📴 End Call
-                  </button>
-                )}
-                {/* Power Dial Controls */}
-                {powerDialActive && (
-                  <>
-                    <button
-                      className="btn-detail-primary"
-                      onClick={nextPowerDialContact}
-                      style={{ backgroundColor: '#10b981' }}
-                      disabled={powerDialIndex >= powerDialQueue.length - 1}
-                    >
-                      ➡️ Next Contact ({powerDialIndex + 1}/{powerDialQueue.length})
-                    </button>
-                    <button
-                      className="btn-detail-secondary"
-                      onClick={skipPowerDialContact}
-                    >
-                      ⏭️ Skip
-                    </button>
-                    <button
-                      className="btn-detail-danger"
-                      onClick={stopPowerDial}
-                    >
-                      ⏹️ Stop Power Dial
-                    </button>
-                  </>
-                )}
-                <button
-                  className="btn-detail-secondary"
-                  onClick={() => {
-                    if (selectedPhoneTask.lead_id) {
-                      navigate(`/leads/${selectedPhoneTask.lead_id}`);
-                    } else if (selectedPhoneTask.loan_id) {
-                      navigate(`/loans/${selectedPhoneTask.loan_id}`);
-                    }
-                  }}
-                >
-                  👤 View {selectedPhoneTask.entity_type === 'lead' ? 'Lead' : 'Loan'}
-                </button>
-                <button
-                  className="btn-detail-complete"
-                  onClick={() => {
-                    // Mark task as complete
-                    setPhoneTasks(prev => prev.filter(t => t.id !== selectedPhoneTask.id));
-                    setSelectedPhoneTask(null);
-                  }}
-                >
-                  ✓ Complete Task
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="detail-empty">
-              <p>Select a call task to view details</p>
-            </div>
-          )}
-        </div>
+        {/* Phone Task Detail (Right Side) - Using shared component */}
+        <CallDetailPanel
+          task={selectedPhoneTask}
+          callStatus={callStatus}
+          powerDialActive={powerDialActive}
+          powerDialIndex={powerDialIndex}
+          powerDialTotal={powerDialQueue.length}
+          onClickToDial={handleClickToDial}
+          onEndCall={handleEndCall}
+          onNextContact={nextPowerDialContact}
+          onSkipContact={skipPowerDialContact}
+          onStopPowerDial={stopPowerDial}
+          onViewEntity={(task) => {
+            if (task.lead_id) {
+              navigate(`/leads/${task.lead_id}`);
+            } else if (task.loan_id) {
+              navigate(`/loans/${task.loan_id}`);
+            }
+          }}
+          onComplete={(taskId) => {
+            setPhoneTasks(prev => prev.filter(t => t.id !== taskId));
+            setSelectedPhoneTask(null);
+          }}
+          onClose={() => setSelectedPhoneTask(null)}
+        />
       </div>
     );
   };

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { commandCenterAPI, tasksAPI, reconciliationAPI } from '../services/api';
 import TaskDetailPanel from './shared/TaskDetailPanel';
+import ReconciliationDetailPanel from './shared/ReconciliationDetailPanel';
+import CallDetailPanel from './shared/CallDetailPanel';
 import './ActionSidebar.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -488,8 +490,8 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
               ))}
             </div>
 
-            {/* Detail Panel - Shared Task Detail Component */}
-            {selectedItem && (
+            {/* Detail Panel - Render appropriate shared component based on tab */}
+            {selectedItem && activeTab === 'tasks' && (
               <TaskDetailPanel
                 task={{
                   ...selectedItem,
@@ -505,6 +507,66 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
                 onSend={() => {}}
                 onApproveAi={() => {}}
                 onChangeStatus={() => {}}
+                onClose={() => setSelectedItem(null)}
+                completing={completingTask}
+                compact={true}
+              />
+            )}
+            {selectedItem && activeTab === 'emails' && (
+              <ReconciliationDetailPanel
+                email={{
+                  ...selectedItem,
+                  subject: selectedItem.title || selectedItem.subject,
+                  from_name: selectedItem.entity_name || selectedItem.from_name,
+                  from_email: selectedItem.email || selectedItem.from_email,
+                  sent_date: selectedItem.created_at || selectedItem.sent_date,
+                  body_preview: selectedItem.description || selectedItem.body_preview,
+                  matched_loan_id: selectedItem.loan_id,
+                  matched_lead_id: selectedItem.lead_id
+                }}
+                onProcess={() => {}}
+                onViewLoan={(loanId) => navigate(`/loans/${loanId}`)}
+                onViewLead={(leadId) => navigate(`/leads/${leadId}`)}
+                onClose={() => setSelectedItem(null)}
+                compact={true}
+              />
+            )}
+            {selectedItem && activeTab === 'calls' && (
+              <CallDetailPanel
+                task={{
+                  ...selectedItem,
+                  contact_name: selectedItem.entity_name || selectedItem.contact_name,
+                  contact_phone: selectedItem.phone || selectedItem.contact_phone || '(555) 000-0000',
+                  entity_type: selectedItem.lead_id ? 'lead' : 'loan',
+                  lead_id: selectedItem.lead_id,
+                  loan_id: selectedItem.loan_id
+                }}
+                callStatus={callInProgress ? 'in-progress' : 'idle'}
+                powerDialActive={powerDialing}
+                powerDialIndex={currentCallIndex}
+                powerDialTotal={selectedCallIds.size}
+                onClickToDial={(task) => {
+                  // Simulate click to dial
+                  setCallInProgress(true);
+                  if (task.contact_phone) {
+                    window.open(`tel:${task.contact_phone}`);
+                  }
+                }}
+                onEndCall={() => setCallInProgress(false)}
+                onNextContact={() => setCurrentCallIndex(prev => prev + 1)}
+                onSkipContact={() => setCurrentCallIndex(prev => prev + 1)}
+                onStopPowerDial={() => {
+                  setPowerDialing(false);
+                  setCurrentCallIndex(0);
+                }}
+                onViewEntity={(task) => {
+                  if (task.lead_id) {
+                    navigate(`/leads/${task.lead_id}`);
+                  } else if (task.loan_id) {
+                    navigate(`/loans/${task.loan_id}`);
+                  }
+                }}
+                onComplete={(taskId) => handleCompleteTask(selectedItem)}
                 onClose={() => setSelectedItem(null)}
                 completing={completingTask}
                 compact={true}
