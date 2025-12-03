@@ -849,7 +849,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             FROM ai_tasks t
             LEFT JOIN loans ln ON t.loan_id = ln.id
             LEFT JOIN leads ld ON t.lead_id = ld.id
-            WHERE t.assigned_to_id = :user_id AND t.type != 'Completed'
+            WHERE t.assigned_to_id = :user_id AND t.type::text != 'Completed'
             ORDER BY
                 CASE WHEN t.priority = 'high' THEN 1 WHEN t.priority = 'medium' THEN 2 ELSE 3 END,
                 t.due_date ASC NULLS LAST
@@ -1143,7 +1143,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
                        WHERE t.assigned_to_id = :user_id
-                       AND t.type != 'Completed'
+                       AND t.type::text != 'Completed'
                        AND t.due_date < CURRENT_DATE
                        ORDER BY
                            CASE WHEN t.priority = 'high' THEN 1
@@ -1162,7 +1162,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
                        WHERE t.assigned_to_id = :user_id
-                       AND t.type != 'Completed'
+                       AND t.type::text != 'Completed'
                        AND t.due_date::date = CURRENT_DATE
                        ORDER BY
                            CASE WHEN t.priority = 'high' THEN 1
@@ -1180,7 +1180,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
                        WHERE t.assigned_to_id = :user_id
-                       AND t.type != 'Completed'
+                       AND t.type::text != 'Completed'
                        AND t.due_date::date = CURRENT_DATE + INTERVAL '1 day'
                        ORDER BY
                            CASE WHEN t.priority = 'high' THEN 1

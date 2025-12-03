@@ -2768,6 +2768,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     Lead = main.Lead
     Loan = main.Loan
     AITask = main.AITask
+    TaskType = main.TaskType
 
     today = datetime.now().date()
 
@@ -2782,7 +2783,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     try:
         ai_tasks = db.query(AITask).filter(
             AITask.assigned_to_id == user_id,
-            AITask.type != 'completed'
+            AITask.type != TaskType.COMPLETED
         ).order_by(AITask.due_date.asc()).limit(20).all()
     except Exception as e:
         logger.debug(f"AITask query failed: {e}")
