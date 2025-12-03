@@ -86,6 +86,10 @@ function LeadDetail() {
   const [cashflowPartners, setCashflowPartners] = useState([]);
   const [cashflowLoading, setCashflowLoading] = useState(false);
 
+  // Stage History state
+  const [stageHistory, setStageHistory] = useState([]);
+  const [stageHistoryLoading, setStageHistoryLoading] = useState(false);
+
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
   const [emailArchive, setEmailArchive] = useState([]);
@@ -523,6 +527,42 @@ function LeadDetail() {
       console.error('Failed to load email drafts:', error);
     }
   };
+
+  // Load stage history for Important Dates tab
+  const loadStageHistory = async () => {
+    if (!id) return;
+    setStageHistoryLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/leads/${id}/stage-history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStageHistory(data.stage_history || []);
+      }
+    } catch (error) {
+      console.error('Failed to load stage history:', error);
+    } finally {
+      setStageHistoryLoading(false);
+    }
+  };
+
+  // Load stage history when Important Dates tab is opened
+  useEffect(() => {
+    if (activeTab === 'important-dates' && id) {
+      loadStageHistory();
+    }
+  }, [activeTab, id]);
 
   // Search contacts for CC autocomplete
   const searchCcContacts = async (query) => {
@@ -2726,6 +2766,63 @@ function LeadDetail() {
                   <small className="field-hint">For shopping-phase automation</small>
                 </div>
               </div>
+            </div>
+
+            {/* Status History Timeline */}
+            <div className="info-section">
+              <h2>Status History Timeline</h2>
+              <p className="section-subtitle">Automatic tracking of all status changes</p>
+
+              {stageHistoryLoading ? (
+                <div className="loading-state">Loading status history...</div>
+              ) : stageHistory.length === 0 ? (
+                <div className="empty-timeline">
+                  <p>No status changes recorded yet. Changes will be tracked automatically when the lead stage is updated.</p>
+                </div>
+              ) : (
+                <div className="status-timeline">
+                  {stageHistory.map((entry, index) => (
+                    <div key={entry.id || index} className="timeline-entry">
+                      <div className="timeline-marker">
+                        <div className="marker-dot"></div>
+                        {index < stageHistory.length - 1 && <div className="marker-line"></div>}
+                      </div>
+                      <div className="timeline-content">
+                        <div className="timeline-header">
+                          <span className="stage-change">
+                            {entry.from_stage ? (
+                              <>
+                                <span className="from-stage">{entry.from_stage}</span>
+                                <span className="arrow">→</span>
+                                <span className="to-stage">{entry.to_stage}</span>
+                              </>
+                            ) : (
+                              <span className="to-stage">Started at: {entry.to_stage}</span>
+                            )}
+                          </span>
+                          <span className="timeline-date">
+                            {new Date(entry.changed_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        {entry.duration_in_previous_stage && (
+                          <div className="duration-info">
+                            Time in previous stage: {Math.floor(entry.duration_in_previous_stage / 86400)} days
+                          </div>
+                        )}
+                        {entry.notes && (
+                          <div className="timeline-notes">{entry.notes}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           )}

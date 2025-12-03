@@ -641,6 +641,7 @@ class Lead(Base):
     owner = relationship("User", back_populates="leads")
     referral_partner = relationship("ReferralPartner", back_populates="leads")
     activities = relationship("Activity", back_populates="lead")
+    stage_history = relationship("StageHistory", back_populates="lead", foreign_keys="StageHistory.lead_id")
     # Workflow relationships (commented out until workflow_models imported)
     # employer_records = relationship("EmployerRecord", back_populates="champion_lead", foreign_keys="EmployerRecord.champion_lead_id")
     # opportunities = relationship("Opportunity", back_populates="primary_lead", foreign_keys="Opportunity.primary_lead_id")
@@ -732,6 +733,7 @@ class Loan(Base):
     # Workflow tracking
     current_workflow_id = Column(String)  # Active workflow identifier
     last_workflow_action = Column(DateTime)  # Last automated action
+    stage_changed_at = Column(DateTime)  # Tracks when stage last changed
     # Team member fields (for populate endpoint)
     loan_officer_name = Column(String)
     loan_officer_email = Column(String)
@@ -744,6 +746,7 @@ class Loan(Base):
     loan_officer = relationship("User", back_populates="loans")
     tasks = relationship("AITask", back_populates="loan")
     activities = relationship("Activity", back_populates="loan")
+    stage_history = relationship("StageHistory", back_populates="loan", foreign_keys="StageHistory.loan_id")
     # Workflow relationship (commented out until workflow_models imported)
     # workflow_executions = relationship("WorkflowExecution", back_populates="loan", foreign_keys="WorkflowExecution.loan_id")
 
@@ -1080,6 +1083,34 @@ class Activity(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     lead = relationship("Lead", back_populates="activities")
     loan = relationship("Loan", back_populates="activities")
+
+
+class StageHistory(Base):
+    """Tracks all stage/status changes for leads and loans with timestamps"""
+    __tablename__ = "stage_history"
+    __table_args__ = (
+        Index('ix_stage_history_lead_id', 'lead_id'),
+        Index('ix_stage_history_loan_id', 'loan_id'),
+        Index('ix_stage_history_changed_at', 'changed_at'),
+        Index('ix_stage_history_entity', 'entity_type', 'entity_id'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String, nullable=False)  # 'lead' or 'loan'
+    entity_id = Column(Integer, nullable=False)  # The lead_id or loan_id
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    from_stage = Column(String)  # Previous stage (null for initial)
+    to_stage = Column(String, nullable=False)  # New stage
+    changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    changed_by_id = Column(Integer, ForeignKey("users.id"))  # User who made the change
+    notes = Column(Text)  # Optional notes about the change
+    duration_in_previous_stage = Column(Integer)  # Days spent in previous stage
+
+    # Relationships
+    lead = relationship("Lead", back_populates="stage_history", foreign_keys=[lead_id])
+    loan = relationship("Loan", back_populates="stage_history", foreign_keys=[loan_id])
+    changed_by = relationship("User")
+
 
 class AIDelegatedTask(Base):
     __tablename__ = "ai_delegated_tasks"
@@ -32841,12 +32872,31 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     # Trigger workflow if status changed
     new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
     if old_status != new_status and new_status:
+        # Calculate duration in previous stage
+        duration_days = None
+        if lead.stage_changed_at:
+            duration_days = (datetime.now(timezone.utc) - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
+
         # Track when stage changed for workflow day calculations
         lead.stage_changed_at = datetime.now(timezone.utc)
         lead.workflow_day = 0  # Reset workflow day counter
+
+        # Record stage change in history
+        stage_history = StageHistory(
+            entity_type='lead',
+            entity_id=lead.id,
+            lead_id=lead.id,
+            from_stage=old_status,
+            to_stage=new_status,
+            changed_at=datetime.now(timezone.utc),
+            changed_by_id=current_user.id,
+            duration_in_previous_stage=duration_days
+        )
+        db.add(stage_history)
+
         db.commit()
         db.refresh(lead)
-        logger.info(f"Stage changed for lead {lead.id}: {old_status} → {new_status}, stage_changed_at updated")
+        logger.info(f"Stage changed for lead {lead.id}: {old_status} → {new_status}, stage_changed_at updated, history recorded")
 
         try:
             # Create status change event
@@ -33375,12 +33425,38 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
-    # Track if stage is changing to FUNDED
+    # Track if stage is changing
     old_stage = loan.stage
+    old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
     new_stage = loan_update.stage if loan_update.stage else old_stage
+    new_stage_str = new_stage.value if hasattr(new_stage, 'value') else str(new_stage) if new_stage else None
 
     for key, value in loan_update.dict(exclude_unset=True).items():
         setattr(loan, key, value)
+
+    # Track stage change in history if stage changed
+    if old_stage_str != new_stage_str and new_stage_str:
+        # Calculate duration in previous stage
+        duration_days = None
+        if loan.stage_changed_at:
+            duration_days = (datetime.now(timezone.utc) - loan.stage_changed_at.replace(tzinfo=timezone.utc)).days
+
+        # Update stage_changed_at
+        loan.stage_changed_at = datetime.now(timezone.utc)
+
+        # Record stage change in history
+        stage_history = StageHistory(
+            entity_type='loan',
+            entity_id=loan.id,
+            loan_id=loan.id,
+            from_stage=old_stage_str,
+            to_stage=new_stage_str,
+            changed_at=datetime.now(timezone.utc),
+            changed_by_id=current_user.id,
+            duration_in_previous_stage=duration_days
+        )
+        db.add(stage_history)
+        logger.info(f"Stage changed for loan {loan.id}: {old_stage_str} → {new_stage_str}, history recorded")
 
     # If stage changed to FUNDED, set funded_date and copy to MUM portfolio
     if new_stage == LoanStage.FUNDED and old_stage != LoanStage.FUNDED:
@@ -33410,6 +33486,75 @@ async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user:
     db.commit()
     logger.info(f"Loan deleted: {loan.loan_number}")
     return None
+
+
+# ============================================================================
+# STAGE HISTORY ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/leads/{lead_id}/stage-history")
+async def get_lead_stage_history(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get the complete stage history for a lead"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get stage history ordered by date (newest first)
+    history = db.query(StageHistory).filter(
+        StageHistory.lead_id == lead_id
+    ).order_by(StageHistory.changed_at.desc()).all()
+
+    return {
+        "lead_id": lead_id,
+        "lead_name": lead.name,
+        "current_stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
+        "stage_history": [
+            {
+                "id": h.id,
+                "from_stage": h.from_stage,
+                "to_stage": h.to_stage,
+                "changed_at": h.changed_at.isoformat() if h.changed_at else None,
+                "changed_by_id": h.changed_by_id,
+                "duration_in_previous_stage": h.duration_in_previous_stage,
+                "notes": h.notes
+            }
+            for h in history
+        ]
+    }
+
+@app.get("/api/v1/loans/{loan_id}/stage-history")
+async def get_loan_stage_history(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get the complete stage history for a loan"""
+    loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Get stage history ordered by date (newest first)
+    history = db.query(StageHistory).filter(
+        StageHistory.loan_id == loan_id
+    ).order_by(StageHistory.changed_at.desc()).all()
+
+    return {
+        "loan_id": loan_id,
+        "loan_number": loan.loan_number,
+        "borrower_name": loan.borrower_name,
+        "current_stage": loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage) if loan.stage else None,
+        "stage_history": [
+            {
+                "id": h.id,
+                "from_stage": h.from_stage,
+                "to_stage": h.to_stage,
+                "changed_at": h.changed_at.isoformat() if h.changed_at else None,
+                "changed_by_id": h.changed_by_id,
+                "duration_in_previous_stage": h.duration_in_previous_stage,
+                "notes": h.notes
+            }
+            for h in history
+        ]
+    }
 
 
 # ============================================================================

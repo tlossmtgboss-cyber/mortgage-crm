@@ -2243,3 +2243,120 @@ button.borrower-btn.add-borrower-btn:hover {
   font-size: 14px;
 }
 
+/* Status History Timeline Styles */
+.empty-timeline {
+  text-align: center;
+  padding: 32px;
+  color: #666;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px dashed #e0e0e0;
+}
+
+.empty-timeline p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.status-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 0;
+}
+
+.timeline-entry {
+  display: flex;
+  gap: 16px;
+  position: relative;
+}
+
+.timeline-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.marker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #218D8D;
+  border: 3px solid #e0f2f2;
+  z-index: 1;
+}
+
+.marker-line {
+  width: 2px;
+  flex-grow: 1;
+  background: #e0e0e0;
+  min-height: 40px;
+}
+
+.timeline-content {
+  flex: 1;
+  padding-bottom: 24px;
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stage-change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.from-stage {
+  color: #666;
+  background: #f0f0f0;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.arrow {
+  color: #218D8D;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.to-stage {
+  color: #218D8D;
+  background: #e0f2f2;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timeline-date {
+  color: #666;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.duration-info {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #888;
+}
+
+.timeline-notes {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #555;
+  background: #f9f9f9;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 3px solid #218D8D;
+}
+
