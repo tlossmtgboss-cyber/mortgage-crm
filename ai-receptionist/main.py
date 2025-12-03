@@ -1,392 +1,422 @@
+#!/usr/bin/env python3
 """
-===============================================================================
-PERENNIA AI RECEPTIONIST - MAIN APPLICATION
-===============================================================================
-FastAPI application for the AI Receptionist system.
+================================================================================
+PERENNIA AI RECEPTIONIST - MAIN ENTRY POINT
+================================================================================
+Start the AI Receptionist server with all components configured.
 
-Run with:
-    python main.py
-    # or
-    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-===============================================================================
+Usage:
+    python main.py              # Start server
+    python main.py --test       # Run test scenario
+    python main.py --simulate   # Interactive simulation
+================================================================================
 """
 
 import os
+import sys
+import asyncio
 import logging
-from datetime import datetime
-from typing import Optional
-from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Form
-from fastapi.responses import Response, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+# Add current directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
 
 # Configure logging
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("perennia.receptionist")
 
-# Import receptionist components
-from AI_RECEPTIONIST_PART1_ENGINE import create_engine, ConversationState, CallOutcome
-from AI_RECEPTIONIST_PART2_TWILIO import get_voice_client, get_ai_config
-from AI_RECEPTIONIST_PART3_AUDIO import create_stt, create_tts, TwilioMediaStreamHandler
-from AI_RECEPTIONIST_PART4_INTEGRATION import create_receptionist
-
-
-# =============================================================================
-# APPLICATION SETUP
-# =============================================================================
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    logger.info("Starting AI Receptionist...")
-
-    # Initialize components
-    app.state.engine = create_engine(
-        company_name=os.getenv("BUSINESS_NAME", "Perennia Mortgage"),
-    )
-    app.state.voice_client = get_voice_client()
-    app.state.ai_config = get_ai_config()
-    app.state.receptionist = create_receptionist(
-        company_name=os.getenv("BUSINESS_NAME", "Perennia Mortgage"),
-        default_lo_id=os.getenv("DEFAULT_LO_ID"),
-    )
-    app.state.stt = create_stt()
-    app.state.tts = create_tts()
-
-    logger.info("AI Receptionist ready!")
-
-    yield
-
-    logger.info("Shutting down AI Receptionist...")
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
-app = FastAPI(
-    title="Perennia AI Receptionist",
-    description="Intelligent Voice AI for Mortgage Companies",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# =============================================================================
-# HEALTH CHECK
-# =============================================================================
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "ai-receptionist",
-        "timestamp": datetime.now().isoformat(),
-        "components": {
-            "engine": "ready",
-            "twilio": "configured" if app.state.voice_client else "not configured",
-            "stt": "configured" if app.state.stt.config.has_deepgram() else "not configured",
-            "tts": "configured" if app.state.tts.config.has_elevenlabs() else "not configured",
-        },
-    }
+def print_startup_banner():
+    """Print startup banner"""
+    print("""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║     🎙️  PERENNIA AI RECEPTIONIST                                             ║
+║     Intelligent Voice AI for Mortgage Companies                              ║
+║                                                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  Features:                                                                   ║
+║    • Natural conversation powered by Claude/GPT-4                            ║
+║    • Emotional intelligence and empathy                                      ║
+║    • Full telephony with Twilio                                              ║
+║    • 160 integrated CRM tools                                                ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+    """)
 
 
-# =============================================================================
-# TWILIO VOICE WEBHOOKS
-# =============================================================================
+def check_configuration():
+    """Check required configuration"""
+    required_vars = [
+        ("TWILIO_ACCOUNT_SID", "Twilio Account SID"),
+        ("TWILIO_AUTH_TOKEN", "Twilio Auth Token"),
+    ]
 
-@app.post("/voice/inbound")
-async def handle_inbound_call(request: Request):
-    """
-    Handle incoming calls from Twilio.
+    llm_vars = [
+        ("ANTHROPIC_API_KEY", "Anthropic API Key"),
+        ("OPENAI_API_KEY", "OpenAI API Key"),
+    ]
 
-    Returns TwiML to greet caller and gather speech input.
-    """
-    form_data = await request.form()
-    caller_phone = form_data.get("From", "Unknown")
-    call_sid = form_data.get("CallSid", "")
+    missing = []
 
-    logger.info(f"Incoming call from {caller_phone} (SID: {call_sid})")
+    for var, name in required_vars:
+        if not os.getenv(var):
+            missing.append(name)
 
-    # Start conversation
-    caller_info = app.state.receptionist.lookup_caller(caller_phone)
-    state = app.state.engine.start_conversation(
-        call_sid=call_sid,
-        caller_phone=caller_phone,
-        caller_info=caller_info.get("data") if caller_info.get("status") == "success" else None,
+    # Check for at least one LLM provider
+    has_llm = any(os.getenv(var) for var, _ in llm_vars)
+    if not has_llm:
+        logger.warning("No LLM API key configured - using rule-based responses")
+
+    if missing:
+        logger.error(f"Missing required configuration: {', '.join(missing)}")
+        logger.error("Please set environment variables or create .env file")
+        return False
+
+    return True
+
+
+def create_app():
+    """Create and configure the FastAPI application"""
+    from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
+    from fastapi.responses import PlainTextResponse
+    from fastapi.middleware.cors import CORSMiddleware
+
+    # Import our modules
+    from AI_RECEPTIONIST_PART1_ENGINE import ConversationEngine, ReceptionistPersonality
+    from AI_RECEPTIONIST_PART2_TWILIO import TwilioVoiceHandler, TwilioConfig
+    from AI_RECEPTIONIST_PART4_INTEGRATION import ReceptionistToolExecutor
+
+    # Create FastAPI app
+    app = FastAPI(
+        title="Perennia AI Receptionist",
+        description="Intelligent voice AI for mortgage companies",
+        version="1.0.0",
     )
 
-    # Log to CRM
-    app.state.receptionist.log_interaction(
-        call_sid=call_sid,
-        caller_phone=caller_phone,
-        interaction_type="incoming_call",
+    # Add CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
-    # Generate greeting
-    twiml = app.state.voice_client.create_greeting_response(
-        company_name=app.state.ai_config.business_name,
+    # Configuration
+    personality = ReceptionistPersonality(
+        name=os.getenv("RECEPTIONIST_NAME", "Sarah"),
+        company_name=os.getenv("COMPANY_NAME", "Perennia Mortgage"),
     )
 
-    return Response(content=twiml, media_type="application/xml")
+    twilio_config = TwilioConfig(
+        account_sid=os.getenv("TWILIO_ACCOUNT_SID"),
+        auth_token=os.getenv("TWILIO_AUTH_TOKEN"),
+        phone_number=os.getenv("TWILIO_PHONE_NUMBER"),
+        base_url=os.getenv("TWILIO_WEBHOOK_BASE_URL"),
+    )
 
+    # Create components
+    tool_executor = ReceptionistToolExecutor()
 
-@app.post("/voice/process-speech")
-async def process_speech(request: Request):
-    """
-    Process speech input from caller.
+    # Determine LLM provider
+    if os.getenv("ANTHROPIC_API_KEY"):
+        llm_provider = "claude"
+    elif os.getenv("OPENAI_API_KEY"):
+        llm_provider = "openai"
+    else:
+        llm_provider = None
 
-    Twilio sends the transcribed speech here after gathering.
-    """
-    form_data = await request.form()
-    call_sid = form_data.get("CallSid", "")
-    speech_result = form_data.get("SpeechResult", "")
-    confidence = float(form_data.get("Confidence", 0))
+    conversation_engine = ConversationEngine(
+        personality=personality,
+        llm_provider=llm_provider,
+        tool_executor=tool_executor.execute,
+    )
 
-    logger.info(f"Speech from {call_sid}: {speech_result} (confidence: {confidence})")
+    voice_handler = TwilioVoiceHandler(
+        config=twilio_config,
+        conversation_handler=conversation_engine,
+    )
 
-    if not speech_result:
-        # No speech detected
-        twiml = app.state.voice_client.create_say_response(
-            "I didn't catch that. Could you please repeat?",
-            gather_after=True,
+    # Store in app state
+    app.state.conversation_engine = conversation_engine
+    app.state.voice_handler = voice_handler
+    app.state.tool_executor = tool_executor
+
+    # -------------------------------------------------------------------------
+    # Routes
+    # -------------------------------------------------------------------------
+
+    @app.get("/")
+    async def root():
+        return {
+            "service": "Perennia AI Receptionist",
+            "status": "running",
+            "version": "1.0.0",
+        }
+
+    @app.get("/health")
+    async def health():
+        return {
+            "status": "healthy",
+            "service": "ai-receptionist",
+            "components": {
+                "conversation_engine": "ok",
+                "voice_handler": "ok",
+                "twilio_configured": bool(twilio_config.account_sid),
+                "llm_provider": llm_provider or "rule-based",
+            },
+        }
+
+    @app.post("/voice/inbound")
+    async def handle_inbound_call(request: Request):
+        """Handle incoming Twilio call"""
+        form_data = await request.form()
+        params = dict(form_data)
+
+        call_sid = params.get("CallSid")
+        from_number = params.get("From")
+        caller_name = params.get("CallerName")
+
+        logger.info(f"Incoming call: {call_sid} from {from_number}")
+
+        # Start conversation
+        state, greeting = await conversation_engine.start_conversation(
+            call_sid=call_sid,
+            caller_phone=from_number,
+            caller_id_name=caller_name,
         )
+
+        # Generate TwiML
+        twiml = voice_handler.generate_greeting_twiml(
+            greeting=greeting,
+            gather_speech=True,
+        )
+
         return Response(content=twiml, media_type="application/xml")
 
-    # Process with AI engine
-    result = await app.state.engine.process_speech(call_sid, speech_result)
+    @app.post("/voice/process-speech")
+    async def process_speech(request: Request):
+        """Process speech recognition result"""
+        form_data = await request.form()
+        params = dict(form_data)
 
-    # Check if transfer needed
-    if result.get("needs_transfer"):
-        # Get routing recommendation
-        routing = app.state.receptionist.route_call(
-            caller_phone="",  # Get from state
-            intent=result.get("intent", "unknown"),
-            urgency="normal",
-        )
+        call_sid = params.get("CallSid")
+        speech_result = params.get("SpeechResult", "")
 
-        transfer_to = os.getenv("TRANSFER_NUMBER", "+15551234567")
-        twiml = app.state.voice_client.create_transfer_response(
-            transfer_to=transfer_to,
-            announcement=result.get("response"),
-        )
-        return Response(content=twiml, media_type="application/xml")
+        logger.info(f"Speech for {call_sid}: {speech_result}")
 
-    # Generate response TwiML
-    ai_response = result.get("response", "I'm sorry, I didn't understand. Can you repeat that?")
-    twiml = app.state.voice_client.create_say_response(
-        ai_response,
-        gather_after=True,
-    )
-
-    return Response(content=twiml, media_type="application/xml")
-
-
-@app.post("/voice/transfer")
-async def handle_transfer(request: Request):
-    """Handle transfer to human agent."""
-    form_data = await request.form()
-    call_sid = form_data.get("CallSid", "")
-
-    logger.info(f"Transferring call {call_sid}")
-
-    transfer_to = os.getenv("TRANSFER_NUMBER", "+15551234567")
-    twiml = app.state.voice_client.create_transfer_response(
-        transfer_to=transfer_to,
-        announcement="Please hold while I transfer you to a loan officer.",
-    )
-
-    return Response(content=twiml, media_type="application/xml")
-
-
-@app.post("/voice/status")
-async def handle_status_callback(request: Request):
-    """Handle Twilio status callbacks."""
-    form_data = await request.form()
-    call_sid = form_data.get("CallSid", "")
-    call_status = form_data.get("CallStatus", "")
-    duration = form_data.get("CallDuration", 0)
-
-    logger.info(f"Call {call_sid} status: {call_status}, duration: {duration}s")
-
-    # End conversation if completed
-    if call_status in ["completed", "busy", "failed", "no-answer"]:
-        outcome = {
-            "completed": CallOutcome.COMPLETED,
-            "busy": CallOutcome.ABANDONED,
-            "failed": CallOutcome.ABANDONED,
-            "no-answer": CallOutcome.ABANDONED,
-        }.get(call_status, CallOutcome.COMPLETED)
-
-        summary = app.state.engine.end_conversation(call_sid, outcome)
-
-        if summary:
-            # Log to CRM
-            app.state.receptionist.log_interaction(
+        # Process through conversation engine
+        if speech_result:
+            response_text = await conversation_engine.process_input(
                 call_sid=call_sid,
-                caller_phone=summary.get("caller_phone", ""),
-                interaction_type="call_completed",
-                outcome=outcome.value,
-                transcript=str(summary.get("transcript", [])),
+                caller_input=speech_result,
             )
+        else:
+            response_text = "I'm sorry, I didn't catch that. Could you please repeat?"
 
-    return JSONResponse({"status": "ok"})
-
-
-@app.post("/voice/voicemail-complete")
-async def handle_voicemail(request: Request):
-    """Handle voicemail recording completion."""
-    form_data = await request.form()
-    call_sid = form_data.get("CallSid", "")
-    recording_url = form_data.get("RecordingUrl", "")
-    recording_duration = form_data.get("RecordingDuration", 0)
-
-    logger.info(f"Voicemail received for {call_sid}: {recording_url}")
-
-    # Log voicemail
-    app.state.receptionist.log_interaction(
-        call_sid=call_sid,
-        caller_phone="",
-        interaction_type="voicemail",
-        notes=f"Recording: {recording_url}, Duration: {recording_duration}s",
-    )
-
-    twiml = app.state.voice_client.create_say_response(
-        "Thank you for your message. A loan officer will call you back shortly. Goodbye.",
-        end_call=True,
-    )
-
-    return Response(content=twiml, media_type="application/xml")
-
-
-# =============================================================================
-# WEBSOCKET FOR AUDIO STREAMING
-# =============================================================================
-
-@app.websocket("/voice/stream")
-async def voice_stream(websocket: WebSocket):
-    """
-    WebSocket endpoint for bidirectional audio streaming.
-
-    Used with Twilio Media Streams for real-time audio processing.
-    """
-    await websocket.accept()
-    logger.info("Voice stream WebSocket connected")
-
-    handler = TwilioMediaStreamHandler(
-        stt=app.state.stt,
-        tts=app.state.tts,
-    )
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            result = await handler.handle_message(data)
-
-            if result and result.get("transcript"):
-                # Process transcript with AI
-                transcript = result["transcript"]
-                logger.info(f"Transcript: {transcript}")
-
-                # Generate AI response
-                # This would integrate with the conversation engine
-
-    except WebSocketDisconnect:
-        logger.info("Voice stream WebSocket disconnected")
-    except Exception as e:
-        logger.error(f"Voice stream error: {e}")
-
-
-# =============================================================================
-# API ENDPOINTS
-# =============================================================================
-
-@app.post("/api/outbound-call")
-async def initiate_outbound_call(
-    to: str = Form(...),
-    purpose: str = Form("follow_up"),
-):
-    """Initiate an outbound call."""
-    result = app.state.voice_client.make_call(to=to)
-
-    if result.get("error"):
-        return JSONResponse(
-            {"status": "error", "error": result["error"]},
-            status_code=400,
+        # Generate TwiML
+        twiml = voice_handler.generate_response_twiml(
+            message=response_text,
+            gather_speech=True,
         )
 
-    return JSONResponse({
-        "status": "success",
-        "call_sid": result.get("call_sid"),
-    })
+        return Response(content=twiml, media_type="application/xml")
+
+    @app.post("/voice/no-input")
+    async def handle_no_input(request: Request):
+        """Handle timeout with no speech"""
+        twiml = voice_handler.generate_response_twiml(
+            message="I'm still here. How can I help you?",
+            gather_speech=True,
+        )
+        return Response(content=twiml, media_type="application/xml")
+
+    @app.post("/voice/status")
+    async def call_status(request: Request):
+        """Handle call status updates"""
+        form_data = await request.form()
+        params = dict(form_data)
+
+        call_sid = params.get("CallSid")
+        status = params.get("CallStatus")
+
+        logger.info(f"Call {call_sid} status: {status}")
+
+        # End conversation if call completed
+        if status in ["completed", "busy", "failed", "no-answer", "canceled"]:
+            summary = await conversation_engine.end_conversation(call_sid, reason=status)
+            logger.info(f"Call summary: {summary}")
+
+        return PlainTextResponse("OK")
+
+    @app.post("/voice/recording-status")
+    async def recording_status(request: Request):
+        """Handle recording callbacks"""
+        form_data = await request.form()
+        params = dict(form_data)
+
+        logger.info(f"Recording status: {params.get('RecordingStatus')}")
+
+        return PlainTextResponse("OK")
+
+    @app.post("/voice/transfer-complete")
+    async def transfer_complete(request: Request):
+        """Handle transfer completion"""
+        form_data = await request.form()
+        params = dict(form_data)
+
+        dial_status = params.get("DialCallStatus")
+
+        if dial_status in ["completed", "answered"]:
+            return Response(content="", media_type="application/xml")
+
+        # Transfer failed
+        twiml = voice_handler.generate_response_twiml(
+            message="I'm sorry, I wasn't able to connect that call. Is there something else I can help with?",
+            gather_speech=True,
+        )
+        return Response(content=twiml, media_type="application/xml")
+
+    @app.post("/voice/voicemail-complete")
+    async def voicemail_complete(request: Request):
+        """Handle voicemail completion"""
+        form_data = await request.form()
+        call_sid = dict(form_data).get("CallSid")
+
+        # Mark message left
+        state = conversation_engine.get_conversation_state(call_sid)
+        if state:
+            state.message_left = True
+
+        twiml = voice_handler.generate_goodbye_twiml(
+            "Thank you for your message. Someone will get back to you shortly. Goodbye!"
+        )
+        return Response(content=twiml, media_type="application/xml")
+
+    @app.websocket("/voice/stream")
+    async def audio_stream(websocket: WebSocket):
+        """Handle real-time audio streaming"""
+        await websocket.accept()
+
+        try:
+            while True:
+                data = await websocket.receive_text()
+                # Handle streaming audio
+                # This would integrate with Deepgram/ElevenLabs
+                pass
+        except WebSocketDisconnect:
+            logger.info("WebSocket disconnected")
+
+    return app
 
 
-@app.get("/api/call/{call_sid}")
-async def get_call_details(call_sid: str):
-    """Get call details."""
-    result = app.state.voice_client.get_call(call_sid)
-    return JSONResponse(result)
-
-
-@app.post("/api/callback")
-async def create_callback_request(
-    phone: str = Form(...),
-    name: Optional[str] = Form(None),
-    preferred_time: Optional[str] = Form(None),
-    reason: Optional[str] = Form(None),
-):
-    """Create a callback request."""
-    result = app.state.receptionist.create_callback(
-        caller_phone=phone,
-        caller_name=name,
-        preferred_time=preferred_time,
-        reason=reason,
-    )
-
-    return JSONResponse(result)
-
-
-@app.get("/api/availability")
-async def check_availability(
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-):
-    """Check available appointment slots."""
-    result = app.state.receptionist.check_availability(
-        date_from=date_from,
-        date_to=date_to,
-    )
-
-    return JSONResponse(result)
-
-
-# =============================================================================
-# MAIN
-# =============================================================================
-
-if __name__ == "__main__":
+def run_server():
+    """Run the server"""
     import uvicorn
 
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", 8000))
+    print_startup_banner()
 
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        reload=os.getenv("DEBUG", "false").lower() == "true",
-    )
+    if not check_configuration():
+        sys.exit(1)
+
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+
+    webhook_url = os.getenv("TWILIO_WEBHOOK_BASE_URL", f"http://localhost:{port}")
+
+    print(f"""
+Server starting...
+
+  URL: http://{host}:{port}
+
+Endpoints:
+  POST /voice/inbound       - Twilio call webhook
+  POST /voice/process-speech - Speech processing
+  POST /voice/status        - Call status updates
+  GET  /health              - Health check
+
+Twilio Webhook URL:
+  {webhook_url}/voice/inbound
+
+Press Ctrl+C to stop
+    """)
+
+    app = create_app()
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+async def run_test():
+    """Run test scenario"""
+    from AI_RECEPTIONIST_PART4_INTEGRATION import ReceptionistTester
+
+    print_startup_banner()
+    print("Running test scenario...\n")
+
+    tester = ReceptionistTester()
+
+    await tester.run_scenario([
+        "Hi, I'd like to schedule an appointment with a loan officer",
+        "I'm looking to refinance my home",
+        "How about tomorrow afternoon around 2pm?",
+        "My name is John Smith",
+        "Perfect, thank you!",
+    ])
+
+
+async def run_simulation():
+    """Run interactive simulation"""
+    from AI_RECEPTIONIST_PART4_INTEGRATION import ReceptionistTester
+
+    print_startup_banner()
+    print("Interactive simulation mode")
+    print("Type your message as the caller")
+    print("Type 'quit' to exit\n")
+
+    tester = ReceptionistTester()
+    await tester.simulate_call("+15551234567")
+
+    while True:
+        try:
+            user_input = input("You: ").strip()
+            if user_input.lower() in ["quit", "exit", "bye"]:
+                break
+            if user_input:
+                await tester.say(user_input)
+        except KeyboardInterrupt:
+            break
+
+    await tester.end()
+
+
+def main():
+    """Main entry point"""
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+
+        if arg == "--test":
+            asyncio.run(run_test())
+        elif arg == "--simulate":
+            asyncio.run(run_simulation())
+        elif arg == "--help":
+            print(__doc__)
+        else:
+            run_server()
+    else:
+        run_server()
+
+
+if __name__ == "__main__":
+    main()
