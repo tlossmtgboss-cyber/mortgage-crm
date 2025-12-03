@@ -273,7 +273,7 @@ class AgentToolExecutor:
                     tool_name=tool_name,
                     success=result.status.value == "success",
                     data=result.data,
-                    message=result.message,
+                    message=result.message or "",
                     error=result.errors[0] if result.errors else None,
                     execution_time_ms=execution_time,
                 )

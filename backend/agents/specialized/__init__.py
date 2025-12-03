@@ -14,7 +14,7 @@ for mortgage CRM operations:
 8. Compliance Agent - Regulatory compliance monitoring
 """
 
-from .base import SpecializedAgent, AgentTool
+from .base import SpecializedAgent, AgentTool, AgentRegistry
 from .lead_agent import LeadManagementAgent
 from .loan_agent import LoanPipelineAgent
 from .task_agent import TaskCalendarAgent
@@ -28,6 +28,7 @@ __all__ = [
     # Base classes
     "SpecializedAgent",
     "AgentTool",
+    "AgentRegistry",
     # Specialized agents
     "LeadManagementAgent",
     "LoanPipelineAgent",
