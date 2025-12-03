@@ -26,6 +26,7 @@ from .nodes.gather import gather_data
 from .nodes.reason import reason_and_analyze
 from .nodes.execute import execute_actions
 from .nodes.respond import generate_response, format_structured_response
+from .nodes.reason_and_respond import reason_and_respond
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +34,19 @@ logger = logging.getLogger(__name__)
 def create_orchestrator(
     tool_functions: Dict[str, Callable] = None,
     anthropic_client: Anthropic = None,
-    autonomous_mode: bool = True
+    autonomous_mode: bool = True,
+    use_unified_mode: bool = True  # New flag to enable optimized mode
 ) -> StateGraph:
     """
     Create the LangGraph orchestrator workflow.
 
-    The workflow follows this structure:
+    OPTIMIZED workflow (use_unified_mode=True, default):
+    1. ANALYZE -> Classify query, extract entities, determine tools
+    2. GATHER -> Execute tools and collect data
+    3. REASON_AND_RESPOND -> Unified analysis + response (1 LLM call)
+    4. EXECUTE -> Optional: Perform actions if requested
+
+    LEGACY workflow (use_unified_mode=False):
     1. ANALYZE -> Classify query, extract entities, determine tools
     2. GATHER -> Execute tools and collect data
     3. REASON -> Analyze data, generate insights
@@ -49,6 +57,7 @@ def create_orchestrator(
         tool_functions: Dictionary mapping tool names to functions
         anthropic_client: Pre-configured Anthropic client
         autonomous_mode: Whether to auto-execute low-risk actions
+        use_unified_mode: Use optimized single LLM call for reason+respond (saves ~5-7s)
 
     Returns:
         Compiled LangGraph StateGraph
@@ -70,7 +79,7 @@ def create_orchestrator(
         return await gather_data(state, tool_functions)
 
     async def reason_node(state: AgentState) -> AgentState:
-        """Reasoning node"""
+        """Reasoning node (legacy)"""
         return await reason_and_analyze(state, anthropic_client)
 
     async def execute_node(state: AgentState) -> AgentState:
@@ -78,75 +87,104 @@ def create_orchestrator(
         return await execute_actions(state, tool_functions, autonomous_mode)
 
     async def respond_node(state: AgentState) -> AgentState:
-        """Response generation node"""
+        """Response generation node (legacy)"""
         return await generate_response(state, anthropic_client)
 
-    # Define routing logic
-    def should_execute_actions(state: AgentState) -> Literal["execute", "respond"]:
-        """Determine if we should execute actions or go straight to response."""
-        requires_action = state.get("requires_action", False)
-        query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
-
-        # Route to execute for action requests
-        if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
-            return "execute"
-
-        # Skip execute for pure information queries
-        return "respond"
-
-    def should_skip_reasoning(state: AgentState) -> Literal["reason", "respond"]:
-        """Determine if reasoning can be skipped for simple queries."""
-        query_complexity = state.get("query_complexity", "moderate")
-        data_quality = state.get("data_quality", "complete")
-
-        # Skip reasoning for simple queries with good data
-        if query_complexity == "simple" and data_quality == "complete":
-            # But still reason if there's significant data to analyze
-            gathered_data = state.get("gathered_data", {})
-            if len(gathered_data) <= 1:
-                return "respond"
-
-        return "reason"
+    async def unified_reason_respond_node(state: AgentState) -> AgentState:
+        """Unified reasoning + response node (optimized - saves ~5-7s)"""
+        return await reason_and_respond(state, anthropic_client)
 
     # Build the graph
     workflow = StateGraph(AgentState)
 
-    # Add nodes
-    workflow.add_node("analyze", analyze_node)
-    workflow.add_node("gather", gather_node)
-    workflow.add_node("reason", reason_node)
-    workflow.add_node("execute", execute_node)
-    workflow.add_node("respond", respond_node)
+    if use_unified_mode:
+        # OPTIMIZED: Unified mode - 2 LLM calls instead of 3
+        logger.info("[ORCHESTRATOR] Using UNIFIED mode (reason+respond combined)")
 
-    # Define edges
-    workflow.set_entry_point("analyze")
-    workflow.add_edge("analyze", "gather")
+        # Add nodes
+        workflow.add_node("analyze", analyze_node)
+        workflow.add_node("gather", gather_node)
+        workflow.add_node("reason_and_respond", unified_reason_respond_node)
+        workflow.add_node("execute", execute_node)
 
-    # After gathering, route based on complexity
-    workflow.add_conditional_edges(
-        "gather",
-        should_skip_reasoning,
-        {
-            "reason": "reason",
-            "respond": "respond"
-        }
-    )
+        # Define routing logic for unified mode
+        def should_execute_after_unified(state: AgentState) -> Literal["execute", "end"]:
+            """Determine if we should execute actions after unified response."""
+            requires_action = state.get("requires_action", False)
+            query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
 
-    # After reasoning, route based on action requirements
-    workflow.add_conditional_edges(
-        "reason",
-        should_execute_actions,
-        {
-            "execute": "execute",
-            "respond": "respond"
-        }
-    )
+            if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
+                return "execute"
+            return "end"
 
-    # Execute always leads to respond
-    workflow.add_edge("execute", "respond")
+        # Define edges - simplified flow
+        workflow.set_entry_point("analyze")
+        workflow.add_edge("analyze", "gather")
+        workflow.add_edge("gather", "reason_and_respond")
 
-    # Respond is the terminal node
-    workflow.add_edge("respond", END)
+        # After unified node, check if we need to execute actions
+        workflow.add_conditional_edges(
+            "reason_and_respond",
+            should_execute_after_unified,
+            {
+                "execute": "execute",
+                "end": END
+            }
+        )
+
+        # Execute leads to end (response already generated)
+        workflow.add_edge("execute", END)
+
+    else:
+        # LEGACY: Separate reason and respond nodes - 3 LLM calls
+        logger.info("[ORCHESTRATOR] Using LEGACY mode (separate reason + respond)")
+
+        # Add nodes
+        workflow.add_node("analyze", analyze_node)
+        workflow.add_node("gather", gather_node)
+        workflow.add_node("reason", reason_node)
+        workflow.add_node("execute", execute_node)
+        workflow.add_node("respond", respond_node)
+
+        # Define routing logic
+        def should_execute_actions(state: AgentState) -> Literal["execute", "respond"]:
+            """Determine if we should execute actions or go straight to response."""
+            requires_action = state.get("requires_action", False)
+            query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
+
+            if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
+                return "execute"
+            return "respond"
+
+        def should_skip_reasoning(state: AgentState) -> Literal["reason", "respond"]:
+            """Determine if reasoning can be skipped for simple queries."""
+            query_complexity = state.get("query_complexity", "moderate")
+            data_quality = state.get("data_quality", "complete")
+
+            if query_complexity == "simple" and data_quality == "complete":
+                gathered_data = state.get("gathered_data", {})
+                if len(gathered_data) <= 1:
+                    return "respond"
+            return "reason"
+
+        # Define edges
+        workflow.set_entry_point("analyze")
+        workflow.add_edge("analyze", "gather")
+
+        workflow.add_conditional_edges(
+            "gather",
+            should_skip_reasoning,
+            {"reason": "reason", "respond": "respond"}
+        )
+
+        workflow.add_conditional_edges(
+            "reason",
+            should_execute_actions,
+            {"execute": "execute", "respond": "respond"}
+        )
+
+        workflow.add_edge("execute", "respond")
+        workflow.add_edge("respond", END)
 
     # Compile the graph
     return workflow.compile()
