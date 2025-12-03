@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { teamAPI, tasksAPI, reconciliationAPI, aiAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
 import MergeCenter from './MergeCenter';
 import { useLayoutFix } from '../hooks/useLayoutFix';
+import TaskDetailPanel from '../components/shared/TaskDetailPanel';
 import './Tasks.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -617,23 +618,11 @@ function Tasks() {
   });
   const [activeTab, setActiveTab] = useState('outstanding');
   const [selectedTask, setSelectedTask] = useState(null);
-  const [editingMessage, setEditingMessage] = useState(false);
-  const [draftMessage, setDraftMessage] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [taskOwner, setTaskOwner] = useState('');
   const [commModal, setCommModal] = useState(null);
-  const [communicationMethod, setCommunicationMethod] = useState('Email');
-  const [aiInstructions, setAiInstructions] = useState('');
-  const [showDelegateModal, setShowDelegateModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [dontAskAgainDelete, setDontAskAgainDelete] = useState(false);
   const [snoozedTasks, setSnoozedTasks] = useState(new Set());
   const [teamMembers, setTeamMembers] = useState([]);
-  const [aiAcknowledgment, setAiAcknowledgment] = useState(null);
-  const [sendingInstruction, setSendingInstruction] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [completingTask, setCompletingTask] = useState(false);
 
@@ -695,9 +684,6 @@ function Tasks() {
   useEffect(() => {
     loadTasks();
     loadTeamMembers();
-    // Load delete confirmation preference from localStorage
-    const skipConfirm = localStorage.getItem('skipDeleteConfirmation') === 'true';
-    setDontAskAgainDelete(skipConfirm);
   }, []);
 
   // Auto-select first task when tasks load or tab changes
@@ -716,19 +702,8 @@ function Tasks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, activeTab, prioritizedTasks, aiTasks, loanIssues]);
 
-  // Update draft message and owner when task ID changes (not on every re-render)
-  const selectedTaskId = selectedTask?.id;
-  useEffect(() => {
-    if (selectedTask) {
-      setDraftMessage(selectedTask.ai_message || '');
-      setTaskOwner(selectedTask.owner || 'Loan Officer');
-      setCommunicationMethod(selectedTask.preferred_contact_method || 'Email');
-      setAiInstructions('');
-      setEditingMessage(false);
-      setShowHistory(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTaskId]);
+  // Note: Task state (draft message, communication method, etc.) is now managed
+  // inside the shared TaskDetailPanel component
 
   // Force layout recalculation when content loads to fix scroll issues
   useEffect(() => {
@@ -1133,14 +1108,13 @@ function Tasks() {
   };
 
   // Handler functions
-  const handleSend = (taskId) => {
-    // TODO: Implement actual send logic based on communicationMethod
-    alert(`Task sent via ${communicationMethod}!`);
+  const handleSend = (taskId, method, message) => {
+    // method and message are passed from the shared TaskDetailPanel component
+    alert(`Task sent via ${method || 'Email'}!`);
     handleComplete(taskId);
   };
 
   const handleDelete = async (taskId) => {
-    setShowDeleteConfirm(false);
 
     try {
       // Check if this is a mock/demo task
@@ -1323,7 +1297,6 @@ function Tasks() {
     const currentIndex = tabTasks.findIndex(t => t.id === taskId);
     const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
     setSelectedTask(nextTask);
-    setShowDelegateModal(false);
 
     // Call API in background
     try {
@@ -1660,11 +1633,10 @@ function Tasks() {
       alert('Failed to update status. Please try again.');
     } finally {
       setUpdatingStatus(false);
-      setShowStatusModal(false);
     }
   };
 
-  const handleApproveAiTask = async (taskId) => {
+  const handleApproveAiTask = async (taskId, method = 'email') => {
     try {
       // Get the task details before completing
       const task = selectedTask;
@@ -1680,7 +1652,7 @@ function Tasks() {
           subject: task.title,
           body: task.ai_message,
           sentAt: new Date().toISOString(),
-          sentVia: communicationMethod,
+          sentVia: method,
           status: 'sent',
           loanId: task.loan_id || task.loanId || null
         });
@@ -1846,458 +1818,21 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         </div>
       </div>
 
-      {/* Task Detail (Right Side) */}
-      <div className="task-detail-pane">
-        {selectedTask ? (
-          <>
-            <div className="detail-header">
-              <div className="detail-title-section">
-                <div className="detail-source">
-                  <span className="source-icon-large">{selectedTask.sourceIcon}</span>
-                  <span className="source-name">{selectedTask.source}</span>
-                </div>
-                <h2 className="detail-title">{selectedTask.title}</h2>
-              </div>
-            </div>
-
-            <div className="detail-body">
-              <div className="detail-info-grid">
-                {selectedTask.borrower && (
-                  <div className="detail-info-item">
-                    <span className="detail-label">Client</span>
-                    <span
-                      className="detail-value client-link"
-                      onClick={() => {
-                        const loanId = selectedTask.loan_id || selectedTask.loanId;
-                        const leadId = selectedTask.lead_id || selectedTask.leadId;
-                        if (loanId) {
-                          navigate(`/loans/${loanId}`);
-                        } else if (leadId) {
-                          navigate(`/leads/${leadId}`);
-                        }
-                      }}
-                      style={{
-                        cursor: (selectedTask.loan_id || selectedTask.loanId || selectedTask.lead_id || selectedTask.leadId) ? 'pointer' : 'default',
-                        color: (selectedTask.loan_id || selectedTask.loanId || selectedTask.lead_id || selectedTask.leadId) ? '#218D8D' : 'inherit',
-                        textDecoration: (selectedTask.loan_id || selectedTask.loanId || selectedTask.lead_id || selectedTask.leadId) ? 'underline' : 'none'
-                      }}
-                    >
-                      {selectedTask.borrower}
-                    </span>
-                  </div>
-                )}
-                <div className="detail-info-item">
-                  <span className="detail-label">Stage</span>
-                  <span
-                    className="detail-value clickable-link"
-                    onClick={() => {
-                      const loanId = selectedTask.loan_id || selectedTask.loanId || selectedTask.entity_id;
-                      const leadId = selectedTask.lead_id || selectedTask.leadId;
-                      if (selectedTask.source === 'Workflow' || selectedTask.stage === 'Workflow') {
-                        navigate('/workflow-dashboard');
-                      } else if (loanId && selectedTask.entity_type === 'loan') {
-                        navigate(`/loans/${loanId}`);
-                      } else if (leadId || selectedTask.entity_type === 'lead') {
-                        navigate(`/leads/${leadId || selectedTask.entity_id}`);
-                      } else if (loanId) {
-                        navigate(`/loans/${loanId}`);
-                      }
-                    }}
-                  >
-                    {selectedTask.stage}
-                  </span>
-                </div>
-                <div className="detail-info-item">
-                  <span className="detail-label">Priority</span>
-                  <span
-                    className="detail-urgency-badge"
-                    style={{ backgroundColor: getUrgencyColor(selectedTask.urgency) }}
-                  >
-                    {selectedTask.urgency}
-                  </span>
-                </div>
-                <div className="detail-info-item">
-                  <span className="detail-label">Source</span>
-                  <span
-                    className="detail-value clickable-link"
-                    onClick={() => {
-                      if (selectedTask.source === 'Workflow') {
-                        navigate('/workflow-dashboard');
-                      } else if (selectedTask.source === 'AI Engine') {
-                        navigate('/ai-landing');
-                      } else if (selectedTask.source === 'Messages') {
-                        navigate('/messages');
-                      } else if (selectedTask.source === 'Client for Life' || selectedTask.source === 'MUM') {
-                        navigate('/mum');
-                      } else if (selectedTask.source === 'Milestone Risk') {
-                        const loanId = selectedTask.loan_id || selectedTask.loanId || selectedTask.entity_id;
-                        if (loanId) navigate(`/loans/${loanId}`);
-                      }
-                    }}
-                  >
-                    {selectedTask.source}
-                  </span>
-                </div>
-                <div className="detail-info-item">
-                  <span className="detail-label">Owner</span>
-                  <span className="detail-value">{taskOwner}</span>
-                </div>
-                <div className="detail-info-item">
-                  <span className="detail-label">{selectedTask.source === 'Workflow' ? 'Due Date' : 'Date Created'}</span>
-                  <span className="detail-value">
-                    {selectedTask.due_date
-                      ? new Date(selectedTask.due_date).toLocaleDateString()
-                      : selectedTask.date_created
-                        ? new Date(selectedTask.date_created).toLocaleString()
-                        : 'N/A'}
-                    {selectedTask.days_until_due !== undefined && (
-                      <span className={`due-badge ${selectedTask.days_until_due === 0 ? 'due-today' : selectedTask.days_until_due === 1 ? 'due-tomorrow' : 'due-upcoming'}`}>
-                        {selectedTask.days_until_due === 0 ? 'Today' : selectedTask.days_until_due === 1 ? 'Tomorrow' : `In ${selectedTask.days_until_due} days`}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div className="detail-info-item detail-comm-method-item">
-                  <span className="detail-label">Send Via</span>
-                  <div className="comm-method-selector">
-                    <button
-                      className={`comm-method-btn ${communicationMethod === 'Email' ? 'active' : ''}`}
-                      onClick={() => setCommunicationMethod('Email')}
-                    >
-                      📧 Email
-                    </button>
-                    <button
-                      className={`comm-method-btn ${communicationMethod === 'Text' ? 'active' : ''}`}
-                      onClick={() => setCommunicationMethod('Text')}
-                    >
-                      💬 Text
-                    </button>
-                    <button
-                      className={`comm-method-btn ${communicationMethod === 'Phone' ? 'active' : ''}`}
-                      onClick={() => setCommunicationMethod('Phone')}
-                    >
-                      📞 Phone
-                    </button>
-                    <button
-                      className={`comm-method-btn ${communicationMethod === 'Voicemail' ? 'active' : ''}`}
-                      onClick={() => setCommunicationMethod('Voicemail')}
-                    >
-                      🎙️ Voicemail
-                    </button>
-                    <button
-                      className="comm-method-btn complete-task-btn"
-                      onClick={() => handleComplete(selectedTask.id)}
-                      disabled={completingTask}
-                    >
-                      {completingTask ? '⏳' : '✓'} Complete
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Task Description - What needs to be accomplished */}
-              {(selectedTask.description || selectedTask.ai_action || selectedTask.workflow_name) && (
-                <div className="task-description-section">
-                  <div className="task-description-header">
-                    <span className="description-icon">📋</span>
-                    <span className="description-title">What to Accomplish</span>
-                  </div>
-                  <div className="task-description-content">
-                    {selectedTask.description && (
-                      <p className="task-description-text">{selectedTask.description}</p>
-                    )}
-                    {selectedTask.ai_action && !selectedTask.description && (
-                      <p className="task-description-text">{selectedTask.ai_action}</p>
-                    )}
-                    {selectedTask.workflow_name && (
-                      <p className="task-workflow-info">
-                        <span className="workflow-badge" style={{ backgroundColor: selectedTask.workflow_color || '#218D8D' }}>
-                          {selectedTask.workflow_name}
-                        </span>
-                        {selectedTask.days_until_due !== undefined && (
-                          <span className="days-info">
-                            {selectedTask.days_until_due === 0 ? 'Due today' :
-                             selectedTask.days_until_due === 1 ? 'Due tomorrow' :
-                             `Due in ${selectedTask.days_until_due} days`}
-                          </span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {selectedTask.missing_documents && selectedTask.missing_documents.length > 0 && (
-                <div className="detail-missing-docs-section">
-                  <div className="missing-docs-header">
-                    <span className="docs-icon">📄</span>
-                    <h3>Missing Documents Detected by AI</h3>
-                  </div>
-                  <div className="missing-docs-list">
-                    {selectedTask.missing_documents.map((doc, idx) => (
-                      <div key={idx} className="missing-doc-item">
-                        <span className="doc-bullet">•</span>
-                        <span className="doc-name">{doc}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="missing-docs-note">
-                    <span className="ai-badge">🤖 AI Analysis</span>
-                    <span className="analysis-text">Detected from email thread analysis</span>
-                  </div>
-                </div>
-              )}
-
-              {selectedTask.ai_message && (
-                <>
-                  {/* AI Training Instructions Section */}
-                  <div className="detail-ai-training-section">
-                    <div className="ai-training-header">
-                      <span className="training-icon">🎓</span>
-                      <span className="training-title">Train AI (Optional)</span>
-                    </div>
-
-                    {/* Inline AI Response (shown after sending instruction) */}
-                    {aiAcknowledgment && (
-                      <div className="ai-conversation-response">
-                        <div className="ai-response-header">
-                          <span className="ai-response-icon">🤖</span>
-                          <span className="ai-response-label">AI Response</span>
-                          <button
-                            className="btn-clear-response"
-                            onClick={() => setAiAcknowledgment(null)}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                        <div
-                          className="ai-response-content"
-                          dangerouslySetInnerHTML={{
-                            __html: aiAcknowledgment
-                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                              .replace(/\n/g, '<br />')
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    <div className="ai-training-input-container">
-                      <textarea
-                        className="ai-training-input"
-                        placeholder={aiAcknowledgment
-                          ? "Continue the conversation or provide additional instructions..."
-                          : "Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
-                        }
-                        value={aiInstructions}
-                        onChange={(e) => setAiInstructions(e.target.value)}
-                        rows={3}
-                        autoComplete="off"
-                      />
-                      <button
-                        className="btn-send-to-ai"
-                        disabled={sendingInstruction || !aiInstructions.trim()}
-                        onClick={async () => {
-                          if (!aiInstructions.trim()) return;
-                          setSendingInstruction(true);
-                          try {
-                            const response = await aiAPI.submitTrainingInstruction(
-                              aiInstructions,
-                              {
-                                task_type: selectedTask.source || 'general',
-                                borrower_name: selectedTask.borrower || '',
-                                task_title: selectedTask.title || '',
-                                stage: selectedTask.stage || ''
-                              }
-                            );
-                            setAiAcknowledgment(response.acknowledgment);
-                            setAiInstructions('');
-                          } catch (error) {
-                            console.error('Failed to send instruction:', error);
-                            setAiAcknowledgment('Failed to send instruction. Please try again.');
-                          } finally {
-                            setSendingInstruction(false);
-                          }
-                        }}
-                      >
-                        {sendingInstruction ? 'Sending...' : aiAcknowledgment ? 'Continue' : 'Send to AI'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* AI-Drafted Message Section */}
-                  <div className="detail-ai-message-section">
-                    <div className="ai-message-header">
-                      <div className="ai-message-title-row">
-                        <span className="ai-icon-large">🤖</span>
-                        <span className="ai-message-title">AI-Drafted Message</span>
-                      </div>
-                      <button
-                        className="btn-edit-message"
-                        onClick={() => setEditingMessage(!editingMessage)}
-                      >
-                        {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
-                      </button>
-                    </div>
-                    <div className="ai-message-body">
-                      {editingMessage ? (
-                        <textarea
-                          className="message-editor"
-                          value={draftMessage}
-                          onChange={(e) => setDraftMessage(e.target.value)}
-                          rows={12}
-                        />
-                      ) : (
-                        <div
-                          className="message-preview"
-                          dangerouslySetInnerHTML={{
-                            __html: draftMessage.replace(/\n/g, '<br />')
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {selectedTask.action && (
-                <div className="detail-action-section">
-                  <h3>Recommended Action</h3>
-                  <p>{selectedTask.action}</p>
-                </div>
-              )}
-
-              {selectedTask.communication_history && selectedTask.communication_history.length > 0 && (
-                <div className="communication-history-section">
-                  <button
-                    className="history-accordion-button"
-                    onClick={() => setShowHistory(!showHistory)}
-                  >
-                    <span className="history-icon">📋</span>
-                    <span className="history-title">Communication History ({selectedTask.communication_history.length})</span>
-                    <span className="history-toggle">{showHistory ? '▼' : '▶'}</span>
-                  </button>
-                  {showHistory && (
-                    <div className="history-content">
-                      {selectedTask.communication_history.map((comm, idx) => (
-                        <div key={idx} className="history-item clickable" onClick={() => handleCommClick(comm)}>
-                          <div className="history-item-header">
-                            <div className="history-type-date">
-                              <span className="history-type-icon">
-                                {comm.type === 'Email' && '📧'}
-                                {comm.type === 'Phone' && '📞'}
-                                {comm.type === 'Text' && '💬'}
-                              </span>
-                              <span className="history-type">{comm.type}</span>
-                              <span className="history-date">{new Date(comm.date).toLocaleDateString()}</span>
-                            </div>
-                            <span className={`history-status ${comm.status.toLowerCase()}`}>
-                              {comm.status}
-                            </span>
-                          </div>
-                          <div className="history-item-body">
-                            <div className="history-subject">{comm.subject}</div>
-                            <div className="history-message">{comm.message}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="detail-footer">
-              <button
-                className="btn-detail-send"
-                onClick={() => handleSend(selectedTask.id)}
-              >
-                📤 Send via {communicationMethod}
-              </button>
-              {selectedTask.ai_action && (
-                <button
-                  className="btn-detail-approve"
-                  onClick={() => handleApproveAiTask(selectedTask.id)}
-                >
-                  Approve AI Action
-                </button>
-              )}
-              <button
-                className="btn-detail-status"
-                onClick={() => setShowStatusModal(true)}
-              >
-                📊 Change Status
-              </button>
-              <button
-                className="btn-detail-secondary"
-                onClick={() => handleSnooze(selectedTask.id)}
-              >
-                💤 Snooze
-              </button>
-              <button
-                className="btn-detail-secondary"
-                onClick={() => setShowDelegateModal(true)}
-              >
-                👥 Delegate
-              </button>
-              <button
-                className="btn-detail-complete"
-                onClick={() => handleComplete(selectedTask.id)}
-                disabled={completingTask}
-              >
-                {completingTask ? '⏳ Completing...' : '✓ Complete Task'}
-              </button>
-              <button
-                className="btn-detail-danger"
-                onClick={() => {
-                  // Check if user has opted to skip confirmation
-                  if (localStorage.getItem('skipDeleteConfirmation') === 'true') {
-                    handleDelete(selectedTask.id);
-                  } else {
-                    setShowDeleteConfirm(true);
-                  }
-                }}
-              >
-                🗑️ Delete
-              </button>
-            </div>
-
-            {/* Change Status Modal */}
-            {showStatusModal && (
-              <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
-                <div className="status-modal" onClick={(e) => e.stopPropagation()}>
-                  <div className="status-modal-header">
-                    <h3>Change Lead/Loan Status</h3>
-                    <button className="modal-close" onClick={() => setShowStatusModal(false)}>×</button>
-                  </div>
-                  <div className="status-modal-content">
-                    <p className="status-current">
-                      Current: <strong>{selectedTask.stage || 'Unknown'}</strong>
-                    </p>
-                    <div className="status-options">
-                      {LEAD_STAGES.map((stage) => (
-                        <button
-                          key={stage.value}
-                          className={`status-option ${selectedTask.stage?.toLowerCase().replace(/\s+/g, '_') === stage.value ? 'current' : ''}`}
-                          style={{ borderLeftColor: stage.color }}
-                          onClick={() => handleChangeStatus(stage.value)}
-                          disabled={updatingStatus}
-                        >
-                          <span className="status-dot" style={{ backgroundColor: stage.color }}></span>
-                          {stage.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="detail-empty">
-            <p>Select a task to view details</p>
-          </div>
-        )}
-      </div>
+      {/* Task Detail (Right Side) - Using Shared Component */}
+      <TaskDetailPanel
+        task={selectedTask}
+        onComplete={handleComplete}
+        onDelete={handleDelete}
+        onSnooze={handleSnooze}
+        onDelegate={handleDelegate}
+        onSend={handleSend}
+        onApproveAi={handleApproveAiTask}
+        onChangeStatus={handleChangeStatus}
+        completing={completingTask}
+        updatingStatus={updatingStatus}
+        teamMembers={teamMembers}
+        statusOptions={LEAD_STAGES}
+      />
     </div>
     );
   };
@@ -2809,90 +2344,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Delete Task</h2>
-            <p>Are you sure you want to delete this task? This action cannot be undone.</p>
-
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginTop: '16px',
-              marginBottom: '8px',
-              fontSize: '14px',
-              cursor: 'pointer',
-              userSelect: 'none'
-            }}>
-              <input
-                type="checkbox"
-                checked={dontAskAgainDelete}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setDontAskAgainDelete(checked);
-                  localStorage.setItem('skipDeleteConfirmation', checked.toString());
-                }}
-                style={{ cursor: 'pointer' }}
-              />
-              <span>Don't ask again</span>
-            </label>
-
-            <div className="modal-buttons">
-              <button
-                className="btn-modal-danger"
-                onClick={() => handleDelete(selectedTask.id)}
-              >
-                Yes, Delete
-              </button>
-              <button
-                className="btn-modal-cancel"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delegate Modal */}
-      {showDelegateModal && (
-        <div className="modal-overlay" onClick={() => setShowDelegateModal(false)}>
-          <div className="modal-content delegate-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Delegate Task</h2>
-            <p>Select a team member to delegate this task to:</p>
-            <div className="team-member-list">
-              {teamMembers.length > 0 ? (
-                teamMembers.map((member) => (
-                  <button
-                    key={member.id}
-                    className="team-member-btn"
-                    onClick={() => handleDelegate(member)}
-                  >
-                    👤 {member.first_name} {member.last_name}
-                    {member.role && <span style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}>({member.role})</span>}
-                  </button>
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-                  <p>No team members available.</p>
-                  <p style={{ fontSize: '14px', marginTop: '8px' }}>
-                    Add team members in Settings → Team Members
-                  </p>
-                </div>
-              )}
-            </div>
-            <button
-              className="btn-modal-cancel"
-              onClick={() => setShowDelegateModal(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Delete and Delegate modals are now handled inside TaskDetailPanel */}
 
       {/* Communication Detail Modal */}
       {commModal && (
@@ -2966,36 +2418,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         </div>
       )}
 
-      {/* AI Acknowledgment Modal */}
-      {aiAcknowledgment && (
-        <div className="modal-overlay" onClick={() => setAiAcknowledgment(null)}>
-          <div className="modal-content ai-acknowledgment-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ai-ack-header">
-              <span className="ai-ack-icon">🤖</span>
-              <h2>AI Training Received</h2>
-            </div>
-            <div className="ai-ack-body">
-              <div
-                className="ai-ack-message"
-                dangerouslySetInnerHTML={{
-                  __html: aiAcknowledgment
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\n/g, '<br />')
-                    .replace(/• /g, '<br />• ')
-                }}
-              />
-            </div>
-            <div className="modal-buttons">
-              <button
-                className="btn-modal-primary"
-                onClick={() => setAiAcknowledgment(null)}
-              >
-                Got it!
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* AI Acknowledgment is now shown inline inside TaskDetailPanel */}
 
       {/* Disposition Dialog Modal */}
       {showDispositionDialog && dispositionEmail && (

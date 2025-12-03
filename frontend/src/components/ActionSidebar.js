@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { commandCenterAPI, tasksAPI, reconciliationAPI } from '../services/api';
+import TaskDetailPanel from './shared/TaskDetailPanel';
 import './ActionSidebar.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -487,151 +488,27 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
               ))}
             </div>
 
-            {/* Detail Panel - Enhanced Task View */}
+            {/* Detail Panel - Shared Task Detail Component */}
             {selectedItem && (
-              <div className="action-detail-panel enhanced">
-                {/* Header with source badge */}
-                <div className="detail-header-enhanced">
-                  <div className="detail-source-badge">
-                    <span className="source-icon">{getTypeIcon(selectedItem.type, selectedItem.category)}</span>
-                    <span className="source-label">{selectedItem.source || getCategoryLabel(selectedItem.category).toUpperCase()}</span>
-                  </div>
-                  <button className="detail-close" onClick={() => setSelectedItem(null)}>×</button>
-                </div>
-
-                {/* Title */}
-                <h3 className="detail-title-enhanced">{selectedItem.title}</h3>
-
-                {/* Info Grid */}
-                <div className="detail-info-grid">
-                  <div className="info-item">
-                    <label>CLIENT</label>
-                    <span className="info-value client-link" onClick={() => selectedItem.url && handleNavigate(selectedItem)}>
-                      {selectedItem.entity_name || 'Unknown'}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <label>STAGE</label>
-                    <span className="info-value stage-link">{selectedItem.stage || selectedItem.status || 'N/A'}</span>
-                  </div>
-                  <div className="info-item">
-                    <label>PRIORITY</label>
-                    <span className={`info-value priority-badge ${selectedItem.priority?.toLowerCase()}`}>
-                      {selectedItem.priority || 'Medium'}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <label>SOURCE</label>
-                    <span className="info-value">{selectedItem.source || getCategoryLabel(selectedItem.category)}</span>
-                  </div>
-                  <div className="info-item">
-                    <label>OWNER</label>
-                    <span className="info-value">Loan Officer</span>
-                  </div>
-                  <div className="info-item">
-                    <label>DATE CREATED</label>
-                    <span className="info-value">{selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleString() : 'N/A'}</span>
-                  </div>
-                </div>
-
-                {/* Send Via Options */}
-                <div className="detail-send-via">
-                  <button className="send-btn email active">📧 Email</button>
-                  <button className="send-btn text">💬 Text</button>
-                  <button className="send-btn phone">📞 Phone</button>
-                  <button className="send-btn voicemail">📱 Voicemail</button>
-                  <button
-                    className="send-btn complete"
-                    onClick={() => handleCompleteTask(selectedItem)}
-                    disabled={completingTask}
-                  >
-                    ✓ Complete
-                  </button>
-                </div>
-
-                {/* What to Accomplish Section */}
-                <div className="detail-accomplish-section">
-                  <div className="accomplish-header">
-                    <span className="accomplish-icon">📋</span>
-                    <span className="accomplish-title">What to Accomplish</span>
-                  </div>
-                  <div className="accomplish-content">
-                    {selectedItem.description || `AI can help you complete this ${activeTab === 'calls' ? 'call' : activeTab === 'emails' ? 'email' : 'task'}`}
-                  </div>
-                </div>
-
-                {/* Train AI Section */}
-                <div className="detail-train-ai-section">
-                  <div className="train-ai-header">
-                    <span className="train-icon">🎓</span>
-                    <span className="train-title">Train AI (Optional)</span>
-                  </div>
-                  <textarea
-                    className="train-ai-input"
-                    placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
-                    rows={2}
-                  />
-                  <button className="send-to-ai-btn">Send to AI</button>
-                </div>
-
-                {/* AI Drafted Message */}
-                <div className="detail-ai-draft-section">
-                  <div className="ai-draft-header">
-                    <span className="ai-icon">🤖</span>
-                    <span className="ai-title">AI-Drafted Message</span>
-                    <button className="edit-message-btn">Edit Message</button>
-                  </div>
-                  <div className="ai-draft-content">
-                    {selectedItem.ai_message || (
-                      <>
-                        <p>Hi {selectedItem.entity_name?.split(' ')[0] || 'there'},</p>
-                        <p>I hope this message finds you well! I wanted to follow up regarding your {selectedItem.stage || 'loan application'}.</p>
-                        <p>If you'd like to discuss your options or need any assistance, I'm here to help. Feel free to reply to this email or give me a call at (555) 123-4567.</p>
-                        <p>Looking forward to hearing from you!</p>
-                        <p className="ai-signature">Best regards,<br/>[Your Name]<br/>Loan Officer</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Communication History */}
-                <div className="detail-history-section collapsed">
-                  <div className="history-header">
-                    <span className="history-icon">📁</span>
-                    <span className="history-title">Communication History ({selectedItem.communication_count || 0})</span>
-                    <span className="history-expand">▶</span>
-                  </div>
-                </div>
-
-                {/* Bottom Action Bar */}
-                <div className="detail-action-bar">
-                  <button className="action-bar-btn send-email">
-                    <span>📧</span> Send via Email
-                  </button>
-                  <button className="action-bar-btn approve-ai">
-                    <span>🤖</span> Approve AI Action
-                  </button>
-                  <button className="action-bar-btn change-status">
-                    <span>🏷️</span> Change Status
-                  </button>
-                  <button className="action-bar-btn snooze">
-                    <span>⏰</span> Snooze
-                  </button>
-                  <button className="action-bar-btn delegate">
-                    <span>👥</span> Delegate
-                  </button>
-                  <button
-                    className="action-bar-btn complete-task"
-                    onClick={() => handleCompleteTask(selectedItem)}
-                    disabled={completingTask}
-                  >
-                    <span>✓</span> {completingTask ? 'Completing...' : 'Complete Task'}
-                  </button>
-                  <button className="action-bar-btn delete">
-                    <span>🗑️</span> Delete
-                  </button>
-                </div>
-              </div>
+              <TaskDetailPanel
+                task={{
+                  ...selectedItem,
+                  borrower: selectedItem.entity_name || selectedItem.borrower,
+                  urgency: selectedItem.priority || selectedItem.urgency,
+                  source: selectedItem.source || getCategoryLabel(selectedItem.category),
+                  ai_message: selectedItem.ai_message || `Hi ${(selectedItem.entity_name || selectedItem.borrower || 'there').split(' ')[0]},\n\nI hope this message finds you well! I wanted to follow up regarding your ${selectedItem.stage || 'loan application'}.\n\nIf you'd like to discuss your options or need any assistance, I'm here to help. Feel free to reply to this email or give me a call at (555) 123-4567.\n\nLooking forward to hearing from you!\n\nBest regards,\n[Your Name]\nLoan Officer`
+                }}
+                onComplete={(id) => handleCompleteTask(selectedItem)}
+                onDelete={() => {}}
+                onSnooze={() => {}}
+                onDelegate={() => {}}
+                onSend={() => {}}
+                onApproveAi={() => {}}
+                onChangeStatus={() => {}}
+                onClose={() => setSelectedItem(null)}
+                completing={completingTask}
+                compact={true}
+              />
             )}
           </>
         )}
