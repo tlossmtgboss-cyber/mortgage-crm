@@ -933,6 +933,70 @@ function Tasks() {
     });
   };
 
+  // Select all phone tasks for power dialing
+  const selectAllPhoneTasks = () => {
+    if (selectedPhoneTaskIds.length === phoneTasks.length) {
+      // If all selected, deselect all
+      setSelectedPhoneTaskIds([]);
+    } else {
+      // Select all
+      setSelectedPhoneTaskIds(phoneTasks.map(task => task.id));
+    }
+  };
+
+  // Power dial state
+  const [powerDialActive, setPowerDialActive] = useState(false);
+  const [powerDialIndex, setPowerDialIndex] = useState(0);
+  const [powerDialQueue, setPowerDialQueue] = useState([]);
+
+  // Start power dial session with selected tasks (or all if none selected)
+  const startPowerDial = () => {
+    const tasksToDialIds = selectedPhoneTaskIds.length > 0
+      ? selectedPhoneTaskIds
+      : phoneTasks.map(t => t.id);
+
+    const tasksToDial = phoneTasks.filter(t => tasksToDialIds.includes(t.id));
+
+    if (tasksToDial.length === 0) {
+      alert('No tasks to dial');
+      return;
+    }
+
+    setPowerDialQueue(tasksToDial);
+    setPowerDialIndex(0);
+    setPowerDialActive(true);
+    setSelectedPhoneTask(tasksToDial[0]);
+
+    // Auto-dial the first contact
+    handleClickToDial(tasksToDial[0]);
+  };
+
+  // Move to next contact in power dial queue
+  const nextPowerDialContact = () => {
+    const nextIndex = powerDialIndex + 1;
+    if (nextIndex < powerDialQueue.length) {
+      setPowerDialIndex(nextIndex);
+      setSelectedPhoneTask(powerDialQueue[nextIndex]);
+      handleClickToDial(powerDialQueue[nextIndex]);
+    } else {
+      // End of queue
+      stopPowerDial();
+    }
+  };
+
+  // Skip current contact and move to next
+  const skipPowerDialContact = () => {
+    nextPowerDialContact();
+  };
+
+  // Stop power dial session
+  const stopPowerDial = () => {
+    setPowerDialActive(false);
+    setPowerDialQueue([]);
+    setPowerDialIndex(0);
+    setCallStatus('idle');
+  };
+
   const loadTasks = async () => {
     try {
       setLoading(true);
@@ -1920,9 +1984,48 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                     >
                       🎙️ Voicemail
                     </button>
+                    <button
+                      className="comm-method-btn complete-task-btn"
+                      onClick={() => handleComplete(selectedTask.id)}
+                      disabled={completingTask}
+                    >
+                      {completingTask ? '⏳' : '✓'} Complete
+                    </button>
                   </div>
                 </div>
               </div>
+
+              {/* Task Description - What needs to be accomplished */}
+              {(selectedTask.description || selectedTask.ai_action || selectedTask.workflow_name) && (
+                <div className="task-description-section">
+                  <div className="task-description-header">
+                    <span className="description-icon">📋</span>
+                    <span className="description-title">What to Accomplish</span>
+                  </div>
+                  <div className="task-description-content">
+                    {selectedTask.description && (
+                      <p className="task-description-text">{selectedTask.description}</p>
+                    )}
+                    {selectedTask.ai_action && !selectedTask.description && (
+                      <p className="task-description-text">{selectedTask.ai_action}</p>
+                    )}
+                    {selectedTask.workflow_name && (
+                      <p className="task-workflow-info">
+                        <span className="workflow-badge" style={{ backgroundColor: selectedTask.workflow_color || '#218D8D' }}>
+                          {selectedTask.workflow_name}
+                        </span>
+                        {selectedTask.days_until_due !== undefined && (
+                          <span className="days-info">
+                            {selectedTask.days_until_due === 0 ? 'Due today' :
+                             selectedTask.days_until_due === 1 ? 'Due tomorrow' :
+                             `Due in ${selectedTask.days_until_due} days`}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {selectedTask.missing_documents && selectedTask.missing_documents.length > 0 && (
                 <div className="detail-missing-docs-section">
@@ -2390,7 +2493,48 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
               <h3>📞 Call Tasks</h3>
               <span className="task-count">{phoneTasks.length}</span>
             </div>
+            <div className="inbox-header-right">
+              <button
+                className="select-all-btn"
+                onClick={selectAllPhoneTasks}
+                title={selectedPhoneTaskIds.length === phoneTasks.length ? "Deselect All" : "Select All"}
+              >
+                {selectedPhoneTaskIds.length === phoneTasks.length ? '☑️ Deselect All' : '☐ Select All'}
+              </button>
+              {!powerDialActive ? (
+                <button
+                  className="power-dial-btn"
+                  onClick={startPowerDial}
+                  disabled={phoneTasks.length === 0}
+                  title={selectedPhoneTaskIds.length > 0 ? `Power Dial ${selectedPhoneTaskIds.length} selected` : 'Power Dial All'}
+                >
+                  🚀 Power Dial {selectedPhoneTaskIds.length > 0 ? `(${selectedPhoneTaskIds.length})` : 'All'}
+                </button>
+              ) : (
+                <button
+                  className="power-dial-btn stop"
+                  onClick={stopPowerDial}
+                >
+                  ⏹️ Stop Dialing
+                </button>
+              )}
+            </div>
           </div>
+          {/* Power Dial Progress Bar */}
+          {powerDialActive && (
+            <div className="power-dial-progress">
+              <div className="progress-info">
+                <span>📞 Power Dialing: {powerDialIndex + 1} of {powerDialQueue.length}</span>
+                <span className="progress-contact">{powerDialQueue[powerDialIndex]?.contact_name}</span>
+              </div>
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${((powerDialIndex + 1) / powerDialQueue.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="inbox-list">
             {phoneTasks.map((task) => (
               <div
@@ -2526,7 +2670,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
               </div>
 
               <div className="detail-actions">
-                {callStatus === 'idle' && (
+                {callStatus === 'idle' && !powerDialActive && (
                   <button
                     className="btn-detail-primary"
                     onClick={() => handleClickToDial(selectedPhoneTask)}
@@ -2542,6 +2686,31 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                   >
                     📴 End Call
                   </button>
+                )}
+                {/* Power Dial Controls */}
+                {powerDialActive && (
+                  <>
+                    <button
+                      className="btn-detail-primary"
+                      onClick={nextPowerDialContact}
+                      style={{ backgroundColor: '#10b981' }}
+                      disabled={powerDialIndex >= powerDialQueue.length - 1}
+                    >
+                      ➡️ Next Contact ({powerDialIndex + 1}/{powerDialQueue.length})
+                    </button>
+                    <button
+                      className="btn-detail-secondary"
+                      onClick={skipPowerDialContact}
+                    >
+                      ⏭️ Skip
+                    </button>
+                    <button
+                      className="btn-detail-danger"
+                      onClick={stopPowerDial}
+                    >
+                      ⏹️ Stop Power Dial
+                    </button>
+                  </>
                 )}
                 <button
                   className="btn-detail-secondary"

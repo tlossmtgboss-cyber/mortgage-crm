@@ -996,6 +996,104 @@
   cursor: not-allowed;
 }
 
+/* Inbox Header Right (Power Dial Controls) */
+.inbox-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-all-btn {
+  padding: 6px 12px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.select-all-btn:hover {
+  background: #e5e7eb;
+}
+
+.power-dial-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.power-dial-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
+}
+
+.power-dial-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.power-dial-btn.stop {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+}
+
+.power-dial-btn.stop:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
+}
+
+/* Power Dial Progress */
+.power-dial-progress {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  padding: 12px 16px;
+  border-bottom: 1px solid #a7f3d0;
+}
+
+.power-dial-progress .progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #065f46;
+  font-weight: 500;
+}
+
+.power-dial-progress .progress-contact {
+  font-weight: 600;
+  color: #047857;
+}
+
+.power-dial-progress .progress-bar {
+  height: 6px;
+  background: #d1fae5;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.power-dial-progress .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
 /* Task Checkboxes */
 .task-checkbox {
   width: 18px;
@@ -2791,4 +2889,83 @@
 .btn-detail-primary[style*="background: rgb(16, 185, 129)"]:hover,
 .btn-detail-primary[style*="background-color: rgb(16, 185, 129)"]:hover {
   background: #059669 !important;
+}
+
+/* Complete Task Button in Send Via row */
+.complete-task-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
+  border: none !important;
+  font-weight: 600;
+}
+
+.complete-task-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  transform: translateY(-1px);
+}
+
+.complete-task-btn:disabled {
+  background: #9ca3af !important;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Task Description Section - What to Accomplish */
+.task-description-section {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.task-description-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.description-icon {
+  font-size: 18px;
+}
+
+.description-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.task-description-content {
+  padding-left: 26px;
+}
+
+.task-description-text {
+  font-size: 14px;
+  color: #1e3a5f;
+  line-height: 1.6;
+  margin: 0 0 8px 0;
+  white-space: pre-wrap;
+}
+
+.task-workflow-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 0 0;
+}
+
+.workflow-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  border-radius: 6px;
+}
+
+.days-info {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
 }
