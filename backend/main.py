@@ -10224,7 +10224,7 @@ The Team menu item appears for managers and management roles.
 
         if "daily briefing" in message_lower or "top 3 priorities" in message_lower:
             coaching_mode = "Daily Briefing"
-            total_outstanding = len([t for t in all_tasks if t.status != "completed"])
+            total_outstanding = len([t for t in all_tasks if t.type != TaskType.COMPLETED])
             pending_recon_count = len(pending_reconciliation)
             has_real_data = total_outstanding > 0 or len(all_leads) > 0 or len(all_loans) > 0 or pending_recon_count > 0
 
@@ -11481,7 +11481,7 @@ When acting autonomously:
         if coaching_mode in ["Daily Briefing", "Priority Decision", "Focus Reset"]:
             # Get top priority tasks to return as structured data
             priority_tasks = sorted(
-                [t for t in all_tasks if t.status != "completed"],
+                [t for t in all_tasks if t.type != TaskType.COMPLETED],
                 key=lambda x: (
                     0 if x.priority == "urgent" else 1 if x.priority == "high" else 2 if x.priority == "medium" else 3,
                     x.due_date or datetime.max
@@ -11506,11 +11506,11 @@ When acting autonomously:
                     "description": task.description,
                     "priority": task.priority.upper() if task.priority else "MEDIUM",
                     "due_date": task.due_date.strftime("%m/%d/%Y %I:%M %p") if task.due_date else None,
-                    "client": loan_info["borrower"] if loan_info else (task.related_contact_name or "Unknown"),
+                    "client": loan_info["borrower"] if loan_info else (getattr(task, 'related_contact_name', None) or "Unknown"),
                     "loan_amount": loan_info["amount"] if loan_info else None,
                     "stage": loan_info["stage"] if loan_info else None,
-                    "category": task.related_type or "general",
-                    "status": task.status
+                    "category": getattr(task, 'related_type', None) or "general",
+                    "status": task.type.value if task.type else "pending"
                 })
 
         # Save conversation to memory for multi-turn context
