@@ -717,7 +717,7 @@ function Dashboard() {
             <h2>AI Prioritized Tasks (Today)</h2>
             <span className="task-count">{getAggregatedTasksCount()} tasks</span>
           </div>
-          <div className="task-summary-view">
+          <div className="task-summary-view clickable-container" onClick={() => navigate('/tasks')}>
             <div className="task-count-display">
               <div className="count-number">{getAggregatedTasksCount()}</div>
               <div className="count-label">Outstanding Tasks</div>

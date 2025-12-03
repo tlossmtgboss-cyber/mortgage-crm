@@ -214,6 +214,25 @@
   min-height: 200px;
 }
 
+.task-summary-view.clickable-container {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  margin: 8px;
+}
+
+.task-summary-view.clickable-container:hover {
+  background: #f0fafa;
+}
+
+.task-summary-view.clickable-container:hover .count-number {
+  transform: scale(1.05);
+}
+
+.task-summary-view.clickable-container:hover .click-to-view p {
+  color: #218D8D;
+}
+
 .task-count-display {
   text-align: center;
   margin-bottom: 20px;
@@ -225,6 +244,7 @@
   color: #218D8D;
   line-height: 1;
   margin-bottom: 8px;
+  transition: transform 0.2s ease;
 }
 
 .count-label {
