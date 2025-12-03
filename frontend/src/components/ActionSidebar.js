@@ -218,21 +218,36 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     }
   };
 
-  // Complete a task
+  // Complete a task or mark action item as done
   const handleCompleteTask = async (item) => {
     setCompletingTask(true);
     try {
-      // Extract numeric ID from various formats
-      let taskId = item.id;
-      if (typeof taskId === 'string') {
-        // Handle formats like 'task_123', 'workflow_123', 'deadline_123_active_loan'
-        const match = taskId.match(/\d+/);
-        if (match) {
-          taskId = match[0];
-        }
-      }
+      const itemId = item.id || '';
+      const itemType = item.type;
 
-      await tasksAPI.update(taskId, { status: 'completed' });
+      // Only real tasks (task_XXX) can be completed via tasks API
+      if (itemId.startsWith('task_')) {
+        const taskId = itemId.replace('task_', '');
+        await tasksAPI.update(taskId, { status: 'completed' });
+      }
+      // For follow-up items, update the lead's last_contact date
+      else if (itemId.startsWith('followup_lead_') && item.entity_id) {
+        const token = localStorage.getItem('token');
+        await fetch(`${API_BASE}/api/v1/leads/${item.entity_id}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ last_contact: new Date().toISOString() })
+        });
+      }
+      // For deadline items and other types, just dismiss from UI
+      // (These don't have a "complete" action - they resolve when the loan progresses)
+      else if (itemId.startsWith('deadline_') || itemId.startsWith('sla_') || itemId.startsWith('active_loan_')) {
+        // These are informational - just remove from view
+        console.log(`Dismissing informational item: ${itemId}`);
+      }
 
       // Remove from selected and refresh
       setSelectedItem(null);
@@ -255,9 +270,9 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
 
     setCallInProgress(true);
     try {
-      // Call the dialer API to initiate call
+      // Call the Twilio dialer API to initiate call (rings your phone, then dials the contact)
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-call`, {
+      const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -266,8 +281,8 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
         body: JSON.stringify({
           phone_number: phone,
           contact_name: item.entity_name || item.title,
-          entity_type: item.entity_type,
-          entity_id: item.entity_id
+          lead_id: item.entity_type === 'lead' ? item.entity_id : null,
+          loan_id: item.entity_type === 'loan' ? item.entity_id : null
         })
       });
 
@@ -280,10 +295,8 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       }
     } catch (err) {
       console.error('Call error:', err);
-      // Fallback to tel: link
-      window.location.href = `tel:${phone}`;
-      // Still mark as complete
-      await handleCompleteTask(item);
+      // Show error - dialer not configured
+      alert(`Could not initiate call. Please ensure the Twilio dialer is configured, or call ${phone} directly.`);
     } finally {
       setCallInProgress(false);
     }
@@ -546,11 +559,14 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
                 powerDialIndex={currentCallIndex}
                 powerDialTotal={selectedCallIds.size}
                 onClickToDial={(task) => {
-                  // Simulate click to dial
-                  setCallInProgress(true);
-                  if (task.contact_phone) {
-                    window.open(`tel:${task.contact_phone}`);
-                  }
+                  // Use Twilio dialer API instead of tel: link (which opens FaceTime on Mac)
+                  handleMakeCall({
+                    phone: task.contact_phone,
+                    entity_name: task.contact_name,
+                    entity_type: task.entity_type,
+                    entity_id: task.lead_id || task.loan_id,
+                    title: task.title
+                  });
                 }}
                 onEndCall={() => setCallInProgress(false)}
                 onNextContact={() => setCurrentCallIndex(prev => prev + 1)}

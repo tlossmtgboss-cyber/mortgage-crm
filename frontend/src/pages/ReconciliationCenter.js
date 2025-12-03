@@ -433,6 +433,16 @@ function ReconciliationCenter() {
             if (response.status === 404 && errorData.detail) {
               // Not connected error
               errorMessage = `⚠ ${errorData.detail}. Go to Settings to reconnect.`;
+            } else if (response.status === 401 || errorData.detail === 'needs_reauth' ||
+                       (errorData.detail && (errorData.detail.includes('token') || errorData.detail.includes('expired')))) {
+              // Token expired - prompt to reconnect
+              const confirmReconnect = window.confirm(
+                'Your Microsoft session has expired. Would you like to go to Settings to reconnect?'
+              );
+              if (confirmReconnect) {
+                window.location.href = '/settings?tab=integrations';
+              }
+              errorMessage = '⚠ Microsoft session expired. Please reconnect in Settings.';
             } else if (errorData.detail) {
               errorMessage = `⚠ ${errorData.detail}`;
             }

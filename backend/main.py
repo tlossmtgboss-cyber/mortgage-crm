@@ -18753,6 +18753,14 @@ except Exception as e:
     logger.warning(f"⚠️ AI Tools Registry routes not loaded: {e}")
     logger.warning(f"Full traceback: {full_error}")
 
+# Cache Management routes (for AI response caching)
+try:
+    from api.cache_routes import router as cache_router
+    app.include_router(cache_router, prefix="/api/v1", tags=["Cache Management"])
+    logger.info("✅ Cache Management routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Cache Management routes not loaded: {e}")
+
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")
 async def debug_tools_registry_status():
@@ -20658,27 +20666,27 @@ async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session
 async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session, limit: int = 50):
     """Fetch emails from Microsoft Graph API"""
     try:
-        # Check if token needs refresh
+        # Check if token needs refresh (proactively refresh if expiring within 5 mins)
+        needs_refresh = False
         if oauth_record.token_expires_at:
-            # Ensure token_expires_at is timezone-aware
             token_expiry = oauth_record.token_expires_at
             if token_expiry.tzinfo is None:
                 token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+            needs_refresh = token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5)
 
-            if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
-                logger.info("Token expiring soon, refreshing...")
-                refresh_result = await refresh_microsoft_token(oauth_record, db)
-                if not refresh_result.get("success"):
-                    return {
-                        "error": refresh_result.get("error", "Failed to refresh token"),
-                        "needs_reauth": refresh_result.get("needs_reauth", False)
-                    }
+        if needs_refresh:
+            logger.info("Token expiring soon, refreshing proactively...")
+            refresh_result = await refresh_microsoft_token(oauth_record, db)
+            if not refresh_result.get("success"):
+                return {
+                    "error": refresh_result.get("error", "Failed to refresh token"),
+                    "needs_reauth": refresh_result.get("needs_reauth", False)
+                }
 
         access_token = decrypt_token(oauth_record.access_token)
 
         # Microsoft Graph API endpoint
         folder = oauth_record.sync_folder or "Inbox"
-        # Simplified query - just get recent emails ordered by date
         graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?$top={limit}&$orderby=receivedDateTime desc"
 
         headers = {
@@ -20687,6 +20695,20 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
         }
 
         response = requests.get(graph_url, headers=headers)
+
+        # If we get a 401, try refreshing token and retry ONCE
+        if response.status_code == 401:
+            logger.info("Got 401 from Microsoft API, attempting token refresh...")
+            refresh_result = await refresh_microsoft_token(oauth_record, db)
+            if not refresh_result.get("success"):
+                return {
+                    "error": refresh_result.get("error", "Failed to refresh token"),
+                    "needs_reauth": refresh_result.get("needs_reauth", True)
+                }
+            # Retry with new token
+            access_token = decrypt_token(oauth_record.access_token)
+            headers["Authorization"] = f"Bearer {access_token}"
+            response = requests.get(graph_url, headers=headers)
 
         if response.status_code == 200:
             emails_data = response.json()
@@ -20702,6 +20724,9 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
         else:
             error_detail = response.text
             logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {error_detail}")
+            # Check if it's still auth-related
+            if response.status_code == 401 or response.status_code == 403:
+                return {"error": "Authentication failed", "needs_reauth": True}
             return {"error": f"Microsoft API error: {response.status_code} - {error_detail[:200]}"}
 
     except Exception as e:
@@ -20712,26 +20737,27 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: str, db: Session):
     """Move an email to trash in Microsoft 365/Outlook"""
     try:
-        # Check if token needs refresh
+        # Check if token needs refresh (proactively)
+        needs_refresh = False
         if oauth_record.token_expires_at:
             token_expiry = oauth_record.token_expires_at
             if token_expiry.tzinfo is None:
                 token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+            needs_refresh = token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5)
 
-            if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
-                logger.info("Token expiring soon, refreshing before delete...")
-                refresh_result = await refresh_microsoft_token(oauth_record, db)
-                if not refresh_result.get("success"):
-                    return {
-                        "success": False,
-                        "error": refresh_result.get("error", "Failed to refresh token"),
-                        "needs_reauth": refresh_result.get("needs_reauth", False)
-                    }
+        if needs_refresh:
+            logger.info("Token expiring soon, refreshing before delete...")
+            refresh_result = await refresh_microsoft_token(oauth_record, db)
+            if not refresh_result.get("success"):
+                return {
+                    "success": False,
+                    "error": refresh_result.get("error", "Failed to refresh token"),
+                    "needs_reauth": refresh_result.get("needs_reauth", False)
+                }
 
         access_token = decrypt_token(oauth_record.access_token)
 
         # Microsoft Graph API endpoint to move email to trash (deletedItems folder)
-        # Using POST to /messages/{id}/move endpoint
         graph_url = f"https://graph.microsoft.com/v1.0/me/messages/{message_id}/move"
 
         headers = {
@@ -20739,12 +20765,24 @@ async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: 
             "Content-Type": "application/json"
         }
 
-        # Move to deletedItems (Trash folder)
-        body = {
-            "destinationId": "deleteditems"
-        }
+        body = {"destinationId": "deleteditems"}
 
         response = requests.post(graph_url, headers=headers, json=body)
+
+        # If we get a 401, try refreshing token and retry ONCE
+        if response.status_code == 401:
+            logger.info("Got 401 from Microsoft API on delete, attempting token refresh...")
+            refresh_result = await refresh_microsoft_token(oauth_record, db)
+            if not refresh_result.get("success"):
+                return {
+                    "success": False,
+                    "error": refresh_result.get("error", "Failed to refresh token"),
+                    "needs_reauth": refresh_result.get("needs_reauth", True)
+                }
+            # Retry with new token
+            access_token = decrypt_token(oauth_record.access_token)
+            headers["Authorization"] = f"Bearer {access_token}"
+            response = requests.post(graph_url, headers=headers, json=body)
 
         if response.status_code == 200 or response.status_code == 201:
             logger.info(f"Successfully moved email {message_id} to trash for user {oauth_record.user_id}")
@@ -20756,6 +20794,8 @@ async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: 
         else:
             error_detail = response.text
             logger.error(f"Failed to delete Microsoft email: {response.status_code} - {error_detail}")
+            if response.status_code == 401 or response.status_code == 403:
+                return {"success": False, "error": "Authentication failed", "needs_reauth": True}
             return {"success": False, "error": f"Microsoft API error: {response.status_code}"}
 
     except Exception as e:
@@ -46032,6 +46072,15 @@ async def startup_event():
     except Exception as cache_e:
         logger.warning(f"⚠️ Redis cache initialization skipped: {cache_e}")
 
+    # Initialize Redis cache for AI response caching
+    try:
+        from utils.cache import cache as response_cache
+        await response_cache.connect()
+    except ImportError:
+        logger.info("ℹ️ Response cache module not available")
+    except Exception as cache_e:
+        logger.warning(f"⚠️ Response cache initialization skipped: {cache_e}")
+
     try:
         # Initialize database with retry logic
         if init_db_with_retry():
@@ -51729,7 +51778,7 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error stopping scheduler: {e}")
 
-    # Disconnect Redis cache
+    # Disconnect Redis cache (AI Agent tools)
     try:
         from core.cache import cache
         await cache.disconnect()
@@ -51737,6 +51786,15 @@ async def shutdown_event():
         pass
     except Exception as e:
         logger.warning(f"Error disconnecting cache: {e}")
+
+    # Disconnect Redis cache (AI response caching)
+    try:
+        from utils.cache import cache as response_cache
+        await response_cache.close()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Error disconnecting response cache: {e}")
 
 
 # ============================================================================
