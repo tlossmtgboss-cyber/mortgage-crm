@@ -550,7 +550,7 @@ def calculate_ltv(
         FROM referrals r
         JOIN loans l ON l.borrower_id = r.referred_id
         WHERE r.referrer_id = :customer_id
-            AND l.status = 'funded'
+            AND l.stage = 'Funded'
     """
 
     referrals = execute_single(referral_query, params)
@@ -847,7 +847,7 @@ def find_opportunities(
             l.current_balance
         FROM loans l
         WHERE (l.borrower_id = :customer_id OR l.co_borrower_id = :customer_id)
-            AND l.status = 'funded'
+            AND l.stage = 'Funded'
     """
 
     loans = execute_query(loans_query, params)
@@ -930,7 +930,7 @@ def find_opportunities(
         )
         AND c.id != :customer_id
         AND c.id NOT IN (
-            SELECT borrower_id FROM loans WHERE status = 'funded'
+            SELECT borrower_id FROM loans WHERE stage = 'Funded'
         )
     """
 
@@ -1161,7 +1161,7 @@ def get_referral_network(
             l.funded_at
         FROM referrals r
         JOIN contacts c ON c.id = r.referred_id
-        LEFT JOIN loans l ON l.borrower_id = r.referred_id AND l.status IN ('funded', 'application', 'processing', 'underwriting')
+        LEFT JOIN loans l ON l.borrower_id = r.referred_id AND l.stage IN ('Funded', 'Disclosed', 'Processing', 'Submitted', 'UW Received')
         WHERE r.referrer_id = :customer_id
         ORDER BY r.created_at DESC
     """
@@ -1178,7 +1178,7 @@ def get_referral_network(
             l.funded_at
         FROM referrals r
         JOIN contacts c ON c.id = r.referrer_id
-        LEFT JOIN loans l ON l.borrower_id = :customer_id AND l.status = 'funded'
+        LEFT JOIN loans l ON l.borrower_id = :customer_id AND l.stage = 'Funded'
         WHERE r.referred_id = :customer_id
         ORDER BY r.created_at DESC
     """
@@ -1319,7 +1319,7 @@ def get_market_comparison(
             l.estimated_value
         FROM loans l
         WHERE (l.borrower_id = :customer_id OR l.co_borrower_id = :customer_id)
-            AND l.status = 'funded'
+            AND l.stage = 'Funded'
     """
 
     loans = execute_query(loans_query, params)

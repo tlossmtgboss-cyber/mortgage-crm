@@ -541,7 +541,8 @@ def monitor_float_position(
     Monitor all unlocked loans and their rate exposure.
     """
     params = {}
-    filters = ["l.rate_lock_status = 'floating'", "l.status NOT IN ('funded', 'cancelled', 'denied')"]
+    # Note: Stage values must match LoanStage enum in main.py exactly
+    filters = ["l.rate_lock_status = 'floating'", "l.stage NOT IN ('Funded')"]
 
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")

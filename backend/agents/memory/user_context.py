@@ -156,14 +156,15 @@ class UserContextManager:
         """Get user's performance metrics for context."""
         try:
             # Get loan pipeline stats
+            # Note: Stage values must match LoanStage enum in main.py exactly
             pipeline_result = db.execute(text("""
                 SELECT
                     COUNT(*) as total_loans,
-                    COUNT(CASE WHEN stage NOT IN ('closed', 'dead', 'withdrawn') THEN 1 END) as active_loans,
-                    COUNT(CASE WHEN stage = 'closed' THEN 1 END) as closed_loans,
-                    COALESCE(SUM(CASE WHEN stage NOT IN ('closed', 'dead', 'withdrawn') THEN amount END), 0) as active_pipeline_value,
-                    COALESCE(SUM(CASE WHEN stage = 'closed' THEN amount END), 0) as closed_volume,
-                    COUNT(CASE WHEN stage NOT IN ('closed', 'dead', 'withdrawn')
+                    COUNT(CASE WHEN stage NOT IN ('Funded') THEN 1 END) as active_loans,
+                    COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as closed_loans,
+                    COALESCE(SUM(CASE WHEN stage NOT IN ('Funded') THEN amount END), 0) as active_pipeline_value,
+                    COALESCE(SUM(CASE WHEN stage = 'Funded' THEN amount END), 0) as closed_volume,
+                    COUNT(CASE WHEN stage NOT IN ('Funded')
                           AND closing_date < NOW() + INTERVAL '7 days' THEN 1 END) as closing_this_week
                 FROM loans
                 WHERE loan_officer_id = :user_id

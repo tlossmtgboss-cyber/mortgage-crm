@@ -298,7 +298,7 @@ def check_query_performance():
 
         # Define critical queries to test
         test_queries = [
-            ("Pipeline Count", "SELECT COUNT(*) as cnt FROM loans WHERE stage NOT IN ('funded', 'cancelled')"),
+            ("Pipeline Count", "SELECT COUNT(*) as cnt FROM loans WHERE stage NOT IN ('Funded')"),
             ("Lead Lookup", "SELECT * FROM leads WHERE id = 999999 LIMIT 1"),
             ("Stage Distribution", "SELECT stage, COUNT(*) FROM loans GROUP BY stage"),
         ]

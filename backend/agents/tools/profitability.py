@@ -241,7 +241,7 @@ def analyze_margins_by_segment(
             LEFT JOIN users lo ON lo.id = l.loan_officer_id
             LEFT JOIN loan_sales ls ON ls.loan_id = l.id
             WHERE l.funded_date >= CURRENT_DATE - :date_range
-                AND l.status = 'funded'
+                AND l.stage = 'Funded'
                 {branch_filter}
         )
         SELECT
@@ -334,7 +334,7 @@ def forecast_revenue(
     Forecast revenue from current pipeline using pull-through rates.
     """
     params = {"months": forecast_months}
-    filters = ["l.status NOT IN ('funded', 'cancelled', 'denied')"]
+    filters = ["l.stage NOT IN ('Funded')"]
 
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
@@ -513,7 +513,7 @@ def compare_lo_profitability(
             JOIN users lo ON lo.id = l.loan_officer_id
             LEFT JOIN loan_sales ls ON ls.loan_id = l.id
             WHERE l.funded_date >= CURRENT_DATE - :date_range
-                AND l.status = 'funded'
+                AND l.stage = 'Funded'
                 {branch_filter}
             GROUP BY l.loan_officer_id, lo.name, lo.commission_rate
             HAVING COUNT(*) >= :min_loans
@@ -902,14 +902,14 @@ def calculate_pull_through_impact(
     # Get current pull-through metrics
     metrics = execute_single("""
         SELECT
-            COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded,
-            COUNT(CASE WHEN status IN ('cancelled', 'denied') THEN 1 END) as fallout,
+            COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded,
+            COUNT(CASE WHEN stage NOT IN ('Disclosed', 'Processing', 'Submitted', 'UW Received', 'Approved', 'Suspended', 'CTC', 'Docs Out', 'Funded') THEN 1 END) as fallout,
             COUNT(*) as total,
-            SUM(CASE WHEN status = 'funded' THEN loan_amount END) as funded_volume,
-            SUM(CASE WHEN status IN ('cancelled', 'denied') THEN loan_amount END) as fallout_volume
+            SUM(CASE WHEN stage = 'Funded' THEN loan_amount END) as funded_volume,
+            SUM(CASE WHEN stage NOT IN ('Disclosed', 'Processing', 'Submitted', 'UW Received', 'Approved', 'Suspended', 'CTC', 'Docs Out', 'Funded') THEN loan_amount END) as fallout_volume
         FROM loans
         WHERE created_at >= CURRENT_DATE - :date_range
-            AND status IN ('funded', 'cancelled', 'denied')
+            AND stage IS NOT NULL
     """, {"date_range": date_range})
 
     if not metrics or metrics["total"] == 0:
@@ -941,7 +941,7 @@ def calculate_pull_through_impact(
             SUM(loan_amount) as volume
         FROM loans
         WHERE created_at >= CURRENT_DATE - :date_range
-            AND status IN ('cancelled', 'denied')
+            AND stage NOT IN ('Disclosed', 'Processing', 'Submitted', 'UW Received', 'Approved', 'Suspended', 'CTC', 'Docs Out', 'Funded')
             AND fallout_reason IS NOT NULL
         GROUP BY fallout_reason
         ORDER BY count DESC
@@ -1054,7 +1054,7 @@ def get_profitability_trends(
             AVG(l.loan_amount) as avg_loan_size
         FROM loans l
         LEFT JOIN loan_sales ls ON ls.loan_id = l.id
-        WHERE l.status = 'funded'
+        WHERE l.stage = 'Funded'
             AND l.funded_date >= CURRENT_DATE - INTERVAL ':num_periods {period}s'
             {where_clause}
         GROUP BY {period_expr}

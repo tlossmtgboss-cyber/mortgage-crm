@@ -219,22 +219,23 @@ class LoanPipelineAgent(SpecializedAgent):
                 params["lo_id"] = lo_id
 
             # Main metrics query
+            # Note: Stage values must match LoanStage enum in main.py exactly
             query = text(f"""
                 SELECT
                     COUNT(*) as total_loans,
                     COALESCE(SUM(amount), 0) as total_volume,
                     COALESCE(AVG(amount), 0) as avg_loan_size,
-                    COUNT(CASE WHEN stage = 'application' THEN 1 END) as applications,
-                    COUNT(CASE WHEN stage = 'processing' THEN 1 END) as processing,
-                    COUNT(CASE WHEN stage = 'underwriting' THEN 1 END) as underwriting,
-                    COUNT(CASE WHEN stage = 'conditional' THEN 1 END) as conditional,
-                    COUNT(CASE WHEN stage = 'clear_to_close' THEN 1 END) as ctc,
-                    COUNT(CASE WHEN stage = 'closing' THEN 1 END) as closing,
+                    COUNT(CASE WHEN stage = 'Disclosed' THEN 1 END) as applications,
+                    COUNT(CASE WHEN stage = 'Processing' THEN 1 END) as processing,
+                    COUNT(CASE WHEN stage IN ('Submitted', 'UW Received') THEN 1 END) as underwriting,
+                    COUNT(CASE WHEN stage IN ('Approved', 'Suspended') THEN 1 END) as conditional,
+                    COUNT(CASE WHEN stage = 'CTC' THEN 1 END) as ctc,
+                    COUNT(CASE WHEN stage = 'Docs Out' THEN 1 END) as closing,
                     COUNT(CASE WHEN expected_close_date < CURRENT_DATE THEN 1 END) as past_due,
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7 THEN 1 END) as closing_this_week,
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30 THEN 1 END) as closing_this_month
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     AND created_at >= CURRENT_DATE - :date_range
                     {lo_filter}
             """)
@@ -249,6 +250,7 @@ class LoanPipelineAgent(SpecializedAgent):
                 )
 
             # Stage distribution with values
+            # Note: Stage values must match LoanStage enum in main.py exactly
             stage_query = text(f"""
                 SELECT
                     stage,
@@ -256,7 +258,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     SUM(amount) as stage_volume,
                     AVG(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as avg_days
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     {lo_filter}
                 GROUP BY stage
             """)
@@ -569,7 +571,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     COUNT(CASE WHEN EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at) BETWEEN 8 AND 14 THEN 1 END) as bucket_8_14,
                     COUNT(CASE WHEN EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at) > 14 THEN 1 END) as bucket_14_plus
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     {lo_filter}
                 GROUP BY stage
             """)
@@ -669,7 +671,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     AVG(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as avg_days,
                     MAX(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as max_days
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     {branch_filter}
                 GROUP BY stage
             """)
@@ -833,7 +835,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     SELECT id, loan_number, stage, updated_at,
                            expected_close_date, amount
                     FROM loans
-                    WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                    WHERE stage NOT IN ('Funded')
                         {lo_filter}
                     ORDER BY expected_close_date ASC NULLS LAST
                     LIMIT 100
@@ -918,7 +920,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at) as days_stale,
                     updated_at
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     AND updated_at < CURRENT_TIMESTAMP - INTERVAL ':days days'
                 ORDER BY updated_at ASC
                 LIMIT :limit

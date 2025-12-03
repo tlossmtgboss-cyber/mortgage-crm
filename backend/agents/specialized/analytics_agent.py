@@ -228,6 +228,7 @@ class AnalyticsAgent(SpecializedAgent):
                 params["lo_id"] = lo_id
 
             # Pipeline summary
+            # Note: Stage values must match LoanStage enum in main.py exactly
             summary_query = text(f"""
                 SELECT
                     COUNT(*) as total_loans,
@@ -237,7 +238,7 @@ class AnalyticsAgent(SpecializedAgent):
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7 THEN 1 END) as closing_7_days,
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30 THEN 1 END) as closing_30_days
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     AND created_at >= CURRENT_DATE - :date_range
                     {lo_filter}
             """)
@@ -245,6 +246,7 @@ class AnalyticsAgent(SpecializedAgent):
             summary = db.execute(summary_query, params).fetchone()
 
             # Stage breakdown
+            # Note: Stage values must match LoanStage enum in main.py exactly
             stage_query = text(f"""
                 SELECT
                     stage,
@@ -252,18 +254,20 @@ class AnalyticsAgent(SpecializedAgent):
                     COALESCE(SUM(amount), 0) as volume,
                     COALESCE(AVG(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)), 0) as avg_days
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     {lo_filter}
                 GROUP BY stage
                 ORDER BY
                     CASE stage
-                        WHEN 'application' THEN 1
-                        WHEN 'processing' THEN 2
-                        WHEN 'underwriting' THEN 3
-                        WHEN 'conditional' THEN 4
-                        WHEN 'clear_to_close' THEN 5
-                        WHEN 'closing' THEN 6
-                        ELSE 7
+                        WHEN 'Disclosed' THEN 1
+                        WHEN 'Processing' THEN 2
+                        WHEN 'Submitted' THEN 3
+                        WHEN 'UW Received' THEN 4
+                        WHEN 'Approved' THEN 5
+                        WHEN 'Suspended' THEN 6
+                        WHEN 'CTC' THEN 7
+                        WHEN 'Docs Out' THEN 8
+                        ELSE 9
                     END
             """)
 
@@ -281,12 +285,13 @@ class AnalyticsAgent(SpecializedAgent):
             ]
 
             # Recent funded
+            # Note: Stage values must match LoanStage enum in main.py exactly
             funded_query = text(f"""
                 SELECT
                     COUNT(*) as count,
                     COALESCE(SUM(amount), 0) as volume
                 FROM loans
-                WHERE stage = 'funded'
+                WHERE stage = 'Funded'
                     AND updated_at >= CURRENT_DATE - :date_range
                     {lo_filter}
             """)
@@ -457,8 +462,8 @@ class AnalyticsAgent(SpecializedAgent):
                         u.id, u.name,
                         COUNT(DISTINCT l.id) as total_loans,
                         COALESCE(SUM(l.amount), 0) as total_volume,
-                        COUNT(CASE WHEN l.stage = 'funded' THEN 1 END) as funded_count,
-                        COALESCE(SUM(CASE WHEN l.stage = 'funded' THEN l.amount END), 0) as funded_volume,
+                        COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded_count,
+                        COALESCE(SUM(CASE WHEN l.stage = 'Funded' THEN l.amount END), 0) as funded_volume,
                         COUNT(DISTINCT ld.id) as total_leads,
                         COALESCE(AVG(EXTRACT(DAY FROM l.updated_at - l.created_at)), 0) as avg_cycle_days
                     FROM users u
@@ -497,7 +502,7 @@ class AnalyticsAgent(SpecializedAgent):
                             COALESCE(SUM(l.amount), 0) as volume
                         FROM users u
                         LEFT JOIN loans l ON l.assigned_lo = u.id
-                            AND l.stage = 'funded'
+                            AND l.stage = 'Funded'
                             AND l.updated_at >= CURRENT_DATE - :period_days
                         WHERE u.role = 'loan_officer'
                         GROUP BY u.id
@@ -525,8 +530,8 @@ class AnalyticsAgent(SpecializedAgent):
                         u.id, u.name,
                         COUNT(DISTINCT l.id) as total_loans,
                         COALESCE(SUM(l.amount), 0) as total_volume,
-                        COUNT(CASE WHEN l.stage = 'funded' THEN 1 END) as funded_count,
-                        COALESCE(SUM(CASE WHEN l.stage = 'funded' THEN l.amount END), 0) as funded_volume
+                        COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded_count,
+                        COALESCE(SUM(CASE WHEN l.stage = 'Funded' THEN l.amount END), 0) as funded_volume
                     FROM users u
                     LEFT JOIN loans l ON l.assigned_lo = u.id
                         AND l.created_at >= CURRENT_DATE - :period_days
@@ -599,7 +604,7 @@ class AnalyticsAgent(SpecializedAgent):
                     COALESCE(SUM(amount), 0) as volume,
                     COALESCE(AVG(rate), 0) as avg_rate
                 FROM loans
-                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('Funded')
                     AND expected_close_date IS NOT NULL
                     AND expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + :days
                     {lo_filter}
@@ -613,7 +618,7 @@ class AnalyticsAgent(SpecializedAgent):
             # Historical pull-through rate
             pull_through_query = text(f"""
                 SELECT
-                    COUNT(CASE WHEN stage = 'funded' THEN 1 END)::float /
+                    COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
                     NULLIF(COUNT(*), 0) as rate
                 FROM loans
                 WHERE created_at >= CURRENT_DATE - 180
@@ -801,7 +806,7 @@ class AnalyticsAgent(SpecializedAgent):
                     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as median_days
                 FROM loans
                 WHERE created_at BETWEEN :start_date AND :end_date
-                    AND stage NOT IN ('funded', 'cancelled', 'denied')
+                    AND stage NOT IN ('Funded')
                     {loan_type_filter}
                 GROUP BY stage
             """)
@@ -849,7 +854,7 @@ class AnalyticsAgent(SpecializedAgent):
                     MIN(EXTRACT(DAY FROM updated_at - created_at)) as min_total,
                     MAX(EXTRACT(DAY FROM updated_at - created_at)) as max_total
                 FROM loans
-                WHERE stage = 'funded'
+                WHERE stage = 'Funded'
                     AND updated_at BETWEEN :start_date AND :end_date
                     {loan_type_filter}
             """)
@@ -899,7 +904,7 @@ class AnalyticsAgent(SpecializedAgent):
                     SELECT
                         COUNT(*) as loans,
                         COALESCE(SUM(amount), 0) as volume,
-                        COUNT(CASE WHEN stage = 'funded' THEN 1 END) as funded
+                        COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded
                     FROM loans
                     WHERE created_at BETWEEN :start AND :end
                 """)
@@ -952,7 +957,7 @@ class AnalyticsAgent(SpecializedAgent):
                         u.id, u.name,
                         COUNT(l.id) as loans,
                         COALESCE(SUM(l.amount), 0) as volume,
-                        COUNT(CASE WHEN l.stage = 'funded' THEN 1 END) as funded
+                        COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded
                     FROM users u
                     LEFT JOIN loans l ON l.assigned_lo = u.id
                         AND l.created_at >= CURRENT_DATE - 30

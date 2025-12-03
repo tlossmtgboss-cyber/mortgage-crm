@@ -61,7 +61,7 @@ def check_sla_status(
 
     # Check pipeline SLA
     params = {}
-    filters = ["status NOT IN ('funded', 'cancelled', 'denied')"]
+    filters = ["stage NOT IN ('Funded')"]
 
     if stage:
         filters.append("status = :stage")
@@ -132,7 +132,7 @@ def get_sla_alerts(
 ) -> ToolResult:
     """Get active SLA alerts."""
     params = {"limit": limit * 2}
-    filters = ["status NOT IN ('funded', 'cancelled', 'denied')"]
+    filters = ["stage NOT IN ('Funded')"]
 
     if stage:
         filters.append("status = :stage")
@@ -302,7 +302,7 @@ def project_sla_breach(
 ) -> ToolResult:
     """Project potential SLA breaches."""
     params = {}
-    filters = ["status NOT IN ('funded', 'cancelled', 'denied')"]
+    filters = ["stage NOT IN ('Funded')"]
 
     if stage:
         filters.append("status = :stage")
@@ -617,7 +617,7 @@ def get_sla_dashboard(
 ) -> ToolResult:
     """Get SLA dashboard metrics."""
     params = {}
-    filters = ["status NOT IN ('funded', 'cancelled', 'denied')"]
+    filters = ["stage NOT IN ('Funded')"]
 
     if user_id:
         filters.append("loan_officer_id = :user_id")

@@ -213,7 +213,7 @@ class PortfolioAgent(SpecializedAgent):
             funded_after = input_data.get("funded_after")
 
             params = {}
-            conditions = ["stage = 'funded'"]
+            conditions = ["stage = 'Funded'"]
 
             if lo_id:
                 conditions.append("assigned_lo = :lo_id")
@@ -330,7 +330,7 @@ class PortfolioAgent(SpecializedAgent):
                     EXTRACT(MONTH FROM AGE(CURRENT_DATE, l.funded_date)) as months_since_close
                 FROM loans l
                 LEFT JOIN users u ON l.assigned_lo = u.id
-                WHERE l.id = :loan_id AND l.stage = 'funded'
+                WHERE l.id = :loan_id AND l.stage = 'Funded'
             """)
 
             loan = db.execute(loan_query, {"loan_id": loan_id}).fetchone()
@@ -436,7 +436,7 @@ class PortfolioAgent(SpecializedAgent):
                     l.funded_date,
                     EXTRACT(MONTH FROM AGE(CURRENT_DATE, l.funded_date)) as months_since_close
                 FROM loans l
-                WHERE l.stage = 'funded'
+                WHERE l.stage = 'Funded'
                     AND l.rate > :target_rate
                     AND l.funded_date <= CURRENT_DATE - INTERVAL ':min_months months'
                 ORDER BY l.rate DESC
@@ -534,7 +534,7 @@ class PortfolioAgent(SpecializedAgent):
                             - CURRENT_DATE
                         ) as days_until
                     FROM loans
-                    WHERE stage = 'funded'
+                    WHERE stage = 'Funded'
                         AND funded_date IS NOT NULL
                         AND (
                             (EXTRACT(MONTH FROM funded_date) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -573,7 +573,7 @@ class PortfolioAgent(SpecializedAgent):
                         ) as days_until
                     FROM loans l
                     JOIN contacts c ON l.borrower_email = c.email
-                    WHERE l.stage = 'funded'
+                    WHERE l.stage = 'Funded'
                         AND c.date_of_birth IS NOT NULL
                         AND (
                             (EXTRACT(MONTH FROM c.date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -649,7 +649,7 @@ class PortfolioAgent(SpecializedAgent):
                     amount, property_value, funded_date,
                     EXTRACT(MONTH FROM AGE(CURRENT_DATE, funded_date)) as months_since_close
                 FROM loans
-                WHERE stage = 'funded'
+                WHERE stage = 'Funded'
                     AND property_value IS NOT NULL
                     AND amount IS NOT NULL
                     {id_filter}
@@ -761,7 +761,7 @@ class PortfolioAgent(SpecializedAgent):
                         WHERE loan_id = l.id
                     ) as last_contact
                 FROM loans l
-                WHERE l.stage = 'funded'
+                WHERE l.stage = 'Funded'
                 ORDER BY l.rate DESC
                 LIMIT :limit
             """)
@@ -939,7 +939,7 @@ class PortfolioAgent(SpecializedAgent):
                         WHERE l2.referral_source = l.borrower_email
                     ) as previous_referrals
                 FROM loans l
-                WHERE l.stage = 'funded'
+                WHERE l.stage = 'Funded'
                     AND l.funded_date <= CURRENT_DATE - INTERVAL ':min_months months'
                 ORDER BY l.funded_date DESC
             """)

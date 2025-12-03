@@ -769,7 +769,7 @@ def check_document_expiration(
         JOIN loans l ON l.id = d.loan_id
         WHERE {' AND '.join(filters)}
             AND d.expiration_date <= CURRENT_DATE + :days_ahead
-            AND l.status NOT IN ('funded', 'cancelled', 'denied')
+            AND l.stage NOT IN ('Funded')
         ORDER BY d.expiration_date ASC
     """, params)
 

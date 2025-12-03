@@ -556,7 +556,7 @@ def check_fair_lending(
                 WHERE program = :program
                 AND ABS(credit_score - :credit_score) <= 20
                 AND ABS(ltv_ratio - :ltv_ratio) <= 5
-                AND stage NOT IN ('denied', 'withdrawn', 'cancelled')
+                AND stage IS NOT NULL
                 AND id != :loan_id
             """
             comparables = execute_single(comparable_query, {
@@ -638,8 +638,8 @@ def check_fair_lending(
                     COUNT(*) as loan_count,
                     AVG(rate) as avg_rate,
                     STDDEV(rate) as rate_stddev,
-                    COUNT(CASE WHEN stage = 'denied' THEN 1 END) as denied_count,
-                    COUNT(CASE WHEN stage IN ('funded', 'closed') THEN 1 END) as approved_count
+                    0 as denied_count,
+                    COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as approved_count
                 FROM loans
                 WHERE created_at >= NOW() - INTERVAL '90 days'
                 GROUP BY program

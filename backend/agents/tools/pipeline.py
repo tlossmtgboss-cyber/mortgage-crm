@@ -36,6 +36,7 @@ def get_pipeline_metrics(
         lo_filter = "AND l.loan_officer_id = :lo_id" if lo_id else ""
 
         # Get pipeline summary by stage
+        # Note: Stage values must match LoanStage enum in main.py exactly
         pipeline_query = f"""
             SELECT
                 l.stage,
@@ -44,19 +45,20 @@ def get_pipeline_metrics(
                 AVG(l.amount) as avg_loan_size,
                 AVG(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as avg_days_in_stage
             FROM loans l
-            WHERE l.stage NOT IN ('funded', 'closed', 'denied', 'withdrawn', 'cancelled')
+            WHERE l.stage NOT IN ('Funded')
             {lo_filter}
             GROUP BY l.stage
             ORDER BY
                 CASE l.stage
-                    WHEN 'application' THEN 1
-                    WHEN 'processing' THEN 2
-                    WHEN 'submitted' THEN 3
-                    WHEN 'underwriting' THEN 4
-                    WHEN 'conditional' THEN 5
-                    WHEN 'clear_to_close' THEN 6
-                    WHEN 'closing' THEN 7
-                    ELSE 8
+                    WHEN 'Disclosed' THEN 1
+                    WHEN 'Processing' THEN 2
+                    WHEN 'Submitted' THEN 3
+                    WHEN 'UW Received' THEN 4
+                    WHEN 'Approved' THEN 5
+                    WHEN 'Suspended' THEN 6
+                    WHEN 'CTC' THEN 7
+                    WHEN 'Docs Out' THEN 8
+                    ELSE 9
                 END
         """
 
@@ -77,26 +79,28 @@ def get_pipeline_metrics(
                 SUM(amount) as closed_volume,
                 AVG(EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400) as avg_cycle_time
             FROM loans l
-            WHERE l.stage IN ('funded', 'closed')
+            WHERE l.stage = 'Funded'
             AND l.funded_at >= NOW() - INTERVAL '{days_back} days'
             {lo_filter}
         """
         velocity_data = execute_single(velocity_query, params)
 
         # Get at-risk loans (over SLA)
+        # Note: Stage values must match LoanStage enum in main.py exactly
         at_risk_query = f"""
             SELECT COUNT(*) as at_risk_count
             FROM loans l
-            WHERE l.stage NOT IN ('funded', 'closed', 'denied', 'withdrawn', 'cancelled')
+            WHERE l.stage NOT IN ('Funded')
             AND EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 >
                 CASE l.stage
-                    WHEN 'application' THEN 1
-                    WHEN 'processing' THEN 3
-                    WHEN 'submitted' THEN 2
-                    WHEN 'underwriting' THEN 3
-                    WHEN 'conditional' THEN 5
-                    WHEN 'clear_to_close' THEN 2
-                    WHEN 'closing' THEN 3
+                    WHEN 'Disclosed' THEN 3
+                    WHEN 'Processing' THEN 5
+                    WHEN 'Submitted' THEN 2
+                    WHEN 'UW Received' THEN 3
+                    WHEN 'Approved' THEN 2
+                    WHEN 'Suspended' THEN 7
+                    WHEN 'CTC' THEN 2
+                    WHEN 'Docs Out' THEN 3
                     ELSE 5
                 END
             {lo_filter}
@@ -269,7 +273,7 @@ def get_loan_aging_report(
                 EXTRACT(EPOCH FROM (NOW() - l.created_at)) / 86400 as total_days_open
             FROM loans l
             LEFT JOIN loan_officers lo ON l.loan_officer_id = lo.id
-            WHERE l.stage NOT IN ('funded', 'closed', 'denied', 'withdrawn', 'cancelled')
+            WHERE l.stage NOT IN ('Funded')
             AND EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 >= :min_days
             {lo_filter}
             ORDER BY days_in_stage DESC
@@ -372,10 +376,11 @@ def calculate_conversion_rates(
         counts = {row["stage"]: row["count"] for row in stage_counts}
 
         # Calculate funnel conversions
+        # Note: Stage values must match LoanStage enum in main.py exactly
         stages = get_loan_stage_order()
-        active_stages = ["application", "processing", "submitted", "underwriting", "conditional", "clear_to_close", "closing"]
-        funded_count = counts.get("funded", 0) + counts.get("closed", 0)
-        fallen_out = counts.get("denied", 0) + counts.get("withdrawn", 0) + counts.get("cancelled", 0)
+        active_stages = ["Disclosed", "Processing", "Submitted", "UW Received", "Approved", "Suspended", "CTC", "Docs Out"]
+        funded_count = counts.get("Funded", 0)
+        fallen_out = 0  # No fallout stages in current LoanStage enum
 
         total_started = sum(counts.values())
         total_active = sum(counts.get(s, 0) for s in active_stages)
@@ -384,7 +389,11 @@ def calculate_conversion_rates(
         prev_count = total_started
 
         for stage in active_stages:
-            current_count = sum(counts.get(s, 0) for s in stages[stages.index(stage):] if s not in ["denied", "withdrawn", "cancelled"])
+            try:
+                stage_idx = stages.index(stage)
+                current_count = sum(counts.get(s, 0) for s in stages[stage_idx:])
+            except ValueError:
+                current_count = 0
             if current_count == 0:
                 # Include funded in downstream counts
                 current_count = funded_count
@@ -471,7 +480,7 @@ def predict_closing_timeline(
             current_stage = loan["stage"]
             stages = get_loan_stage_order()
 
-            if current_stage in ["funded", "closed", "denied", "withdrawn", "cancelled"]:
+            if current_stage == "Funded":
                 return ToolResult.success({
                     "loan_id": loan_id,
                     "status": "complete",
@@ -479,7 +488,12 @@ def predict_closing_timeline(
                 })
 
             # Calculate remaining days
-            remaining_stages = stages[stages.index(current_stage):stages.index("funded")]
+            try:
+                current_idx = stages.index(current_stage)
+                funded_idx = stages.index("Funded")
+                remaining_stages = stages[current_idx:funded_idx]
+            except ValueError:
+                remaining_stages = []
             days_in_current = days_between(loan["stage_entered_at"])
             remaining_in_current = max(0, avg_times.get(current_stage, 3) - days_in_current)
 
@@ -518,10 +532,15 @@ def predict_closing_timeline(
 
             for loan in loans:
                 current_stage = loan["stage"]
-                if current_stage in ["funded", "closed", "denied", "withdrawn", "cancelled"]:
+                if current_stage == "Funded":
                     continue
 
-                remaining_stages = stages[stages.index(current_stage):stages.index("funded")]
+                try:
+                    current_idx = stages.index(current_stage)
+                    funded_idx = stages.index("Funded")
+                    remaining_stages = stages[current_idx:funded_idx]
+                except ValueError:
+                    continue
                 days_in_current = days_between(loan["stage_entered_at"])
                 remaining_in_current = max(0, avg_times.get(current_stage, 3) - days_in_current)
                 remaining_days = remaining_in_current + sum(avg_times.get(s, 3) for s in remaining_stages[1:])
@@ -570,6 +589,7 @@ def get_bottleneck_analysis(
         lo_filter = "AND l.loan_officer_id = :lo_id" if lo_id else ""
 
         # Get average time in each stage vs SLA
+        # Note: Stage values must match LoanStage enum in main.py exactly
         stage_analysis_query = f"""
             SELECT
                 l.stage,
@@ -579,17 +599,18 @@ def get_bottleneck_analysis(
                 MAX(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as max_days_in_stage,
                 COUNT(CASE WHEN EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400 >
                     CASE l.stage
-                        WHEN 'application' THEN 1
-                        WHEN 'processing' THEN 3
-                        WHEN 'submitted' THEN 2
-                        WHEN 'underwriting' THEN 3
-                        WHEN 'conditional' THEN 5
-                        WHEN 'clear_to_close' THEN 2
-                        WHEN 'closing' THEN 3
+                        WHEN 'Disclosed' THEN 3
+                        WHEN 'Processing' THEN 5
+                        WHEN 'Submitted' THEN 2
+                        WHEN 'UW Received' THEN 3
+                        WHEN 'Approved' THEN 2
+                        WHEN 'Suspended' THEN 7
+                        WHEN 'CTC' THEN 2
+                        WHEN 'Docs Out' THEN 3
                         ELSE 5
                     END THEN 1 END) as over_sla_count
             FROM loans l
-            WHERE l.stage NOT IN ('funded', 'closed', 'denied', 'withdrawn', 'cancelled')
+            WHERE l.stage NOT IN ('Funded')
             {lo_filter}
             GROUP BY l.stage
         """
@@ -658,13 +679,16 @@ def _get_bottleneck_recommendation(stage: str, over_sla_pct: float, avg_days: fl
     if over_sla_pct < 10:
         return f"{stage.title()} is performing well within SLA"
 
+    # Note: Stage values must match LoanStage enum in main.py exactly
     recommendations = {
-        "processing": "Consider adding processing capacity or automating document collection",
-        "underwriting": "Review underwriter workload distribution; consider condition delegation",
-        "conditional": "Expedite condition clearing with borrower outreach automation",
-        "clear_to_close": "Streamline CD preparation and closing coordination",
-        "closing": "Improve title/settlement coordination and funding procedures",
-        "submitted": "Follow up with underwriting on submission queue priority",
+        "Disclosed": "Ensure timely processing of initial disclosures",
+        "Processing": "Consider adding processing capacity or automating document collection",
+        "Submitted": "Follow up with underwriting on submission queue priority",
+        "UW Received": "Review underwriter workload distribution; consider condition delegation",
+        "Approved": "Move approved loans to CTC quickly",
+        "Suspended": "Prioritize clearing suspended conditions",
+        "CTC": "Streamline CD preparation and closing coordination",
+        "Docs Out": "Improve title/settlement coordination and funding procedures",
     }
 
     base_rec = recommendations.get(stage, f"Review {stage} process for efficiency improvements")
@@ -708,13 +732,13 @@ def compare_to_benchmark(
         params = {"lo_id": lo_id} if lo_id else {}
 
         # Get our metrics
+        # Note: Stage values must match LoanStage enum in main.py exactly
         metrics_query = f"""
             SELECT
                 AVG(EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400) as avg_cycle_time,
-                COUNT(CASE WHEN stage IN ('funded', 'closed') THEN 1 END)::float /
+                COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
                     NULLIF(COUNT(*), 0) * 100 as pull_through_rate,
-                COUNT(CASE WHEN stage IN ('denied', 'withdrawn', 'cancelled') THEN 1 END)::float /
-                    NULLIF(COUNT(*), 0) * 100 as fallout_rate
+                0::float as fallout_rate
             FROM loans
             WHERE created_at >= NOW() - INTERVAL '{days_back} days'
             {lo_filter}
@@ -813,6 +837,7 @@ def get_lo_pipeline_breakdown(
 ) -> ToolResult:
     """Get pipeline breakdown by loan officer."""
     try:
+        # Note: Stage values must match LoanStage enum in main.py exactly
         query = """
             SELECT
                 lo.id as lo_id,
@@ -820,13 +845,13 @@ def get_lo_pipeline_breakdown(
                 lo.email as lo_email,
                 COUNT(l.id) as total_loans,
                 SUM(l.amount) as total_volume,
-                COUNT(CASE WHEN l.stage IN ('application', 'processing') THEN 1 END) as early_stage,
-                COUNT(CASE WHEN l.stage IN ('submitted', 'underwriting', 'conditional') THEN 1 END) as mid_stage,
-                COUNT(CASE WHEN l.stage IN ('clear_to_close', 'closing') THEN 1 END) as late_stage,
+                COUNT(CASE WHEN l.stage IN ('Disclosed', 'Processing') THEN 1 END) as early_stage,
+                COUNT(CASE WHEN l.stage IN ('Submitted', 'UW Received', 'Approved', 'Suspended') THEN 1 END) as mid_stage,
+                COUNT(CASE WHEN l.stage IN ('CTC', 'Docs Out') THEN 1 END) as late_stage,
                 AVG(EXTRACT(EPOCH FROM (NOW() - l.stage_entered_at)) / 86400) as avg_days_in_stage
             FROM loan_officers lo
             LEFT JOIN loans l ON lo.id = l.loan_officer_id
-                AND l.stage NOT IN ('funded', 'closed', 'denied', 'withdrawn', 'cancelled')
+                AND l.stage NOT IN ('Funded')
             GROUP BY lo.id, lo.name, lo.email
             ORDER BY total_volume DESC NULLS LAST
         """
@@ -855,10 +880,11 @@ def get_lo_pipeline_breakdown(
 
             if include_metrics and row["total_loans"]:
                 # Get additional metrics for this LO
+                # Note: Stage values must match LoanStage enum in main.py exactly
                 metrics_query = """
                     SELECT
-                        COUNT(CASE WHEN stage IN ('funded', 'closed') AND funded_at >= NOW() - INTERVAL '30 days' THEN 1 END) as closed_30d,
-                        AVG(CASE WHEN stage IN ('funded', 'closed') THEN EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400 END) as avg_cycle_time
+                        COUNT(CASE WHEN stage = 'Funded' AND funded_at >= NOW() - INTERVAL '30 days' THEN 1 END) as closed_30d,
+                        AVG(CASE WHEN stage = 'Funded' THEN EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400 END) as avg_cycle_time
                     FROM loans
                     WHERE loan_officer_id = :lo_id
                 """

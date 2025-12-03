@@ -64,10 +64,10 @@ def get_lo_metrics(
     production = execute_single("""
         SELECT
             COUNT(*) as total_apps,
-            COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded,
-            COUNT(CASE WHEN status IN ('cancelled', 'denied') THEN 1 END) as fallout,
-            SUM(CASE WHEN status = 'funded' THEN loan_amount END) as funded_volume,
-            AVG(CASE WHEN status = 'funded' THEN loan_amount END) as avg_loan_size
+            COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded,
+            COUNT(CASE WHEN stage NOT IN ('Disclosed', 'Processing', 'Submitted', 'UW Received', 'Approved', 'Suspended', 'CTC', 'Docs Out', 'Funded') THEN 1 END) as fallout,
+            SUM(CASE WHEN stage = 'Funded' THEN loan_amount END) as funded_volume,
+            AVG(CASE WHEN stage = 'Funded' THEN loan_amount END) as avg_loan_size
         FROM loans
         WHERE loan_officer_id = :lo_id
             AND created_at >= CURRENT_DATE - :date_range
@@ -151,9 +151,9 @@ def get_lo_metrics(
             FROM (
                 SELECT
                     loan_officer_id,
-                    COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded_count,
-                    SUM(CASE WHEN status = 'funded' THEN loan_amount END) as funded_volume,
-                    COUNT(CASE WHEN status = 'funded' THEN 1 END)::float /
+                    COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded_count,
+                    SUM(CASE WHEN stage = 'Funded' THEN loan_amount END) as funded_volume,
+                    COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
                         NULLIF(COUNT(*), 0) * 100 as conversion_rate
                 FROM loans
                 WHERE created_at >= CURRENT_DATE - :date_range
@@ -271,9 +271,9 @@ def compare_to_peers(
         SELECT
             u.id as lo_id,
             u.name as lo_name,
-            COUNT(CASE WHEN l.status = 'funded' THEN 1 END) as funded,
-            SUM(CASE WHEN l.status = 'funded' THEN l.loan_amount END) as volume,
-            COUNT(CASE WHEN l.status = 'funded' THEN 1 END)::float /
+            COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded,
+            SUM(CASE WHEN l.stage = 'Funded' THEN l.loan_amount END) as volume,
+            COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END)::float /
                 NULLIF(COUNT(*), 0) * 100 as conversion,
             AVG(EXTRACT(EPOCH FROM l.first_contact_at - l.created_at) / 60) as speed_to_lead
         FROM users u
@@ -633,9 +633,9 @@ def track_improvement(
         SELECT
             {period_expr} as period,
             COUNT(*) as total_apps,
-            COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded,
-            SUM(CASE WHEN status = 'funded' THEN loan_amount END) as volume,
-            COUNT(CASE WHEN status = 'funded' THEN 1 END)::float /
+            COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded,
+            SUM(CASE WHEN stage = 'Funded' THEN loan_amount END) as volume,
+            COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
                 NULLIF(COUNT(*), 0) * 100 as conversion_rate,
             AVG(EXTRACT(EPOCH FROM first_contact_at - created_at) / 60) as avg_stl
         FROM loans
@@ -751,9 +751,9 @@ def get_best_practices(
         SELECT
             l.loan_officer_id,
             u.name,
-            COUNT(CASE WHEN l.status = 'funded' THEN 1 END) as funded,
-            SUM(CASE WHEN l.status = 'funded' THEN l.loan_amount END) as volume,
-            COUNT(CASE WHEN l.status = 'funded' THEN 1 END)::float /
+            COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded,
+            SUM(CASE WHEN l.stage = 'Funded' THEN l.loan_amount END) as volume,
+            COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END)::float /
                 NULLIF(COUNT(*), 0) * 100 as conversion_rate,
             AVG(EXTRACT(EPOCH FROM l.first_contact_at - l.created_at) / 60) as avg_stl
         FROM loans l
@@ -893,10 +893,10 @@ def get_performance_trends(
             {period_expr} as period,
             COUNT(DISTINCT loan_officer_id) as active_los,
             COUNT(*) as total_apps,
-            COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded,
-            SUM(CASE WHEN status = 'funded' THEN loan_amount END) as volume,
-            AVG(CASE WHEN status = 'funded' THEN loan_amount END) as avg_loan,
-            COUNT(CASE WHEN status = 'funded' THEN 1 END)::float /
+            COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded,
+            SUM(CASE WHEN stage = 'Funded' THEN loan_amount END) as volume,
+            AVG(CASE WHEN stage = 'Funded' THEN loan_amount END) as avg_loan,
+            COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
                 NULLIF(COUNT(*), 0) * 100 as conversion
         FROM loans
         WHERE created_at >= CURRENT_DATE - INTERVAL ':num_periods {period}s'

@@ -52,27 +52,25 @@ def generate_pipeline_report(
     # Get pipeline data by stage
     stage_data = execute_query("""
         SELECT
-            status as stage,
+            stage,
             COUNT(*) as count,
             COALESCE(SUM(loan_amount), 0) as volume,
             COALESCE(AVG(loan_amount), 0) as avg_amount
         FROM loans
         WHERE created_at >= :date_from AND created_at <= :date_to
-            AND status NOT IN ('cancelled', 'denied')
-        GROUP BY status
+        GROUP BY stage
         ORDER BY
-            CASE status
-                WHEN 'lead' THEN 1
-                WHEN 'application' THEN 2
-                WHEN 'processing' THEN 3
-                WHEN 'submitted' THEN 4
-                WHEN 'underwriting' THEN 5
-                WHEN 'approved' THEN 6
-                WHEN 'clear_to_close' THEN 7
-                WHEN 'docs_out' THEN 8
-                WHEN 'docs_back' THEN 9
-                WHEN 'funded' THEN 10
-                ELSE 11
+            CASE stage
+                WHEN 'Disclosed' THEN 1
+                WHEN 'Processing' THEN 2
+                WHEN 'Submitted' THEN 3
+                WHEN 'UW Received' THEN 4
+                WHEN 'Approved' THEN 5
+                WHEN 'Suspended' THEN 6
+                WHEN 'CTC' THEN 7
+                WHEN 'Docs Out' THEN 8
+                WHEN 'Funded' THEN 9
+                ELSE 10
             END
     """, {"date_from": date_from, "date_to": date_to})
 
@@ -292,7 +290,7 @@ def generate_lo_performance_report(
             COALESCE(SUM(CASE WHEN funded_at IS NOT NULL THEN loan_amount END), 0) as funded_volume,
             COALESCE(AVG(CASE WHEN funded_at IS NOT NULL THEN loan_amount END), 0) as avg_loan_size,
             AVG(EXTRACT(EPOCH FROM (funded_at - application_date)) / 86400) as avg_cycle_time,
-            COUNT(CASE WHEN status IN ('cancelled', 'denied') THEN 1 END) as fallout_count
+            0 as fallout_count
         FROM loans
         WHERE loan_officer_id = :lo_id
             AND created_at >= :date_from AND created_at <= :date_to
@@ -608,7 +606,7 @@ def get_dashboard_metrics(
             COUNT(CASE WHEN status IN ('clear_to_close', 'docs_out', 'docs_back') THEN 1 END) as closing_soon,
             COUNT(CASE WHEN status = 'underwriting' THEN 1 END) as in_underwriting
         FROM loans
-        WHERE status NOT IN ('funded', 'cancelled', 'denied')
+        WHERE stage NOT IN ('Funded')
             AND {where_sql}
     """, params)
 
@@ -637,7 +635,7 @@ def get_dashboard_metrics(
     sla_alerts = execute_single(f"""
         SELECT COUNT(*) as overdue_count
         FROM loans
-        WHERE status NOT IN ('funded', 'cancelled', 'denied')
+        WHERE stage NOT IN ('Funded')
             AND status_changed_at < CURRENT_TIMESTAMP - INTERVAL '5 days'
             AND {where_sql}
     """, params)

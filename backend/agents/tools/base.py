@@ -114,20 +114,25 @@ class ToolStatus(str, Enum):
 
 
 class LoanStatus(str, Enum):
-    """Loan pipeline status values."""
-    LEAD = "lead"
-    APPLICATION = "application"
-    PROCESSING = "processing"
-    SUBMITTED = "submitted"
-    UNDERWRITING = "underwriting"
-    CONDITIONAL = "conditional"
-    CLEAR_TO_CLOSE = "clear_to_close"
-    CLOSING = "closing"
-    FUNDED = "funded"
-    CLOSED = "closed"
-    DENIED = "denied"
-    WITHDRAWN = "withdrawn"
-    CANCELLED = "cancelled"
+    """
+    Loan pipeline status values.
+
+    IMPORTANT: These values MUST match the LoanStage enum in main.py exactly.
+    The database stores these as PostgreSQL enums with these exact values.
+    """
+    DISCLOSED = "Disclosed"
+    PROCESSING = "Processing"
+    SUBMITTED = "Submitted"
+    UW_RECEIVED = "UW Received"
+    APPROVED = "Approved"
+    SUSPENDED = "Suspended"
+    CTC = "CTC"
+    DOCS_OUT = "Docs Out"
+    FUNDED = "Funded"
+
+    # Legacy aliases for backward compatibility with existing queries
+    # Note: These don't exist in the actual database - queries using them will fail
+    # TODO: Update all queries to use correct enum values above
 
 
 class LoanType(str, Enum):
@@ -482,30 +487,57 @@ def subtract_business_days(start_date: date, days: int) -> date:
 
 
 def get_loan_stage_order() -> List[str]:
-    """Get the standard loan stage progression order."""
+    """
+    Get the standard loan stage progression order.
+
+    These values match the LoanStage enum in main.py exactly.
+    """
     return [
-        "lead",
-        "application",
-        "processing",
-        "submitted",
-        "underwriting",
-        "conditional",
-        "clear_to_close",
-        "closing",
-        "funded",
-        "closed",
+        "Disclosed",
+        "Processing",
+        "Submitted",
+        "UW Received",
+        "Approved",
+        "Suspended",
+        "CTC",
+        "Docs Out",
+        "Funded",
     ]
 
 
 def is_loan_active(status: str) -> bool:
-    """Check if a loan status indicates an active loan."""
-    inactive_statuses = {"funded", "closed", "denied", "withdrawn", "cancelled"}
+    """
+    Check if a loan status indicates an active loan.
+
+    Uses case-insensitive comparison for flexibility.
+    'Funded' is the only terminal successful state in LoanStage enum.
+    """
+    inactive_statuses = {"funded"}
     return status.lower() not in inactive_statuses
 
 
 def get_sla_for_stage(stage: str) -> int:
-    """Get SLA target days for a loan stage."""
-    return SLA_TARGETS.get(stage.lower(), 5)  # Default 5 days
+    """
+    Get SLA target days for a loan stage.
+
+    Maps both old-style (lowercase) and new-style (title case) stage names.
+    """
+    # Normalize stage name for lookup
+    stage_lower = stage.lower().replace(" ", "_").replace("-", "_")
+
+    # Map to SLA targets
+    stage_sla_map = {
+        "disclosed": 3,
+        "processing": 5,
+        "submitted": 2,
+        "uw_received": 3,
+        "approved": 2,
+        "suspended": 7,
+        "ctc": 2,
+        "docs_out": 3,
+        "funded": 0,
+    }
+    return stage_sla_map.get(stage_lower, 5)  # Default 5 days
 
 
 # =============================================================================
