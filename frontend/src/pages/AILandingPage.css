@@ -403,6 +403,12 @@
   font-size: 15px;
 }
 
+.ai-welcome-state p.ai-datetime {
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
 /* Example Prompts - Claude.ai style cards */
 .ai-example-prompts-new {
   display: grid;

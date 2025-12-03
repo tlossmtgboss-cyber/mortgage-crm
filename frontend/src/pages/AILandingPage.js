@@ -58,8 +58,8 @@ function AILandingPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
-  // Action sidebar state (persistent right sidebar)
-  const [showActionSidebar, setShowActionSidebar] = useState(true);
+  // Action sidebar state (hidden by default, shown when user asks about tasks/reconciliations/calls/appointments)
+  const [showActionSidebar, setShowActionSidebar] = useState(false);
 
   // Reconciliation sidebar state
   const [reconciliationItems, setReconciliationItems] = useState([]);
@@ -221,6 +221,29 @@ function AILandingPage() {
   const handleDividerMouseDown = (e) => {
     e.preventDefault();
     setIsDragging(true);
+  };
+
+  // Dynamic greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  // Format current date and time
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    const options = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    };
+    return now.toLocaleDateString('en-US', options);
   };
 
   const handleCopyContent = async () => {
@@ -1109,6 +1132,29 @@ function AILandingPage() {
           // ONLY show task sidebar for EXPLICIT task questions
           // NOT for general questions like "daily briefing", "pipeline audit", "what should I do next"
           const msgLower = message.toLowerCase();
+
+          // Check if user is asking about tasks, reconciliations, calls, or appointments
+          // These trigger the Action Sidebar to appear
+          const shouldShowActionSidebar =
+            // Task-related questions
+            msgLower.includes('task') ||
+            msgLower.includes('to-do') ||
+            msgLower.includes('todo') ||
+            // Reconciliation questions
+            msgLower.includes('reconcil') ||
+            // Call-related questions
+            (msgLower.includes('call') && (msgLower.includes('need') || msgLower.includes('make') || msgLower.includes('who') || msgLower.includes('today'))) ||
+            msgLower.includes('phone') ||
+            // Appointment/schedule questions
+            msgLower.includes('appointment') ||
+            msgLower.includes('schedule') ||
+            msgLower.includes('calendar') ||
+            msgLower.includes('meeting');
+
+          // Show the Action Sidebar when user asks relevant questions
+          if (shouldShowActionSidebar) {
+            setShowActionSidebar(true);
+          }
 
           // Strict patterns - ONLY explicit task questions trigger the task sidebar
           const isExplicitTaskQuestion =
@@ -2276,7 +2322,8 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
           })() || (
             /* Quick Actions - Show when no messages */
             <div className="ai-welcome-state">
-              <h2>What would you like to do today?</h2>
+              <h2>{getGreeting()}, {userName}!</h2>
+              <p className="ai-datetime">{getCurrentDateTime()}</p>
               <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
 
               <div className="ai-example-prompts-new">
