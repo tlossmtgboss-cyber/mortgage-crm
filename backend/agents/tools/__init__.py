@@ -1,7 +1,7 @@
 """
 Perennia AI - Agent Tools Package
 =================================
-Comprehensive tooling for 8 specialized mortgage CRM agents.
+Comprehensive tooling for 20 specialized mortgage CRM agents.
 
 Usage:
     from backend.agents.tools import tool_registry, get_tools_for_agent
@@ -55,7 +55,11 @@ from .base import (
     DOCUMENT_CATEGORIES,
 )
 
+# =============================================================================
 # Import all tool modules to register tools
+# =============================================================================
+
+# CRM Tools (8 agents, 64 tools)
 from . import pipeline
 from . import compliance
 from . import leads
@@ -65,8 +69,32 @@ from . import rates
 from . import coaching
 from . import customer
 
-# Agent role to module mapping
+# Communication Tools (4 agents, 32 tools)
+from . import voice
+from . import video
+from . import email_intel
+from . import receptionist
+
+# Operations Tools (4 agents, 32 tools)
+from . import scheduler
+from . import tasks
+from . import sla
+from . import integrations
+
+# Business Tools (4 agents, 32 tools)
+from . import reporting
+from . import notifications
+from . import subscription
+from . import onboarding
+
+
+# =============================================================================
+# Agent Configuration
+# =============================================================================
+
+# Agent role to module mapping (20 agents)
 AGENT_MODULES = {
+    # CRM Agents
     "pipeline_analyst": pipeline,
     "compliance_checker": compliance,
     "lead_nurturer": leads,
@@ -75,9 +103,29 @@ AGENT_MODULES = {
     "rate_advisor": rates,
     "team_coach": coaching,
     "customer_intelligence": customer,
+    # Communication Agents
+    "voice_os": voice,
+    "uvip": video,
+    "email_intelligence": email_intel,
+    "ai_receptionist": receptionist,
+    # Operations Agents
+    "smart_scheduler": scheduler,
+    "task_automation": tasks,
+    "sla_tracker": sla,
+    "integrations": integrations,
+    # Business Agents
+    "reporting_engine": reporting,
+    "notification_center": notifications,
+    "subscription_manager": subscription,
+    "onboarding_assistant": onboarding,
 }
 
-# All tool names by category
+
+# =============================================================================
+# Tool Lists by Category
+# =============================================================================
+
+# CRM Tools
 PIPELINE_TOOLS = [
     "get_pipeline_metrics",
     "get_loans_by_status",
@@ -166,8 +214,148 @@ CUSTOMER_TOOLS = [
     "get_market_comparison",
 ]
 
-# All tools organized
+# Communication Tools
+VOICE_TOOLS = [
+    "initiate_outbound_call",
+    "drop_voicemail",
+    "get_call_history",
+    "analyze_call_sentiment",
+    "schedule_callback",
+    "get_power_dialer_queue",
+    "transcribe_call",
+    "get_call_metrics",
+]
+
+VIDEO_TOOLS = [
+    "schedule_video_meeting",
+    "get_meeting_recordings",
+    "analyze_meeting",
+    "send_async_video",
+    "get_video_analytics",
+    "extract_meeting_action_items",
+    "generate_meeting_summary",
+    "get_participant_insights",
+]
+
+EMAIL_INTEL_TOOLS = [
+    "parse_email",
+    "get_email_thread",
+    "draft_email_response",
+    "get_email_templates",
+    "send_email",
+    "categorize_email_attachments",
+    "match_email_to_loan",
+    "analyze_email_engagement",
+]
+
+RECEPTIONIST_TOOLS = [
+    "get_greeting_script",
+    "qualify_caller",
+    "route_call",
+    "create_callback_request",
+    "get_lo_availability",
+    "get_call_queue_status",
+    "handle_inbound_call",
+    "log_call_interaction",
+]
+
+# Operations Tools
+SCHEDULER_TOOLS = [
+    "get_availability",
+    "book_appointment",
+    "reschedule_appointment",
+    "cancel_appointment",
+    "get_upcoming_appointments",
+    "send_appointment_reminder",
+    "sync_external_calendar",
+    "optimize_schedule",
+]
+
+TASK_TOOLS = [
+    "create_task",
+    "get_task_queue",
+    "update_task_status",
+    "assign_task",
+    "get_task_templates",
+    "bulk_update_tasks",
+    "execute_workflow",
+    "get_workflow_status",
+]
+
+SLA_TOOLS = [
+    "check_sla_status",
+    "get_sla_dashboard",
+    "get_sla_alerts",
+    "calculate_stage_sla",
+    "configure_sla_rules",
+    "get_sla_report",
+    "project_sla_breach",
+    "escalate_sla_breach",
+]
+
+INTEGRATION_TOOLS = [
+    "sync_los_data",
+    "check_integration_status",
+    "trigger_credit_pull",
+    "submit_to_aus",
+    "order_appraisal",
+    "order_title",
+    "get_pricing_engine_quote",
+    "send_for_esign",
+]
+
+# Business Tools
+REPORTING_TOOLS = [
+    "generate_pipeline_report",
+    "generate_production_report",
+    "generate_lo_performance_report",
+    "get_report_templates",
+    "schedule_report",
+    "export_report",
+    "get_dashboard_metrics",
+    "create_custom_report",
+]
+
+NOTIFICATION_TOOLS = [
+    "send_notification",
+    "get_pending_notifications",
+    "get_notification_templates",
+    "schedule_notification",
+    "get_delivery_status",
+    "update_preferences",
+    "get_preferences",
+    "batch_send",
+]
+
+SUBSCRIPTION_TOOLS = [
+    "get_subscription_status",
+    "get_plans",
+    "change_plan",
+    "get_billing_history",
+    "update_payment_method",
+    "get_usage_metrics",
+    "manage_addons",
+    "pause_subscription",
+]
+
+ONBOARDING_TOOLS = [
+    "get_onboarding_status",
+    "get_checklist",
+    "complete_step",
+    "start_guided_tour",
+    "get_training_resources",
+    "get_setup_wizard",
+    "request_support",
+    "track_progress",
+]
+
+
+# =============================================================================
+# All Tools Organized by Category
+# =============================================================================
+
 ALL_TOOLS = {
+    # CRM
     "pipeline": PIPELINE_TOOLS,
     "compliance": COMPLIANCE_TOOLS,
     "leads": LEAD_TOOLS,
@@ -176,8 +364,139 @@ ALL_TOOLS = {
     "rates": RATE_TOOLS,
     "coaching": COACHING_TOOLS,
     "customer": CUSTOMER_TOOLS,
+    # Communication
+    "voice": VOICE_TOOLS,
+    "video": VIDEO_TOOLS,
+    "email_intel": EMAIL_INTEL_TOOLS,
+    "receptionist": RECEPTIONIST_TOOLS,
+    # Operations
+    "scheduler": SCHEDULER_TOOLS,
+    "tasks": TASK_TOOLS,
+    "sla": SLA_TOOLS,
+    "integrations": INTEGRATION_TOOLS,
+    # Business
+    "reporting": REPORTING_TOOLS,
+    "notifications": NOTIFICATION_TOOLS,
+    "subscription": SUBSCRIPTION_TOOLS,
+    "onboarding": ONBOARDING_TOOLS,
 }
 
+
+# =============================================================================
+# Agent Configurations (Full 20-agent system)
+# =============================================================================
+
+AGENT_CONFIGS = {
+    # CRM Agents
+    "pipeline_analyst": {
+        "description": "Analyzes loan pipeline health, bottlenecks, and conversion rates",
+        "tools": PIPELINE_TOOLS,
+        "category": "crm",
+    },
+    "compliance_checker": {
+        "description": "Monitors TRID, RESPA, and fair lending compliance",
+        "tools": COMPLIANCE_TOOLS,
+        "category": "crm",
+    },
+    "lead_nurturer": {
+        "description": "Manages lead engagement, scoring, and follow-up strategies",
+        "tools": LEAD_TOOLS,
+        "category": "crm",
+    },
+    "document_tracker": {
+        "description": "Tracks documents, conditions, and third-party orders",
+        "tools": DOCUMENT_TOOLS,
+        "category": "crm",
+    },
+    "profitability_analyst": {
+        "description": "Analyzes loan profitability, margins, and revenue optimization",
+        "tools": PROFITABILITY_TOOLS,
+        "category": "crm",
+    },
+    "rate_advisor": {
+        "description": "Provides rate analysis, lock recommendations, and market insights",
+        "tools": RATE_TOOLS,
+        "category": "crm",
+    },
+    "team_coach": {
+        "description": "Tracks LO performance, provides coaching, and identifies training needs",
+        "tools": COACHING_TOOLS,
+        "category": "crm",
+    },
+    "customer_intelligence": {
+        "description": "Provides customer 360 view, LTV analysis, and opportunity identification",
+        "tools": CUSTOMER_TOOLS,
+        "category": "crm",
+    },
+    # Communication Agents
+    "voice_os": {
+        "description": "Manages phone calls, voicemail, transcription, and call analytics",
+        "tools": VOICE_TOOLS,
+        "category": "communication",
+    },
+    "uvip": {
+        "description": "Handles video meetings, recordings, and engagement analysis",
+        "tools": VIDEO_TOOLS,
+        "category": "communication",
+    },
+    "email_intelligence": {
+        "description": "Analyzes emails, detects intent, and generates contextual responses",
+        "tools": EMAIL_INTEL_TOOLS,
+        "category": "communication",
+    },
+    "ai_receptionist": {
+        "description": "Handles initial inquiries, qualifies leads, and routes to specialists",
+        "tools": RECEPTIONIST_TOOLS,
+        "category": "communication",
+    },
+    # Operations Agents
+    "smart_scheduler": {
+        "description": "Manages appointments, calendar optimization, and scheduling",
+        "tools": SCHEDULER_TOOLS,
+        "category": "operations",
+    },
+    "task_automation": {
+        "description": "Automates task creation, assignment, and workflow management",
+        "tools": TASK_TOOLS,
+        "category": "operations",
+    },
+    "sla_tracker": {
+        "description": "Monitors SLA compliance, alerts, and breach prevention",
+        "tools": SLA_TOOLS,
+        "category": "operations",
+    },
+    "integrations": {
+        "description": "Manages LOS, credit, AUS, and vendor integrations",
+        "tools": INTEGRATION_TOOLS,
+        "category": "operations",
+    },
+    # Business Agents
+    "reporting_engine": {
+        "description": "Generates reports, analytics, and data exports",
+        "tools": REPORTING_TOOLS,
+        "category": "business",
+    },
+    "notification_center": {
+        "description": "Manages notifications, alerts, and communication preferences",
+        "tools": NOTIFICATION_TOOLS,
+        "category": "business",
+    },
+    "subscription_manager": {
+        "description": "Handles subscriptions, billing, and usage tracking",
+        "tools": SUBSCRIPTION_TOOLS,
+        "category": "business",
+    },
+    "onboarding_assistant": {
+        "description": "Guides new users through setup, training, and platform adoption",
+        "tools": ONBOARDING_TOOLS,
+        "category": "business",
+    },
+}
+
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
 
 def get_all_tool_names() -> list:
     """Get flat list of all tool names."""
@@ -190,6 +509,19 @@ def get_all_tool_names() -> list:
 def get_tool_count() -> dict:
     """Get count of tools by category."""
     return {k: len(v) for k, v in ALL_TOOLS.items()}
+
+
+def get_total_tool_count() -> int:
+    """Get total number of tools."""
+    return sum(len(v) for v in ALL_TOOLS.values())
+
+
+def get_agents_by_category(category: str) -> list:
+    """Get agent names by category (crm, communication, operations, business)."""
+    return [
+        name for name, config in AGENT_CONFIGS.items()
+        if config.get("category") == category
+    ]
 
 
 def print_tool_summary():
@@ -213,8 +545,13 @@ def print_tool_summary():
 
     print("\n" + "=" * 60)
     print(f"Total: {total} tools across {len(ALL_TOOLS)} categories")
+    print(f"Agents: {len(AGENT_CONFIGS)} specialized agents")
     print("=" * 60)
 
+
+# =============================================================================
+# Exports
+# =============================================================================
 
 __all__ = [
     # Infrastructure
@@ -246,7 +583,7 @@ __all__ = [
     "SLA_TARGETS",
     "DOCUMENT_CATEGORIES",
 
-    # Modules
+    # CRM Modules
     "pipeline",
     "compliance",
     "leads",
@@ -256,9 +593,30 @@ __all__ = [
     "coaching",
     "customer",
 
-    # Tool lists
+    # Communication Modules
+    "voice",
+    "video",
+    "email_intel",
+    "receptionist",
+
+    # Operations Modules
+    "scheduler",
+    "tasks",
+    "sla",
+    "integrations",
+
+    # Business Modules
+    "reporting",
+    "notifications",
+    "subscription",
+    "onboarding",
+
+    # Configuration
     "AGENT_MODULES",
+    "AGENT_CONFIGS",
     "ALL_TOOLS",
+
+    # CRM Tool Lists
     "PIPELINE_TOOLS",
     "COMPLIANCE_TOOLS",
     "LEAD_TOOLS",
@@ -268,8 +626,28 @@ __all__ = [
     "COACHING_TOOLS",
     "CUSTOMER_TOOLS",
 
+    # Communication Tool Lists
+    "VOICE_TOOLS",
+    "VIDEO_TOOLS",
+    "EMAIL_INTEL_TOOLS",
+    "RECEPTIONIST_TOOLS",
+
+    # Operations Tool Lists
+    "SCHEDULER_TOOLS",
+    "TASK_TOOLS",
+    "SLA_TOOLS",
+    "INTEGRATION_TOOLS",
+
+    # Business Tool Lists
+    "REPORTING_TOOLS",
+    "NOTIFICATION_TOOLS",
+    "SUBSCRIPTION_TOOLS",
+    "ONBOARDING_TOOLS",
+
     # Utilities
     "get_all_tool_names",
     "get_tool_count",
+    "get_total_tool_count",
+    "get_agents_by_category",
     "print_tool_summary",
 ]
