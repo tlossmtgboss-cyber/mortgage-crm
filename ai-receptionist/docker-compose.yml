@@ -1,0 +1,130 @@
+#===============================================================================
+# PERENNIA AI RECEPTIONIST - DOCKER COMPOSE
+#===============================================================================
+# Full stack deployment with optional database
+#===============================================================================
+
+version: '3.8'
+
+services:
+  #-----------------------------------------------------------------------------
+  # AI Receptionist Service
+  #-----------------------------------------------------------------------------
+  receptionist:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: perennia-receptionist
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      # Twilio
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - TWILIO_WEBHOOK_BASE_URL=${TWILIO_WEBHOOK_BASE_URL}
+
+      # LLM
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # Speech
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+
+      # Database
+      - DATABASE_URL=postgresql://perennia:perennia@postgres:5432/perennia
+
+      # Server
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - perennia-network
+
+  #-----------------------------------------------------------------------------
+  # PostgreSQL Database
+  #-----------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: perennia-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=perennia
+      - POSTGRES_PASSWORD=perennia
+      - POSTGRES_DB=perennia
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U perennia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - perennia-network
+
+  #-----------------------------------------------------------------------------
+  # Redis (for caching and sessions)
+  #-----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: perennia-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - perennia-network
+
+  #-----------------------------------------------------------------------------
+  # Nginx Reverse Proxy (Production)
+  #-----------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: perennia-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - receptionist
+    networks:
+      - perennia-network
+    profiles:
+      - production
+
+#-------------------------------------------------------------------------------
+# Networks
+#-------------------------------------------------------------------------------
+networks:
+  perennia-network:
+    driver: bridge
+
+#-------------------------------------------------------------------------------
+# Volumes
+#-------------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  redis_data:
