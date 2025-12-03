@@ -448,22 +448,34 @@ function Dashboard() {
           </div>
           <div className="profitability-preview">
             <div className="profitability-metrics-grid">
-              <div className="profitability-metric">
+              <div
+                className="profitability-metric clickable"
+                onClick={() => navigate('/profitability?metric=gain_on_sale')}
+              >
                 <div className="metric-label">Gain on Sale</div>
                 <div className="metric-value">285 bps</div>
                 <div className="metric-change positive">↑ 12 bps</div>
               </div>
-              <div className="profitability-metric">
+              <div
+                className="profitability-metric clickable"
+                onClick={() => navigate('/profitability?metric=cost_per_loan')}
+              >
                 <div className="metric-label">Cost per Loan</div>
                 <div className="metric-value">$8,450</div>
                 <div className="metric-change positive">↓ $320</div>
               </div>
-              <div className="profitability-metric">
+              <div
+                className="profitability-metric clickable"
+                onClick={() => navigate('/profitability?metric=net_margin')}
+              >
                 <div className="metric-label">Net Margin</div>
                 <div className="metric-value">$2,850</div>
                 <div className="metric-change positive">↑ $180</div>
               </div>
-              <div className="profitability-metric">
+              <div
+                className="profitability-metric clickable"
+                onClick={() => navigate('/profitability?metric=cash_runway')}
+              >
                 <div className="metric-label">Cash Runway</div>
                 <div className="metric-value">8.2 mo</div>
                 <div className="metric-change neutral">→ stable</div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { profitabilityAPI } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import {
@@ -8,6 +8,14 @@ import {
 } from 'recharts';
 import './ProfitabilityDashboard.css';
 import CostToCloseChart from '../components/CostToCloseChart';
+
+// Metric tabs configuration
+const METRIC_TABS = [
+  { id: 'gain_on_sale', name: 'Gain on Sale', value: '285 bps', change: '+12 bps', changeType: 'positive' },
+  { id: 'cost_per_loan', name: 'Cost Per Loan', value: '$8,450', change: '-$320', changeType: 'positive' },
+  { id: 'net_margin', name: 'Net Margin', value: '$2,850', change: '+$180', changeType: 'positive' },
+  { id: 'cash_runway', name: 'Cash Runway', value: '8.2 mo', change: 'stable', changeType: 'neutral' }
+];
 
 // Demo data for testing
 const DEMO_METRICS = {
@@ -78,7 +86,11 @@ const DEMO_SUGGESTED_QUESTIONS = [
 
 const ProfitabilityDashboard = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, userRole } = usePermissions();
+
+  // Get metric from URL or default to null (show overview)
+  const urlMetric = searchParams.get('metric');
 
   // State
   const [loading, setLoading] = useState(true);
@@ -91,6 +103,17 @@ const ProfitabilityDashboard = () => {
   const [gapsGains, setGapsGains] = useState([]);
   const [insights, setInsights] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [activeMetric, setActiveMetric] = useState(urlMetric || null);
+
+  // Update URL when metric changes
+  const handleMetricChange = (metricId) => {
+    setActiveMetric(metricId);
+    if (metricId) {
+      setSearchParams({ metric: metricId });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   // AI Assistant State
   const [aiQuery, setAiQuery] = useState('');
@@ -285,6 +308,9 @@ const ProfitabilityDashboard = () => {
       {/* Header */}
       <header className="dashboard-header">
         <div className="header-content">
+          <button className="back-btn" onClick={() => navigate('/dashboard')}>
+            ← Back to Dashboard
+          </button>
           <h1>Profitability Intelligence</h1>
           <p className="header-subtitle">Real-time business performance analytics</p>
         </div>
@@ -307,7 +333,281 @@ const ProfitabilityDashboard = () => {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Metric Tabs - Key metrics from Dashboard */}
+      <div className="metric-tabs-container">
+        <div className="metric-tabs">
+          {METRIC_TABS.map(metric => (
+            <button
+              key={metric.id}
+              className={`metric-tab ${activeMetric === metric.id ? 'active' : ''}`}
+              onClick={() => handleMetricChange(metric.id)}
+            >
+              <span className="metric-tab-name">{metric.name}</span>
+              <span className="metric-tab-value">{metric.value}</span>
+              <span className={`metric-tab-change ${metric.changeType}`}>{metric.change}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Metric Detail View - Show when a metric is selected */}
+      {activeMetric && (
+        <div className="metric-detail-view">
+          <div className="metric-detail-header">
+            <h2>{METRIC_TABS.find(m => m.id === activeMetric)?.name} Analysis</h2>
+            <button className="btn-close-detail" onClick={() => handleMetricChange(null)}>
+              ← Back to Overview
+            </button>
+          </div>
+
+          {activeMetric === 'gain_on_sale' && (
+            <div className="metric-detail-content">
+              <div className="detail-summary-cards">
+                <div className="detail-card">
+                  <div className="detail-label">Current Gain on Sale</div>
+                  <div className="detail-value">285 bps</div>
+                  <div className="detail-change positive">↑ 12 bps vs last month</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">YTD Average</div>
+                  <div className="detail-value">268 bps</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Industry Benchmark</div>
+                  <div className="detail-value">250 bps</div>
+                  <div className="detail-change positive">+35 bps above benchmark</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Best Month (2024)</div>
+                  <div className="detail-value">312 bps</div>
+                  <div className="detail-sublabel">March 2024</div>
+                </div>
+              </div>
+              <div className="detail-breakdown">
+                <h3>Gain on Sale by Product Type</h3>
+                <div className="breakdown-table">
+                  <div className="breakdown-row header">
+                    <span>Product</span>
+                    <span>Volume</span>
+                    <span>Gain (bps)</span>
+                    <span>Revenue</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Conventional</span>
+                    <span>$12.5M</span>
+                    <span className="positive">295 bps</span>
+                    <span>$368,750</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>FHA</span>
+                    <span>$8.2M</span>
+                    <span className="positive">310 bps</span>
+                    <span>$254,200</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>VA</span>
+                    <span>$5.1M</span>
+                    <span>265 bps</span>
+                    <span>$135,150</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Jumbo</span>
+                    <span>$3.8M</span>
+                    <span className="warning">245 bps</span>
+                    <span>$93,100</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeMetric === 'cost_per_loan' && (
+            <div className="metric-detail-content">
+              <div className="detail-summary-cards">
+                <div className="detail-card">
+                  <div className="detail-label">Current Cost per Loan</div>
+                  <div className="detail-value">$8,450</div>
+                  <div className="detail-change positive">↓ $320 vs last month</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">YTD Average</div>
+                  <div className="detail-value">$8,890</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Industry Benchmark</div>
+                  <div className="detail-value">$9,200</div>
+                  <div className="detail-change positive">$750 below benchmark</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Target</div>
+                  <div className="detail-value">$8,000</div>
+                  <div className="detail-sublabel">$450 to go</div>
+                </div>
+              </div>
+              <div className="detail-breakdown">
+                <h3>Cost Breakdown by Category</h3>
+                <div className="breakdown-table">
+                  <div className="breakdown-row header">
+                    <span>Category</span>
+                    <span>Cost/Loan</span>
+                    <span>% of Total</span>
+                    <span>Trend</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Compensation</span>
+                    <span>$4,200</span>
+                    <span>49.7%</span>
+                    <span className="neutral">→ stable</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Technology</span>
+                    <span>$1,850</span>
+                    <span>21.9%</span>
+                    <span className="positive">↓ $120</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Compliance</span>
+                    <span>$1,200</span>
+                    <span>14.2%</span>
+                    <span className="warning">↑ $80</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Operations</span>
+                    <span>$1,200</span>
+                    <span>14.2%</span>
+                    <span className="positive">↓ $200</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeMetric === 'net_margin' && (
+            <div className="metric-detail-content">
+              <div className="detail-summary-cards">
+                <div className="detail-card">
+                  <div className="detail-label">Current Net Margin</div>
+                  <div className="detail-value">$2,850</div>
+                  <div className="detail-change positive">↑ $180 vs last month</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">YTD Total</div>
+                  <div className="detail-value">$847,500</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Margin %</div>
+                  <div className="detail-value">34.6%</div>
+                  <div className="detail-change positive">↑ 2.1% vs last month</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Loans Closed (MTD)</div>
+                  <div className="detail-value">47</div>
+                  <div className="detail-sublabel">$133,950 total margin</div>
+                </div>
+              </div>
+              <div className="detail-breakdown">
+                <h3>Margin by Loan Officer</h3>
+                <div className="breakdown-table">
+                  <div className="breakdown-row header">
+                    <span>Loan Officer</span>
+                    <span>Loans</span>
+                    <span>Avg Margin</span>
+                    <span>Total</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Timothy Loss</span>
+                    <span>18</span>
+                    <span className="positive">$3,420</span>
+                    <span>$61,560</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Sarah Mitchell</span>
+                    <span>14</span>
+                    <span className="positive">$2,980</span>
+                    <span>$41,720</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Mike Johnson</span>
+                    <span>10</span>
+                    <span>$2,650</span>
+                    <span>$26,500</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>Others</span>
+                    <span>5</span>
+                    <span className="warning">$834</span>
+                    <span>$4,170</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeMetric === 'cash_runway' && (
+            <div className="metric-detail-content">
+              <div className="detail-summary-cards">
+                <div className="detail-card">
+                  <div className="detail-label">Current Cash Runway</div>
+                  <div className="detail-value">8.2 months</div>
+                  <div className="detail-change neutral">→ stable</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Cash on Hand</div>
+                  <div className="detail-value">$1.64M</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Monthly Burn Rate</div>
+                  <div className="detail-value">$200K</div>
+                  <div className="detail-change positive">↓ $15K vs last month</div>
+                </div>
+                <div className="detail-card">
+                  <div className="detail-label">Break-even Point</div>
+                  <div className="detail-value">28 loans</div>
+                  <div className="detail-sublabel">Currently 19 above</div>
+                </div>
+              </div>
+              <div className="detail-breakdown">
+                <h3>Cash Flow Projection</h3>
+                <div className="breakdown-table">
+                  <div className="breakdown-row header">
+                    <span>Month</span>
+                    <span>Projected Revenue</span>
+                    <span>Projected Expenses</span>
+                    <span>Net Cash</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>December</span>
+                    <span>$245,000</span>
+                    <span>$200,000</span>
+                    <span className="positive">+$45,000</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>January</span>
+                    <span>$220,000</span>
+                    <span>$205,000</span>
+                    <span className="positive">+$15,000</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>February</span>
+                    <span>$235,000</span>
+                    <span>$202,000</span>
+                    <span className="positive">+$33,000</span>
+                  </div>
+                  <div className="breakdown-row">
+                    <span>March</span>
+                    <span>$260,000</span>
+                    <span>$198,000</span>
+                    <span className="positive">+$62,000</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tabs - Only show when no metric is selected */}
+      {!activeMetric && (
       <div className="dashboard-tabs">
         <button
           className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
@@ -811,6 +1111,7 @@ const ProfitabilityDashboard = () => {
             )}
           </div>
         </div>
+      )}
       )}
     </div>
   );

@@ -2055,9 +2055,18 @@
   transition: all 0.2s ease;
 }
 
+.profitability-metric.clickable {
+  cursor: pointer;
+}
+
 .profitability-metric:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.profitability-metric.clickable:hover {
+  border-color: #218D8D;
+  background: linear-gradient(135deg, #f0fdfa 0%, #e8f5f5 100%);
 }
 
 .profitability-metric .metric-label {

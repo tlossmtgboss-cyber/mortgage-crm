@@ -41,11 +41,262 @@
   gap: 16px;
 }
 
+.dashboard-header .back-btn {
+  background: none;
+  border: none;
+  color: #218D8D;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.dashboard-header .back-btn:hover {
+  text-decoration: underline;
+}
+
 .header-content h1 {
   font-size: 28px;
   font-weight: 600;
   margin: 0 0 4px 0;
   color: #111827;
+}
+
+/* Metric Tabs */
+.metric-tabs-container {
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.metric-tabs {
+  display: flex;
+  gap: 12px;
+  min-width: max-content;
+}
+
+.metric-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 24px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+}
+
+.metric-tab:hover {
+  border-color: #218D8D;
+  background: #f0fdfa;
+}
+
+.metric-tab.active {
+  border-color: #218D8D;
+  background: #f0fdfa;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.15);
+}
+
+.metric-tab-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.metric-tab.active .metric-tab-name {
+  color: #218D8D;
+}
+
+.metric-tab-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.metric-tab-change {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.metric-tab-change.positive {
+  color: #10b981;
+}
+
+.metric-tab-change.warning {
+  color: #f59e0b;
+}
+
+.metric-tab-change.neutral {
+  color: #6b7280;
+}
+
+/* Metric Detail View */
+.metric-detail-view {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.metric-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.metric-detail-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.btn-close-detail {
+  background: none;
+  border: none;
+  color: #218D8D;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-close-detail:hover {
+  text-decoration: underline;
+}
+
+.detail-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.detail-card {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.detail-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.detail-change {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.detail-change.positive {
+  color: #10b981;
+}
+
+.detail-change.warning {
+  color: #f59e0b;
+}
+
+.detail-change.neutral {
+  color: #6b7280;
+}
+
+.detail-sublabel {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.detail-breakdown {
+  margin-top: 24px;
+}
+
+.detail-breakdown h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.breakdown-table {
+  background: #f9fafb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.breakdown-row:last-child {
+  border-bottom: none;
+}
+
+.breakdown-row.header {
+  background: #f3f4f6;
+  font-weight: 600;
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.breakdown-row span {
+  font-size: 14px;
+  color: #374151;
+}
+
+.breakdown-row span.positive {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.breakdown-row span.warning {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.breakdown-row span.neutral {
+  color: #6b7280;
+}
+
+@media (max-width: 768px) {
+  .metric-tabs {
+    gap: 8px;
+  }
+
+  .metric-tab {
+    min-width: 120px;
+    padding: 12px 16px;
+  }
+
+  .metric-tab-value {
+    font-size: 20px;
+  }
+
+  .detail-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .breakdown-row {
+    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    font-size: 12px;
+  }
 }
 
 .header-subtitle {
