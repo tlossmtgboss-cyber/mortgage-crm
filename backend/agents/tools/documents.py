@@ -528,12 +528,12 @@ def send_document_reminder(
 
 
 @mortgage_tool(
-    name="escalate_document_issue",
+    name="escalate_issue",
     description="Escalate a document issue to appropriate party",
     agent_roles=["document_tracker"],
     risk_level="MEDIUM",
 )
-def escalate_document_issue(
+def escalate_issue(
     loan_id: str,
     document_type: str,
     issue_description: str,
