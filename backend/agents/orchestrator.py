@@ -236,9 +236,12 @@ async def run_orchestrator(
             logger.warning(f"Orchestrator completed with errors: {errors}")
             response["warnings"] = errors
 
+        # Get timing breakdown from node_trace
+        node_trace = final_state.get("node_trace", [])
         logger.info(
-            f"Orchestrator completed in {processing_time:.2f}s: "
-            f"intent={response['intent']}, confidence={response['confidence']:.2f}"
+            f"[ORCHESTRATOR] ⏱️ Total: {processing_time:.2f}s | "
+            f"intent={response['intent']}, confidence={response['confidence']:.2f}, "
+            f"nodes={node_trace}"
         )
 
         return response

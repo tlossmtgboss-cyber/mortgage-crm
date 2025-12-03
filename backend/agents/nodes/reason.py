@@ -7,6 +7,7 @@ and a coherent understanding of the user's situation.
 
 import json
 import logging
+import time
 from typing import Any
 from anthropic import Anthropic
 
@@ -110,6 +111,7 @@ async def reason_and_analyze(
         Updated state with analysis, insights, and recommendations
     """
     state = add_node_trace(state, "reason")
+    node_start = time.time()
 
     try:
         # Check if we have enough data to analyze
@@ -155,6 +157,7 @@ Data Quality: {data_quality}
             import os
             anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+        llm_start = time.time()
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=2000,
@@ -166,6 +169,8 @@ Data Quality: {data_quality}
                 }
             ]
         )
+        llm_time = (time.time() - llm_start) * 1000
+        logger.info(f"[REASON] ⏱️ LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")
 
         # Parse the response
         response_text = response.content[0].text.strip()
@@ -188,7 +193,8 @@ Data Quality: {data_quality}
             "reasoning_chain": reasoning.get("reasoning_chain", [])
         })
 
-        logger.info(f"Reasoning complete: {len(reasoning.get('insights', []))} insights, confidence={reasoning.get('confidence_score', 0)}")
+        node_time = (time.time() - node_start) * 1000
+        logger.info(f"[REASON] ⏱️ Total node time: {node_time:.0f}ms | {len(reasoning.get('insights', []))} insights, confidence={reasoning.get('confidence_score', 0)}")
 
         return state
 

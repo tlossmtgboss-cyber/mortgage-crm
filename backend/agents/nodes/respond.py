@@ -7,6 +7,7 @@ analysis, insights, recommendations, and action results.
 
 import json
 import logging
+import time
 from typing import Any
 from anthropic import Anthropic
 
@@ -106,6 +107,7 @@ async def generate_response(
         Updated state with final response
     """
     state = add_node_trace(state, "respond")
+    node_start = time.time()
 
     try:
         # Gather all the context for response generation
@@ -174,6 +176,7 @@ async def generate_response(
             import os
             anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+        llm_start = time.time()
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1500,
@@ -185,6 +188,8 @@ async def generate_response(
                 }
             ]
         )
+        llm_time = (time.time() - llm_start) * 1000
+        logger.info(f"[RESPOND] ⏱️ LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")
 
         response_text = response.content[0].text.strip()
 
@@ -211,7 +216,8 @@ async def generate_response(
             "follow_up_suggestions": follow_ups
         })
 
-        logger.info(f"Response generated: {len(response_text)} chars, type={response_type}")
+        node_time = (time.time() - node_start) * 1000
+        logger.info(f"[RESPOND] ⏱️ Total node time: {node_time:.0f}ms | {len(response_text)} chars, type={response_type}")
 
         return state
 

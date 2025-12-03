@@ -10,6 +10,7 @@ This node analyzes the user's query to determine:
 
 import json
 import logging
+import time
 from typing import Any
 from anthropic import Anthropic
 
@@ -112,6 +113,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
         Updated state with query analysis
     """
     state = add_node_trace(state, "analyze")
+    node_start = time.time()
 
     try:
         user_message = state["user_message"]
@@ -134,6 +136,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             import os
             anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+        llm_start = time.time()
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
@@ -145,6 +148,8 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
                 }
             ]
         )
+        llm_time = (time.time() - llm_start) * 1000
+        logger.info(f"[ANALYZE] ⏱️ LLM call took {llm_time:.0f}ms (system prompt: {len(system_prompt)} chars)")
 
         # Parse the response
         response_text = response.content[0].text.strip()
@@ -203,7 +208,8 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             "requires_action": analysis.get("requires_action", False)
         })
 
-        logger.info(f"Query analyzed: intent={intent.value}, tools={required_tools}")
+        node_time = (time.time() - node_start) * 1000
+        logger.info(f"[ANALYZE] ⏱️ Total node time: {node_time:.0f}ms | intent={intent.value}, tools={required_tools}")
 
         return state
 
