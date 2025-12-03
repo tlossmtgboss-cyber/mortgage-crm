@@ -4,6 +4,20 @@ import './WorkflowStatusDetail.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
+// All workflow statuses for the tabs
+const ALL_STATUSES = [
+  { id: 'new', name: 'New', color: '#10b981' },
+  { id: 'attempted_contact', name: 'Attempted Contact', color: '#f59e0b' },
+  { id: 'prospect', name: 'Prospect', color: '#10b981' },
+  { id: 'application', name: 'Application', color: '#f59e0b' },
+  { id: 'pre_qualified', name: 'Pre-Qualified', color: '#10b981' },
+  { id: 'pre_approved', name: 'Pre-Approved', color: '#10b981' },
+  { id: 'under_contract', name: 'Under Contract', color: '#f59e0b' },
+  { id: 'long_term_nurture', name: 'Long-Term Nurture', color: '#10b981' },
+  { id: 'withdrawn', name: 'Withdrawn', color: '#10b981' },
+  { id: 'does_not_qualify', name: 'Does Not Qualify', color: '#ef4444' }
+];
+
 function WorkflowStatusDetail() {
   const { statusId } = useParams();
   const navigate = useNavigate();
@@ -12,6 +26,7 @@ function WorkflowStatusDetail() {
   const [loans, setLoans] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [filter, setFilter] = useState('all'); // all, overdue, upcoming
+  const [statusScores, setStatusScores] = useState({}); // Store scores for all statuses
 
   useEffect(() => {
     loadStatusData();
@@ -60,14 +75,32 @@ function WorkflowStatusDetail() {
       'does_not_qualify': 'Does Not Qualify'
     };
 
+    // Mock scores for all statuses (for tabs display)
+    const mockScores = {
+      'new': { score: 82, loans: 15, tasks: '28/32' },
+      'attempted_contact': { score: 68, loans: 8, tasks: '12/20' },
+      'prospect': { score: 75, loans: 22, tasks: '45/56' },
+      'application': { score: 71, loans: 18, tasks: '36/48' },
+      'pre_qualified': { score: 88, loans: 12, tasks: '24/26' },
+      'pre_approved': { score: 79, loans: 14, tasks: '32/38' },
+      'under_contract': { score: 65, loans: 9, tasks: '18/30' },
+      'long_term_nurture': { score: 72, loans: 45, tasks: '68/90' },
+      'withdrawn': { score: 90, loans: 3, tasks: '6/6' },
+      'does_not_qualify': { score: 58, loans: 7, tasks: '8/18' }
+    };
+    setStatusScores(mockScores);
+
+    const currentScore = mockScores[statusId] || { score: 75, loans: 18, tasks: '36/48' };
+    const health = currentScore.score >= 80 ? 'healthy' : currentScore.score >= 65 ? 'warning' : 'critical';
+
     setStatusData({
       id: statusId,
       name: statusNames[statusId] || statusId,
-      score: 75,
-      health: 'warning',
-      activeLoans: 18,
-      tasksCompleted: 36,
-      tasksDue: 48,
+      score: currentScore.score,
+      health: health,
+      activeLoans: currentScore.loans,
+      tasksCompleted: parseInt(currentScore.tasks.split('/')[0]),
+      tasksDue: parseInt(currentScore.tasks.split('/')[1]),
       avgDaysInStatus: 4.2,
       conversionRate: 68
     });
@@ -118,6 +151,13 @@ function WorkflowStatusDetail() {
     );
   }
 
+  // Helper function to get score color
+  const getScoreColor = (score) => {
+    if (score >= 80) return 'healthy';
+    if (score >= 65) return 'warning';
+    return 'critical';
+  };
+
   return (
     <div className="workflow-status-detail">
       {/* Header */}
@@ -126,10 +166,36 @@ function WorkflowStatusDetail() {
           ← Back to Dashboard
         </button>
         <div className="header-content">
-          <h1>{statusData?.name} Workflow</h1>
-          <div className={`status-health-badge ${statusData?.health}`}>
-            {statusData?.health === 'healthy' ? '✓ Healthy' : statusData?.health === 'warning' ? '⚠ Needs Attention' : '⚠ Critical'}
-          </div>
+          <h1>Workflow Scorecards</h1>
+        </div>
+      </div>
+
+      {/* Status Tabs */}
+      <div className="status-tabs-container">
+        <div className="status-tabs">
+          {ALL_STATUSES.map(status => {
+            const scoreData = statusScores[status.id] || { score: 0 };
+            const isActive = status.id === statusId;
+            const scoreColor = getScoreColor(scoreData.score);
+            return (
+              <button
+                key={status.id}
+                className={`status-tab ${isActive ? 'active' : ''} ${scoreColor}`}
+                onClick={() => navigate(`/workflow/status/${status.id}`)}
+              >
+                <span className="tab-name">{status.name}</span>
+                <span className={`tab-score ${scoreColor}`}>{scoreData.score}%</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Current Status Header */}
+      <div className="current-status-header">
+        <h2>{statusData?.name}</h2>
+        <div className={`status-health-badge ${statusData?.health}`}>
+          {statusData?.health === 'healthy' ? '✓ Healthy' : statusData?.health === 'warning' ? '⚠ Needs Attention' : '⚠ Critical'}
         </div>
       </div>
 
