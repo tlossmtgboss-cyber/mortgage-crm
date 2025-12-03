@@ -367,11 +367,15 @@ export const aiAPI = {
     };
   },
   // Streaming version of processCommand for real-time responses
+  // Uses LangGraph endpoint and simulates streaming for smooth UI delivery
   processCommandStream: async (message, onContent, onStatus, onDone, onError) => {
     const token = localStorage.getItem('token');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
+      // Show initial status
+      if (onStatus) onStatus('Analyzing your request...');
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai/langgraph-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -384,41 +388,46 @@ export const aiAPI = {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      const data = await response.json();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // Check for error in response
+      if (data.error) {
+        if (onError) onError(data.error);
+        return;
+      }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
+      // Simulate streaming by delivering content in chunks for smooth UI
+      const fullResponse = data.response || '';
+      if (fullResponse && onContent) {
+        // Split into paragraphs for natural delivery
+        const paragraphs = fullResponse.split('\n\n');
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === 'content' && onContent) {
-                onContent(data.content);
-              } else if (data.type === 'status' && onStatus) {
-                onStatus(data.content);
-              } else if (data.type === 'done' && onDone) {
-                // Pass full response and any additional data (like prioritized_tasks)
-                onDone(data.full_response, data);
-              } else if (data.type === 'error' && onError) {
-                onError(data.content);
-              }
-            } catch (e) {
-              console.warn('Failed to parse SSE data:', e);
-            }
+        for (const para of paragraphs) {
+          if (para.trim()) {
+            // Deliver paragraph
+            onContent(para + '\n\n');
+            // Small delay between paragraphs for readability
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
         }
       }
+
+      // Signal completion with full response and metadata
+      if (onDone) {
+        onDone(fullResponse, {
+          full_response: fullResponse,
+          intent: data.intent,
+          confidence: data.confidence,
+          follow_up_suggestions: data.follow_up_suggestions,
+          processing_time_seconds: data.processing_time_seconds,
+          data_quality: data.data_quality,
+          actions_executed: data.actions_executed,
+          actions_pending: data.actions_pending,
+          engine: data.engine || 'langgraph'
+        });
+      }
     } catch (error) {
-      console.error('Streaming error:', error);
+      console.error('LangGraph chat error:', error);
       if (onError) onError(error.message);
     }
   },
