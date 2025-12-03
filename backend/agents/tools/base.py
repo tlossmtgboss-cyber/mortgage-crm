@@ -1,0 +1,496 @@
+"""
+Perennia AI - Agent Tools Base Infrastructure
+Core utilities, decorators, and registry for all agent tools.
+"""
+
+import os
+import functools
+from datetime import datetime, date, timedelta
+from typing import Optional, List, Dict, Any, Callable, TypeVar, Union
+from dataclasses import dataclass, field
+from decimal import Decimal
+from enum import Enum
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import QueuePool
+from langchain_core.tools import Tool
+
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+
+class DatabaseConfig:
+    """Database configuration management."""
+
+    _engine = None
+    _session_factory = None
+
+    @classmethod
+    def get_database_url(cls) -> str:
+        """Get database URL from environment."""
+        return os.getenv("DATABASE_URL", "postgresql://localhost/mortgage_crm")
+
+    @classmethod
+    def get_engine(cls):
+        """Get or create database engine (singleton)."""
+        if cls._engine is None:
+            database_url = cls.get_database_url()
+            # Handle Railway's postgres:// vs postgresql://
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+            cls._engine = create_engine(
+                database_url,
+                poolclass=QueuePool,
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,
+                pool_recycle=300,
+            )
+        return cls._engine
+
+    @classmethod
+    def get_session_factory(cls):
+        """Get or create session factory (singleton)."""
+        if cls._session_factory is None:
+            cls._session_factory = sessionmaker(
+                bind=cls.get_engine(),
+                expire_on_commit=False
+            )
+        return cls._session_factory
+
+
+def get_engine():
+    """Get database engine."""
+    return DatabaseConfig.get_engine()
+
+
+def get_session_factory():
+    """Get session factory."""
+    return DatabaseConfig.get_session_factory()
+
+
+@contextmanager
+def get_db():
+    """Context manager for database sessions."""
+    session = get_session_factory()()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def execute_query(query: str, params: Optional[Dict] = None) -> List[Dict]:
+    """Execute a query and return results as list of dicts."""
+    with get_db() as db:
+        result = db.execute(text(query), params or {})
+        columns = result.keys()
+        return [dict(zip(columns, row)) for row in result.fetchall()]
+
+
+def execute_single(query: str, params: Optional[Dict] = None) -> Optional[Dict]:
+    """Execute a query and return single result as dict."""
+    results = execute_query(query, params)
+    return results[0] if results else None
+
+
+# =============================================================================
+# Enums and Constants
+# =============================================================================
+
+class ToolStatus(str, Enum):
+    """Status of a tool execution."""
+    SUCCESS = "success"
+    ERROR = "error"
+    NO_DATA = "no_data"
+    PARTIAL = "partial"
+
+
+class LoanStatus(str, Enum):
+    """Loan pipeline status values."""
+    LEAD = "lead"
+    APPLICATION = "application"
+    PROCESSING = "processing"
+    SUBMITTED = "submitted"
+    UNDERWRITING = "underwriting"
+    CONDITIONAL = "conditional"
+    CLEAR_TO_CLOSE = "clear_to_close"
+    CLOSING = "closing"
+    FUNDED = "funded"
+    CLOSED = "closed"
+    DENIED = "denied"
+    WITHDRAWN = "withdrawn"
+    CANCELLED = "cancelled"
+
+
+class LoanType(str, Enum):
+    """Loan product types."""
+    CONVENTIONAL = "conventional"
+    FHA = "fha"
+    VA = "va"
+    USDA = "usda"
+    JUMBO = "jumbo"
+    NON_QM = "non_qm"
+    HELOC = "heloc"
+    REVERSE = "reverse"
+
+
+class PropertyType(str, Enum):
+    """Property types."""
+    SINGLE_FAMILY = "single_family"
+    CONDO = "condo"
+    TOWNHOUSE = "townhouse"
+    MULTI_FAMILY = "multi_family"
+    MANUFACTURED = "manufactured"
+    CO_OP = "co_op"
+
+
+class OccupancyType(str, Enum):
+    """Occupancy types."""
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+    INVESTMENT = "investment"
+
+
+# SLA targets in days for each stage
+SLA_TARGETS = {
+    "application": 1,
+    "processing": 3,
+    "submitted": 2,
+    "underwriting": 3,
+    "conditional": 5,
+    "clear_to_close": 2,
+    "closing": 3,
+    "funded": 1,
+}
+
+# Document categories
+DOCUMENT_CATEGORIES = {
+    "income": ["W2s", "Paystubs", "Tax Returns", "1099s", "P&L Statement", "Business Returns"],
+    "asset": ["Bank Statements", "Investment Statements", "Retirement Accounts", "Gift Letter"],
+    "identity": ["Government ID", "SSN Card", "DD-214", "Green Card"],
+    "property": ["Purchase Contract", "Appraisal", "Title Report", "Insurance", "Survey"],
+    "compliance": ["Initial Disclosures", "CD", "LE", "URLA", "4506-C", "VOE", "VOR"],
+    "credit": ["Credit Report", "Credit Supplement", "LOX", "Fraud Report"],
+}
+
+
+# =============================================================================
+# Tool Result Types
+# =============================================================================
+
+@dataclass
+class ToolResult:
+    """Standardized result from tool execution."""
+    status: ToolStatus
+    data: Optional[Any] = None
+    message: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "status": self.status.value,
+            "data": self.data,
+            "message": self.message,
+            "metadata": self.metadata,
+            "errors": self.errors,
+            "warnings": self.warnings,
+        }
+
+    @classmethod
+    def success(cls, data: Any, message: Optional[str] = None, **metadata) -> "ToolResult":
+        """Create a successful result."""
+        return cls(
+            status=ToolStatus.SUCCESS,
+            data=data,
+            message=message,
+            metadata=metadata,
+        )
+
+    @classmethod
+    def error(cls, message: str, errors: Optional[List[str]] = None) -> "ToolResult":
+        """Create an error result."""
+        return cls(
+            status=ToolStatus.ERROR,
+            message=message,
+            errors=errors or [message],
+        )
+
+    @classmethod
+    def no_data(cls, message: str = "No data found") -> "ToolResult":
+        """Create a no-data result."""
+        return cls(
+            status=ToolStatus.NO_DATA,
+            message=message,
+        )
+
+    @classmethod
+    def partial(cls, data: Any, message: str, warnings: List[str]) -> "ToolResult":
+        """Create a partial success result."""
+        return cls(
+            status=ToolStatus.PARTIAL,
+            data=data,
+            message=message,
+            warnings=warnings,
+        )
+
+
+class ToolError(Exception):
+    """Exception raised by tools."""
+
+    def __init__(self, message: str, details: Optional[Dict] = None):
+        super().__init__(message)
+        self.message = message
+        self.details = details or {}
+
+
+# =============================================================================
+# Tool Registry
+# =============================================================================
+
+@dataclass
+class ToolDefinition:
+    """Definition of a registered tool."""
+    name: str
+    description: str
+    func: Callable
+    agent_roles: List[str]
+    risk_level: str = "low"
+    requires_confirmation: bool = False
+    examples: List[str] = field(default_factory=list)
+    parameters: Dict[str, Any] = field(default_factory=dict)
+
+
+class ToolRegistry:
+    """Central registry for all agent tools."""
+
+    _instance = None
+    _tools: Dict[str, ToolDefinition] = {}
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._tools = {}
+        return cls._instance
+
+    @classmethod
+    def register(cls, tool_def: ToolDefinition):
+        """Register a tool definition."""
+        instance = cls()
+        instance._tools[tool_def.name] = tool_def
+
+    @classmethod
+    def get(cls, name: str) -> Optional[ToolDefinition]:
+        """Get a tool by name."""
+        instance = cls()
+        return instance._tools.get(name)
+
+    @classmethod
+    def get_all(cls) -> Dict[str, ToolDefinition]:
+        """Get all registered tools."""
+        instance = cls()
+        return instance._tools.copy()
+
+    @classmethod
+    def get_for_agent(cls, agent_role: str) -> List[ToolDefinition]:
+        """Get all tools available for a specific agent role."""
+        instance = cls()
+        return [
+            tool for tool in instance._tools.values()
+            if agent_role in tool.agent_roles or "all" in tool.agent_roles
+        ]
+
+    @classmethod
+    def get_langchain_tools(cls, agent_role: Optional[str] = None) -> List[Tool]:
+        """Get tools as LangChain Tool objects."""
+        instance = cls()
+
+        if agent_role:
+            tool_defs = cls.get_for_agent(agent_role)
+        else:
+            tool_defs = list(instance._tools.values())
+
+        langchain_tools = []
+        for tool_def in tool_defs:
+            langchain_tools.append(
+                Tool(
+                    name=tool_def.name,
+                    description=tool_def.description,
+                    func=tool_def.func,
+                )
+            )
+        return langchain_tools
+
+    @classmethod
+    def clear(cls):
+        """Clear all registered tools (for testing)."""
+        instance = cls()
+        instance._tools.clear()
+
+
+# =============================================================================
+# Tool Decorator
+# =============================================================================
+
+F = TypeVar('F', bound=Callable)
+
+
+def mortgage_tool(
+    name: str,
+    description: str,
+    agent_roles: List[str],
+    risk_level: str = "low",
+    requires_confirmation: bool = False,
+    examples: Optional[List[str]] = None,
+    parameters: Optional[Dict[str, Any]] = None,
+) -> Callable[[F], F]:
+    """
+    Decorator to register a function as a mortgage tool.
+
+    Args:
+        name: Unique tool name
+        description: Human-readable description
+        agent_roles: List of agent roles that can use this tool
+        risk_level: Risk level (low, medium, high)
+        requires_confirmation: Whether tool requires user confirmation
+        examples: Example usage strings
+        parameters: Parameter schema for the tool
+    """
+    def decorator(func: F) -> F:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                # Ensure result is a ToolResult
+                if not isinstance(result, ToolResult):
+                    result = ToolResult.success(result)
+                return result
+            except ToolError as e:
+                return ToolResult.error(e.message, [e.message])
+            except Exception as e:
+                return ToolResult.error(f"Tool error: {str(e)}", [str(e)])
+
+        # Register the tool
+        tool_def = ToolDefinition(
+            name=name,
+            description=description,
+            func=wrapper,
+            agent_roles=agent_roles,
+            risk_level=risk_level,
+            requires_confirmation=requires_confirmation,
+            examples=examples or [],
+            parameters=parameters or {},
+        )
+        ToolRegistry.register(tool_def)
+
+        # Store metadata on function
+        wrapper._tool_definition = tool_def
+
+        return wrapper
+    return decorator
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def format_currency(amount: Union[float, Decimal, int, None]) -> str:
+    """Format a number as currency."""
+    if amount is None:
+        return "$0.00"
+    return f"${float(amount):,.2f}"
+
+
+def format_percentage(value: Union[float, Decimal, None], decimals: int = 2) -> str:
+    """Format a number as percentage."""
+    if value is None:
+        return "0.00%"
+    return f"{float(value):.{decimals}f}%"
+
+
+def format_date(dt: Union[datetime, date, None], fmt: str = "%Y-%m-%d") -> str:
+    """Format a date/datetime."""
+    if dt is None:
+        return ""
+    return dt.strftime(fmt)
+
+
+def days_between(start: Union[datetime, date, None], end: Union[datetime, date, None] = None) -> int:
+    """Calculate days between two dates."""
+    if start is None:
+        return 0
+    if end is None:
+        end = datetime.now().date() if isinstance(start, date) else datetime.now()
+
+    if isinstance(start, datetime):
+        start = start.date()
+    if isinstance(end, datetime):
+        end = end.date()
+
+    return (end - start).days
+
+
+def calculate_percentage_change(old_value: float, new_value: float) -> float:
+    """Calculate percentage change between two values."""
+    if old_value == 0:
+        return 0.0 if new_value == 0 else 100.0
+    return ((new_value - old_value) / old_value) * 100
+
+
+def add_business_days(start_date: date, days: int) -> date:
+    """Add business days to a date."""
+    current = start_date
+    added = 0
+    while added < days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:  # Monday = 0, Friday = 4
+            added += 1
+    return current
+
+
+def subtract_business_days(start_date: date, days: int) -> date:
+    """Subtract business days from a date."""
+    current = start_date
+    subtracted = 0
+    while subtracted < days:
+        current -= timedelta(days=1)
+        if current.weekday() < 5:
+            subtracted += 1
+    return current
+
+
+def get_loan_stage_order() -> List[str]:
+    """Get the standard loan stage progression order."""
+    return [
+        "lead",
+        "application",
+        "processing",
+        "submitted",
+        "underwriting",
+        "conditional",
+        "clear_to_close",
+        "closing",
+        "funded",
+        "closed",
+    ]
+
+
+def is_loan_active(status: str) -> bool:
+    """Check if a loan status indicates an active loan."""
+    inactive_statuses = {"funded", "closed", "denied", "withdrawn", "cancelled"}
+    return status.lower() not in inactive_statuses
+
+
+def get_sla_for_stage(stage: str) -> int:
+    """Get SLA target days for a loan stage."""
+    return SLA_TARGETS.get(stage.lower(), 5)  # Default 5 days

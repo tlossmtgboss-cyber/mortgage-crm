@@ -315,16 +315,19 @@ function LeadDetail() {
     try {
       // Special handling for "Disclosed" or "Funded" - converts lead to loan
       if (newStatus === 'Disclosed' || newStatus === 'Funded') {
+        // Generate a unique loan number from lead ID and timestamp
+        const timestamp = Date.now().toString(36).toUpperCase();
+        const loanNumber = `LEAD-${id}-${timestamp}`;
+
         // Create a new loan from the lead data
         const loanData = {
+          loan_number: loanNumber,
           borrower_name: lead?.name || formData?.name || `${formData?.first_name || ''} ${formData?.last_name || ''}`.trim(),
           borrower_email: lead?.email || formData?.email,
           borrower_phone: lead?.phone || formData?.phone,
           amount: lead?.loan_amount || formData?.loan_amount || 0,
           stage: newStatus,  // Use selected stage (Disclosed or Funded)
-          lead_id: parseInt(id),  // Link back to original lead
           property_address: lead?.property_address || formData?.property_address,
-          loan_type: lead?.loan_type || formData?.loan_type,
         };
 
         console.log(`Converting lead to ${newStatus} loan with data:`, loanData);
@@ -332,7 +335,7 @@ function LeadDetail() {
         console.log('Loan created:', newLoan);
 
         // Update lead stage to indicate it's been converted
-        await leadsAPI.update(id, { stage: newStatus, loan_id: newLoan.id });
+        await leadsAPI.update(id, { stage: newStatus });
 
         // Clear caches
         localStorage.removeItem('leads_data');
@@ -341,7 +344,11 @@ function LeadDetail() {
         localStorage.removeItem('loans_data_time');
 
         // Navigate to the new loan (Active Loans for Disclosed, Portfolio/MUM for Funded)
-        navigate(`/loans/${newLoan.id}`);
+        if (newStatus === 'Funded') {
+          navigate(`/mum/${newLoan.id}`);  // Funded goes to MUM/Portfolio
+        } else {
+          navigate(`/loans/${newLoan.id}`);  // Disclosed goes to Active Loans
+        }
         return;
       }
 

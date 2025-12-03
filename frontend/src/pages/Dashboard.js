@@ -882,15 +882,27 @@ function Dashboard() {
           </div>
           <div className="team-content">
             <div className="team-metrics">
-              <div className="team-metric">
+              <div
+                className="team-metric clickable-metric"
+                onClick={() => navigate('/efficiency/team/processors')}
+                title="View processor files"
+              >
                 <div className="metric-label">Processor Workload</div>
                 <div className="metric-value">{teamStats.avg_workload} files/person</div>
               </div>
-              <div className="team-metric">
+              <div
+                className="team-metric clickable-metric"
+                onClick={() => navigate('/tasks?filter=backlog')}
+                title="View task backlog"
+              >
                 <div className="metric-label">Task Backlog</div>
                 <div className="metric-value warn">{teamStats.backlog}</div>
               </div>
-              <div className="team-metric">
+              <div
+                className="team-metric clickable-metric"
+                onClick={() => navigate('/sla-tracking?filter=missed')}
+                title="View SLA violations"
+              >
                 <div className="metric-label">SLA Missed</div>
                 <div className="metric-value">{teamStats.sla_missed}</div>
               </div>

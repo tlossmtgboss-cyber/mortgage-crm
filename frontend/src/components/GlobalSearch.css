@@ -1,38 +1,73 @@
-.global-search {
-  position: relative;
-  width: 320px;
-  margin-right: 16px;
+/* Global Search Overlay - Floating Modal */
+.global-search-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.global-search-modal {
+  width: 100%;
+  max-width: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .global-search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  padding: 4px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .search-icon {
   position: absolute;
-  left: 12px;
-  font-size: 14px;
+  left: 20px;
+  font-size: 18px;
   pointer-events: none;
   opacity: 0.6;
 }
 
 .global-search-input {
   width: 100%;
-  padding: 8px 36px 8px 36px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 14px;
-  background: #f9fafb;
+  padding: 16px 100px 16px 52px;
+  border: none;
+  font-size: 18px;
+  background: transparent;
   transition: all 0.2s ease;
 }
 
 .global-search-input:focus {
   outline: none;
-  border-color: #218D8D;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .global-search-input::placeholder {
@@ -41,8 +76,8 @@
 
 .search-loading {
   position: absolute;
-  right: 12px;
-  font-size: 14px;
+  right: 100px;
+  font-size: 16px;
   animation: spin 1s linear infinite;
 }
 
@@ -51,19 +86,20 @@
   to { transform: rotate(360deg); }
 }
 
-.global-search-dropdown {
+.search-shortcut {
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  right: 16px;
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 4px 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+/* Results */
+.global-search-results {
   max-height: 400px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .search-results-header {
@@ -101,13 +137,13 @@
 
 .result-icon {
   font-size: 20px;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f3f4f6;
-  border-radius: 8px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 
@@ -117,7 +153,7 @@
 }
 
 .result-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #1f2937;
   white-space: nowrap;
@@ -152,7 +188,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 150px;
+  max-width: 200px;
 }
 
 .result-loan-number {
@@ -171,41 +207,58 @@
 }
 
 .no-results {
-  padding: 24px 16px;
+  padding: 32px 16px;
   text-align: center;
   color: #6b7280;
   font-size: 14px;
 }
 
+/* Hint for empty state */
+.global-search-hint {
+  padding: 32px 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.global-search-hint p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+.global-search-hint .hint-shortcut {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.global-search-hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* Responsive */
-@media (max-width: 1200px) {
-  .global-search {
-    width: 250px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .global-search {
-    width: 200px;
-  }
-
-  .global-search-input::placeholder {
-    font-size: 12px;
-  }
-}
-
 @media (max-width: 768px) {
-  .global-search {
-    width: 100%;
-    margin-right: 0;
-    margin-bottom: 8px;
+  .global-search-overlay {
+    padding-top: 10vh;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
-  .global-search-dropdown {
-    position: fixed;
+  .global-search-modal {
+    max-width: 100%;
+  }
+
+  .global-search-input {
+    font-size: 16px;
+    padding: 14px 80px 14px 48px;
+  }
+
+  .search-icon {
     left: 16px;
-    right: 16px;
-    top: 70px;
-    width: auto;
+    font-size: 16px;
   }
 }

@@ -8,6 +8,7 @@ function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchRef = useRef(null);
@@ -69,6 +70,7 @@ function GlobalSearch() {
 
   const handleResultClick = (result) => {
     setIsOpen(false);
+    setIsModalOpen(false);
     setQuery('');
     navigate(result.url);
   };
@@ -93,6 +95,7 @@ function GlobalSearch() {
         break;
       case 'Escape':
         setIsOpen(false);
+        setIsModalOpen(false);
         setSelectedIndex(-1);
         inputRef.current?.blur();
         break;
@@ -118,7 +121,8 @@ function GlobalSearch() {
     const handleKeyboardShortcut = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        inputRef.current?.focus();
+        setIsModalOpen(true);
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
     };
 
@@ -148,59 +152,75 @@ function GlobalSearch() {
     }
   };
 
-  return (
-    <div className="global-search" ref={searchRef}>
-      <div className="global-search-input-wrapper">
-        <span className="search-icon">🔍</span>
-        <input
-          ref={inputRef}
-          type="text"
-          className="global-search-input"
-          placeholder="Search leads, loans, contacts... (⌘K)"
-          value={query}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          onFocus={() => query.length >= 2 && results.length > 0 && setIsOpen(true)}
-        />
-        {loading && <span className="search-loading">⏳</span>}
-      </div>
+  // Don't render anything if modal is not open
+  if (!isModalOpen) {
+    return null;
+  }
 
-      {isOpen && results.length > 0 && (
-        <div className="global-search-dropdown">
-          <div className="search-results-header">
-            {results.length} result{results.length !== 1 ? 's' : ''} found
-          </div>
-          <div className="search-results-list">
-            {results.map((result, index) => (
-              <div
-                key={`${result.type}-${result.id}`}
-                className={`search-result-item ${index === selectedIndex ? 'selected' : ''}`}
-                onClick={() => handleResultClick(result)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                <span className="result-icon">{getTypeIcon(result.type)}</span>
-                <div className="result-content">
-                  <div className="result-name">{result.name}</div>
-                  <div className="result-meta">
-                    <span className="result-type">{getTypeLabel(result.type)}</span>
-                    {result.email && <span className="result-email">{result.email}</span>}
-                    {result.loan_number && <span className="result-loan-number">#{result.loan_number}</span>}
-                    {result.status && <span className="result-status">{result.status}</span>}
+  return (
+    <div className="global-search-overlay" onClick={() => setIsModalOpen(false)}>
+      <div className="global-search-modal" ref={searchRef} onClick={e => e.stopPropagation()}>
+        <div className="global-search-input-wrapper">
+          <span className="search-icon">🔍</span>
+          <input
+            ref={inputRef}
+            type="text"
+            className="global-search-input"
+            placeholder="Search leads, loans, contacts..."
+            value={query}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => query.length >= 2 && results.length > 0 && setIsOpen(true)}
+            autoFocus
+          />
+          {loading && <span className="search-loading">⏳</span>}
+          <span className="search-shortcut">ESC to close</span>
+        </div>
+
+        {isOpen && results.length > 0 && (
+          <div className="global-search-results">
+            <div className="search-results-header">
+              {results.length} result{results.length !== 1 ? 's' : ''} found
+            </div>
+            <div className="search-results-list">
+              {results.map((result, index) => (
+                <div
+                  key={`${result.type}-${result.id}`}
+                  className={`search-result-item ${index === selectedIndex ? 'selected' : ''}`}
+                  onClick={() => handleResultClick(result)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  <span className="result-icon">{getTypeIcon(result.type)}</span>
+                  <div className="result-content">
+                    <div className="result-name">{result.name}</div>
+                    <div className="result-meta">
+                      <span className="result-type">{getTypeLabel(result.type)}</span>
+                      {result.email && <span className="result-email">{result.email}</span>}
+                      {result.loan_number && <span className="result-loan-number">#{result.loan_number}</span>}
+                      {result.status && <span className="result-status">{result.status}</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {isOpen && query.length >= 2 && results.length === 0 && !loading && (
-        <div className="global-search-dropdown">
-          <div className="no-results">
-            No results found for "{query}"
+        {isOpen && query.length >= 2 && results.length === 0 && !loading && (
+          <div className="global-search-results">
+            <div className="no-results">
+              No results found for "{query}"
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {!isOpen && query.length < 2 && (
+          <div className="global-search-hint">
+            <p>Start typing to search across leads, loans, contacts, and partners</p>
+            <p className="hint-shortcut">Press <kbd>⌘K</kbd> anytime to open search</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
 import EmailDropZone from './components/EmailDropZone';
 import GlobalLayoutFix from './components/GlobalLayoutFix';
+import GlobalSearch from './components/GlobalSearch';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -1657,6 +1658,8 @@ function App() {
           onClose={() => setTaskSidebarOpen(false)}
           onTaskCountChange={handleUnifiedTaskCountChange}
         />
+        {/* Global Search - floating, triggered by Cmd+K */}
+        <GlobalSearch />
         </div>
             </EmailDropZone>
       </Router>

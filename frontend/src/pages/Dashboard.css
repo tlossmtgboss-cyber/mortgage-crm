@@ -1141,6 +1141,23 @@
   color: #f59e0b;
 }
 
+.team-metric.clickable-metric {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.team-metric.clickable-metric:hover {
+  background: #e8f5f5;
+  border-color: #218D8D;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.15);
+}
+
+.team-metric.clickable-metric:active {
+  transform: translateY(0);
+}
+
 .ai-coaching {
   background: #e8f5f5;
   padding: 12px;

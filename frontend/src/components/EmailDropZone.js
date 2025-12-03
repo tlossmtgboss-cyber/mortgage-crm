@@ -470,73 +470,157 @@ function EmailDropZone({ children }) {
       {/* Choice Modal */}
       {showChoiceModal && emailData && (
         <div className="email-choice-modal-overlay" onClick={() => setShowChoiceModal(false)}>
-          <div className="email-choice-modal" onClick={e => e.stopPropagation()}>
+          <div className="email-choice-modal email-choice-modal-expanded" onClick={e => e.stopPropagation()}>
             <div className="email-choice-header">
               <h2>Email Imported</h2>
               <button className="close-btn" onClick={() => setShowChoiceModal(false)}>×</button>
             </div>
 
-            <div className="email-preview">
-              <div className="email-preview-row">
-                <span className="label">From:</span>
-                <span className="value">{emailData.from}</span>
-              </div>
-              <div className="email-preview-row">
-                <span className="label">Subject:</span>
-                <span className="value">{emailData.subject}</span>
-              </div>
-              <div className="email-preview-row">
-                <span className="label">Date:</span>
-                <span className="value">{emailData.date}</span>
-              </div>
-              {emailData.aiSummary && (
-                <div className="email-preview-row ai-summary">
-                  <span className="label">AI Summary:</span>
-                  <span className="value">{emailData.aiSummary}</span>
+            <div className="email-choice-content">
+              {/* Left Column - Email Details */}
+              <div className="email-details-column">
+                <div className="email-preview">
+                  <div className="email-preview-row">
+                    <span className="label">From:</span>
+                    <span className="value">{emailData.from}</span>
+                  </div>
+                  {emailData.to && (
+                    <div className="email-preview-row">
+                      <span className="label">To:</span>
+                      <span className="value">{emailData.to}</span>
+                    </div>
+                  )}
+                  <div className="email-preview-row">
+                    <span className="label">Subject:</span>
+                    <span className="value">{emailData.subject}</span>
+                  </div>
+                  <div className="email-preview-row">
+                    <span className="label">Date:</span>
+                    <span className="value">{emailData.date}</span>
+                  </div>
                 </div>
-              )}
-              {emailData.aiSuggestedAction && (
-                <div className="email-preview-row ai-suggestion">
-                  <span className="label">AI Suggests:</span>
-                  <span className="value suggested-action">{emailData.aiSuggestedAction.replace(/_/g, ' ')}</span>
+
+                {/* AI Analysis Section */}
+                <div className="ai-analysis-section">
+                  {emailData.aiSummary && (
+                    <div className="ai-analysis-row">
+                      <span className="ai-label">AI Summary:</span>
+                      <span className="ai-value">{emailData.aiSummary}</span>
+                    </div>
+                  )}
+                  {emailData.aiSuggestedAction && (
+                    <div className="ai-analysis-row suggestion">
+                      <span className="ai-label">AI Suggests:</span>
+                      <span className="ai-value suggested-action">{emailData.aiSuggestedAction.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                    </div>
+                  )}
+                  {emailData.matchedBorrower && (
+                    <div className="ai-analysis-row">
+                      <span className="ai-label">Matched Borrower:</span>
+                      <span className="ai-value">{emailData.matchedBorrower}</span>
+                    </div>
+                  )}
+                  {emailData.matchedLoanNumber && (
+                    <div className="ai-analysis-row">
+                      <span className="ai-label">Loan Number:</span>
+                      <span className="ai-value">{emailData.matchedLoanNumber}</span>
+                    </div>
+                  )}
+                  {emailData.aiExtractedFields && Object.keys(emailData.aiExtractedFields).length > 0 && (
+                    <div className="ai-extracted-fields">
+                      <span className="ai-label">Extracted Fields:</span>
+                      <div className="extracted-fields-list">
+                        {Object.entries(emailData.aiExtractedFields).map(([key, value]) => (
+                          value && (
+                            <div key={key} className="extracted-field">
+                              <span className="field-key">{key.replace(/_/g, ' ')}:</span>
+                              <span className="field-value">{String(value)}</span>
+                            </div>
+                          )
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="ai-analysis-row confidence">
+                    <span className="ai-label">Confidence:</span>
+                    <span className={`confidence-badge ${emailData.confidence > 70 ? 'high' : emailData.confidence > 40 ? 'medium' : 'low'}`}>
+                      {emailData.confidence}%
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div className="email-choice-question">
-              <h3>Where should this email go?</h3>
-            </div>
+                {/* Email Body Preview */}
+                <div className="email-body-section">
+                  <span className="section-label">Email Body:</span>
+                  <div className="email-body-preview">
+                    <pre>{emailData.body || '(No body content)'}</pre>
+                  </div>
+                </div>
+              </div>
 
-            <div className="email-choice-options">
-              <button className="choice-btn document" onClick={handleChoiceDocument}>
-                <span className="choice-icon">📁</span>
-                <span className="choice-title">Archive Email</span>
-                <span className="choice-desc">Add to borrower's document tab</span>
-              </button>
+              {/* Right Column - Actions */}
+              <div className="email-actions-column">
+                <div className="email-choice-question">
+                  <h3>Where should this email go?</h3>
+                </div>
 
-              <button
-                className={`choice-btn lead ${emailData.aiSuggestedAction === 'create_lead' || emailData.aiSuggestedAction === 'update_lead' ? 'suggested' : ''}`}
-                onClick={handleChoiceLead}
-              >
-                <span className="choice-icon">👤</span>
-                <span className="choice-title">Lead</span>
-                <span className="choice-desc">Create or update a lead</span>
-                {(emailData.aiSuggestedAction === 'create_lead' || emailData.aiSuggestedAction === 'update_lead') && (
-                  <span className="ai-badge">AI Suggested</span>
-                )}
-              </button>
+                <div className="email-choice-options">
+                  <button className="choice-btn document" onClick={handleChoiceDocument}>
+                    <span className="choice-icon">📁</span>
+                    <span className="choice-title">Archive Email</span>
+                    <span className="choice-desc">Add to borrower's document tab</span>
+                  </button>
 
-              <button
-                className={`choice-btn crm ${emailData.aiSuggestedAction === 'create_loan' || emailData.aiSuggestedAction === 'update_loan' ? 'suggested' : ''}`}
-                onClick={handleChoiceLoan}
-              >
-                <span className="choice-icon">➕</span>
-                <span className="choice-title">Create/Open Loan</span>
-                <span className="choice-desc">Add data to the CRM</span>
-                {(emailData.aiSuggestedAction === 'create_loan' || emailData.aiSuggestedAction === 'update_loan') && (
-                  <span className="ai-badge">AI Suggested</span>
-                )}
-              </button>
+                  <button
+                    className={`choice-btn lead ${emailData.aiSuggestedAction === 'create_lead' || emailData.aiSuggestedAction === 'update_lead' ? 'suggested' : ''}`}
+                    onClick={handleChoiceLead}
+                  >
+                    <span className="choice-icon">👤</span>
+                    <span className="choice-title">Lead</span>
+                    <span className="choice-desc">Create or update a lead</span>
+                    {(emailData.aiSuggestedAction === 'create_lead' || emailData.aiSuggestedAction === 'update_lead') && (
+                      <span className="ai-badge">AI Suggested</span>
+                    )}
+                  </button>
+
+                  <button
+                    className={`choice-btn crm ${emailData.aiSuggestedAction === 'create_loan' || emailData.aiSuggestedAction === 'update_loan' ? 'suggested' : ''}`}
+                    onClick={handleChoiceLoan}
+                  >
+                    <span className="choice-icon">➕</span>
+                    <span className="choice-title">Create/Open Loan</span>
+                    <span className="choice-desc">Add data to the CRM</span>
+                    {(emailData.aiSuggestedAction === 'create_loan' || emailData.aiSuggestedAction === 'update_loan') && (
+                      <span className="ai-badge">AI Suggested</span>
+                    )}
+                  </button>
+                </div>
+
+                {/* AI Auto-Execute Option */}
+                <div className="ai-auto-execute-section">
+                  <div className="auto-execute-header">
+                    <span className="auto-icon">🤖</span>
+                    <span className="auto-title">AI Automation</span>
+                  </div>
+                  <label className="auto-execute-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={emailData.autoExecuteEnabled || false}
+                      onChange={(e) => {
+                        setEmailData(prev => ({ ...prev, autoExecuteEnabled: e.target.checked }));
+                      }}
+                    />
+                    <span className="checkbox-label">
+                      Let AI automatically handle similar emails in the future
+                    </span>
+                  </label>
+                  {emailData.autoExecuteEnabled && (
+                    <div className="auto-execute-note">
+                      AI will automatically {emailData.aiSuggestedAction?.replace(/_/g, ' ') || 'process'} emails matching this pattern without prompting.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

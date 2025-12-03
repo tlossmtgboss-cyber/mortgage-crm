@@ -335,6 +335,9 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const callItems = getCallItems();
   const allCallsSelected = callItems.length > 0 && selectedCallIds.size === callItems.length;
 
+  // Get total count for welcome message
+  const totalItems = getTabCount('tasks') + getTabCount('emails') + getTabCount('calls');
+
   return (
     <div className="action-sidebar">
       <div className="action-sidebar-header">
@@ -353,6 +356,17 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
           )}
         </div>
       </div>
+
+      {/* Welcome Message */}
+      {totalItems > 0 && !selectedItem && (
+        <div className="action-welcome-message">
+          <span className="welcome-icon">👋</span>
+          <div className="welcome-text">
+            <strong>Here are the outstanding things you need to do first</strong>
+            <span className="welcome-count">{totalItems} action items need your attention</span>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="action-tabs">
@@ -473,132 +487,149 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
               ))}
             </div>
 
-            {/* Detail Panel */}
+            {/* Detail Panel - Enhanced Task View */}
             {selectedItem && (
-              <div className="action-detail-panel">
-                <div className="detail-header">
-                  <span className="detail-icon">{getTypeIcon(selectedItem.type, selectedItem.category)}</span>
-                  <div className="detail-title-section">
-                    <h3>{selectedItem.title}</h3>
-                    <span className="detail-category">{getCategoryLabel(selectedItem.category)}</span>
+              <div className="action-detail-panel enhanced">
+                {/* Header with source badge */}
+                <div className="detail-header-enhanced">
+                  <div className="detail-source-badge">
+                    <span className="source-icon">{getTypeIcon(selectedItem.type, selectedItem.category)}</span>
+                    <span className="source-label">{selectedItem.source || getCategoryLabel(selectedItem.category).toUpperCase()}</span>
                   </div>
                   <button className="detail-close" onClick={() => setSelectedItem(null)}>×</button>
                 </div>
 
-                <div className="detail-body">
-                  {/* Entity Info */}
-                  {selectedItem.entity_name && (
-                    <div className="detail-field">
-                      <label>Client</label>
-                      <span className="detail-value client-name">{selectedItem.entity_name}</span>
-                    </div>
-                  )}
+                {/* Title */}
+                <h3 className="detail-title-enhanced">{selectedItem.title}</h3>
 
-                  {/* Loan/Lead Info */}
-                  {selectedItem.loan_number && (
-                    <div className="detail-field">
-                      <label>Loan #</label>
-                      <span className="detail-value">{selectedItem.loan_number}</span>
-                    </div>
-                  )}
-
-                  {/* Status */}
-                  {selectedItem.status && (
-                    <div className="detail-field">
-                      <label>Status</label>
-                      <span className="detail-value status-badge">{selectedItem.status}</span>
-                    </div>
-                  )}
-
-                  {/* Due Date */}
-                  {selectedItem.due_date && (
-                    <div className="detail-field">
-                      <label>Due</label>
-                      <span className="detail-value">{new Date(selectedItem.due_date).toLocaleDateString()}</span>
-                    </div>
-                  )}
-
-                  {/* Description / Message Body */}
-                  {selectedItem.description && (
-                    <div className="detail-field full-width">
-                      <label>Details</label>
-                      <div className="detail-message">{selectedItem.description}</div>
-                    </div>
-                  )}
-
-                  {/* AI Message (if available) */}
-                  {selectedItem.ai_message && (
-                    <div className="detail-field full-width">
-                      <label>AI Drafted Message</label>
-                      <div className="detail-ai-message">{selectedItem.ai_message}</div>
-                    </div>
-                  )}
-
-                  {/* Phone number for calls */}
-                  {(selectedItem.phone || selectedItem.entity_phone || selectedItem.borrower_phone) && (
-                    <div className="detail-field">
-                      <label>Phone</label>
-                      <span className="detail-value phone-number">
-                        {selectedItem.phone || selectedItem.entity_phone || selectedItem.borrower_phone}
-                      </span>
-                    </div>
-                  )}
+                {/* Info Grid */}
+                <div className="detail-info-grid">
+                  <div className="info-item">
+                    <label>CLIENT</label>
+                    <span className="info-value client-link" onClick={() => selectedItem.url && handleNavigate(selectedItem)}>
+                      {selectedItem.entity_name || 'Unknown'}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <label>STAGE</label>
+                    <span className="info-value stage-link">{selectedItem.stage || selectedItem.status || 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>PRIORITY</label>
+                    <span className={`info-value priority-badge ${selectedItem.priority?.toLowerCase()}`}>
+                      {selectedItem.priority || 'Medium'}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <label>SOURCE</label>
+                    <span className="info-value">{selectedItem.source || getCategoryLabel(selectedItem.category)}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>OWNER</label>
+                    <span className="info-value">Loan Officer</span>
+                  </div>
+                  <div className="info-item">
+                    <label>DATE CREATED</label>
+                    <span className="info-value">{selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleString() : 'N/A'}</span>
+                  </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="detail-actions">
-                  {activeTab === 'calls' ? (
-                    <>
-                      <button
-                        className="detail-btn call-btn"
-                        onClick={() => handleMakeCall(selectedItem)}
-                        disabled={callInProgress}
-                      >
-                        {callInProgress ? '📞 Calling...' : '📞 Call & Complete'}
-                      </button>
-                      <button
-                        className="detail-btn complete-btn"
-                        onClick={() => handleCompleteTask(selectedItem)}
-                        disabled={completingTask}
-                      >
-                        {completingTask ? '⏳ Completing...' : '✓ Mark Complete'}
-                      </button>
-                    </>
-                  ) : activeTab === 'emails' ? (
-                    <>
-                      <button
-                        className="detail-btn navigate-btn"
-                        onClick={() => handleNavigate(selectedItem)}
-                      >
-                        📧 Open in Reconciliation
-                      </button>
-                      <button
-                        className="detail-btn complete-btn"
-                        onClick={() => handleCompleteTask(selectedItem)}
-                        disabled={completingTask}
-                      >
-                        {completingTask ? '⏳ Completing...' : '✓ Mark Complete'}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="detail-btn complete-btn primary"
-                        onClick={() => handleCompleteTask(selectedItem)}
-                        disabled={completingTask}
-                      >
-                        {completingTask ? '⏳ Completing...' : '✓ Complete Task'}
-                      </button>
-                      {selectedItem.url && (
-                        <button
-                          className="detail-btn navigate-btn"
-                          onClick={() => handleNavigate(selectedItem)}
-                        >
-                          → Open Details
-                        </button>
-                      )}
-                    </>
-                  )}
+                {/* Send Via Options */}
+                <div className="detail-send-via">
+                  <button className="send-btn email active">📧 Email</button>
+                  <button className="send-btn text">💬 Text</button>
+                  <button className="send-btn phone">📞 Phone</button>
+                  <button className="send-btn voicemail">📱 Voicemail</button>
+                  <button
+                    className="send-btn complete"
+                    onClick={() => handleCompleteTask(selectedItem)}
+                    disabled={completingTask}
+                  >
+                    ✓ Complete
+                  </button>
+                </div>
+
+                {/* What to Accomplish Section */}
+                <div className="detail-accomplish-section">
+                  <div className="accomplish-header">
+                    <span className="accomplish-icon">📋</span>
+                    <span className="accomplish-title">What to Accomplish</span>
+                  </div>
+                  <div className="accomplish-content">
+                    {selectedItem.description || `AI can help you complete this ${activeTab === 'calls' ? 'call' : activeTab === 'emails' ? 'email' : 'task'}`}
+                  </div>
+                </div>
+
+                {/* Train AI Section */}
+                <div className="detail-train-ai-section">
+                  <div className="train-ai-header">
+                    <span className="train-icon">🎓</span>
+                    <span className="train-title">Train AI (Optional)</span>
+                  </div>
+                  <textarea
+                    className="train-ai-input"
+                    placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                    rows={2}
+                  />
+                  <button className="send-to-ai-btn">Send to AI</button>
+                </div>
+
+                {/* AI Drafted Message */}
+                <div className="detail-ai-draft-section">
+                  <div className="ai-draft-header">
+                    <span className="ai-icon">🤖</span>
+                    <span className="ai-title">AI-Drafted Message</span>
+                    <button className="edit-message-btn">Edit Message</button>
+                  </div>
+                  <div className="ai-draft-content">
+                    {selectedItem.ai_message || (
+                      <>
+                        <p>Hi {selectedItem.entity_name?.split(' ')[0] || 'there'},</p>
+                        <p>I hope this message finds you well! I wanted to follow up regarding your {selectedItem.stage || 'loan application'}.</p>
+                        <p>If you'd like to discuss your options or need any assistance, I'm here to help. Feel free to reply to this email or give me a call at (555) 123-4567.</p>
+                        <p>Looking forward to hearing from you!</p>
+                        <p className="ai-signature">Best regards,<br/>[Your Name]<br/>Loan Officer</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Communication History */}
+                <div className="detail-history-section collapsed">
+                  <div className="history-header">
+                    <span className="history-icon">📁</span>
+                    <span className="history-title">Communication History ({selectedItem.communication_count || 0})</span>
+                    <span className="history-expand">▶</span>
+                  </div>
+                </div>
+
+                {/* Bottom Action Bar */}
+                <div className="detail-action-bar">
+                  <button className="action-bar-btn send-email">
+                    <span>📧</span> Send via Email
+                  </button>
+                  <button className="action-bar-btn approve-ai">
+                    <span>🤖</span> Approve AI Action
+                  </button>
+                  <button className="action-bar-btn change-status">
+                    <span>🏷️</span> Change Status
+                  </button>
+                  <button className="action-bar-btn snooze">
+                    <span>⏰</span> Snooze
+                  </button>
+                  <button className="action-bar-btn delegate">
+                    <span>👥</span> Delegate
+                  </button>
+                  <button
+                    className="action-bar-btn complete-task"
+                    onClick={() => handleCompleteTask(selectedItem)}
+                    disabled={completingTask}
+                  >
+                    <span>✓</span> {completingTask ? 'Completing...' : 'Complete Task'}
+                  </button>
+                  <button className="action-bar-btn delete">
+                    <span>🗑️</span> Delete
+                  </button>
                 </div>
               </div>
             )}

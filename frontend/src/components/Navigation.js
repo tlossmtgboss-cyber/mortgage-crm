@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import NotificationBell from './NotificationBell';
-import GlobalSearch from './GlobalSearch';
 import './Navigation.css';
 
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
@@ -143,7 +142,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
         </div>
 
         <div className="nav-actions">
-          <GlobalSearch />
           <NotificationBell />
           {/* My Profile and Permissions moved to Settings page */}
           {(userRole === 'manager' || userRole === 'management') && (
