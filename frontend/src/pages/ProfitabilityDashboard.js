@@ -608,8 +608,8 @@ const ProfitabilityDashboard = () => {
 
       {/* Tabs - Only show when no metric is selected */}
       {!activeMetric && (
-      <>
-      <div className="dashboard-tabs">
+        <>
+          <div className="dashboard-tabs">
         <button
           className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
