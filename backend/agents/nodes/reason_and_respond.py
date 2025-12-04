@@ -278,12 +278,16 @@ async def reason_and_respond(
         # Get intent string from state (could be QueryIntent enum or string)
         intent_str = query_intent.value if hasattr(query_intent, 'value') else str(query_intent)
 
-        # Use Haiku for simple/greeting intents, Sonnet for complex analysis
-        use_haiku = intent_str in HAIKU_INTENTS or data_quality == "insufficient"
+        # Check for explicit use_haiku flag from analyze node (fastest path)
+        use_haiku_flag = state.get("use_haiku", False)
+        intent_str_override = state.get("intent_str", "")
+
+        # Use Haiku if: explicit flag set, or intent is in HAIKU_INTENTS, or data is insufficient
+        use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality == "insufficient"
         model = MODEL_HAIKU if use_haiku else MODEL_SONNET
         max_tokens = 500 if use_haiku else 2500  # Smaller output for simple queries
 
-        logger.info(f"[REASON_AND_RESPOND] Model selection: {model} (intent={intent_str}, use_haiku={use_haiku})")
+        logger.info(f"[REASON_AND_RESPOND] Model selection: {model} (intent={intent_str}, intent_str_override={intent_str_override}, use_haiku_flag={use_haiku_flag})")
 
         # Single LLM call for both reasoning AND response generation
         llm_start = time.time()
