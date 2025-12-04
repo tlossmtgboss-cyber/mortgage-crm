@@ -161,6 +161,9 @@ class SLAMeasure(Base):
     # Activation
     is_active = Column(Boolean, default=True)
 
+    # Display order for UI sorting
+    display_order = Column(Integer, default=0)
+
     # Relationships
     history_records = relationship("LoanMilestoneHistory", back_populates="sla_measure")
 

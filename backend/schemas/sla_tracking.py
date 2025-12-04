@@ -151,6 +151,7 @@ class SLAMeasureUpdate(BaseModel):
     applies_to_channels: Optional[List[str]] = None
     business_hours_only: Optional[bool] = None
     is_active: Optional[bool] = None
+    display_order: Optional[int] = None
 
 
 class SLAMeasureResponse(SLAMeasureBase):
@@ -159,6 +160,7 @@ class SLAMeasureResponse(SLAMeasureBase):
     organization_id: int
     trigger_from: Optional[str] = "previous_milestone"
     trigger_from_is_default: bool = False
+    display_order: int = 0
     created_at: datetime
     updated_at: datetime
 

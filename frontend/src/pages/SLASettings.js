@@ -349,7 +349,7 @@ const SLASettings = () => {
     }
   };
 
-  const handleDrop = (e, targetMeasure, stage) => {
+  const handleDrop = async (e, targetMeasure, stage) => {
     e.preventDefault();
     setDragOverItem(null);
     if (!draggedItem || draggedItem.id === targetMeasure.id) {
@@ -394,6 +394,25 @@ const SLASettings = () => {
       return updated;
     });
 
+    // Save the new order to the backend
+    try {
+      const token = localStorage.getItem('token');
+      // Update each measure with its new display_order
+      for (let i = 0; i < newItems.length; i++) {
+        const measure = newItems[i];
+        await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measure.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ display_order: i })
+        });
+      }
+    } catch (err) {
+      console.error('Error saving measure order:', err);
+    }
+
     setDraggedItem(null);
   };
 
@@ -408,7 +427,7 @@ const SLASettings = () => {
 
   // Define milestone stages for sorting - Lead stage first, then Loan stage
   const leadStageMilestones = [
-    'lead_response', 'initial_consultation', 'lead_created', 'pre_qualified', 'preapproval'
+    'lead_response', 'lead_created', 'application_completed', 'application_review', 'pre_qualified', 'preapproval'
   ];
 
   const loanStageMilestones = [
@@ -439,7 +458,7 @@ const SLASettings = () => {
     return 999;
   };
 
-  // Sort measures: Lead stage first, then Loan stage, then by status (Active first), then by order within stage
+  // Sort measures: Lead stage first, then Loan stage, then by status (Active first), then by display_order or milestone order
   const sortedMeasures = [...measures].sort((a, b) => {
     // First sort by stage (Lead = 0, Loan = 1, Other = 2)
     const stageOrder = { lead: 0, loan: 1, other: 2 };
@@ -450,8 +469,10 @@ const SLASettings = () => {
     // Then sort by active status (Active first)
     if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
 
-    // Then sort by order within stage
-    return getMilestoneOrder(a.milestone_type) - getMilestoneOrder(b.milestone_type);
+    // Then sort by display_order if set, otherwise by default milestone order
+    const orderA = a.display_order !== undefined && a.display_order !== null ? a.display_order : getMilestoneOrder(a.milestone_type);
+    const orderB = b.display_order !== undefined && b.display_order !== null ? b.display_order : getMilestoneOrder(b.milestone_type);
+    return orderA - orderB;
   });
 
   // Group measures by stage for display
@@ -1433,7 +1454,7 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
   });
 
   const milestoneTypes = [
-    'lead_response', 'initial_consultation', 'pre_qualified', 'preapproval',
+    'lead_response', 'application_completed', 'application_review', 'pre_qualified', 'preapproval',
     'application_submitted', 'documents_requested', 'documents_received',
     'document_collection', 'application_complete',
     'submitted_to_processing', 'processing_start',
@@ -1451,7 +1472,8 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     { value: 'loan_created', label: 'Loan Created' },
     { value: 'previous_milestone', label: 'Previous Milestone Completed' },
     { value: 'lead_response', label: 'Lead Response' },
-    { value: 'initial_consultation', label: 'Initial Consultation' },
+    { value: 'application_completed', label: 'Application Completed' },
+    { value: 'application_review', label: 'Application Review' },
     { value: 'pre_qualified', label: 'Pre-Qualified' },
     { value: 'preapproval', label: 'Pre-Approval' },
     { value: 'application_submitted', label: 'Application Submitted' },
