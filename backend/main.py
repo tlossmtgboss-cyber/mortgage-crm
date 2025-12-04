@@ -29127,6 +29127,98 @@ async def reprocess_unextracted_emails(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/microsoft/synced-emails-status")
+async def get_synced_emails_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check status of synced emails - where did they go?"""
+    try:
+        from sqlalchemy import text
+
+        # Get all incoming events for this user from Microsoft
+        events = db.execute(text("""
+            SELECT
+                ide.id, ide.subject, ide.sender, ide.received_at, ide.processed, ide.created_at,
+                ed.id as extracted_id, ed.status as extracted_status, ed.category
+            FROM incoming_data_events ide
+            LEFT JOIN extracted_data ed ON ide.id = ed.event_id
+            WHERE ide.user_id = :user_id AND ide.source = 'microsoft365'
+            ORDER BY ide.received_at DESC
+            LIMIT 20
+        """), {"user_id": current_user.id}).fetchall()
+
+        results = []
+        for e in events:
+            results.append({
+                "event_id": e[0],
+                "subject": e[1][:50] if e[1] else None,
+                "sender": e[2],
+                "received_at": e[3].isoformat() if e[3] else None,
+                "processed": e[4],
+                "synced_at": e[5].isoformat() if e[5] else None,
+                "extracted_id": e[6],
+                "extracted_status": e[7],
+                "category": e[8]
+            })
+
+        # Summary stats
+        total = len(results)
+        with_extraction = len([r for r in results if r["extracted_id"]])
+        pending_review = len([r for r in results if r["extracted_status"] == "pending_review"])
+
+        return {
+            "total_synced": total,
+            "with_extraction": with_extraction,
+            "pending_review": pending_review,
+            "emails": results,
+            "note": "If emails are synced but not in Reconciliation, they may have been classified as 'unrelated' or had extraction errors"
+        }
+
+    except Exception as e:
+        logger.error(f"Synced emails status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/microsoft/clear-sync-history")
+async def clear_sync_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Clear sync history to allow re-syncing all emails (use with caution)"""
+    try:
+        from sqlalchemy import text
+
+        # Delete extracted data first (foreign key constraint)
+        deleted_extracted = db.execute(text("""
+            DELETE FROM extracted_data
+            WHERE event_id IN (
+                SELECT id FROM incoming_data_events
+                WHERE user_id = :user_id AND source = 'microsoft365'
+            )
+        """), {"user_id": current_user.id}).rowcount
+
+        # Delete incoming events
+        deleted_events = db.execute(text("""
+            DELETE FROM incoming_data_events
+            WHERE user_id = :user_id AND source = 'microsoft365'
+        """), {"user_id": current_user.id}).rowcount
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "deleted_events": deleted_events,
+            "deleted_extractions": deleted_extracted,
+            "message": f"Cleared {deleted_events} synced emails. Click 'Sync Emails Now' to re-sync."
+        }
+
+    except Exception as e:
+        logger.error(f"Clear sync history error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/reconciliation/reextract/{extracted_data_id}")
 async def reextract_email_data(
     extracted_data_id: int,
