@@ -99,13 +99,14 @@ INTENT_PATTERNS = {
     # Greetings - fastest path, use Haiku model
     "greeting": {
         "patterns": [
-            r"^(hi|hey|hello|howdy|yo|sup)(\s+there)?!?$",  # hi, hi there, hey there, etc.
-            r"^(hi|hey|hello|howdy)[\s,!]*$",  # hi!, hello,, etc.
-            r"^(good\s*)?(morning|afternoon|evening)!?$",
-            r"^what'?s? up\??$",
-            r"^how are you\??$",
-            r"^how'?s? it going\??$",
-            r"^greetings!?$",
+            r"^(hi|hey|hello|howdy|yo|sup)(\s+there)?(\s+\w+)?[!,.\s]*$",  # hi, hi there, hey there friend, etc.
+            r"^(hi|hey|hello|howdy)[!,.\s]*$",  # hi!, hello,, etc.
+            r"^(good\s*)?(morning|afternoon|evening)[!,.\s]*$",
+            r"^what'?s? up\??[!,.\s]*$",
+            r"^how are you\??[!,.\s]*$",
+            r"^how'?s? it going\??[!,.\s]*$",
+            r"^greetings[!,.\s]*$",
+            r"^howdy\s+\w+[!,.\s]*$",  # howdy partner, howdy friend, etc.
         ],
         "intent": QueryIntent.GENERAL_QUERY,  # Map to GENERAL_QUERY for state
         "intent_str": "greeting",  # But use this for model selection
