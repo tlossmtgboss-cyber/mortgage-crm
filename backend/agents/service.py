@@ -1398,6 +1398,140 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools["get_leads_by_status"] = execute_get_leads_by_status
 
+    # ============ Communication Tools ============
+
+    async def execute_click_to_dial(args):
+        """
+        Initiate an outbound call to a contact using click-to-dial.
+
+        Args:
+            phone_number: The phone number to call (required)
+            contact_name: Name of the person being called (optional)
+            lead_id: Associated lead ID (optional)
+            loan_id: Associated loan ID (optional)
+        """
+        import os
+        from telephony.dialer_engine import click_to_dial
+
+        phone_number = args.get("phone_number")
+        if not phone_number:
+            return {"success": False, "error": "phone_number is required"}
+
+        # Clean phone number - remove any non-digit characters except +
+        clean_phone = "".join(c for c in phone_number if c.isdigit() or c == "+")
+        if not clean_phone.startswith("+"):
+            clean_phone = f"+1{clean_phone}" if len(clean_phone) == 10 else f"+{clean_phone}"
+
+        contact_name = args.get("contact_name", "Contact")
+        lead_id = args.get("lead_id")
+        loan_id = args.get("loan_id")
+
+        base_url = os.getenv("BASE_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+
+        try:
+            result = click_to_dial(
+                db_session=db,
+                agent_id=current_user.id,
+                phone_number=clean_phone,
+                contact_name=contact_name,
+                base_url=base_url,
+                lead_id=lead_id,
+                loan_id=loan_id
+            )
+
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "message": f"Call initiated to {contact_name} at {clean_phone}",
+                    "call_sid": result.get("call_sid"),
+                    "phone_number": clean_phone,
+                    "contact_name": contact_name
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "Failed to initiate call"),
+                    "phone_number": clean_phone
+                }
+        except Exception as e:
+            logger.error(f"Error in click_to_dial: {e}")
+            return {"success": False, "error": str(e)}
+
+    tools["click_to_dial"] = execute_click_to_dial
+    tools["make_call"] = execute_click_to_dial  # Alias for natural language
+    tools["call_contact"] = execute_click_to_dial  # Another alias
+
+    async def execute_send_sms(args):
+        """
+        Send an SMS message to a phone number.
+
+        Args:
+            phone_number: The phone number to text (required)
+            message: The message content (required)
+            lead_id: Associated lead ID (optional)
+            loan_id: Associated loan ID (optional)
+        """
+        from integrations.twilio_service import sms_client
+
+        phone_number = args.get("phone_number") or args.get("to_number")
+        message = args.get("message")
+
+        if not phone_number:
+            return {"success": False, "error": "phone_number is required"}
+        if not message:
+            return {"success": False, "error": "message is required"}
+
+        # Clean phone number
+        clean_phone = "".join(c for c in phone_number if c.isdigit() or c == "+")
+        if not clean_phone.startswith("+"):
+            clean_phone = f"+1{clean_phone}" if len(clean_phone) == 10 else f"+{clean_phone}"
+
+        try:
+            message_sid = await sms_client.send_sms(
+                to_number=clean_phone,
+                message=message
+            )
+
+            if message_sid:
+                # Log to database
+                try:
+                    from main import SMSMessage
+                    sms_record = SMSMessage(
+                        user_id=current_user.id,
+                        lead_id=args.get("lead_id"),
+                        loan_id=args.get("loan_id"),
+                        to_number=clean_phone,
+                        from_number=sms_client.from_number,
+                        message=message,
+                        direction="outbound",
+                        status="sent",
+                        twilio_sid=message_sid
+                    )
+                    db.add(sms_record)
+                    db.commit()
+                except Exception as log_err:
+                    logger.warning(f"Failed to log SMS: {log_err}")
+
+                return {
+                    "success": True,
+                    "message": f"SMS sent to {clean_phone}",
+                    "message_sid": message_sid,
+                    "phone_number": clean_phone
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Failed to send SMS - check Twilio configuration",
+                    "phone_number": clean_phone
+                }
+        except Exception as e:
+            logger.error(f"Error in send_sms: {e}")
+            return {"success": False, "error": str(e)}
+
+    tools["send_sms"] = execute_send_sms
+    tools["send_text"] = execute_send_sms  # Alias for natural language
+    tools["text_contact"] = execute_send_sms  # Another alias
+
     return tools
 
 

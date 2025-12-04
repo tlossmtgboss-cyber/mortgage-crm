@@ -34,10 +34,14 @@ ACTION_RISK_LEVELS = {
     "send_email": "medium",  # To self only
     "update_lead": "medium",
 
-    # HIGH RISK - Requires confirmation
+    # HIGH RISK - Requires confirmation (but will auto-execute for explicit requests)
     "send_email_to_contact": "high",  # External emails
-    "send_sms": "high",
-    "make_phone_call": "high",
+    "send_sms": "medium",             # Changed to medium for explicit user requests
+    "send_text": "medium",            # Alias for send_sms
+    "make_phone_call": "medium",
+    "make_call": "medium",            # Alias for click_to_dial
+    "click_to_dial": "medium",        # User explicitly requested call
+    "call_contact": "medium",         # Alias
     "create_lead": "high",
     "update_loan_status": "high",
 

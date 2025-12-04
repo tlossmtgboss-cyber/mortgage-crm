@@ -48,6 +48,12 @@ AVAILABLE_TOOLS = [
 
     # Market Intelligence
     "get_rate_lock_advisory", # Rate lock recommendations
+
+    # Communication Tools
+    "click_to_dial",         # Initiate outbound call
+    "make_call",             # Alias for click_to_dial
+    "send_sms",              # Send SMS message
+    "send_text",             # Alias for send_sms
 ]
 
 
@@ -150,7 +156,61 @@ INTENT_PATTERNS = {
         "complexity": "moderate",
         "confidence": 0.90
     },
+
+    # Communication - Call requests
+    "call_request": {
+        "patterns": [
+            r"(call|dial|phone|ring) (\+?1?[\d\-\.\s\(\)]{10,})",  # call + phone number
+            r"(call|dial|phone|ring) (him|her|them|this person|the (client|borrower|lead))",
+            r"(make|place|start|initiate) (a |the )?call",
+            r"(can you |please )?(call|dial|phone|ring)",
+            r"(click.?to.?dial|click.?to.?call)",
+            r"(connect|get) me (on|with) (a )?call",
+        ],
+        "intent": QueryIntent.ACTION_REQUEST,
+        "tools": ["click_to_dial"],
+        "urgency": "high",
+        "complexity": "simple",
+        "confidence": 0.95,
+        "requires_action": True
+    },
+
+    # Communication - SMS/Text requests
+    "text_request": {
+        "patterns": [
+            r"(text|sms|message) (\+?1?[\d\-\.\s\(\)]{10,})",  # text + phone number
+            r"(send|shoot) (a |an )?(text|sms|message)",
+            r"(text|sms|message) (him|her|them|this person|the (client|borrower|lead))",
+            r"(can you |please )?(text|sms|message)",
+        ],
+        "intent": QueryIntent.ACTION_REQUEST,
+        "tools": ["send_sms"],
+        "urgency": "medium",
+        "complexity": "simple",
+        "confidence": 0.95,
+        "requires_action": True
+    },
 }
+
+
+def extract_phone_number(query: str) -> Optional[str]:
+    """Extract phone number from query text."""
+    # Match various phone formats: (843) 834-4997, 843-834-4997, 8438344997, +1-843-834-4997
+    phone_patterns = [
+        r'\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}',  # Standard US formats
+        r'\b\d{10}\b',  # 10 digit number
+    ]
+
+    for pattern in phone_patterns:
+        match = re.search(pattern, query)
+        if match:
+            # Clean the number - keep only digits
+            number = re.sub(r'\D', '', match.group())
+            if len(number) == 10:
+                return number
+            elif len(number) == 11 and number.startswith('1'):
+                return number[1:]  # Remove leading 1
+    return None
 
 
 def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
@@ -167,15 +227,26 @@ def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
         for pattern in config["patterns"]:
             if re.search(pattern, query_lower, re.IGNORECASE):
                 logger.info(f"[ANALYZE] FAST PATH: Pattern matched '{pattern}' -> {intent_key}")
-                return {
+
+                result = {
                     "intent": config["intent"],
                     "tools": config["tools"],
                     "urgency": config["urgency"],
                     "complexity": config["complexity"],
                     "confidence": config["confidence"],
                     "pattern_matched": pattern,
-                    "fast_path": True
+                    "fast_path": True,
+                    "requires_action": config.get("requires_action", False)
                 }
+
+                # For call/text requests, extract phone number
+                if intent_key in ["call_request", "text_request"]:
+                    phone = extract_phone_number(query)
+                    if phone:
+                        result["extracted_entities"] = {"phone_number": phone}
+                        logger.info(f"[ANALYZE] Extracted phone: {phone}")
+
+                return result
 
     return None
 
@@ -183,7 +254,7 @@ def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
 def extract_entities(query: str) -> Dict[str, List]:
     """
     Simple entity extraction using regex patterns.
-    Extracts loan IDs, names, amounts, dates, etc.
+    Extracts loan IDs, names, amounts, dates, phone numbers, etc.
     """
     entities = {
         "loan_ids": [],
@@ -191,8 +262,14 @@ def extract_entities(query: str) -> Dict[str, List]:
         "amounts": [],
         "dates": [],
         "stages": [],
-        "team_members": []
+        "team_members": [],
+        "phone_numbers": []
     }
+
+    # Extract phone numbers
+    phone = extract_phone_number(query)
+    if phone:
+        entities["phone_numbers"] = [phone]
 
     # Extract loan/lead IDs (numeric)
     id_matches = re.findall(r'\b(?:loan|lead|id|#)\s*(\d+)\b', query, re.IGNORECASE)
