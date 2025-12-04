@@ -233,6 +233,21 @@ async def reason_and_respond(
                 "follow_up_suggestions": ["Show me my pipeline", "What are my priorities today?"]
             })
 
+        # Handle greeting case - fast path with friendly response
+        intent_str_check = state.get("intent_str", "")
+        if data_quality == "not_needed" and intent_str_check == "greeting":
+            logger.info("[REASON_AND_RESPOND] Greeting detected - using fast greeting response")
+            greeting_response = f"Hello! I'm Perennia AI, your mortgage industry assistant. I'm here to help you with your pipeline, leads, tasks, rates, and more. What would you like to work on today?"
+            return update_state(state, {
+                "analysis": "Greeting detected",
+                "insights": [],
+                "recommendations": [],
+                "confidence_score": 0.99,
+                "response": greeting_response,
+                "response_type": "text",
+                "follow_up_suggestions": ["Show me my pipeline", "What are my priorities?", "How are my leads doing?"]
+            })
+
         # Format gathered data
         formatted_data = format_gathered_data_for_llm(gathered_data)
 

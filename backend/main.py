@@ -23953,6 +23953,19 @@ async def approve_reconciliation(
                 # This ensures we control exactly what gets sent to PostgreSQL
                 amount = float(get_val("amount", 0) or get_val("loan_amount", 0) or 0)
 
+                # Debug: log the INSERT parameters
+                insert_params = {
+                    "loan_number": loan_number,
+                    "borrower_name": borrower_name,
+                    "borrower_email": borrower_email,
+                    "borrower_phone": borrower_phone,
+                    "coborrower_name": coborrower_name,
+                    "co_borrower_email": coborrower_email,
+                    "program": get_val("program"),
+                    "amount": amount,
+                }
+                logger.info(f"RECONCILIATION DEBUG: INSERT params = {insert_params}")
+
                 result = db.execute(
                     text("""
                         INSERT INTO loans (
@@ -24170,7 +24183,8 @@ async def approve_reconciliation(
             debug_info = {
                 "extracted_fields_type": str(type(extracted.fields)),
                 "extracted_fields_keys": list(extracted.fields.keys()) if extracted.fields else [],
-                "extracted_fields_sample": {k: str(v)[:100] for k, v in (extracted.fields or {}).items()}
+                "extracted_fields_sample": {k: str(v)[:100] for k, v in (extracted.fields or {}).items()},
+                "insert_params_used": getattr(approval, '_debug_insert_params', None)
             }
 
             return {
