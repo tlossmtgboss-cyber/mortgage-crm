@@ -33367,65 +33367,42 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
 
     try:
         # Delete related records first to avoid foreign key constraint errors
-        # Use raw connection to handle each delete independently
-        from sqlalchemy import inspect
-
-        # Get list of all tables to check what exists
-        inspector = inspect(db.bind)
-        existing_tables = set(inspector.get_table_names())
-
-        # Tables to delete from (if they exist)
-        delete_tables = [
-            ("activities", "lead_id"),
-            ("tasks", "lead_id"),
-            ("ai_tasks", "lead_id"),
-            ("documents", "lead_id"),
-            ("notes", "lead_id"),
-            ("communications", "lead_id"),
-            ("email_reconciliation_queue", "lead_id"),
-            ("workflow_executions", "lead_id"),
-            ("lead_profiles", "lead_id"),
-            ("circle_contacts", "lead_id"),
-            ("notifications", "lead_id"),
-            ("stage_history", "entity_id"),
-            ("conversation_messages", "lead_id"),
-            ("ai_conversation_messages", "lead_id"),
-            ("email_intelligence_queue", "lead_id"),
-            ("known_client_emails", "lead_id"),
-            ("incoming_data_events", "lead_id"),
+        # Execute each delete in sequence - all should succeed or we fail
+        delete_statements = [
+            "DELETE FROM activities WHERE lead_id = :lid",
+            "DELETE FROM tasks WHERE lead_id = :lid",
+            "DELETE FROM ai_tasks WHERE lead_id = :lid",
+            "DELETE FROM documents WHERE lead_id = :lid",
+            "DELETE FROM notes WHERE lead_id = :lid",
+            "DELETE FROM communications WHERE lead_id = :lid",
+            "DELETE FROM email_reconciliation_queue WHERE lead_id = :lid",
+            "DELETE FROM workflow_executions WHERE lead_id = :lid",
+            "DELETE FROM lead_profiles WHERE lead_id = :lid",
+            "DELETE FROM circle_contacts WHERE lead_id = :lid",
+            "DELETE FROM notifications WHERE lead_id = :lid",
+            "DELETE FROM stage_history WHERE entity_id = :lid",
+            "DELETE FROM conversation_messages WHERE lead_id = :lid",
+            "DELETE FROM ai_conversation_messages WHERE lead_id = :lid",
+            "DELETE FROM incoming_data_events WHERE lead_id = :lid",
+            "UPDATE loans SET lead_id = NULL WHERE lead_id = :lid",
         ]
 
-        # Tables to nullify (if they exist)
-        nullify_tables = [
-            ("loans", "lead_id"),
-            ("extracted_data", "match_entity_id"),
-        ]
+        # Execute all cleanup statements
+        for stmt in delete_statements:
+            try:
+                db.execute(text(stmt), {"lid": lead_id})
+            except Exception as e:
+                # Only ignore "table doesn't exist" or "column doesn't exist" errors
+                err_str = str(e).lower()
+                if 'undefined_table' in err_str or 'does not exist' in err_str or 'undefined_column' in err_str:
+                    logger.debug(f"Skipping non-existent table/column: {stmt[:40]}...")
+                else:
+                    raise  # Re-raise other errors
 
-        # Delete from existing tables
-        for table_name, column in delete_tables:
-            if table_name in existing_tables:
-                try:
-                    db.execute(text(f"DELETE FROM {table_name} WHERE {column} = :lead_id"), {"lead_id": lead_id})
-                except Exception as e:
-                    logger.debug(f"Table {table_name} delete skipped: {e}")
-                    # Rollback the failed statement and continue
-                    db.rollback()
-
-        # Nullify references in existing tables
-        for table_name, column in nullify_tables:
-            if table_name in existing_tables:
-                try:
-                    db.execute(text(f"UPDATE {table_name} SET {column} = NULL WHERE {column} = :lead_id"), {"lead_id": lead_id})
-                except Exception as e:
-                    logger.debug(f"Table {table_name} nullify skipped: {e}")
-                    db.rollback()
-
-        # Refresh the lead object since we may have rolled back
-        db.refresh(lead)
-
-        # Now delete the lead
-        db.delete(lead)
+        # Now delete the lead itself
+        db.execute(text("DELETE FROM leads WHERE id = :lid"), {"lid": lead_id})
         db.commit()
+
         logger.info(f"Lead deleted: {lead_name}")
         return None
 
