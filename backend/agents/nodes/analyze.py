@@ -485,8 +485,9 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             # Get scoped tools for this intent
             scoped_tools = INTENT_TO_BASE_TOOLS.get(intent_str, INTENT_TO_BASE_TOOLS["general"])
 
-            # Use pattern-determined tools if more specific
-            final_tools = pattern_result["tools"] if pattern_result["tools"] else scoped_tools
+            # Use pattern-determined tools if specified (even if empty list)
+            # Empty list [] means "no tools needed" which is different from None/missing
+            final_tools = pattern_result["tools"] if pattern_result.get("tools") is not None else scoped_tools
 
             state = update_state(state, {
                 "query_intent": pattern_result["intent"],
