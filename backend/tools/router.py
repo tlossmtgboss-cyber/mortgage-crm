@@ -359,7 +359,7 @@ async def handle_search_leads(args: Dict[str, Any], request: Request) -> Dict[st
         try:
             query_str = args.get('query', '')
             stage_filter = args.get('stage', args.get('status'))
-            limit = args.get('limit', 25)
+            limit = args.get('limit', 200)  # Increased from 25 to return full results
 
             query = db.query(Lead)
 
@@ -522,7 +522,7 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
 
             # Terminal statuses
             terminal_statuses = {"Withdrawn", "Does Not Qualify"}
-            active_leads = [l for l in leads if l.stage and l.stage.value not in terminal_statuses]
+            active_leads = [l for l in leads if l.stage and (l.stage.value if hasattr(l.stage, 'value') else str(l.stage)) not in terminal_statuses]
 
             # Build by_status breakdown
             status_breakdown = []
@@ -790,37 +790,57 @@ async def handle_get_tasks(args: Dict[str, Any], request: Request) -> Dict[str, 
         List of tasks with details
     """
     try:
-        from main import SessionLocal, Task
+        from main import SessionLocal
         from datetime import datetime
+        from sqlalchemy import text
 
         db = SessionLocal()
         try:
             status_filter = args.get("status")
             limit = args.get("limit", 50)
 
-            query = db.query(Task)
+            # Use raw SQL to avoid selecting missing columns (sla_milestone_id, etc.)
+            sql = """
+                SELECT id, title, description, status, priority, due_date,
+                       lead_id, loan_id, created_at
+                FROM tasks
+                WHERE 1=1
+            """
+            params = {"limit": limit}
 
-            # Apply status filter
             if status_filter and status_filter != "all":
-                query = query.filter(Task.status == status_filter)
+                sql += " AND status = :status"
+                params["status"] = status_filter
 
-            tasks = query.order_by(Task.due_date.asc().nullslast()).limit(limit).all()
+            sql += " ORDER BY due_date ASC NULLS LAST LIMIT :limit"
+
+            result = db.execute(text(sql), params)
+            rows = result.fetchall()
 
             now = datetime.utcnow()
             tasks_list = []
 
-            for task in tasks:
+            for row in rows:
+                due_date = row[5]  # due_date column
+                is_overdue = False
+                if due_date:
+                    due_date_obj = due_date if hasattr(due_date, 'date') else due_date
+                    if hasattr(due_date_obj, 'date'):
+                        is_overdue = due_date_obj.date() < now.date()
+                    else:
+                        is_overdue = due_date_obj < now.date()
+
                 task_dict = {
-                    "id": task.id,
-                    "title": task.title,
-                    "description": task.description,
-                    "status": task.status,
-                    "priority": getattr(task, 'priority', 'medium'),
-                    "due_date": task.due_date.isoformat() if task.due_date else None,
-                    "is_overdue": task.due_date and task.due_date < now.date() if hasattr(task.due_date, 'date') else False,
-                    "lead_id": task.lead_id,
-                    "loan_id": task.loan_id,
-                    "created_at": task.created_at.isoformat() if task.created_at else None
+                    "id": row[0],
+                    "title": row[1],
+                    "description": row[2],
+                    "status": row[3],
+                    "priority": row[4] or 'medium',
+                    "due_date": due_date.isoformat() if due_date else None,
+                    "is_overdue": is_overdue,
+                    "lead_id": row[6],
+                    "loan_id": row[7],
+                    "created_at": row[8].isoformat() if row[8] else None
                 }
                 tasks_list.append(task_dict)
 
@@ -860,8 +880,9 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
     - Follow-ups due
     """
     try:
-        from main import SessionLocal, Task, Lead, Loan, LeadStage, LoanStage
+        from main import SessionLocal, Lead, Loan, LeadStage, LoanStage
         from datetime import datetime, timedelta
+        from sqlalchemy import text
 
         db = SessionLocal()
         try:
@@ -874,19 +895,24 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
                 "follow_ups": []
             }
 
-            # 1. Get overdue tasks
-            overdue_tasks = db.query(Task).filter(
-                Task.status.notin_(["completed", "cancelled"]),
-                Task.due_date < today
-            ).limit(10).all()
-
-            for task in overdue_tasks:
+            # 1. Get overdue tasks using raw SQL to avoid missing columns
+            overdue_sql = """
+                SELECT id, title, due_date
+                FROM tasks
+                WHERE status NOT IN ('completed', 'cancelled')
+                AND due_date < :today
+                ORDER BY due_date ASC
+                LIMIT 10
+            """
+            overdue_result = db.execute(text(overdue_sql), {"today": today})
+            for row in overdue_result.fetchall():
+                due_date = row[2]
                 priorities["high_priority"].append({
                     "type": "overdue_task",
-                    "id": task.id,
-                    "title": task.title,
-                    "due_date": task.due_date.isoformat() if task.due_date else None,
-                    "days_overdue": (today - task.due_date).days if task.due_date else 0,
+                    "id": row[0],
+                    "title": row[1],
+                    "due_date": due_date.isoformat() if due_date else None,
+                    "days_overdue": (today - due_date).days if due_date else 0,
                     "action": "Complete this overdue task"
                 })
 
@@ -911,17 +937,20 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
                     "action": "Make first contact - speed to lead is critical"
                 })
 
-            # 3. Get tasks due today
-            tasks_due_today = db.query(Task).filter(
-                Task.status.notin_(["completed", "cancelled"]),
-                Task.due_date == today
-            ).limit(10).all()
-
-            for task in tasks_due_today:
+            # 3. Get tasks due today using raw SQL
+            today_sql = """
+                SELECT id, title
+                FROM tasks
+                WHERE status NOT IN ('completed', 'cancelled')
+                AND due_date = :today
+                LIMIT 10
+            """
+            today_result = db.execute(text(today_sql), {"today": today})
+            for row in today_result.fetchall():
                 priorities["medium_priority"].append({
                     "type": "task_due_today",
-                    "id": task.id,
-                    "title": task.title,
+                    "id": row[0],
+                    "title": row[1],
                     "action": "Complete before end of day"
                 })
 
