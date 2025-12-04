@@ -1,0 +1,499 @@
+"""
+Intent Router - Fast Intent Classification & Agent Routing
+
+This module provides ultra-fast intent classification (<100ms) to route queries
+to the appropriate specialized agents, loading only 8-16 tools instead of 160.
+
+Performance improvement:
+- Before: All 160 tools loaded on every request
+- After: Only 8-16 relevant tools loaded based on intent
+
+Usage:
+    from agents.intent_router import classify_intent, get_tools_for_intent
+
+    # Fast classification (<100ms with pattern matching, <1s with LLM)
+    intent = await classify_intent("How is my lead pipeline?")
+    # Returns: "leads"
+
+    # Get relevant agent tools
+    tools = get_tools_for_intent(intent, db, current_user)
+    # Returns: Dict with only lead_nurturer tools (8 tools)
+"""
+
+import re
+import time
+import logging
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from enum import Enum
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# INTENT DEFINITIONS
+# =============================================================================
+
+class Intent(str, Enum):
+    """Query intent categories mapped to specialized agents."""
+    GREETING = "greeting"          # Simple greetings (hi, hello, etc.) - use Haiku
+    SIMPLE = "simple"              # Simple lookups, basic info - use Haiku
+    PIPELINE = "pipeline"          # Loan pipeline analytics
+    COMPLIANCE = "compliance"      # Regulatory compliance
+    TASKS = "tasks"                # Task management
+    PRIORITIES = "priorities"      # Daily priorities (combines pipeline + tasks)
+    LEADS = "leads"                # Lead management and nurturing
+    DOCUMENTS = "documents"        # Document tracking
+    RATES = "rates"                # Rate lock advisory
+    SCHEDULE = "schedule"          # Appointment scheduling
+    SLA = "sla"                    # SLA tracking
+    CALLS = "calls"                # Phone calls
+    EMAIL = "email"                # Email management
+    VIDEO = "video"                # Video meetings
+    REPORTS = "reports"            # Reporting
+    BILLING = "billing"            # Subscription/billing
+    COACHING = "coaching"          # Team performance coaching
+    CUSTOMER = "customer"          # Customer intelligence
+    INTEGRATIONS = "integrations"  # LOS/vendor integrations
+    GENERAL = "general"            # Default fallback
+
+
+# =============================================================================
+# INTENTS THAT USE HAIKU (Fast, simple responses)
+# =============================================================================
+
+HAIKU_INTENTS = {"greeting", "simple"}
+
+
+# =============================================================================
+# INTENT TO AGENTS MAPPING
+# =============================================================================
+
+INTENT_TO_AGENTS: Dict[str, List[str]] = {
+    "greeting": [],                                       # No tools needed - direct Haiku response
+    "simple": ["pipeline_analyst"],                       # Basic lookup with Haiku
+    "pipeline": ["pipeline_analyst"],
+    "compliance": ["compliance_checker"],
+    "tasks": ["task_automation"],
+    "priorities": ["pipeline_analyst", "task_automation"],
+    "leads": ["lead_nurturer"],
+    "documents": ["document_tracker"],
+    "rates": ["rate_advisor"],
+    "schedule": ["smart_scheduler"],
+    "sla": ["sla_tracker"],
+    "calls": ["voice_os", "ai_receptionist"],
+    "email": ["email_intelligence"],
+    "video": ["uvip"],
+    "reports": ["reporting_engine"],
+    "billing": ["subscription_manager"],
+    "coaching": ["team_coach"],
+    "customer": ["customer_intelligence"],
+    "integrations": ["integrations"],
+    "general": ["pipeline_analyst", "task_automation"],  # Default
+}
+
+
+# =============================================================================
+# FAST PATTERN MATCHING
+# =============================================================================
+
+# Regex patterns for ultra-fast intent classification (~1-5ms)
+INTENT_PATTERNS: Dict[str, List[str]] = {
+    # Greetings - use Haiku for fast response
+    "greeting": [
+        r"^(hi|hey|hello|howdy|yo|sup|morning|afternoon|evening)\b",
+        r"^(good\s*)?(morning|afternoon|evening)",
+        r"^what'?s? up\b",
+        r"^how are you",
+        r"^how'?s? it going",
+    ],
+    # Simple queries - use Haiku
+    "simple": [
+        r"^(thanks?|thank you)",
+        r"^(ok|okay|got it|sounds good|perfect)",
+        r"^(yes|no|yep|nope|sure|maybe)",
+        r"what (can|do) you do",
+        r"help me",
+        r"^(bye|goodbye|see you|later)",
+    ],
+    "priorities": [
+        r"(top|my|daily|today'?s?) ?(priorit|urgent|important)",
+        r"what (should|do) i (do|focus|work)",
+        r"(start|begin) (my|the) day",
+        r"morning brief",
+        r"what'?s? (on my|my) (plate|agenda)",
+    ],
+    "tasks": [
+        r"\btasks?\b",
+        r"to.?do",
+        r"overdue",
+        r"due (today|tomorrow|this week)",
+        r"reminders?",
+        r"follow.?up",
+    ],
+    "leads": [
+        r"\bleads?\b",
+        r"prospects?",
+        r"lead (pipeline|funnel|conversion|bottleneck)",
+        r"nurture",
+        r"who (should|to) (call|contact)",
+        r"speed to lead",
+        r"lead (score|scoring|analytics)",
+    ],
+    "pipeline": [
+        r"(loan|loans) (pipeline|funnel)",
+        r"(my|the) pipeline",
+        r"(closing|funded|processing|underwriting)",
+        r"(deals?|applications?) (in|at|stuck)",
+        r"pipeline (summary|status|metrics)",
+    ],
+    "rates": [
+        r"\brates?\b",
+        r"lock (or|vs|versus) float",
+        r"should (i|we) lock",
+        r"rate (lock|advisory|recommendation)",
+        r"(current|today'?s?) (rate|pricing)",
+        r"float",
+    ],
+    "calls": [
+        r"\b(call|dial|phone|ring)\b",
+        r"click.?to.?dial",
+        r"make a call",
+        r"(outbound|inbound) call",
+        r"voicemail",
+        r"transcri(be|ption)",
+    ],
+    "email": [
+        r"\bemail\b",
+        r"(send|draft|compose) (an? )?email",
+        r"email (template|thread)",
+        r"inbox",
+    ],
+    "schedule": [
+        r"\bschedul(e|ing)\b",
+        r"\bappointment",
+        r"\bmeeting\b",
+        r"(book|cancel|reschedule)",
+        r"calendar",
+        r"availab(le|ility)",
+    ],
+    "documents": [
+        r"\bdocument",
+        r"condition",
+        r"missing (doc|document|file)",
+        r"(upload|submit|request) (doc|document)",
+        r"third.?party",
+        r"appraisal|title|insurance",
+    ],
+    "compliance": [
+        r"complian(ce|t)",
+        r"\bTRID\b",
+        r"\bRESPA\b",
+        r"fair lending",
+        r"disclosure",
+        r"regulat(ory|ion)",
+        r"audit",
+    ],
+    "sla": [
+        r"\bSLA\b",
+        r"service level",
+        r"breach",
+        r"(stage|status) (time|duration)",
+        r"aging",
+    ],
+    "video": [
+        r"video (meeting|call|conference)",
+        r"zoom|teams|webex",
+        r"screen.?share",
+        r"record(ing)?",
+    ],
+    "reports": [
+        r"\breport\b",
+        r"export",
+        r"dashboard",
+        r"analytics",
+        r"metrics",
+        r"production (report|numbers)",
+    ],
+    "billing": [
+        r"subscript",
+        r"billing",
+        r"payment",
+        r"invoice",
+        r"plan|pricing|upgrade",
+    ],
+    "coaching": [
+        r"coach(ing)?",
+        r"performance",
+        r"training",
+        r"improvement",
+        r"best practice",
+        r"(team|lo) (metrics|stats)",
+    ],
+    "customer": [
+        r"customer",
+        r"360.?view",
+        r"relationship",
+        r"lifetime value|ltv",
+        r"churn",
+        r"referral",
+    ],
+    "integrations": [
+        r"integrat",
+        r"\bLOS\b",
+        r"credit (pull|report)",
+        r"\bAUS\b",
+        r"e.?sign",
+        r"sync",
+    ],
+}
+
+
+def classify_intent_fast(query: str) -> Tuple[Optional[str], float, Optional[str]]:
+    """
+    Ultra-fast intent classification using regex patterns.
+
+    Returns:
+        Tuple of (intent, confidence, matched_pattern)
+        Returns (None, 0, None) if no pattern matches
+    """
+    query_lower = query.lower().strip()
+
+    for intent, patterns in INTENT_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, query_lower, re.IGNORECASE):
+                logger.debug(f"[INTENT] Fast match: '{pattern}' -> {intent}")
+                return (intent, 0.95, pattern)
+
+    return (None, 0.0, None)
+
+
+# =============================================================================
+# LLM-BASED INTENT CLASSIFICATION (Fallback)
+# =============================================================================
+
+INTENT_CLASSIFIER_PROMPT = """Classify this mortgage CRM query into ONE category. Return ONLY the category name.
+
+Categories:
+- priorities: Daily priorities, what to focus on, morning briefing
+- tasks: Task management, to-dos, follow-ups
+- leads: Lead pipeline, prospects, nurturing, who to call
+- pipeline: Loan pipeline, deals, closing, processing status
+- rates: Interest rates, lock/float decisions
+- calls: Phone calls, click-to-dial, voicemail
+- email: Email management, drafting, templates
+- schedule: Appointments, meetings, calendar
+- documents: Document tracking, conditions, uploads
+- compliance: TRID, RESPA, fair lending, disclosures
+- sla: SLA tracking, stage timing, breaches
+- video: Video meetings, recordings
+- reports: Reports, dashboards, analytics exports
+- billing: Subscription, billing, payments
+- coaching: Team performance, training, metrics
+- customer: Customer 360, relationships, referrals
+- integrations: LOS sync, credit pulls, AUS
+- general: Unclear or multiple categories
+
+Query: {query}
+
+Category:"""
+
+
+async def classify_intent_llm(
+    query: str,
+    anthropic_client = None
+) -> Tuple[str, float]:
+    """
+    LLM-based intent classification for complex/ambiguous queries.
+
+    This is slower (~500-1000ms) but handles edge cases better.
+    Only called when pattern matching fails.
+
+    Returns:
+        Tuple of (intent, confidence)
+    """
+    start = time.time()
+
+    if anthropic_client is None:
+        import os
+        from anthropic import Anthropic
+        anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    try:
+        response = anthropic_client.messages.create(
+            model="claude-3-5-haiku-20241022",  # Fastest model for classification
+            max_tokens=20,
+            messages=[{
+                "role": "user",
+                "content": INTENT_CLASSIFIER_PROMPT.format(query=query)
+            }]
+        )
+
+        intent = response.content[0].text.strip().lower()
+        elapsed = (time.time() - start) * 1000
+
+        logger.info(f"[INTENT] LLM classification: '{intent}' in {elapsed:.0f}ms")
+
+        # Validate intent
+        if intent in INTENT_TO_AGENTS:
+            return (intent, 0.85)
+        else:
+            logger.warning(f"[INTENT] Unknown intent from LLM: {intent}")
+            return ("general", 0.5)
+
+    except Exception as e:
+        logger.error(f"[INTENT] LLM classification failed: {e}")
+        return ("general", 0.3)
+
+
+# =============================================================================
+# MAIN CLASSIFICATION FUNCTION
+# =============================================================================
+
+async def classify_intent(
+    query: str,
+    anthropic_client = None,
+    use_llm_fallback: bool = True
+) -> Dict[str, Any]:
+    """
+    Classify query intent using fast pattern matching, with LLM fallback.
+
+    Performance:
+    - Pattern match: ~1-5ms (handles 80%+ of queries)
+    - LLM fallback: ~500-1000ms (for complex/ambiguous queries)
+
+    Args:
+        query: User's input query
+        anthropic_client: Optional pre-configured Anthropic client
+        use_llm_fallback: Whether to use LLM for unmatched queries
+
+    Returns:
+        Dict with:
+        - intent: The classified intent
+        - confidence: Confidence score (0-1)
+        - agents: List of agent names to use
+        - method: 'pattern_match' or 'llm'
+        - elapsed_ms: Classification time in milliseconds
+    """
+    start = time.time()
+
+    # Try fast pattern matching first
+    intent, confidence, pattern = classify_intent_fast(query)
+
+    if intent:
+        elapsed = (time.time() - start) * 1000
+        logger.info(
+            f"[INTENT] Pattern match: {intent} (conf={confidence:.2f}) in {elapsed:.1f}ms"
+        )
+        return {
+            "intent": intent,
+            "confidence": confidence,
+            "agents": INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"]),
+            "method": "pattern_match",
+            "matched_pattern": pattern,
+            "elapsed_ms": elapsed
+        }
+
+    # Fall back to LLM if enabled
+    if use_llm_fallback:
+        intent, confidence = await classify_intent_llm(query, anthropic_client)
+        elapsed = (time.time() - start) * 1000
+
+        return {
+            "intent": intent,
+            "confidence": confidence,
+            "agents": INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"]),
+            "method": "llm",
+            "matched_pattern": None,
+            "elapsed_ms": elapsed
+        }
+
+    # Default fallback
+    elapsed = (time.time() - start) * 1000
+    return {
+        "intent": "general",
+        "confidence": 0.3,
+        "agents": INTENT_TO_AGENTS["general"],
+        "method": "fallback",
+        "matched_pattern": None,
+        "elapsed_ms": elapsed
+    }
+
+
+# =============================================================================
+# TOOL LOADING BY INTENT
+# =============================================================================
+
+def get_agent_tools(agent_name: str) -> List[str]:
+    """Get list of tool names for a specific agent."""
+    from .tool_integration import AGENT_CONFIGS
+
+    config = AGENT_CONFIGS.get(agent_name)
+    if config:
+        return config.tool_names
+    return []
+
+
+def get_tools_for_intent(intent: str) -> Dict[str, List[str]]:
+    """
+    Get all tools for the agents mapped to an intent.
+
+    Returns:
+        Dict mapping agent names to their tool lists
+    """
+    agents = INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"])
+
+    result = {}
+    for agent_name in agents:
+        tools = get_agent_tools(agent_name)
+        if tools:
+            result[agent_name] = tools
+
+    return result
+
+
+def get_tool_count_for_intent(intent: str) -> int:
+    """Get total number of tools that would be loaded for an intent."""
+    tools_by_agent = get_tools_for_intent(intent)
+    return sum(len(tools) for tools in tools_by_agent.values())
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def print_intent_summary():
+    """Print summary of intents and their mapped agents/tools."""
+    print("=" * 70)
+    print("INTENT ROUTING SUMMARY")
+    print("=" * 70)
+
+    for intent, agents in INTENT_TO_AGENTS.items():
+        tools_by_agent = get_tools_for_intent(intent)
+        total_tools = sum(len(tools) for tools in tools_by_agent.values())
+
+        print(f"\n{intent.upper()}")
+        print(f"  Agents: {', '.join(agents)}")
+        print(f"  Total tools: {total_tools}")
+        for agent, tools in tools_by_agent.items():
+            print(f"    {agent}: {len(tools)} tools")
+
+    print("\n" + "=" * 70)
+
+
+# =============================================================================
+# EXPORTS
+# =============================================================================
+
+__all__ = [
+    "Intent",
+    "INTENT_TO_AGENTS",
+    "HAIKU_INTENTS",
+    "classify_intent",
+    "classify_intent_fast",
+    "classify_intent_llm",
+    "get_tools_for_intent",
+    "get_agent_tools",
+    "get_tool_count_for_intent",
+    "print_intent_summary",
+]

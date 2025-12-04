@@ -22,8 +22,18 @@ from ..state import (
     add_error,
     update_state
 )
+from ..intent_router import HAIKU_INTENTS
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# MODEL SELECTION
+# =============================================================================
+
+# Models for different complexity levels
+MODEL_HAIKU = "claude-3-5-haiku-20241022"   # Fast for simple queries (~1-2s)
+MODEL_SONNET = "claude-sonnet-4-20250514"   # Full power for complex analysis (~7-8s)
 
 
 UNIFIED_SYSTEM_PROMPT = """You are Perennia AI, an expert mortgage industry assistant. Your job is to analyze data AND generate a helpful response in one step.
@@ -264,11 +274,22 @@ async def reason_and_respond(
         if anthropic_client is None:
             anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+        # Select model based on intent complexity
+        # Get intent string from state (could be QueryIntent enum or string)
+        intent_str = query_intent.value if hasattr(query_intent, 'value') else str(query_intent)
+
+        # Use Haiku for simple/greeting intents, Sonnet for complex analysis
+        use_haiku = intent_str in HAIKU_INTENTS or data_quality == "insufficient"
+        model = MODEL_HAIKU if use_haiku else MODEL_SONNET
+        max_tokens = 500 if use_haiku else 2500  # Smaller output for simple queries
+
+        logger.info(f"[REASON_AND_RESPOND] Model selection: {model} (intent={intent_str}, use_haiku={use_haiku})")
+
         # Single LLM call for both reasoning AND response generation
         llm_start = time.time()
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2500,  # Slightly higher since we're doing both tasks
+            model=model,
+            max_tokens=max_tokens,
             system=system_prompt,
             messages=[
                 {
@@ -278,7 +299,7 @@ async def reason_and_respond(
             ]
         )
         llm_time = (time.time() - llm_start) * 1000
-        logger.info(f"[REASON_AND_RESPOND] ⏱️ Unified LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")
+        logger.info(f"[REASON_AND_RESPOND] ⏱️ Unified LLM call took {llm_time:.0f}ms (model={model}, context: {len(context)} chars)")
 
         response_text = response.content[0].text.strip()
 
