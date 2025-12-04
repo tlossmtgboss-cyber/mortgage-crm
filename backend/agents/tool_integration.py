@@ -46,6 +46,9 @@ class AgentToolConfig:
 
 
 AGENT_CONFIGS = {
+    # =========================================================================
+    # CRM Agents (8)
+    # =========================================================================
     "pipeline_analyst": AgentToolConfig(
         role="pipeline_analyst",
         name="Pipeline Analyst",
@@ -169,6 +172,200 @@ AGENT_CONFIGS = {
             "get_interaction_history",
             "get_referral_network",
             "get_market_comparison",
+        ],
+    ),
+    # =========================================================================
+    # Communication Agents (4)
+    # =========================================================================
+    "voice_os": AgentToolConfig(
+        role="voice_os",
+        name="Voice OS",
+        description="Manages phone calls, voicemail, transcription, and call analytics",
+        tool_names=[
+            "initiate_outbound_call",
+            "drop_voicemail",
+            "get_call_history",
+            "analyze_call_sentiment",
+            "schedule_callback",
+            "get_power_dialer_queue",
+            "transcribe_call",
+            "get_call_metrics",
+        ],
+        requires_approval_for=["initiate_outbound_call"],
+    ),
+    "uvip": AgentToolConfig(
+        role="uvip",
+        name="UVIP (Video Platform)",
+        description="Handles video meetings, recordings, and engagement analysis",
+        tool_names=[
+            "schedule_video_meeting",
+            "get_meeting_recordings",
+            "analyze_meeting",
+            "send_async_video",
+            "get_video_analytics",
+            "extract_meeting_action_items",
+            "generate_meeting_summary",
+            "get_participant_insights",
+        ],
+    ),
+    "email_intelligence": AgentToolConfig(
+        role="email_intelligence",
+        name="Email Intelligence",
+        description="Analyzes emails, detects intent, and generates contextual responses",
+        tool_names=[
+            "parse_email",
+            "get_email_thread",
+            "draft_email_response",
+            "get_email_templates",
+            "send_email",
+            "categorize_email_attachments",
+            "match_email_to_loan",
+            "analyze_email_engagement",
+        ],
+        requires_approval_for=["send_email"],
+    ),
+    "ai_receptionist": AgentToolConfig(
+        role="ai_receptionist",
+        name="AI Receptionist",
+        description="Handles initial inquiries, qualifies leads, and routes to specialists",
+        tool_names=[
+            "get_greeting_script",
+            "qualify_caller",
+            "route_call",
+            "create_callback_request",
+            "get_lo_availability",
+            "get_call_queue_status",
+            "handle_inbound_call",
+            "log_call_interaction",
+        ],
+    ),
+    # =========================================================================
+    # Operations Agents (4)
+    # =========================================================================
+    "smart_scheduler": AgentToolConfig(
+        role="smart_scheduler",
+        name="Smart Scheduler",
+        description="Manages appointments, calendar optimization, and scheduling",
+        tool_names=[
+            "get_availability",
+            "book_appointment",
+            "reschedule_appointment",
+            "cancel_appointment",
+            "get_upcoming_appointments",
+            "send_appointment_reminder",
+            "sync_external_calendar",
+            "optimize_schedule",
+        ],
+    ),
+    "task_automation": AgentToolConfig(
+        role="task_automation",
+        name="Task Automation",
+        description="Automates task creation, assignment, and workflow management",
+        tool_names=[
+            "create_task",
+            "get_task_queue",
+            "update_task_status",
+            "assign_task",
+            "get_task_templates",
+            "bulk_update_tasks",
+            "execute_workflow",
+            "get_workflow_status",
+        ],
+    ),
+    "sla_tracker": AgentToolConfig(
+        role="sla_tracker",
+        name="SLA Tracker",
+        description="Monitors SLA compliance, alerts, and breach prevention",
+        tool_names=[
+            "check_sla_status",
+            "get_sla_dashboard",
+            "get_sla_alerts",
+            "calculate_stage_sla",
+            "configure_sla_rules",
+            "get_sla_report",
+            "project_sla_breach",
+            "escalate_sla_breach",
+        ],
+    ),
+    "integrations": AgentToolConfig(
+        role="integrations",
+        name="Integrations Manager",
+        description="Manages LOS, credit, AUS, and vendor integrations",
+        tool_names=[
+            "sync_los_data",
+            "check_integration_status",
+            "trigger_credit_pull",
+            "submit_to_aus",
+            "order_appraisal",
+            "order_title",
+            "get_pricing_engine_quote",
+            "send_for_esign",
+        ],
+        requires_approval_for=["trigger_credit_pull", "submit_to_aus"],
+    ),
+    # =========================================================================
+    # Business Agents (4)
+    # =========================================================================
+    "reporting_engine": AgentToolConfig(
+        role="reporting_engine",
+        name="Reporting Engine",
+        description="Generates reports, analytics, and data exports",
+        tool_names=[
+            "generate_pipeline_report",
+            "generate_production_report",
+            "generate_lo_performance_report",
+            "get_report_templates",
+            "schedule_report",
+            "export_report",
+            "get_dashboard_metrics",
+            "create_custom_report",
+        ],
+    ),
+    "notification_center": AgentToolConfig(
+        role="notification_center",
+        name="Notification Center",
+        description="Manages notifications, alerts, and communication preferences",
+        tool_names=[
+            "send_notification",
+            "get_pending_notifications",
+            "get_notification_templates",
+            "schedule_notification",
+            "get_delivery_status",
+            "update_preferences",
+            "get_preferences",
+            "batch_send",
+        ],
+        requires_approval_for=["batch_send"],
+    ),
+    "subscription_manager": AgentToolConfig(
+        role="subscription_manager",
+        name="Subscription Manager",
+        description="Handles subscriptions, billing, and usage tracking",
+        tool_names=[
+            "get_subscription_status",
+            "get_plans",
+            "change_plan",
+            "get_billing_history",
+            "update_payment_method",
+            "get_usage_metrics",
+            "manage_addons",
+            "pause_subscription",
+        ],
+        requires_approval_for=["change_plan", "update_payment_method"],
+    ),
+    "onboarding_assistant": AgentToolConfig(
+        role="onboarding_assistant",
+        name="Onboarding Assistant",
+        description="Guides new users through setup, training, and platform adoption",
+        tool_names=[
+            "get_onboarding_status",
+            "get_checklist",
+            "complete_step",
+            "start_guided_tour",
+            "get_training_resources",
+            "get_setup_wizard",
+            "request_support",
+            "track_progress",
         ],
     ),
 }
