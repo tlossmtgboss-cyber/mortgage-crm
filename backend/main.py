@@ -23727,6 +23727,25 @@ async def approve_reconciliation(
                     # Update field value
                     extracted.fields[field_name]["value"] = corrected_value
                     extracted.fields[field_name]["confidence"] = 1.0  # User-verified
+                else:
+                    # Field doesn't exist - add it as a new field
+                    # This handles cases where user adds new fields like coborrower info
+                    extracted.fields[field_name] = {
+                        "value": corrected_value,
+                        "confidence": 1.0  # User-added
+                    }
+
+                    # Create training event for new field
+                    training = AITrainingEvent(
+                        extracted_data_id=extracted.id,
+                        field_name=field_name,
+                        original_value="[NEW_FIELD]",
+                        corrected_value=str(corrected_value),
+                        label="added",
+                        user_id=current_user.id
+                    )
+                    db.add(training)
+                    logger.info(f"Added new field {field_name}={corrected_value} to extracted data {extracted.id}")
 
         # Apply field deletions if provided
         if approval.deleted_fields:
@@ -23776,6 +23795,11 @@ async def approve_reconciliation(
             extracted.match_entity_type = approval.target_entity_type
             if approval.target_entity_id:
                 extracted.match_entity_id = approval.target_entity_id
+
+        # Mark fields as modified so SQLAlchemy persists JSON changes
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(extracted, "fields")
+        db.flush()  # Ensure changes are written before create_new_loan reads them
 
         # Handle "Create New Loan" option
         if approval.create_new_loan:
@@ -46843,6 +46867,21 @@ async def startup_event():
                     logger.info("✅ SLA milestone date columns added to leads table")
                 except Exception as sla_e:
                     logger.warning(f"⚠️ SLA date columns creation skipped: {sla_e}")
+
+                # Add display_order column to sla_measures table if missing
+                try:
+                    result = db.execute(text("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'sla_measures' AND column_name = 'display_order'
+                    """))
+                    if not result.fetchone():
+                        db.execute(text("ALTER TABLE sla_measures ADD COLUMN display_order INTEGER DEFAULT 0"))
+                        db.commit()
+                        logger.info("✅ Added display_order column to sla_measures table")
+                    else:
+                        logger.info("✅ sla_measures.display_order column already exists")
+                except Exception as sla_do_e:
+                    logger.warning(f"⚠️ sla_measures.display_order column creation skipped: {sla_do_e}")
 
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
