@@ -24166,6 +24166,13 @@ async def approve_reconciliation(
                     logger.error(f"Error deleting email from inbox: {del_err}")
                     # Don't fail the approval if email deletion fails
 
+            # Include debug info for diagnosing field extraction issues
+            debug_info = {
+                "extracted_fields_type": str(type(extracted.fields)),
+                "extracted_fields_keys": list(extracted.fields.keys()) if extracted.fields else [],
+                "extracted_fields_sample": {k: str(v)[:100] for k, v in (extracted.fields or {}).items()}
+            }
+
             return {
                 "status": "success",
                 "message": "Data approved and applied to CRM",
@@ -24178,7 +24185,8 @@ async def approve_reconciliation(
                 "status_updated": status_updated,
                 "old_status": old_status,
                 "new_status": new_status,
-                "email_deleted_from_inbox": email_deleted
+                "email_deleted_from_inbox": email_deleted,
+                "_debug": debug_info
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to apply data to CRM")
