@@ -1358,6 +1358,16 @@ function LeadDetail() {
         </div>
         <div className="loan-fields-grid">
           <div className="loan-field">
+            <label>Loan Number</label>
+            <input
+              type="text"
+              value={formData.loan_number || ''}
+              onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+              placeholder="Enter loan number"
+            />
+          </div>
+
+          <div className="loan-field">
             <label>Loan Amount</label>
             <input
               type="number"
