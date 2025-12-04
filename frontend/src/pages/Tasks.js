@@ -1043,7 +1043,12 @@ function Tasks() {
         entity_id: task.entity_id,
         email_from: task.email_from,
         email_subject: task.email_subject,
-        communication_history: []
+        communication_history: [],
+        // SLA task fields
+        sla_milestone_id: task.sla_milestone_id,
+        sla_milestone_type: task.sla_milestone_type,
+        sla_date_field: task.sla_date_field,
+        related_type: task.related_type
       }));
 
       // Filter manual tasks only (workflow tasks come from the new endpoint)

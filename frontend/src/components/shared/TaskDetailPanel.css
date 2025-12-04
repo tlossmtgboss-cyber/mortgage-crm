@@ -718,3 +718,108 @@
   background: #f0f9fa;
   border-color: #217F8D;
 }
+
+/* SLA Milestone Section */
+.task-detail-panel .detail-sla-section {
+  margin: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+}
+
+.task-detail-panel .sla-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.task-detail-panel .sla-icon {
+  font-size: 20px;
+}
+
+.task-detail-panel .sla-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.task-detail-panel .sla-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-detail-panel .sla-instruction {
+  margin: 0;
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.task-detail-panel .sla-milestone-type,
+.task-detail-panel .sla-date-field {
+  margin: 0;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.task-detail-panel .sla-date-input-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #fbbf24;
+}
+
+.task-detail-panel .sla-date-input-container label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+  white-space: nowrap;
+}
+
+.task-detail-panel .sla-date-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.task-detail-panel .sla-date-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.task-detail-panel .btn-complete-sla {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.task-detail-panel .btn-complete-sla:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-1px);
+}
+
+.task-detail-panel .btn-complete-sla:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

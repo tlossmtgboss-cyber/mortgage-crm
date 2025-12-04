@@ -25,20 +25,40 @@ import './TaskDetailPanel.css';
  * - statusOptions: Array of status options for status change modal
  */
 
-// Default status options if none provided
-const DEFAULT_STATUS_OPTIONS = [
+// Lead stages (pre-application)
+const LEAD_STATUS_OPTIONS = [
   { value: 'new', label: 'New', color: '#6366f1' },
   { value: 'attempted_contact', label: 'Attempted Contact', color: '#8b5cf6' },
   { value: 'contact_made', label: 'Contact Made', color: '#06b6d4' },
   { value: 'needs_analysis', label: 'Needs Analysis', color: '#0ea5e9' },
   { value: 'pre_approved', label: 'Pre-Approved', color: '#10b981' },
   { value: 'application', label: 'Application', color: '#f59e0b' },
-  { value: 'processing', label: 'Processing', color: '#f97316' },
-  { value: 'closing', label: 'Closing', color: '#22c55e' },
-  { value: 'funded', label: 'Funded', color: '#16a34a' },
   { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' },
   { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
 ];
+
+// Loan stages (active loans - from Processing onwards)
+const LOAN_STATUS_OPTIONS = [
+  { value: 'disclosed', label: 'Disclosed', color: '#8b5cf6' },
+  { value: 'processing', label: 'In Processing', color: '#f97316' },
+  { value: 'in_underwriting', label: 'In Underwriting', color: '#0ea5e9' },
+  { value: 'approved', label: 'Approved', color: '#10b981' },
+  { value: 'clear_to_close', label: 'Clear to Close', color: '#22c55e' },
+  { value: 'suspended', label: 'Suspended', color: '#f59e0b' },
+  { value: 'funded', label: 'Funded', color: '#16a34a' },
+  { value: 'nurture', label: 'Nurture', color: '#a855f7' },
+  { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' },
+  { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' }
+];
+
+// Active loan stages that indicate the entity is a loan (not a lead)
+const ACTIVE_LOAN_STAGES = [
+  'disclosed', 'processing', 'in_processing', 'in_underwriting', 'underwriting',
+  'approved', 'clear_to_close', 'ctc', 'suspended', 'funded', 'closing', 'docs_out', 'docs_back'
+];
+
+// Default status options if none provided (legacy, use the specific ones above)
+const DEFAULT_STATUS_OPTIONS = LEAD_STATUS_OPTIONS;
 
 const TaskDetailPanel = ({
   task,
@@ -242,6 +262,15 @@ const TaskDetailPanel = ({
 
   const hasEntityLink = task.loan_id || task.loanId || task.lead_id || task.leadId || task.entity_id;
   const isSlaTask = task.sla_milestone_id || task.sla_milestone_type || task.related_type === 'sla_milestone';
+
+  // Determine if this is a loan (active loan stage) or lead based on current stage and entity type
+  const currentStage = (task.stage || task.status || '').toLowerCase().replace(/\s+/g, '_');
+  const isLoanEntity = task.entity_type === 'loan' || task.loan_id || task.loanId ||
+    ACTIVE_LOAN_STAGES.some(stage => currentStage.includes(stage));
+
+  // Use appropriate status options based on entity type
+  const effectiveStatusOptions = isLoanEntity ? LOAN_STATUS_OPTIONS :
+    (statusOptions !== DEFAULT_STATUS_OPTIONS ? statusOptions : LEAD_STATUS_OPTIONS);
 
   return (
     <div className={`task-detail-panel ${compact ? 'compact' : ''}`}>
@@ -650,7 +679,7 @@ const TaskDetailPanel = ({
         <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
           <div className="status-modal" onClick={(e) => e.stopPropagation()}>
             <div className="status-modal-header">
-              <h3>Change Lead/Loan Status</h3>
+              <h3>Change {isLoanEntity ? 'Loan' : 'Lead'} Status</h3>
               <button className="modal-close" onClick={() => setShowStatusModal(false)}>×</button>
             </div>
             <div className="status-modal-content">
@@ -658,10 +687,10 @@ const TaskDetailPanel = ({
                 Current: <strong>{task.stage || task.status || 'Unknown'}</strong>
               </p>
               <div className="status-options">
-                {statusOptions.map((stage) => (
+                {effectiveStatusOptions.map((stage) => (
                   <button
                     key={stage.value}
-                    className={`status-option ${task.stage?.toLowerCase().replace(/\s+/g, '_') === stage.value ? 'current' : ''}`}
+                    className={`status-option ${currentStage === stage.value || currentStage.includes(stage.value) ? 'current' : ''}`}
                     style={{ borderLeftColor: stage.color }}
                     onClick={() => {
                       onChangeStatus && onChangeStatus(stage.value);

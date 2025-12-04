@@ -360,19 +360,50 @@ async def list_sla_measures(
     db: Session = Depends(get_db)
 ):
     """Get all SLA measures for the organization. Auto-initializes defaults if none exist."""
-    measures = get_all_sla_measures(db, active_only=active_only)
+    try:
+        measures = get_all_sla_measures(db, active_only=active_only)
 
-    # Auto-initialize default measures if none exist
-    if not measures:
-        logger.info("No SLA measures found - auto-initializing defaults")
-        try:
-            seed_default_sla_measures(db)
-            measures = get_all_sla_measures(db, active_only=active_only)
-            logger.info(f"Auto-initialized {len(measures)} default SLA measures")
-        except Exception as e:
-            logger.error(f"Failed to auto-initialize SLA measures: {e}")
+        # Auto-initialize default measures if none exist
+        if not measures:
+            logger.info("No SLA measures found - auto-initializing defaults")
+            try:
+                seed_default_sla_measures(db)
+                measures = get_all_sla_measures(db, active_only=active_only)
+                logger.info(f"Auto-initialized {len(measures)} default SLA measures")
+            except Exception as e:
+                logger.error(f"Failed to auto-initialize SLA measures: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
-    return measures
+        # Convert to response models manually to avoid enum serialization issues
+        response = []
+        for m in measures:
+            response.append(SLAMeasureResponse(
+                id=m.id,
+                organization_id=m.organization_id,
+                milestone_type=m.milestone_type.value if hasattr(m.milestone_type, 'value') else m.milestone_type,
+                name=m.name,
+                description=m.description,
+                target_value=m.target_value,
+                target_unit=m.target_unit.value if hasattr(m.target_unit, 'value') else m.target_unit,
+                trigger_from=m.trigger_from,
+                trigger_from_is_default=m.trigger_from_is_default or False,
+                warning_threshold_pct=m.warning_threshold_pct or 75,
+                critical_threshold_pct=m.critical_threshold_pct or 100,
+                applies_to_loan_types=m.applies_to_loan_types,
+                applies_to_channels=m.applies_to_channels,
+                business_hours_only=m.business_hours_only if m.business_hours_only is not None else True,
+                is_active=m.is_active if m.is_active is not None else True,
+                display_order=m.display_order or 0,
+                created_at=m.created_at,
+                updated_at=m.updated_at,
+            ))
+        return response
+    except Exception as e:
+        logger.error(f"Error in list_sla_measures: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/measures/{measure_id}", response_model=SLAMeasureResponse)

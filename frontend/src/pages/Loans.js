@@ -26,6 +26,7 @@ function Loans() {
   const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusDropdown, setStatusDropdown] = useState({ show: false, loanId: null, position: { top: 0, left: 0 } });
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -78,6 +79,20 @@ function Loans() {
     'Clear to Close',
     'Suspended',
     'Funded',
+  ];
+
+  // Loan status options for the dropdown
+  const loanStatusOptions = [
+    'Disclosed',
+    'In Processing',
+    'In Underwriting',
+    'Approved',
+    'Clear to Close',
+    'Suspended',
+    'Funded',
+    'Nurture',
+    'Withdrawn',
+    'Does Not Qualify',
   ];
 
   // Map filter display names to actual API stage values
@@ -215,6 +230,40 @@ function Loans() {
     } catch (err) {
       alert('Failed to delete loan');
     }
+  };
+
+  // Status dropdown handlers
+  const handleStatusClick = (e, loanId) => {
+    e.stopPropagation(); // Prevent row click navigation
+    const rect = e.target.getBoundingClientRect();
+    setStatusDropdown({
+      show: true,
+      loanId,
+      position: {
+        top: rect.bottom + window.scrollY + 5,
+        left: rect.left + window.scrollX,
+      },
+    });
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    const loanId = statusDropdown.loanId;
+    setStatusDropdown({ show: false, loanId: null, position: { top: 0, left: 0 } });
+
+    try {
+      await loansAPI.update(loanId, { stage: newStatus });
+      // Update local state
+      setLoans(loans.map(loan =>
+        loan.id === loanId ? { ...loan, stage: newStatus } : loan
+      ));
+    } catch (err) {
+      console.error('Failed to update loan status:', err);
+      alert('Failed to update loan status');
+    }
+  };
+
+  const closeStatusDropdown = () => {
+    setStatusDropdown({ show: false, loanId: null, position: { top: 0, left: 0 } });
   };
 
   const resetForm = () => {
@@ -412,7 +461,11 @@ function Loans() {
                 </td>
                 <td>{loan.property_address || 'N/A'}</td>
                 <td>
-                  <span className={`status-badge status-${getStatusClass(loan.stage)}`}>
+                  <span
+                    className={`status-badge status-${getStatusClass(loan.stage)} status-clickable`}
+                    onClick={(e) => handleStatusClick(e, loan.id)}
+                    title="Click to change status"
+                  >
                     {loan.stage}
                   </span>
                 </td>
@@ -873,6 +926,33 @@ function Loans() {
           </div>
         </div>
       )}
+
+      {/* Status Dropdown Popup */}
+      {statusDropdown.show && (
+        <>
+          <div className="status-dropdown-overlay" onClick={closeStatusDropdown} />
+          <div
+            className="status-dropdown-popup"
+            style={{
+              top: statusDropdown.position.top,
+              left: statusDropdown.position.left,
+            }}
+          >
+            <div className="status-dropdown-header">Change Loan Status</div>
+            <div className="status-dropdown-options">
+              {loanStatusOptions.map((status) => (
+                <button
+                  key={status}
+                  className={`status-dropdown-option status-${getStatusClass(status)}`}
+                  onClick={() => handleStatusChange(status)}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -882,10 +962,15 @@ function getStatusClass(status) {
     'Contract Received': 'received',
     'Disclosed': 'disclosed',
     'In Processing': 'processing',
+    'In Underwriting': 'underwriting',
     'Approved': 'approved',
+    'Clear to Close': 'ctc',
     'Suspended': 'suspended',
+    'Funded': 'funded',
+    'Nurture': 'nurture',
     'Denied': 'denied',
     'Withdrawn': 'withdrawn',
+    'Does Not Qualify': 'not-qualified',
   };
   return statusMap[status] || 'default';
 }

@@ -375,3 +375,156 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+/* Status Dropdown Styles */
+.status-clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.status-clickable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-clickable::after {
+  content: '▼';
+  font-size: 8px;
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+.status-dropdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  z-index: 999;
+}
+
+.status-dropdown-popup {
+  position: absolute;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  z-index: 1000;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.status-dropdown-header {
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.status-dropdown-options {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.status-dropdown-option {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.15s ease;
+}
+
+.status-dropdown-option:hover {
+  background: #f3f4f6;
+}
+
+/* Status option colors */
+.status-dropdown-option.status-disclosed:hover {
+  background: rgba(139, 92, 246, 0.1);
+  color: #7c3aed;
+}
+
+.status-dropdown-option.status-processing:hover {
+  background: rgba(249, 115, 22, 0.1);
+  color: #c2410c;
+}
+
+.status-dropdown-option.status-underwriting:hover {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
+}
+
+.status-dropdown-option.status-approved:hover {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.status-dropdown-option.status-ctc:hover {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.status-dropdown-option.status-suspended:hover {
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.status-dropdown-option.status-funded:hover {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+}
+
+.status-dropdown-option.status-nurture:hover {
+  background: rgba(168, 85, 247, 0.1);
+  color: #9333ea;
+}
+
+.status-dropdown-option.status-withdrawn:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: #4b5563;
+}
+
+.status-dropdown-option.status-not-qualified:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+/* Additional status badge colors */
+.status-badge.status-underwriting {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.status-badge.status-ctc {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-badge.status-funded {
+  background: #d1fae5;
+  color: #15803d;
+}
+
+.status-badge.status-nurture {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.status-badge.status-not-qualified {
+  background: #fee2e2;
+  color: #dc2626;
+}

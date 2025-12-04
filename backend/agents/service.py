@@ -102,7 +102,9 @@ class AIAgentService:
             Response dictionary with text and metadata
         """
         try:
-            # Run the orchestrator
+            # Run the orchestrator with two-phase tool loading
+            # Phase 1: Quick intent classification (before loading tools)
+            # Phase 2: Load only scoped tools for classified intent
             result = await run_orchestrator(
                 message=message,
                 user_id=str(self.current_user.id),
@@ -112,7 +114,9 @@ class AIAgentService:
                 anthropic_client=self.anthropic_client,
                 autonomous_mode=self.autonomous_mode,
                 conversation_history=conversation_history,
-                return_structured=return_structured
+                return_structured=return_structured,
+                db_session=self.db,  # Enable dynamic tool loading
+                current_user=self.current_user,  # Enable dynamic tool loading
             )
 
             # Log the interaction
