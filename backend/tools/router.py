@@ -869,6 +869,49 @@ async def handle_get_tasks(args: Dict[str, Any], request: Request) -> Dict[str, 
         }
 
 
+@register_tool_handler("get_daily_call_list")
+async def handle_get_daily_call_list(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get prioritized daily call list aggregating call-type tasks, leads needing contact,
+    and loans needing milestone follow-ups.
+
+    Returns contact names, phone numbers, and call reasons.
+    """
+    try:
+        from agents.tools.tasks import get_daily_call_list
+
+        user_id = args.get("user_id")
+        include_leads = args.get("include_leads", True)
+        include_loans = args.get("include_loans", True)
+        include_tasks = args.get("include_tasks", True)
+        limit = args.get("limit", 20)
+
+        result = get_daily_call_list(
+            user_id=user_id,
+            include_leads=include_leads,
+            include_loans=include_loans,
+            include_tasks=include_tasks,
+            limit=limit,
+        )
+
+        # Convert ToolResult to dict
+        return {
+            "success": result.status.value == "success",
+            "data": result.data,
+            "error": result.error,
+            "message": result.message,
+        }
+
+    except Exception as e:
+        logger.error(f"Get daily call list error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @register_tool_handler("get_daily_priorities")
 async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
     """

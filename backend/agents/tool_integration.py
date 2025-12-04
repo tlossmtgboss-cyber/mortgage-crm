@@ -270,6 +270,7 @@ AGENT_CONFIGS = {
             "bulk_update_tasks",
             "execute_workflow",
             "get_workflow_status",
+            "get_daily_call_list",
         ],
     ),
     "sla_tracker": AgentToolConfig(

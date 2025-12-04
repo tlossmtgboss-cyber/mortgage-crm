@@ -2,7 +2,7 @@
 Perennia AI - Task Automation Tools
 ===================================
 Tools for the Task Automation Agent handling workflow tasks and automation.
-8 tools for task management, workflow automation, and productivity.
+9 tools for task management, workflow automation, and productivity.
 """
 
 from datetime import datetime, timedelta
@@ -14,6 +14,7 @@ from .base import (
     execute_query,
     execute_single,
     format_date,
+    days_between,
 )
 
 
@@ -793,4 +794,346 @@ def bulk_update_tasks(
     return ToolResult.success(
         data=results,
         message=f"Bulk {action}: {results['successful']}/{len(task_ids)} successful, {results['skipped']} skipped",
+    )
+
+
+# =============================================================================
+# Daily Call List Tool - Aggregates call-related data from multiple sources
+# =============================================================================
+
+@mortgage_tool(
+    name="get_daily_call_list",
+    description="Get prioritized daily call list aggregating call-type tasks, leads needing contact, and loans needing milestone follow-ups. Returns contact names, phone numbers, and call reasons.",
+    agent_roles=["task_automation", "lead_nurturer", "pipeline_analyst"],
+    risk_level="LOW",
+    parameters={
+        "user_id": "Optional user ID to filter by owner",
+        "include_leads": "Include leads needing contact (default: true)",
+        "include_loans": "Include loans needing milestone follow-ups (default: true)",
+        "include_tasks": "Include call-type tasks (default: true)",
+        "limit": "Maximum contacts to return (default: 20)",
+    },
+)
+def get_daily_call_list(
+    user_id: Optional[str] = None,
+    include_leads: bool = True,
+    include_loans: bool = True,
+    include_tasks: bool = True,
+    limit: int = 20,
+) -> ToolResult:
+    """
+    Get a prioritized daily call list aggregating data from:
+    1. Tasks - call-type tasks due today or overdue
+    2. Leads - new leads or those not contacted in 3+ days
+    3. Loans - milestone follow-ups (stage changes, rate locks expiring, etc.)
+
+    Returns formatted list with contact names, phone numbers, and reasons to call.
+    """
+    today = datetime.now().date()
+    calls = []
+
+    # =========================================================================
+    # 1. Get call-type tasks due today or overdue
+    # =========================================================================
+    if include_tasks:
+        task_params = {}
+        task_filters = [
+            "t.status NOT IN ('completed', 'cancelled')",
+            "(t.due_date <= CURRENT_DATE OR t.due_date IS NULL)",
+        ]
+
+        if user_id:
+            task_filters.append("t.owner_id = :user_id")
+            task_params["user_id"] = user_id
+
+        # Match call-type tasks by title/description containing 'call' or category
+        task_filters.append("""(
+            LOWER(t.title) LIKE '%call%'
+            OR LOWER(t.title) LIKE '%phone%'
+            OR LOWER(t.title) LIKE '%contact%'
+            OR LOWER(t.title) LIKE '%follow up%'
+            OR LOWER(t.title) LIKE '%follow-up%'
+            OR LOWER(COALESCE(t.description, '')) LIKE '%call%'
+        )""")
+
+        where_sql = " AND ".join(task_filters)
+
+        task_results = execute_query(f"""
+            SELECT
+                t.id, t.title, t.description, t.due_date, t.priority,
+                t.related_contact_name,
+                l.name as lead_name, l.phone as lead_phone, l.email as lead_email,
+                ln.borrower_name, ln.borrower_phone, ln.loan_number
+            FROM tasks t
+            LEFT JOIN leads l ON t.lead_id = l.id
+            LEFT JOIN loans ln ON t.loan_id = ln.id
+            WHERE {where_sql}
+            ORDER BY
+                CASE t.priority
+                    WHEN 'urgent' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    ELSE 4
+                END,
+                t.due_date ASC NULLS LAST
+            LIMIT 10
+        """, task_params)
+
+        for task in task_results:
+            # Get contact info from task, lead, or loan
+            contact_name = (
+                task.get("related_contact_name") or
+                task.get("lead_name") or
+                task.get("borrower_name") or
+                "Unknown"
+            )
+            phone = task.get("lead_phone") or task.get("borrower_phone")
+
+            if contact_name and contact_name != "Unknown":
+                due_date = task.get("due_date")
+                is_overdue = False
+                if due_date:
+                    if hasattr(due_date, 'date'):
+                        is_overdue = due_date.date() < today
+                    else:
+                        is_overdue = due_date < today
+
+                reason = task.get("title", "Follow-up call")
+                if is_overdue:
+                    reason = f"[OVERDUE] {reason}"
+                elif task.get("priority") in ("urgent", "high"):
+                    reason = f"[{task.get('priority').upper()}] {reason}"
+
+                calls.append({
+                    "source": "task",
+                    "priority": 1 if task.get("priority") == "urgent" else (2 if task.get("priority") == "high" else 3),
+                    "name": contact_name,
+                    "phone": phone,
+                    "email": task.get("lead_email"),
+                    "reason": reason,
+                    "context": {
+                        "task_id": task.get("id"),
+                        "loan_number": task.get("loan_number"),
+                        "is_overdue": is_overdue,
+                    },
+                })
+
+    # =========================================================================
+    # 2. Get leads needing contact (new or not contacted in 3+ days)
+    # =========================================================================
+    if include_leads:
+        lead_params = {"days_threshold": 3}
+        lead_filters = [
+            "l.stage NOT IN ('Closed Lost', 'Closed Won', 'Disqualified', 'Converted')",
+            "l.phone IS NOT NULL",
+            "l.phone != ''",
+        ]
+
+        if user_id:
+            lead_filters.append("l.owner_id = :user_id")
+            lead_params["user_id"] = user_id
+
+        # New leads or those not contacted recently
+        lead_filters.append("""(
+            l.stage = 'New'
+            OR l.last_contact IS NULL
+            OR l.last_contact < CURRENT_DATE - INTERVAL ':days_threshold days'
+        )""".replace(":days_threshold", str(lead_params["days_threshold"])))
+
+        where_sql = " AND ".join(lead_filters)
+
+        lead_results = execute_query(f"""
+            SELECT
+                l.id, l.name, l.first_name, l.last_name,
+                l.phone, l.email, l.stage, l.source,
+                l.last_contact, l.ai_score, l.created_at,
+                l.loan_type, l.preapproval_amount
+            FROM leads l
+            WHERE {where_sql}
+            ORDER BY
+                CASE
+                    WHEN l.stage = 'New' THEN 1
+                    WHEN l.last_contact IS NULL THEN 2
+                    ELSE 3
+                END,
+                l.ai_score DESC NULLS LAST,
+                l.created_at DESC
+            LIMIT 10
+        """, lead_params)
+
+        for lead in lead_results:
+            lead_name = lead.get("name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
+
+            # Build reason
+            if lead.get("stage") == "New":
+                days_since_created = days_between(lead.get("created_at"), datetime.now())
+                reason = f"New lead from {lead.get('source', 'unknown source')}"
+                if days_since_created == 0:
+                    reason += " - today"
+                elif days_since_created == 1:
+                    reason += " - yesterday"
+                else:
+                    reason += f" - {days_since_created} days ago"
+                priority = 2  # High priority for new leads
+            elif not lead.get("last_contact"):
+                reason = "Lead never contacted - needs qualification call"
+                priority = 2
+            else:
+                days_since_contact = days_between(lead.get("last_contact"), datetime.now())
+                reason = f"No contact in {days_since_contact} days - follow up needed"
+                priority = 3
+
+            # Add loan interest context if available
+            if lead.get("loan_type"):
+                reason += f" ({lead.get('loan_type')})"
+
+            calls.append({
+                "source": "lead",
+                "priority": priority,
+                "name": lead_name,
+                "phone": lead.get("phone"),
+                "email": lead.get("email"),
+                "reason": reason,
+                "context": {
+                    "lead_id": lead.get("id"),
+                    "stage": lead.get("stage"),
+                    "ai_score": lead.get("ai_score"),
+                    "preapproval_amount": lead.get("preapproval_amount"),
+                },
+            })
+
+    # =========================================================================
+    # 3. Get loans needing milestone follow-ups
+    # =========================================================================
+    if include_loans:
+        loan_params = {}
+        loan_filters = [
+            "ln.stage NOT IN ('Funded')",
+            "ln.borrower_phone IS NOT NULL",
+            "ln.borrower_phone != ''",
+        ]
+
+        if user_id:
+            loan_filters.append("ln.loan_officer_id = :user_id")
+            loan_params["user_id"] = user_id
+
+        where_sql = " AND ".join(loan_filters)
+
+        loan_results = execute_query(f"""
+            SELECT
+                ln.id, ln.loan_number, ln.borrower_name, ln.borrower_phone, ln.borrower_email,
+                ln.stage, ln.amount, ln.closing_date, ln.lock_date,
+                ln.days_in_stage, ln.sla_status, ln.created_at
+            FROM loans ln
+            WHERE {where_sql}
+            ORDER BY
+                CASE
+                    WHEN ln.sla_status = 'at-risk' THEN 1
+                    WHEN ln.sla_status = 'warning' THEN 2
+                    WHEN ln.closing_date <= CURRENT_DATE + INTERVAL '7 days' THEN 1
+                    ELSE 3
+                END,
+                ln.closing_date ASC NULLS LAST
+            LIMIT 10
+        """, loan_params)
+
+        for loan in loan_results:
+            # Determine call reason based on loan state
+            reasons = []
+            priority = 4  # Default lower priority
+
+            # Check for rate lock expiring
+            if loan.get("lock_date"):
+                lock_date = loan.get("lock_date")
+                if hasattr(lock_date, 'date'):
+                    lock_date = lock_date.date()
+                days_to_lock = (lock_date - today).days if lock_date else None
+                if days_to_lock is not None and days_to_lock <= 5 and days_to_lock >= 0:
+                    reasons.append(f"Rate lock expiring in {days_to_lock} days")
+                    priority = 1 if days_to_lock <= 2 else 2
+
+            # Check for closing coming up
+            if loan.get("closing_date"):
+                closing_date = loan.get("closing_date")
+                if hasattr(closing_date, 'date'):
+                    closing_date = closing_date.date()
+                days_to_close = (closing_date - today).days if closing_date else None
+                if days_to_close is not None and days_to_close <= 7 and days_to_close >= 0:
+                    reasons.append(f"Closing in {days_to_close} days")
+                    priority = min(priority, 2)
+
+            # Check for SLA issues
+            if loan.get("sla_status") == "at-risk":
+                reasons.append(f"SLA at risk - {loan.get('days_in_stage', '?')} days in {loan.get('stage')}")
+                priority = min(priority, 2)
+            elif loan.get("sla_status") == "warning":
+                reasons.append(f"SLA warning - {loan.get('days_in_stage', '?')} days in {loan.get('stage')}")
+                priority = min(priority, 3)
+
+            # Check for stale loans (many days in stage)
+            if loan.get("days_in_stage") and loan.get("days_in_stage") >= 7 and not reasons:
+                reasons.append(f"Loan in {loan.get('stage')} for {loan.get('days_in_stage')} days - status update call")
+                priority = 3
+
+            # Only add if there's a reason to call
+            if reasons:
+                reason = "; ".join(reasons)
+
+                calls.append({
+                    "source": "loan",
+                    "priority": priority,
+                    "name": loan.get("borrower_name"),
+                    "phone": loan.get("borrower_phone"),
+                    "email": loan.get("borrower_email"),
+                    "reason": reason,
+                    "context": {
+                        "loan_id": loan.get("id"),
+                        "loan_number": loan.get("loan_number"),
+                        "stage": loan.get("stage"),
+                        "amount": loan.get("amount"),
+                        "closing_date": format_date(loan.get("closing_date")),
+                    },
+                })
+
+    # =========================================================================
+    # Sort and limit results
+    # =========================================================================
+    # Sort by priority (lower is higher priority)
+    calls.sort(key=lambda x: (x["priority"], x["source"] != "task"))
+    calls = calls[:limit]
+
+    # Format for output
+    formatted_calls = []
+    for i, call in enumerate(calls, 1):
+        formatted_calls.append({
+            "rank": i,
+            "name": call["name"],
+            "phone": call["phone"],
+            "email": call.get("email"),
+            "reason": call["reason"],
+            "source": call["source"],
+            "context": call.get("context", {}),
+        })
+
+    # Summary stats
+    summary = {
+        "total": len(formatted_calls),
+        "from_tasks": sum(1 for c in formatted_calls if c["source"] == "task"),
+        "from_leads": sum(1 for c in formatted_calls if c["source"] == "lead"),
+        "from_loans": sum(1 for c in formatted_calls if c["source"] == "loan"),
+        "high_priority": sum(1 for c in calls if c["priority"] <= 2),
+    }
+
+    data = {
+        "calls": formatted_calls,
+        "summary": summary,
+        "generated_at": datetime.now().isoformat(),
+    }
+
+    if not formatted_calls:
+        return ToolResult.no_data("No calls needed today - pipeline is on track!")
+
+    return ToolResult.success(
+        data=data,
+        message=f"Found {len(formatted_calls)} contacts to call: {summary['from_tasks']} tasks, {summary['from_leads']} leads, {summary['from_loans']} loans",
     )
