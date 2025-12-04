@@ -28757,6 +28757,9 @@ async def sync_microsoft_emails_now(
         if not oauth_record.sync_enabled:
             raise HTTPException(status_code=400, detail="Email sync is disabled")
 
+        # Log which account/folder we're syncing from
+        logger.info(f"Syncing from Microsoft account: {oauth_record.email_address}, folder: {oauth_record.sync_folder or 'Inbox'}")
+
         # Auto-populate known_client_emails table before sync for better identity resolution
         try:
             from sqlalchemy import text as sa_text
@@ -28853,12 +28856,14 @@ async def sync_microsoft_emails_now(
 
         return {
             "status": "success",
+            "email_account": oauth_record.email_address,
+            "sync_folder": oauth_record.sync_folder or "Inbox",
             "fetched_count": len(emails),
             "processed_count": processed_count,
             "skipped_count": skipped_count,
             "error_count": error_count,
             "errors": errors[:5] if errors else [],  # Return first 5 errors
-            "message": f"Synced {processed_count} emails successfully" + (f" ({error_count} errors)" if error_count else "")
+            "message": f"Synced {processed_count} emails from {oauth_record.email_address}" + (f" ({error_count} errors)" if error_count else "")
         }
 
     except HTTPException:

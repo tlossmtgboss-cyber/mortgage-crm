@@ -416,13 +416,29 @@ function ReconciliationCenter() {
 
         if (!silent) {
           const count = data.processed_count || data.synced_count || 0;
-          setSyncStatus(`Synced ${count} emails successfully`);
+          const fetched = data.fetched_count || 0;
+          const account = data.email_account || '';
+          const folder = data.sync_folder || 'Inbox';
+
+          // Show more detailed status including which account
+          let statusMsg = `Synced ${count} emails`;
+          if (account) {
+            statusMsg += ` from ${account}`;
+          }
+          if (fetched > 0 && count === 0) {
+            statusMsg += ` (${fetched} fetched, ${data.skipped_count || 0} skipped)`;
+          }
+          setSyncStatus(statusMsg);
+
+          // Log detailed info for debugging
+          console.log('Sync result:', { account, folder, fetched, processed: count, skipped: data.skipped_count, errors: data.error_count });
+
           // Refresh both pending and completed items to show new data
           fetchPendingItems();
           fetchCompletedItems();
 
-          // Clear status after 3 seconds
-          setTimeout(() => setSyncStatus(''), 3000);
+          // Clear status after 5 seconds (longer to read the info)
+          setTimeout(() => setSyncStatus(''), 5000);
         }
       } else {
         if (!silent) {
