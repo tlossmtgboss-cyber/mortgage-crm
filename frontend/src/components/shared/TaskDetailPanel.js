@@ -126,16 +126,18 @@ const TaskDetailPanel = ({
   };
 
   const handleNavigateToEntity = () => {
-    const loanId = task.loan_id || task.loanId || task.entity_id;
+    const loanId = task.loan_id || task.loanId;
     const leadId = task.lead_id || task.leadId;
-    if (task.source === 'Workflow' || task.stage === 'Workflow') {
-      navigate('/workflow-dashboard');
-    } else if (loanId && task.entity_type === 'loan') {
+
+    // Prioritize navigating to the client profile (loan or lead page)
+    if (loanId) {
       navigate(`/loans/${loanId}`);
-    } else if (leadId || task.entity_type === 'lead') {
-      navigate(`/leads/${leadId || task.entity_id}`);
-    } else if (loanId) {
-      navigate(`/loans/${loanId}`);
+    } else if (leadId) {
+      navigate(`/leads/${leadId}`);
+    } else if (task.entity_type === 'loan' && task.entity_id) {
+      navigate(`/loans/${task.entity_id}`);
+    } else if (task.entity_type === 'lead' && task.entity_id) {
+      navigate(`/leads/${task.entity_id}`);
     }
   };
 
