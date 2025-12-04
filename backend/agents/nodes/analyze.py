@@ -174,6 +174,10 @@ INTENT_PATTERNS = {
             r"(speed|time) to lead",
             r"lead (analytics?|metrics?|insights?)",
             r"(nurture|follow.?up) (leads?|list)",
+            # "Call my leads" queries - need lead data first, NOT click_to_dial
+            r"call (my |the )?(top|best|hot|warm|priority|highest)( \d+)? (leads?|prospects?)",
+            r"(call|contact|reach out to) (my |the )?(leads?|prospects?)",
+            r"(top|best|hot) \d+ (leads?|contacts?|prospects?) (to call|to contact)",
         ],
         "intent": QueryIntent.LEAD_MANAGEMENT,
         "tools": ["lead_status_insights", "get_leads_by_status"],
