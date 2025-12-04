@@ -33367,40 +33367,61 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
 
     try:
         # Delete related records first to avoid foreign key constraint errors
-        # Use a helper to safely delete from tables that may or may not exist
-        def safe_delete(table_name, column="lead_id"):
-            try:
-                db.execute(text(f"DELETE FROM {table_name} WHERE {column} = :lead_id"), {"lead_id": lead_id})
-            except Exception as e:
-                logger.debug(f"Table {table_name} delete skipped: {e}")
+        # Use raw connection to handle each delete independently
+        from sqlalchemy import inspect
 
-        def safe_nullify(table_name, column="lead_id"):
-            try:
-                db.execute(text(f"UPDATE {table_name} SET {column} = NULL WHERE {column} = :lead_id"), {"lead_id": lead_id})
-            except Exception as e:
-                logger.debug(f"Table {table_name} nullify skipped: {e}")
+        # Get list of all tables to check what exists
+        inspector = inspect(db.bind)
+        existing_tables = set(inspector.get_table_names())
 
-        # Delete from all possible related tables
-        safe_delete("activities")
-        safe_delete("tasks")
-        safe_delete("ai_tasks")
-        safe_delete("documents")
-        safe_delete("notes")
-        safe_delete("communications")
-        safe_delete("email_reconciliation_queue")
-        safe_delete("workflow_executions")
-        safe_delete("lead_profiles")
-        safe_delete("circle_contacts")
-        safe_delete("notifications")
-        safe_delete("stage_history", "entity_id")  # For leads tracked in stage_history
-        safe_delete("conversation_messages")
-        safe_delete("ai_conversation_messages")
-        safe_delete("email_intelligence_queue")
-        safe_delete("known_client_emails")
+        # Tables to delete from (if they exist)
+        delete_tables = [
+            ("activities", "lead_id"),
+            ("tasks", "lead_id"),
+            ("ai_tasks", "lead_id"),
+            ("documents", "lead_id"),
+            ("notes", "lead_id"),
+            ("communications", "lead_id"),
+            ("email_reconciliation_queue", "lead_id"),
+            ("workflow_executions", "lead_id"),
+            ("lead_profiles", "lead_id"),
+            ("circle_contacts", "lead_id"),
+            ("notifications", "lead_id"),
+            ("stage_history", "entity_id"),
+            ("conversation_messages", "lead_id"),
+            ("ai_conversation_messages", "lead_id"),
+            ("email_intelligence_queue", "lead_id"),
+            ("known_client_emails", "lead_id"),
+            ("incoming_data_events", "lead_id"),
+        ]
 
-        # Nullify references in other tables (don't delete the parent records)
-        safe_nullify("loans")
-        safe_nullify("extracted_data", "match_entity_id")  # Only nullify if match_entity_type = 'lead'
+        # Tables to nullify (if they exist)
+        nullify_tables = [
+            ("loans", "lead_id"),
+            ("extracted_data", "match_entity_id"),
+        ]
+
+        # Delete from existing tables
+        for table_name, column in delete_tables:
+            if table_name in existing_tables:
+                try:
+                    db.execute(text(f"DELETE FROM {table_name} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                except Exception as e:
+                    logger.debug(f"Table {table_name} delete skipped: {e}")
+                    # Rollback the failed statement and continue
+                    db.rollback()
+
+        # Nullify references in existing tables
+        for table_name, column in nullify_tables:
+            if table_name in existing_tables:
+                try:
+                    db.execute(text(f"UPDATE {table_name} SET {column} = NULL WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                except Exception as e:
+                    logger.debug(f"Table {table_name} nullify skipped: {e}")
+                    db.rollback()
+
+        # Refresh the lead object since we may have rolled back
+        db.refresh(lead)
 
         # Now delete the lead
         db.delete(lead)
