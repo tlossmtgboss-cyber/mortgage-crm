@@ -609,11 +609,21 @@ class Lead(Base):
     dti_back = Column(Float)   # Back-end DTI ratio
     program = Column(String)   # Loan program (FHA, VA, Conv, etc.)
     status_date = Column(DateTime)  # Date of last status change
+    # SLA Milestone Dates - tracks key dates for SLA measurement
+    lead_received_date = Column(DateTime)  # When lead was received/imported (for SLA: Lead Response Time)
+    first_contact_attempt_date = Column(DateTime)  # First attempt to contact borrower (SLA: Speed to Lead)
+    first_contact_successful_date = Column(DateTime)  # First successful contact with borrower
+    lead_qualification_date = Column(DateTime)  # When lead was qualified
+    application_link_sent_date = Column(DateTime)  # When application link was sent
     # Milestone dates for task triggering
     application_started_date = Column(DateTime)
     application_completed_date = Column(DateTime)
     credit_pulled_date = Column(DateTime)
+    preapproval_submission_date = Column(DateTime)  # When pre-approval was submitted
     preapproval_issued_date = Column(DateTime)
+    preapproval_expiration_date = Column(DateTime)  # Typically 90 days from credit pull
+    realtor_referral_date = Column(DateTime)  # When referred to realtor
+    rate_watch_enrollment_date = Column(DateTime)  # For shopping-phase automation
     property_address = Column(String)
     # PRD Section 4.1 - Borrower Fields for Rate Lock Intelligence
     buying_timeline_category = Column(SQLEnum(BuyingTimelineCategory))  # Platinum/Gold/Silver/Green
@@ -3128,6 +3138,20 @@ class LeadUpdate(BaseModel):
     appraisal_value: Optional[float] = None
     ltv: Optional[float] = None
     dti: Optional[float] = None
+    # SLA Milestone Dates
+    lead_received_date: Optional[datetime] = None
+    first_contact_attempt_date: Optional[datetime] = None
+    first_contact_successful_date: Optional[datetime] = None
+    lead_qualification_date: Optional[datetime] = None
+    application_link_sent_date: Optional[datetime] = None
+    application_started_date: Optional[datetime] = None
+    application_completed_date: Optional[datetime] = None
+    credit_pulled_date: Optional[datetime] = None
+    preapproval_submission_date: Optional[datetime] = None
+    preapproval_issued_date: Optional[datetime] = None
+    preapproval_expiration_date: Optional[datetime] = None
+    realtor_referral_date: Optional[datetime] = None
+    rate_watch_enrollment_date: Optional[datetime] = None
 
 class LeadResponse(BaseModel):
     id: int
@@ -3177,6 +3201,20 @@ class LeadResponse(BaseModel):
     ltv: Optional[float] = None
     dti: Optional[float] = None
     notes: Optional[str] = None
+    # SLA Milestone Dates
+    lead_received_date: Optional[datetime] = None
+    first_contact_attempt_date: Optional[datetime] = None
+    first_contact_successful_date: Optional[datetime] = None
+    lead_qualification_date: Optional[datetime] = None
+    application_link_sent_date: Optional[datetime] = None
+    application_started_date: Optional[datetime] = None
+    application_completed_date: Optional[datetime] = None
+    credit_pulled_date: Optional[datetime] = None
+    preapproval_submission_date: Optional[datetime] = None
+    preapproval_issued_date: Optional[datetime] = None
+    preapproval_expiration_date: Optional[datetime] = None
+    realtor_referral_date: Optional[datetime] = None
+    rate_watch_enrollment_date: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     class Config:
@@ -46652,6 +46690,38 @@ async def startup_event():
                         logger.info("✅ loans.stage_changed_at column already exists")
                 except Exception as loan_stage_e:
                     logger.warning(f"⚠️ loans.stage_changed_at column creation skipped: {loan_stage_e}")
+
+                # Add SLA milestone date columns to leads table
+                try:
+                    sla_date_columns = [
+                        ("lead_received_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("first_contact_attempt_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("first_contact_successful_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("lead_qualification_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("application_link_sent_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("preapproval_submission_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("preapproval_expiration_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("realtor_referral_date", "TIMESTAMP WITH TIME ZONE"),
+                        ("rate_watch_enrollment_date", "TIMESTAMP WITH TIME ZONE"),
+                    ]
+                    for col_name, col_type in sla_date_columns:
+                        result = db.execute(text(f"""
+                            SELECT column_name FROM information_schema.columns
+                            WHERE table_name = 'leads' AND column_name = '{col_name}'
+                        """))
+                        if not result.fetchone():
+                            db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                            logger.info(f"✅ Added leads.{col_name} column")
+                    # Initialize lead_received_date from created_at for existing leads
+                    db.execute(text("""
+                        UPDATE leads
+                        SET lead_received_date = created_at
+                        WHERE lead_received_date IS NULL
+                    """))
+                    db.commit()
+                    logger.info("✅ SLA milestone date columns added to leads table")
+                except Exception as sla_e:
+                    logger.warning(f"⚠️ SLA date columns creation skipped: {sla_e}")
 
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")

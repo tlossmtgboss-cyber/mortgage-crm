@@ -1452,11 +1452,111 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 /* Important Dates Tab Styles */
+
+/* SLA Metrics Dashboard */
+.sla-metrics-section {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.sla-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.sla-card {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-left: 4px solid #94a3b8;
+  transition: all 0.2s;
+}
+
+.sla-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.sla-card.sla-met {
+  border-left-color: #22c55e;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.sla-card.sla-missed {
+  border-left-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.sla-card.sla-pending {
+  border-left-color: #94a3b8;
+  background: white;
+}
+
+.sla-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sla-icon {
+  font-size: 20px;
+}
+
+.sla-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sla-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.sla-card.sla-met .sla-value {
+  color: #16a34a;
+}
+
+.sla-card.sla-missed .sla-value {
+  color: #dc2626;
+}
+
+.sla-target {
+  font-size: 12px;
+  color: #64748b;
+}
+
 .dates-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 24px;
   margin-top: 24px;
+}
+
+.date-field input[type="datetime-local"] {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: white;
+  width: 100%;
+}
+
+.date-field input[type="datetime-local"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .date-field {

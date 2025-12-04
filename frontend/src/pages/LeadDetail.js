@@ -2659,40 +2659,129 @@ function LeadDetail() {
           {/* Important Dates Tab */}
           {activeTab === 'important-dates' && (
           <div className="tab-content">
+            {/* SLA Metrics Dashboard */}
+            <div className="info-section sla-metrics-section">
+              <h2>SLA Performance Metrics</h2>
+              <p className="section-subtitle">Track response times and performance against SLA targets</p>
+
+              <div className="sla-cards-grid">
+                <div className={`sla-card ${
+                  formData.lead_received_date && formData.first_contact_attempt_date
+                    ? (Math.floor((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60)) <= 1 ? 'sla-met' : 'sla-missed')
+                    : 'sla-pending'
+                }`}>
+                  <div className="sla-card-header">
+                    <span className="sla-icon">⏱️</span>
+                    <span className="sla-title">Speed to Lead</span>
+                  </div>
+                  <div className="sla-value">
+                    {formData.lead_received_date && formData.first_contact_attempt_date
+                      ? (() => {
+                          const hours = Math.floor((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60));
+                          const minutes = Math.floor(((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) % (1000 * 60 * 60)) / (1000 * 60));
+                          return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                        })()
+                      : '—'
+                    }
+                  </div>
+                  <div className="sla-target">Target: &lt; 1 hour</div>
+                </div>
+
+                <div className={`sla-card ${
+                  formData.first_contact_attempt_date && formData.first_contact_successful_date
+                    ? (Math.floor((new Date(formData.first_contact_successful_date) - new Date(formData.first_contact_attempt_date)) / (1000 * 60 * 60 * 24)) <= 2 ? 'sla-met' : 'sla-missed')
+                    : 'sla-pending'
+                }`}>
+                  <div className="sla-card-header">
+                    <span className="sla-icon">📞</span>
+                    <span className="sla-title">Time to Connect</span>
+                  </div>
+                  <div className="sla-value">
+                    {formData.first_contact_attempt_date && formData.first_contact_successful_date
+                      ? (() => {
+                          const days = Math.floor((new Date(formData.first_contact_successful_date) - new Date(formData.first_contact_attempt_date)) / (1000 * 60 * 60 * 24));
+                          return days === 0 ? 'Same day' : `${days} day${days !== 1 ? 's' : ''}`;
+                        })()
+                      : '—'
+                    }
+                  </div>
+                  <div className="sla-target">Target: &lt; 2 days</div>
+                </div>
+
+                <div className={`sla-card ${
+                  formData.lead_received_date && formData.application_started_date
+                    ? (Math.floor((new Date(formData.application_started_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60 * 24)) <= 7 ? 'sla-met' : 'sla-missed')
+                    : 'sla-pending'
+                }`}>
+                  <div className="sla-card-header">
+                    <span className="sla-icon">📝</span>
+                    <span className="sla-title">Lead to Application</span>
+                  </div>
+                  <div className="sla-value">
+                    {formData.lead_received_date && formData.application_started_date
+                      ? `${Math.floor((new Date(formData.application_started_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60 * 24))} days`
+                      : '—'
+                    }
+                  </div>
+                  <div className="sla-target">Target: &lt; 7 days</div>
+                </div>
+
+                <div className={`sla-card ${
+                  formData.application_started_date && formData.preapproval_issued_date
+                    ? (Math.floor((new Date(formData.preapproval_issued_date) - new Date(formData.application_started_date)) / (1000 * 60 * 60 * 24)) <= 3 ? 'sla-met' : 'sla-missed')
+                    : 'sla-pending'
+                }`}>
+                  <div className="sla-card-header">
+                    <span className="sla-icon">✅</span>
+                    <span className="sla-title">App to Pre-Approval</span>
+                  </div>
+                  <div className="sla-value">
+                    {formData.application_started_date && formData.preapproval_issued_date
+                      ? `${Math.floor((new Date(formData.preapproval_issued_date) - new Date(formData.application_started_date)) / (1000 * 60 * 60 * 24))} days`
+                      : '—'
+                    }
+                  </div>
+                  <div className="sla-target">Target: &lt; 3 days</div>
+                </div>
+              </div>
+            </div>
+
             <div className="info-section">
-              <h2>Lead Stage Dates</h2>
-              <p className="section-subtitle">Track key milestone dates throughout the lead journey</p>
+              <h2>SLA Milestone Dates</h2>
+              <p className="section-subtitle">Track key milestone dates for SLA measurement</p>
 
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Lead Created Date</label>
+                  <label>Lead Received Date</label>
                   <input
-                    type="date"
-                    value={formData.lead_created_date || ''}
-                    onChange={(e) => handleFieldChange('lead_created_date', e.target.value)}
+                    type="datetime-local"
+                    value={formData.lead_received_date ? formData.lead_received_date.slice(0, 16) : ''}
+                    onChange={(e) => handleFieldChange('lead_received_date', e.target.value)}
                   />
+                  <small className="field-hint">When lead entered the system (auto-set on import)</small>
                 </div>
 
                 <div className="date-field">
-                  <label>First Contact Attempt Date</label>
+                  <label>First Contact Attempt</label>
                   <input
-                    type="date"
-                    value={formData.first_contact_attempt_date || ''}
+                    type="datetime-local"
+                    value={formData.first_contact_attempt_date ? formData.first_contact_attempt_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('first_contact_attempt_date', e.target.value)}
                   />
+                  <small className="field-hint">SLA: Speed to Lead measurement</small>
                 </div>
 
                 <div className="date-field">
-                  <label>First Contact Successful Date</label>
+                  <label>First Successful Contact</label>
                   <input
-                    type="date"
-                    value={formData.first_contact_successful_date || ''}
+                    type="datetime-local"
+                    value={formData.first_contact_successful_date ? formData.first_contact_successful_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('first_contact_successful_date', e.target.value)}
                   />
                 </div>
 
                 <div className="date-field">
-                  <label>Lead Qualification Date</label>
+                  <label>Lead Qualified Date</label>
                   <input
                     type="date"
                     value={formData.lead_qualification_date || ''}
@@ -2701,7 +2790,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Application Link Sent Date</label>
+                  <label>Application Link Sent</label>
                   <input
                     type="date"
                     value={formData.application_link_sent_date || ''}
@@ -2710,7 +2799,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Application Started Date</label>
+                  <label>Application Started</label>
                   <input
                     type="date"
                     value={formData.application_started_date || ''}
@@ -2719,7 +2808,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Application Completed Date</label>
+                  <label>Application Completed</label>
                   <input
                     type="date"
                     value={formData.application_completed_date || ''}
@@ -2728,7 +2817,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Credit Pulled Date</label>
+                  <label>Credit Pulled</label>
                   <input
                     type="date"
                     value={formData.credit_pulled_date || ''}
@@ -2737,7 +2826,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Pre-Approval Submission Date</label>
+                  <label>Pre-Approval Submitted</label>
                   <input
                     type="date"
                     value={formData.preapproval_submission_date || ''}
@@ -2746,7 +2835,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Pre-Approval Issued Date</label>
+                  <label>Pre-Approval Issued</label>
                   <input
                     type="date"
                     value={formData.preapproval_issued_date || ''}
@@ -2764,7 +2853,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Pre-Approval Expiration Date</label>
+                  <label>Pre-Approval Expiration</label>
                   <input
                     type="date"
                     value={formData.preapproval_expiration_date || ''}
@@ -2774,7 +2863,7 @@ function LeadDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Rate Watch Enrollment Date</label>
+                  <label>Rate Watch Enrollment</label>
                   <input
                     type="date"
                     value={formData.rate_watch_enrollment_date || ''}
