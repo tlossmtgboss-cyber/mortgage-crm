@@ -26156,6 +26156,82 @@ def get_sync_recommendations(connection_status, email_count):
 
     return recommendations
 
+@app.get("/api/v1/microsoft/test-fetch")
+async def test_microsoft_fetch(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint - test Microsoft API fetch and show raw results"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            return {"error": "Microsoft 365 not connected"}
+
+        # Get token info
+        token_info = {
+            "email_address": oauth_record.email_address,
+            "sync_folder": oauth_record.sync_folder or "Inbox",
+            "sync_enabled": oauth_record.sync_enabled,
+            "token_expires_at": oauth_record.token_expires_at.isoformat() if oauth_record.token_expires_at else None,
+        }
+
+        # Check if token is expired
+        if oauth_record.token_expires_at:
+            token_expiry = oauth_record.token_expires_at
+            if token_expiry.tzinfo is None:
+                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+            token_info["token_expired"] = token_expiry < datetime.now(timezone.utc)
+            token_info["expires_in_minutes"] = round((token_expiry - datetime.now(timezone.utc)).total_seconds() / 60, 1)
+
+        # Try to fetch from Microsoft API directly
+        try:
+            access_token = decrypt_token(oauth_record.access_token)
+            folder = oauth_record.sync_folder or "Inbox"
+            graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?$top=5&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime"
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.get(graph_url, headers=headers, timeout=30)
+
+            api_result = {
+                "status_code": response.status_code,
+                "url_called": graph_url.replace(access_token, "***"),
+            }
+
+            if response.status_code == 200:
+                data = response.json()
+                emails = data.get("value", [])
+                api_result["email_count"] = len(emails)
+                api_result["emails"] = [
+                    {
+                        "id": e.get("id", "")[:20] + "...",
+                        "subject": e.get("subject", "")[:50],
+                        "from": e.get("from", {}).get("emailAddress", {}).get("address", ""),
+                        "received": e.get("receivedDateTime", "")
+                    }
+                    for e in emails[:5]
+                ]
+            else:
+                api_result["error"] = response.text[:500]
+
+        except Exception as api_error:
+            api_result = {"error": str(api_error)}
+
+        return {
+            "token_info": token_info,
+            "api_result": api_result
+        }
+
+    except Exception as e:
+        logger.error(f"Test fetch error: {e}")
+        return {"error": str(e)}
+
 @app.post("/api/v1/microsoft/force-sync")
 async def force_email_sync(
     current_user: User = Depends(get_current_user),
