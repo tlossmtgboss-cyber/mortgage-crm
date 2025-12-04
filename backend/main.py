@@ -23806,18 +23806,10 @@ async def approve_reconciliation(
             # Create a new loan from the extracted data
             fields = extracted.fields or {}
 
-            # Debug: log the raw fields we're working with
-            logger.info(f"RECONCILIATION DEBUG: extracted.fields type = {type(extracted.fields)}")
-            logger.info(f"RECONCILIATION DEBUG: extracted.fields content = {extracted.fields}")
-            logger.info(f"RECONCILIATION DEBUG: fields variable = {fields}")
-
             def get_val(field_name, default=None):
                 """Helper to get field value"""
                 if field_name in fields and isinstance(fields[field_name], dict):
-                    val = fields[field_name].get("value", default)
-                    logger.info(f"RECONCILIATION DEBUG: get_val({field_name}) = {val}")
-                    return val
-                logger.info(f"RECONCILIATION DEBUG: get_val({field_name}) field not found or not dict, returning {default}")
+                    return fields[field_name].get("value", default)
                 return default
 
             # Get loan number - generate if not provided
@@ -23832,29 +23824,20 @@ async def approve_reconciliation(
 
             # Get co-borrower name - handle separate coborrower_first_name/coborrower_last_name fields
             coborrower_name = get_val("coborrower_name")
-            logger.info(f"RECONCILIATION DEBUG: coborrower_name from get_val = {coborrower_name}")
             if not coborrower_name:
                 coborrower_first = get_val("coborrower_first_name", "") or get_val("coborrower first name", "")
                 coborrower_last = get_val("coborrower_last_name", "") or get_val("coborrower last name", "")
-                logger.info(f"RECONCILIATION DEBUG: coborrower_first={coborrower_first}, coborrower_last={coborrower_last}")
                 if coborrower_first or coborrower_last:
                     coborrower_name = f"{coborrower_first} {coborrower_last}".strip()
-                    logger.info(f"RECONCILIATION DEBUG: constructed coborrower_name = {coborrower_name}")
 
             # Get co-borrower email
             coborrower_email = get_val("coborrower_email") or get_val("co_borrower_email")
-            logger.info(f"RECONCILIATION DEBUG: coborrower_email = {coborrower_email}")
 
             # Get email - handle borrower_email field name
             borrower_email = get_val("borrower_email") or get_val("email")
-            logger.info(f"RECONCILIATION DEBUG: borrower_email = {borrower_email}")
 
             # Get phone - handle borrower_phone field name
             borrower_phone = get_val("borrower_phone") or get_val("phone")
-            logger.info(f"RECONCILIATION DEBUG: borrower_phone = {borrower_phone}")
-
-            # Debug: log all fields
-            logger.info(f"RECONCILIATION DEBUG: All fields keys: {list(fields.keys())}")
 
             # If no loan number, generate one (skip searching for existing loans to avoid enum errors)
             # NOTE: Previously searched for existing loans, but this causes issues when DB has
@@ -23952,21 +23935,6 @@ async def approve_reconciliation(
                 # Use raw SQL INSERT to bypass SQLAlchemy enum serialization completely
                 # This ensures we control exactly what gets sent to PostgreSQL
                 amount = float(get_val("amount", 0) or get_val("loan_amount", 0) or 0)
-
-                # Debug: log and store the INSERT parameters
-                insert_params = {
-                    "loan_number": loan_number,
-                    "borrower_name": borrower_name,
-                    "borrower_email": borrower_email,
-                    "borrower_phone": borrower_phone,
-                    "coborrower_name": coborrower_name,
-                    "co_borrower_email": coborrower_email,
-                    "program": get_val("program"),
-                    "amount": amount,
-                }
-                logger.info(f"RECONCILIATION DEBUG: INSERT params = {insert_params}")
-                # Store for debug response - using extracted object to pass info
-                extracted._debug_insert_params = insert_params
 
                 result = db.execute(
                     text("""
@@ -24181,14 +24149,6 @@ async def approve_reconciliation(
                     logger.error(f"Error deleting email from inbox: {del_err}")
                     # Don't fail the approval if email deletion fails
 
-            # Include debug info for diagnosing field extraction issues
-            debug_info = {
-                "extracted_fields_type": str(type(extracted.fields)),
-                "extracted_fields_keys": list(extracted.fields.keys()) if extracted.fields else [],
-                "extracted_fields_sample": {k: str(v)[:100] for k, v in (extracted.fields or {}).items()},
-                "insert_params_used": getattr(extracted, '_debug_insert_params', None)
-            }
-
             return {
                 "status": "success",
                 "message": "Data approved and applied to CRM",
@@ -24201,8 +24161,7 @@ async def approve_reconciliation(
                 "status_updated": status_updated,
                 "old_status": old_status,
                 "new_status": new_status,
-                "email_deleted_from_inbox": email_deleted,
-                "_debug": debug_info
+                "email_deleted_from_inbox": email_deleted
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to apply data to CRM")
@@ -33949,7 +33908,9 @@ async def get_loans(
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         sql = f"""
-            SELECT id, loan_number, borrower_name, stage, program, amount, rate,
+            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
+                   coborrower_name, co_borrower_email,
+                   stage, program, amount, rate,
                    closing_date, days_in_stage, sla_status, created_at,
                    loan_officer_name, loan_officer_email, processor, processor_email,
                    underwriter, underwriter_email, closer, closer_email
@@ -33990,7 +33951,9 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
     """Get single loan using raw SQL to avoid enum deserialization issues"""
     try:
         sql = """
-            SELECT id, loan_number, borrower_name, stage, program, amount, rate,
+            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
+                   coborrower_name, co_borrower_email,
+                   stage, program, amount, rate,
                    closing_date, days_in_stage, sla_status, created_at,
                    loan_officer_name, loan_officer_email, processor, processor_email,
                    underwriter, underwriter_email, closer, closer_email, loan_officer_id
