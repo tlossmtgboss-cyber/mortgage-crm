@@ -816,6 +816,11 @@ class Task(Base):
     related_contact_name = Column(String)
     related_type = Column(String)
     completed_at = Column(DateTime)
+    # SLA milestone tracking fields
+    sla_milestone_id = Column(Integer, nullable=True)  # Links to loan_milestone_history.id
+    sla_milestone_type = Column(String, nullable=True)  # e.g., 'appraisal_ordered', 'title_received'
+    sla_date_field = Column(String, nullable=True)  # Loan field to update (e.g., 'appraisal_ordered_date')
+    milestone_date = Column(DateTime, nullable=True)  # Date entered by user when completing task
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     owner = relationship("User", backref="tasks")
@@ -23793,6 +23798,17 @@ async def approve_reconciliation(
                 last_name = get_val("last_name", "")
                 borrower_name = f"{first_name} {last_name}".strip() or "Unknown"
 
+            # Get co-borrower name - handle separate coborrower_first_name/coborrower_last_name fields
+            coborrower_name = get_val("coborrower_name")
+            if not coborrower_name:
+                coborrower_first = get_val("coborrower_first_name", "") or get_val("coborrower first name", "")
+                coborrower_last = get_val("coborrower_last_name", "") or get_val("coborrower last name", "")
+                if coborrower_first or coborrower_last:
+                    coborrower_name = f"{coborrower_first} {coborrower_last}".strip()
+
+            # Get co-borrower email
+            coborrower_email = get_val("coborrower_email") or get_val("co_borrower_email")
+
             # Get email - handle borrower_email field name
             borrower_email = get_val("borrower_email") or get_val("email")
 
@@ -23900,12 +23916,12 @@ async def approve_reconciliation(
                     text("""
                         INSERT INTO loans (
                             loan_number, borrower_name, borrower_email, borrower_phone,
-                            coborrower_name, program, amount, property_address,
+                            coborrower_name, co_borrower_email, program, amount, property_address,
                             property_city, property_state, property_zip, processor, lender,
                             loan_officer_id, stage, days_in_stage, sla_status, created_at, updated_at
                         ) VALUES (
                             :loan_number, :borrower_name, :borrower_email, :borrower_phone,
-                            :coborrower_name, :program, :amount, :property_address,
+                            :coborrower_name, :co_borrower_email, :program, :amount, :property_address,
                             :property_city, :property_state, :property_zip, :processor, :lender,
                             :loan_officer_id, :stage, 0, 'on-track', NOW(), NOW()
                         ) RETURNING id
@@ -23915,7 +23931,8 @@ async def approve_reconciliation(
                         "borrower_name": borrower_name,
                         "borrower_email": borrower_email,
                         "borrower_phone": borrower_phone,
-                        "coborrower_name": get_val("coborrower_name"),
+                        "coborrower_name": coborrower_name,
+                        "co_borrower_email": coborrower_email,
                         "program": get_val("program"),
                         "amount": amount,
                         "property_address": get_val("property_address"),
@@ -35726,6 +35743,105 @@ async def delegate_task(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/v1/tasks/{task_id}/complete-sla")
+async def complete_sla_task(
+    task_id: int,
+    completion_data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Complete an SLA milestone task with a date.
+    This endpoint:
+    1. Marks the task as completed
+    2. Stores the milestone date
+    3. Updates the loan's Important Dates field (if mapped)
+    4. Completes the SLA milestone
+
+    Request body:
+    {
+        "milestone_date": "2024-01-15T00:00:00Z"  // ISO format date
+    }
+    """
+    try:
+        from crud.sla_tracking import complete_sla_task_with_date
+
+        milestone_date_str = completion_data.get("milestone_date")
+        if not milestone_date_str:
+            raise HTTPException(status_code=400, detail="milestone_date is required")
+
+        # Parse the date
+        try:
+            if isinstance(milestone_date_str, str):
+                # Try ISO format first
+                if "T" in milestone_date_str:
+                    milestone_date = datetime.fromisoformat(milestone_date_str.replace("Z", "+00:00"))
+                else:
+                    # Try simple date format
+                    milestone_date = datetime.strptime(milestone_date_str, "%Y-%m-%d")
+                    milestone_date = milestone_date.replace(tzinfo=timezone.utc)
+            else:
+                milestone_date = milestone_date_str
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+
+        # Complete the SLA task
+        result = complete_sla_task_with_date(
+            db=db,
+            task_id=task_id,
+            milestone_date=milestone_date,
+            user_id=current_user.id,
+            organization_id=1
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to complete SLA task"))
+
+        return {
+            "success": True,
+            "message": "SLA task completed successfully",
+            **result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Complete SLA task error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/tasks/sla")
+async def get_sla_tasks(
+    include_completed: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all SLA milestone warning tasks for the current user.
+    These are tasks created when SLA milestones hit warning or overdue status.
+    """
+    try:
+        from crud.sla_tracking import get_sla_tasks_for_user
+
+        tasks = get_sla_tasks_for_user(
+            db=db,
+            user_id=current_user.id,
+            include_completed=include_completed
+        )
+
+        return {
+            "success": True,
+            "count": len(tasks),
+            "tasks": tasks
+        }
+
+    except Exception as e:
+        logger.error(f"Get SLA tasks error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/api/v1/tasks/{task_id}", status_code=204)
 async def delete_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -35935,7 +36051,12 @@ async def get_unified_tasks(
                 "stage": loan_stage or "Workflow",
                 "owner": "Loan Officer",
                 "communication_count": 0,
-                "has_calendly_slots": has_calendly
+                "has_calendly_slots": has_calendly,
+                # SLA task fields
+                "sla_milestone_id": task.sla_milestone_id,
+                "sla_milestone_type": task.sla_milestone_type,
+                "sla_date_field": task.sla_date_field,
+                "related_type": task.related_type
             })
 
         # 3. Get pending reconciliation items (batch fetch events separately to avoid N+1)
@@ -50255,98 +50376,98 @@ async def setup_mum_database(
 
 
 @app.get("/api/v1/mum/clients")
-async def get_mum_clients(
-    status: str = "active",
+async def get_mum_clients_portfolio(
+    status: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all MUM clients with calculated fields"""
+    """Get all MUM clients for portfolio view - uses main MUMClient model"""
     try:
-        from models_mum import MUMClient
-        from utils_mum import (
-            calculate_current_balance, calculate_property_value,
-            calculate_ltv, calculate_equity, calculate_days_since_funding,
-            calculate_servicing_revenue, determine_loan_term_from_type
-        )
-
-        # Query clients
-        query = db.query(MUMClient)
-        if status:
+        # Query from main MUMClient model (defined in main.py)
+        query = db.query(MUMClient).filter(MUMClient.user_id == current_user.id)
+        if status and status != "all":
             query = query.filter(MUMClient.status == status)
 
-        clients = query.all()
+        clients = query.order_by(MUMClient.created_at.desc()).all()
 
-        # Calculate real-time values for each client
+        # Build response with calculated fields
         client_list = []
+        refinance_count = 0
+
         for client in clients:
-            # Determine loan term
-            loan_term = determine_loan_term_from_type(client.loan_type)
-
-            # Calculate current balance
-            current_balance = calculate_current_balance(
-                float(client.original_loan_amount),
-                float(client.interest_rate),
-                client.first_payment_date,
-                loan_term
-            )
-
-            # Calculate current property value
-            current_value = calculate_property_value(
-                float(client.appraisal_value_at_closing),
-                client.first_payment_date
-            )
-
-            # Calculate LTV and equity
-            ltv = calculate_ltv(current_balance, current_value)
-            equity_amount, equity_pct = calculate_equity(current_value, current_balance)
-
             # Calculate days since funding
-            days_since_funding = calculate_days_since_funding(client.closing_date)
+            days_since = 0
+            if client.original_close_date:
+                close_dt = client.original_close_date
+                if hasattr(close_dt, 'tzinfo') and close_dt.tzinfo is None:
+                    close_dt = close_dt.replace(tzinfo=timezone.utc)
+                days_since = (datetime.now(timezone.utc) - close_dt).days
 
-            # Calculate revenue
-            annual_revenue = calculate_servicing_revenue(current_balance)
+            # Calculate estimated current balance (simple amortization approximation)
+            # Roughly reduce balance by 1/360 * months passed for 30yr loan
+            original_balance = float(client.loan_balance or client.original_loan_amount or 0)
+            months_passed = days_since // 30
+            principal_paid = (original_balance / 360) * months_passed * 0.3  # Simplified
+            current_balance = max(0, original_balance - principal_paid)
+
+            # Estimate property appreciation (3% annually)
+            original_value = float(client.appraisal_value_at_closing or original_balance * 1.25)
+            years_passed = days_since / 365
+            current_value = original_value * (1 + 0.03 * years_passed)
+
+            # Calculate equity
+            equity_amount = current_value - current_balance
+            equity_pct = (equity_amount / current_value * 100) if current_value > 0 else 0
+
+            # Check refinance opportunity (if rates dropped > 0.5%)
+            is_refinance_opportunity = client.refinance_opportunity or False
+            if is_refinance_opportunity:
+                refinance_count += 1
 
             client_data = {
                 "id": client.id,
-                "client_name": client.client_name,
+                "client_name": client.client_name or client.name,
                 "email": client.email,
                 "phone": client.phone,
-                "original_loan_amount": float(client.original_loan_amount),
-                "current_loan_amount": current_balance,
-                "interest_rate": float(client.interest_rate),
-                "servicing_loan_number": client.servicing_loan_number,
-                "origination_loan_number": client.origination_loan_number,
-                "appraisal_value_at_closing": float(client.appraisal_value_at_closing),
-                "current_property_value": current_value,
-                "current_servicer": client.current_servicer,
-                "has_escrow": client.has_escrow,
-                "current_principal_payment": float(client.current_principal_payment or 0),
-                "monthly_taxes": float(client.monthly_taxes or 0),
-                "monthly_insurance": float(client.monthly_insurance or 0),
-                "monthly_pmi": float(client.monthly_pmi or 0) if client.monthly_pmi else None,
-                "loan_type": client.loan_type,
-                "is_veteran": client.is_veteran,
-                "ltv": ltv,
-                "equity_amount": equity_amount,
-                "equity_percentage": equity_pct,
-                "closing_date": client.closing_date.isoformat(),
-                "first_payment_date": client.first_payment_date.isoformat(),
-                "days_since_funding": days_since_funding,
-                "refinance_opportunity": client.refinance_opportunity,
-                "heloc_opportunity": client.heloc_opportunity,
-                "rate_rebound_opportunity": client.rate_rebound_opportunity,
-                "high_equity_opportunity": client.high_equity_opportunity,
-                "referrals_sent": client.referrals_sent,
-                "annual_servicing_revenue": annual_revenue,
-                "status": client.status
+                "loan_number": client.loan_number,
+                "original_loan_amount": original_balance,
+                "current_loan_amount": round(current_balance, 2),
+                "loan_balance": round(current_balance, 2),
+                "interest_rate": float(client.original_rate or client.interest_rate or 0),
+                "original_rate": float(client.original_rate or 0),
+                "current_rate": float(client.current_rate or client.original_rate or 0),
+                "appraisal_value_at_closing": original_value,
+                "current_property_value": round(current_value, 2),
+                "closing_date": client.original_close_date.isoformat() if client.original_close_date else None,
+                "original_close_date": client.original_close_date.isoformat() if client.original_close_date else None,
+                "days_since_funding": days_since,
+                "ltv": round((current_balance / current_value * 100) if current_value > 0 else 0, 2),
+                "equity_amount": round(equity_amount, 2),
+                "equity_percentage": round(equity_pct, 2),
+                "refinance_opportunity": is_refinance_opportunity,
+                "estimated_savings": float(client.estimated_savings or 0),
+                "engagement_score": client.engagement_score or 0,
+                "referrals_sent": client.referrals_sent or 0,
+                "status": client.status or "Active",
+                "last_contact": client.last_contact.isoformat() if client.last_contact else None,
+                "notes": client.notes,
+                # Team info
+                "loan_officer": client.loan_officer,
+                "processor": client.processor,
             }
 
             client_list.append(client_data)
 
-        return {"clients": client_list, "count": len(client_list)}
+        return {
+            "clients": client_list,
+            "count": len(client_list),
+            "refinance_opportunities": refinance_count
+        }
 
     except Exception as e:
         logger.error(f"Get MUM clients error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
