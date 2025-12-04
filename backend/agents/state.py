@@ -65,10 +65,12 @@ class AgentState(TypedDict, total=False):
     # === Query Analysis (from analyze node) ===
     query_intent: QueryIntent            # Classified intent
     query_entities: dict                 # Extracted entities (names, dates, amounts)
+    extracted_entities: dict             # Special entities from pattern matching (phone numbers, etc.)
     query_urgency: Literal["low", "medium", "high", "critical"]
     query_complexity: Literal["simple", "moderate", "complex"]
     required_tools: list[str]            # Tools needed to answer query
     requires_action: bool                # Whether query needs action vs just info
+    analysis_method: str                 # How query was analyzed (pattern_match, llm, fallback)
 
     # === Data Gathering (from gather node) ===
     tool_calls: list[ToolCall]           # Tools called and their results

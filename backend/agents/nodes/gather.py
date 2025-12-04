@@ -88,7 +88,11 @@ CACHEABLE_TOOLS = {
 }
 
 # Tools that should NEVER be cached (write operations)
-NON_CACHEABLE_TOOLS = {"create_task", "update_task", "delete_task", "send_email"}
+NON_CACHEABLE_TOOLS = {
+    "create_task", "update_task", "delete_task", "send_email",
+    "click_to_dial", "make_call", "call_contact",
+    "send_sms", "send_text", "text_contact"
+}
 
 
 async def execute_tool(
@@ -249,6 +253,32 @@ def determine_tool_arguments(
     elif tool_name == "create_task":
         args["title"] = entities.get("task_title", "Follow up")
         args["priority"] = "medium"
+
+    # Communication tools
+    elif tool_name in ["click_to_dial", "make_call", "call_contact"]:
+        # Get phone number from entities or extracted_entities
+        phone = None
+        if entities.get("phone_numbers"):
+            phone = entities["phone_numbers"][0]
+        elif state.get("extracted_entities", {}).get("phone_number"):
+            phone = state["extracted_entities"]["phone_number"]
+
+        if phone:
+            args["phone_number"] = phone
+            args["contact_name"] = entities.get("borrower_names", ["Contact"])[0] if entities.get("borrower_names") else "Contact"
+
+    elif tool_name in ["send_sms", "send_text", "text_contact"]:
+        # Get phone number from entities or extracted_entities
+        phone = None
+        if entities.get("phone_numbers"):
+            phone = entities["phone_numbers"][0]
+        elif state.get("extracted_entities", {}).get("phone_number"):
+            phone = state["extracted_entities"]["phone_number"]
+
+        if phone:
+            args["phone_number"] = phone
+            # Default message if not specified
+            args["message"] = state.get("message_content", "Hello from your loan officer!")
 
     return args
 

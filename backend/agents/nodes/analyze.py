@@ -393,13 +393,18 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             # Pattern matched - skip LLM entirely!
             entities = extract_entities(user_message)
 
+            # Merge extracted_entities from pattern matching (e.g., phone numbers)
+            if pattern_result.get("extracted_entities"):
+                entities.update(pattern_result["extracted_entities"])
+
             state = update_state(state, {
                 "query_intent": pattern_result["intent"],
                 "query_entities": entities,
+                "extracted_entities": pattern_result.get("extracted_entities", {}),
                 "query_urgency": pattern_result["urgency"],
                 "query_complexity": pattern_result["complexity"],
                 "required_tools": pattern_result["tools"],
-                "requires_action": False,
+                "requires_action": pattern_result.get("requires_action", False),
                 "analysis_method": "pattern_match"
             })
 
