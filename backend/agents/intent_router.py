@@ -144,6 +144,10 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"who (should|to) (call|contact)",
         r"speed to lead",
         r"lead (score|scoring|analytics)",
+        # "Call my leads" type queries - need lead data first
+        r"call (my |the )?(top|best|hot|warm|priority|highest)",
+        r"(call|contact|reach out to) (my )?leads",
+        r"(top|best|hot) \d+ (leads?|contacts?|prospects?) (to call|to contact)",
     ],
     "pipeline": [
         r"(loan|loans) (pipeline|funnel)",
