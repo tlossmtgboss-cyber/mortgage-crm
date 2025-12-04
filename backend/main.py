@@ -20734,7 +20734,9 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
             emails_data = response.json()
             emails = emails_data.get("value", [])
 
-            logger.info(f"Fetched {len(emails)} emails from Microsoft for user {oauth_record.user_id}")
+            logger.info(f"Fetched {len(emails)} emails from Microsoft for user {oauth_record.user_id} (folder: {folder})")
+            if len(emails) == 0:
+                logger.warning(f"Microsoft API returned 0 emails for folder '{folder}'. API response keys: {list(emails_data.keys())}")
 
             # Update last sync time
             oauth_record.last_sync_at = datetime.now(timezone.utc)
@@ -28854,6 +28856,18 @@ async def sync_microsoft_emails_now(
 
         logger.info(f"Synced {processed_count}/{len(emails)} emails for user {current_user.id} (skipped: {skipped_count}, errors: {error_count})")
 
+        # Build informative message
+        if len(emails) == 0:
+            message = f"No new emails in {oauth_record.sync_folder or 'Inbox'} from {oauth_record.email_address}"
+        elif processed_count == 0 and skipped_count > 0:
+            message = f"All {skipped_count} emails already synced from {oauth_record.email_address}"
+        elif processed_count > 0:
+            message = f"Synced {processed_count} new emails from {oauth_record.email_address}"
+            if error_count > 0:
+                message += f" ({error_count} errors)"
+        else:
+            message = f"Synced {processed_count} emails from {oauth_record.email_address}"
+
         return {
             "status": "success",
             "email_account": oauth_record.email_address,
@@ -28863,7 +28877,7 @@ async def sync_microsoft_emails_now(
             "skipped_count": skipped_count,
             "error_count": error_count,
             "errors": errors[:5] if errors else [],  # Return first 5 errors
-            "message": f"Synced {processed_count} emails from {oauth_record.email_address}" + (f" ({error_count} errors)" if error_count else "")
+            "message": message
         }
 
     except HTTPException:

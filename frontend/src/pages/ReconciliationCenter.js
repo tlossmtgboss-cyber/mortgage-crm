@@ -415,23 +415,12 @@ function ReconciliationCenter() {
         setLastSyncTime(new Date());
 
         if (!silent) {
-          const count = data.processed_count || data.synced_count || 0;
-          const fetched = data.fetched_count || 0;
-          const account = data.email_account || '';
-          const folder = data.sync_folder || 'Inbox';
-
-          // Show more detailed status including which account
-          let statusMsg = `Synced ${count} emails`;
-          if (account) {
-            statusMsg += ` from ${account}`;
-          }
-          if (fetched > 0 && count === 0) {
-            statusMsg += ` (${fetched} fetched, ${data.skipped_count || 0} skipped)`;
-          }
+          // Use message from backend which has better context
+          const statusMsg = data.message || `Synced ${data.processed_count || 0} emails`;
           setSyncStatus(statusMsg);
 
           // Log detailed info for debugging
-          console.log('Sync result:', { account, folder, fetched, processed: count, skipped: data.skipped_count, errors: data.error_count });
+          console.log('Sync result:', data);
 
           // Refresh both pending and completed items to show new data
           fetchPendingItems();
