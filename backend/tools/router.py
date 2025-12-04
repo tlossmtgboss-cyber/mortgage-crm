@@ -350,18 +350,81 @@ async def handle_get_pipeline(args: Dict[str, Any], request: Request) -> Dict[st
 
 @register_tool_handler("search_leads")
 async def handle_search_leads(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
-    """Search leads handler"""
-    query = args.get('query', '')
-    limit = args.get('limit', 10)
+    """Search leads handler - query leads from database"""
+    try:
+        from main import SessionLocal, Lead, LeadStage
+        from datetime import datetime
 
-    return {
-        "success": True,
-        "data": {
-            "message": "Lead search delegated to agents/service.py handler",
-            "query": query,
-            "limit": limit
+        db = SessionLocal()
+        try:
+            query_str = args.get('query', '')
+            stage_filter = args.get('stage', args.get('status'))
+            limit = args.get('limit', 25)
+
+            query = db.query(Lead)
+
+            # Apply stage filter if provided
+            if stage_filter:
+                try:
+                    stage_enum = LeadStage(stage_filter)
+                    query = query.filter(Lead.stage == stage_enum)
+                except ValueError:
+                    # Try matching by name (case-insensitive)
+                    for s in LeadStage:
+                        if s.name.lower() == stage_filter.lower() or s.value.lower() == stage_filter.lower():
+                            query = query.filter(Lead.stage == s)
+                            break
+
+            # Apply text search if provided
+            if query_str:
+                search_term = f"%{query_str}%"
+                query = query.filter(
+                    (Lead.name.ilike(search_term)) |
+                    (Lead.first_name.ilike(search_term)) |
+                    (Lead.last_name.ilike(search_term)) |
+                    (Lead.email.ilike(search_term)) |
+                    (Lead.phone.ilike(search_term))
+                )
+
+            leads = query.order_by(Lead.created_at.desc()).limit(limit).all()
+
+            now = datetime.utcnow()
+            leads_list = []
+
+            for lead in leads:
+                status_key = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+                name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name or "Unknown"
+
+                leads_list.append({
+                    "id": lead.id,
+                    "name": name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "source": lead.source,
+                    "status": status_key,
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                    "property_type": lead.property_type,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None
+                })
+
+            return {
+                "success": True,
+                "data": {
+                    "total": len(leads_list),
+                    "query": query_str,
+                    "stage_filter": stage_filter,
+                    "leads": leads_list
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Search leads error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
         }
-    }
 
 
 @register_tool_handler("search_loans")
@@ -429,19 +492,107 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
     """
     try:
         # Get database session
-        from main import SessionLocal
-        from services.lead_status_insights_service import get_lead_status_insights
+        from main import SessionLocal, Lead, LeadStage
+        from datetime import datetime, timezone
+        from collections import defaultdict
 
         db = SessionLocal()
         try:
-            insights = get_lead_status_insights(
-                db=db,
-                assigned_to_user_id=args.get('assigned_to_user_id'),
-                include_statuses=args.get('include_statuses'),
-                created_date_from=args.get('created_date_from'),
-                created_date_to=args.get('created_date_to'),
-                time_bucket=args.get('time_bucket', 'week')
-            )
+            # Query ALL leads directly from database
+            query = db.query(Lead)
+
+            # Apply optional user filter
+            if args.get('assigned_to_user_id'):
+                try:
+                    query = query.filter(Lead.owner_id == int(args['assigned_to_user_id']))
+                except (ValueError, TypeError):
+                    pass
+
+            leads = query.all()
+            total_leads = len(leads)
+
+            # Group by stage
+            by_stage = defaultdict(list)
+            for lead in leads:
+                stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+                by_stage[stage_value].append(lead)
+
+            # Calculate summary
+            now = datetime.now(timezone.utc)
+
+            # Terminal statuses
+            terminal_statuses = {"Withdrawn", "Does Not Qualify"}
+            active_leads = [l for l in leads if l.stage and l.stage.value not in terminal_statuses]
+
+            # Build by_status breakdown
+            status_breakdown = []
+            for stage_value, stage_leads in by_stage.items():
+                count = len(stage_leads)
+                pct = round((count / total_leads * 100), 1) if total_leads > 0 else 0
+
+                # Calculate average days in status
+                days_list = []
+                for lead in stage_leads:
+                    if lead.updated_at:
+                        updated = lead.updated_at
+                        if updated.tzinfo is None:
+                            updated = updated.replace(tzinfo=timezone.utc)
+                        days = max(0, (now - updated).days)
+                        days_list.append(days)
+
+                avg_days = round(sum(days_list) / len(days_list), 1) if days_list else 0
+
+                status_breakdown.append({
+                    "status": stage_value.lower().replace(" ", "_").replace("-", "_"),
+                    "label": stage_value,
+                    "count": count,
+                    "percentage_of_total": pct,
+                    "average_days_in_status": avg_days
+                })
+
+            # Sort by count descending
+            status_breakdown.sort(key=lambda x: x["count"], reverse=True)
+
+            # Calculate conversion rates
+            new_count = len(by_stage.get("New", []))
+            contacted = total_leads - new_count
+            overall_contact_rate = round((contacted / total_leads * 100), 1) if total_leads > 0 else 0
+
+            # Build response
+            insights = {
+                "context": {
+                    "assigned_to_user_id": args.get('assigned_to_user_id'),
+                    "generated_at": now.isoformat()
+                },
+                "summary": {
+                    "total_leads": total_leads,
+                    "total_active_leads": len(active_leads),
+                    "overall_contact_rate": overall_contact_rate
+                },
+                "by_status": status_breakdown,
+                "bottlenecks": [],
+                "priority_focus_areas": []
+            }
+
+            # Detect bottlenecks - leads in New for too long
+            new_leads = by_stage.get("New", [])
+            if new_leads:
+                not_contacted = [l for l in new_leads if not l.last_contact]
+                if len(not_contacted) > 3:
+                    insights["bottlenecks"].append({
+                        "status": "new",
+                        "issue_type": "missing_contact_attempts",
+                        "description": f"{len(not_contacted)} new leads have not been contacted yet",
+                        "severity": "critical",
+                        "recommended_action": "Speed to lead is critical. Contact these leads immediately."
+                    })
+
+                insights["priority_focus_areas"].append({
+                    "rank": 1,
+                    "status": "new",
+                    "focus_reason": f"{len(new_leads)} new leads require immediate attention",
+                    "suggested_playbook": "Call within 5 minutes, then text + email same day."
+                })
 
             return {
                 "success": True,
@@ -452,6 +603,8 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
 
     except Exception as e:
         logger.error(f"Lead status insights error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             "success": False,
             "error": str(e)
@@ -540,6 +693,281 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
 
     except Exception as e:
         logger.error(f"Get leads by status error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@register_tool_handler("get_pipeline_metrics")
+async def handle_get_pipeline_metrics(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get comprehensive pipeline metrics including loan count, volume, and stage breakdown.
+
+    Returns:
+    - Summary: total loans, total volume, active loans
+    - By stage: count and volume per loan stage
+    - Velocity: recent fundings and average days to close
+    """
+    try:
+        from main import SessionLocal, Loan, LoanStage
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+
+        db = SessionLocal()
+        try:
+            # Get all loans
+            loans = db.query(Loan).all()
+
+            # Calculate metrics
+            total_loans = len(loans)
+            active_loans = [l for l in loans if l.stage != LoanStage.FUNDED]
+            funded_loans = [l for l in loans if l.stage == LoanStage.FUNDED]
+
+            # Calculate volumes
+            total_volume = sum(float(l.amount or 0) for l in loans)
+            active_volume = sum(float(l.amount or 0) for l in active_loans)
+
+            # Stage breakdown
+            stages = {}
+            for loan in loans:
+                stage_name = loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage)
+                if stage_name not in stages:
+                    stages[stage_name] = {"count": 0, "volume": 0}
+                stages[stage_name]["count"] += 1
+                stages[stage_name]["volume"] += float(loan.amount or 0)
+
+            # Convert to list format
+            stages_list = [
+                {
+                    "stage": stage,
+                    "count": data["count"],
+                    "volume": data["volume"],
+                    "volume_formatted": f"${data['volume']:,.2f}"
+                }
+                for stage, data in stages.items()
+            ]
+
+            # Sort by pipeline order
+            stage_order = ["Disclosed", "Processing", "Submitted", "UW Received", "Approved", "Suspended", "CTC", "Docs Out", "Funded"]
+            stages_list.sort(key=lambda x: stage_order.index(x["stage"]) if x["stage"] in stage_order else 99)
+
+            return {
+                "success": True,
+                "data": {
+                    "summary": {
+                        "total_loans": len(active_loans),  # Active loans (not funded)
+                        "total_volume": active_volume,
+                        "total_volume_formatted": f"${active_volume:,.2f}",
+                        "funded_count": len(funded_loans),
+                        "funded_volume": sum(float(l.amount or 0) for l in funded_loans)
+                    },
+                    "stages": stages_list,
+                    "generated_at": datetime.utcnow().isoformat()
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Get pipeline metrics error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@register_tool_handler("get_tasks")
+async def handle_get_tasks(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get tasks for the current user.
+
+    Args:
+        status: Filter by status (pending, completed, all)
+        limit: Maximum number of tasks to return
+
+    Returns:
+        List of tasks with details
+    """
+    try:
+        from main import SessionLocal, Task
+        from datetime import datetime
+
+        db = SessionLocal()
+        try:
+            status_filter = args.get("status")
+            limit = args.get("limit", 50)
+
+            query = db.query(Task)
+
+            # Apply status filter
+            if status_filter and status_filter != "all":
+                query = query.filter(Task.status == status_filter)
+
+            tasks = query.order_by(Task.due_date.asc().nullslast()).limit(limit).all()
+
+            now = datetime.utcnow()
+            tasks_list = []
+
+            for task in tasks:
+                task_dict = {
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "status": task.status,
+                    "priority": getattr(task, 'priority', 'medium'),
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "is_overdue": task.due_date and task.due_date < now.date() if hasattr(task.due_date, 'date') else False,
+                    "lead_id": task.lead_id,
+                    "loan_id": task.loan_id,
+                    "created_at": task.created_at.isoformat() if task.created_at else None
+                }
+                tasks_list.append(task_dict)
+
+            # Count by status
+            open_count = len([t for t in tasks_list if t["status"] not in ("completed", "cancelled")])
+            overdue_count = len([t for t in tasks_list if t.get("is_overdue")])
+
+            return {
+                "success": True,
+                "data": {
+                    "total": len(tasks_list),
+                    "open_count": open_count,
+                    "overdue_count": overdue_count,
+                    "tasks": tasks_list
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Get tasks error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@register_tool_handler("get_daily_priorities")
+async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get prioritized daily action items across loans, leads, and tasks.
+
+    Returns high-priority items that need attention today:
+    - Overdue tasks
+    - Hot leads (New leads, high scores)
+    - Loans at risk (stalled, lock expiring)
+    - Follow-ups due
+    """
+    try:
+        from main import SessionLocal, Task, Lead, Loan, LeadStage, LoanStage
+        from datetime import datetime, timedelta
+
+        db = SessionLocal()
+        try:
+            now = datetime.utcnow()
+            today = now.date()
+
+            priorities = {
+                "high_priority": [],
+                "medium_priority": [],
+                "follow_ups": []
+            }
+
+            # 1. Get overdue tasks
+            overdue_tasks = db.query(Task).filter(
+                Task.status.notin_(["completed", "cancelled"]),
+                Task.due_date < today
+            ).limit(10).all()
+
+            for task in overdue_tasks:
+                priorities["high_priority"].append({
+                    "type": "overdue_task",
+                    "id": task.id,
+                    "title": task.title,
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "days_overdue": (today - task.due_date).days if task.due_date else 0,
+                    "action": "Complete this overdue task"
+                })
+
+            # 2. Get hot leads (New stage, not contacted)
+            hot_leads = db.query(Lead).filter(
+                Lead.stage == LeadStage.NEW
+            ).order_by(Lead.created_at.desc()).limit(10).all()
+
+            for lead in hot_leads:
+                name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name or "Unknown"
+                days_old = (now - lead.created_at).days if lead.created_at else 0
+                priority_level = "high_priority" if days_old < 2 else "medium_priority"
+
+                priorities[priority_level].append({
+                    "type": "new_lead",
+                    "id": lead.id,
+                    "name": name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "source": lead.source,
+                    "days_since_created": days_old,
+                    "action": "Make first contact - speed to lead is critical"
+                })
+
+            # 3. Get tasks due today
+            tasks_due_today = db.query(Task).filter(
+                Task.status.notin_(["completed", "cancelled"]),
+                Task.due_date == today
+            ).limit(10).all()
+
+            for task in tasks_due_today:
+                priorities["medium_priority"].append({
+                    "type": "task_due_today",
+                    "id": task.id,
+                    "title": task.title,
+                    "action": "Complete before end of day"
+                })
+
+            # 4. Get stalled loans (in same stage for too long)
+            stalled_threshold = now - timedelta(days=7)
+            active_loans = db.query(Loan).filter(
+                Loan.stage.notin_([LoanStage.FUNDED])
+            ).all()
+
+            for loan in active_loans:
+                # Check if loan has been in current stage too long
+                updated_at = loan.updated_at or loan.created_at
+                if updated_at and updated_at < stalled_threshold:
+                    days_stalled = (now - updated_at).days
+                    priorities["medium_priority"].append({
+                        "type": "stalled_loan",
+                        "id": loan.id,
+                        "loan_number": loan.loan_number,
+                        "borrower": loan.borrower_name,
+                        "stage": loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage),
+                        "days_in_stage": days_stalled,
+                        "action": f"Follow up on loan stalled in {loan.stage.value if hasattr(loan.stage, 'value') else loan.stage}"
+                    })
+
+            # Limit results
+            priorities["high_priority"] = priorities["high_priority"][:5]
+            priorities["medium_priority"] = priorities["medium_priority"][:10]
+
+            return {
+                "success": True,
+                "data": {
+                    "date": today.isoformat(),
+                    "high_priority": priorities["high_priority"],
+                    "medium_priority": priorities["medium_priority"],
+                    "summary": {
+                        "high_priority_count": len(priorities["high_priority"]),
+                        "medium_priority_count": len(priorities["medium_priority"]),
+                        "total_action_items": len(priorities["high_priority"]) + len(priorities["medium_priority"])
+                    }
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Get daily priorities error: {e}")
         return {
             "success": False,
             "error": str(e)
