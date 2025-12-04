@@ -286,16 +286,22 @@ function Loans() {
   // Ensure loans is always an array before filtering
   const safeLoans = Array.isArray(loans) ? loans : [];
 
-  // Filter by stage - exclude funded loans from "All" since they're closed
-  const fundedStages = ['Funded This Month', 'Funded Prior Month'];
+  // Filter by stage - exclude funded loans from "All" since they belong in Portfolio
+  // Include all variations of "Funded" status
+  const isFundedLoan = (loan) => {
+    const stage = (loan.stage || '').toLowerCase();
+    const status = (loan.status || '').toLowerCase();
+    return stage.includes('funded') || status.includes('funded');
+  };
+
   let filteredLoans;
 
   if (activeFilter === 'All') {
-    // Show only active (non-funded) loans
-    filteredLoans = safeLoans.filter(loan => !fundedStages.includes(loan.stage));
+    // Show only active (non-funded) loans - funded loans go to Portfolio
+    filteredLoans = safeLoans.filter(loan => !isFundedLoan(loan));
   } else if (activeFilter === 'Funded') {
-    // Show all funded loans (this month and prior)
-    filteredLoans = safeLoans.filter(loan => fundedStages.includes(loan.stage));
+    // Show all funded loans
+    filteredLoans = safeLoans.filter(loan => isFundedLoan(loan));
   } else {
     filteredLoans = safeLoans.filter(loan => loan.stage === activeFilter);
   }
@@ -319,7 +325,7 @@ function Loans() {
       <div className="page-header">
         <div>
           <h1>Active Loans</h1>
-          <p>{safeLoans.filter(loan => !fundedStages.includes(loan.stage)).length} active loans</p>
+          <p>{safeLoans.filter(loan => !isFundedLoan(loan)).length} active loans</p>
         </div>
         <div className="header-actions">
           <button className="btn-secondary" onClick={handleExport}>
