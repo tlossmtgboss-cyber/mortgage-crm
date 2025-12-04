@@ -202,7 +202,7 @@ function ReconciliationCenter() {
 
   const fetchReferralPartners = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -260,7 +260,7 @@ function ReconciliationCenter() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
