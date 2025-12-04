@@ -6926,6 +6926,18 @@ The Team menu item appears for managers and management roles.
                         }
                     }
                 }
+            },
+            # EMAIL & INTEGRATION STATUS TOOLS
+            {
+                "type": "function",
+                "function": {
+                    "name": "check_email_sync_status",
+                    "description": "Check the status of email synchronization with Microsoft 365 or Gmail. ALWAYS use this tool when asked about email sync, email integration status, whether emails are syncing, or email connection issues. Returns connection status, last sync time, email count, and any errors.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
             }
         ]
 
@@ -9983,6 +9995,86 @@ The Team menu item appears for managers and management roles.
                 logger.error(f"get_leads_by_status error: {e}")
                 return {"success": False, "error": str(e)}
 
+        async def execute_check_email_sync_status(args: dict):
+            """Check email sync status for Microsoft 365 or Gmail integrations."""
+            try:
+                # Check for Microsoft OAuth connection
+                microsoft_oauth = db.query(MicrosoftOAuthToken).filter(
+                    MicrosoftOAuthToken.user_id == current_user.id
+                ).first()
+
+                # Check for Gmail OAuth connection (if exists)
+                gmail_oauth = None
+                try:
+                    from main import GmailOAuthToken
+                    gmail_oauth = db.query(GmailOAuthToken).filter(
+                        GmailOAuthToken.user_id == current_user.id
+                    ).first()
+                except Exception:
+                    pass  # Gmail table may not exist
+
+                result = {
+                    "success": True,
+                    "has_email_integration": False,
+                    "microsoft": None,
+                    "gmail": None,
+                    "summary": ""
+                }
+
+                if microsoft_oauth:
+                    result["has_email_integration"] = True
+                    # Check token validity
+                    token_expired = False
+                    if microsoft_oauth.expires_at:
+                        token_expired = microsoft_oauth.expires_at < datetime.utcnow()
+
+                    # Get recent email count
+                    recent_emails = db.execute(text("""
+                        SELECT COUNT(*) as count, MAX(received_date) as last_email
+                        FROM incoming_data_events
+                        WHERE user_id = :user_id AND source_type = 'microsoft_email'
+                        AND received_date >= NOW() - INTERVAL '24 hours'
+                    """), {"user_id": current_user.id}).fetchone()
+
+                    result["microsoft"] = {
+                        "connected": True,
+                        "email_address": microsoft_oauth.email_address,
+                        "sync_folder": microsoft_oauth.sync_folder or "Inbox",
+                        "token_status": "expired" if token_expired else "valid",
+                        "last_sync": microsoft_oauth.updated_at.isoformat() if microsoft_oauth.updated_at else None,
+                        "emails_last_24h": recent_emails[0] if recent_emails else 0,
+                        "last_email_received": recent_emails[1].isoformat() if recent_emails and recent_emails[1] else None
+                    }
+
+                    if token_expired:
+                        result["summary"] = f"Microsoft 365 email connected ({microsoft_oauth.email_address}) but token has EXPIRED. Please re-authenticate."
+                    elif recent_emails and recent_emails[0] > 0:
+                        result["summary"] = f"Microsoft 365 email is syncing properly. {recent_emails[0]} emails received in the last 24 hours from {microsoft_oauth.email_address}."
+                    else:
+                        result["summary"] = f"Microsoft 365 email connected ({microsoft_oauth.email_address}). No new emails in the last 24 hours."
+
+                if gmail_oauth:
+                    result["has_email_integration"] = True
+                    result["gmail"] = {
+                        "connected": True,
+                        "email_address": getattr(gmail_oauth, 'email_address', 'Unknown')
+                    }
+                    if not result["summary"]:
+                        result["summary"] = "Gmail is connected."
+
+                if not result["has_email_integration"]:
+                    result["summary"] = "No email integration configured. Go to Settings > Integrations to connect Microsoft 365 or Gmail."
+
+                return result
+
+            except Exception as e:
+                logger.error(f"check_email_sync_status error: {e}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "summary": f"Error checking email sync status: {str(e)}"
+                }
+
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
@@ -10023,7 +10115,9 @@ The Team menu item appears for managers and management roles.
             "analyze_conversion_patterns": execute_analyze_conversion_patterns,
             # Lead Pipeline Intelligence Tools
             "lead_status_insights": execute_lead_status_insights,
-            "get_leads_by_status": execute_get_leads_by_status
+            "get_leads_by_status": execute_get_leads_by_status,
+            # Email & Integration Status Tools
+            "check_email_sync_status": execute_check_email_sync_status
         }
 
         # Pre-fetch real data context for personalized responses
@@ -15275,6 +15369,56 @@ Thank you!"""
 
         return result
 
+    async def execute_check_email_sync_status(args: dict):
+        """Check email sync status for Microsoft 365 or Gmail integrations."""
+        try:
+            # Check for Microsoft OAuth connection
+            microsoft_oauth = db.query(MicrosoftOAuthToken).filter(
+                MicrosoftOAuthToken.user_id == current_user.id
+            ).first()
+
+            result = {
+                "success": True,
+                "has_email_integration": False,
+                "microsoft": None,
+                "summary": ""
+            }
+
+            if microsoft_oauth:
+                result["has_email_integration"] = True
+                token_expired = False
+                if microsoft_oauth.expires_at:
+                    token_expired = microsoft_oauth.expires_at < datetime.utcnow()
+
+                recent_emails = db.execute(text("""
+                    SELECT COUNT(*) as count, MAX(received_date) as last_email
+                    FROM incoming_data_events
+                    WHERE user_id = :user_id AND source_type = 'microsoft_email'
+                    AND received_date >= NOW() - INTERVAL '24 hours'
+                """), {"user_id": current_user.id}).fetchone()
+
+                result["microsoft"] = {
+                    "connected": True,
+                    "email_address": microsoft_oauth.email_address,
+                    "sync_folder": microsoft_oauth.sync_folder or "Inbox",
+                    "token_status": "expired" if token_expired else "valid",
+                    "emails_last_24h": recent_emails[0] if recent_emails else 0
+                }
+
+                if token_expired:
+                    result["summary"] = f"Microsoft 365 email connected ({microsoft_oauth.email_address}) but token has EXPIRED. Please re-authenticate."
+                elif recent_emails and recent_emails[0] > 0:
+                    result["summary"] = f"Microsoft 365 email is syncing properly. {recent_emails[0]} emails received in the last 24 hours."
+                else:
+                    result["summary"] = f"Microsoft 365 email connected ({microsoft_oauth.email_address}). No new emails in the last 24 hours."
+            else:
+                result["summary"] = "No email integration configured. Go to Settings > Integrations to connect Microsoft 365 or Gmail."
+
+            return result
+        except Exception as e:
+            logger.error(f"check_email_sync_status error: {e}")
+            return {"success": False, "error": str(e), "summary": f"Error checking email sync: {str(e)}"}
+
     tool_functions = {
         "get_tasks": execute_get_tasks,
         "get_calendar_events": execute_get_calendar_events,
@@ -15337,7 +15481,9 @@ Thank you!"""
         "extend_lock": execute_extend_lock,
         # NEW: Scheduling tools
         "reschedule_appointment": execute_reschedule_appointment,
-        "cancel_appointment": execute_cancel_appointment
+        "cancel_appointment": execute_cancel_appointment,
+        # Email & Integration Status Tools
+        "check_email_sync_status": execute_check_email_sync_status
     }
 
     # Pre-fetch real data for rich context
