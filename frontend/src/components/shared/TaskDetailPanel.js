@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { aiAPI } from '../../services/api';
+import { aiAPI, tasksAPI } from '../../services/api';
 import './TaskDetailPanel.css';
 
 /**
@@ -71,6 +71,9 @@ const TaskDetailPanel = ({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showDelegateModal, setShowDelegateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // SLA task state
+  const [slaMilestoneDate, setSlaMilestoneDate] = useState('');
+  const [completingSla, setCompletingSla] = useState(false);
 
   // Reset state when task changes
   useEffect(() => {
@@ -82,6 +85,8 @@ const TaskDetailPanel = ({
       setAiAcknowledgment(null);
       setEditingMessage(false);
       setShowHistory(false);
+      // Reset SLA date - use existing milestone_date if available
+      setSlaMilestoneDate(task.milestone_date ? task.milestone_date.split('T')[0] : '');
     }
   }, [task?.id]);
 
@@ -180,7 +185,61 @@ const TaskDetailPanel = ({
     }
   };
 
+  // Handle SLA task completion with date
+  const handleCompleteSlaTask = async () => {
+    if (!slaMilestoneDate) {
+      alert('Please enter the milestone completion date');
+      return;
+    }
+
+    setCompletingSla(true);
+    try {
+      // Extract numeric task ID if it's a string like "workflow-123"
+      let taskId = task.id;
+      if (typeof taskId === 'string' && taskId.includes('-')) {
+        taskId = taskId.split('-').pop();
+      }
+
+      const response = await fetch(`/api/v1/tasks/${taskId}/complete-sla`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          milestone_date: slaMilestoneDate
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to complete SLA task');
+      }
+
+      const result = await response.json();
+
+      // Show success message with details
+      let message = 'SLA task completed!';
+      if (result.loan_field_updated) {
+        message += ` Updated ${result.loan_field_updated.replace(/_/g, ' ')} on the loan.`;
+      }
+      if (result.milestone_completed) {
+        message += ' SLA milestone marked as complete.';
+      }
+      alert(message);
+
+      // Call parent's onComplete to remove from list
+      onComplete && onComplete(task.id);
+    } catch (error) {
+      console.error('Error completing SLA task:', error);
+      alert(error.message || 'Failed to complete SLA task');
+    } finally {
+      setCompletingSla(false);
+    }
+  };
+
   const hasEntityLink = task.loan_id || task.loanId || task.lead_id || task.leadId || task.entity_id;
+  const isSlaTask = task.sla_milestone_id || task.sla_milestone_type || task.related_type === 'sla_milestone';
 
   return (
     <div className={`task-detail-panel ${compact ? 'compact' : ''}`}>
@@ -292,13 +351,6 @@ const TaskDetailPanel = ({
               >
                 🎙️ Voicemail
               </button>
-              <button
-                className="comm-method-btn complete-task-btn"
-                onClick={() => onComplete && onComplete(task.id)}
-                disabled={completing}
-              >
-                {completing ? '⏳' : '✓'} Complete
-              </button>
             </div>
           </div>
         </div>
@@ -331,6 +383,49 @@ const TaskDetailPanel = ({
                   )}
                 </p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* SLA Milestone Date Input Section */}
+        {isSlaTask && (
+          <div className="detail-sla-section">
+            <div className="sla-section-header">
+              <span className="sla-icon">⚠️</span>
+              <span className="sla-title">SLA Milestone Completion</span>
+            </div>
+            <div className="sla-section-content">
+              <p className="sla-instruction">
+                Enter the date this milestone was completed to update the loan's Important Dates:
+              </p>
+              {task.sla_milestone_type && (
+                <p className="sla-milestone-type">
+                  <strong>Milestone:</strong> {task.sla_milestone_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </p>
+              )}
+              {task.sla_date_field && (
+                <p className="sla-date-field">
+                  <strong>Updates:</strong> {task.sla_date_field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </p>
+              )}
+              <div className="sla-date-input-container">
+                <label htmlFor="sla-milestone-date">Milestone Date:</label>
+                <input
+                  id="sla-milestone-date"
+                  type="date"
+                  className="sla-date-input"
+                  value={slaMilestoneDate}
+                  onChange={(e) => setSlaMilestoneDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <button
+                className="btn-complete-sla"
+                onClick={handleCompleteSlaTask}
+                disabled={completingSla || !slaMilestoneDate}
+              >
+                {completingSla ? '⏳ Completing...' : '✓ Complete SLA Milestone'}
+              </button>
             </div>
           </div>
         )}
