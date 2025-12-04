@@ -148,9 +148,14 @@ INTENT_PATTERNS = {
             r"(start|begin) (my|the) day",
             r"what('?s| is) overdue",
             r"urgent (items?|tasks?|things?)",
+            # Call list queries - "what calls do I need to make today?"
+            r"what (calls?|people) (do i |should i |to )?(need to )?(make|call|contact)( today)?",
+            r"who (do i |should i )?need to (call|contact|reach out to)( today)?",
+            r"(my |today'?s? )?call (list|queue)",
+            r"calls? (i need|to make)( today)?",
         ],
         "intent": QueryIntent.TASK_MANAGEMENT,
-        "tools": ["get_daily_priorities", "get_tasks"],
+        "tools": ["get_daily_priorities", "get_tasks", "lead_status_insights"],
         "urgency": "high",
         "complexity": "simple",
         "confidence": 0.95

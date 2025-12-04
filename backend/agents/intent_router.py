@@ -130,6 +130,11 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"due (today|tomorrow|this week)",
         r"reminders?",
         r"follow.?up",
+        # Call list queries
+        r"what (calls?|people) (do i |should i |to )?(need to )?(make|call|contact)",
+        r"who (do i |should i )?need to (call|contact|reach out)",
+        r"call (list|queue)",
+        r"calls? (i need|to make)",
     ],
     "leads": [
         r"\bleads?\b",
