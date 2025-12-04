@@ -23806,10 +23806,18 @@ async def approve_reconciliation(
             # Create a new loan from the extracted data
             fields = extracted.fields or {}
 
+            # Debug: log the raw fields we're working with
+            logger.info(f"RECONCILIATION DEBUG: extracted.fields type = {type(extracted.fields)}")
+            logger.info(f"RECONCILIATION DEBUG: extracted.fields content = {extracted.fields}")
+            logger.info(f"RECONCILIATION DEBUG: fields variable = {fields}")
+
             def get_val(field_name, default=None):
                 """Helper to get field value"""
                 if field_name in fields and isinstance(fields[field_name], dict):
-                    return fields[field_name].get("value", default)
+                    val = fields[field_name].get("value", default)
+                    logger.info(f"RECONCILIATION DEBUG: get_val({field_name}) = {val}")
+                    return val
+                logger.info(f"RECONCILIATION DEBUG: get_val({field_name}) field not found or not dict, returning {default}")
                 return default
 
             # Get loan number - generate if not provided
