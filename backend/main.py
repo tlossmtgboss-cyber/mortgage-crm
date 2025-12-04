@@ -52958,7 +52958,8 @@ async def langgraph_orchestrator_chat(
             "actions_executed": result.get("actions_executed", []),
             "actions_pending": result.get("actions_pending", []),
             "engine": "langgraph",
-            "cached": False
+            "cached": False,
+            "performance": result.get("performance", {})  # Include performance metrics
         }
 
         # === Cache the response (only for high-confidence, single-turn, no-action queries) ===
