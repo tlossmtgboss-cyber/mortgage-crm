@@ -220,8 +220,8 @@ async def reason_and_respond(
         actions_pending = state.get("actions_pending", [])
         errors = state.get("errors", [])
 
-        # Handle insufficient data case
-        if data_quality == "insufficient" or not gathered_data:
+        # Handle insufficient data case (but NOT "not_needed" which is intentional for greetings)
+        if data_quality == "insufficient":
             logger.warning("[REASON_AND_RESPOND] Insufficient data for analysis")
             return update_state(state, {
                 "analysis": "Unable to complete analysis due to insufficient data.",
@@ -282,8 +282,8 @@ async def reason_and_respond(
         use_haiku_flag = state.get("use_haiku", False)
         intent_str_override = state.get("intent_str", "")
 
-        # Use Haiku if: explicit flag set, or intent is in HAIKU_INTENTS, or data is insufficient
-        use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality == "insufficient"
+        # Use Haiku if: explicit flag set, intent in HAIKU_INTENTS, data not needed (greeting), or data insufficient
+        use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality in ("insufficient", "not_needed")
         model = MODEL_HAIKU if use_haiku else MODEL_SONNET
         max_tokens = 500 if use_haiku else 2500  # Smaller output for simple queries
 

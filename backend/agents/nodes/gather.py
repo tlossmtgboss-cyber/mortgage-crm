@@ -313,9 +313,20 @@ async def gather_data(
     required_tools = state.get("required_tools", [])
     logger.info(f"[GATHER] Required tools from analyzer: {required_tools}")
 
-    if not required_tools:
-        logger.warning("[GATHER] No tools required, using default pipeline summary")
+    # Check if required_tools is explicitly empty list (e.g., for greetings)
+    # vs None/missing (which would need a default)
+    if state.get("required_tools") is None:
+        logger.warning("[GATHER] No tools specified (None), using default pipeline summary")
         required_tools = ["get_pipeline"]
+    elif len(required_tools) == 0:
+        # Empty list means intentionally no tools needed (e.g., greeting)
+        logger.info("[GATHER] Empty tools list - skipping tool execution (greeting/simple query)")
+        return update_state(state, {
+            "gathered_data": {},
+            "data_quality": "not_needed",
+            "tools_executed": [],
+            "tools_errored": [],
+        })
 
     tool_calls = []
     gathered_data = {}
