@@ -498,13 +498,17 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
                 "requires_action": pattern_result.get("requires_action", False),
                 "analysis_method": "pattern_match",
                 "intent_agents": INTENT_TO_AGENTS.get(intent_str, ["pipeline_analyst"]),
+                # Pass use_haiku flag for model selection in reason_and_respond
+                "use_haiku": pattern_result.get("use_haiku", False),
+                "intent_str": pattern_result.get("intent_str", intent_str),
             })
 
             node_time = (time.time() - node_start) * 1000
+            use_haiku = pattern_result.get("use_haiku", False)
             logger.info(
                 f"[ANALYZE] ⚡ FAST PATH complete in {node_time:.1f}ms | "
                 f"pattern_match={timing['pattern_match']:.1f}ms | "
-                f"intent={pattern_result['intent'].value}, tools={final_tools}"
+                f"intent={pattern_result['intent'].value}, use_haiku={use_haiku}, tools={final_tools}"
             )
             logger.info(f"[ANALYZE] ========== END (pattern_match) ==========")
 
