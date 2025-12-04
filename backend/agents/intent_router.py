@@ -148,6 +148,13 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"call (my |the )?(top|best|hot|warm|priority|highest)",
         r"(call|contact|reach out to) (my )?leads",
         r"(top|best|hot) \d+ (leads?|contacts?|prospects?) (to call|to contact)",
+        # Contact frequency patterns - leads not contacted recently
+        r"(leads?|prospects?) (not |haven't been |i haven't )?contacted",
+        r"(haven't|have not|not) contacted",
+        r"(stale|inactive|cold|dormant) (leads?|prospects?)",
+        r"last contact(ed)?",
+        r"(not )?(contacted|reached) in \d+ (days?|weeks?)",
+        r"overdue (for )?contact",
     ],
     "pipeline": [
         r"(loan|loans) (pipeline|funnel)",
