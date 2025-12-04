@@ -72,10 +72,16 @@ class AgentState(TypedDict, total=False):
     requires_action: bool                # Whether query needs action vs just info
     analysis_method: str                 # How query was analyzed (pattern_match, llm, fallback)
 
+    # === Model Selection (for optimized responses) ===
+    use_haiku: bool                      # Flag to use fast Haiku model for simple queries
+    intent_str: str                      # String intent for model selection (greeting, simple, etc.)
+    intent_agents: list[str]             # Agents assigned to handle this intent
+    intent_confidence: float             # Confidence score from intent classification
+
     # === Data Gathering (from gather node) ===
     tool_calls: list[ToolCall]           # Tools called and their results
     gathered_data: dict                  # Consolidated data from all tools
-    data_quality: Literal["complete", "partial", "insufficient"]
+    data_quality: Literal["complete", "partial", "insufficient", "not_needed"]  # not_needed for greetings
     missing_data: list[str]              # Data that couldn't be retrieved
 
     # === Reasoning (from reason node) ===
