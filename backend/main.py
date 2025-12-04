@@ -1,3 +1,6 @@
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
 
 # ============================================================================
 # COMPLETE AGENTIC AI MORTGAGE CRM - FULLY FUNCTIONAL
@@ -33420,6 +33423,7 @@ async def claim_orphan_leads(
     """
     Claim all orphan leads (leads with no owner) and assign them to the current user.
     This fixes the AI chat issue where leads aren't visible because they have no owner.
+    Also claims loans that don't belong to any valid user.
     """
     try:
         # Update leads with NULL owner_id to current user
@@ -33429,9 +33433,16 @@ async def claim_orphan_leads(
         )
         leads_claimed = result.rowcount
 
-        # Also update loans with NULL loan_officer_id
+        # Update loans with NULL loan_officer_id OR loan_officer_id not matching any user
+        # This catches loans with invalid/orphaned loan_officer_ids
         result = db.execute(
-            text("UPDATE loans SET loan_officer_id = :user_id WHERE loan_officer_id IS NULL"),
+            text("""
+                UPDATE loans
+                SET loan_officer_id = :user_id
+                WHERE loan_officer_id IS NULL
+                   OR loan_officer_id NOT IN (SELECT id FROM users)
+                   OR loan_officer_id != :user_id
+            """),
             {"user_id": current_user.id}
         )
         loans_claimed = result.rowcount
