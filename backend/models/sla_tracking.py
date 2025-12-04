@@ -40,6 +40,7 @@ class MilestoneType(str, enum.Enum):
     """Types of loan lifecycle milestones."""
     # Lead Stage Milestones
     LEAD_RESPONSE = "lead_response"
+    INITIAL_CONSULTATION = "initial_consultation"  # Added for existing data compatibility
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
     DOCUMENTS_REQUESTED = "documents_requested"

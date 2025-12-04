@@ -36,6 +36,7 @@ class SLAStatusEnum(str, Enum):
 class MilestoneTypeEnum(str, Enum):
     # Lead Stage
     LEAD_RESPONSE = "lead_response"
+    INITIAL_CONSULTATION = "initial_consultation"  # Added for existing data compatibility
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
 
