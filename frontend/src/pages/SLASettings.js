@@ -841,10 +841,9 @@ const SLASettings = () => {
 
           {measures.length === 0 ? (
             <div className="empty-state">
-              <div className="icon">📋</div>
-              <h3>No SLA Measures Configured</h3>
-              <p>Set up SLA measures to start tracking loan lifecycle milestones</p>
-              <button onClick={runMigration}>Initialize Default Measures</button>
+              <div className="icon">⏳</div>
+              <h3>Loading SLA Measures...</h3>
+              <p>Default measures are being initialized automatically</p>
             </div>
           ) : (
             <table className="measures-table">

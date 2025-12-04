@@ -359,8 +359,19 @@ async def list_sla_measures(
     active_only: bool = Query(True, description="Only return active measures"),
     db: Session = Depends(get_db)
 ):
-    """Get all SLA measures for the organization."""
+    """Get all SLA measures for the organization. Auto-initializes defaults if none exist."""
     measures = get_all_sla_measures(db, active_only=active_only)
+
+    # Auto-initialize default measures if none exist
+    if not measures:
+        logger.info("No SLA measures found - auto-initializing defaults")
+        try:
+            seed_default_sla_measures(db)
+            measures = get_all_sla_measures(db, active_only=active_only)
+            logger.info(f"Auto-initialized {len(measures)} default SLA measures")
+        except Exception as e:
+            logger.error(f"Failed to auto-initialize SLA measures: {e}")
+
     return measures
 
 
