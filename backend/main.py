@@ -33367,41 +33367,40 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
 
     try:
         # Delete related records first to avoid foreign key constraint errors
-        # Delete in order of dependencies
+        # Use a helper to safely delete from tables that may or may not exist
+        def safe_delete(table_name, column="lead_id"):
+            try:
+                db.execute(text(f"DELETE FROM {table_name} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+            except Exception as e:
+                logger.debug(f"Table {table_name} delete skipped: {e}")
 
-        # Delete activities
-        db.execute(text("DELETE FROM activities WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+        def safe_nullify(table_name, column="lead_id"):
+            try:
+                db.execute(text(f"UPDATE {table_name} SET {column} = NULL WHERE {column} = :lead_id"), {"lead_id": lead_id})
+            except Exception as e:
+                logger.debug(f"Table {table_name} nullify skipped: {e}")
 
-        # Delete tasks
-        db.execute(text("DELETE FROM tasks WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-        db.execute(text("DELETE FROM ai_tasks WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+        # Delete from all possible related tables
+        safe_delete("activities")
+        safe_delete("tasks")
+        safe_delete("ai_tasks")
+        safe_delete("documents")
+        safe_delete("notes")
+        safe_delete("communications")
+        safe_delete("email_reconciliation_queue")
+        safe_delete("workflow_executions")
+        safe_delete("lead_profiles")
+        safe_delete("circle_contacts")
+        safe_delete("notifications")
+        safe_delete("stage_history", "entity_id")  # For leads tracked in stage_history
+        safe_delete("conversation_messages")
+        safe_delete("ai_conversation_messages")
+        safe_delete("email_intelligence_queue")
+        safe_delete("known_client_emails")
 
-        # Delete documents
-        db.execute(text("DELETE FROM documents WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete notes
-        db.execute(text("DELETE FROM notes WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete communications
-        db.execute(text("DELETE FROM communications WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete email queue items
-        db.execute(text("DELETE FROM email_reconciliation_queue WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete workflow executions
-        db.execute(text("DELETE FROM workflow_executions WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete lead profiles
-        db.execute(text("DELETE FROM lead_profiles WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete circle contacts
-        db.execute(text("DELETE FROM circle_contacts WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Delete notifications
-        db.execute(text("DELETE FROM notifications WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-        # Nullify lead references in loans (don't delete loans)
-        db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+        # Nullify references in other tables (don't delete the parent records)
+        safe_nullify("loans")
+        safe_nullify("extracted_data", "match_entity_id")  # Only nullify if match_entity_type = 'lead'
 
         # Now delete the lead
         db.delete(lead)
@@ -33412,6 +33411,8 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting lead {lead_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
 
 
