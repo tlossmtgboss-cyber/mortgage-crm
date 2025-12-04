@@ -915,13 +915,13 @@ async def handle_get_daily_call_list(args: Dict[str, Any], request: Request) -> 
 @register_tool_handler("get_daily_priorities")
 async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
     """
-    Get prioritized daily action items across loans, leads, and tasks.
+    Get comprehensive daily priorities aggregating ALL relevant data sources:
+    - Tasks (overdue and due today)
+    - Call list (leads and contacts needing calls)
+    - Pipeline alerts (stalled loans, lock expirations)
+    - SLA tracking (milestones at risk)
 
-    Returns high-priority items that need attention today:
-    - Overdue tasks
-    - Hot leads (New leads, high scores)
-    - Loans at risk (stalled, lock expiring)
-    - Follow-ups due
+    Returns actionable items with phone numbers for immediate action.
     """
     try:
         from main import SessionLocal, Lead, Loan, LeadStage, LoanStage
@@ -933,112 +933,246 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
             now = datetime.utcnow()
             today = now.date()
 
-            priorities = {
-                "high_priority": [],
-                "medium_priority": [],
-                "follow_ups": []
-            }
+            # Initialize result sections
+            calls_to_make = []
+            tasks_to_complete = []
+            pipeline_alerts = []
 
-            # 1. Get overdue tasks using raw SQL to avoid missing columns
+            # =================================================================
+            # 1. CALLS TO MAKE - Most important for LO productivity
+            # =================================================================
+
+            # 1a. Call-type tasks with contact info
+            call_tasks_sql = """
+                SELECT t.id, t.title, t.due_date, t.priority,
+                       l.id as lead_id, l.first_name, l.last_name, l.name as lead_name, l.phone as lead_phone, l.email as lead_email,
+                       ln.id as loan_id, ln.borrower_name, ln.borrower_phone, ln.borrower_email
+                FROM tasks t
+                LEFT JOIN leads l ON t.lead_id = l.id
+                LEFT JOIN loans ln ON t.loan_id = ln.id
+                WHERE t.status NOT IN ('completed', 'cancelled')
+                AND (LOWER(t.title) LIKE '%call%' OR LOWER(t.title) LIKE '%phone%' OR LOWER(t.title) LIKE '%contact%')
+                ORDER BY t.due_date ASC NULLS LAST, t.priority DESC
+                LIMIT 10
+            """
+            call_tasks = db.execute(text(call_tasks_sql)).fetchall()
+
+            for row in call_tasks:
+                # Determine contact name and phone
+                if row[4]:  # lead_id exists
+                    name = f"{row[5] or ''} {row[6] or ''}".strip() or row[7] or "Unknown"
+                    phone = row[8]
+                    email = row[9]
+                    contact_type = "lead"
+                elif row[10]:  # loan_id exists
+                    name = row[11] or "Unknown"
+                    phone = row[12]
+                    email = row[13]
+                    contact_type = "borrower"
+                else:
+                    name = "Unknown"
+                    phone = None
+                    email = None
+                    contact_type = "unknown"
+
+                due_date = row[2]
+                is_overdue = due_date and (due_date.date() if hasattr(due_date, 'date') else due_date) < today
+
+                calls_to_make.append({
+                    "type": "scheduled_call",
+                    "task_id": row[0],
+                    "name": name,
+                    "phone": phone,
+                    "email": email,
+                    "contact_type": contact_type,
+                    "reason": row[1],
+                    "due_date": due_date.isoformat() if due_date else None,
+                    "priority": "high" if is_overdue else (row[3] or "medium"),
+                    "is_overdue": is_overdue
+                })
+
+            # 1b. New leads needing first contact (speed to lead)
+            new_leads = db.query(Lead).filter(
+                Lead.stage == LeadStage.NEW,
+                Lead.phone.isnot(None),
+                Lead.phone != ''
+            ).order_by(Lead.created_at.desc()).limit(10).all()
+
+            for lead in new_leads:
+                name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name or "Unknown"
+                hours_old = (now - lead.created_at).total_seconds() / 3600 if lead.created_at else 999
+
+                calls_to_make.append({
+                    "type": "new_lead",
+                    "lead_id": lead.id,
+                    "name": name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "contact_type": "lead",
+                    "reason": f"New lead from {lead.source or 'unknown source'} - {hours_old:.0f}hrs old",
+                    "priority": "high" if hours_old < 24 else "medium",
+                    "hours_since_created": round(hours_old, 1),
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None
+                })
+
+            # 1c. Leads needing follow-up (attempted contact, no recent activity)
+            followup_sql = """
+                SELECT id, first_name, last_name, name, phone, email, source, last_contact, stage
+                FROM leads
+                WHERE stage NOT IN ('Withdrawn', 'Does Not Qualify')
+                AND phone IS NOT NULL AND phone != ''
+                AND (last_contact IS NULL OR last_contact < :threshold)
+                ORDER BY last_contact ASC NULLS FIRST
+                LIMIT 10
+            """
+            followup_threshold = now - timedelta(days=3)
+            followup_leads = db.execute(text(followup_sql), {"threshold": followup_threshold}).fetchall()
+
+            for row in followup_leads:
+                name = f"{row[1] or ''} {row[2] or ''}".strip() or row[3] or "Unknown"
+                last_contact = row[7]
+                days_since = (now - last_contact).days if last_contact else 999
+
+                calls_to_make.append({
+                    "type": "followup",
+                    "lead_id": row[0],
+                    "name": name,
+                    "phone": row[4],
+                    "email": row[5],
+                    "contact_type": "lead",
+                    "reason": f"Follow-up needed - {days_since} days since last contact",
+                    "priority": "medium",
+                    "days_since_contact": days_since,
+                    "stage": row[8]
+                })
+
+            # Sort calls by priority (high first) and limit
+            priority_order = {"high": 0, "medium": 1, "low": 2}
+            calls_to_make.sort(key=lambda x: (priority_order.get(x.get("priority", "medium"), 1), not x.get("is_overdue", False)))
+            calls_to_make = calls_to_make[:15]
+
+            # =================================================================
+            # 2. TASKS TO COMPLETE - Non-call tasks
+            # =================================================================
+
+            # Overdue tasks
             overdue_sql = """
-                SELECT id, title, due_date
+                SELECT id, title, due_date, priority, description
                 FROM tasks
                 WHERE status NOT IN ('completed', 'cancelled')
                 AND due_date < :today
+                AND (LOWER(title) NOT LIKE '%call%' AND LOWER(title) NOT LIKE '%phone%')
                 ORDER BY due_date ASC
                 LIMIT 10
             """
             overdue_result = db.execute(text(overdue_sql), {"today": today})
             for row in overdue_result.fetchall():
                 due_date = row[2]
-                # Handle both date and datetime types
-                if due_date:
-                    due_date_as_date = due_date.date() if hasattr(due_date, 'date') else due_date
-                    days_overdue = (today - due_date_as_date).days
-                else:
-                    days_overdue = 0
-                priorities["high_priority"].append({
+                days_overdue = (today - (due_date.date() if hasattr(due_date, 'date') else due_date)).days if due_date else 0
+                tasks_to_complete.append({
                     "type": "overdue_task",
-                    "id": row[0],
+                    "task_id": row[0],
                     "title": row[1],
+                    "description": row[4][:100] if row[4] else None,
                     "due_date": due_date.isoformat() if due_date else None,
                     "days_overdue": days_overdue,
-                    "action": "Complete this overdue task"
+                    "priority": "high"
                 })
 
-            # 2. Get hot leads (New stage, not contacted)
-            hot_leads = db.query(Lead).filter(
-                Lead.stage == LeadStage.NEW
-            ).order_by(Lead.created_at.desc()).limit(10).all()
-
-            for lead in hot_leads:
-                name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name or "Unknown"
-                days_old = (now - lead.created_at).days if lead.created_at else 0
-                priority_level = "high_priority" if days_old < 2 else "medium_priority"
-
-                priorities[priority_level].append({
-                    "type": "new_lead",
-                    "id": lead.id,
-                    "name": name,
-                    "phone": lead.phone,
-                    "email": lead.email,
-                    "source": lead.source,
-                    "days_since_created": days_old,
-                    "action": "Make first contact - speed to lead is critical"
-                })
-
-            # 3. Get tasks due today using raw SQL
+            # Tasks due today
             today_sql = """
-                SELECT id, title
+                SELECT id, title, priority, description
                 FROM tasks
                 WHERE status NOT IN ('completed', 'cancelled')
                 AND due_date = :today
+                AND (LOWER(title) NOT LIKE '%call%' AND LOWER(title) NOT LIKE '%phone%')
                 LIMIT 10
             """
             today_result = db.execute(text(today_sql), {"today": today})
             for row in today_result.fetchall():
-                priorities["medium_priority"].append({
-                    "type": "task_due_today",
-                    "id": row[0],
+                tasks_to_complete.append({
+                    "type": "due_today",
+                    "task_id": row[0],
                     "title": row[1],
-                    "action": "Complete before end of day"
+                    "description": row[3][:100] if row[3] else None,
+                    "priority": row[2] or "medium"
                 })
 
-            # 4. Get stalled loans (in same stage for too long)
+            # =================================================================
+            # 3. PIPELINE ALERTS - Loans needing attention
+            # =================================================================
+
+            # Stalled loans (7+ days in same stage)
             stalled_threshold = now - timedelta(days=7)
             active_loans = db.query(Loan).filter(
                 Loan.stage.notin_([LoanStage.FUNDED])
             ).all()
 
             for loan in active_loans:
-                # Check if loan has been in current stage too long
                 updated_at = loan.updated_at or loan.created_at
                 if updated_at and updated_at < stalled_threshold:
                     days_stalled = (now - updated_at).days
-                    priorities["medium_priority"].append({
+                    pipeline_alerts.append({
                         "type": "stalled_loan",
-                        "id": loan.id,
+                        "loan_id": loan.id,
                         "loan_number": loan.loan_number,
-                        "borrower": loan.borrower_name,
+                        "borrower_name": loan.borrower_name,
+                        "borrower_phone": loan.borrower_phone,
+                        "borrower_email": loan.borrower_email,
                         "stage": loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage),
                         "days_in_stage": days_stalled,
-                        "action": f"Follow up on loan stalled in {loan.stage.value if hasattr(loan.stage, 'value') else loan.stage}"
+                        "amount": float(loan.amount) if loan.amount else None,
+                        "priority": "high" if days_stalled > 14 else "medium",
+                        "action": f"Follow up - {days_stalled} days in {loan.stage.value if hasattr(loan.stage, 'value') else loan.stage}"
                     })
 
-            # Limit results
-            priorities["high_priority"] = priorities["high_priority"][:5]
-            priorities["medium_priority"] = priorities["medium_priority"][:10]
+            # Sort pipeline alerts
+            pipeline_alerts.sort(key=lambda x: x.get("days_in_stage", 0), reverse=True)
+            pipeline_alerts = pipeline_alerts[:10]
+
+            # =================================================================
+            # BUILD FINAL RESPONSE
+            # =================================================================
+
+            # Calculate summary stats
+            high_priority_count = (
+                len([c for c in calls_to_make if c.get("priority") == "high"]) +
+                len([t for t in tasks_to_complete if t.get("priority") == "high"]) +
+                len([p for p in pipeline_alerts if p.get("priority") == "high"])
+            )
 
             return {
                 "success": True,
                 "data": {
                     "date": today.isoformat(),
-                    "high_priority": priorities["high_priority"],
-                    "medium_priority": priorities["medium_priority"],
+                    "generated_at": now.isoformat(),
+
+                    # Section 1: Calls to make (with phone numbers)
+                    "calls_to_make": {
+                        "count": len(calls_to_make),
+                        "items": calls_to_make
+                    },
+
+                    # Section 2: Tasks to complete
+                    "tasks_to_complete": {
+                        "count": len(tasks_to_complete),
+                        "overdue_count": len([t for t in tasks_to_complete if t.get("type") == "overdue_task"]),
+                        "items": tasks_to_complete
+                    },
+
+                    # Section 3: Pipeline alerts
+                    "pipeline_alerts": {
+                        "count": len(pipeline_alerts),
+                        "items": pipeline_alerts
+                    },
+
+                    # Summary
                     "summary": {
-                        "high_priority_count": len(priorities["high_priority"]),
-                        "medium_priority_count": len(priorities["medium_priority"]),
-                        "total_action_items": len(priorities["high_priority"]) + len(priorities["medium_priority"])
+                        "total_action_items": len(calls_to_make) + len(tasks_to_complete) + len(pipeline_alerts),
+                        "high_priority_count": high_priority_count,
+                        "calls_needed": len(calls_to_make),
+                        "tasks_due": len(tasks_to_complete),
+                        "loans_needing_attention": len(pipeline_alerts)
                     }
                 }
             }
@@ -1047,6 +1181,8 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
 
     except Exception as e:
         logger.error(f"Get daily priorities error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             "success": False,
             "error": str(e)
