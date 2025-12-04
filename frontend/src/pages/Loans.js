@@ -80,6 +80,17 @@ function Loans() {
     'Funded',
   ];
 
+  // Map filter display names to actual API stage values
+  const filterToStage = {
+    'Disclosed': ['Disclosed'],
+    'In Processing': ['Processing', 'Submitted'],
+    'In Underwriting': ['UW Received', 'Underwriting'],
+    'Approved': ['Approved'],
+    'Clear to Close': ['CTC', 'Clear to Close', 'Docs Out'],
+    'Suspended': ['Suspended'],
+    'Funded': ['Funded'],
+  };
+
   useEffect(() => {
     loadLoans();
   }, []);
@@ -303,7 +314,9 @@ function Loans() {
     // Show all funded loans
     filteredLoans = safeLoans.filter(loan => isFundedLoan(loan));
   } else {
-    filteredLoans = safeLoans.filter(loan => loan.stage === activeFilter);
+    // Use the mapping to match filter name to actual API stage values
+    const stageValues = filterToStage[activeFilter] || [activeFilter];
+    filteredLoans = safeLoans.filter(loan => stageValues.includes(loan.stage));
   }
 
   // Filter by search query
