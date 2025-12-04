@@ -20698,6 +20698,8 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
                     "error": refresh_result.get("error", "Failed to refresh token"),
                     "needs_reauth": refresh_result.get("needs_reauth", False)
                 }
+            # Refresh ORM object to get updated token
+            db.refresh(oauth_record)
 
         access_token = decrypt_token(oauth_record.access_token)
 
@@ -20721,6 +20723,8 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
                     "error": refresh_result.get("error", "Failed to refresh token"),
                     "needs_reauth": refresh_result.get("needs_reauth", True)
                 }
+            # Refresh the ORM object to get updated token from DB
+            db.refresh(oauth_record)
             # Retry with new token
             access_token = decrypt_token(oauth_record.access_token)
             headers["Authorization"] = f"Bearer {access_token}"
@@ -20770,6 +20774,8 @@ async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: 
                     "error": refresh_result.get("error", "Failed to refresh token"),
                     "needs_reauth": refresh_result.get("needs_reauth", False)
                 }
+            # Refresh ORM object to get updated token
+            db.refresh(oauth_record)
 
         access_token = decrypt_token(oauth_record.access_token)
 
@@ -20795,6 +20801,8 @@ async def delete_microsoft_email(oauth_record: MicrosoftOAuthToken, message_id: 
                     "error": refresh_result.get("error", "Failed to refresh token"),
                     "needs_reauth": refresh_result.get("needs_reauth", True)
                 }
+            # Refresh ORM object to get updated token from DB
+            db.refresh(oauth_record)
             # Retry with new token
             access_token = decrypt_token(oauth_record.access_token)
             headers["Authorization"] = f"Bearer {access_token}"
