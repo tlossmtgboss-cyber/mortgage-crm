@@ -33265,6 +33265,65 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
         logger.error(f"Error deleting lead {lead_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
 
+
+@app.post("/api/v1/leads/claim-orphans")
+async def claim_orphan_leads(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Claim all orphan leads (leads with no owner) and assign them to the current user.
+    This fixes the AI chat issue where leads aren't visible because they have no owner.
+    """
+    try:
+        # Update leads with NULL owner_id to current user
+        result = db.execute(
+            text("UPDATE leads SET owner_id = :user_id WHERE owner_id IS NULL"),
+            {"user_id": current_user.id}
+        )
+        leads_claimed = result.rowcount
+
+        # Also update loans with NULL loan_officer_id
+        result = db.execute(
+            text("UPDATE loans SET loan_officer_id = :user_id WHERE loan_officer_id IS NULL"),
+            {"user_id": current_user.id}
+        )
+        loans_claimed = result.rowcount
+
+        db.commit()
+
+        # Get totals
+        result = db.execute(
+            text("""
+                SELECT
+                    (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id) as leads,
+                    (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id) as loans
+            """),
+            {"user_id": current_user.id}
+        )
+        totals = result.fetchone()
+
+        logger.info(f"User {current_user.email} claimed {leads_claimed} leads, {loans_claimed} loans")
+
+        return {
+            "success": True,
+            "message": f"Successfully claimed {leads_claimed} leads and {loans_claimed} loans",
+            "claimed": {
+                "leads": leads_claimed,
+                "loans": loans_claimed
+            },
+            "totals": {
+                "leads": totals[0],
+                "loans": totals[1]
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error claiming orphan leads: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to claim orphan leads: {str(e)}")
+
+
 @app.post("/api/v1/leads/{lead_id}/calculate-referral-scores")
 async def calculate_lead_referral_scores(lead_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Calculate AI-based referral intelligence scores for a lead"""
