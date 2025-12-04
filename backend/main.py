@@ -33889,60 +33889,72 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
 
 @app.patch("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
-    if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
+    try:
+        loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
+        if not loan:
+            # Check if loan exists but belongs to different user
+            any_loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            if any_loan:
+                logger.error(f"Loan {loan_id} exists but loan_officer_id={any_loan.loan_officer_id} != current_user.id={current_user.id}")
+                raise HTTPException(status_code=403, detail=f"Loan belongs to different user (loan_officer_id={any_loan.loan_officer_id})")
+            raise HTTPException(status_code=404, detail="Loan not found")
 
-    # Track if stage is changing
-    old_stage = loan.stage
-    old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
-    new_stage = loan_update.stage if loan_update.stage else old_stage
-    new_stage_str = new_stage.value if hasattr(new_stage, 'value') else str(new_stage) if new_stage else None
+        # Track if stage is changing
+        old_stage = loan.stage
+        old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
+        new_stage = loan_update.stage if loan_update.stage else old_stage
+        new_stage_str = new_stage.value if hasattr(new_stage, 'value') else str(new_stage) if new_stage else None
 
-    for key, value in loan_update.dict(exclude_unset=True).items():
-        setattr(loan, key, value)
+        for key, value in loan_update.dict(exclude_unset=True).items():
+            setattr(loan, key, value)
 
-    # Track stage change in history if stage changed
-    if old_stage_str != new_stage_str and new_stage_str:
-        # Calculate duration in previous stage
-        duration_days = None
-        if loan.stage_changed_at:
-            duration_days = (datetime.now(timezone.utc) - loan.stage_changed_at.replace(tzinfo=timezone.utc)).days
+        # Track stage change in history if stage changed
+        if old_stage_str != new_stage_str and new_stage_str:
+            # Calculate duration in previous stage
+            duration_days = None
+            if loan.stage_changed_at:
+                duration_days = (datetime.now(timezone.utc) - loan.stage_changed_at.replace(tzinfo=timezone.utc)).days
 
-        # Update stage_changed_at
-        loan.stage_changed_at = datetime.now(timezone.utc)
+            # Update stage_changed_at
+            loan.stage_changed_at = datetime.now(timezone.utc)
 
-        # Record stage change in history
-        stage_history = StageHistory(
-            entity_type='loan',
-            entity_id=loan.id,
-            loan_id=loan.id,
-            from_stage=old_stage_str,
-            to_stage=new_stage_str,
-            changed_at=datetime.now(timezone.utc),
-            changed_by_id=current_user.id,
-            duration_in_previous_stage=duration_days
-        )
-        db.add(stage_history)
-        logger.info(f"Stage changed for loan {loan.id}: {old_stage_str} → {new_stage_str}, history recorded")
+            # Record stage change in history
+            stage_history = StageHistory(
+                entity_type='loan',
+                entity_id=loan.id,
+                loan_id=loan.id,
+                from_stage=old_stage_str,
+                to_stage=new_stage_str,
+                changed_at=datetime.now(timezone.utc),
+                changed_by_id=current_user.id,
+                duration_in_previous_stage=duration_days
+            )
+            db.add(stage_history)
+            logger.info(f"Stage changed for loan {loan.id}: {old_stage_str} → {new_stage_str}, history recorded")
 
-    # If stage changed to FUNDED, set funded_date and copy to MUM portfolio
-    if new_stage == LoanStage.FUNDED and old_stage != LoanStage.FUNDED:
-        if not loan.funded_date:
-            loan.funded_date = datetime.now(timezone.utc)
-        logger.info(f"🎉 Loan {loan.loan_number} is now FUNDED! Creating MUM client...")
-        # Copy to MUM portfolio and create post-close tasks
-        mum_client = copy_loan_to_mum_client(loan, db, current_user.id)
-        if mum_client:
-            logger.info(f"✅ MUM client {mum_client.id} created for {loan.borrower_name}")
+        # If stage changed to FUNDED, set funded_date and copy to MUM portfolio
+        if new_stage == LoanStage.FUNDED and old_stage != LoanStage.FUNDED:
+            if not loan.funded_date:
+                loan.funded_date = datetime.now(timezone.utc)
+            logger.info(f"🎉 Loan {loan.loan_number} is now FUNDED! Creating MUM client...")
+            # Copy to MUM portfolio and create post-close tasks
+            mum_client = copy_loan_to_mum_client(loan, db, current_user.id)
+            if mum_client:
+                logger.info(f"✅ MUM client {mum_client.id} created for {loan.borrower_name}")
 
-    loan.ai_insights = generate_ai_insights(loan)
-    loan.updated_at = datetime.now(timezone.utc)
+        loan.ai_insights = generate_ai_insights(loan)
+        loan.updated_at = datetime.now(timezone.utc)
 
-    db.commit()
-    db.refresh(loan)
-    logger.info(f"Loan updated: {loan.loan_number}")
-    return loan
+        db.commit()
+        db.refresh(loan)
+        logger.info(f"Loan updated: {loan.loan_number}")
+        return loan
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating loan {loan_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update loan: {str(e)}")
 
 @app.delete("/api/v1/loans/{loan_id}", status_code=204)
 async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
