@@ -3205,6 +3205,7 @@ class LoanUpdate(BaseModel):
     rate: Optional[float] = None
     closing_date: Optional[datetime] = None
     processor: Optional[str] = None
+    borrower_name: Optional[str] = None
     borrower_email: Optional[str] = None
     borrower_phone: Optional[str] = None
     preferred_communication: Optional[str] = None
@@ -3215,6 +3216,16 @@ class LoanUpdate(BaseModel):
     property_state: Optional[str] = None
     property_zip: Optional[str] = None
     loan_number: Optional[str] = None
+    program: Optional[str] = None
+    amount: Optional[float] = None
+    loan_type: Optional[str] = None
+    term: Optional[int] = None
+    purchase_price: Optional[float] = None
+    down_payment: Optional[float] = None
+    underwriter: Optional[str] = None
+    realtor_agent: Optional[str] = None
+    title_company: Optional[str] = None
+    lender: Optional[str] = None
 
 class LoanResponse(BaseModel):
     id: int
