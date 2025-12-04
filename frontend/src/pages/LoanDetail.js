@@ -854,6 +854,15 @@ function LoanDetail() {
           </div>
 
           <div className="loan-field">
+            <label>Loan Officer</label>
+            <input
+              type="text"
+              value={formData.loan_officer || loan?.loan_officer || ''}
+              onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
             <label>Closing Date</label>
             <input
               type="date"
