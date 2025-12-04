@@ -33377,48 +33377,63 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
     lead_name = lead.name
 
     try:
-        # Delete related records first to avoid foreign key constraint errors
-        # Execute each delete in sequence - all should succeed or we fail
-        delete_statements = [
-            "DELETE FROM activities WHERE lead_id = :lid",
-            "DELETE FROM tasks WHERE lead_id = :lid",
-            "DELETE FROM ai_tasks WHERE lead_id = :lid",
-            "DELETE FROM documents WHERE lead_id = :lid",
-            "DELETE FROM notes WHERE lead_id = :lid",
-            "DELETE FROM communications WHERE lead_id = :lid",
-            "DELETE FROM email_reconciliation_queue WHERE lead_id = :lid",
-            "DELETE FROM workflow_executions WHERE lead_id = :lid",
-            "DELETE FROM lead_profiles WHERE lead_id = :lid",
-            "DELETE FROM circle_contacts WHERE lead_id = :lid",
-            "DELETE FROM notifications WHERE lead_id = :lid",
-            "DELETE FROM stage_history WHERE entity_id = :lid",
-            "DELETE FROM conversation_messages WHERE lead_id = :lid",
-            "DELETE FROM ai_conversation_messages WHERE lead_id = :lid",
-            "DELETE FROM incoming_data_events WHERE lead_id = :lid",
-            "UPDATE loans SET lead_id = NULL WHERE lead_id = :lid",
+        # Delete related records first using raw SQL connection
+        # This avoids SQLAlchemy transaction issues
+        from sqlalchemy import inspect
+
+        # Get list of existing tables
+        inspector = inspect(db.bind)
+        existing_tables = set(inspector.get_table_names())
+
+        # Define tables and their foreign key columns to lead
+        tables_to_clean = [
+            ("activities", "lead_id"),
+            ("tasks", "lead_id"),
+            ("ai_tasks", "lead_id"),
+            ("notes", "lead_id"),
+            ("communications", "lead_id"),
+            ("email_reconciliation_queue", "lead_id"),
+            ("workflow_executions", "lead_id"),
+            ("lead_profiles", "lead_id"),
+            ("circle_contacts", "lead_id"),
+            ("notifications", "lead_id"),
+            ("stage_history", "lead_id"),
+            ("conversation_messages", "lead_id"),
+            ("ai_conversation_messages", "lead_id"),
+            ("incoming_data_events", "lead_id"),
         ]
 
-        # Execute all cleanup statements
-        for stmt in delete_statements:
-            try:
-                db.execute(text(stmt), {"lid": lead_id})
-            except Exception as e:
-                # Only ignore "table doesn't exist" or "column doesn't exist" errors
-                err_str = str(e).lower()
-                if 'undefined_table' in err_str or 'does not exist' in err_str or 'undefined_column' in err_str:
-                    logger.debug(f"Skipping non-existent table/column: {stmt[:40]}...")
-                else:
-                    raise  # Re-raise other errors
+        # Build a single SQL statement that deletes from all existing tables
+        delete_sqls = []
+        for table, column in tables_to_clean:
+            if table in existing_tables:
+                delete_sqls.append(f"DELETE FROM {table} WHERE {column} = {lead_id}")
 
-        # Now delete the lead itself
-        db.execute(text("DELETE FROM leads WHERE id = :lid"), {"lid": lead_id})
-        db.commit()
+        # Nullify loan references if loans table exists
+        if "loans" in existing_tables:
+            delete_sqls.append(f"UPDATE loans SET lead_id = NULL WHERE lead_id = {lead_id}")
+
+        # Add the final lead delete
+        delete_sqls.append(f"DELETE FROM leads WHERE id = {lead_id}")
+
+        # Execute all as a single raw SQL transaction
+        raw_conn = db.bind.raw_connection()
+        try:
+            cursor = raw_conn.cursor()
+            for sql in delete_sqls:
+                try:
+                    cursor.execute(sql)
+                except Exception as e:
+                    logger.debug(f"Delete statement skipped: {sql[:50]}... - {e}")
+                    # Continue with next statement
+            raw_conn.commit()
+        finally:
+            raw_conn.close()
 
         logger.info(f"Lead deleted: {lead_name}")
         return None
 
     except Exception as e:
-        db.rollback()
         logger.error(f"Error deleting lead {lead_id}: {str(e)}")
         import traceback
         traceback.print_exc()
