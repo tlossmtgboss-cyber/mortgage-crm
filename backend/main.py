@@ -23824,20 +23824,29 @@ async def approve_reconciliation(
 
             # Get co-borrower name - handle separate coborrower_first_name/coborrower_last_name fields
             coborrower_name = get_val("coborrower_name")
+            logger.info(f"RECONCILIATION DEBUG: coborrower_name from get_val = {coborrower_name}")
             if not coborrower_name:
                 coborrower_first = get_val("coborrower_first_name", "") or get_val("coborrower first name", "")
                 coborrower_last = get_val("coborrower_last_name", "") or get_val("coborrower last name", "")
+                logger.info(f"RECONCILIATION DEBUG: coborrower_first={coborrower_first}, coborrower_last={coborrower_last}")
                 if coborrower_first or coborrower_last:
                     coborrower_name = f"{coborrower_first} {coborrower_last}".strip()
+                    logger.info(f"RECONCILIATION DEBUG: constructed coborrower_name = {coborrower_name}")
 
             # Get co-borrower email
             coborrower_email = get_val("coborrower_email") or get_val("co_borrower_email")
+            logger.info(f"RECONCILIATION DEBUG: coborrower_email = {coborrower_email}")
 
             # Get email - handle borrower_email field name
             borrower_email = get_val("borrower_email") or get_val("email")
+            logger.info(f"RECONCILIATION DEBUG: borrower_email = {borrower_email}")
 
             # Get phone - handle borrower_phone field name
             borrower_phone = get_val("borrower_phone") or get_val("phone")
+            logger.info(f"RECONCILIATION DEBUG: borrower_phone = {borrower_phone}")
+
+            # Debug: log all fields
+            logger.info(f"RECONCILIATION DEBUG: All fields keys: {list(fields.keys())}")
 
             # If no loan number, generate one (skip searching for existing loans to avoid enum errors)
             # NOTE: Previously searched for existing loans, but this causes issues when DB has
