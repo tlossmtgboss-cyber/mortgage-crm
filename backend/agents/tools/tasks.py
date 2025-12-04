@@ -924,8 +924,8 @@ def get_daily_call_list(
     if include_leads:
         lead_params = {"days_threshold": 3}
         lead_filters = [
-            # Exclude terminal lead stages - use actual LeadStage enum values
-            "l.stage NOT IN ('Closed', 'Withdrawn', 'Does Not Qualify', 'Disclosed')",
+            # Exclude terminal lead stages - only use values that exist in prod database enum
+            "l.stage NOT IN ('Withdrawn', 'Does Not Qualify')",
             "l.phone IS NOT NULL",
             "l.phone != ''",
         ]
