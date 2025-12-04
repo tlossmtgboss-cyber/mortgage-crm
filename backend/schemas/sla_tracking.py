@@ -36,7 +36,6 @@ class SLAStatusEnum(str, Enum):
 class MilestoneTypeEnum(str, Enum):
     # Lead Stage
     LEAD_RESPONSE = "lead_response"
-    INITIAL_CONSULTATION = "initial_consultation"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
 
@@ -84,7 +83,6 @@ class TriggerFromEventEnum(str, Enum):
     """Events that can trigger the SLA timer to start."""
     LEAD_CREATED = "lead_created"
     LEAD_RESPONSE = "lead_response"
-    INITIAL_CONSULTATION = "initial_consultation"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
     APPLICATION_SUBMITTED = "application_submitted"

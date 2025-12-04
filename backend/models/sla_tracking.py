@@ -40,7 +40,6 @@ class MilestoneType(str, enum.Enum):
     """Types of loan lifecycle milestones."""
     # Lead Stage Milestones
     LEAD_RESPONSE = "lead_response"
-    INITIAL_CONSULTATION = "initial_consultation"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
     DOCUMENTS_REQUESTED = "documents_requested"
@@ -94,7 +93,6 @@ class TriggerFromEvent(str, enum.Enum):
     # Lead Stage Events
     LEAD_CREATED = "lead_created"
     LEAD_RESPONSE = "lead_response"
-    INITIAL_CONSULTATION = "initial_consultation"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
     DOCUMENTS_REQUESTED = "documents_requested"

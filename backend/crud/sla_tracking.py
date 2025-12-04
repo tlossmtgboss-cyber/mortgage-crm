@@ -33,6 +33,56 @@ from schemas.sla_tracking import (
     SLAAlertUpdate
 )
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+# ============ Milestone Type to Loan Date Field Mapping ============
+# Maps SLA milestone types to the corresponding loan date field
+# This is used when completing an SLA task to update the loan's Important Dates
+
+MILESTONE_TO_LOAN_DATE_FIELD = {
+    # Appraisal milestones
+    MilestoneType.APPRAISAL_ORDERED: "appraisal_ordered_date",
+    MilestoneType.APPRAISAL_RECEIVED: "appraisal_completed_date",
+
+    # Title milestones
+    MilestoneType.TITLE_ORDERED: "title_ordered_date",
+    MilestoneType.TITLE_RECEIVED: "title_received_date",
+
+    # Insurance milestones
+    MilestoneType.INSURANCE_ORDERED: "insurance_ordered_date",
+    MilestoneType.INSURANCE_RECEIVED: "insurance_received_date",
+
+    # Disclosure milestones
+    MilestoneType.LE_PENDING: "loan_estimate_sent_date",
+    MilestoneType.LE_DISCLOSED: "initial_disclosures_sent_date",
+
+    # Underwriting milestones
+    MilestoneType.SUBMITTED_TO_UW: "submitted_to_uw_date",
+    MilestoneType.UW_DECISION: "uw_decision_date",
+    MilestoneType.CONDITIONS_ISSUED: "conditional_approval_date",
+    MilestoneType.CONDITIONS_CLEARED: "conditions_cleared_date",
+
+    # Closing milestones
+    MilestoneType.CLEAR_TO_CLOSE: "clear_to_close_date",
+    MilestoneType.CLOSING_DOCS_OUT: "final_closing_package_sent_date",
+    MilestoneType.CLOSING_SCHEDULED: "closing_date",
+    MilestoneType.CLOSED: "closing_date",
+    MilestoneType.FUNDED: "funded_date",
+
+    # Lead/Pre-approval milestones
+    MilestoneType.LEAD_RESPONSE: None,  # No date field - just activity
+    MilestoneType.PRE_QUALIFIED: None,
+    MilestoneType.PREAPPROVAL: None,
+    MilestoneType.DOCUMENTS_REQUESTED: None,
+    MilestoneType.DOCUMENTS_RECEIVED: None,
+    MilestoneType.APPLICATION_COMPLETE: None,
+    MilestoneType.APPLICATION_SUBMITTED: "contract_received_date",
+    MilestoneType.DOCUMENT_COLLECTION: None,
+    MilestoneType.PROCESSING_START: None,
+}
+
 
 # ============ SLA Measure CRUD ============
 
@@ -341,6 +391,75 @@ def update_milestone_status(
     return db_history
 
 
+def create_sla_warning_task(
+    db: Session,
+    milestone: LoanMilestoneHistory,
+    sla_measure: SLAMeasure
+) -> Optional[int]:
+    """
+    Create a task for a milestone that has hit warning status.
+    The task allows the user to enter the milestone date which will update Important Dates.
+
+    Returns the task ID if created, None if task already exists or creation failed.
+    """
+    # Import Task model here to avoid circular imports
+    from main import Task
+
+    try:
+        # Check if task already exists for this milestone
+        existing_task = db.query(Task).filter(
+            Task.sla_milestone_id == milestone.id,
+            Task.status != "completed"
+        ).first()
+
+        if existing_task:
+            logger.debug(f"SLA task already exists for milestone {milestone.id}")
+            return None
+
+        # Get the loan date field for this milestone type
+        date_field = MILESTONE_TO_LOAN_DATE_FIELD.get(milestone.milestone_type)
+
+        # Format milestone type for display
+        milestone_name = milestone.milestone_type.value.replace("_", " ").title()
+
+        # Create task title and description
+        task_title = f"⚠️ SLA Warning: {milestone_name}"
+        task_description = (
+            f"This milestone is approaching its SLA deadline.\n\n"
+            f"Target: {sla_measure.target_value} {sla_measure.target_unit.value}\n"
+            f"Deadline: {milestone.target_deadline.strftime('%Y-%m-%d %H:%M') if milestone.target_deadline else 'Not set'}\n\n"
+            f"When you complete this milestone, enter the date it was completed to update the loan's Important Dates."
+        )
+
+        # Create the task
+        new_task = Task(
+            title=task_title,
+            description=task_description,
+            status="pending",
+            priority="high",
+            due_date=milestone.target_deadline,
+            owner_id=milestone.assigned_to_id,
+            lead_id=milestone.lead_id,
+            loan_id=milestone.loan_id,
+            related_contact_name=milestone.loan_number,
+            related_type="sla_milestone",
+            # SLA tracking fields
+            sla_milestone_id=milestone.id,
+            sla_milestone_type=milestone.milestone_type.value,
+            sla_date_field=date_field
+        )
+
+        db.add(new_task)
+        db.flush()  # Get the task ID without committing
+
+        logger.info(f"Created SLA warning task {new_task.id} for milestone {milestone.id} ({milestone_name})")
+        return new_task.id
+
+    except Exception as e:
+        logger.error(f"Error creating SLA warning task for milestone {milestone.id}: {e}")
+        return None
+
+
 def update_milestone_statuses_batch(
     db: Session,
     organization_id: int = 1
@@ -348,9 +467,10 @@ def update_milestone_statuses_batch(
     """
     Batch update all milestone statuses based on current time.
     Called periodically by background job.
+    Also creates tasks for milestones that hit warning status.
     """
     now = datetime.now(timezone.utc)
-    updated_counts = {"at_risk": 0, "overdue": 0}
+    updated_counts = {"at_risk": 0, "overdue": 0, "tasks_created": 0}
 
     # Get all active milestones
     active = db.query(LoanMilestoneHistory).filter(
@@ -379,6 +499,10 @@ def update_milestone_statuses_batch(
             if milestone.status != SLAStatus.OVERDUE:
                 milestone.status = SLAStatus.OVERDUE
                 updated_counts["overdue"] += 1
+                # Create task for overdue milestone if not already created
+                task_id = create_sla_warning_task(db, milestone, sla_measure)
+                if task_id:
+                    updated_counts["tasks_created"] += 1
         else:
             # Check if at risk (past warning threshold)
             warning_time = milestone.started_at + timedelta(
@@ -387,6 +511,10 @@ def update_milestone_statuses_batch(
             if now > warning_time and milestone.status not in [SLAStatus.AT_RISK, SLAStatus.OVERDUE]:
                 milestone.status = SLAStatus.AT_RISK
                 updated_counts["at_risk"] += 1
+                # Create task for at-risk milestone
+                task_id = create_sla_warning_task(db, milestone, sla_measure)
+                if task_id:
+                    updated_counts["tasks_created"] += 1
             elif now <= warning_time and milestone.status not in [SLAStatus.IN_PROGRESS, SLAStatus.ON_TRACK]:
                 milestone.status = SLAStatus.ON_TRACK
 
@@ -975,7 +1103,7 @@ def seed_default_sla_measures(
     default_measures = [
         # Lead Stage
         {"milestone_type": MilestoneType.LEAD_RESPONSE, "name": "Lead Response Time", "target_value": 4, "target_unit": TimeUnit.HOURS, "description": "Time to first contact with new lead"},
-        {"milestone_type": MilestoneType.INITIAL_CONSULTATION, "name": "Initial Consultation", "target_value": 24, "target_unit": TimeUnit.HOURS, "description": "Schedule initial consultation"},
+        {"milestone_type": MilestoneType.PRE_QUALIFIED, "name": "Pre-Qualification", "target_value": 24, "target_unit": TimeUnit.HOURS, "description": "Qualify the lead"},
         {"milestone_type": MilestoneType.PREAPPROVAL, "name": "Pre-Approval Issuance", "target_value": 2, "target_unit": TimeUnit.BUSINESS_DAYS, "description": "Issue pre-approval letter"},
 
         # Application Stage
@@ -1024,3 +1152,153 @@ def seed_default_sla_measures(
             db.refresh(m)
 
     return created_measures
+
+
+# ============ SLA Task Completion ============
+
+def complete_sla_task_with_date(
+    db: Session,
+    task_id: int,
+    milestone_date: datetime,
+    user_id: int,
+    organization_id: int = 1
+) -> Dict[str, Any]:
+    """
+    Complete an SLA warning task with the milestone date.
+    Updates the loan's Important Dates field and completes the SLA milestone.
+
+    Args:
+        db: Database session
+        task_id: ID of the task to complete
+        milestone_date: The date the milestone was actually completed
+        user_id: ID of the user completing the task
+        organization_id: Organization ID
+
+    Returns:
+        Dict with result details including loan_updated, milestone_completed status
+    """
+    # Import Task and Loan models here to avoid circular imports
+    from main import Task, Loan
+
+    result = {
+        "success": False,
+        "task_id": task_id,
+        "task_completed": False,
+        "loan_updated": False,
+        "milestone_completed": False,
+        "loan_field_updated": None,
+        "error": None
+    }
+
+    try:
+        # Get the task
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            result["error"] = "Task not found"
+            return result
+
+        # Verify it's an SLA task
+        if not task.sla_milestone_id:
+            result["error"] = "This is not an SLA milestone task"
+            return result
+
+        # Store the milestone date on the task
+        task.milestone_date = milestone_date
+        task.status = "completed"
+        task.completed_at = datetime.now(timezone.utc)
+
+        result["task_completed"] = True
+
+        # Update the loan's Important Dates if there's a date field mapping
+        if task.sla_date_field and task.loan_id:
+            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+            if loan and hasattr(loan, task.sla_date_field):
+                setattr(loan, task.sla_date_field, milestone_date)
+                loan.updated_at = datetime.now(timezone.utc)
+                result["loan_updated"] = True
+                result["loan_field_updated"] = task.sla_date_field
+                logger.info(f"Updated loan {loan.id} field {task.sla_date_field} to {milestone_date}")
+
+        # Complete the SLA milestone
+        if task.sla_milestone_id:
+            milestone = get_milestone_history(db, task.sla_milestone_id, organization_id)
+            if milestone:
+                completed_milestone = complete_milestone(
+                    db,
+                    task.sla_milestone_id,
+                    completed_by_id=user_id,
+                    notes=f"Completed via task. Milestone date: {milestone_date.strftime('%Y-%m-%d')}",
+                    organization_id=organization_id
+                )
+                if completed_milestone:
+                    result["milestone_completed"] = True
+                    logger.info(f"Completed SLA milestone {task.sla_milestone_id}")
+
+        db.commit()
+        result["success"] = True
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error completing SLA task {task_id}: {e}")
+        result["error"] = str(e)
+
+    return result
+
+
+def get_sla_tasks_for_user(
+    db: Session,
+    user_id: int,
+    include_completed: bool = False
+) -> List[Dict[str, Any]]:
+    """
+    Get all SLA warning tasks for a user.
+
+    Returns list of tasks with SLA milestone information.
+    """
+    from main import Task, Loan, Lead
+
+    query = db.query(Task).filter(
+        Task.owner_id == user_id,
+        Task.sla_milestone_id.isnot(None)
+    )
+
+    if not include_completed:
+        query = query.filter(Task.status != "completed")
+
+    tasks = query.order_by(Task.due_date).all()
+
+    result = []
+    for task in tasks:
+        task_data = {
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "status": task.status,
+            "priority": task.priority,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "sla_milestone_id": task.sla_milestone_id,
+            "sla_milestone_type": task.sla_milestone_type,
+            "sla_date_field": task.sla_date_field,
+            "milestone_date": task.milestone_date.isoformat() if task.milestone_date else None,
+            "loan_id": task.loan_id,
+            "lead_id": task.lead_id,
+            "related_contact_name": task.related_contact_name,
+            "created_at": task.created_at.isoformat() if task.created_at else None
+        }
+
+        # Add loan info if available
+        if task.loan_id:
+            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+            if loan:
+                task_data["loan_number"] = loan.loan_number
+                task_data["borrower_name"] = loan.borrower_name
+
+        # Add lead info if available
+        if task.lead_id:
+            lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+            if lead:
+                task_data["lead_name"] = f"{lead.first_name} {lead.last_name}"
+
+        result.append(task_data)
+
+    return result

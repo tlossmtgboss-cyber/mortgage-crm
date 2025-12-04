@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 # Maps loan/lead stages to milestone types for auto-tracking
 LEAD_STAGE_TO_MILESTONE = {
     "new": MilestoneType.LEAD_RESPONSE,
-    "contacted": MilestoneType.INITIAL_CONSULTATION,
-    "consultation_scheduled": MilestoneType.INITIAL_CONSULTATION,
+    "contacted": MilestoneType.LEAD_RESPONSE,
+    "pre_qualified": MilestoneType.PRE_QUALIFIED,
     "pre_approved": MilestoneType.PREAPPROVAL,
     "pre-approved": MilestoneType.PREAPPROVAL,
     "documents_requested": MilestoneType.DOCUMENTS_REQUESTED,
@@ -69,8 +69,8 @@ LOAN_STAGE_TO_MILESTONE = {
 # Milestone completion triggers (when entering these stages, complete previous milestone)
 MILESTONE_COMPLETION_MAP = {
     # Lead Stage progression
-    MilestoneType.INITIAL_CONSULTATION: MilestoneType.LEAD_RESPONSE,
-    MilestoneType.PREAPPROVAL: MilestoneType.INITIAL_CONSULTATION,
+    MilestoneType.PRE_QUALIFIED: MilestoneType.LEAD_RESPONSE,
+    MilestoneType.PREAPPROVAL: MilestoneType.PRE_QUALIFIED,
     MilestoneType.DOCUMENTS_REQUESTED: MilestoneType.PREAPPROVAL,
     MilestoneType.DOCUMENTS_RECEIVED: MilestoneType.DOCUMENTS_REQUESTED,
     MilestoneType.APPLICATION_COMPLETE: MilestoneType.DOCUMENTS_RECEIVED,
