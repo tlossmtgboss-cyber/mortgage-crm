@@ -560,6 +560,7 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
 
             # Build response
             insights = {
+                "total_leads": total_leads,  # Top-level for easier access
                 "context": {
                     "assigned_to_user_id": args.get('assigned_to_user_id'),
                     "generated_at": now.isoformat()
@@ -907,12 +908,18 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
             overdue_result = db.execute(text(overdue_sql), {"today": today})
             for row in overdue_result.fetchall():
                 due_date = row[2]
+                # Handle both date and datetime types
+                if due_date:
+                    due_date_as_date = due_date.date() if hasattr(due_date, 'date') else due_date
+                    days_overdue = (today - due_date_as_date).days
+                else:
+                    days_overdue = 0
                 priorities["high_priority"].append({
                     "type": "overdue_task",
                     "id": row[0],
                     "title": row[1],
                     "due_date": due_date.isoformat() if due_date else None,
-                    "days_overdue": (today - due_date).days if due_date else 0,
+                    "days_overdue": days_overdue,
                     "action": "Complete this overdue task"
                 })
 
