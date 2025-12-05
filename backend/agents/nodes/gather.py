@@ -85,6 +85,8 @@ CACHEABLE_TOOLS = {
     "get_tasks": 60,              # 1 minute - tasks change frequently
     "lead_status_insights": 120,  # 2 minutes - lead pipeline coaching
     "get_leads_by_status": 60,    # 1 minute - lead lists change frequently
+    "get_top_leads": 60,          # 1 minute - top leads for calling
+    "get_stale_leads": 60,        # 1 minute - stale leads for follow-up
 }
 
 # Tools that should NEVER be cached (write operations)
@@ -279,6 +281,40 @@ def determine_tool_arguments(
             args["phone_number"] = phone
             # Default message if not specified
             args["message"] = state.get("message_content", "Hello from your loan officer!")
+
+    elif tool_name == "get_top_leads":
+        # Extract limit from query (e.g., "top 3 leads" -> limit=3)
+        user_message = state.get("user_message", "").lower()
+        import re
+        match = re.search(r"top\s*(\d+)", user_message)
+        if match:
+            args["limit"] = int(match.group(1))
+        else:
+            args["limit"] = 5  # Default to top 5
+        args["require_phone"] = True  # Always require phone for calling
+
+    elif tool_name == "get_stale_leads":
+        # Extract days threshold from query (e.g., "not contacted in 7 days" -> 7)
+        user_message = state.get("user_message", "").lower()
+        import re
+        match = re.search(r"(\d+)\s*days?", user_message)
+        if match:
+            args["days_threshold"] = int(match.group(1))
+        else:
+            args["days_threshold"] = 7  # Default to 7 days
+        args["limit"] = 20
+        args["include_never_contacted"] = True
+
+    elif tool_name == "lead_status_insights":
+        # No arguments needed
+        pass
+
+    elif tool_name == "get_leads_by_status":
+        # Extract status from entities if available
+        entities = state.get("query_entities", {})
+        if entities.get("stages"):
+            args["status"] = entities["stages"][0]
+        args["limit"] = 25
 
     return args
 

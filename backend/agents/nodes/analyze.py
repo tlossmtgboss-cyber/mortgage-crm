@@ -52,6 +52,8 @@ BASE_TOOLS = [
     # Lead Intelligence
     "lead_status_insights",
     "get_leads_by_status",
+    "get_top_leads",
+    "get_stale_leads",
 
     # Task Management
     "get_tasks",
@@ -72,10 +74,10 @@ BASE_TOOLS = [
 INTENT_TO_BASE_TOOLS: Dict[str, List[str]] = {
     "priorities": ["get_daily_priorities", "get_tasks", "get_pipeline"],
     "tasks": ["get_tasks", "create_task", "get_daily_priorities"],
-    "leads": ["lead_status_insights", "get_leads_by_status", "search_leads"],
+    "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
-    "calls": ["click_to_dial", "make_call", "search_leads"],
+    "calls": ["click_to_dial", "make_call", "get_top_leads", "search_leads"],
     "email": ["search_leads", "search_loans"],  # Basic for now
     "schedule": ["get_tasks", "get_daily_priorities"],  # Basic for now
     "documents": ["search_loans", "get_pipeline"],  # Basic for now
