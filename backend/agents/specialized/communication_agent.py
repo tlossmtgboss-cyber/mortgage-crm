@@ -247,11 +247,12 @@ class CommunicationAgent(SpecializedAgent):
             try:
                 from services.microsoft_graph import send_email_via_graph
 
-                # Check if user has Microsoft integration
+                # Check if user has Microsoft integration (in microsoft_oauth_tokens table)
                 integration_check = db.execute(text("""
-                    SELECT id FROM user_integrations
-                    WHERE user_id = :user_id AND provider = 'microsoft'
+                    SELECT id FROM microsoft_oauth_tokens
+                    WHERE user_id = :user_id
                     AND access_token IS NOT NULL
+                    AND sync_enabled = true
                     LIMIT 1
                 """), {"user_id": user_id}).fetchone()
 
@@ -326,7 +327,7 @@ class CommunicationAgent(SpecializedAgent):
                 message = f"Email failed to send to {result.to_address}: {send_error}"
                 response_data["error"] = send_error
             else:
-                message = f"Email logged (not sent - no email integration): {result.subject}"
+                message = f"Email logged (not sent - connect Microsoft 365 in Settings to send): {result.subject}"
 
             return ToolResult(
                 success=send_status != "failed",
