@@ -2,7 +2,7 @@
 Communication Agent
 
 Specialized agent for email, SMS, and notification management with 8 tools:
-1. send_email - Send email to contact
+1. send_email - Send email to contact (with auto calendar availability injection)
 2. send_sms - Send SMS message
 3. get_communication_history - Get communication history for entity
 4. schedule_communication - Schedule future communication
@@ -10,12 +10,21 @@ Specialized agent for email, SMS, and notification management with 8 tools:
 6. create_template - Create a new message template
 7. get_unread_messages - Get unread messages/responses
 8. log_communication - Log a communication that occurred externally
+
+Calendar-Aware Email Sending:
+- When sending emails about scheduling/meetings, automatically checks user's calendar
+- Injects available time slots into the email body without asking
+- Uses Microsoft Graph API to get free/busy information
 """
 
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
+import re
+import logging
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -218,6 +227,201 @@ class CommunicationAgent(SpecializedAgent):
             handler=self._log_communication,
             input_schema=LogCommunicationInput
         ))
+
+    # ========================================================================
+    # CALENDAR AVAILABILITY HELPERS
+    # ========================================================================
+
+    def _is_scheduling_email(self, subject: str, body: str) -> bool:
+        """
+        Detect if the email is about scheduling a meeting/call.
+        Returns True if the email appears to be scheduling-related.
+        """
+        scheduling_keywords = [
+            r'\bschedul\w*\b',           # schedule, scheduling, scheduled
+            r'\bmeet\w*\b',              # meet, meeting, meetings
+            r'\bappointment\b',
+            r'\bcall\b',
+            r'\bavailab\w*\b',           # available, availability
+            r'\bset up a time\b',
+            r'\bfind a time\b',
+            r'\bwhen.*free\b',
+            r'\bwhen.*available\b',
+            r'\blet.*know.*time\b',
+            r'\bdiscuss\b',
+            r'\bchat\b',
+            r'\bconnect\b',
+            r'\bconsultation\b',
+        ]
+
+        combined_text = f"{subject} {body}".lower()
+        for pattern in scheduling_keywords:
+            if re.search(pattern, combined_text, re.IGNORECASE):
+                return True
+        return False
+
+    async def _get_calendar_availability(
+        self,
+        user_id: int,
+        db,
+        days_ahead: int = 7
+    ) -> List[Dict[str, Any]]:
+        """
+        Get user's busy time slots from Microsoft Graph calendar.
+
+        Args:
+            user_id: The user whose calendar to check
+            db: Database session
+            days_ahead: How many days ahead to check (default 7)
+
+        Returns:
+            List of busy slots with start/end datetimes
+        """
+        try:
+            from services.microsoft_graph import get_user_availability
+
+            start_time = datetime.utcnow()
+            end_time = start_time + timedelta(days=days_ahead)
+
+            busy_slots = await get_user_availability(
+                user_id=user_id,
+                start_time=start_time,
+                end_time=end_time,
+                db=db
+            )
+
+            return busy_slots
+
+        except ImportError:
+            logger.warning("Microsoft Graph service not available for calendar")
+            return []
+        except Exception as e:
+            logger.error(f"Error getting calendar availability: {e}")
+            return []
+
+    def _calculate_free_slots(
+        self,
+        busy_slots: List[Dict[str, Any]],
+        days_ahead: int = 5,
+        slots_needed: int = 4,
+        business_hours_start: int = 9,
+        business_hours_end: int = 17
+    ) -> List[Dict[str, str]]:
+        """
+        Calculate available time slots based on busy periods.
+
+        Args:
+            busy_slots: List of busy periods from calendar
+            days_ahead: Number of days to look ahead
+            slots_needed: Maximum number of slots to return
+            business_hours_start: Start of business hours (24h format)
+            business_hours_end: End of business hours (24h format)
+
+        Returns:
+            List of free slot dicts with 'date', 'start', 'end' keys
+        """
+        free_slots = []
+        now = datetime.now()
+
+        # Start from tomorrow if it's after business hours today
+        if now.hour >= business_hours_end - 1:
+            start_date = now.date() + timedelta(days=1)
+        else:
+            start_date = now.date()
+
+        for day_offset in range(days_ahead):
+            check_date = start_date + timedelta(days=day_offset)
+
+            # Skip weekends
+            if check_date.weekday() >= 5:
+                continue
+
+            # Generate potential 30-minute slots during business hours
+            for hour in range(business_hours_start, business_hours_end):
+                for minute in [0, 30]:
+                    slot_start = datetime.combine(check_date, datetime.min.time().replace(hour=hour, minute=minute))
+                    slot_end = slot_start + timedelta(minutes=30)
+
+                    # Skip if slot is in the past
+                    if slot_start <= now + timedelta(hours=1):
+                        continue
+
+                    # Check if slot conflicts with any busy period
+                    is_free = True
+                    for busy in busy_slots:
+                        busy_start = busy.get('start')
+                        busy_end = busy.get('end')
+
+                        if isinstance(busy_start, str):
+                            busy_start = datetime.fromisoformat(busy_start.replace('Z', '+00:00'))
+                        if isinstance(busy_end, str):
+                            busy_end = datetime.fromisoformat(busy_end.replace('Z', '+00:00'))
+
+                        # Make times comparable (strip timezone for comparison)
+                        if hasattr(busy_start, 'replace'):
+                            busy_start = busy_start.replace(tzinfo=None)
+                        if hasattr(busy_end, 'replace'):
+                            busy_end = busy_end.replace(tzinfo=None)
+
+                        # Check for overlap
+                        if slot_start < busy_end and slot_end > busy_start:
+                            is_free = False
+                            break
+
+                    if is_free:
+                        free_slots.append({
+                            'date': check_date.strftime('%A, %B %d'),
+                            'start': slot_start.strftime('%I:%M %p'),
+                            'end': slot_end.strftime('%I:%M %p'),
+                            'datetime': slot_start
+                        })
+
+                        if len(free_slots) >= slots_needed:
+                            return free_slots
+
+        return free_slots
+
+    def _inject_availability_into_body(
+        self,
+        body: str,
+        free_slots: List[Dict[str, str]]
+    ) -> str:
+        """
+        Inject availability slots into email body.
+
+        Adds available times before the closing/signature.
+
+        Args:
+            body: Original email body
+            free_slots: List of available time slots
+
+        Returns:
+            Updated email body with availability injected
+        """
+        if not free_slots:
+            return body
+
+        # Build availability text
+        availability_text = "\n\nHere are some times I'm available:\n"
+        for slot in free_slots:
+            availability_text += f"• {slot['date']} at {slot['start']}\n"
+        availability_text += "\nLet me know which time works best for you, or suggest another time that's convenient.\n"
+
+        # Try to insert before common sign-offs
+        signoff_patterns = [
+            r'\n\s*(Best|Best regards|Regards|Thanks|Thank you|Sincerely|Cheers)',
+            r'\n\s*--\s*\n',  # Signature delimiter
+            r'\n\s*Sent from',
+        ]
+
+        for pattern in signoff_patterns:
+            match = re.search(pattern, body, re.IGNORECASE)
+            if match:
+                insert_pos = match.start()
+                return body[:insert_pos] + availability_text + body[insert_pos:]
+
+        # If no sign-off found, append at end
+        return body + availability_text
 
     # ========================================================================
     # TOOL IMPLEMENTATIONS

@@ -47,6 +47,7 @@ INTENT_TO_SCOPED_TOOLS = {
     "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
     "top_leads": ["get_top_leads"],  # Specific entry for "call my top leads" queries
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
+    "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Q3 vs Q4, period comparisons
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
     "email": ["send_email", "search_leads", "search_loans"],
