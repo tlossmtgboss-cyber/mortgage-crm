@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
+import CommandCenter from './CommandCenter';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
@@ -2135,6 +2136,13 @@ const API_BASE_URL = isProduction
           )}
 
           <button
+            className={`sidebar-btn ${activeSection === 'command-center' ? 'active' : ''}`}
+            onClick={() => setActiveSection('command-center')}
+          >
+            <span>Command Center</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeSection === 'sla-tracking' ? 'active' : ''}`}
             onClick={() => navigate('/sla-tracking')}
           >
@@ -2329,6 +2337,10 @@ const API_BASE_URL = isProduction
 
         {/* Main Content */}
         <div className="settings-main">
+          {activeSection === 'command-center' && (
+            <CommandCenter />
+          )}
+
           {activeSection === 'mission-control' && (
             <MissionControl />
           )}

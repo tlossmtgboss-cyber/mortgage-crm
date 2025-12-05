@@ -1,10 +1,16 @@
 """
 Perennia AI - Agent Tools Base Infrastructure
 Core utilities, decorators, and registry for all agent tools.
+
+Database Connection:
+    This module uses the shared database connection from backend.database,
+    ensuring consistency between the main application and agent tools.
+    Works with both SQLite (local development) and PostgreSQL (production).
 """
 
 import os
 import functools
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Callable, TypeVar, Union
 from dataclasses import dataclass, field
@@ -12,49 +18,41 @@ from decimal import Decimal
 from enum import Enum
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool
 from langchain_core.tools import Tool
+
+# Import shared database connection from main application
+# This ensures agents use the same database as the main app
+from backend.database import engine as shared_engine, SessionLocal as SharedSessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Database Configuration
+# Database Configuration - Using Shared Connection
 # =============================================================================
 
 class DatabaseConfig:
-    """Database configuration management."""
+    """
+    Database configuration management.
 
-    _engine = None
+    Uses the shared database engine from backend.database to ensure
+    consistency across the application. This allows agent tools to
+    work with both SQLite (local) and PostgreSQL (production) without
+    any configuration changes.
+    """
+
     _session_factory = None
 
     @classmethod
-    def get_database_url(cls) -> str:
-        """Get database URL from environment."""
-        return os.getenv("DATABASE_URL", "postgresql://localhost/mortgage_crm")
-
-    @classmethod
     def get_engine(cls):
-        """Get or create database engine (singleton)."""
-        if cls._engine is None:
-            database_url = cls.get_database_url()
-            # Handle Railway's postgres:// vs postgresql://
-            if database_url.startswith("postgres://"):
-                database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-            cls._engine = create_engine(
-                database_url,
-                poolclass=QueuePool,
-                pool_size=5,
-                max_overflow=10,
-                pool_pre_ping=True,
-                pool_recycle=300,
-            )
-        return cls._engine
+        """Get the shared database engine from backend.database."""
+        return shared_engine
 
     @classmethod
     def get_session_factory(cls):
-        """Get or create session factory (singleton)."""
+        """Get or create session factory using shared engine."""
         if cls._session_factory is None:
             cls._session_factory = sessionmaker(
                 bind=cls.get_engine(),
@@ -64,7 +62,7 @@ class DatabaseConfig:
 
 
 def get_engine():
-    """Get database engine."""
+    """Get database engine (shared with main application)."""
     return DatabaseConfig.get_engine()
 
 
@@ -88,11 +86,21 @@ def get_db():
 
 
 def execute_query(query: str, params: Optional[Dict] = None) -> List[Dict]:
-    """Execute a query and return results as list of dicts."""
-    with get_db() as db:
-        result = db.execute(text(query), params or {})
-        columns = result.keys()
-        return [dict(zip(columns, row)) for row in result.fetchall()]
+    """
+    Execute a query and return results as list of dicts.
+
+    Uses the shared database connection from backend.database,
+    which supports both SQLite and PostgreSQL.
+    """
+    try:
+        with get_db() as db:
+            result = db.execute(text(query), params or {})
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in result.fetchall()]
+    except Exception as e:
+        logger.error(f"Query execution failed: {e}")
+        logger.debug(f"Query: {query[:200]}...")
+        raise
 
 
 def execute_single(query: str, params: Optional[Dict] = None) -> Optional[Dict]:

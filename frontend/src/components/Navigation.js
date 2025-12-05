@@ -29,12 +29,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
       <div className="nav-container">
         <div className="nav-links">
           <Link
-            to="/command-center"
-            className={`nav-link command-center-link ${isActive('/command-center') ? 'active' : ''}`}
-          >
-            Command Center
-          </Link>
-          <Link
             to="/dashboard"
             className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}
           >

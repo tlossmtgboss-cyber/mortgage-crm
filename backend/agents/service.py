@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 from datetime import datetime
@@ -21,6 +22,17 @@ from sqlalchemy.orm import Session
 
 from .orchestrator import run_orchestrator, OrchestratorSession
 from .state import create_initial_state, QueryIntent
+
+# Add project root for prompt loader imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# Import optimized prompt system
+try:
+    from prompt_integration import OptimizedPromptService
+    from prompt_loader import LoadContext, ContextPresets, PerenniaContexts
+    PROMPT_OPTIMIZATION_AVAILABLE = True
+except ImportError:
+    PROMPT_OPTIMIZATION_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +79,26 @@ class AIAgentService:
 
         # Tool definitions for API calls
         self._tool_definitions: List[Dict] = []
+
+        # Initialize optimized prompt service (50-80% token reduction)
+        self._prompt_service: Optional[OptimizedPromptService] = None
+        if PROMPT_OPTIMIZATION_AVAILABLE:
+            try:
+                prompts_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    'perennia-prompts'
+                )
+                if os.path.exists(prompts_dir):
+                    self._prompt_service = OptimizedPromptService(
+                        prompts_dir,
+                        cache_ttl_seconds=300,  # 5 minute cache
+                        enable_cache=True
+                    )
+                    # Pre-warm common contexts
+                    self._prompt_service.warm_cache()
+                    logger.info(f"Optimized prompt service initialized from {prompts_dir}")
+            except Exception as e:
+                logger.warning(f"Could not initialize optimized prompts: {e}")
 
     def register_tool(self, name: str, func: Callable):
         """Register a tool function that the agent can use."""
@@ -536,10 +568,71 @@ class AIAgentService:
     def _build_system_prompt(
         self,
         custom_prompt: Optional[str] = None,
-        data_context: Optional[str] = None
+        data_context: Optional[str] = None,
+        context_type: str = "mortgage"  # minimal, conversational, mortgage, tools, agent, full
     ) -> str:
-        """Build the system prompt with context."""
-        base_prompt = custom_prompt or """You are an expert AI assistant for a mortgage CRM system.
+        """
+        Build the system prompt with context-aware optimization.
+
+        Uses the optimized prompt service when available, reducing token usage
+        by 50-80% compared to loading the full prompt every time.
+
+        Args:
+            custom_prompt: Override prompt (bypasses optimization)
+            data_context: Additional data context to append
+            context_type: Type of context needed:
+                - "minimal": Core identity only (~19k chars)
+                - "conversational": Chat interactions (~20k chars)
+                - "mortgage": Full CRM functionality (~24k chars)
+                - "tools": Tool-focused operations
+                - "agent": Multi-agent orchestration
+                - "full": Everything loaded
+
+        Returns:
+            Optimized system prompt string
+        """
+        # If custom prompt provided, use it directly (backwards compatible)
+        if custom_prompt:
+            if data_context:
+                return f"{custom_prompt}\n\n{data_context}"
+            return custom_prompt
+
+        # Try optimized prompt loading
+        if self._prompt_service and PROMPT_OPTIMIZATION_AVAILABLE:
+            try:
+                # Map context type to appropriate preset
+                context_map = {
+                    "minimal": ContextPresets.minimal,
+                    "conversational": ContextPresets.conversational,
+                    "mortgage": ContextPresets.mortgage_crm,
+                    "tools": ContextPresets.tool_use,
+                    "agent": ContextPresets.agent_orchestration,
+                    "full": ContextPresets.full,
+                    # Perennia-specific contexts
+                    "receptionist": PerenniaContexts.receptionist,
+                    "pipeline": PerenniaContexts.pipeline_analyst,
+                    "loan_processor": PerenniaContexts.loan_processor,
+                    "lead_manager": PerenniaContexts.lead_manager,
+                    "email": PerenniaContexts.email_intelligence,
+                    "briefing": PerenniaContexts.daily_briefing,
+                    "market": PerenniaContexts.market_intelligence,
+                }
+
+                context_func = context_map.get(context_type, ContextPresets.mortgage_crm)
+                context = context_func()
+
+                # Get optimized prompt (cached after first load)
+                base_prompt = self._prompt_service.get_system_prompt(context)
+
+                if data_context:
+                    return f"{base_prompt}\n\n{data_context}"
+                return base_prompt
+
+            except Exception as e:
+                logger.warning(f"Optimized prompt loading failed, using fallback: {e}")
+
+        # Fallback to basic prompt
+        base_prompt = """You are an expert AI assistant for a mortgage CRM system.
 You help loan officers manage their pipeline, track tasks, and make informed decisions.
 Be concise, actionable, and always reference specific data when available.
 Format responses with markdown for clarity."""
@@ -548,6 +641,12 @@ Format responses with markdown for clarity."""
             return f"{base_prompt}\n\n{data_context}"
 
         return base_prompt
+
+    def get_prompt_stats(self) -> Dict[str, Any]:
+        """Get statistics about prompt optimization performance."""
+        if self._prompt_service:
+            return self._prompt_service.get_performance_stats()
+        return {"status": "optimization_not_available"}
 
     def _get_tool_definitions(self) -> List[Dict]:
         """Get tool definitions for the API call."""

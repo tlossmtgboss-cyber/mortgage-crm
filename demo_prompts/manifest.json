@@ -1,0 +1,154 @@
+{
+  "version": "1.0",
+  "source_file": "demo_claude.md",
+  "source_hash": "2f7c6cd76cf68cbaa749e40e166c87c6",
+  "total_sections": 11,
+  "total_characters": 2536,
+  "sections": [
+    {
+      "id": "perennia_ai_core_identity",
+      "title": "Perennia AI - Core Identity",
+      "priority": "core",
+      "capabilities": [
+        "identity",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 172,
+      "line_count": 1,
+      "file": "core/perennia_ai_core_identity.md"
+    },
+    {
+      "id": "core_principles",
+      "title": "Core Principles",
+      "priority": "core",
+      "capabilities": [
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 150,
+      "line_count": 4,
+      "file": "core/core_principles.md"
+    },
+    {
+      "id": "safety_instructions",
+      "title": "Safety Instructions",
+      "priority": "core",
+      "capabilities": [
+        "identity",
+        "safety",
+        "domain",
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 202,
+      "line_count": 4,
+      "file": "core/safety_instructions.md"
+    },
+    {
+      "id": "communication_style",
+      "title": "Communication Style",
+      "priority": "conditional",
+      "capabilities": [
+        "memory",
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 127,
+      "line_count": 4,
+      "file": "conditional/communication_style.md"
+    },
+    {
+      "id": "tool_usage_guidelines",
+      "title": "Tool Usage Guidelines",
+      "priority": "conditional",
+      "capabilities": [
+        "tools",
+        "search",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 553,
+      "line_count": 16,
+      "file": "conditional/tool_usage_guidelines.md"
+    },
+    {
+      "id": "memory_and_context",
+      "title": "Memory and Context",
+      "priority": "conditional",
+      "capabilities": [
+        "memory",
+        "domain"
+      ],
+      "dependencies": [],
+      "char_count": 175,
+      "line_count": 5,
+      "file": "conditional/memory_and_context.md"
+    },
+    {
+      "id": "search_capabilities",
+      "title": "Search Capabilities",
+      "priority": "conditional",
+      "capabilities": [
+        "search",
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 145,
+      "line_count": 5,
+      "file": "conditional/search_capabilities.md"
+    },
+    {
+      "id": "agent_orchestration",
+      "title": "Agent Orchestration",
+      "priority": "conditional",
+      "capabilities": [
+        "agent",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 205,
+      "line_count": 5,
+      "file": "conditional/agent_orchestration.md"
+    },
+    {
+      "id": "domain_knowledge_mortgage_industry",
+      "title": "Domain Knowledge - Mortgage Industry",
+      "priority": "conditional",
+      "capabilities": [
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 333,
+      "line_count": 14,
+      "file": "conditional/domain_knowledge_mortgage_industry.md"
+    },
+    {
+      "id": "workflow_procedures",
+      "title": "Workflow Procedures",
+      "priority": "conditional",
+      "capabilities": [
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 242,
+      "line_count": 11,
+      "file": "conditional/workflow_procedures.md"
+    },
+    {
+      "id": "optional_advanced_features",
+      "title": "Optional: Advanced Features",
+      "priority": "optional",
+      "capabilities": [],
+      "dependencies": [],
+      "char_count": 232,
+      "line_count": 8,
+      "file": "optional/optional_advanced_features.md"
+    }
+  ]
+}
