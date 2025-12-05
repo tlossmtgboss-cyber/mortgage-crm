@@ -121,12 +121,12 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
     ],
     # Historical comparisons - MUST come before pipeline to match Q3/Q4 queries
     "historical": [
-        r"q[1-4]\s*(vs?\.?|versus|to|compared? to?)\s*q[1-4]",  # Q3 vs Q4, Q1 to Q2
+        r"q[1-4]\s*(\d{4})?\s*(vs?\.?|versus|to|compared? to?)\s*q[1-4]",  # Q3 vs Q4, Q1 2025 to Q2 2025
         r"compare\s*(q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december)",
-        r"(q[1-4]|quarter)\s*(performance|metrics|results|numbers)",
+        r"(q[1-4])\s*(\d{4})?\s*(performance|metrics|results|numbers)",  # Q3 2025 performance
         r"(last|previous|this)\s*(month|quarter|year)\s*(vs?\.?|versus|compared? to?|to)",
         r"(month|quarter|year)\s*over\s*(month|quarter|year)",
-        r"(january|february|march|april|may|june|july|august|september|october|november|december)\s*(vs?\.?|to|versus)",
+        r"(january|february|march|april|may|june|july|august|september|october|november|december)\s*(\d{4})?\s*(vs?\.?|to|versus)",
         r"(ytd|year to date)\s*(performance|comparison|metrics)",
         r"how did (q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december) (do|perform)",
         r"(performance|results|metrics) (for|in|during) (q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december)",
