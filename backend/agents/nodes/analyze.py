@@ -211,6 +211,25 @@ INTENT_PATTERNS = {
         "confidence": 0.95
     },
 
+    # Borrower-specific queries - HIGHEST PRIORITY for data boundaries
+    # Must come before general pipeline queries to ensure proper filtering
+    "borrower_specific": {
+        "patterns": [
+            r"(insights?|info|information|details?|update|status) (on|about|for) (borrower |client |customer )?[A-Z][a-z]+",  # insights on borrower Thompson
+            r"(borrower|client|customer|applicant) [A-Z][a-z]+",  # borrower Thompson
+            r"[A-Z][a-z]+'?s? (loan|file|application|deal|status)",  # Thompson's loan
+            r"(show|give|get|tell) me (about |info on )?[A-Z][a-z]+'?s?",  # show me about Thompson
+            r"(how is|what about|update on) [A-Z][a-z]+",  # how is Thompson
+            r"(find|search|look up) (borrower |client )?[A-Z][a-z]+",  # find borrower Thompson
+        ],
+        "intent": QueryIntent.PIPELINE_STATUS,
+        "tools": ["search_loans"],  # Use search_loans with the borrower name filter
+        "urgency": "medium",
+        "complexity": "simple",
+        "confidence": 0.95,
+        "extract_borrower_name": True  # Flag to extract name as search query
+    },
+
     # Loan pipeline queries
     "pipeline_status": {
         "patterns": [
@@ -321,6 +340,35 @@ def extract_phone_number(query: str) -> Optional[str]:
     return None
 
 
+def extract_borrower_name(query: str) -> Optional[str]:
+    """Extract borrower name from query text for search_loans filtering."""
+    # Patterns to extract proper nouns that are likely borrower names
+    name_patterns = [
+        r'(?:borrower|client|customer|applicant)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)',  # borrower Thompson
+        r'(?:insights?|info|information|details?|update|status)\s+(?:on|about|for)\s+(?:borrower\s+|client\s+|customer\s+)?([A-Z][a-z]+)',  # insights on Thompson
+        r'([A-Z][a-z]+)\'?s?\s+(?:loan|file|application|deal|status)',  # Thompson's loan
+        r'(?:show|give|get|tell)\s+me\s+(?:about\s+|info\s+on\s+)?([A-Z][a-z]+)',  # show me about Thompson
+        r'(?:how\s+is|what\s+about|update\s+on)\s+([A-Z][a-z]+)',  # how is Thompson
+        r'(?:find|search|look\s+up)\s+(?:borrower\s+|client\s+)?([A-Z][a-z]+)',  # find Thompson
+    ]
+
+    # Common words that should not be treated as names
+    common_words = {
+        'Show', 'Give', 'Get', 'Tell', 'What', 'How', 'The', 'My', 'Our', 'This', 'That',
+        'Pipeline', 'Loan', 'Lead', 'Task', 'Rate', 'Status', 'Update', 'Info', 'Details',
+        'Today', 'Tomorrow', 'Yesterday', 'Week', 'Month', 'Year', 'Insights', 'About'
+    }
+
+    for pattern in name_patterns:
+        match = re.search(pattern, query)
+        if match:
+            name = match.group(1)
+            if name not in common_words:
+                logger.info(f"[ANALYZE] Extracted borrower name: {name}")
+                return name
+    return None
+
+
 def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
     """
     Fast pattern matching for common intents.
@@ -355,6 +403,15 @@ def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
                     if phone:
                         result["extracted_entities"] = {"phone_number": phone}
                         logger.info(f"[ANALYZE] Extracted phone: {phone}")
+
+                # For borrower-specific queries, extract the borrower name
+                if config.get("extract_borrower_name"):
+                    borrower_name = extract_borrower_name(query)
+                    if borrower_name:
+                        result["extracted_entities"] = result.get("extracted_entities", {})
+                        result["extracted_entities"]["borrower_name"] = borrower_name
+                        result["extracted_entities"]["search_query"] = borrower_name  # For search_loans tool
+                        logger.info(f"[ANALYZE] Extracted borrower name for search: {borrower_name}")
 
                 return result
 
@@ -408,6 +465,23 @@ def extract_entities(query: str) -> Dict[str, List]:
     for stage in stages:
         if re.search(rf'\b{stage}\b', query, re.IGNORECASE):
             entities["stages"].append(stage)
+
+    # Extract borrower names - look for patterns like "borrower Thompson", "client Smith", etc.
+    # Also detect proper nouns after trigger words
+    name_patterns = [
+        r'(?:borrower|client|customer|applicant|person|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)',  # borrower Thompson
+        r'(?:about|on|for|update on)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*(?:\'s)?\s*(?:loan|file|application|deal)?',  # about Thompson's loan
+        r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*(?:\'s)?\s+(?:loan|file|application|status|deal)\b',  # Thompson's loan
+    ]
+    for pattern in name_patterns:
+        matches = re.findall(pattern, query)
+        if matches:
+            # Filter out common non-name words
+            common_words = {'New', 'Show', 'Give', 'Get', 'What', 'How', 'The', 'My', 'Our', 'This', 'That'}
+            names = [m for m in matches if m not in common_words]
+            if names:
+                entities["borrower_names"].extend(names)
+                break  # Only use first matching pattern to avoid duplicates
 
     return entities
 

@@ -205,12 +205,23 @@ def determine_tool_arguments(
     entities = state.get("query_entities", {})
     args = {}
 
+    # Get extracted entities from pattern matching (e.g., borrower names)
+    extracted_entities = state.get("extracted_entities", {})
+
     # Map entities to tool arguments based on tool type
     if tool_name == "search_loans":
-        if entities.get("loan_ids"):
+        # Priority: extracted_entities.search_query > entities.loan_ids > entities.borrower_names
+        if extracted_entities.get("search_query"):
+            args["query"] = extracted_entities["search_query"]
+            logger.info(f"[GATHER] search_loans using extracted search_query: {args['query']}")
+        elif extracted_entities.get("borrower_name"):
+            args["query"] = extracted_entities["borrower_name"]
+            logger.info(f"[GATHER] search_loans using extracted borrower_name: {args['query']}")
+        elif entities.get("loan_ids"):
             args["query"] = entities["loan_ids"][0]
         elif entities.get("borrower_names"):
             args["query"] = entities["borrower_names"][0]
+            logger.info(f"[GATHER] search_loans using entity borrower_name: {args['query']}")
         args["limit"] = 10
 
     elif tool_name == "search_leads":
