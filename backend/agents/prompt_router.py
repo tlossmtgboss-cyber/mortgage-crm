@@ -214,18 +214,18 @@ def smart_get_prompt(
     user_message: str,
     user_context: Optional[Dict[str, Any]] = None
 ) -> str:
-    """
-    Get the optimal system prompt for a message (convenience function).
-
-    Args:
-        user_message: The user's input message
-        user_context: Optional context
-
-    Returns:
-        The optimal system prompt string
-    """
+    """Get optimized prompt with INFO-level logging for production visibility"""
     getter = route_to_optimal_prompt(user_message, user_context)
-    return getter()
+    prompt = getter()
+
+    # Log at INFO level for production visibility
+    log_prompt_selection(
+        user_message,
+        getter.__name__,
+        len(prompt)
+    )
+
+    return prompt
 
 
 # =============================================================================
