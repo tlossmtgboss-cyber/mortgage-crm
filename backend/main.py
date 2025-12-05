@@ -18982,7 +18982,7 @@ except Exception as e:
 
 # OAuth routes (Microsoft, Google integrations)
 try:
-    from api.routes.oauth import router as oauth_router
+    from oauth_routes import router as oauth_router
     app.include_router(oauth_router, prefix="/api", tags=["OAuth"])
     logger.info("✅ OAuth routes loaded")
 except Exception as e:
