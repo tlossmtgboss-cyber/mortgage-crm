@@ -24,7 +24,8 @@ from langchain_core.tools import Tool
 
 # Import shared database connection from main application
 # This ensures agents use the same database as the main app
-from backend.database import engine as shared_engine, SessionLocal as SharedSessionLocal
+# Note: Uses 'database' not 'backend.database' as Railway deploys from backend/ directory
+from database import engine as shared_engine, SessionLocal as SharedSessionLocal
 
 logger = logging.getLogger(__name__)
 
