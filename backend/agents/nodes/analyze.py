@@ -77,6 +77,7 @@ INTENT_TO_BASE_TOOLS: Dict[str, List[str]] = {
     "tasks": ["get_tasks", "create_task", "get_daily_priorities"],
     "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
+    "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Historical comparisons
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "get_top_leads", "search_leads"],
     "email": ["send_email", "search_leads", "search_loans"],  # Email sending + contact lookup
@@ -265,6 +266,31 @@ INTENT_PATTERNS = {
         "intent": QueryIntent.MARKET_INTELLIGENCE,
         "tools": ["get_rate_lock_advisory", "get_pipeline"],
         "urgency": "high",
+        "complexity": "moderate",
+        "confidence": 0.95
+    },
+
+    # Historical comparisons - Q3 vs Q4, month-over-month, year-over-year
+    # MUST come before team_performance to catch "compare Q3 to Q4" type queries
+    "historical": {
+        "patterns": [
+            r"q[1-4]\s*(vs?\.?|versus|to|compared? to?)\s*q[1-4]",  # Q3 vs Q4, Q1 to Q2
+            r"compare\s*(q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december)",
+            r"(q[1-4]|quarter)\s*(performance|metrics|results|numbers)",
+            r"(last|previous|this)\s*(month|quarter|year)\s*(vs?\.?|versus|compared? to?|to)",
+            r"(month|quarter|year)\s*over\s*(month|quarter|year)",
+            r"(january|february|march|april|may|june|july|august|september|october|november|december)\s*(vs?\.?|to|versus)",
+            r"(ytd|year to date)\s*(performance|comparison|metrics)",
+            r"how did (q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december) (do|perform)",
+            r"(performance|results|metrics) (for|in|during) (q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december)",
+            r"historical (comparison|data|performance|metrics)",
+            r"(what|how much) data (do we|is) (have|available)",
+            r"when does (our|my) data (start|begin)",
+        ],
+        "intent": QueryIntent.FINANCIAL_ANALYSIS,  # Map to financial analysis for historical reports
+        "intent_str": "historical",  # Used for intent routing
+        "tools": ["get_performance_by_period", "compare_periods", "get_data_availability"],
+        "urgency": "low",
         "complexity": "moderate",
         "confidence": 0.95
     },
@@ -690,6 +716,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
         # Map intent string to QueryIntent enum
         intent_map = {
             "pipeline": QueryIntent.PIPELINE_STATUS,
+            "historical": QueryIntent.FINANCIAL_ANALYSIS,  # Historical comparisons (Q3 vs Q4)
             "leads": QueryIntent.LEAD_MANAGEMENT,
             "coaching": QueryIntent.TEAM_PERFORMANCE,
             "tasks": QueryIntent.TASK_MANAGEMENT,
