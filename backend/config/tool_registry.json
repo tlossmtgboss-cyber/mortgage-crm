@@ -645,6 +645,83 @@
       "implementation_location": "tools/router.py:handle_get_stale_leads"
     },
     {
+      "name": "get_top_leads",
+      "domain": "leads",
+      "description": "Get the top leads by score for immediate calling action. Returns leads sorted by AI score, stage priority, and recency. Perfect for 'call my top leads' queries. All returned leads have valid phone numbers.",
+      "endpoint": "/api/tools/leads/get_top_leads",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Number of top leads to return (default: 10)",
+            "default": 10
+          },
+          "include_stages": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Optional: filter to specific stages only"
+          },
+          "require_phone": {
+            "type": "boolean",
+            "description": "Only return leads with phone numbers (default: true)",
+            "default": true
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "total": {"type": "integer"},
+              "leads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "rank": {"type": "integer"},
+                    "id": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "email": {"type": "string"},
+                    "score": {"type": "integer"},
+                    "stage": {"type": "string"},
+                    "source": {"type": "string"},
+                    "loan_amount": {"type": "number"},
+                    "call_ready": {"type": "boolean"}
+                  }
+                }
+              },
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "average_score": {"type": "number"},
+                  "by_stage": {"type": "object"},
+                  "all_have_phone": {"type": "boolean"}
+                }
+              },
+              "call_action": {
+                "type": "object",
+                "properties": {
+                  "ready_to_dial": {"type": "integer"},
+                  "suggestion": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "tools/router.py:handle_get_top_leads"
+    },
+    {
       "name": "create_task",
       "domain": "pipeline",
       "description": "Create a new task for follow-up or action item",

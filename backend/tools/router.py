@@ -1300,3 +1300,132 @@ async def handle_get_stale_leads(args: Dict[str, Any], request: Request) -> Dict
             "success": False,
             "error": str(e)
         }
+
+
+@register_tool_handler("get_top_leads")
+async def handle_get_top_leads(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get the top leads by score for immediate calling action.
+
+    Returns leads sorted by:
+    1. AI score (highest first)
+    2. Recency (newest first)
+    3. Stage priority (New > Prospect > Application)
+
+    Perfect for "Call my top 3 leads right now" queries.
+    """
+    try:
+        from main import SessionLocal, Lead, LeadStage
+        from datetime import datetime
+        from sqlalchemy import desc, case
+
+        db = SessionLocal()
+        try:
+            limit = args.get("limit", 10)
+            include_stages = args.get("include_stages", None)
+            require_phone = args.get("require_phone", True)
+
+            # Excluded stages (terminal/inactive)
+            excluded_stages = [LeadStage.WITHDRAWN, LeadStage.DOES_NOT_QUALIFY]
+
+            # Build query
+            query = db.query(Lead).filter(
+                Lead.stage.notin_(excluded_stages)
+            )
+
+            # Filter to specific stages if requested
+            if include_stages:
+                stage_enums = []
+                for stage in include_stages:
+                    try:
+                        stage_enums.append(LeadStage(stage))
+                    except ValueError:
+                        # Try matching by name
+                        for s in LeadStage:
+                            if s.name.lower() == stage.lower():
+                                stage_enums.append(s)
+                                break
+                if stage_enums:
+                    query = query.filter(Lead.stage.in_(stage_enums))
+
+            # Require phone number for calling
+            if require_phone:
+                query = query.filter(
+                    Lead.phone.isnot(None),
+                    Lead.phone != ''
+                )
+
+            # Stage priority ordering (higher = call first)
+            stage_priority = case(
+                (Lead.stage == LeadStage.NEW, 100),
+                (Lead.stage == LeadStage.ATTEMPTED_CONTACT, 90),
+                (Lead.stage == LeadStage.PROSPECT, 80),
+                (Lead.stage == LeadStage.APPLICATION, 70),
+                (Lead.stage == LeadStage.PRE_QUALIFIED, 60),
+                (Lead.stage == LeadStage.PRE_APPROVED, 50),
+                (Lead.stage == LeadStage.LONG_TERM_NURTURE, 20),
+                else_=10
+            )
+
+            # Order by: AI score (desc), stage priority (desc), created_at (desc)
+            leads = query.order_by(
+                desc(Lead.ai_score),
+                desc(stage_priority),
+                desc(Lead.created_at)
+            ).limit(limit).all()
+
+            # Format results
+            top_leads = []
+            for i, lead in enumerate(leads, 1):
+                name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name or "Unknown"
+                stage = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+                top_leads.append({
+                    "rank": i,
+                    "id": lead.id,
+                    "name": name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "score": lead.ai_score or 50,
+                    "stage": stage,
+                    "source": lead.source,
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                    "last_contact": lead.last_contact.isoformat() if lead.last_contact else None,
+                    "notes": lead.notes[:200] if lead.notes else None,
+                    "call_ready": True  # All leads in this list have phones
+                })
+
+            # Summary stats
+            avg_score = sum(l["score"] for l in top_leads) / len(top_leads) if top_leads else 0
+            stages = {}
+            for lead in top_leads:
+                stages[lead["stage"]] = stages.get(lead["stage"], 0) + 1
+
+            return {
+                "success": True,
+                "data": {
+                    "total": len(top_leads),
+                    "leads": top_leads,
+                    "summary": {
+                        "average_score": round(avg_score, 1),
+                        "by_stage": stages,
+                        "all_have_phone": True
+                    },
+                    "call_action": {
+                        "ready_to_dial": len(top_leads),
+                        "suggestion": f"Click to call any of these {len(top_leads)} leads directly"
+                    }
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Get top leads error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }

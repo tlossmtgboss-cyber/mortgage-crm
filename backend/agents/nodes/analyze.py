@@ -188,7 +188,7 @@ INTENT_PATTERNS = {
             r"(leads?|prospects?) (need(s|ing)?|require) follow.?up",
         ],
         "intent": QueryIntent.LEAD_MANAGEMENT,
-        "tools": ["lead_status_insights", "get_leads_by_status"],
+        "tools": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads"],
         "urgency": "medium",
         "complexity": "moderate",
         "confidence": 0.95
