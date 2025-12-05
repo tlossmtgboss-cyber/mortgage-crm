@@ -1894,40 +1894,34 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"success": False, "error": "body is required"}
 
         try:
-            # Check for Microsoft OAuth token in user_integrations table
+            # Check for Microsoft OAuth token in microsoft_oauth_tokens table
             oauth = db.execute(text("""
-                SELECT access_token, refresh_token, expires_at
-                FROM user_integrations
+                SELECT access_token, refresh_token, token_expires_at
+                FROM microsoft_oauth_tokens
                 WHERE user_id = :user_id
-                AND provider = 'microsoft'
                 AND access_token IS NOT NULL
             """), {"user_id": current_user.id}).fetchone()
 
             if not oauth:
                 return {
                     "success": False,
-                    "error": "Microsoft account not connected. Please connect your Microsoft 365 account in Settings.",
+                    "error": "Microsoft account not connected. Please connect your Microsoft 365 account in Settings > Outlook Email.",
                     "requires_oauth": True
                 }
 
             access_token = oauth.access_token
             refresh_token = oauth.refresh_token
-            expires_at = oauth.expires_at
+            expires_at = oauth.token_expires_at
 
-            # Decrypt token if encrypted
-            encryption_key = os.getenv("ENCRYPTION_KEY")
+            # Decrypt token if encrypted (tokens are encrypted using SECRET_KEY)
             if access_token and access_token.startswith("gAAAAA"):
-                # Token is encrypted - need encryption key to decrypt
-                if not encryption_key:
-                    logger.error("Token is encrypted but ENCRYPTION_KEY not set")
-                    return {
-                        "success": False,
-                        "error": "Email token is encrypted but decryption key is not configured. Please reconnect your Microsoft account or contact support.",
-                        "requires_oauth": True
-                    }
                 try:
                     from cryptography.fernet import Fernet
-                    f = Fernet(encryption_key.encode())
+                    import base64
+                    secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+                    key_material = secret_key.encode()[:32].ljust(32, b'0')
+                    encryption_key = base64.urlsafe_b64encode(key_material)
+                    f = Fernet(encryption_key)
                     access_token = f.decrypt(access_token.encode()).decode()
                     if refresh_token and refresh_token.startswith("gAAAAA"):
                         refresh_token = f.decrypt(refresh_token.encode()).decode()
@@ -1935,7 +1929,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     logger.error(f"Token decryption failed: {decrypt_err}")
                     return {
                         "success": False,
-                        "error": "Failed to decrypt email token. Please reconnect your Microsoft account.",
+                        "error": "Failed to decrypt email token. Please reconnect your Microsoft account in Settings > Outlook Email.",
                         "requires_oauth": True
                     }
 
@@ -1966,18 +1960,27 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                             new_refresh = tokens.get("refresh_token", refresh_token)
                             new_expires = datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
 
-                            # Store new tokens (no encryption needed for user_integrations)
+                            # Store new tokens (encrypted using SECRET_KEY)
                             try:
+                                from cryptography.fernet import Fernet
+                                import base64
+                                secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+                                key_material = secret_key.encode()[:32].ljust(32, b'0')
+                                enc_key = base64.urlsafe_b64encode(key_material)
+                                f = Fernet(enc_key)
+                                enc_access = f.encrypt(access_token.encode()).decode()
+                                enc_refresh = f.encrypt(new_refresh.encode()).decode()
+
                                 db.execute(text("""
-                                    UPDATE user_integrations
+                                    UPDATE microsoft_oauth_tokens
                                     SET access_token = :access_token,
                                         refresh_token = :refresh_token,
-                                        expires_at = :expires_at,
+                                        token_expires_at = :expires_at,
                                         updated_at = :updated_at
-                                    WHERE user_id = :user_id AND provider = 'microsoft'
+                                    WHERE user_id = :user_id
                                 """), {
-                                    "access_token": access_token,
-                                    "refresh_token": new_refresh,
+                                    "access_token": enc_access,
+                                    "refresh_token": enc_refresh,
                                     "expires_at": new_expires,
                                     "updated_at": datetime.utcnow(),
                                     "user_id": current_user.id
