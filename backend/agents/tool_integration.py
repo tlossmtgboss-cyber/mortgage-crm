@@ -94,6 +94,7 @@ AGENT_CONFIGS = {
             "schedule_outreach",
             "get_similar_converted_leads",
             "get_optimal_contact_time",
+            "get_stale_leads",
         ],
         requires_approval_for=["send_email", "send_sms", "make_call"],
     ),

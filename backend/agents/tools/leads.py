@@ -1003,3 +1003,159 @@ def get_optimal_contact_time(
 
     except Exception as e:
         return ToolResult.error(f"Failed to determine optimal contact time: {str(e)}")
+
+
+@mortgage_tool(
+    name="get_stale_leads",
+    description="Find leads that haven't been contacted in a specified number of days. Useful for re-engagement campaigns and preventing leads from going cold.",
+    agent_roles=["lead_nurturer", "sales", "manager"],
+    risk_level="low",
+    examples=[
+        "Find leads not contacted in 7 days",
+        "Show me stale leads",
+        "Get leads I haven't reached out to recently",
+        "Which leads need follow-up?",
+    ],
+)
+def get_stale_leads(
+    days_since_contact: int = 7,
+    limit: int = 50,
+    include_never_contacted: bool = True,
+) -> ToolResult:
+    """
+    Get leads that haven't been contacted in N days.
+
+    Args:
+        days_since_contact: Number of days since last contact (default 7)
+        limit: Maximum number of leads to return (default 50)
+        include_never_contacted: Include leads that have never been contacted (default True)
+
+    Returns:
+        List of stale leads with contact history and summary statistics
+    """
+    try:
+        # Build the query based on parameters
+        if include_never_contacted:
+            stale_query = """
+                SELECT
+                    l.id,
+                    l.first_name,
+                    l.last_name,
+                    l.phone,
+                    l.email,
+                    l.source as lead_source,
+                    l.stage,
+                    l.status,
+                    l.created_at,
+                    l.last_contact_date,
+                    l.lead_score,
+                    l.assigned_to,
+                    lo.name as assigned_lo_name,
+                    COALESCE(
+                        EXTRACT(DAY FROM NOW() - l.last_contact_date),
+                        EXTRACT(DAY FROM NOW() - l.created_at)
+                    ) as days_stale,
+                    CASE
+                        WHEN l.last_contact_date IS NULL THEN true
+                        ELSE false
+                    END as never_contacted
+                FROM leads l
+                LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+                WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify', 'Converted')
+                    AND l.status NOT IN ('dead', 'unqualified', 'converted')
+                    AND (
+                        l.last_contact_date < NOW() - INTERVAL :days_interval
+                        OR l.last_contact_date IS NULL
+                    )
+                ORDER BY
+                    CASE WHEN l.last_contact_date IS NULL THEN 0 ELSE 1 END,
+                    days_stale DESC
+                LIMIT :limit
+            """
+        else:
+            stale_query = """
+                SELECT
+                    l.id,
+                    l.first_name,
+                    l.last_name,
+                    l.phone,
+                    l.email,
+                    l.source as lead_source,
+                    l.stage,
+                    l.status,
+                    l.created_at,
+                    l.last_contact_date,
+                    l.lead_score,
+                    l.assigned_to,
+                    lo.name as assigned_lo_name,
+                    EXTRACT(DAY FROM NOW() - l.last_contact_date) as days_stale,
+                    false as never_contacted
+                FROM leads l
+                LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+                WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify', 'Converted')
+                    AND l.status NOT IN ('dead', 'unqualified', 'converted')
+                    AND l.last_contact_date IS NOT NULL
+                    AND l.last_contact_date < NOW() - INTERVAL :days_interval
+                ORDER BY days_stale DESC
+                LIMIT :limit
+            """
+
+        # Execute query with interval as string
+        days_interval = f"{days_since_contact} days"
+        stale_leads = execute_query(stale_query, {
+            "days_interval": days_interval,
+            "limit": limit
+        })
+
+        if not stale_leads:
+            return ToolResult.no_data(f"No leads found that haven't been contacted in {days_since_contact}+ days")
+
+        # Calculate summary statistics
+        total_count = len(stale_leads)
+        never_contacted_count = sum(1 for lead in stale_leads if lead.get("never_contacted"))
+
+        # Find the oldest stale lead
+        max_days = max((lead.get("days_stale") or 0) for lead in stale_leads)
+
+        # Get count by stage for insights
+        stage_counts = {}
+        for lead in stale_leads:
+            stage = lead.get("stage") or "Unknown"
+            stage_counts[stage] = stage_counts.get(stage, 0) + 1
+
+        # Format leads for response
+        formatted_leads = []
+        for lead in stale_leads:
+            formatted_leads.append({
+                "id": lead["id"],
+                "name": f"{lead['first_name']} {lead['last_name']}",
+                "phone": lead["phone"],
+                "email": lead["email"],
+                "lead_source": lead["lead_source"],
+                "stage": lead["stage"] or lead["status"],
+                "lead_score": lead["lead_score"],
+                "assigned_to": lead["assigned_lo_name"],
+                "created_at": format_date(lead["created_at"]),
+                "last_contact_date": format_date(lead["last_contact_date"]) if lead["last_contact_date"] else "Never",
+                "days_stale": int(lead["days_stale"] or 0),
+                "never_contacted": lead["never_contacted"],
+            })
+
+        # Generate summary message
+        if never_contacted_count > 0:
+            summary = f"{total_count} leads need follow-up ({never_contacted_count} never contacted, oldest {int(max_days)} days)"
+        else:
+            summary = f"{total_count} leads need follow-up (oldest {int(max_days)} days since contact)"
+
+        return ToolResult.success({
+            "stale_leads": formatted_leads,
+            "total_count": total_count,
+            "never_contacted": never_contacted_count,
+            "oldest_days": int(max_days),
+            "days_threshold": days_since_contact,
+            "by_stage": stage_counts,
+            "summary": summary,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to get stale leads: {str(e)}")
