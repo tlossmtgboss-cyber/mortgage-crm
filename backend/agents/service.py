@@ -1870,6 +1870,184 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
     tools["send_text"] = execute_send_sms  # Alias for natural language
     tools["text_contact"] = execute_send_sms  # Another alias
 
+    async def execute_send_email(args):
+        """
+        Send an email to an external contact via Microsoft Graph.
+
+        Args:
+            to_email: Recipient email address (required)
+            subject: Email subject line (required)
+            body: Email body content (required)
+            user_id: User ID for OAuth token lookup (optional, uses current_user if not provided)
+        """
+        import httpx
+        import os
+        from datetime import datetime, timedelta
+
+        to_email = args.get("to_email")
+        subject = args.get("subject", "Message from your Loan Officer")
+        body = args.get("body", "")
+
+        if not to_email:
+            return {"success": False, "error": "to_email is required"}
+        if not body:
+            return {"success": False, "error": "body is required"}
+
+        try:
+            # Check for Microsoft OAuth token
+            oauth = db.execute(text("""
+                SELECT access_token, refresh_token, token_expires_at
+                FROM microsoft_oauth_tokens
+                WHERE user_id = :user_id
+                AND access_token IS NOT NULL
+            """), {"user_id": current_user.id}).fetchone()
+
+            if not oauth:
+                return {
+                    "success": False,
+                    "error": "Microsoft account not connected. Please connect your Microsoft 365 account in Settings.",
+                    "requires_oauth": True
+                }
+
+            access_token = oauth.access_token
+            refresh_token = oauth.refresh_token
+            expires_at = oauth.token_expires_at
+
+            # Decrypt token if encrypted
+            encryption_key = os.getenv("ENCRYPTION_KEY")
+            if encryption_key and access_token and access_token.startswith("gAAAAA"):
+                try:
+                    from cryptography.fernet import Fernet
+                    f = Fernet(encryption_key.encode())
+                    access_token = f.decrypt(access_token.encode()).decode()
+                    if refresh_token and refresh_token.startswith("gAAAAA"):
+                        refresh_token = f.decrypt(refresh_token.encode()).decode()
+                except Exception as decrypt_err:
+                    logger.warning(f"Token decryption failed: {decrypt_err}")
+
+            # Check if token needs refresh
+            if expires_at and expires_at < datetime.utcnow():
+                logger.info("Access token expired, attempting refresh...")
+                client_id = os.getenv("MICROSOFT_CLIENT_ID")
+                client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+
+                if refresh_token and client_id and client_secret:
+                    async with httpx.AsyncClient() as client:
+                        refresh_response = await client.post(
+                            "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                            data={
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "refresh_token": refresh_token,
+                                "grant_type": "refresh_token",
+                                "scope": "Mail.Send Mail.ReadWrite offline_access"
+                            },
+                            headers={"Content-Type": "application/x-www-form-urlencoded"},
+                            timeout=30.0
+                        )
+
+                        if refresh_response.status_code == 200:
+                            tokens = refresh_response.json()
+                            access_token = tokens["access_token"]
+                            new_refresh = tokens.get("refresh_token", refresh_token)
+                            new_expires = datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
+
+                            # Encrypt and store new tokens
+                            if encryption_key:
+                                try:
+                                    f = Fernet(encryption_key.encode())
+                                    enc_access = f.encrypt(access_token.encode()).decode()
+                                    enc_refresh = f.encrypt(new_refresh.encode()).decode()
+                                    db.execute(text("""
+                                        UPDATE microsoft_oauth_tokens
+                                        SET access_token = :access_token,
+                                            refresh_token = :refresh_token,
+                                            token_expires_at = :expires_at
+                                        WHERE user_id = :user_id
+                                    """), {
+                                        "access_token": enc_access,
+                                        "refresh_token": enc_refresh,
+                                        "expires_at": new_expires,
+                                        "user_id": current_user.id
+                                    })
+                                    db.commit()
+                                except Exception as enc_err:
+                                    logger.warning(f"Failed to encrypt/store refreshed token: {enc_err}")
+                        else:
+                            return {
+                                "success": False,
+                                "error": "Microsoft token expired and refresh failed. Please reconnect your account.",
+                                "requires_oauth": True
+                            }
+
+            # Send email via Microsoft Graph
+            async with httpx.AsyncClient() as client:
+                email_data = {
+                    "message": {
+                        "subject": subject,
+                        "body": {
+                            "contentType": "Text",
+                            "content": body
+                        },
+                        "toRecipients": [
+                            {"emailAddress": {"address": to_email}}
+                        ]
+                    },
+                    "saveToSentItems": "true"
+                }
+
+                response = await client.post(
+                    "https://graph.microsoft.com/v1.0/me/sendMail",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=email_data,
+                    timeout=30.0
+                )
+
+                if response.status_code == 202:
+                    # Log the sent email
+                    try:
+                        db.execute(text("""
+                            INSERT INTO communications (
+                                type, direction, user_id, to_address,
+                                subject, body_preview, status, sent_at, created_at
+                            ) VALUES (
+                                'email', 'outbound', :user_id, :to_email,
+                                :subject, :body_preview, 'sent', NOW(), NOW()
+                            )
+                        """), {
+                            "user_id": current_user.id,
+                            "to_email": to_email,
+                            "subject": subject,
+                            "body_preview": body[:500]
+                        })
+                        db.commit()
+                    except Exception as log_err:
+                        logger.warning(f"Failed to log email: {log_err}")
+
+                    return {
+                        "success": True,
+                        "message": f"Email sent successfully to {to_email}",
+                        "to_email": to_email,
+                        "subject": subject
+                    }
+                else:
+                    error_text = response.text
+                    logger.error(f"Microsoft Graph sendMail failed: {response.status_code} - {error_text}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to send email: {error_text}",
+                        "status_code": response.status_code
+                    }
+
+        except Exception as e:
+            logger.error(f"Error in send_email: {e}")
+            return {"success": False, "error": str(e)}
+
+    tools["send_email"] = execute_send_email
+
     return tools
 
 

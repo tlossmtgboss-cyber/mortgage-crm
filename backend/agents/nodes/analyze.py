@@ -68,6 +68,7 @@ BASE_TOOLS = [
     "make_call",
     "send_sms",
     "send_text",
+    "send_email",
 ]
 
 # Map intents to the base tools that support them
@@ -78,7 +79,7 @@ INTENT_TO_BASE_TOOLS: Dict[str, List[str]] = {
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "get_top_leads", "search_leads"],
-    "email": ["search_leads", "search_loans"],  # Basic for now
+    "email": ["send_email", "search_leads", "search_loans"],  # Email sending + contact lookup
     "schedule": ["get_tasks", "get_daily_priorities"],  # Basic for now
     "documents": ["search_loans", "get_pipeline"],  # Basic for now
     "compliance": ["search_loans", "get_pipeline"],  # Basic for now
@@ -317,6 +318,24 @@ INTENT_PATTERNS = {
         "confidence": 0.95,
         "requires_action": True
     },
+
+    # Communication - Email requests
+    "email_request": {
+        "patterns": [
+            r"(send|shoot|fire off|draft) (a |an )?email",  # send an email
+            r"email ([\w\.\-]+@[\w\.\-]+)",  # email user@example.com
+            r"(send|email) (him|her|them|this person|the (client|borrower|lead)) (an )?email",
+            r"(can you |please )?(send|write|draft) (a |an )?email",
+            r"send (a |an )?email to",  # send email to...
+            r"email (to|about|regarding)",  # email to/about
+        ],
+        "intent": QueryIntent.ACTION_REQUEST,
+        "tools": ["send_email"],
+        "urgency": "medium",
+        "complexity": "simple",
+        "confidence": 0.95,
+        "requires_action": True
+    },
 }
 
 
@@ -337,6 +356,15 @@ def extract_phone_number(query: str) -> Optional[str]:
                 return number
             elif len(number) == 11 and number.startswith('1'):
                 return number[1:]  # Remove leading 1
+    return None
+
+
+def extract_email_address(query: str) -> Optional[str]:
+    """Extract email address from query text."""
+    email_pattern = r'[\w\.\-\+]+@[\w\.\-]+\.\w+'
+    match = re.search(email_pattern, query)
+    if match:
+        return match.group()
     return None
 
 

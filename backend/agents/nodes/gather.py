@@ -293,6 +293,32 @@ def determine_tool_arguments(
             # Default message if not specified
             args["message"] = state.get("message_content", "Hello from your loan officer!")
 
+    elif tool_name == "send_email":
+        # Get email address from entities or extracted_entities
+        email = None
+        if entities.get("email_addresses"):
+            email = entities["email_addresses"][0]
+        elif state.get("extracted_entities", {}).get("email_address"):
+            email = state["extracted_entities"]["email_address"]
+
+        # Try to extract email from user message if not in entities
+        if not email:
+            user_message = state.get("user_message", "")
+            import re
+            email_match = re.search(r'[\w\.\-\+]+@[\w\.\-]+\.\w+', user_message)
+            if email_match:
+                email = email_match.group()
+
+        if email:
+            args["to_email"] = email
+            # Default subject and body - will be enhanced by AI
+            args["subject"] = state.get("email_subject", "Message from your Loan Officer")
+            args["body"] = state.get("email_body", state.get("user_message", "Hello!"))
+            # Pass user_id for OAuth token lookup
+            args["user_id"] = state.get("user_id")
+
+        logger.info(f"[GATHER] send_email args: {args}")
+
     elif tool_name == "get_top_leads":
         # Extract limit from query (e.g., "top 3 leads" -> limit=3)
         user_message = state.get("user_message", "").lower()
