@@ -1915,7 +1915,15 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
             # Decrypt token if encrypted
             encryption_key = os.getenv("ENCRYPTION_KEY")
-            if encryption_key and access_token and access_token.startswith("gAAAAA"):
+            if access_token and access_token.startswith("gAAAAA"):
+                # Token is encrypted - need encryption key to decrypt
+                if not encryption_key:
+                    logger.error("Token is encrypted but ENCRYPTION_KEY not set")
+                    return {
+                        "success": False,
+                        "error": "Email token is encrypted but decryption key is not configured. Please reconnect your Microsoft account or contact support.",
+                        "requires_oauth": True
+                    }
                 try:
                     from cryptography.fernet import Fernet
                     f = Fernet(encryption_key.encode())
@@ -1923,7 +1931,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     if refresh_token and refresh_token.startswith("gAAAAA"):
                         refresh_token = f.decrypt(refresh_token.encode()).decode()
                 except Exception as decrypt_err:
-                    logger.warning(f"Token decryption failed: {decrypt_err}")
+                    logger.error(f"Token decryption failed: {decrypt_err}")
+                    return {
+                        "success": False,
+                        "error": "Failed to decrypt email token. Please reconnect your Microsoft account.",
+                        "requires_oauth": True
+                    }
 
             # Check if token needs refresh
             if expires_at and expires_at < datetime.utcnow():

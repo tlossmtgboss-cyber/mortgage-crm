@@ -29979,20 +29979,6 @@ async def health_check(db: Session = Depends(get_db)):
         )
 
 
-@app.post("/admin/reset-password-temp")
-async def reset_admin_password_temp(db: Session = Depends(get_db)):
-    """Temporary endpoint to reset admin password - REMOVE AFTER USE"""
-    try:
-        new_hash = "$2b$12$EVZWPfWzMfhen6epdFdm3e6XSet26VKm5tGh61i53sxcRnvjGxdJy"
-        result = db.execute(
-            text("UPDATE users SET hashed_password = :hash WHERE email = 'admin@perenniaai.com'"),
-            {"hash": new_hash}
-        )
-        db.commit()
-        return {"status": "success", "rows_updated": result.rowcount}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
 @app.get("/health/detailed")
 async def health_check_detailed():
     """Comprehensive health check with all dependencies"""
