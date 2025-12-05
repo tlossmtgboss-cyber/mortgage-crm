@@ -7,6 +7,7 @@ Tools for the Smart Scheduler Agent handling appointments and calendar managemen
 
 from datetime import datetime, timedelta, date
 from typing import Optional, List, Dict, Any
+from sqlalchemy import text
 
 from .base import (
     mortgage_tool,
@@ -128,7 +129,7 @@ def get_availability(
 
 @mortgage_tool(
     name="book_appointment",
-    description="Book an appointment with conflict checking",
+    description="Book an appointment with conflict checking. Optionally syncs to Outlook calendar and creates Teams meeting.",
     agent_roles=["smart_scheduler", "ai_receptionist"],
     risk_level="MEDIUM",
     parameters={
@@ -141,6 +142,8 @@ def get_availability(
         "title": "Appointment title",
         "notes": "Additional notes",
         "send_confirmation": "Send confirmation to contact",
+        "add_teams_link": "Create Teams meeting link (requires Microsoft integration)",
+        "sync_to_outlook": "Sync appointment to Outlook calendar",
     },
 )
 def book_appointment(
@@ -153,8 +156,10 @@ def book_appointment(
     title: Optional[str] = None,
     notes: Optional[str] = None,
     send_confirmation: bool = True,
+    add_teams_link: bool = False,
+    sync_to_outlook: bool = True,
 ) -> ToolResult:
-    """Book an appointment."""
+    """Book an appointment with optional Outlook/Teams integration."""
     # Get contact info
     if contact_type == "lead":
         contact = execute_single(
@@ -215,6 +220,81 @@ def book_appointment(
     if not title:
         title = f"{appointment_type.replace('_', ' ').title()} - {contact_name}"
 
+    # Calculate end time
+    appt_end = appt_datetime + timedelta(minutes=duration_minutes)
+
+    # Optional: Create Outlook calendar event with Teams link
+    outlook_event_id = None
+    outlook_web_link = None
+    teams_link = None
+
+    if sync_to_outlook and user_id:
+        try:
+            import asyncio
+            from database import SessionLocal
+            from services.microsoft_graph import create_event_via_graph
+
+            db = SessionLocal()
+            try:
+                # Check if user has Microsoft integration
+                integration_check = db.execute(text("""
+                    SELECT id FROM user_integrations
+                    WHERE user_id = :user_id AND provider = 'microsoft'
+                    AND access_token IS NOT NULL
+                    LIMIT 1
+                """), {"user_id": int(user_id)}).fetchone()
+
+                if integration_check:
+                    # Build attendee list
+                    attendees = []
+                    if contact.get("email"):
+                        attendees.append(contact["email"])
+
+                    # Create event (run async function)
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Already in async context
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(
+                                asyncio.run,
+                                create_event_via_graph(
+                                    user_id=int(user_id),
+                                    subject=title,
+                                    start=appt_datetime,
+                                    end=appt_end,
+                                    db=db,
+                                    attendees=attendees if attendees else None,
+                                    add_teams_link=add_teams_link,
+                                    body=notes,
+                                )
+                            )
+                            graph_result = future.result()
+                    else:
+                        graph_result = asyncio.run(create_event_via_graph(
+                            user_id=int(user_id),
+                            subject=title,
+                            start=appt_datetime,
+                            end=appt_end,
+                            db=db,
+                            attendees=attendees if attendees else None,
+                            add_teams_link=add_teams_link,
+                            body=notes,
+                        ))
+
+                    if graph_result.success:
+                        outlook_event_id = graph_result.event_id
+                        outlook_web_link = graph_result.web_link
+                        teams_link = graph_result.teams_link
+            finally:
+                db.close()
+        except ImportError:
+            pass  # Microsoft Graph service not available
+        except Exception as e:
+            # Log but don't fail the appointment creation
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to sync to Outlook: {e}")
+
     appointment = {
         "appointment_id": appt_id,
         "contact_id": contact_id,
@@ -225,7 +305,7 @@ def book_appointment(
         "user_id": user_id,
         "datetime": appt_datetime.isoformat(),
         "duration_minutes": duration_minutes,
-        "end_time": (appt_datetime + timedelta(minutes=duration_minutes)).isoformat(),
+        "end_time": appt_end.isoformat(),
         "type": appointment_type,
         "title": title,
         "notes": notes,
@@ -236,11 +316,22 @@ def book_appointment(
             {"type": "email", "before_minutes": 1440, "status": "pending"},  # 24 hours
             {"type": "sms", "before_minutes": 60, "status": "pending"},  # 1 hour
         ],
+        # Outlook integration
+        "outlook_event_id": outlook_event_id,
+        "outlook_web_link": outlook_web_link,
+        "teams_link": teams_link,
     }
+
+    # Build success message
+    message = f"Appointment booked for {appt_datetime.strftime('%B %d at %I:%M %p')}"
+    if outlook_event_id:
+        message += " (synced to Outlook)"
+    if teams_link:
+        message += " with Teams link"
 
     return ToolResult.success(
         data=appointment,
-        message=f"Appointment booked for {appt_datetime.strftime('%B %d at %I:%M %p')}",
+        message=message,
     )
 
 

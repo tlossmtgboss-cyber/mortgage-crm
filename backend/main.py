@@ -18980,6 +18980,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Monitoring routes not loaded: {e}")
 
+# OAuth routes (Microsoft, Google integrations)
+try:
+    from api.routes.oauth import router as oauth_router
+    app.include_router(oauth_router, prefix="/api", tags=["OAuth"])
+    logger.info("✅ OAuth routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ OAuth routes not loaded: {e}")
+
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")
 async def debug_tools_registry_status():

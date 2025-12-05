@@ -228,14 +228,65 @@ class CommunicationAgent(SpecializedAgent):
         input_data: Dict[str, Any],
         context: AgentContext
     ) -> ToolResult:
-        """Send an email"""
+        """Send an email via Microsoft Graph (if connected) or log to database"""
         from database import SessionLocal
 
         db = SessionLocal()
         try:
-            # In production, this would integrate with email service (SendGrid, etc.)
-            # For now, we log the email to the communications table
+            user_id = context.get("user_id", 1)
+            to_email = input_data["to_email"]
+            subject = input_data["subject"]
+            body = input_data["body"]
+            cc = input_data.get("cc")
 
+            # Status tracking
+            send_status = "logged"  # Default: just logged, not actually sent
+            send_error = None
+
+            # Try to send via Microsoft Graph if user has integration
+            try:
+                from services.microsoft_graph import send_email_via_graph
+
+                # Check if user has Microsoft integration
+                integration_check = db.execute(text("""
+                    SELECT id FROM user_integrations
+                    WHERE user_id = :user_id AND provider = 'microsoft'
+                    AND access_token IS NOT NULL
+                    LIMIT 1
+                """), {"user_id": user_id}).fetchone()
+
+                if integration_check:
+                    # User has Microsoft connected - send via Graph API
+                    to_list = [to_email] if isinstance(to_email, str) else to_email
+                    cc_list = cc if isinstance(cc, list) else ([cc] if cc else None)
+
+                    graph_result = await send_email_via_graph(
+                        user_id=user_id,
+                        to=to_list,
+                        subject=subject,
+                        body=body,
+                        db=db,
+                        cc=cc_list,
+                    )
+
+                    if graph_result.success:
+                        send_status = "sent"
+                    else:
+                        send_status = "failed"
+                        send_error = graph_result.error
+                else:
+                    # No Microsoft integration - will just log
+                    send_status = "logged"
+
+            except ImportError:
+                # Microsoft Graph service not available
+                send_status = "logged"
+            except Exception as e:
+                # Graph API error - still log the communication
+                send_status = "failed"
+                send_error = str(e)
+
+            # Log the communication to database regardless of send status
             query = text("""
                 INSERT INTO communications (
                     type, direction, entity_type, entity_id,
@@ -243,7 +294,7 @@ class CommunicationAgent(SpecializedAgent):
                     created_by, created_at
                 ) VALUES (
                     'email', 'outbound', :entity_type, :entity_id,
-                    :to_email, :subject, :body, 'sent',
+                    :to_email, :subject, :body, :status,
                     :created_by, CURRENT_TIMESTAMP
                 )
                 RETURNING id, subject, to_address
@@ -252,23 +303,35 @@ class CommunicationAgent(SpecializedAgent):
             result = db.execute(query, {
                 "entity_type": input_data.get("entity_type"),
                 "entity_id": input_data.get("entity_id"),
-                "to_email": input_data["to_email"],
-                "subject": input_data["subject"],
-                "body": input_data["body"],
-                "created_by": context.get("user_id", 1)
+                "to_email": to_email,
+                "subject": subject,
+                "body": body,
+                "status": send_status,
+                "created_by": user_id
             }).fetchone()
 
             db.commit()
 
+            # Build response based on status
+            response_data = {
+                "communication_id": result.id,
+                "to": result.to_address,
+                "subject": result.subject,
+                "status": send_status
+            }
+
+            if send_status == "sent":
+                message = f"Email sent to {result.to_address}: {result.subject}"
+            elif send_status == "failed":
+                message = f"Email failed to send to {result.to_address}: {send_error}"
+                response_data["error"] = send_error
+            else:
+                message = f"Email logged (not sent - no email integration): {result.subject}"
+
             return ToolResult(
-                success=True,
-                data={
-                    "communication_id": result.id,
-                    "to": result.to_address,
-                    "subject": result.subject,
-                    "status": "sent"
-                },
-                message=f"Email sent to {result.to_address}: {result.subject}"
+                success=send_status != "failed",
+                data=response_data,
+                message=message
             )
 
         except Exception as e:

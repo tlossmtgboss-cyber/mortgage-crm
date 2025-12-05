@@ -10,6 +10,7 @@ from .team_member_profile import TeamMemberProfile
 from .email_interaction import EmailInteraction
 from .field_update_history import FieldUpdateHistory
 from .data_conflict import DataConflict
+from .user_integration import UserIntegration
 from .sla_tracking import (
     SLAMeasure,
     LoanMilestoneHistory,
@@ -30,6 +31,7 @@ __all__ = [
     'EmailInteraction',
     'FieldUpdateHistory',
     'DataConflict',
+    'UserIntegration',
     # SLA Tracking
     'SLAMeasure',
     'LoanMilestoneHistory',
