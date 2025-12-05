@@ -39,6 +39,7 @@ class Intent(str, Enum):
     GREETING = "greeting"          # Simple greetings (hi, hello, etc.) - use Haiku
     SIMPLE = "simple"              # Simple lookups, basic info - use Haiku
     PIPELINE = "pipeline"          # Loan pipeline analytics
+    HISTORICAL = "historical"      # Historical comparisons (Q3 vs Q4, period performance)
     COMPLIANCE = "compliance"      # Regulatory compliance
     TASKS = "tasks"                # Task management
     PRIORITIES = "priorities"      # Daily priorities (combines pipeline + tasks)
@@ -73,6 +74,7 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "greeting": [],                                       # No tools needed - direct Haiku response
     "simple": ["pipeline_analyst"],                       # Basic lookup with Haiku
     "pipeline": ["pipeline_analyst"],
+    "historical": ["pipeline_analyst"],                   # Historical comparisons (Q3 vs Q4, etc.)
     "compliance": ["compliance_checker"],
     "tasks": ["task_automation"],
     "priorities": ["pipeline_analyst", "task_automation"],
@@ -116,6 +118,21 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"what (can|do) you do",
         r"help me",
         r"^(bye|goodbye|see you|later)",
+    ],
+    # Historical comparisons - MUST come before pipeline to match Q3/Q4 queries
+    "historical": [
+        r"q[1-4]\s*(vs?\.?|versus|to|compared? to?)\s*q[1-4]",  # Q3 vs Q4, Q1 to Q2
+        r"compare\s*(q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december)",
+        r"(q[1-4]|quarter)\s*(performance|metrics|results|numbers)",
+        r"(last|previous|this)\s*(month|quarter|year)\s*(vs?\.?|versus|compared? to?|to)",
+        r"(month|quarter|year)\s*over\s*(month|quarter|year)",
+        r"(january|february|march|april|may|june|july|august|september|october|november|december)\s*(vs?\.?|to|versus)",
+        r"(ytd|year to date)\s*(performance|comparison|metrics)",
+        r"how did (q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december) (do|perform)",
+        r"(performance|results|metrics) (for|in|during) (q[1-4]|january|february|march|april|may|june|july|august|september|october|november|december)",
+        r"historical (comparison|data|performance|metrics)",
+        r"(what|how much) data (do we|is) (have|available)",
+        r"when does (our|my) data (start|begin)",
     ],
     "priorities": [
         r"(top|my|daily|today'?s?) ?(priorit|urgent|important)",
@@ -303,6 +320,7 @@ Categories:
 - tasks: Task management, to-dos, follow-ups
 - leads: Lead pipeline, prospects, nurturing, who to call
 - pipeline: Loan pipeline, deals, closing, processing status
+- historical: Quarter/month comparisons (Q3 vs Q4), period performance, historical data
 - rates: Interest rates, lock/float decisions
 - calls: Phone calls, click-to-dial, voicemail
 - email: Email management, drafting, templates
