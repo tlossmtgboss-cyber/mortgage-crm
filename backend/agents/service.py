@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 import os
-import sys
 import uuid
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 from datetime import datetime
@@ -23,15 +22,15 @@ from sqlalchemy.orm import Session
 from .orchestrator import run_orchestrator, OrchestratorSession
 from .state import create_initial_state, QueryIntent
 
-# Add project root for prompt loader imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-# Import optimized prompt system
+# Import optimized prompt system (local to agents package)
 try:
-    from prompt_integration import OptimizedPromptService
-    from prompt_loader import LoadContext, ContextPresets, PerenniaContexts
+    from .prompt_integration import OptimizedPromptService
+    from .prompt_loader import LoadContext, ContextPresets, PerenniaContexts
+    from .prompt_router import smart_get_prompt, route_to_optimal_prompt
     PROMPT_OPTIMIZATION_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    import traceback
+    traceback.print_exc()
     PROMPT_OPTIMIZATION_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -569,7 +568,8 @@ class AIAgentService:
         self,
         custom_prompt: Optional[str] = None,
         data_context: Optional[str] = None,
-        context_type: str = "mortgage"  # minimal, conversational, mortgage, tools, agent, full
+        context_type: str = "mortgage",  # minimal, conversational, mortgage, tools, agent, full
+        user_message: Optional[str] = None  # For smart routing based on query content
     ) -> str:
         """
         Build the system prompt with context-aware optimization.
@@ -587,6 +587,7 @@ class AIAgentService:
                 - "tools": Tool-focused operations
                 - "agent": Multi-agent orchestration
                 - "full": Everything loaded
+            user_message: Optional user message for smart routing (auto-detects optimal context)
 
         Returns:
             Optimized system prompt string
@@ -596,6 +597,17 @@ class AIAgentService:
             if data_context:
                 return f"{custom_prompt}\n\n{data_context}"
             return custom_prompt
+
+        # Try SMART routing based on user message content (highest priority)
+        if user_message and PROMPT_OPTIMIZATION_AVAILABLE:
+            try:
+                base_prompt = smart_get_prompt(user_message)
+                logger.debug(f"[PROMPT_ROUTER] Smart-routed prompt for: '{user_message[:50]}...'")
+                if data_context:
+                    return f"{base_prompt}\n\n{data_context}"
+                return base_prompt
+            except Exception as e:
+                logger.warning(f"Smart prompt routing failed: {e}")
 
         # Try optimized prompt loading
         if self._prompt_service and PROMPT_OPTIMIZATION_AVAILABLE:

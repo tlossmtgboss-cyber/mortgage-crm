@@ -1,0 +1,335 @@
+"""
+Action Executor Node
+
+This node handles action requests - creating tasks, sending emails,
+updating records, etc. It manages action confirmation and execution.
+"""
+
+import asyncio
+import logging
+from typing import Any, Callable, Dict, List
+from datetime import datetime
+
+from ..state import (
+    AgentState,
+    ActionResult,
+    add_node_trace,
+    add_error,
+    update_state
+)
+
+logger = logging.getLogger(__name__)
+
+
+# Risk classification for actions
+ACTION_RISK_LEVELS = {
+    # LOW RISK - Auto-execute without confirmation
+    "create_task": "low",
+    "schedule_followup": "low",
+    "get_tasks": "low",
+    "get_pipeline": "low",
+    "search_leads": "low",
+
+    # MEDIUM RISK - Auto-execute for internal actions
+    "send_email": "medium",  # To self only
+    "update_lead": "medium",
+
+    # HIGH RISK - Requires confirmation (but will auto-execute for explicit requests)
+    "send_email_to_contact": "high",  # External emails
+    "send_sms": "medium",             # Changed to medium for explicit user requests
+    "send_text": "medium",            # Alias for send_sms
+    "make_phone_call": "medium",
+    "make_call": "medium",            # Alias for click_to_dial
+    "click_to_dial": "medium",        # User explicitly requested call
+    "call_contact": "medium",         # Alias
+    "create_lead": "high",
+    "update_loan_status": "high",
+
+    # CRITICAL - Always requires explicit confirmation
+    "delete_loan": "critical",
+    "delete_lead": "critical",
+    "escalate_to_human": "critical"
+}
+
+
+def classify_action_risk(action_type: str) -> str:
+    """
+    Classify the risk level of an action.
+
+    Args:
+        action_type: Type of action to classify
+
+    Returns:
+        Risk level: 'low', 'medium', 'high', or 'critical'
+    """
+    return ACTION_RISK_LEVELS.get(action_type, "medium")
+
+
+def should_auto_execute(action_type: str, autonomous_mode: bool = True) -> bool:
+    """
+    Determine if an action should be auto-executed.
+
+    Args:
+        action_type: Type of action
+        autonomous_mode: Whether autonomous mode is enabled
+
+    Returns:
+        True if action should be auto-executed
+    """
+    if not autonomous_mode:
+        return False
+
+    risk = classify_action_risk(action_type)
+    return risk in ["low", "medium"]
+
+
+async def execute_single_action(
+    action: dict,
+    tool_functions: Dict[str, Callable]
+) -> ActionResult:
+    """
+    Execute a single action.
+
+    Args:
+        action: Action specification with type and parameters
+        tool_functions: Available tool functions
+
+    Returns:
+        ActionResult with outcome
+    """
+    action_type = action.get("type", action.get("action_type", "unknown"))
+    params = action.get("params", action.get("parameters", {}))
+
+    result = ActionResult(
+        action_type=action_type,
+        success=False,
+        message=""
+    )
+
+    try:
+        func = tool_functions.get(action_type)
+        if func is None:
+            result.message = f"Action '{action_type}' not supported"
+            result.error = "Function not found"
+            return result
+
+        # Execute the action
+        if asyncio.iscoroutinefunction(func):
+            action_result = await func(params)
+        else:
+            action_result = func(params)
+
+        result.success = True
+        result.message = action_result.get("message", f"Action {action_type} completed")
+        result.data = action_result
+
+        logger.info(f"Action {action_type} executed successfully")
+
+    except Exception as e:
+        result.success = False
+        result.message = f"Action failed: {str(e)}"
+        result.error = str(e)
+        logger.error(f"Action {action_type} failed: {e}")
+
+    return result
+
+
+def extract_actions_from_analysis(state: AgentState) -> List[dict]:
+    """
+    Extract actionable requests from the user's query and analysis.
+
+    This identifies when the user wants to DO something vs just GET information.
+
+    Args:
+        state: Current agent state
+
+    Returns:
+        List of action specifications
+    """
+    actions = []
+    user_message = state.get("user_message", "").lower()
+    recommendations = state.get("recommendations", [])
+
+    # Detect email sending requests
+    if any(phrase in user_message for phrase in [
+        "send me", "email me", "send email", "send an email",
+        "email that", "send a summary", "send my"
+    ]):
+        # Determine email type from context
+        content_type = "custom"
+        if "task" in user_message or "priorities" in user_message:
+            content_type = "task_summary"
+        elif "pipeline" in user_message:
+            content_type = "pipeline_update"
+        elif "lead" in user_message:
+            content_type = "lead_summary"
+
+        actions.append({
+            "type": "send_email",
+            "params": {
+                "content_type": content_type,
+                "subject": "Your Requested Summary"
+            },
+            "auto_execute": True
+        })
+
+    # Detect task creation requests
+    if any(phrase in user_message for phrase in [
+        "create a task", "add a task", "remind me", "schedule",
+        "create task", "new task", "add task"
+    ]):
+        # Extract task details from context
+        actions.append({
+            "type": "create_task",
+            "params": {
+                "title": "Follow-up task (review details)",
+                "priority": "medium"
+            },
+            "auto_execute": False,  # Need to extract proper details
+            "needs_details": True
+        })
+
+    # Detect follow-up scheduling
+    if any(phrase in user_message for phrase in [
+        "follow up", "schedule a call", "reach out to",
+        "contact", "call back"
+    ]):
+        actions.append({
+            "type": "schedule_followup",
+            "params": {
+                "followup_type": "call"
+            },
+            "auto_execute": False,
+            "needs_details": True
+        })
+
+    # Detect lead/loan update requests
+    if any(phrase in user_message for phrase in [
+        "update", "change status", "move to", "mark as"
+    ]):
+        actions.append({
+            "type": "update_lead",
+            "params": {},
+            "auto_execute": False,
+            "needs_details": True
+        })
+
+    return actions
+
+
+async def execute_actions(
+    state: AgentState,
+    tool_functions: Dict[str, Callable] = None,
+    autonomous_mode: bool = True
+) -> AgentState:
+    """
+    Execute requested actions based on user intent.
+
+    Args:
+        state: Current agent state
+        tool_functions: Dictionary of available tool functions
+        autonomous_mode: Whether to auto-execute low-risk actions
+
+    Returns:
+        Updated state with action results
+    """
+    state = add_node_trace(state, "execute")
+
+    if tool_functions is None:
+        tool_functions = {}
+
+    # Check if this is an action request
+    requires_action = state.get("requires_action", False)
+    if not requires_action:
+        logger.info("No actions required for this query")
+        return update_state(state, {
+            "actions_requested": [],
+            "actions_executed": [],
+            "actions_pending": []
+        })
+
+    try:
+        # Extract actions from the user's request
+        actions = extract_actions_from_analysis(state)
+
+        if not actions:
+            return update_state(state, {
+                "actions_requested": actions,
+                "actions_executed": [],
+                "actions_pending": []
+            })
+
+        executed = []
+        pending = []
+
+        for action in actions:
+            action_type = action.get("type")
+            needs_details = action.get("needs_details", False)
+
+            # If action needs more details, mark as pending
+            if needs_details:
+                pending.append(action)
+                continue
+
+            # Check if we should auto-execute
+            if action.get("auto_execute") and should_auto_execute(action_type, autonomous_mode):
+                result = await execute_single_action(action, tool_functions)
+                executed.append(result)
+            else:
+                # Requires confirmation
+                pending.append(action)
+
+        # Update state with results
+        state = update_state(state, {
+            "actions_requested": actions,
+            "actions_executed": executed,
+            "actions_pending": pending
+        })
+
+        logger.info(f"Actions: {len(executed)} executed, {len(pending)} pending confirmation")
+
+        return state
+
+    except Exception as e:
+        logger.error(f"Action execution failed: {e}")
+        state = add_error(state, f"Action execution error: {str(e)}")
+        return update_state(state, {
+            "actions_requested": [],
+            "actions_executed": [],
+            "actions_pending": []
+        })
+
+
+def format_action_confirmation_request(pending_actions: List[dict]) -> str:
+    """
+    Format pending actions into a confirmation request for the user.
+
+    Args:
+        pending_actions: List of actions needing confirmation
+
+    Returns:
+        Formatted string requesting user confirmation
+    """
+    if not pending_actions:
+        return ""
+
+    lines = ["The following actions require your confirmation:"]
+
+    for i, action in enumerate(pending_actions, 1):
+        action_type = action.get("type", "unknown")
+        params = action.get("params", {})
+
+        if action_type == "send_email_to_contact":
+            lines.append(f"{i}. Send email to {params.get('recipient', 'contact')}")
+        elif action_type == "send_sms":
+            lines.append(f"{i}. Send SMS to {params.get('phone', 'contact')}")
+        elif action_type == "create_task":
+            lines.append(f"{i}. Create task: {params.get('title', 'New task')}")
+        elif action_type == "update_lead":
+            lines.append(f"{i}. Update lead status")
+        else:
+            lines.append(f"{i}. {action_type.replace('_', ' ').title()}")
+
+    lines.append("\nReply 'confirm' to proceed or 'cancel' to abort.")
+
+    return "\n".join(lines)

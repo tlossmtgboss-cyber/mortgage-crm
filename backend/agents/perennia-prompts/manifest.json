@@ -1,0 +1,302 @@
+{
+  "version": "1.0",
+  "source_file": "SYSTEM_PROMPTS.md",
+  "source_hash": "0f5e7d5ba3d4ed43777d1a13606f5054",
+  "total_sections": 20,
+  "total_characters": 23650,
+  "sections": [
+    {
+      "id": "perennia_ai_master_system_prompts",
+      "title": "Perennia AI - Master System Prompts",
+      "priority": "core",
+      "capabilities": [
+        "identity",
+        "domain",
+        "agent"
+      ],
+      "dependencies": [],
+      "char_count": 144,
+      "line_count": 4,
+      "file": "core/perennia_ai_master_system_prompts.md"
+    },
+    {
+      "id": "core_identity",
+      "title": "Core Identity",
+      "priority": "core",
+      "capabilities": [
+        "identity",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 180,
+      "line_count": 3,
+      "file": "core/core_identity.md"
+    },
+    {
+      "id": "core_capabilities",
+      "title": "Core Capabilities",
+      "priority": "core",
+      "capabilities": [
+        "search",
+        "domain",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 1005,
+      "line_count": 38,
+      "file": "core/core_capabilities.md"
+    },
+    {
+      "id": "core_guidelines",
+      "title": "Core Guidelines",
+      "priority": "core",
+      "capabilities": [
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 285,
+      "line_count": 9,
+      "file": "core/core_guidelines.md"
+    },
+    {
+      "id": "action_first_behavior",
+      "title": "Action First Behavior",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "tools",
+        "memory",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 624,
+      "line_count": 9,
+      "file": "conditional/action_first_behavior.md"
+    },
+    {
+      "id": "tone_and_style",
+      "title": "Tone and Style",
+      "priority": "conditional",
+      "capabilities": [
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 108,
+      "line_count": 6,
+      "file": "conditional/tone_and_style.md"
+    },
+    {
+      "id": "response_format",
+      "title": "Response Format",
+      "priority": "conditional",
+      "capabilities": [
+        "domain",
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 320,
+      "line_count": 9,
+      "file": "conditional/response_format.md"
+    },
+    {
+      "id": "query_analyzer_node",
+      "title": "Query Analyzer Node",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "tools",
+        "search",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 1054,
+      "line_count": 37,
+      "file": "conditional/query_analyzer_node.md"
+    },
+    {
+      "id": "unified_reasoning_and_response_node",
+      "title": "Unified Reasoning and Response Node",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "memory",
+        "domain",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 2266,
+      "line_count": 73,
+      "file": "conditional/unified_reasoning_and_response_node.md"
+    },
+    {
+      "id": "reasoning_engine_node",
+      "title": "Reasoning Engine Node",
+      "priority": "core",
+      "capabilities": [
+        "search",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 1267,
+      "line_count": 30,
+      "file": "core/reasoning_engine_node.md"
+    },
+    {
+      "id": "response_generator_node",
+      "title": "Response Generator Node",
+      "priority": "conditional",
+      "capabilities": [
+        "domain",
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 929,
+      "line_count": 24,
+      "file": "conditional/response_generator_node.md"
+    },
+    {
+      "id": "lead_pipeline_tools",
+      "title": "Lead Pipeline Tools",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "tools",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 2859,
+      "line_count": 75,
+      "file": "conditional/lead_pipeline_tools.md"
+    },
+    {
+      "id": "daily_lead_briefing_mode",
+      "title": "Daily Lead Briefing Mode",
+      "priority": "core",
+      "capabilities": [
+        "identity",
+        "tools",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 2350,
+      "line_count": 84,
+      "file": "core/daily_lead_briefing_mode.md"
+    },
+    {
+      "id": "specialized_agent_prompts",
+      "title": "Specialized Agent Prompts",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "domain",
+        "agent",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 1179,
+      "line_count": 55,
+      "file": "conditional/specialized_agent_prompts.md"
+    },
+    {
+      "id": "role_context_prompts",
+      "title": "Role Context Prompts",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "memory",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 754,
+      "line_count": 37,
+      "file": "conditional/role_context_prompts.md"
+    },
+    {
+      "id": "ai_receptionist_sam",
+      "title": "AI Receptionist (Sam)",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "tools",
+        "memory",
+        "search",
+        "domain",
+        "agent",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 4512,
+      "line_count": 109,
+      "file": "conditional/ai_receptionist_sam.md"
+    },
+    {
+      "id": "twilio_voice_agent",
+      "title": "Twilio Voice Agent",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "tools",
+        "domain",
+        "agent",
+        "communication"
+      ],
+      "dependencies": [],
+      "char_count": 435,
+      "line_count": 12,
+      "file": "conditional/twilio_voice_agent.md"
+    },
+    {
+      "id": "lead_outreach_templates",
+      "title": "Lead Outreach Templates",
+      "priority": "conditional",
+      "capabilities": [
+        "tools",
+        "search",
+        "domain",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 2652,
+      "line_count": 60,
+      "file": "conditional/lead_outreach_templates.md"
+    },
+    {
+      "id": "base_tools_available",
+      "title": "Base Tools Available",
+      "priority": "conditional",
+      "capabilities": [
+        "tools",
+        "search",
+        "domain",
+        "agent",
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 419,
+      "line_count": 27,
+      "file": "conditional/base_tools_available.md"
+    },
+    {
+      "id": "model_selection_guide",
+      "title": "Model Selection Guide",
+      "priority": "conditional",
+      "capabilities": [
+        "workflow"
+      ],
+      "dependencies": [],
+      "char_count": 308,
+      "line_count": 12,
+      "file": "conditional/model_selection_guide.md"
+    }
+  ]
+}
