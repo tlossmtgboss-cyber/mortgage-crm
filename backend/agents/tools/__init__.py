@@ -87,6 +87,9 @@ from . import notifications
 from . import subscription
 from . import onboarding
 
+# Analytics Tools
+from . import historical
+
 
 # =============================================================================
 # Agent Configuration
@@ -349,6 +352,13 @@ ONBOARDING_TOOLS = [
     "track_progress",
 ]
 
+# Analytics Tools
+HISTORICAL_TOOLS = [
+    "get_performance_by_period",
+    "compare_periods",
+    "get_data_availability",
+]
+
 
 # =============================================================================
 # All Tools Organized by Category
@@ -379,6 +389,8 @@ ALL_TOOLS = {
     "notifications": NOTIFICATION_TOOLS,
     "subscription": SUBSCRIPTION_TOOLS,
     "onboarding": ONBOARDING_TOOLS,
+    # Analytics
+    "historical": HISTORICAL_TOOLS,
 }
 
 
@@ -611,6 +623,9 @@ __all__ = [
     "subscription",
     "onboarding",
 
+    # Analytics Modules
+    "historical",
+
     # Configuration
     "AGENT_MODULES",
     "AGENT_CONFIGS",
@@ -643,6 +658,9 @@ __all__ = [
     "NOTIFICATION_TOOLS",
     "SUBSCRIPTION_TOOLS",
     "ONBOARDING_TOOLS",
+
+    # Analytics Tool Lists
+    "HISTORICAL_TOOLS",
 
     # Utilities
     "get_all_tool_names",

@@ -62,6 +62,10 @@ AGENT_CONFIGS = {
             "get_bottleneck_analysis",
             "compare_to_benchmark",
             "get_lo_pipeline_breakdown",
+            # Historical analytics
+            "get_performance_by_period",
+            "compare_periods",
+            "get_data_availability",
         ],
         max_concurrent_tools=5,
     ),
@@ -159,6 +163,10 @@ AGENT_CONFIGS = {
             "get_best_practices",
             "get_performance_trends",
             "set_performance_goals",
+            # Historical analytics
+            "get_performance_by_period",
+            "compare_periods",
+            "get_data_availability",
         ],
     ),
     "customer_intelligence": AgentToolConfig(
@@ -322,6 +330,10 @@ AGENT_CONFIGS = {
             "export_report",
             "get_dashboard_metrics",
             "create_custom_report",
+            # Historical analytics
+            "get_performance_by_period",
+            "compare_periods",
+            "get_data_availability",
         ],
     ),
     "notification_center": AgentToolConfig(
