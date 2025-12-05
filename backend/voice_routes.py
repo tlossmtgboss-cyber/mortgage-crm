@@ -2,7 +2,7 @@
 Voice AI Receptionist Routes
 Handles Twilio voice webhooks and OpenAI Realtime API integration
 """
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -957,6 +957,58 @@ async def get_voice_os_status():
         }
     }
 
+
+# ============================================================================
+# MOBILE APP TRANSCRIPTION PROXY
+# ============================================================================
+
+@router.post("/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+):
+    """
+    Proxy to OpenAI Whisper API for audio transcription.
+    Used by mobile app when OpenAI key is not in the app.
+    """
+    import httpx
+    import os
+
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        raise HTTPException(500, "OpenAI API key not configured on server")
+
+    try:
+        # Read uploaded file
+        audio_data = await file.read()
+
+        # Send to OpenAI Whisper
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                files={"file": (file.filename or "audio.m4a", audio_data, file.content_type or "audio/m4a")},
+                data={"model": "whisper-1", "language": "en"},
+                timeout=30.0,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Whisper API error: {response.status_code} - {response.text}")
+                raise HTTPException(response.status_code, "Transcription failed")
+
+            result = response.json()
+            return {"success": True, "text": result.get("text", "")}
+
+    except httpx.TimeoutException:
+        logger.error("Whisper API timeout")
+        raise HTTPException(504, "Transcription timed out")
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise HTTPException(500, f"Transcription failed: {str(e)}")
+
+
+# ============================================================================
+# VOICE TESTING
+# ============================================================================
 
 @router.post("/voice-os/test-voice")
 async def test_voice_sample(request: Request):

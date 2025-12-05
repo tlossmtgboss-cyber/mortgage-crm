@@ -159,8 +159,8 @@ def get_data_date_range() -> Tuple[Optional[date], Optional[date]]:
     # Check loans
     loan_range = execute_single("""
         SELECT
-            MIN(COALESCE(funded_at, created_at))::date as earliest,
-            MAX(COALESCE(funded_at, created_at))::date as latest
+            MIN(COALESCE(funded_date, created_at))::date as earliest,
+            MAX(COALESCE(funded_date, created_at))::date as latest
         FROM loans
     """)
 
@@ -295,11 +295,11 @@ def get_performance_by_period(
                 COUNT(*) as loans_funded,
                 COALESCE(SUM(amount), 0) as volume,
                 AVG(amount) as avg_loan_size,
-                AVG(EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400) as avg_cycle_time
+                AVG(EXTRACT(EPOCH FROM (funded_date - created_at)) / 86400) as avg_cycle_time
             FROM loans l
             WHERE l.stage = 'Funded'
-            AND l.funded_at >= :start_date
-            AND l.funded_at <= :end_date
+            AND l.funded_date >= :start_date
+            AND l.funded_date <= :end_date
             {lo_filter}
         """
         funded_data = execute_single(funded_query, params)
@@ -517,10 +517,10 @@ def compare_periods(
                     COUNT(*) as loans_funded,
                     COALESCE(SUM(amount), 0) as volume,
                     AVG(amount) as avg_loan_size,
-                    AVG(EXTRACT(EPOCH FROM (funded_at - created_at)) / 86400) as avg_cycle_time
+                    AVG(EXTRACT(EPOCH FROM (funded_date - created_at)) / 86400) as avg_cycle_time
                 FROM loans l
                 WHERE l.stage = 'Funded'
-                AND l.funded_at >= :start_date AND l.funded_at <= :end_date
+                AND l.funded_date >= :start_date AND l.funded_date <= :end_date
                 {lo_filter}
             """, params)
 
@@ -713,9 +713,9 @@ def get_data_availability() -> ToolResult:
         # Months with data
         months_query = execute_query("""
             SELECT DISTINCT
-                DATE_TRUNC('month', COALESCE(funded_at, created_at))::date as month
+                DATE_TRUNC('month', COALESCE(funded_date, created_at))::date as month
             FROM loans
-            WHERE COALESCE(funded_at, created_at) IS NOT NULL
+            WHERE COALESCE(funded_date, created_at) IS NOT NULL
             ORDER BY month
         """)
         months_with_data = [row['month'].strftime('%B %Y') for row in months_query if row['month']]
