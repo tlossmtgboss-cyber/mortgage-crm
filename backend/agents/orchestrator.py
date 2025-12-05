@@ -49,7 +49,7 @@ INTENT_TO_SCOPED_TOOLS = {
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
-    "email": ["search_leads", "search_loans"],
+    "email": ["send_email", "search_leads", "search_loans"],
     "schedule": ["get_tasks", "get_daily_priorities"],
     "documents": ["search_loans", "get_pipeline"],
     "compliance": ["search_loans", "get_pipeline"],
