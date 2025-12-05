@@ -164,6 +164,23 @@ INTENT_PATTERNS = {
     },
 
     # Lead pipeline queries
+    # Top leads queries - highest priority for immediate calling
+    "top_leads": {
+        "patterns": [
+            r"(get|show|give|list) (me )?(my |the )?(top|best|highest|hot|priority) ?\d* ?(leads?|prospects?)",
+            r"(my |the )?(top|best|highest|hot) ?\d* ?(leads?|prospects?) (to call|for calling|with phone)",
+            r"call (my |the )?(top|best|hot|warm|priority|highest)( \d+)? (leads?|prospects?)",
+            r"(top|best|hot|priority) \d+ (leads?|contacts?|prospects?)",
+            r"who (should|do|can) i call (first|next|today)",
+            r"(leads?|prospects?) (with |that have )?(phone|contact) (numbers?|info)",
+        ],
+        "intent": QueryIntent.LEAD_MANAGEMENT,
+        "tools": ["get_top_leads"],  # Only use get_top_leads for these queries
+        "urgency": "high",
+        "complexity": "simple",
+        "confidence": 0.98
+    },
+
     "lead_management": {
         "patterns": [
             r"(my |the |our )?(lead|leads) (pipeline|funnel|status)",
@@ -176,10 +193,8 @@ INTENT_PATTERNS = {
             r"(speed|time) to lead",
             r"lead (analytics?|metrics?|insights?)",
             r"(nurture|follow.?up) (leads?|list)",
-            # "Call my leads" queries - need lead data first, NOT click_to_dial
-            r"call (my |the )?(top|best|hot|warm|priority|highest)( \d+)? (leads?|prospects?)",
+            # General lead calling without specific "top" keyword
             r"(call|contact|reach out to) (my |the )?(leads?|prospects?)",
-            r"(top|best|hot) \d+ (leads?|contacts?|prospects?) (to call|to contact)",
             # Contact frequency patterns - leads not contacted recently
             r"(leads?|prospects?) (not |haven't been |i haven't )?contacted",
             r"(haven't|have not|not) contacted",
