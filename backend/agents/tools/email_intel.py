@@ -288,7 +288,7 @@ Best regards""",
 
 @mortgage_tool(
     name="send_email",
-    description="Send email to contact",
+    description="Send email to contact via Microsoft Graph (if connected) or queue for approval",
     agent_roles=["email_intelligence"],
     risk_level="HIGH",
     parameters={
@@ -299,6 +299,7 @@ Best regards""",
         "contact_type": "Type: lead, borrower",
         "cc": "CC recipients",
         "attachments": "Attachment file IDs",
+        "user_id": "User ID sending the email",
     },
 )
 def send_email(
@@ -309,10 +310,137 @@ def send_email(
     contact_type: str = "lead",
     cc: Optional[List[str]] = None,
     attachments: Optional[List[str]] = None,
+    user_id: Optional[int] = None,
 ) -> ToolResult:
-    """Send email."""
+    """Send email via Microsoft Graph if user has integration, otherwise queue for approval."""
     import uuid
+    import asyncio
+    import httpx
+    import os
+
     email_id = str(uuid.uuid4())[:8].upper()
+    send_status = "queued"
+    send_error = None
+
+    # Try to send via Microsoft Graph if user_id provided
+    if user_id:
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+
+            db = SessionLocal()
+            try:
+                # Check for Microsoft OAuth token
+                oauth = db.execute(text("""
+                    SELECT access_token, refresh_token, token_expires_at
+                    FROM microsoft_oauth_tokens
+                    WHERE user_id = :user_id
+                    AND access_token IS NOT NULL
+                    AND sync_enabled = true
+                    LIMIT 1
+                """), {"user_id": user_id}).fetchone()
+
+                if oauth and oauth.access_token:
+                    # Decrypt token
+                    from main import decrypt_token
+                    access_token = decrypt_token(oauth.access_token)
+
+                    # Check if token expired and needs refresh
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc)
+                    if oauth.token_expires_at and oauth.token_expires_at.replace(tzinfo=timezone.utc) < now:
+                        # Token expired - try to refresh
+                        refresh_token = decrypt_token(oauth.refresh_token) if oauth.refresh_token else None
+                        if refresh_token:
+                            client_id = os.getenv("MICROSOFT_CLIENT_ID")
+                            client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+                            tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+                            token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+                            import requests
+                            refresh_response = requests.post(token_url, data={
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "refresh_token": refresh_token,
+                                "grant_type": "refresh_token",
+                                "scope": "https://graph.microsoft.com/Mail.Send offline_access",
+                            }, timeout=30)
+
+                            if refresh_response.status_code == 200:
+                                tokens = refresh_response.json()
+                                access_token = tokens["access_token"]
+
+                                # Update stored tokens
+                                from main import encrypt_token
+                                from datetime import timedelta
+                                new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
+
+                                db.execute(text("""
+                                    UPDATE microsoft_oauth_tokens
+                                    SET access_token = :access_token,
+                                        refresh_token = :refresh_token,
+                                        token_expires_at = :expires_at,
+                                        updated_at = CURRENT_TIMESTAMP
+                                    WHERE user_id = :user_id
+                                """), {
+                                    "access_token": encrypt_token(access_token),
+                                    "refresh_token": encrypt_token(tokens.get("refresh_token", refresh_token)),
+                                    "expires_at": new_expires_at,
+                                    "user_id": user_id,
+                                })
+                                db.commit()
+
+                    # Prepare email payload for Microsoft Graph
+                    message = {
+                        "subject": subject,
+                        "body": {
+                            "contentType": "HTML",
+                            "content": body,
+                        },
+                        "toRecipients": [
+                            {"emailAddress": {"address": to_email}}
+                        ],
+                    }
+
+                    if cc:
+                        message["ccRecipients"] = [
+                            {"emailAddress": {"address": email}} for email in cc
+                        ]
+
+                    payload = {
+                        "message": message,
+                        "saveToSentItems": True,
+                    }
+
+                    # Send via Graph API
+                    import requests
+                    response = requests.post(
+                        "https://graph.microsoft.com/v1.0/me/sendMail",
+                        json=payload,
+                        headers={
+                            "Authorization": f"Bearer {access_token}",
+                            "Content-Type": "application/json",
+                        },
+                        timeout=30,
+                    )
+
+                    if response.status_code == 202:  # Accepted
+                        send_status = "sent"
+                    else:
+                        error_data = response.json() if response.content else {}
+                        send_error = error_data.get("error", {}).get("message", f"HTTP {response.status_code}")
+                        send_status = "failed"
+                else:
+                    # No Microsoft integration
+                    send_status = "queued"
+
+            finally:
+                db.close()
+
+        except Exception as e:
+            send_error = str(e)
+            send_status = "failed"
 
     email_data = {
         "email_id": f"EMAIL-{email_id}",
@@ -323,15 +451,28 @@ def send_email(
         "contact_id": contact_id,
         "contact_type": contact_type,
         "attachments": attachments or [],
-        "status": "queued",
-        "queued_at": datetime.now().isoformat(),
+        "status": send_status,
+        "sent_at": datetime.now().isoformat() if send_status == "sent" else None,
+        "error": send_error,
     }
 
-    return ToolResult.success(
-        data=email_data,
-        message=f"Email queued to {to_email}",
-        requires_approval=True,
-    )
+    if send_status == "sent":
+        return ToolResult.success(
+            data=email_data,
+            message=f"Email sent successfully to {to_email}",
+            requires_approval=False,
+        )
+    elif send_status == "failed":
+        return ToolResult.error(
+            error=send_error or "Failed to send email",
+            message=f"Email failed to send to {to_email}: {send_error}",
+        )
+    else:
+        return ToolResult.success(
+            data=email_data,
+            message=f"Email queued to {to_email} (connect Microsoft 365 to send directly)",
+            requires_approval=True,
+        )
 
 
 @mortgage_tool(
