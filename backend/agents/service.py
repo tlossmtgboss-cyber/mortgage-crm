@@ -1402,6 +1402,229 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools["get_leads_by_status"] = execute_get_leads_by_status
 
+    async def execute_get_top_leads(args):
+        """
+        Get the top leads by score for immediate calling action.
+
+        Returns leads sorted by:
+        1. AI score (highest first)
+        2. Stage priority (New > Prospect > Application)
+        3. Recency (newest first)
+
+        Perfect for "Call my top 3 leads right now" queries.
+        All returned leads have valid phone numbers.
+        """
+        limit = args.get("limit", 10)
+        require_phone = args.get("require_phone", True)
+
+        try:
+            # Query leads with phone numbers, sorted by AI score and recency
+            query_sql = """
+                SELECT
+                    l.id,
+                    l.first_name,
+                    l.last_name,
+                    l.name,
+                    l.phone,
+                    l.email,
+                    l.ai_score,
+                    l.stage,
+                    l.source,
+                    l.loan_amount,
+                    l.created_at,
+                    l.last_contact,
+                    l.notes
+                FROM leads l
+                WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify')
+                  AND l.owner_id = :user_id
+            """
+
+            if require_phone:
+                query_sql += " AND l.phone IS NOT NULL AND l.phone != ''"
+
+            # Sort by AI score (desc), then by stage priority, then by recency
+            query_sql += """
+                ORDER BY
+                    COALESCE(l.ai_score, 50) DESC,
+                    CASE l.stage
+                        WHEN 'New' THEN 100
+                        WHEN 'Attempted Contact' THEN 90
+                        WHEN 'Prospect' THEN 80
+                        WHEN 'Application' THEN 70
+                        WHEN 'Pre-Qualified' THEN 60
+                        WHEN 'Pre-Approved' THEN 50
+                        ELSE 10
+                    END DESC,
+                    l.created_at DESC
+                LIMIT :limit
+            """
+
+            rows = db.execute(text(query_sql), {"user_id": current_user.id, "limit": limit}).fetchall()
+
+            top_leads = []
+            for i, row in enumerate(rows, 1):
+                name = f"{row.first_name or ''} {row.last_name or ''}".strip() or row.name or "Unknown"
+
+                top_leads.append({
+                    "rank": i,
+                    "id": row.id,
+                    "name": name,
+                    "phone": row.phone,
+                    "email": row.email,
+                    "score": row.ai_score or 50,
+                    "stage": row.stage,
+                    "source": row.source,
+                    "loan_amount": float(row.loan_amount) if row.loan_amount else None,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "last_contact": row.last_contact.isoformat() if row.last_contact else None,
+                    "notes": row.notes[:200] if row.notes else None,
+                    "call_ready": True
+                })
+
+            # Summary stats
+            avg_score = sum(l["score"] for l in top_leads) / len(top_leads) if top_leads else 0
+            stages = {}
+            for lead in top_leads:
+                stages[lead["stage"]] = stages.get(lead["stage"], 0) + 1
+
+            return {
+                "total": len(top_leads),
+                "leads": top_leads,
+                "summary": {
+                    "average_score": round(avg_score, 1),
+                    "by_stage": stages,
+                    "all_have_phone": True
+                },
+                "call_action": {
+                    "ready_to_dial": len(top_leads),
+                    "suggestion": f"Click to call any of these {len(top_leads)} leads directly"
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error in get_top_leads: {e}")
+            db.rollback()
+            return {"error": str(e), "leads": []}
+
+    tools["get_top_leads"] = execute_get_top_leads
+
+    async def execute_get_stale_leads(args):
+        """
+        Get leads that haven't been contacted in a specified number of days.
+
+        Useful for:
+        - Re-engagement campaigns
+        - Preventing leads from going cold
+        - Identifying follow-up opportunities
+        """
+        days_threshold = args.get("days_threshold", 7)
+        limit = args.get("limit", 50)
+        include_never_contacted = args.get("include_never_contacted", True)
+
+        try:
+            now = datetime.now()
+            threshold_date = now - timedelta(days=days_threshold)
+
+            # Build query for stale leads
+            if include_never_contacted:
+                query_sql = """
+                    SELECT
+                        l.id,
+                        l.first_name,
+                        l.last_name,
+                        l.name,
+                        l.phone,
+                        l.email,
+                        l.ai_score,
+                        l.stage,
+                        l.source,
+                        l.loan_amount,
+                        l.created_at,
+                        l.last_contact
+                    FROM leads l
+                    WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify')
+                      AND l.owner_id = :user_id
+                      AND (l.last_contact IS NULL OR l.last_contact < :threshold)
+                    ORDER BY l.last_contact ASC NULLS FIRST
+                    LIMIT :limit
+                """
+            else:
+                query_sql = """
+                    SELECT
+                        l.id,
+                        l.first_name,
+                        l.last_name,
+                        l.name,
+                        l.phone,
+                        l.email,
+                        l.ai_score,
+                        l.stage,
+                        l.source,
+                        l.loan_amount,
+                        l.created_at,
+                        l.last_contact
+                    FROM leads l
+                    WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify')
+                      AND l.owner_id = :user_id
+                      AND l.last_contact IS NOT NULL
+                      AND l.last_contact < :threshold
+                    ORDER BY l.last_contact ASC
+                    LIMIT :limit
+                """
+
+            rows = db.execute(text(query_sql), {
+                "user_id": current_user.id,
+                "threshold": threshold_date,
+                "limit": limit
+            }).fetchall()
+
+            stale_leads = []
+            never_contacted_count = 0
+
+            for row in rows:
+                name = f"{row.first_name or ''} {row.last_name or ''}".strip() or row.name or "Unknown"
+
+                if row.last_contact:
+                    days_since = (now - row.last_contact).days
+                else:
+                    days_since = None
+                    never_contacted_count += 1
+
+                stale_leads.append({
+                    "id": row.id,
+                    "name": name,
+                    "phone": row.phone,
+                    "email": row.email,
+                    "source": row.source,
+                    "stage": row.stage,
+                    "loan_amount": float(row.loan_amount) if row.loan_amount else None,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "last_contact": row.last_contact.isoformat() if row.last_contact else None,
+                    "days_since_contact": days_since,
+                    "never_contacted": row.last_contact is None,
+                    "priority": "high" if days_since is None or days_since > 14 else "medium"
+                })
+
+            return {
+                "total": len(stale_leads),
+                "never_contacted_count": never_contacted_count,
+                "days_threshold": days_threshold,
+                "leads": stale_leads,
+                "summary": {
+                    "total_stale": len(stale_leads),
+                    "never_contacted": never_contacted_count,
+                    "contacted_but_stale": len(stale_leads) - never_contacted_count,
+                    "high_priority": len([l for l in stale_leads if l["priority"] == "high"])
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error in get_stale_leads: {e}")
+            db.rollback()
+            return {"error": str(e), "leads": []}
+
+    tools["get_stale_leads"] = execute_get_stale_leads
+
     # ============ Communication Tools ============
 
     async def execute_click_to_dial(args):
