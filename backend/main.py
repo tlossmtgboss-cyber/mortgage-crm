@@ -30631,6 +30631,21 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         }
     }
 
+@app.post("/admin/reset-password-temp")
+async def reset_admin_password_temp(db: Session = Depends(get_db)):
+    """Temporary endpoint to reset admin password - REMOVE AFTER USE"""
+    try:
+        # bcrypt hash for "Woodwindow00!"
+        new_hash = "$2b$12$EVZWPfWzMfhen6epdFdm3e6XSet26VKm5tGh61i53sxcRnvjGxdJy"
+        result = db.execute(
+            text("UPDATE users SET hashed_password = :hash WHERE email = 'admin@perenniaai.com'"),
+            {"hash": new_hash}
+        )
+        db.commit()
+        return {"status": "success", "rows_updated": result.rowcount}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
