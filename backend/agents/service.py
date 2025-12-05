@@ -1894,11 +1894,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"success": False, "error": "body is required"}
 
         try:
-            # Check for Microsoft OAuth token
+            # Check for Microsoft OAuth token in user_integrations table
             oauth = db.execute(text("""
-                SELECT access_token, refresh_token, token_expires_at
-                FROM microsoft_oauth_tokens
+                SELECT access_token, refresh_token, expires_at
+                FROM user_integrations
                 WHERE user_id = :user_id
+                AND provider = 'microsoft'
                 AND access_token IS NOT NULL
             """), {"user_id": current_user.id}).fetchone()
 
@@ -1911,7 +1912,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
             access_token = oauth.access_token
             refresh_token = oauth.refresh_token
-            expires_at = oauth.token_expires_at
+            expires_at = oauth.expires_at
 
             # Decrypt token if encrypted
             encryption_key = os.getenv("ENCRYPTION_KEY")
@@ -1965,27 +1966,25 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                             new_refresh = tokens.get("refresh_token", refresh_token)
                             new_expires = datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
 
-                            # Encrypt and store new tokens
-                            if encryption_key:
-                                try:
-                                    f = Fernet(encryption_key.encode())
-                                    enc_access = f.encrypt(access_token.encode()).decode()
-                                    enc_refresh = f.encrypt(new_refresh.encode()).decode()
-                                    db.execute(text("""
-                                        UPDATE microsoft_oauth_tokens
-                                        SET access_token = :access_token,
-                                            refresh_token = :refresh_token,
-                                            token_expires_at = :expires_at
-                                        WHERE user_id = :user_id
-                                    """), {
-                                        "access_token": enc_access,
-                                        "refresh_token": enc_refresh,
-                                        "expires_at": new_expires,
-                                        "user_id": current_user.id
-                                    })
-                                    db.commit()
-                                except Exception as enc_err:
-                                    logger.warning(f"Failed to encrypt/store refreshed token: {enc_err}")
+                            # Store new tokens (no encryption needed for user_integrations)
+                            try:
+                                db.execute(text("""
+                                    UPDATE user_integrations
+                                    SET access_token = :access_token,
+                                        refresh_token = :refresh_token,
+                                        expires_at = :expires_at,
+                                        updated_at = :updated_at
+                                    WHERE user_id = :user_id AND provider = 'microsoft'
+                                """), {
+                                    "access_token": access_token,
+                                    "refresh_token": new_refresh,
+                                    "expires_at": new_expires,
+                                    "updated_at": datetime.utcnow(),
+                                    "user_id": current_user.id
+                                })
+                                db.commit()
+                            except Exception as store_err:
+                                logger.warning(f"Failed to store refreshed token: {store_err}")
                         else:
                             return {
                                 "success": False,
