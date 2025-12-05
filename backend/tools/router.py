@@ -1187,3 +1187,116 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
             "success": False,
             "error": str(e)
         }
+
+
+@register_tool_handler("get_stale_leads")
+async def handle_get_stale_leads(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get leads that haven't been contacted in a specified number of days.
+
+    Useful for:
+    - Re-engagement campaigns
+    - Preventing leads from going cold
+    - Identifying follow-up opportunities
+
+    Args:
+        days_threshold: Days since last contact (default 7)
+        limit: Maximum leads to return (default 50)
+        include_never_contacted: Include leads never contacted (default True)
+    """
+    try:
+        from main import SessionLocal, Lead, LeadStage
+        from datetime import datetime, timedelta
+        from sqlalchemy import or_, and_
+
+        db = SessionLocal()
+        try:
+            days_threshold = args.get("days_threshold", 7)
+            limit = args.get("limit", 50)
+            include_never_contacted = args.get("include_never_contacted", True)
+
+            now = datetime.utcnow()
+            threshold_date = now - timedelta(days=days_threshold)
+
+            # Build query for stale leads
+            query = db.query(Lead).filter(
+                Lead.stage.notin_([LeadStage.WITHDRAWN, LeadStage.DOES_NOT_QUALIFY])
+            )
+
+            if include_never_contacted:
+                # Leads never contacted OR not contacted since threshold
+                query = query.filter(
+                    or_(
+                        Lead.last_contact.is_(None),
+                        Lead.last_contact < threshold_date
+                    )
+                )
+            else:
+                # Only leads that were contacted but not recently
+                query = query.filter(
+                    and_(
+                        Lead.last_contact.isnot(None),
+                        Lead.last_contact < threshold_date
+                    )
+                )
+
+            # Order by oldest contact first (never contacted at top)
+            leads = query.order_by(
+                Lead.last_contact.asc().nullsfirst()
+            ).limit(limit).all()
+
+            # Build result
+            stale_leads = []
+            never_contacted_count = 0
+
+            for lead in leads:
+                name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name or "Unknown"
+                stage = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+                if lead.last_contact:
+                    days_since = (now - lead.last_contact).days
+                else:
+                    days_since = None
+                    never_contacted_count += 1
+
+                stale_leads.append({
+                    "id": lead.id,
+                    "name": name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "source": lead.source,
+                    "stage": stage,
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                    "last_contact": lead.last_contact.isoformat() if lead.last_contact else None,
+                    "days_since_contact": days_since,
+                    "never_contacted": lead.last_contact is None,
+                    "priority": "high" if days_since is None or days_since > 14 else "medium"
+                })
+
+            return {
+                "success": True,
+                "data": {
+                    "total": len(stale_leads),
+                    "never_contacted_count": never_contacted_count,
+                    "days_threshold": days_threshold,
+                    "leads": stale_leads,
+                    "summary": {
+                        "total_stale": len(stale_leads),
+                        "never_contacted": never_contacted_count,
+                        "contacted_but_stale": len(stale_leads) - never_contacted_count,
+                        "high_priority": len([l for l in stale_leads if l["priority"] == "high"])
+                    }
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Get stale leads error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }

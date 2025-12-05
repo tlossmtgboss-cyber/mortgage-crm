@@ -570,6 +570,81 @@
       "implementation_location": "tools/router.py:handle_get_leads_by_status"
     },
     {
+      "name": "get_stale_leads",
+      "domain": "leads",
+      "description": "Find leads that haven't been contacted in a specified number of days. Useful for re-engagement campaigns, preventing leads from going cold, and identifying follow-up opportunities. Returns leads sorted by urgency (never contacted first, then by days since last contact).",
+      "endpoint": "/api/tools/leads/get_stale_leads",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "days_threshold": {
+            "type": "integer",
+            "description": "Number of days since last contact to consider a lead 'stale' (default: 7)",
+            "default": 7
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of leads to return (default: 50)",
+            "default": 50
+          },
+          "include_never_contacted": {
+            "type": "boolean",
+            "description": "Include leads that have never been contacted (default: true)",
+            "default": true
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "total": {"type": "integer"},
+              "never_contacted_count": {"type": "integer"},
+              "days_threshold": {"type": "integer"},
+              "leads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "phone": {"type": "string"},
+                    "email": {"type": "string"},
+                    "source": {"type": "string"},
+                    "stage": {"type": "string"},
+                    "loan_amount": {"type": "number"},
+                    "created_at": {"type": "string"},
+                    "last_contact": {"type": "string"},
+                    "days_since_contact": {"type": "integer"},
+                    "never_contacted": {"type": "boolean"},
+                    "priority": {"type": "string"}
+                  }
+                }
+              },
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "total_stale": {"type": "integer"},
+                  "never_contacted": {"type": "integer"},
+                  "contacted_but_stale": {"type": "integer"},
+                  "high_priority": {"type": "integer"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "tools/router.py:handle_get_stale_leads"
+    },
+    {
       "name": "create_task",
       "domain": "pipeline",
       "description": "Create a new task for follow-up or action item",
