@@ -1895,12 +1895,15 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
         try:
             # Check for Microsoft OAuth token in microsoft_oauth_tokens table
+            user_id = current_user.id
+            logger.info(f"[send_email] Looking up OAuth token for user_id={user_id} (type: {type(user_id).__name__})")
+
             oauth = db.execute(text("""
                 SELECT access_token, refresh_token, token_expires_at
                 FROM microsoft_oauth_tokens
                 WHERE user_id = :user_id
                 AND access_token IS NOT NULL
-            """), {"user_id": current_user.id}).fetchone()
+            """), {"user_id": int(user_id)}).fetchone()
 
             if not oauth:
                 return {
@@ -1983,7 +1986,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                                     "refresh_token": enc_refresh,
                                     "expires_at": new_expires,
                                     "updated_at": datetime.utcnow(),
-                                    "user_id": current_user.id
+                                    "user_id": int(user_id)
                                 })
                                 db.commit()
                             except Exception as store_err:
