@@ -44,10 +44,11 @@ INTENT_TO_SCOPED_TOOLS = {
     # Standard intents (use Sonnet, appropriate tools)
     "priorities": ["get_daily_priorities", "get_tasks", "get_pipeline"],
     "tasks": ["get_tasks", "create_task", "get_daily_priorities"],
-    "leads": ["lead_status_insights", "get_leads_by_status", "search_leads"],
+    "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
+    "top_leads": ["get_top_leads"],  # Specific entry for "call my top leads" queries
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
-    "calls": ["click_to_dial", "make_call", "call_contact", "search_leads"],
+    "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
     "email": ["search_leads", "search_loans"],
     "schedule": ["get_tasks", "get_daily_priorities"],
     "documents": ["search_loans", "get_pipeline"],

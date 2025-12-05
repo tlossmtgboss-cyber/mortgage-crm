@@ -76,6 +76,7 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "compliance": ["compliance_checker"],
     "tasks": ["task_automation"],
     "priorities": ["pipeline_analyst", "task_automation"],
+    "top_leads": ["lead_nurturer"],                       # Specific for "call my top leads" queries
     "leads": ["lead_nurturer"],
     "documents": ["document_tracker"],
     "rates": ["rate_advisor"],
@@ -136,6 +137,15 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"call (list|queue)",
         r"calls? (i need|to make)",
     ],
+    # Top leads - specific high-priority pattern for "call my top leads" type queries
+    # Must come BEFORE "leads" to match first
+    "top_leads": [
+        r"(get|show|give|list) (me )?(my |the )?(top|best|highest|hot|priority) ?\d* ?(leads?|prospects?)",
+        r"(my |the )?(top|best|highest|hot) ?\d* ?(leads?|prospects?) (to call|for calling|with phone)",
+        r"call (my |the )?(top|best|hot|warm|priority|highest)( \d+)? (leads?|prospects?)",
+        r"(top|best|hot|priority) \d+ (leads?|contacts?|prospects?)",
+        r"who (should|do|can) i call (first|next|today)",
+    ],
     "leads": [
         r"\bleads?\b",
         r"prospects?",
@@ -144,10 +154,8 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"who (should|to) (call|contact)",
         r"speed to lead",
         r"lead (score|scoring|analytics)",
-        # "Call my leads" type queries - need lead data first
-        r"call (my |the )?(top|best|hot|warm|priority|highest)",
+        # General lead calling without specific "top" keyword
         r"(call|contact|reach out to) (my )?leads",
-        r"(top|best|hot) \d+ (leads?|contacts?|prospects?) (to call|to contact)",
         # Contact frequency patterns - leads not contacted recently
         r"(leads?|prospects?) (not |haven't been |i haven't )?contacted",
         r"(haven't|have not|not) contacted",
