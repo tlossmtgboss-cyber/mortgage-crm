@@ -4152,7 +4152,7 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 app.add_middleware(IPBlockingMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_hour=2000)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=300, requests_per_hour=5000)
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
 
