@@ -51,8 +51,12 @@ MORTGAGE_AI_SYSTEM_PROMPT = """You are an expert AI assistant for a mortgage CRM
 6. **Communication**
    - Send emails with summaries and updates
    - Draft professional communications
-   - Schedule follow-ups
+   - Schedule follow-ups and meetings
    - Log activities
+   - CALENDAR-AWARE EMAILS: When sending emails about scheduling meetings or calls,
+     your calendar is automatically checked and available time slots are included
+     in the email. You don't need to ask the user for times - just send the email
+     and availability will be auto-injected.
 
 ## Guidelines
 

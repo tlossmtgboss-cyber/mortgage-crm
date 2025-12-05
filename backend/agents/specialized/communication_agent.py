@@ -432,7 +432,13 @@ class CommunicationAgent(SpecializedAgent):
         input_data: Dict[str, Any],
         context: AgentContext
     ) -> ToolResult:
-        """Send an email via Microsoft Graph (if connected) or log to database"""
+        """
+        Send an email via Microsoft Graph (if connected) or log to database.
+
+        CALENDAR-AWARE: If the email is about scheduling (detected via keywords),
+        automatically checks the user's calendar and injects available time slots
+        into the email body before sending.
+        """
         from database import SessionLocal
 
         db = SessionLocal()
@@ -442,6 +448,40 @@ class CommunicationAgent(SpecializedAgent):
             subject = input_data["subject"]
             body = input_data["body"]
             cc = input_data.get("cc")
+            skip_availability = input_data.get("skip_availability", False)
+
+            # Track if we injected availability
+            availability_injected = False
+            injected_slots = []
+
+            # Auto-inject calendar availability for scheduling emails
+            if not skip_availability and self._is_scheduling_email(subject, body):
+                logger.info(f"[send_email] Detected scheduling email - checking calendar availability")
+                try:
+                    # Get busy slots from calendar
+                    busy_slots = await self._get_calendar_availability(user_id, db, days_ahead=7)
+
+                    # Calculate free slots
+                    free_slots = self._calculate_free_slots(
+                        busy_slots,
+                        days_ahead=5,
+                        slots_needed=4,
+                        business_hours_start=9,
+                        business_hours_end=17
+                    )
+
+                    if free_slots:
+                        # Inject availability into body
+                        body = self._inject_availability_into_body(body, free_slots)
+                        availability_injected = True
+                        injected_slots = free_slots
+                        logger.info(f"[send_email] Injected {len(free_slots)} available time slots into email")
+                    else:
+                        logger.info("[send_email] No free slots found to inject")
+
+                except Exception as avail_err:
+                    logger.warning(f"[send_email] Could not get calendar availability: {avail_err}")
+                    # Continue without availability - don't block the email
 
             # Status tracking
             send_status = "logged"  # Default: just logged, not actually sent
@@ -525,8 +565,17 @@ class CommunicationAgent(SpecializedAgent):
                 "status": send_status
             }
 
+            # Include availability injection info
+            if availability_injected:
+                response_data["availability_injected"] = True
+                response_data["injected_slots"] = [
+                    f"{slot['date']} at {slot['start']}" for slot in injected_slots
+                ]
+
             if send_status == "sent":
                 message = f"Email sent to {result.to_address}: {result.subject}"
+                if availability_injected:
+                    message += f" (included {len(injected_slots)} available time slots)"
             elif send_status == "failed":
                 message = f"Email failed to send to {result.to_address}: {send_error}"
                 response_data["error"] = send_error
