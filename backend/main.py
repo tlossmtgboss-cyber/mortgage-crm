@@ -30812,7 +30812,7 @@ Built-in compliance monitoring vs. add-on compliance tools:
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             line-height: 1.7;
             color: #1a1a2e;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #ffffff;
             min-height: 100vh;
             padding: 40px 20px;
         }}
@@ -30820,8 +30820,6 @@ Built-in compliance monitoring vs. add-on compliance tools:
             max-width: 900px;
             margin: 0 auto;
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.3);
             padding: 60px;
         }}
         h1 {{
