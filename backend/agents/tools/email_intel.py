@@ -752,6 +752,210 @@ def categorize_email_attachments(
 
 
 @mortgage_tool(
+    name="search_email_inbox",
+    description="Search user's Microsoft 365 email inbox for messages. Use this when user wants to find specific emails "
+                "by sender name, subject, or content. Returns matching emails from Microsoft Graph.",
+    agent_roles=["email_intelligence", "all"],
+    risk_level="LOW",
+    parameters={
+        "search_query": "Search term (name, email, subject keywords)",
+        "user_id": "User ID to search inbox for",
+        "limit": "Maximum results (default 10)",
+        "folder": "Folder to search: inbox, sentitems, all (default: all)",
+    },
+)
+def search_email_inbox(
+    search_query: str,
+    user_id: Optional[int] = None,
+    limit: int = 10,
+    folder: str = "all",
+) -> ToolResult:
+    """
+    Search user's Microsoft 365 inbox for emails matching the query.
+    Uses Microsoft Graph API to search across inbox and sent items.
+    """
+    import os
+    import requests
+
+    if not user_id:
+        return ToolResult.error(
+            "Unable to search emails: user_id is required. Please ensure you're logged in.",
+            ["No user context available for email search"]
+        )
+
+    if not search_query or len(search_query.strip()) < 2:
+        return ToolResult.error(
+            "Search query is too short. Please provide at least 2 characters.",
+            ["Invalid search query"]
+        )
+
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            # Check for Microsoft OAuth token
+            oauth = db.execute(text("""
+                SELECT access_token, refresh_token, token_expires_at
+                FROM microsoft_oauth_tokens
+                WHERE user_id = :user_id
+                AND access_token IS NOT NULL
+                AND sync_enabled = true
+                LIMIT 1
+            """), {"user_id": user_id}).fetchone()
+
+            if not oauth or not oauth.access_token:
+                return ToolResult.error(
+                    "Microsoft 365 not connected. Please connect your email to search your inbox.",
+                    ["No Microsoft OAuth token found for user"]
+                )
+
+            # Decrypt and possibly refresh token
+            from main import decrypt_token, encrypt_token
+            from datetime import timezone
+            access_token = decrypt_token(oauth.access_token)
+
+            now = datetime.now(timezone.utc)
+            if oauth.token_expires_at and oauth.token_expires_at.replace(tzinfo=timezone.utc) < now:
+                # Token expired - try to refresh
+                refresh_token = decrypt_token(oauth.refresh_token) if oauth.refresh_token else None
+                if refresh_token:
+                    client_id = os.getenv("MICROSOFT_CLIENT_ID")
+                    client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+                    tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+                    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+                    refresh_response = requests.post(token_url, data={
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "refresh_token": refresh_token,
+                        "grant_type": "refresh_token",
+                        "scope": "https://graph.microsoft.com/Mail.Read offline_access",
+                    }, timeout=30)
+
+                    if refresh_response.status_code == 200:
+                        tokens = refresh_response.json()
+                        access_token = tokens["access_token"]
+
+                        # Update stored tokens
+                        new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
+                        db.execute(text("""
+                            UPDATE microsoft_oauth_tokens
+                            SET access_token = :access_token,
+                                refresh_token = :refresh_token,
+                                token_expires_at = :expires_at,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE user_id = :user_id
+                        """), {
+                            "access_token": encrypt_token(access_token),
+                            "refresh_token": encrypt_token(tokens.get("refresh_token", refresh_token)),
+                            "expires_at": new_expires_at,
+                            "user_id": user_id,
+                        })
+                        db.commit()
+                    else:
+                        return ToolResult.error(
+                            "Microsoft 365 token expired. Please reconnect your email.",
+                            ["Token refresh failed"]
+                        )
+                else:
+                    return ToolResult.error(
+                        "Microsoft 365 token expired. Please reconnect your email.",
+                        ["No refresh token available"]
+                    )
+
+            # Build Microsoft Graph search query
+            # Search in subject, from, body using $search
+            search_filter = f'"{search_query}"'
+
+            # Determine which folders to search
+            if folder == "inbox":
+                endpoint = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages"
+            elif folder == "sentitems":
+                endpoint = "https://graph.microsoft.com/v1.0/me/mailFolders/sentitems/messages"
+            else:
+                # Search all mail
+                endpoint = "https://graph.microsoft.com/v1.0/me/messages"
+
+            params = {
+                "$search": search_filter,
+                "$top": limit,
+                "$select": "id,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments,isRead",
+                "$orderby": "receivedDateTime desc",
+            }
+
+            response = requests.get(
+                endpoint,
+                params=params,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+
+            if response.status_code != 200:
+                error_data = response.json() if response.content else {}
+                error_msg = error_data.get("error", {}).get("message", f"HTTP {response.status_code}")
+                return ToolResult.error(
+                    f"Failed to search emails: {error_msg}",
+                    [error_msg]
+                )
+
+            data = response.json()
+            messages = data.get("value", [])
+
+            # Format results
+            emails = []
+            for msg in messages:
+                from_info = msg.get("from", {}).get("emailAddress", {})
+                to_info = msg.get("toRecipients", [])
+
+                emails.append({
+                    "id": msg.get("id"),
+                    "subject": msg.get("subject"),
+                    "from_name": from_info.get("name"),
+                    "from_email": from_info.get("address"),
+                    "to": [r.get("emailAddress", {}).get("address") for r in to_info[:3]],
+                    "received": msg.get("receivedDateTime"),
+                    "preview": (msg.get("bodyPreview") or "")[:200],
+                    "has_attachments": msg.get("hasAttachments", False),
+                    "is_read": msg.get("isRead", False),
+                })
+
+            if not emails:
+                return ToolResult.success(
+                    data={
+                        "emails": [],
+                        "count": 0,
+                        "search_query": search_query,
+                        "message": f"No emails found matching '{search_query}'",
+                    },
+                    message=f"No emails found for '{search_query}'"
+                )
+
+            return ToolResult.success(
+                data={
+                    "emails": emails,
+                    "count": len(emails),
+                    "search_query": search_query,
+                    "folder": folder,
+                },
+                message=f"Found {len(emails)} emails matching '{search_query}'"
+            )
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        return ToolResult.error(
+            f"Failed to search emails: {str(e)}",
+            [str(e)]
+        )
+
+
+@mortgage_tool(
     name="get_emails_needing_response",
     description="Get emails from your inbox that need a response. Shows unread/pending emails requiring attention, "
                 "prioritized by urgency. Use this when user asks about emails to respond to, urgent emails, or inbox status.",

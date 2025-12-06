@@ -50,7 +50,7 @@ INTENT_TO_SCOPED_TOOLS = {
     "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Q3 vs Q4, period comparisons
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
-    "email": ["get_emails_needing_response", "send_email", "search_leads", "search_loans"],
+    "email": ["get_emails_needing_response", "send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],
     "schedule": ["get_tasks", "get_daily_priorities"],
     "documents": ["search_loans", "get_pipeline"],
     "compliance": ["search_loans", "get_pipeline"],

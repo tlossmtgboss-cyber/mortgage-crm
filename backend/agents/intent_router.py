@@ -213,6 +213,10 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"respond to",
         r"unread",
         r"(urgent|priority) (email|message)",
+        r"search (my )?(email|inbox|mail)",
+        r"find (email|message|correspondence)",
+        r"(referral|partner)",  # Referral partners often involves email lookup
+        r"reschedule",  # Often involves sending email
     ],
     "schedule": [
         r"\bschedul(e|ing)\b",

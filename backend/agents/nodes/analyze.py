@@ -80,7 +80,7 @@ INTENT_TO_BASE_TOOLS: Dict[str, List[str]] = {
     "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Historical comparisons
     "rates": ["get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "get_top_leads", "search_leads"],
-    "email": ["send_email", "search_leads", "search_loans"],  # Email sending + contact lookup
+    "email": ["send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],  # Email sending, search, contact lookup, referral partners
     "schedule": ["get_tasks", "get_daily_priorities"],  # Basic for now
     "documents": ["search_loans", "get_pipeline"],  # Basic for now
     "compliance": ["search_loans", "get_pipeline"],  # Basic for now

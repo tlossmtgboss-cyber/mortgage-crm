@@ -1445,3 +1445,125 @@ def get_market_comparison(
         data=data,
         message=f"Market comparison: {refi_candidates}/{len(loans)} loans are refi candidates. Potential annual savings: {format_currency(total_potential_savings)}. Total equity: {format_currency(total_equity)}",
     )
+
+
+@mortgage_tool(
+    name="create_referral_partner",
+    description="Create or add a referral partner to the CRM. Use when user wants to add a realtor, attorney, "
+                "financial advisor, or other professional as a referral partner.",
+    agent_roles=["customer_intelligence", "lead_nurturer", "all"],
+    risk_level="MEDIUM",
+    parameters={
+        "name": "Full name of the referral partner",
+        "email": "Email address",
+        "phone": "Phone number (optional)",
+        "company": "Company/firm name (optional)",
+        "partner_type": "Type: realtor, attorney, financial_advisor, builder, insurance, other",
+        "notes": "Notes about the partner (optional)",
+        "user_id": "User ID adding this partner",
+    },
+)
+def create_referral_partner(
+    name: str,
+    email: str,
+    phone: Optional[str] = None,
+    company: Optional[str] = None,
+    partner_type: str = "realtor",
+    notes: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> ToolResult:
+    """
+    Create a new referral partner in the CRM.
+
+    Referral partners are professionals (realtors, attorneys, etc.)
+    who refer business to the loan officer.
+    """
+    import uuid
+
+    if not name or not email:
+        raise ToolError("Name and email are required for creating a referral partner")
+
+    # Validate email format
+    import re
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        raise ToolError(f"Invalid email format: {email}")
+
+    # Validate partner type
+    valid_types = ["realtor", "attorney", "financial_advisor", "builder", "insurance", "cpa", "other"]
+    if partner_type.lower() not in valid_types:
+        partner_type = "other"
+
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            # Check if partner already exists
+            existing = db.execute(text("""
+                SELECT id, name, email, partner_type
+                FROM referral_partners
+                WHERE LOWER(email) = LOWER(:email)
+                LIMIT 1
+            """), {"email": email}).fetchone()
+
+            if existing:
+                return ToolResult.success(
+                    data={
+                        "partner_id": existing.id,
+                        "name": existing.name,
+                        "email": existing.email,
+                        "partner_type": existing.partner_type,
+                        "already_exists": True,
+                    },
+                    message=f"Referral partner '{existing.name}' already exists in the system"
+                )
+
+            # Create new partner
+            partner_id = str(uuid.uuid4())[:8].upper()
+
+            db.execute(text("""
+                INSERT INTO referral_partners (
+                    id, name, email, phone, company, partner_type,
+                    notes, created_by_user_id, created_at, updated_at, is_active
+                ) VALUES (
+                    :id, :name, :email, :phone, :company, :partner_type,
+                    :notes, :user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, true
+                )
+            """), {
+                "id": partner_id,
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "company": company,
+                "partner_type": partner_type.lower(),
+                "notes": notes,
+                "user_id": user_id,
+            })
+            db.commit()
+
+            return ToolResult.success(
+                data={
+                    "partner_id": partner_id,
+                    "name": name,
+                    "email": email,
+                    "phone": phone,
+                    "company": company,
+                    "partner_type": partner_type,
+                    "notes": notes,
+                    "created": True,
+                },
+                message=f"Created referral partner: {name} ({partner_type})"
+            )
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        # If the table doesn't exist, create it first
+        if "referral_partners" in str(e).lower() and "does not exist" in str(e).lower():
+            return ToolResult.error(
+                "Referral partners feature is not yet set up. Please contact support.",
+                [str(e)]
+            )
+        raise ToolError(f"Failed to create referral partner: {str(e)}")

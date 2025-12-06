@@ -2328,6 +2328,64 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools["get_emails_needing_response"] = execute_get_emails_needing_response
 
+    # Tool to search user's email inbox via Microsoft Graph
+    from .tools.email_intel import search_email_inbox as _search_email_inbox
+
+    async def execute_search_email_inbox(args):
+        """Search user's Microsoft 365 email inbox for messages."""
+        user_id = args.get("user_id") or (current_user.id if hasattr(current_user, 'id') else None)
+        search_query = args.get("search_query", "")
+        limit = args.get("limit", 10)
+        folder = args.get("folder", "all")
+
+        try:
+            result = _search_email_inbox(
+                search_query=search_query,
+                user_id=user_id,
+                limit=limit,
+                folder=folder
+            )
+            if hasattr(result, 'to_dict'):
+                return result.to_dict()
+            return result
+        except Exception as e:
+            logger.error(f"Error in search_email_inbox: {e}")
+            return {"status": "error", "error": str(e)}
+
+    tools["search_email_inbox"] = execute_search_email_inbox
+
+    # Tool to create referral partners
+    from .tools.customer import create_referral_partner as _create_referral_partner
+
+    async def execute_create_referral_partner(args):
+        """Create or add a referral partner to the CRM."""
+        user_id = args.get("user_id") or (current_user.id if hasattr(current_user, 'id') else None)
+        name = args.get("name", "")
+        email = args.get("email", "")
+        phone = args.get("phone")
+        company = args.get("company")
+        partner_type = args.get("partner_type", "realtor")
+        notes = args.get("notes")
+
+        try:
+            result = _create_referral_partner(
+                name=name,
+                email=email,
+                phone=phone,
+                company=company,
+                partner_type=partner_type,
+                notes=notes,
+                user_id=user_id
+            )
+            if hasattr(result, 'to_dict'):
+                return result.to_dict()
+            return result
+        except Exception as e:
+            logger.error(f"Error in create_referral_partner: {e}")
+            return {"status": "error", "error": str(e)}
+
+    tools["create_referral_partner"] = execute_create_referral_partner
+
     return tools
 
 
