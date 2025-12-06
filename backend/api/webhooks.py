@@ -250,86 +250,424 @@ async def fetch_email_from_graph(
 
 async def process_incoming_email(email: Dict[str, Any], db: Any):
     """
-    Process an incoming email - classify, route, and create tasks as needed.
+    Process an incoming email through the reconciliation system.
 
-    This integrates with the Email Orchestrator processors:
-    - LoanApplicationProcessor: Detect loan applications
-    - ClientInquiryProcessor: Handle client questions
-    - DocumentProcessor: Classify document submissions
-    - SLAMonitorProcessor: Track response times
+    FLOW:
+    1. Create IncomingDataEvent for the email
+    2. Classify email intent and recommended action
+    3. Check for matching response patterns (learned behavior)
+    4. Add to reconciliation queue for user review OR auto-execute if confidence is high
+    5. User approves/rejects/modifies -> system learns
+
+    This enables the AI to learn email handling preferences over time.
     """
     try:
         from sqlalchemy import text
+        import json
 
         email_id = email.get("id")
         subject = email.get("subject", "")
-        body = email.get("body", {}).get("content", "")
+        body_content = email.get("body", {}).get("content", "")
+        body_preview = email.get("body_preview", "")
         from_email = email.get("from", {}).get("emailAddress", {}).get("address", "")
         from_name = email.get("from", {}).get("emailAddress", {}).get("name", "")
+        to_recipients = email.get("to_recipients", [])
         received_at = email.get("received_datetime")
+        has_attachments = email.get("has_attachments", False)
 
-        logger.info(f"[GRAPH WEBHOOK] Processing email: {subject} from {from_email}")
+        # Extract sender domain for pattern matching
+        sender_domain = from_email.split("@")[1] if "@" in from_email else ""
 
-        # Store in email_tracking table
-        await db.execute(text("""
-            INSERT INTO email_tracking
-            (email_id, subject, from_email, from_name, body_preview, received_at, status, has_attachments)
-            VALUES (:email_id, :subject, :from_email, :from_name, :body_preview, :received_at, 'pending', :has_attachments)
-            ON CONFLICT (email_id) DO UPDATE SET
+        logger.info(f"[GRAPH WEBHOOK] Processing email for reconciliation: {subject} from {from_email}")
+
+        # Get the user_id from recipient (for multi-tenant support)
+        # For now, we'll get the first user or use a system user
+        user_result = await db.execute(text("""
+            SELECT id FROM users WHERE email = :to_email LIMIT 1
+        """), {"to_email": to_recipients[0].get("emailAddress", {}).get("address") if to_recipients else ""})
+        user_row = user_result.fetchone()
+        user_id = user_row.id if user_row else 1  # Default to admin user
+
+        # =================================================================
+        # STEP 1: Create IncomingDataEvent (enters reconciliation flow)
+        # =================================================================
+        result = await db.execute(text("""
+            INSERT INTO incoming_data_events
+            (source, external_message_id, raw_text, raw_html, subject, sender, recipients, attachments, received_at, processed, user_id, created_at)
+            VALUES ('microsoft365', :email_id, :raw_text, :raw_html, :subject, :sender, :recipients, :attachments, :received_at, false, :user_id, :created_at)
+            ON CONFLICT (external_message_id) DO UPDATE SET
                 subject = EXCLUDED.subject,
                 received_at = EXCLUDED.received_at
+            RETURNING id
         """), {
             "email_id": email_id,
+            "raw_text": body_preview[:5000] if body_preview else "",
+            "raw_html": body_content[:50000] if body_content else "",
             "subject": subject,
-            "from_email": from_email,
-            "from_name": from_name,
-            "body_preview": email.get("body_preview", "")[:500],
+            "sender": from_email,
+            "recipients": json.dumps([r.get("emailAddress", {}).get("address") for r in to_recipients]),
+            "attachments": json.dumps([]) if not has_attachments else json.dumps([{"type": "unknown"}]),
             "received_at": received_at,
-            "has_attachments": email.get("has_attachments", False),
+            "user_id": user_id,
+            "created_at": datetime.utcnow(),
         })
+        event_row = result.fetchone()
+        event_id = event_row.id if event_row else None
         await db.commit()
 
-        # Classify email type using simple pattern matching
-        # (Full AI classification would be done by the Email Orchestrator)
-        email_type = classify_email_type(subject, body, from_email)
+        if not event_id:
+            logger.warning(f"[GRAPH WEBHOOK] Failed to create IncomingDataEvent for {email_id}")
+            return
 
-        # Create task if needed
-        if email_type in ["loan_application", "document_submission", "urgent_inquiry"]:
-            await db.execute(text("""
-                INSERT INTO tasks
-                (title, description, type, priority, status, due_date, metadata, created_at)
-                VALUES (:title, :description, :type, :priority, 'pending', :due_date, :metadata, :created_at)
-            """), {
-                "title": f"Review: {subject[:100]}",
-                "description": f"Email from {from_name or from_email}: {email.get('body_preview', '')[:300]}",
-                "type": f"email_{email_type}",
-                "priority": "high" if email_type == "urgent_inquiry" else "medium",
-                "due_date": datetime.utcnow(),
-                "metadata": f'{{"email_id": "{email_id}", "from": "{from_email}"}}',
-                "created_at": datetime.utcnow(),
-            })
-            await db.commit()
-            logger.info(f"[GRAPH WEBHOOK] Created task for {email_type} email")
+        # =================================================================
+        # STEP 2: Classify email and recommend action
+        # =================================================================
+        email_type = classify_email_type(subject, body_content, from_email)
+        email_intent = classify_email_intent_detailed(subject, body_content, from_email, sender_domain)
+        recommended_action = recommend_email_action(email_intent, email_type, has_attachments)
 
-        # Update tracking status
+        # =================================================================
+        # STEP 3: Check for learned patterns
+        # =================================================================
+        pattern_match = await check_response_patterns(
+            db, user_id, sender_domain, from_email, email_intent["intent"], subject
+        )
+
+        # =================================================================
+        # STEP 4: Add to reconciliation queue OR auto-execute
+        # =================================================================
+        should_auto_execute = (
+            pattern_match and
+            pattern_match.get("is_active") and
+            pattern_match.get("confidence_score", 0) >= pattern_match.get("auto_execute_threshold", 0.85)
+        )
+
+        # Determine priority
+        priority = "normal"
+        if email_type == "urgent_inquiry":
+            priority = "urgent"
+        elif email_type in ["loan_application", "document_submission"]:
+            priority = "high"
+        elif email_intent.get("confidence", 0) >= 0.90:
+            priority = "high"
+
+        # Add to email_response_queue for reconciliation review
         await db.execute(text("""
-            UPDATE email_tracking
-            SET status = 'processed',
-                email_type = :email_type,
-                processed_at = :processed_at
-            WHERE email_id = :email_id
+            INSERT INTO email_response_queue
+            (user_id, email_id, incoming_event_id, sender_email, sender_name, subject, body_preview,
+             received_at, email_intent, intent_confidence, recommended_action, recommended_response,
+             recommendation_reasoning, recommendation_confidence, matched_pattern_id, pattern_confidence,
+             status, priority, created_at)
+            VALUES (:user_id, :email_id, :event_id, :sender_email, :sender_name, :subject, :body_preview,
+                    :received_at, :email_intent, :intent_confidence, :recommended_action, :recommended_response,
+                    :reasoning, :rec_confidence, :pattern_id, :pattern_confidence, :status, :priority, :created_at)
+            ON CONFLICT DO NOTHING
         """), {
+            "user_id": user_id,
             "email_id": email_id,
-            "email_type": email_type,
-            "processed_at": datetime.utcnow(),
+            "event_id": event_id,
+            "sender_email": from_email,
+            "sender_name": from_name,
+            "subject": subject,
+            "body_preview": body_preview[:500] if body_preview else "",
+            "received_at": received_at,
+            "email_intent": email_intent.get("intent"),
+            "intent_confidence": email_intent.get("confidence", 0.5),
+            "recommended_action": recommended_action.get("action_type"),
+            "recommended_response": recommended_action.get("draft_response"),
+            "reasoning": recommended_action.get("reasoning"),
+            "rec_confidence": recommended_action.get("confidence", 0.5),
+            "pattern_id": pattern_match.get("id") if pattern_match else None,
+            "pattern_confidence": pattern_match.get("confidence_score") if pattern_match else None,
+            "status": "auto_executed" if should_auto_execute else "pending",
+            "priority": priority,
+            "created_at": datetime.utcnow(),
         })
         await db.commit()
 
-        logger.info(f"[GRAPH WEBHOOK] Email classified as: {email_type}")
+        # If auto-execute, perform the action
+        if should_auto_execute:
+            logger.info(f"[GRAPH WEBHOOK] Auto-executing pattern {pattern_match.get('id')} for email {email_id}")
+            await execute_email_response_pattern(db, user_id, email_id, pattern_match, email, recommended_action)
+        else:
+            logger.info(f"[GRAPH WEBHOOK] Email {email_id} added to reconciliation queue (priority: {priority})")
+
+        # Mark event as processed
+        await db.execute(text("""
+            UPDATE incoming_data_events SET processed = true WHERE id = :event_id
+        """), {"event_id": event_id})
+        await db.commit()
+
+        logger.info(f"[GRAPH WEBHOOK] Email processed: type={email_type}, intent={email_intent.get('intent')}, action={recommended_action.get('action_type')}")
 
     except Exception as e:
         logger.error(f"[GRAPH WEBHOOK] Error in process_incoming_email: {e}", exc_info=True)
         raise
+
+
+def classify_email_intent_detailed(subject: str, body: str, from_email: str, sender_domain: str) -> Dict[str, Any]:
+    """
+    Detailed email intent classification for reconciliation.
+    Returns intent, confidence, and context.
+    """
+    subject_lower = subject.lower() if subject else ""
+    body_lower = body.lower() if body else ""
+    combined = subject_lower + " " + body_lower
+
+    # Vendor/third-party domains
+    vendor_domains = [
+        "docusign.com", "optimalblue.com", "stewart.com", "firstam.com",
+        "fidelity.com", "titlecompany", "appraisal", "title"
+    ]
+
+    # Clear to Close
+    if any(kw in subject_lower for kw in ["clear to close", "ctc", "clear-to-close"]):
+        return {"intent": "Clear to Close", "confidence": 0.95, "category": "status_update"}
+
+    # Rate Lock
+    if any(kw in subject_lower for kw in ["rate lock", "lock confirmation", "locked"]):
+        return {"intent": "Rate Lock", "confidence": 0.90, "category": "status_update"}
+
+    # Appraisal
+    if any(kw in subject_lower for kw in ["appraisal", "home value", "property value"]):
+        return {"intent": "Appraisal Update", "confidence": 0.90, "category": "document_update"}
+
+    # Underwriting
+    if any(kw in subject_lower for kw in ["underwriting", "conditional", "uw approval"]):
+        return {"intent": "Underwriting Update", "confidence": 0.85, "category": "status_update"}
+
+    # Title/Closing
+    if any(kw in subject_lower for kw in ["title", "closing", "settlement", "hud"]):
+        return {"intent": "Title/Closing", "confidence": 0.80, "category": "document_update"}
+
+    # Document submission (client sending docs)
+    if any(kw in combined for kw in ["attached", "please find", "sending you", "here is", "here are"]):
+        if any(kw in combined for kw in ["paystub", "w2", "tax", "bank statement", "document"]):
+            return {"intent": "Document Submission", "confidence": 0.85, "category": "document_received"}
+
+    # Client question
+    if any(kw in combined for kw in ["question", "status", "update", "when will", "how long"]):
+        return {"intent": "Client Question", "confidence": 0.75, "category": "inquiry"}
+
+    # Vendor notification
+    if any(domain in sender_domain for domain in vendor_domains):
+        return {"intent": "Vendor Notification", "confidence": 0.80, "category": "vendor_update"}
+
+    return {"intent": "General", "confidence": 0.50, "category": "general"}
+
+
+def recommend_email_action(intent: Dict[str, Any], email_type: str, has_attachments: bool) -> Dict[str, Any]:
+    """
+    Recommend what action to take based on email intent.
+    Returns action type, draft response, and confidence.
+    """
+    intent_type = intent.get("intent", "General")
+    category = intent.get("category", "general")
+
+    # Status update emails - recommend acknowledging and updating CRM
+    if category == "status_update":
+        return {
+            "action_type": "acknowledge_and_update",
+            "title": f"Acknowledge {intent_type} and Update Status",
+            "description": f"Send acknowledgment email and update loan status to reflect {intent_type}",
+            "draft_response": f"Thank you for the update. I've noted the {intent_type.lower()} in our system.",
+            "reasoning": f"This appears to be a {intent_type} notification that should be acknowledged and recorded.",
+            "confidence": intent.get("confidence", 0.5),
+            "creates_task": False,
+            "updates_status": True,
+        }
+
+    # Document received - acknowledge and create task to review
+    if category == "document_received" or email_type == "document_submission":
+        return {
+            "action_type": "acknowledge_and_task",
+            "title": "Acknowledge Document and Create Review Task",
+            "description": "Send acknowledgment and create task to review submitted documents",
+            "draft_response": "Thank you for sending the documents. I'll review them and follow up if I need anything else.",
+            "reasoning": "Documents were submitted and should be acknowledged with a review task created.",
+            "confidence": intent.get("confidence", 0.5),
+            "creates_task": True,
+            "updates_status": False,
+        }
+
+    # Client question - create task to respond
+    if category == "inquiry" or email_type == "client_inquiry":
+        return {
+            "action_type": "create_response_task",
+            "title": "Create Task to Respond",
+            "description": "This requires a personalized response - create a task to follow up",
+            "draft_response": None,  # Needs human response
+            "reasoning": "Client has a question that needs a thoughtful, personalized response.",
+            "confidence": intent.get("confidence", 0.5),
+            "creates_task": True,
+            "updates_status": False,
+        }
+
+    # Vendor notification - acknowledge
+    if category == "vendor_update":
+        return {
+            "action_type": "acknowledge",
+            "title": "Acknowledge Vendor Update",
+            "description": "Send brief acknowledgment to vendor",
+            "draft_response": "Thank you for this update. I've received and noted the information.",
+            "reasoning": "Vendor notifications typically just need acknowledgment.",
+            "confidence": intent.get("confidence", 0.5),
+            "creates_task": False,
+            "updates_status": True,
+        }
+
+    # Default - queue for review
+    return {
+        "action_type": "queue_for_review",
+        "title": "Review Email",
+        "description": "Email needs manual review to determine appropriate action",
+        "draft_response": None,
+        "reasoning": "Could not confidently determine the appropriate action.",
+        "confidence": 0.30,
+        "creates_task": False,
+        "updates_status": False,
+    }
+
+
+async def check_response_patterns(
+    db: Any,
+    user_id: int,
+    sender_domain: str,
+    sender_email: str,
+    email_intent: str,
+    subject: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Check if there's a learned response pattern for this email.
+    Returns the matching pattern with highest confidence, or None.
+    """
+    try:
+        from sqlalchemy import text
+
+        result = await db.execute(text("""
+            SELECT id, pattern_type, pattern_value, response_type, response_config,
+                   confidence_score, is_active, auto_execute_threshold
+            FROM email_response_patterns
+            WHERE user_id = :user_id
+              AND is_active = true
+              AND (
+                  (pattern_type = 'sender_domain' AND pattern_value = :domain)
+                  OR (pattern_type = 'sender_email' AND pattern_value = :email)
+                  OR (pattern_type = 'email_intent' AND pattern_value = :intent)
+              )
+            ORDER BY confidence_score DESC
+            LIMIT 1
+        """), {
+            "user_id": user_id,
+            "domain": sender_domain,
+            "email": sender_email,
+            "intent": email_intent,
+        })
+
+        row = result.fetchone()
+        if row:
+            return {
+                "id": row.id,
+                "pattern_type": row.pattern_type,
+                "pattern_value": row.pattern_value,
+                "response_type": row.response_type,
+                "response_config": row.response_config,
+                "confidence_score": float(row.confidence_score) if row.confidence_score else 0,
+                "is_active": row.is_active,
+                "auto_execute_threshold": float(row.auto_execute_threshold) if row.auto_execute_threshold else 0.85,
+            }
+        return None
+
+    except Exception as e:
+        logger.error(f"[GRAPH WEBHOOK] Error checking patterns: {e}")
+        return None
+
+
+async def execute_email_response_pattern(
+    db: Any,
+    user_id: int,
+    email_id: str,
+    pattern: Dict[str, Any],
+    email: Dict[str, Any],
+    recommended_action: Dict[str, Any]
+):
+    """
+    Execute an auto-approved email response pattern.
+    This is called when confidence is high enough for autonomous action.
+    """
+    try:
+        from sqlalchemy import text
+        import json
+
+        response_type = pattern.get("response_type")
+        config = pattern.get("response_config") or {}
+
+        logger.info(f"[GRAPH WEBHOOK] Auto-executing {response_type} for pattern {pattern.get('id')}")
+
+        # Log the auto-execution
+        await db.execute(text("""
+            INSERT INTO email_response_log
+            (user_id, email_id, sender_email, sender_domain, subject, email_intent,
+             response_type, response_pattern_id, was_auto_executed, ai_recommended_action,
+             ai_confidence, user_action, success, created_at, responded_at)
+            VALUES (:user_id, :email_id, :sender_email, :sender_domain, :subject, :intent,
+                    :response_type, :pattern_id, true, :ai_action, :ai_confidence,
+                    'auto_approved', true, :now, :now)
+        """), {
+            "user_id": user_id,
+            "email_id": email_id,
+            "sender_email": email.get("from", {}).get("emailAddress", {}).get("address", ""),
+            "sender_domain": email.get("from", {}).get("emailAddress", {}).get("address", "").split("@")[1] if "@" in email.get("from", {}).get("emailAddress", {}).get("address", "") else "",
+            "subject": email.get("subject", ""),
+            "intent": recommended_action.get("title"),
+            "response_type": response_type,
+            "pattern_id": pattern.get("id"),
+            "ai_action": recommended_action.get("action_type"),
+            "ai_confidence": recommended_action.get("confidence"),
+            "now": datetime.utcnow(),
+        })
+
+        # Update pattern usage
+        await db.execute(text("""
+            UPDATE email_response_patterns
+            SET last_matched_at = :now, last_approved_at = :now
+            WHERE id = :pattern_id
+        """), {"now": datetime.utcnow(), "pattern_id": pattern.get("id")})
+
+        await db.commit()
+
+        # Execute based on response type
+        if response_type == "auto_reply" and config.get("template_id"):
+            # TODO: Send auto-reply using template
+            logger.info(f"[GRAPH WEBHOOK] Would send auto-reply using template {config.get('template_id')}")
+
+        elif response_type == "create_task":
+            # Create a task
+            await db.execute(text("""
+                INSERT INTO tasks
+                (title, description, type, priority, status, due_date, metadata, created_at, user_id)
+                VALUES (:title, :description, :type, :priority, 'pending', :due_date, :metadata, :created_at, :user_id)
+            """), {
+                "title": f"Review: {email.get('subject', 'Email')[:100]}",
+                "description": recommended_action.get("reasoning", ""),
+                "type": config.get("task_type", "email_followup"),
+                "priority": config.get("priority", "medium"),
+                "due_date": datetime.utcnow(),
+                "metadata": json.dumps({"email_id": email_id, "pattern_id": pattern.get("id")}),
+                "created_at": datetime.utcnow(),
+                "user_id": user_id,
+            })
+            await db.commit()
+            logger.info(f"[GRAPH WEBHOOK] Created task from auto-executed pattern")
+
+        elif response_type == "archive":
+            # Mark as handled without response
+            logger.info(f"[GRAPH WEBHOOK] Email archived by auto-execution")
+
+        logger.info(f"[GRAPH WEBHOOK] Successfully auto-executed pattern {pattern.get('id')}")
+
+    except Exception as e:
+        logger.error(f"[GRAPH WEBHOOK] Error executing pattern: {e}", exc_info=True)
 
 
 def classify_email_type(subject: str, body: str, from_email: str) -> str:
