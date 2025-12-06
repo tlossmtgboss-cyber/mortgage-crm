@@ -4461,13 +4461,14 @@ class CreateLeadFromScreenshotRequest(BaseModel):
 # Screenshot Parsing Endpoints
 # ============================================================================
 
-@router.post("/parse-screenshot")
-async def parse_screenshot(
+@router.post("/parse-screenshot-upload")
+async def parse_screenshot_upload(
     image: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     """
-    Parse a screenshot image to extract lead information using Claude's vision.
+    Parse a screenshot image (file upload) to extract lead information using Claude's vision.
+    For JSON base64 input, use /parse-screenshot instead.
     """
     if not anthropic_client:
         raise HTTPException(status_code=500, detail="AI service not configured")
