@@ -31104,38 +31104,6 @@ Built-in compliance monitoring vs. add-on compliance tools:
             <span class="metric">3x ROI within first year</span>
         </p>
 
-        <h2 class="section">Pricing Model</h2>
-        <table>
-            <tr><th>Tier</th><th>Users</th><th>Price/User/Month</th><th>Features</th></tr>
-            <tr><td>Starter</td><td>1-5</td><td>$149</td><td>Core CRM, Basic AI</td></tr>
-            <tr><td>Professional</td><td>6-25</td><td>$199</td><td>Full AI, Integrations</td></tr>
-            <tr><td>Enterprise</td><td>26+</td><td>Custom</td><td>White-label, API access</td></tr>
-        </table>
-
-        <h2 class="section">Investment Thesis</h2>
-        <h3>Market Size</h3>
-        <ul>
-            <li><strong>TAM:</strong> $8.5B mortgage technology market</li>
-            <li><strong>SAM:</strong> $2.1B CRM/automation segment</li>
-            <li><strong>SOM:</strong> $210M initial target market</li>
-        </ul>
-
-        <h3>Growth Drivers</h3>
-        <ul>
-            <li><strong>Labor Shortage</strong> - Fewer LOs, need more efficiency</li>
-            <li><strong>Compliance Burden</strong> - Increasing regulatory requirements</li>
-            <li><strong>AI Adoption</strong> - Industry ready for intelligent automation</li>
-            <li><strong>Remote Work</strong> - Need for digital-first workflows</li>
-        </ul>
-
-        <h3>Competitive Moat</h3>
-        <ul>
-            <li><strong>AI Learning System</strong> - Improves with every interaction</li>
-            <li><strong>Multi-Agent Architecture</strong> - Difficult to replicate</li>
-            <li><strong>Integration Depth</strong> - Deep workflow connections</li>
-            <li><strong>Data Network Effects</strong> - Better predictions with more data</li>
-        </ul>
-
         <div class="footer">
             <p><strong>Perennia AI</strong> - Intelligent Mortgage CRM</p>
             <p>Document prepared for investor discussions. Confidential.</p>
