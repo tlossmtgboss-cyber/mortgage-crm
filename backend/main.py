@@ -53511,7 +53511,7 @@ async def add_leads_import_columns_migration(
 # NATIVE ACTION DETECTION FOR MOBILE APP
 # ============================================================================
 
-def detect_native_action(message: str, db: Session = None) -> dict | None:
+def detect_native_action(message: str, db: Session = None, user_id: int = None) -> dict | None:
     """
     Detect if the user's message requests a native device action (SMS, call, email).
     These actions should be executed on the mobile device, not the server.
@@ -53533,6 +53533,48 @@ def detect_native_action(message: str, db: Session = None) -> dict | None:
         r"(call|dial|phone)\s+(.+?)(?:\s+(?:at|on)\s+)?(\d[\d\s\-\(\)]+)?$",
         r"(give|make)\s+(a\s+)?call\s+to\s+(.+)",
     ]
+
+    # Patterns for email requests - detect "send an email to [name]"
+    email_patterns = [
+        r"(send|write|compose|draft)\s+(an?\s+)?email\s+to\s+(.+?)(?:\s+(?:saying|with|about|regarding)\s+(.+))?$",
+        r"email\s+(.+?)(?:\s+(?:saying|with|about|regarding)\s+(.+))?$",
+        r"(send|shoot)\s+(.+?)\s+an?\s+email(?:\s+(?:saying|with|about)\s+(.+))?$",
+    ]
+
+    # Check for email request FIRST (before SMS since "send" is common)
+    for pattern in email_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            groups = match.groups()
+            recipient_name = None
+            subject_content = None
+
+            # Pattern-specific extraction
+            if len(groups) >= 3:
+                # "send an email to [name]" pattern
+                recipient_name = groups[2] if groups[2] else groups[1]
+                subject_content = groups[3] if len(groups) > 3 and groups[3] else None
+            elif len(groups) >= 1:
+                # "email [name]" pattern
+                recipient_name = groups[0]
+                subject_content = groups[1] if len(groups) > 1 else None
+
+            if recipient_name:
+                # Clean up recipient name
+                recipient_name = recipient_name.strip().rstrip('.')
+
+                # Try to look up email address from CRM, then email inbox
+                email_address = None
+                if db and recipient_name:
+                    email_address = _lookup_contact_email(db, recipient_name, user_id)
+
+                return {
+                    "type": "send_email",
+                    "recipient_name": recipient_name.title(),
+                    "email": email_address,
+                    "subject": subject_content.strip() if subject_content else None,
+                    "requires_email_lookup": email_address is None
+                }
 
     # Check for SMS/text request
     for pattern in sms_patterns:
@@ -53558,7 +53600,7 @@ def detect_native_action(message: str, db: Session = None) -> dict | None:
                 # Try to look up phone number from CRM if db available
                 phone_number = None
                 if db and recipient_name:
-                    phone_number = _lookup_contact_phone(db, recipient_name)
+                    phone_number = _lookup_contact_phone(db, recipient_name, user_id)
 
                 return {
                     "type": "send_sms",
@@ -53581,7 +53623,7 @@ def detect_native_action(message: str, db: Session = None) -> dict | None:
                 # Try to look up phone number from CRM
                 phone_number = None
                 if db and recipient_name:
-                    phone_number = _lookup_contact_phone(db, recipient_name)
+                    phone_number = _lookup_contact_phone(db, recipient_name, user_id)
 
                 return {
                     "type": "make_call",
@@ -53593,8 +53635,8 @@ def detect_native_action(message: str, db: Session = None) -> dict | None:
     return None
 
 
-def _lookup_contact_phone(db: Session, name: str) -> str | None:
-    """Look up a contact's phone number from leads, loans, or referral partners."""
+def _lookup_contact_phone(db: Session, name: str, user_id: int = None) -> str | None:
+    """Look up a contact's phone number from leads, loans, referral partners, or email inbox."""
     name_lower = name.lower().strip()
 
     # Search in leads
@@ -53631,6 +53673,195 @@ def _lookup_contact_phone(db: Session, name: str) -> str | None:
         return partner.phone
 
     return None
+
+
+def _lookup_contact_email(db: Session, name: str, user_id: int = None) -> str | None:
+    """
+    Look up a contact's email address from CRM, then fall back to searching email inbox.
+
+    This enables looking up contact info for people not in the CRM but who have
+    emailed the user (like Trevor Hammond who's in the inbox but not the CRM).
+    """
+    name_lower = name.lower().strip()
+
+    # 1. Search in leads
+    lead = db.execute(text("""
+        SELECT email FROM leads
+        WHERE LOWER(first_name || ' ' || last_name) LIKE :name
+           OR LOWER(first_name) LIKE :name
+           OR LOWER(last_name) LIKE :name
+        LIMIT 1
+    """), {"name": f"%{name_lower}%"}).fetchone()
+
+    if lead and lead.email:
+        logger.info(f"[ContactLookup] Found email for '{name}' in leads: {lead.email}")
+        return lead.email
+
+    # 2. Search in loans (borrower and co-borrower)
+    loan = db.execute(text("""
+        SELECT borrower_email, co_borrower_email FROM loans
+        WHERE LOWER(borrower_name) LIKE :name
+           OR LOWER(coborrower_name) LIKE :name
+        LIMIT 1
+    """), {"name": f"%{name_lower}%"}).fetchone()
+
+    if loan:
+        if loan.borrower_email:
+            logger.info(f"[ContactLookup] Found email for '{name}' in loans (borrower): {loan.borrower_email}")
+            return loan.borrower_email
+        if loan.co_borrower_email:
+            logger.info(f"[ContactLookup] Found email for '{name}' in loans (co-borrower): {loan.co_borrower_email}")
+            return loan.co_borrower_email
+
+    # 3. Search in referral partners
+    partner = db.execute(text("""
+        SELECT email FROM referral_partners
+        WHERE LOWER(name) LIKE :name
+           OR LOWER(contact_name) LIKE :name
+        LIMIT 1
+    """), {"name": f"%{name_lower}%"}).fetchone()
+
+    if partner and partner.email:
+        logger.info(f"[ContactLookup] Found email for '{name}' in referral_partners: {partner.email}")
+        return partner.email
+
+    # 4. FALLBACK: Search user's email inbox via Microsoft Graph
+    if user_id:
+        logger.info(f"[ContactLookup] '{name}' not in CRM, searching email inbox for user {user_id}...")
+        email_from_inbox = _search_email_inbox_for_contact(db, user_id, name)
+        if email_from_inbox:
+            logger.info(f"[ContactLookup] Found email for '{name}' in email inbox: {email_from_inbox}")
+            return email_from_inbox
+
+    logger.info(f"[ContactLookup] Could not find email for '{name}' in CRM or email inbox")
+    return None
+
+
+def _search_email_inbox_for_contact(db: Session, user_id: int, name: str) -> str | None:
+    """
+    Search user's Microsoft 365 email inbox for emails from/to a person by name.
+    Returns the email address if found.
+    """
+    import requests
+
+    try:
+        # Get Microsoft OAuth token for the user
+        oauth = db.execute(text("""
+            SELECT access_token, refresh_token, token_expires_at
+            FROM microsoft_oauth_tokens
+            WHERE user_id = :user_id
+            AND access_token IS NOT NULL
+            AND sync_enabled = true
+            LIMIT 1
+        """), {"user_id": user_id}).fetchone()
+
+        if not oauth or not oauth.access_token:
+            logger.debug(f"[EmailInboxSearch] No Microsoft OAuth token for user {user_id}")
+            return None
+
+        # Decrypt and possibly refresh token
+        access_token = decrypt_token(oauth.access_token)
+
+        now = datetime.now(timezone.utc)
+        if oauth.token_expires_at and oauth.token_expires_at.replace(tzinfo=timezone.utc) < now:
+            # Token expired - try to refresh
+            refresh_token = decrypt_token(oauth.refresh_token) if oauth.refresh_token else None
+            if refresh_token:
+                client_id = os.getenv("MICROSOFT_CLIENT_ID")
+                client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+                tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+                token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+                refresh_response = requests.post(token_url, data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                    "scope": "https://graph.microsoft.com/Mail.Read offline_access",
+                }, timeout=30)
+
+                if refresh_response.status_code == 200:
+                    tokens = refresh_response.json()
+                    access_token = tokens["access_token"]
+
+                    # Update stored tokens
+                    new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
+                    db.execute(text("""
+                        UPDATE microsoft_oauth_tokens
+                        SET access_token = :access_token,
+                            refresh_token = :refresh_token,
+                            token_expires_at = :expires_at,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = :user_id
+                    """), {
+                        "access_token": encrypt_token(access_token),
+                        "refresh_token": encrypt_token(tokens.get("refresh_token", refresh_token)),
+                        "expires_at": new_expires_at,
+                        "user_id": user_id,
+                    })
+                    db.commit()
+                else:
+                    logger.warning(f"[EmailInboxSearch] Token refresh failed for user {user_id}")
+                    return None
+            else:
+                logger.warning(f"[EmailInboxSearch] Token expired and no refresh token for user {user_id}")
+                return None
+
+        # Search Microsoft Graph for emails from/to this person
+        # Use $search to find by name in from/to fields
+        search_filter = f'"{name}"'
+
+        params = {
+            "$search": search_filter,
+            "$top": 5,
+            "$select": "id,from,toRecipients",
+            "$orderby": "receivedDateTime desc",
+        }
+
+        response = requests.get(
+            "https://graph.microsoft.com/v1.0/me/messages",
+            params=params,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+
+        if response.status_code != 200:
+            logger.warning(f"[EmailInboxSearch] Graph API search failed: {response.status_code}")
+            return None
+
+        data = response.json()
+        messages = data.get("value", [])
+
+        name_lower = name.lower()
+
+        # Look for matching sender name in results
+        for msg in messages:
+            from_info = msg.get("from", {}).get("emailAddress", {})
+            from_name = from_info.get("name", "").lower()
+            from_email = from_info.get("address")
+
+            # Check if sender name matches
+            if from_name and name_lower in from_name:
+                return from_email
+
+            # Also check recipients
+            for recipient in msg.get("toRecipients", []):
+                to_info = recipient.get("emailAddress", {})
+                to_name = to_info.get("name", "").lower()
+                to_email = to_info.get("address")
+
+                if to_name and name_lower in to_name:
+                    return to_email
+
+        logger.debug(f"[EmailInboxSearch] No matching email found for '{name}' in inbox search")
+        return None
+
+    except Exception as e:
+        logger.error(f"[EmailInboxSearch] Error searching inbox for '{name}': {e}")
+        return None
 
 
 # ============================================================================
@@ -53787,11 +54018,11 @@ async def langgraph_orchestrator_chat(
             "performance": result.get("performance", {})  # Include performance metrics
         }
 
-        # Check for native mobile actions (SMS, calls) that should be executed on device
-        native_action = detect_native_action(message, db)
+        # Check for native mobile actions (SMS, calls, emails) that should be executed on device
+        native_action = detect_native_action(message, db, user_id=current_user.id)
         if native_action:
             response_data["native_action"] = native_action
-            logger.info(f"[NATIVE ACTION] Detected: {native_action['type']} to {native_action.get('recipient_name')}")
+            logger.info(f"[NATIVE ACTION] Detected: {native_action['type']} to {native_action.get('recipient_name')} - email={native_action.get('email')}")
 
         # === Cache the response (only for high-confidence, single-turn, no-action queries) ===
         if (use_cache
