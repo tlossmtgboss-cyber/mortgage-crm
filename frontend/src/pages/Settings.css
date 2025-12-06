@@ -5,7 +5,14 @@
 }
 
 .settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 32px;
+}
+
+.settings-header-left {
+  flex: 1;
 }
 
 .settings-header h1 {
@@ -19,6 +26,26 @@
   font-size: 16px;
   color: #666;
   margin: 0;
+}
+
+.logout-btn-settings {
+  padding: 10px 24px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logout-btn-settings:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
 }
 
 .settings-content {

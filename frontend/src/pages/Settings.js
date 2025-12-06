@@ -2054,11 +2054,24 @@ const API_BASE_URL = isProduction
     }
   }, [activeSection, ticketStatusFilter]);
 
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to log out?')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    }
+  };
+
   return (
     <div className="settings-page">
       <div className="settings-header">
-        <h1>Settings</h1>
-        <p>Manage your integrations and preferences</p>
+        <div className="settings-header-left">
+          <h1>Settings</h1>
+          <p>Manage your integrations and preferences</p>
+        </div>
+        <button className="logout-btn-settings" onClick={handleLogout}>
+          Logout
+        </button>
       </div>
 
       <div className="settings-content">

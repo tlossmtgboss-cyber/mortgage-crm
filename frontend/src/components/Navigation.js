@@ -163,13 +163,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             ⚙️
           </Link>
-          <button
-            className="logout-btn"
-            onClick={handleLogout}
-            title="Logout"
-          >
-            🚪 Logout
-          </button>
         </div>
       </div>
     </nav>
