@@ -78,13 +78,13 @@
 }
 
 .type-pill:hover {
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .type-pill.active {
-  border-color: #c41230;
-  background: #fef2f2;
-  color: #c41230;
+  border-color: #217F8D;
+  background: rgba(33, 127, 141, 0.08);
+  color: #217F8D;
 }
 
 .type-pill .duration {
@@ -126,8 +126,8 @@
 }
 
 .week-nav:hover:not(:disabled) {
-  border-color: #c41230;
-  color: #c41230;
+  border-color: #217F8D;
+  color: #217F8D;
 }
 
 .week-nav:disabled {
@@ -164,12 +164,12 @@
 
 .date-card:hover:not(.disabled) {
   background: #fff;
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .date-card.selected {
-  background: #c41230;
-  border-color: #c41230;
+  background: #217F8D;
+  border-color: #217F8D;
 }
 
 .date-card.selected .day-name,
@@ -184,7 +184,7 @@
 }
 
 .date-card.today:not(.selected) {
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .day-name {
@@ -247,7 +247,7 @@
 
 .time-dropdown:focus {
   outline: none;
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .dropdown-arrow {
@@ -284,13 +284,13 @@
 }
 
 .mode-button:hover {
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .mode-button.active {
-  border-color: #c41230;
-  background: #fef2f2;
-  color: #c41230;
+  border-color: #217F8D;
+  background: rgba(33, 127, 141, 0.08);
+  color: #217F8D;
 }
 
 .mode-button svg {
@@ -302,7 +302,7 @@
 .primary-button {
   width: 100%;
   padding: 16px;
-  background: #c41230;
+  background: #217F8D;
   color: white;
   border: none;
   border-radius: 6px;
@@ -313,7 +313,7 @@
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #a30f28;
+  background: #1a6670;
 }
 
 .primary-button:disabled {
@@ -341,7 +341,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: #c41230;
+  color: #217F8D;
   font-size: 14px;
   cursor: pointer;
   padding: 0;
@@ -393,7 +393,7 @@
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .form-group input::placeholder,
@@ -427,7 +427,7 @@
 .radio-label input[type="radio"] {
   width: 18px;
   height: 18px;
-  accent-color: #c41230;
+  accent-color: #217F8D;
 }
 
 .radio-label span {
@@ -540,7 +540,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #f0f0f0;
-  border-top-color: #c41230;
+  border-top-color: #217F8D;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto 16px;
@@ -731,7 +731,7 @@
 }
 
 .booking-footer strong {
-  color: #c41230;
+  color: #217F8D;
 }
 
 /* Responsive */

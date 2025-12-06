@@ -86,8 +86,8 @@
 }
 
 .schedule-week-nav:hover:not(:disabled) {
-  border-color: #c41230;
-  color: #c41230;
+  border-color: #217F8D;
+  color: #217F8D;
 }
 
 .schedule-week-nav:disabled {
@@ -124,12 +124,12 @@
 
 .schedule-date-card:hover:not(.disabled) {
   background: #fff;
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .schedule-date-card.selected {
-  background: #c41230;
-  border-color: #c41230;
+  background: #217F8D;
+  border-color: #217F8D;
 }
 
 .schedule-date-card.selected .schedule-day-name,
@@ -144,7 +144,7 @@
 }
 
 .schedule-date-card.today:not(.selected) {
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .schedule-day-name {
@@ -207,7 +207,7 @@
 
 .schedule-time-dropdown:focus {
   outline: none;
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .schedule-dropdown-arrow {
@@ -244,13 +244,13 @@
 }
 
 .schedule-mode-btn:hover {
-  border-color: #c41230;
+  border-color: #217F8D;
 }
 
 .schedule-mode-btn.active {
-  border-color: #c41230;
-  background: #fef2f2;
-  color: #c41230;
+  border-color: #217F8D;
+  background: rgba(33, 127, 141, 0.08);
+  color: #217F8D;
 }
 
 .schedule-mode-btn svg {
@@ -285,7 +285,7 @@
 .schedule-submit-btn {
   width: 100%;
   padding: 14px;
-  background: #c41230;
+  background: #217F8D;
   color: white;
   border: none;
   border-radius: 6px;
@@ -296,7 +296,7 @@
 }
 
 .schedule-submit-btn:hover:not(:disabled) {
-  background: #a30f28;
+  background: #1a6670;
 }
 
 .schedule-submit-btn:disabled {
