@@ -88,6 +88,7 @@ const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
+const PublicBooking = lazy(() => import('./pages/PublicBooking'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -270,6 +271,9 @@ function App() {
 
           {/* Video Meeting Room (public/private) */}
           <Route path="/meeting/:roomCode" element={<LazyPage><MeetingRoom /></LazyPage>} />
+
+          {/* Public Booking Page */}
+          <Route path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />
 
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />

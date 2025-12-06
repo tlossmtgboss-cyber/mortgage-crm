@@ -227,6 +227,16 @@ class AvailableSlotsRequest(BaseModel):
     start_date: date
     end_date: date
     timezone: str = "America/Chicago"
+
+
+class PublicBookingConfirmRequest(BaseModel):
+    appointment_type_id: int
+    start_time: datetime
+    duration_minutes: int = 30
+    attendee_name: str
+    attendee_email: EmailStr
+    attendee_phone: Optional[str] = None
+    notes: Optional[str] = None
     user_ids: List[int] = []  # Empty = any available user
     lead_id: Optional[int] = None
     loan_id: Optional[int] = None
@@ -1592,16 +1602,18 @@ async def get_public_booking_page(
     }
 
 
-@router.post("/public/book/{slug}/slots")
+@router.get("/public/book/{slug}/slots")
 async def get_public_available_slots(
     slug: str,
     appointment_type_id: int = Query(...),
-    start_date: date = Query(...),
-    end_date: date = Query(...),
+    date: date = Query(..., description="Date to get slots for"),
     duration_minutes: int = Query(30),
     db: Session = Depends(get_db)
 ):
     """Get available slots for public booking"""
+    # Use same date for start and end (single day)
+    start_date = date
+    end_date = date
     BookingLink = _models['BookingLink']
     SchedulerConfig = _models['SchedulerConfig']
     BlockedTime = _models['BlockedTime']
@@ -1717,16 +1729,18 @@ async def get_public_available_slots(
 @router.post("/public/book/{slug}/confirm")
 async def confirm_public_booking(
     slug: str,
-    appointment_type_id: int,
-    slot_start: datetime,
-    duration_minutes: int,
-    attendee_name: str,
-    attendee_email: EmailStr,
-    attendee_phone: Optional[str] = None,
-    intake_responses: Dict = {},
+    booking_data: PublicBookingConfirmRequest,
     db: Session = Depends(get_db)
 ):
     """Confirm a public booking"""
+    # Extract data from request body
+    appointment_type_id = booking_data.appointment_type_id
+    slot_start = booking_data.start_time
+    duration_minutes = booking_data.duration_minutes
+    attendee_name = booking_data.attendee_name
+    attendee_email = booking_data.attendee_email
+    attendee_phone = booking_data.attendee_phone
+    intake_responses = {"notes": booking_data.notes} if booking_data.notes else {}
     BookingLink = _models['BookingLink']
     AppointmentType = _models['AppointmentType']
     Appointment = _models['Appointment']
