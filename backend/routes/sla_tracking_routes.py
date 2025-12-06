@@ -569,8 +569,7 @@ async def get_milestone_drilldown(
     Returns detailed loan information for each milestone matching the filters.
     """
     try:
-        from models.loan import Loan
-        from models.lead import Lead
+        from main import Loan, Lead
 
         # Build base query joining milestones with loans/leads
         query = db.query(LoanMilestoneHistory)
