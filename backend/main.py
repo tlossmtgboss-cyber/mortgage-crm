@@ -30801,7 +30801,7 @@ Built-in compliance monitoring vs. add-on compliance tools:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perennia AI - Product Requirements Document</title>
+    <title>Perennia AI - Intelligent Mortgage Production Manager</title>
     <style>
         * {{
             margin: 0;
@@ -30945,16 +30945,16 @@ Built-in compliance monitoring vs. add-on compliance tools:
 <body>
     <div class="container">
         <h1>Perennia AI</h1>
-        <h2>Intelligent Mortgage CRM Platform</h2>
+        <h2>Intelligent Mortgage Production Manager</h2>
         <p class="meta"><strong>Version:</strong> 1.0 &nbsp;|&nbsp; <strong>Date:</strong> December 2025 &nbsp;|&nbsp; <strong>Status:</strong> Production Ready</p>
 
         <hr>
 
         <h2 class="section">Executive Summary</h2>
-        <p>Perennia AI is a next-generation mortgage CRM platform that combines comprehensive loan origination management with advanced AI automation. The platform empowers loan officers to close more loans faster by automating routine tasks, providing intelligent coaching, and delivering actionable insights across the entire mortgage lifecycle.</p>
+        <p>Perennia AI is an intelligent mortgage production management platform that combines comprehensive loan origination, pipeline optimization, and profitability tracking with advanced AI automation. The platform empowers mortgage professionals to maximize production efficiency, increase profitability, and close more loans faster through intelligent workflow automation, real-time analytics, and AI-driven coaching.</p>
 
         <div class="highlight-box">
-            <strong>Key Value Proposition:</strong> Perennia AI reduces loan officer administrative burden by up to 60% through AI-powered automation while improving compliance, customer communication, and pipeline visibility.
+            <strong>Key Value Proposition:</strong> Perennia AI transforms mortgage operations by reducing administrative burden by up to 60%, optimizing loan cycle times, maximizing per-loan profitability, and providing complete visibility across the entire production pipeline.
         </div>
 
         <h2 class="section">Market Opportunity</h2>
@@ -31132,7 +31132,7 @@ Built-in compliance monitoring vs. add-on compliance tools:
         </p>
 
         <div class="footer">
-            <p><strong>Perennia AI</strong> - Intelligent Mortgage CRM</p>
+            <p><strong>Perennia AI</strong> - Intelligent Mortgage Production Manager</p>
             <p>Document prepared for investor discussions. Confidential.</p>
         </div>
     </div>
