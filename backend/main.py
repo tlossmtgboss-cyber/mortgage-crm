@@ -25406,6 +25406,62 @@ async def get_email_response_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/email-response-queue/test-item")
+async def create_test_email_response_item(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a test email response queue item for testing the approval flow.
+    This simulates an incoming email that needs user review.
+    """
+    try:
+        import uuid
+        test_email_id = f"test-{uuid.uuid4().hex[:8]}"
+
+        db.execute(text("""
+            INSERT INTO email_response_queue
+            (user_id, email_id, sender_email, sender_name, subject, body_preview,
+             received_at, email_intent, intent_confidence,
+             recommended_action, recommended_response, recommendation_reasoning,
+             recommendation_confidence, status, priority, created_at)
+            VALUES
+            (:user_id, :email_id, :sender_email, :sender_name, :subject, :body_preview,
+             NOW(), :email_intent, :intent_confidence,
+             :recommended_action, :recommended_response, :recommendation_reasoning,
+             :recommendation_confidence, 'pending', 'normal', NOW())
+        """), {
+            "user_id": current_user.id,
+            "email_id": test_email_id,
+            "sender_email": "titlecompany@test.com",
+            "sender_name": "Test Title Company",
+            "subject": "Clear to Close - Smith Loan #12345",
+            "body_preview": "We are pleased to inform you that the Smith loan is now clear to close. Please schedule the closing at your earliest convenience.",
+            "email_intent": "Clear to Close",
+            "intent_confidence": 0.95,
+            "recommended_action": "acknowledge_and_update",
+            "recommended_response": "Thank you for the CTC notification. I will update the loan status and schedule closing.",
+            "recommendation_reasoning": "Email indicates Clear to Close status. Recommend acknowledging and updating loan status.",
+            "recommendation_confidence": 0.88,
+        })
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Test email response queue item created",
+            "email_id": test_email_id,
+            "test_data": {
+                "sender": "titlecompany@test.com",
+                "subject": "Clear to Close - Smith Loan #12345",
+                "recommended_action": "acknowledge_and_update"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error creating test item: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # DUPLICATE MERGE & AI LEARNING SYSTEM
 # ============================================================================
