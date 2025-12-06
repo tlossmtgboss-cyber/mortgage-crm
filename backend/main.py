@@ -31866,6 +31866,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
+    # Parse business_hours JSON if it exists
+    business_hours = getattr(current_user, 'business_hours', None) or {}
+
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -31878,6 +31881,9 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "phone": getattr(current_user, 'phone', None),
         "nmls_number": getattr(current_user, 'nmls_number', None),
         "job_title": getattr(current_user, 'job_title', None),
+        "work_hours_start": business_hours.get('start', '09:00') if business_hours else '09:00',
+        "work_hours_end": business_hours.get('end', '17:00') if business_hours else '17:00',
+        "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) if business_hours else ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
 
@@ -31888,6 +31894,9 @@ class UserProfileUpdate(BaseModel):
     phone: Optional[str] = None
     nmls_number: Optional[str] = None
     job_title: Optional[str] = None
+    work_hours_start: Optional[str] = None  # e.g., "09:00"
+    work_hours_end: Optional[str] = None    # e.g., "17:00"
+    work_days: Optional[List[str]] = None   # e.g., ["monday", "tuesday", ...]
 
 
 @app.put("/api/v1/users/me")
@@ -31910,8 +31919,22 @@ async def update_current_user_profile(
             if hasattr(current_user, 'job_title'):
                 current_user.job_title = profile_update.job_title
 
+        # Update work hours (stored in business_hours JSON column)
+        if profile_update.work_hours_start is not None or profile_update.work_hours_end is not None or profile_update.work_days is not None:
+            business_hours = getattr(current_user, 'business_hours', None) or {}
+            if profile_update.work_hours_start is not None:
+                business_hours['start'] = profile_update.work_hours_start
+            if profile_update.work_hours_end is not None:
+                business_hours['end'] = profile_update.work_hours_end
+            if profile_update.work_days is not None:
+                business_hours['days'] = profile_update.work_days
+            current_user.business_hours = business_hours
+
         db.commit()
         db.refresh(current_user)
+
+        # Get updated business hours for response
+        business_hours = getattr(current_user, 'business_hours', None) or {}
 
         logger.info(f"Profile updated for user {current_user.email}")
         return {
@@ -31923,7 +31946,10 @@ async def update_current_user_profile(
                 "full_name": current_user.full_name,
                 "phone": getattr(current_user, 'phone', None),
                 "nmls_number": getattr(current_user, 'nmls_number', None),
-                "job_title": getattr(current_user, 'job_title', None)
+                "job_title": getattr(current_user, 'job_title', None),
+                "work_hours_start": business_hours.get('start', '09:00'),
+                "work_hours_end": business_hours.get('end', '17:00'),
+                "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
             }
         }
     except Exception as e:
@@ -42677,6 +42703,41 @@ async def get_team_member_detail(
     except Exception as e:
         logger.error(f"Get team member detail error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/team/members/{user_id}/work-hours")
+async def get_team_member_work_hours(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a team member's work hours for scheduling"""
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            # Return default work hours for non-existent users
+            return {
+                "user_id": user_id,
+                "work_hours_start": "09:00",
+                "work_hours_end": "17:00",
+                "work_days": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+            }
+
+        # Parse business_hours JSON if it exists
+        business_hours = getattr(user, 'business_hours', None) or {}
+
+        return {
+            "user_id": user.id,
+            "full_name": user.full_name,
+            "work_hours_start": business_hours.get('start', '09:00') if business_hours else '09:00',
+            "work_hours_end": business_hours.get('end', '17:00') if business_hours else '17:00',
+            "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) if business_hours else ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        }
+
+    except Exception as e:
+        logger.error(f"Get team member work hours error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/v1/team/members")
 async def create_team_member(
@@ -55061,6 +55122,9 @@ If you cannot identify a partner or lead, set those fields to null but still ret
 
         # === Step 3: Create/Find Lead ===
         lead_id = None
+        missing_fields = []
+        lead_creation_blocked = False
+
         if lead_data and lead_data.get("name"):
             lead_name = lead_data["name"]
             lead_email = lead_data.get("email")
@@ -55073,6 +55137,29 @@ If you cannot identify a partner or lead, set those fields to null but still ret
             name_parts = lead_name.split(" ", 1)
             first_name = name_parts[0]
             last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+            # === VALIDATION: Check required fields for lead creation ===
+            # Required: 1. First name, 2. Phone OR Email, 3. Referral Partner
+            if not first_name or not first_name.strip():
+                missing_fields.append({
+                    "field": "first_name",
+                    "label": "First Name",
+                    "question": "What is the lead's first name?"
+                })
+
+            if not lead_phone and not lead_email:
+                missing_fields.append({
+                    "field": "phone_or_email",
+                    "label": "Phone or Email",
+                    "question": "What is their phone number or email address?"
+                })
+
+            if not referral_partner_id and not partner_data.get("name"):
+                missing_fields.append({
+                    "field": "referral_partner",
+                    "label": "Referral Partner",
+                    "question": "Who referred this lead? (realtor name, company, etc.)"
+                })
 
             # Check if lead already exists (by email or name+phone)
             existing_lead = None
@@ -55102,8 +55189,19 @@ If you cannot identify a partner or lead, set those fields to null but still ret
                     "created": False
                 }
                 logger.info(f"[SCREENSHOT] Found existing lead: {existing_lead.name} (ID: {existing_lead.id})")
+            elif missing_fields:
+                # Cannot create lead - missing required fields
+                lead_creation_blocked = True
+                entities_created["lead"] = {
+                    "id": None,
+                    "name": lead_name,
+                    "created": False,
+                    "blocked": True,
+                    "reason": "missing_required_fields"
+                }
+                logger.info(f"[SCREENSHOT] Lead creation blocked - missing fields: {[f['field'] for f in missing_fields]}")
             else:
-                # Create new lead
+                # Create new lead - all required fields present
                 new_lead = Lead(
                     name=lead_name,
                     first_name=first_name,
@@ -55188,6 +55286,7 @@ If you cannot identify a partner or lead, set those fields to null but still ret
 
         # === Step 5: Build response message ===
         message_parts = []
+        needs_followup = False
 
         if entities_created["referral_partner"]:
             partner = entities_created["referral_partner"]
@@ -55198,7 +55297,12 @@ If you cannot identify a partner or lead, set those fields to null but still ret
 
         if entities_created["lead"]:
             lead = entities_created["lead"]
-            if lead["created"]:
+            if lead.get("blocked"):
+                # Lead creation was blocked due to missing fields
+                needs_followup = True
+                lead_name = lead.get("name", "the lead")
+                message_parts.append(f"I found potential lead information for {lead_name}, but I need some additional details before I can create the lead.")
+            elif lead["created"]:
                 message_parts.append(f"I've created a new lead for {lead['name']}.")
             else:
                 message_parts.append(f"I found {lead['name']} is already in your leads.")
@@ -55211,12 +55315,23 @@ If you cannot identify a partner or lead, set those fields to null but still ret
 
         response_message = " ".join(message_parts)
 
-        return {
+        # Build the response
+        response_data = {
             "message": response_message,
             "response": response_message,  # For compatibility
             "entities_created": entities_created,
             "extracted_data": extracted_data
         }
+
+        # Add missing_fields if lead creation was blocked
+        if missing_fields:
+            response_data["missing_fields"] = missing_fields
+            response_data["needs_followup"] = True
+            # Add a prompt for what info is needed
+            field_labels = [f["label"] for f in missing_fields]
+            response_data["followup_prompt"] = f"To create this lead, I still need: {', '.join(field_labels)}. Can you provide this information?"
+
+        return response_data
 
     except HTTPException:
         raise
@@ -55224,6 +55339,163 @@ If you cannot identify a partner or lead, set those fields to null but still ret
         logger.exception(f"[SCREENSHOT] Error processing screenshot: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to process screenshot: {str(e)}")
+
+
+@app.post("/api/v1/ai/complete-lead-from-screenshot")
+async def complete_lead_from_screenshot(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Complete lead creation with user-provided missing information.
+
+    This endpoint is called after parse-screenshot returns missing_fields.
+    The user provides the missing data (phone, email, referral partner name),
+    and this endpoint creates the lead with the combined data.
+
+    Request body:
+    {
+        "extracted_data": { ... original extracted data from parse-screenshot ... },
+        "additional_info": {
+            "phone": "optional phone number",
+            "email": "optional email address",
+            "referral_partner_name": "optional partner name"
+        }
+    }
+    """
+    try:
+        data = await request.json()
+        extracted_data = data.get("extracted_data", {})
+        additional_info = data.get("additional_info", {})
+
+        lead_data = extracted_data.get("lead", {})
+        partner_data = extracted_data.get("referral_partner", {})
+
+        if not lead_data:
+            raise HTTPException(status_code=400, detail="No lead data provided")
+
+        # Merge additional info with extracted data
+        lead_name = lead_data.get("name", "")
+        lead_email = additional_info.get("email") or lead_data.get("email")
+        lead_phone = additional_info.get("phone") or lead_data.get("phone")
+        lead_address = lead_data.get("address")
+        lead_loan_type = lead_data.get("loan_type")
+        lead_notes = lead_data.get("notes")
+
+        # Handle referral partner
+        referral_partner_name = additional_info.get("referral_partner_name") or partner_data.get("name")
+        referral_partner_id = None
+
+        if referral_partner_name:
+            # Check if partner exists
+            existing_partner = db.query(ReferralPartner).filter(
+                ReferralPartner.name == referral_partner_name
+            ).first()
+
+            if existing_partner:
+                referral_partner_id = existing_partner.id
+            else:
+                # Create new partner
+                new_partner = ReferralPartner(
+                    name=referral_partner_name,
+                    business_name=partner_data.get("company", ""),
+                    contact_name=referral_partner_name,
+                    category=partner_data.get("type", "realtor"),
+                    company=partner_data.get("company"),
+                    type=partner_data.get("type", "other"),
+                    phone=partner_data.get("phone"),
+                    email=partner_data.get("email"),
+                    status="active",
+                    notes=f"Added via screenshot import on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+                )
+                db.add(new_partner)
+                db.flush()
+                referral_partner_id = new_partner.id
+
+        # Parse first/last name
+        name_parts = lead_name.split(" ", 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        # Validate required fields now
+        validation_errors = []
+        if not first_name or not first_name.strip():
+            validation_errors.append("First name is required")
+        if not lead_phone and not lead_email:
+            validation_errors.append("Phone number or email is required")
+        if not referral_partner_id:
+            validation_errors.append("Referral partner is required")
+
+        if validation_errors:
+            raise HTTPException(status_code=400, detail=f"Missing required fields: {', '.join(validation_errors)}")
+
+        # Create the lead
+        new_lead = Lead(
+            name=lead_name,
+            first_name=first_name,
+            last_name=last_name,
+            email=lead_email,
+            phone=lead_phone,
+            address=lead_address,
+            property_address=lead_address,
+            loan_type=lead_loan_type,
+            source="screenshot_import",
+            stage=LeadStage.NEW,
+            owner_id=current_user.id,
+            referral_partner_id=referral_partner_id,
+            notes=f"Imported from screenshot on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}. {lead_notes or ''}",
+            lead_received_date=datetime.now(timezone.utc)
+        )
+        db.add(new_lead)
+        db.flush()
+
+        # Create follow-up task
+        task_title = f"Contact new lead: {new_lead.name}"
+        from sqlalchemy import text
+        task_due = datetime.now(timezone.utc) + timedelta(days=1)
+        result = db.execute(text("""
+            INSERT INTO tasks (title, description, status, priority, due_date, owner_id, lead_id, related_contact_name, related_type, created_at, updated_at)
+            VALUES (:title, :description, :status, :priority, :due_date, :owner_id, :lead_id, :contact_name, :related_type, NOW(), NOW())
+            RETURNING id
+        """), {
+            "title": task_title,
+            "description": f"New lead added: {new_lead.name}",
+            "status": "pending",
+            "priority": "high",
+            "due_date": task_due,
+            "owner_id": current_user.id,
+            "lead_id": new_lead.id,
+            "contact_name": new_lead.name,
+            "related_type": "lead"
+        })
+        task_id = result.scalar()
+
+        db.commit()
+
+        logger.info(f"[SCREENSHOT] Created lead with additional info: {new_lead.name} (ID: {new_lead.id})")
+
+        return {
+            "message": f"I've created a new lead for {new_lead.name} and added a follow-up task.",
+            "entities_created": {
+                "lead": {
+                    "id": new_lead.id,
+                    "name": new_lead.name,
+                    "created": True
+                },
+                "task": {
+                    "id": task_id,
+                    "title": task_title
+                }
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[SCREENSHOT] Error completing lead creation: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")
 
 
 @app.get("/api/v1/ai/langgraph-status")
