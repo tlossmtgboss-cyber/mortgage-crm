@@ -1501,7 +1501,7 @@ def create_referral_partner(
         try:
             # Check if partner already exists
             existing = db.execute(text("""
-                SELECT id, name, email, partner_type
+                SELECT id, name, email, type, category
                 FROM referral_partners
                 WHERE LOWER(email) = LOWER(:email)
                 LIMIT 1
@@ -1513,34 +1513,42 @@ def create_referral_partner(
                         "partner_id": existing.id,
                         "name": existing.name,
                         "email": existing.email,
-                        "partner_type": existing.partner_type,
+                        "partner_type": existing.type or existing.category,
                         "already_exists": True,
                     },
                     message=f"Referral partner '{existing.name}' already exists in the system"
                 )
 
-            # Create new partner
-            partner_id = str(uuid.uuid4())[:8].upper()
-
+            # Create new partner - use schema from main.py ReferralPartner model
+            # Columns: name, business_name, contact_name, category, company, type, phone, email, status, loyalty_tier, notes
             db.execute(text("""
                 INSERT INTO referral_partners (
-                    id, name, email, phone, company, partner_type,
-                    notes, created_by_user_id, created_at, updated_at, is_active
+                    name, business_name, contact_name, category, company, type,
+                    phone, email, status, loyalty_tier, notes, created_at
                 ) VALUES (
-                    :id, :name, :email, :phone, :company, :partner_type,
-                    :notes, :user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, true
+                    :name, :business_name, :contact_name, :category, :company, :type,
+                    :phone, :email, 'active', 'bronze', :notes, CURRENT_TIMESTAMP
                 )
+                RETURNING id
             """), {
-                "id": partner_id,
                 "name": name,
-                "email": email,
-                "phone": phone,
+                "business_name": company or "",
+                "contact_name": name,
+                "category": partner_type.lower(),
                 "company": company,
-                "partner_type": partner_type.lower(),
+                "type": partner_type.lower(),
+                "phone": phone,
+                "email": email,
                 "notes": notes,
-                "user_id": user_id,
             })
             db.commit()
+
+            # Get the created ID
+            result = db.execute(text("""
+                SELECT id FROM referral_partners WHERE email = :email ORDER BY created_at DESC LIMIT 1
+            """), {"email": email}).fetchone()
+
+            partner_id = result.id if result else None
 
             return ToolResult.success(
                 data={
