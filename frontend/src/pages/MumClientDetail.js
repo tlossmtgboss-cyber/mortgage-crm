@@ -51,6 +51,8 @@ function MumClientDetail() {
   const [activeTab, setActiveTab] = useState('personal');
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
+  const [isFundedLoan, setIsFundedLoan] = useState(false);
+  const [loanId, setLoanId] = useState(null);
 
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
@@ -160,6 +162,18 @@ function MumClientDetail() {
       let clientData = null;
       let activitiesData = [];
 
+      // Check if this is a funded loan (ID starts with "loan_")
+      if (id && id.toString().startsWith('loan_')) {
+        const actualLoanId = id.replace('loan_', '');
+        setIsFundedLoan(true);
+        setLoanId(actualLoanId);
+
+        // Redirect to loan detail page instead
+        console.log('🔄 Redirecting to loan detail page for funded loan:', actualLoanId);
+        navigate(`/loans/${actualLoanId}`);
+        return;
+      }
+
       try {
         // Try to fetch from API first
         [clientData, activitiesData] = await Promise.all([
@@ -178,8 +192,8 @@ function MumClientDetail() {
 
         if (!clientData) {
           console.error('❌ Lead not found in mock data');
-          alert('Lead not found in mock data');
-          navigate('/mum');
+          alert('Failed to load lead details');
+          navigate('/portfolio');
           return;
         }
         activitiesData = [];
