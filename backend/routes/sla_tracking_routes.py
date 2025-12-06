@@ -557,6 +557,155 @@ async def get_active_milestone_list(
     }
 
 
+@router.get("/milestones/drilldown")
+async def get_milestone_drilldown(
+    status: Optional[str] = Query(None, description="Filter by status: on_track, at_risk, overdue"),
+    milestone_type: Optional[str] = Query(None, description="Filter by milestone type"),
+    limit: int = Query(100, le=500),
+    db: Session = Depends(get_db)
+):
+    """
+    Get loan-level drill-down data for SLA milestones.
+    Returns detailed loan information for each milestone matching the filters.
+    """
+    try:
+        from models.loan import Loan
+        from models.lead import Lead
+
+        # Build base query joining milestones with loans/leads
+        query = db.query(LoanMilestoneHistory)
+
+        # Filter by status
+        if status == "on_track":
+            query = query.filter(LoanMilestoneHistory.status.in_([
+                SLAStatus.IN_PROGRESS,
+                SLAStatus.ON_TRACK
+            ]))
+        elif status == "at_risk":
+            query = query.filter(LoanMilestoneHistory.status == SLAStatus.AT_RISK)
+        elif status == "overdue":
+            query = query.filter(LoanMilestoneHistory.status == SLAStatus.OVERDUE)
+        else:
+            # All active milestones
+            query = query.filter(LoanMilestoneHistory.status.in_([
+                SLAStatus.IN_PROGRESS,
+                SLAStatus.ON_TRACK,
+                SLAStatus.AT_RISK,
+                SLAStatus.OVERDUE
+            ]))
+
+        # Filter by milestone type if specified
+        if milestone_type:
+            query = query.filter(LoanMilestoneHistory.milestone_type == milestone_type)
+
+        # Order by urgency (overdue first, then at_risk, then by deadline)
+        query = query.order_by(
+            LoanMilestoneHistory.status.desc(),  # OVERDUE > AT_RISK > ON_TRACK
+            LoanMilestoneHistory.target_deadline.asc()
+        ).limit(limit)
+
+        milestones = query.all()
+
+        # Build response with loan details
+        result = []
+        for m in milestones:
+            loan_info = None
+            lead_info = None
+            borrower_name = "Unknown"
+            loan_number = m.loan_number or "N/A"
+            loan_amount = 0
+            loan_status = "Unknown"
+            lo_name = "Unassigned"
+
+            # Get loan details if loan_id exists
+            if m.loan_id:
+                try:
+                    loan = db.query(Loan).filter(Loan.id == m.loan_id).first()
+                    if loan:
+                        borrower_name = loan.borrower_name or "Unknown"
+                        loan_number = loan.loan_number or loan_number
+                        loan_amount = float(loan.loan_amount or 0)
+                        loan_status = loan.status or "Unknown"
+                        if loan.loan_officer:
+                            lo_name = loan.loan_officer.full_name or loan.loan_officer.email or "Unassigned"
+                except Exception as e:
+                    logger.warning(f"Error fetching loan {m.loan_id}: {e}")
+
+            # Get lead details if lead_id exists
+            if m.lead_id and not m.loan_id:
+                try:
+                    lead = db.query(Lead).filter(Lead.id == m.lead_id).first()
+                    if lead:
+                        borrower_name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or "Unknown Lead"
+                        loan_status = lead.status or "Lead"
+                        loan_amount = float(lead.loan_amount or 0)
+                        if hasattr(lead, 'assigned_to') and lead.assigned_to:
+                            lo_name = lead.assigned_to.full_name if hasattr(lead.assigned_to, 'full_name') else "Assigned"
+                except Exception as e:
+                    logger.warning(f"Error fetching lead {m.lead_id}: {e}")
+
+            # Calculate time info
+            hours_elapsed = 0
+            hours_remaining = 0
+            pct_used = 0
+
+            if m.started_at and m.target_hours:
+                now = datetime.now(timezone.utc)
+                started = m.started_at.replace(tzinfo=timezone.utc) if m.started_at.tzinfo is None else m.started_at
+                hours_elapsed = (now - started).total_seconds() / 3600
+                hours_remaining = max(0, m.target_hours - hours_elapsed)
+                pct_used = min(100, (hours_elapsed / m.target_hours) * 100) if m.target_hours > 0 else 0
+
+            result.append({
+                "milestone_id": m.id,
+                "loan_id": m.loan_id,
+                "lead_id": m.lead_id,
+                "loan_number": loan_number,
+                "borrower_name": borrower_name,
+                "loan_amount": loan_amount,
+                "loan_status": loan_status,
+                "lo_name": lo_name,
+                "milestone_type": m.milestone_type.value if hasattr(m.milestone_type, 'value') else str(m.milestone_type),
+                "sla_status": m.status.value if hasattr(m.status, 'value') else str(m.status),
+                "started_at": m.started_at.isoformat() if m.started_at else None,
+                "target_deadline": m.target_deadline.isoformat() if m.target_deadline else None,
+                "target_hours": m.target_hours,
+                "hours_elapsed": round(hours_elapsed, 1),
+                "hours_remaining": round(hours_remaining, 1),
+                "pct_used": round(pct_used, 1),
+                "is_overdue": m.status == SLAStatus.OVERDUE,
+                "is_at_risk": m.status == SLAStatus.AT_RISK
+            })
+
+        # Group by milestone type for summary
+        type_summary = {}
+        for item in result:
+            mt = item["milestone_type"]
+            if mt not in type_summary:
+                type_summary[mt] = {"total": 0, "at_risk": 0, "overdue": 0, "on_track": 0}
+            type_summary[mt]["total"] += 1
+            if item["is_overdue"]:
+                type_summary[mt]["overdue"] += 1
+            elif item["is_at_risk"]:
+                type_summary[mt]["at_risk"] += 1
+            else:
+                type_summary[mt]["on_track"] += 1
+
+        return {
+            "status_filter": status,
+            "milestone_type_filter": milestone_type,
+            "total": len(result),
+            "summary_by_type": type_summary,
+            "loans": result
+        }
+
+    except Exception as e:
+        logger.error(f"Error in milestone drilldown: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # Alert Management Routes
 # ============================================================================

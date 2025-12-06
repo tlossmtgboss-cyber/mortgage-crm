@@ -22,6 +22,7 @@ const SLASettings = () => {
   // Drill-down modal state
   const [showDrillDown, setShowDrillDown] = useState(false);
   const [drillDownType, setDrillDownType] = useState(null); // 'on_track', 'at_risk', 'overdue', 'health'
+  const [drillDownMilestoneType, setDrillDownMilestoneType] = useState(null); // For direct milestone drill-down
 
   // Drag-and-drop state
   const [draggedItem, setDraggedItem] = useState(null);
@@ -276,8 +277,16 @@ const SLASettings = () => {
   };
 
   // Handle drill-down click on summary cards
-  const handleDrillDown = (type) => {
+  const handleDrillDown = (type, milestoneType = null) => {
     setDrillDownType(type);
+    setDrillDownMilestoneType(milestoneType);
+    setShowDrillDown(true);
+  };
+
+  // Handle milestone row click to open drill-down directly to loans
+  const handleMilestoneRowClick = (milestoneType) => {
+    setDrillDownType('on_track'); // Default to showing all statuses
+    setDrillDownMilestoneType(milestoneType);
     setShowDrillDown(true);
   };
 
@@ -1005,6 +1014,7 @@ const SLASettings = () => {
           sendingReport={sendingReport}
           onSendReport={sendReport}
           formatMilestoneType={formatMilestoneType}
+          onMilestoneClick={handleMilestoneRowClick}
         />
       )}
 
@@ -1030,9 +1040,11 @@ const SLASettings = () => {
           alerts={alerts}
           bottlenecks={bottlenecks}
           formatMilestoneType={formatMilestoneType}
+          milestoneTypeFilter={drillDownMilestoneType}
           onClose={() => {
             setShowDrillDown(false);
             setDrillDownType(null);
+            setDrillDownMilestoneType(null);
           }}
         />
       )}
@@ -1041,7 +1053,7 @@ const SLASettings = () => {
 };
 
 // Reports Tab Component
-const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSendReport, formatMilestoneType }) => {
+const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSendReport, formatMilestoneType, onMilestoneClick }) => {
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [customEmail, setCustomEmail] = useState('');
   const [reportOptions, setReportOptions] = useState({
@@ -1149,9 +1161,22 @@ const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSen
                   {runRates.milestone_run_rates.map((rr) => {
                     const forecast = runRates.inventory_forecasts?.find(f => f.milestone_type === rr.milestone_type);
                     return (
-                      <tr key={rr.milestone_type}>
+                      <tr
+                        key={rr.milestone_type}
+                        onClick={() => onMilestoneClick && onMilestoneClick(rr.milestone_type)}
+                        style={{
+                          cursor: 'pointer',
+                          transition: 'background 0.15s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f0f9ff'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        title="Click to view loans for this milestone"
+                      >
                         <td>
-                          <div className="milestone-name">{formatMilestoneType(rr.milestone_type)}</div>
+                          <div className="milestone-name" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {formatMilestoneType(rr.milestone_type)}
+                            <span style={{ color: '#9ca3af', fontSize: '12px' }}>→</span>
+                          </div>
                         </td>
                         <td>{rr.daily_run_rate}</td>
                         <td>{rr.weekly_run_rate}</td>
@@ -1657,9 +1682,59 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
   );
 };
 
-// Drill-Down Modal Component
-const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, formatMilestoneType, onClose }) => {
+// Drill-Down Modal Component with Loan-Level Details
+const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, formatMilestoneType, onClose, milestoneTypeFilter = null }) => {
+  const [loanData, setLoanData] = React.useState([]);
+  const [loadingLoans, setLoadingLoans] = React.useState(false);
+  const [selectedMilestoneType, setSelectedMilestoneType] = React.useState(milestoneTypeFilter);
+  const [viewMode, setViewMode] = React.useState(milestoneTypeFilter ? 'loans' : 'summary'); // 'summary' or 'loans'
+
+  // Fetch loan-level data when viewing loans
+  React.useEffect(() => {
+    if (viewMode === 'loans' || milestoneTypeFilter) {
+      fetchLoanData();
+    }
+  }, [type, selectedMilestoneType, viewMode]);
+
+  const fetchLoanData = async () => {
+    setLoadingLoans(true);
+    try {
+      const token = localStorage.getItem('token');
+      let url = `${API_BASE_URL}/api/v1/sla/milestones/drilldown?status=${type}`;
+      if (selectedMilestoneType) {
+        url += `&milestone_type=${selectedMilestoneType}`;
+      }
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setLoanData(result.loans || []);
+      }
+    } catch (err) {
+      console.error('Error fetching loan data:', err);
+    } finally {
+      setLoadingLoans(false);
+    }
+  };
+
+  const handleMilestoneClick = (milestoneType) => {
+    setSelectedMilestoneType(milestoneType);
+    setViewMode('loans');
+  };
+
+  const handleBackToSummary = () => {
+    setSelectedMilestoneType(null);
+    setViewMode('summary');
+  };
+
   const getTitle = () => {
+    if (selectedMilestoneType) {
+      return `${formatMilestoneType(selectedMilestoneType)} - Loans`;
+    }
     switch (type) {
       case 'on_track': return 'On Track Milestones';
       case 'at_risk': return 'At Risk Milestones';
@@ -1689,15 +1764,172 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
     }
   };
 
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount || 0);
+  };
+
+  const formatTimeRemaining = (hours) => {
+    if (hours <= 0) return 'Overdue';
+    if (hours < 24) return `${hours.toFixed(1)}h`;
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return `${days}d ${remainingHours.toFixed(0)}h`;
+  };
+
+  // Render loan-level details
+  const renderLoansList = () => {
+    if (loadingLoans) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="loading-spinner" style={{ margin: '0 auto 16px' }}></div>
+          <div style={{ color: '#6b7280' }}>Loading loan details...</div>
+        </div>
+      );
+    }
+
+    if (loanData.length === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+          <div style={{ fontSize: '48px', marginBottom: '12px' }}>📋</div>
+          <div style={{ fontWeight: '500' }}>No loans found</div>
+          <div style={{ fontSize: '13px', marginTop: '4px' }}>
+            No loans match the current filter criteria
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead>
+            <tr style={{ background: '#f9fafb', position: 'sticky', top: 0 }}>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>Loan</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>Borrower</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>Amount</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>LO</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>Time</th>
+              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', borderBottom: '1px solid #e5e7eb' }}>Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loanData.map((loan, idx) => (
+              <tr
+                key={loan.milestone_id || idx}
+                style={{
+                  borderBottom: '1px solid #e5e7eb',
+                  background: loan.is_overdue ? '#fef2f2' : loan.is_at_risk ? '#fffbeb' : 'white',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s'
+                }}
+                onClick={() => {
+                  if (loan.loan_id) {
+                    window.open(`/loans/${loan.loan_id}`, '_blank');
+                  } else if (loan.lead_id) {
+                    window.open(`/leads/${loan.lead_id}`, '_blank');
+                  }
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f0f9ff'}
+                onMouseLeave={(e) => e.currentTarget.style.background = loan.is_overdue ? '#fef2f2' : loan.is_at_risk ? '#fffbeb' : 'white'}
+              >
+                <td style={{ padding: '10px 12px' }}>
+                  <div style={{ fontWeight: '500', color: '#1f2937' }}>{loan.loan_number}</div>
+                  <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                    {loan.loan_id ? `Loan #${loan.loan_id}` : `Lead #${loan.lead_id}`}
+                  </div>
+                </td>
+                <td style={{ padding: '10px 12px' }}>
+                  <div style={{ fontWeight: '500' }}>{loan.borrower_name}</div>
+                </td>
+                <td style={{ padding: '10px 12px', fontWeight: '500' }}>
+                  {formatCurrency(loan.loan_amount)}
+                </td>
+                <td style={{ padding: '10px 12px' }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    fontWeight: '500',
+                    background: loan.is_overdue ? '#fee2e2' : loan.is_at_risk ? '#fef3c7' : '#d1fae5',
+                    color: loan.is_overdue ? '#991b1b' : loan.is_at_risk ? '#92400e' : '#065f46'
+                  }}>
+                    {loan.sla_status?.replace(/_/g, ' ') || loan.loan_status}
+                  </span>
+                </td>
+                <td style={{ padding: '10px 12px', fontSize: '12px', color: '#6b7280' }}>
+                  {loan.lo_name}
+                </td>
+                <td style={{ padding: '10px 12px' }}>
+                  <div style={{
+                    fontWeight: '500',
+                    color: loan.is_overdue ? '#ef4444' : loan.is_at_risk ? '#f59e0b' : '#10b981'
+                  }}>
+                    {formatTimeRemaining(loan.hours_remaining)}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#9ca3af' }}>
+                    {loan.target_hours ? `of ${loan.target_hours}h` : ''}
+                  </div>
+                </td>
+                <td style={{ padding: '10px 12px', width: '100px' }}>
+                  <div style={{
+                    height: '8px',
+                    background: '#e5e7eb',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: `${Math.min(loan.pct_used || 0, 100)}%`,
+                      height: '100%',
+                      background: loan.is_overdue ? '#ef4444' : loan.is_at_risk ? '#f59e0b' : '#10b981',
+                      borderRadius: '4px',
+                      transition: 'width 0.3s'
+                    }}></div>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px', textAlign: 'center' }}>
+                    {(loan.pct_used || 0).toFixed(0)}%
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content drill-down-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-content drill-down-modal" style={{ maxWidth: viewMode === 'loans' ? '900px' : '600px' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header" style={{ borderLeft: `4px solid ${getStatusColor()}` }}>
-          <h3>{getIcon()} {getTitle()}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {viewMode === 'loans' && !milestoneTypeFilter && (
+              <button
+                onClick={handleBackToSummary}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: '#6b7280',
+                  fontSize: '13px'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.target.style.background = 'none'}
+              >
+                ← Back
+              </button>
+            )}
+            <h3>{getIcon()} {getTitle()}</h3>
+          </div>
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body drill-down-body">
-          {type === 'health' ? (
+          {type === 'health' && viewMode === 'summary' ? (
             // Health Score breakdown
             <div className="health-breakdown">
               <div className="health-score-display" style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -1751,34 +1983,50 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                   </div>
                 </div>
 
-                <div className="health-factor" style={{
-                  padding: '16px',
-                  background: '#fef3c7',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
+                <div
+                  className="health-factor clickable-card"
+                  style={{
+                    padding: '16px',
+                    background: '#fef3c7',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'transform 0.15s, box-shadow 0.15s'
+                  }}
+                  onClick={() => { setViewMode('loans'); setSelectedMilestoneType(null); }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
                   <div>
                     <div style={{ fontWeight: '600', color: '#92400e' }}>At Risk</div>
-                    <div style={{ fontSize: '12px', color: '#b45309' }}>Approaching deadline</div>
+                    <div style={{ fontSize: '12px', color: '#b45309' }}>Click to view loans →</div>
                   </div>
                   <div style={{ fontSize: '24px', fontWeight: '600', color: '#f59e0b' }}>
                     {summary?.at_risk_count || 0}
                   </div>
                 </div>
 
-                <div className="health-factor" style={{
-                  padding: '16px',
-                  background: '#fee2e2',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
+                <div
+                  className="health-factor clickable-card"
+                  style={{
+                    padding: '16px',
+                    background: '#fee2e2',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    transition: 'transform 0.15s, box-shadow 0.15s'
+                  }}
+                  onClick={() => { setViewMode('loans'); setSelectedMilestoneType(null); }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
                   <div>
                     <div style={{ fontWeight: '600', color: '#991b1b' }}>Overdue</div>
-                    <div style={{ fontSize: '12px', color: '#b91c1c' }}>Past deadline</div>
+                    <div style={{ fontSize: '12px', color: '#b91c1c' }}>Click to view loans →</div>
                   </div>
                   <div style={{ fontSize: '24px', fontWeight: '600', color: '#ef4444' }}>
                     {summary?.overdue_count || 0}
@@ -1800,8 +2048,14 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                       padding: '10px',
                       background: '#f9fafb',
                       borderRadius: '6px',
-                      marginBottom: '8px'
-                    }}>
+                      marginBottom: '8px',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s'
+                    }}
+                    onClick={() => handleMilestoneClick(bn.milestone_type)}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#e0f2f1'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#f9fafb'}
+                    >
                       <span style={{
                         width: '24px',
                         height: '24px',
@@ -1822,13 +2076,40 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                           {bn.avg_delay_hours?.toFixed(1)}h avg delay • {bn.total_affected_loans} loans
                         </div>
                       </div>
+                      <span style={{ color: '#9ca3af', fontSize: '12px' }}>View →</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+          ) : viewMode === 'loans' ? (
+            // Loan-level detail view
+            <div>
+              <div style={{
+                padding: '12px 16px',
+                background: type === 'on_track' ? '#d1fae5' : type === 'at_risk' ? '#fef3c7' : '#fee2e2',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ fontWeight: '600', color: getStatusColor() }}>
+                    {loanData.length} Loans Found
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                    {selectedMilestoneType ? formatMilestoneType(selectedMilestoneType) : 'All milestone types'}
+                  </div>
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  Click a row to open loan details
+                </div>
+              </div>
+              {renderLoansList()}
+            </div>
           ) : (
-            // On Track / At Risk / Overdue breakdown
+            // On Track / At Risk / Overdue breakdown - Summary View
             <div className="milestone-breakdown">
               <div style={{
                 padding: '16px',
@@ -1846,33 +2127,60 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                   {type === 'on_track' ? 'Total On Track' :
                    type === 'at_risk' ? 'Total At Risk' : 'Total Overdue'}
                 </div>
+                <button
+                  onClick={() => setViewMode('loans')}
+                  style={{
+                    marginTop: '12px',
+                    padding: '8px 16px',
+                    background: getStatusColor(),
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '500'
+                  }}
+                >
+                  View All Loans →
+                </button>
               </div>
 
               {data && data.length > 0 ? (
                 <div className="breakdown-list" style={{ display: 'grid', gap: '10px' }}>
                   <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
-                    Breakdown by Milestone
+                    Breakdown by Milestone (click to drill down)
                   </div>
                   {data.map((item) => (
-                    <div key={item.milestone_type} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 16px',
-                      background: '#f9fafb',
-                      borderRadius: '8px',
-                      borderLeft: `3px solid ${getStatusColor()}`
-                    }}>
+                    <div
+                      key={item.milestone_type}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: '#f9fafb',
+                        borderRadius: '8px',
+                        borderLeft: `3px solid ${getStatusColor()}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                      onClick={() => handleMilestoneClick(item.milestone_type)}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#e0f2f1'; e.currentTarget.style.transform = 'translateX(4px)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.transform = 'none'; }}
+                    >
                       <div>
                         <div style={{ fontWeight: '500' }}>{formatMilestoneType(item.milestone_type)}</div>
                         <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.details}</div>
                       </div>
-                      <div style={{
-                        fontSize: '20px',
-                        fontWeight: '600',
-                        color: getStatusColor()
-                      }}>
-                        {item.count}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          fontSize: '20px',
+                          fontWeight: '600',
+                          color: getStatusColor()
+                        }}>
+                          {item.count}
+                        </div>
+                        <span style={{ color: '#9ca3af', fontSize: '12px' }}>→</span>
                       </div>
                     </div>
                   ))}

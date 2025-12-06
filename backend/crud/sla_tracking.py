@@ -148,13 +148,13 @@ def get_all_sla_measures(
     organization_id: int = 1,
     active_only: bool = True
 ) -> List[SLAMeasure]:
-    """Get all SLA measures for an organization."""
+    """Get all SLA measures for an organization, ordered by display_order."""
     query = db.query(SLAMeasure).filter(
         SLAMeasure.organization_id == organization_id
     )
     if active_only:
         query = query.filter(SLAMeasure.is_active == True)
-    return query.order_by(SLAMeasure.milestone_type).all()
+    return query.order_by(SLAMeasure.display_order, SLAMeasure.milestone_type).all()
 
 
 def update_sla_measure(
