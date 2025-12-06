@@ -51021,20 +51021,24 @@ async def get_mum_clients_portfolio(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all MUM clients for portfolio view - uses main MUMClient model"""
+    """Get all MUM clients for portfolio view - includes both MUMClient table AND funded loans"""
     try:
-        # Query from main MUMClient model (defined in main.py)
+        client_list = []
+        refinance_count = 0
+        seen_loan_numbers = set()  # Track loan numbers to avoid duplicates
+
+        # 1. First, get MUM clients from the mum_clients table
         query = db.query(MUMClient).filter(MUMClient.user_id == current_user.id)
         if status and status != "all":
             query = query.filter(MUMClient.status == status)
 
-        clients = query.order_by(MUMClient.created_at.desc()).all()
+        mum_clients = query.order_by(MUMClient.created_at.desc()).all()
 
-        # Build response with calculated fields
-        client_list = []
-        refinance_count = 0
+        for client in mum_clients:
+            # Track this loan number
+            if client.loan_number:
+                seen_loan_numbers.add(client.loan_number)
 
-        for client in clients:
             # Calculate days since funding
             days_since = 0
             if client.original_close_date:
@@ -51044,7 +51048,6 @@ async def get_mum_clients_portfolio(
                 days_since = (datetime.now(timezone.utc) - close_dt).days
 
             # Calculate estimated current balance (simple amortization approximation)
-            # Roughly reduce balance by 1/360 * months passed for 30yr loan
             original_balance = float(client.loan_balance or client.original_loan_amount or 0)
             months_passed = days_since // 30
             principal_paid = (original_balance / 360) * months_passed * 0.3  # Simplified
@@ -51059,17 +51062,19 @@ async def get_mum_clients_portfolio(
             equity_amount = current_value - current_balance
             equity_pct = (equity_amount / current_value * 100) if current_value > 0 else 0
 
-            # Check refinance opportunity (if rates dropped > 0.5%)
+            # Check refinance opportunity
             is_refinance_opportunity = client.refinance_opportunity or False
             if is_refinance_opportunity:
                 refinance_count += 1
 
             client_data = {
                 "id": client.id,
+                "source": "mum_client",  # Mark source for debugging
                 "client_name": client.client_name or client.name,
                 "email": client.email,
                 "phone": client.phone,
                 "loan_number": client.loan_number,
+                "servicing_loan_number": client.loan_number,
                 "original_loan_amount": original_balance,
                 "current_loan_amount": round(current_balance, 2),
                 "loan_balance": round(current_balance, 2),
@@ -51091,12 +51096,97 @@ async def get_mum_clients_portfolio(
                 "status": client.status or "Active",
                 "last_contact": client.last_contact.isoformat() if client.last_contact else None,
                 "notes": client.notes,
-                # Team info
                 "loan_officer": client.loan_officer,
                 "processor": client.processor,
             }
 
             client_list.append(client_data)
+
+        # 2. Now get funded loans from the loans table that aren't already in MUM clients
+        funded_loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED
+        ).all()
+
+        for loan in funded_loans:
+            # Skip if this loan is already in MUM clients
+            if loan.loan_number and loan.loan_number in seen_loan_numbers:
+                continue
+
+            # Calculate days since funding
+            days_since = 0
+            close_dt = loan.funded_date or loan.closing_date
+            if close_dt:
+                if hasattr(close_dt, 'tzinfo') and close_dt.tzinfo is None:
+                    close_dt = close_dt.replace(tzinfo=timezone.utc)
+                days_since = (datetime.now(timezone.utc) - close_dt).days
+
+            # Get loan amount
+            original_balance = float(loan.amount or 0)
+            months_passed = max(0, days_since // 30)
+            principal_paid = (original_balance / 360) * months_passed * 0.3 if original_balance > 0 else 0
+            current_balance = max(0, original_balance - principal_paid)
+
+            # Estimate property value
+            original_value = float(loan.purchase_price or loan.appraisal_value or original_balance * 1.25)
+            years_passed = days_since / 365 if days_since > 0 else 0
+            current_value = original_value * (1 + 0.03 * years_passed)
+
+            # Calculate equity
+            equity_amount = current_value - current_balance
+            equity_pct = (equity_amount / current_value * 100) if current_value > 0 else 0
+
+            # Check refinance opportunity (if rate is above 6.5%, consider it a refi opportunity)
+            loan_rate = float(loan.rate or 0)
+            is_refinance_opportunity = loan_rate >= 6.5
+            if is_refinance_opportunity:
+                refinance_count += 1
+
+            # Format closing date
+            closing_date_str = None
+            if close_dt:
+                closing_date_str = close_dt.isoformat() if hasattr(close_dt, 'isoformat') else str(close_dt)
+
+            client_data = {
+                "id": f"loan_{loan.id}",  # Prefix with loan_ to distinguish from MUM client IDs
+                "source": "funded_loan",  # Mark source for debugging
+                "client_name": loan.borrower_name,
+                "email": loan.borrower_email,
+                "phone": loan.borrower_phone,
+                "loan_number": loan.loan_number,
+                "servicing_loan_number": loan.loan_number,
+                "original_loan_amount": original_balance,
+                "current_loan_amount": round(current_balance, 2),
+                "loan_balance": round(current_balance, 2),
+                "interest_rate": loan_rate,
+                "original_rate": loan_rate,
+                "current_rate": loan_rate,
+                "appraisal_value_at_closing": original_value,
+                "current_property_value": round(current_value, 2),
+                "closing_date": closing_date_str,
+                "original_close_date": closing_date_str,
+                "days_since_funding": days_since,
+                "ltv": round((current_balance / current_value * 100) if current_value > 0 else 0, 2),
+                "equity_amount": round(equity_amount, 2),
+                "equity_percentage": round(equity_pct, 2),
+                "refinance_opportunity": is_refinance_opportunity,
+                "estimated_savings": 0,  # Would need rate comparison to calculate
+                "engagement_score": 50,  # Default score for funded loans
+                "referrals_sent": 0,
+                "status": "Active",
+                "last_contact": None,
+                "notes": None,
+                "loan_officer": None,  # Would need to look up
+                "processor": loan.processor,
+                "property_address": loan.property_address,
+                "loan_type": loan.loan_type,
+                "program": loan.program,
+            }
+
+            client_list.append(client_data)
+
+        # Sort by closing date (most recent first)
+        client_list.sort(key=lambda x: x.get("closing_date") or "", reverse=True)
 
         return {
             "clients": client_list,
@@ -51116,56 +51206,55 @@ async def get_mum_metrics(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get aggregated MUM portfolio metrics"""
+    """Get aggregated MUM portfolio metrics - includes both MUM clients and funded loans"""
     try:
-        from models_mum import MUMClient, MUMTransaction
-        from utils_mum import (
-            calculate_current_balance, calculate_property_value,
-            calculate_equity, determine_loan_term_from_type,
-            calculate_servicing_revenue
-        )
         from datetime import date, timedelta
-
-        # Get all active clients
-        clients = db.query(MUMClient).filter(MUMClient.status == 'active').all()
-
-        if not clients:
-            return {
-                "total_upb": 0,
-                "client_count": 0,
-                "net_growth_mom": 0,
-                "portfolio_yield": 0,
-                "avg_client_ltv": 0
-            }
 
         # Calculate metrics
         total_upb = 0
         total_revenue = 0
         total_equity = 0
         ltv_sum = 0
+        client_count = 0
 
         refinance_opps = 0
         heloc_opps = 0
         rate_rebound_opps = 0
+        seen_loan_numbers = set()
 
-        for client in clients:
-            loan_term = determine_loan_term_from_type(client.loan_type)
-            current_balance = calculate_current_balance(
-                float(client.original_loan_amount),
-                float(client.interest_rate),
-                client.first_payment_date,
-                loan_term
-            )
-            current_value = calculate_property_value(
-                float(client.appraisal_value_at_closing),
-                client.first_payment_date
-            )
+        # 1. Process MUM clients
+        mum_clients = db.query(MUMClient).filter(
+            MUMClient.user_id == current_user.id,
+            MUMClient.status == 'active'
+        ).all()
+
+        for client in mum_clients:
+            if client.loan_number:
+                seen_loan_numbers.add(client.loan_number)
+
+            # Calculate days since funding
+            days_since = 0
+            if client.original_close_date:
+                close_dt = client.original_close_date
+                if hasattr(close_dt, 'tzinfo') and close_dt.tzinfo is None:
+                    close_dt = close_dt.replace(tzinfo=timezone.utc)
+                days_since = (datetime.now(timezone.utc) - close_dt).days
+
+            original_balance = float(client.loan_balance or client.original_loan_amount or 0)
+            months_passed = days_since // 30
+            principal_paid = (original_balance / 360) * months_passed * 0.3
+            current_balance = max(0, original_balance - principal_paid)
+
+            original_value = float(client.appraisal_value_at_closing or original_balance * 1.25)
+            years_passed = days_since / 365
+            current_value = original_value * (1 + 0.03 * years_passed)
 
             total_upb += current_balance
-            total_revenue += calculate_servicing_revenue(current_balance)
-            equity_amt, _ = calculate_equity(current_value, current_balance)
-            total_equity += equity_amt
+            total_revenue += current_balance * 0.0025  # Servicing revenue
+            equity_amount = current_value - current_balance
+            total_equity += equity_amount
             ltv_sum += (current_balance / current_value) if current_value > 0 else 0
+            client_count += 1
 
             if client.refinance_opportunity:
                 refinance_opps += 1
@@ -51174,23 +51263,71 @@ async def get_mum_metrics(
             if client.rate_rebound_opportunity:
                 rate_rebound_opps += 1
 
-        # Calculate month-over-month growth
-        thirty_days_ago = date.today() - timedelta(days=30)
-        recent_adds = db.query(MUMTransaction).filter(
-            MUMTransaction.transaction_type == 'added',
-            MUMTransaction.transaction_date >= thirty_days_ago
-        ).all()
-        recent_losses = db.query(MUMTransaction).filter(
-            MUMTransaction.transaction_type.in_(['lost', 'paid_off', 'refinanced']),
-            MUMTransaction.transaction_date >= thirty_days_ago
+        # 2. Process funded loans not already in MUM clients
+        funded_loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED
         ).all()
 
-        added_upb = sum([float(t.loan_amount) for t in recent_adds])
-        lost_upb = sum([float(t.loan_amount) for t in recent_losses])
-        net_growth = added_upb - lost_upb
+        for loan in funded_loans:
+            if loan.loan_number and loan.loan_number in seen_loan_numbers:
+                continue
 
-        # Calculate metrics
-        client_count = len(clients)
+            days_since = 0
+            close_dt = loan.funded_date or loan.closing_date
+            if close_dt:
+                if hasattr(close_dt, 'tzinfo') and close_dt.tzinfo is None:
+                    close_dt = close_dt.replace(tzinfo=timezone.utc)
+                days_since = (datetime.now(timezone.utc) - close_dt).days
+
+            original_balance = float(loan.amount or 0)
+            months_passed = max(0, days_since // 30)
+            principal_paid = (original_balance / 360) * months_passed * 0.3 if original_balance > 0 else 0
+            current_balance = max(0, original_balance - principal_paid)
+
+            original_value = float(loan.purchase_price or loan.appraisal_value or original_balance * 1.25)
+            years_passed = days_since / 365 if days_since > 0 else 0
+            current_value = original_value * (1 + 0.03 * years_passed)
+
+            total_upb += current_balance
+            total_revenue += current_balance * 0.0025
+            equity_amount = current_value - current_balance
+            total_equity += equity_amount
+            ltv_sum += (current_balance / current_value) if current_value > 0 else 0
+            client_count += 1
+
+            # Check refinance opportunity
+            loan_rate = float(loan.rate or 0)
+            if loan_rate >= 6.5:
+                refinance_opps += 1
+                rate_rebound_opps += 1
+
+        if client_count == 0:
+            return {
+                "total_upb": 0,
+                "client_count": 0,
+                "net_growth_mom": 0,
+                "portfolio_yield": 0,
+                "avg_client_ltv": 0,
+                "avg_annual_revenue_per_client": 0,
+                "total_annual_revenue": 0,
+                "refinance_opportunities": 0,
+                "heloc_opportunities": 0,
+                "rate_rebound_opportunities": 0,
+                "loans_added_30d": 0,
+                "loans_lost_30d": 0
+            }
+
+        # Calculate month-over-month growth from funded loans in last 30 days
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        recent_funded = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED,
+            Loan.funded_date >= thirty_days_ago
+        ).all()
+        added_upb = sum([float(l.amount or 0) for l in recent_funded])
+
+        # Calculate final metrics
         portfolio_yield = (total_revenue / total_upb * 100) if total_upb > 0 else 0
         avg_ltv = (ltv_sum / client_count) if client_count > 0 else 0
         avg_client_value = total_revenue / client_count if client_count > 0 else 0
@@ -51198,7 +51335,7 @@ async def get_mum_metrics(
         return {
             "total_upb": round(total_upb, 2),
             "client_count": client_count,
-            "net_growth_mom": round(net_growth, 2),
+            "net_growth_mom": round(added_upb, 2),
             "portfolio_yield": round(portfolio_yield, 4),
             "avg_client_ltv": round(avg_ltv, 4),
             "avg_annual_revenue_per_client": round(avg_client_value, 2),
@@ -51206,12 +51343,14 @@ async def get_mum_metrics(
             "refinance_opportunities": refinance_opps,
             "heloc_opportunities": heloc_opps,
             "rate_rebound_opportunities": rate_rebound_opps,
-            "loans_added_30d": len(recent_adds),
-            "loans_lost_30d": len(recent_losses)
+            "loans_added_30d": len(recent_funded),
+            "loans_lost_30d": 0  # Would need to track separately
         }
 
     except Exception as e:
         logger.error(f"Get MUM metrics error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
