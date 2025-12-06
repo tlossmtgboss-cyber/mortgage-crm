@@ -321,37 +321,54 @@ function LeadDetail() {
         const timestamp = Date.now().toString(36).toUpperCase();
         const loanNumber = `LEAD-${id}-${timestamp}`;
 
+        // Build borrower name from available data
+        const borrowerName = lead?.name || formData?.name ||
+          `${formData?.first_name || lead?.first_name || ''} ${formData?.last_name || lead?.last_name || ''}`.trim() ||
+          'Unknown Borrower';
+
+        // Get loan amount - default to 1 if not set (required field)
+        const loanAmount = parseFloat(lead?.loan_amount || formData?.loan_amount || lead?.amount || formData?.amount) || 1;
+
         // Create a new loan from the lead data
         const loanData = {
           loan_number: loanNumber,
-          borrower_name: lead?.name || formData?.name || `${formData?.first_name || ''} ${formData?.last_name || ''}`.trim(),
+          borrower_name: borrowerName,
           borrower_email: lead?.email || formData?.email,
           borrower_phone: lead?.phone || formData?.phone,
-          amount: lead?.loan_amount || formData?.loan_amount || 0,
+          amount: loanAmount,
           stage: newStatus,  // Use selected stage (Disclosed or Funded)
           property_address: lead?.property_address || formData?.property_address,
         };
 
         console.log(`Converting lead to ${newStatus} loan with data:`, loanData);
-        const newLoan = await loansAPI.create(loanData);
-        console.log('Loan created:', newLoan);
 
-        // Update lead stage to indicate it's been converted
-        await leadsAPI.update(id, { stage: newStatus });
+        try {
+          const newLoan = await loansAPI.create(loanData);
+          console.log('Loan created:', newLoan);
 
-        // Clear caches
-        localStorage.removeItem('leads_data');
-        localStorage.removeItem('leads_data_time');
-        localStorage.removeItem('loans_data');
-        localStorage.removeItem('loans_data_time');
+          // Update lead stage to indicate it's been converted
+          await leadsAPI.update(id, { stage: newStatus });
 
-        // Navigate to the new loan (Active Loans for Disclosed, Portfolio/MUM for Funded)
-        if (newStatus === 'Funded') {
-          navigate(`/mum/${newLoan.id}`);  // Funded goes to MUM/Portfolio
-        } else {
-          navigate(`/loans/${newLoan.id}`);  // Disclosed goes to Active Loans
+          // Clear caches
+          localStorage.removeItem('leads_data');
+          localStorage.removeItem('leads_data_time');
+          localStorage.removeItem('loans_data');
+          localStorage.removeItem('loans_data_time');
+
+          // Navigate to the new loan (Active Loans for Disclosed, Portfolio/MUM for Funded)
+          if (newStatus === 'Funded') {
+            navigate(`/mum/${newLoan.id}`);  // Funded goes to MUM/Portfolio
+          } else {
+            navigate(`/loans/${newLoan.id}`);  // Disclosed goes to Active Loans
+          }
+          return;
+        } catch (loanError) {
+          console.error('Error creating loan:', loanError);
+          const errorMessage = loanError.response?.data?.detail || loanError.message || 'Failed to create loan';
+          alert(`Could not convert lead to ${newStatus}: ${errorMessage}`);
+          setStatusSaving(false);
+          return;
         }
-        return;
       }
 
       // Update local state immediately
@@ -368,6 +385,7 @@ function LeadDetail() {
       console.log(`Status updated to: ${newStatus}`);
     } catch (error) {
       console.error('Error updating status:', error);
+      alert(`Error updating status: ${error.message || 'Unknown error'}`);
       // Revert on error
       setFormData(prev => ({ ...prev, stage: lead?.stage }));
       setLead(prev => ({ ...prev, stage: lead?.stage }));
