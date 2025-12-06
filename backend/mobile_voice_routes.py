@@ -498,10 +498,16 @@ async def mobile_voice_websocket(
         token = websocket.query_params.get("token")
         if token:
             try:
-                # Validate token and extract user
-                from auth import validate_token
-                user_data = validate_token(token)
-                user_id = user_data.get("sub", user_id)
+                # Validate token and extract user using jose JWT
+                from jose import jwt, JWTError
+                import os
+                SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+                ALGORITHM = "HS256"
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                user_id = payload.get("sub", user_id)
+                logger.info(f"[MobileVoice] Authenticated user: {user_id}")
+            except JWTError as e:
+                logger.warning(f"[MobileVoice] JWT validation failed: {e}")
             except Exception as e:
                 logger.warning(f"[MobileVoice] Token validation failed: {e}")
 
