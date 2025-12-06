@@ -31069,7 +31069,36 @@ Built-in compliance monitoring vs. add-on compliance tools:
             <li><strong>Audit Trail</strong> - Complete activity logging</li>
         </ul>
 
-        <h3>6. Mobile Application</h3>
+        <h3>6. Loan Efficiency Management</h3>
+        <ul>
+            <li><strong>Cycle Time Analytics</strong> - Track time-in-stage and identify bottlenecks</li>
+            <li><strong>SLA Monitoring</strong> - Real-time alerts when loans exceed target timelines</li>
+            <li><strong>Workflow Automation</strong> - Auto-trigger tasks based on loan milestones</li>
+            <li><strong>Capacity Planning</strong> - Balance workload across team members</li>
+            <li><strong>Turn Time Optimization</strong> - AI recommendations to accelerate closings</li>
+        </ul>
+
+        <h3>7. Profitability Management</h3>
+        <ul>
+            <li><strong>Loan-Level P&L</strong> - Track revenue, costs, and margin per loan</li>
+            <li><strong>Commission Tracking</strong> - Automated commission calculations and splits</li>
+            <li><strong>Cost Analysis</strong> - Monitor origination costs and overhead allocation</li>
+            <li><strong>Revenue Forecasting</strong> - Predict income based on pipeline and close rates</li>
+            <li><strong>Profitability Dashboards</strong> - Real-time visibility into financial performance</li>
+            <li><strong>Margin Optimization</strong> - AI-driven pricing recommendations</li>
+        </ul>
+
+        <h3>8. Partner Management</h3>
+        <ul>
+            <li><strong>Referral Partner Portal</strong> - Self-service access for realtors and builders</li>
+            <li><strong>Partner Performance Tracking</strong> - Monitor referral volume and conversion rates</li>
+            <li><strong>Co-Marketing Tools</strong> - Branded materials and campaign coordination</li>
+            <li><strong>Commission Sharing</strong> - Automated referral fee calculations</li>
+            <li><strong>Partner Communication</strong> - Automated status updates to referral sources</li>
+            <li><strong>Relationship Scoring</strong> - Identify top-performing partnerships</li>
+        </ul>
+
+        <h3>9. Mobile Application</h3>
         <ul>
             <li><strong>iOS & Android</strong> - Cross-platform React Native/Expo app</li>
             <li><strong>Real-Time Sync</strong> - Instant updates across devices</li>
