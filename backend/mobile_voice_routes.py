@@ -236,6 +236,9 @@ class AriaVoiceAgent:
         # Import LangGraph chat handler
         try:
             from ai_command_routes import langgraph_chat_handler
+            import traceback
+
+            logger.info(f"[AriaVoiceAgent] Processing: '{transcript}' for user {self.user_id}")
 
             # Call the existing LangGraph handler
             result = await langgraph_chat_handler(
@@ -244,12 +247,33 @@ class AriaVoiceAgent:
                 db=db
             )
 
+            logger.info(f"[AriaVoiceAgent] LangGraph result: {result}")
             response = result.get("response", "I'm having trouble processing that. Could you try again?")
 
         except Exception as e:
             logger.error(f"[AriaVoiceAgent] Error calling LangGraph: {e}")
-            # Fallback to simple response
-            response = "I apologize, I'm having some technical difficulties. Please try again in a moment."
+            logger.error(f"[AriaVoiceAgent] Traceback: {traceback.format_exc()}")
+            # Fallback to simple Anthropic call for voice
+            try:
+                from anthropic import Anthropic
+                client = Anthropic()
+
+                # Simple direct response for voice
+                voice_messages = [{"role": "user", "content": transcript}]
+                if self.conversation_history:
+                    voice_messages = self.conversation_history[-6:] + voice_messages  # Keep last 3 exchanges
+
+                ai_response = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=150,
+                    system="""You are Aria, a helpful mortgage assistant. Keep responses brief (under 50 words) and conversational for voice. Be warm and professional.""",
+                    messages=voice_messages
+                )
+                response = ai_response.content[0].text
+                logger.info(f"[AriaVoiceAgent] Fallback response: {response}")
+            except Exception as fallback_error:
+                logger.error(f"[AriaVoiceAgent] Fallback also failed: {fallback_error}")
+                response = "Sorry, I'm having trouble right now. Try again in a moment."
 
         # Add assistant response to history
         self.conversation_history.append({
@@ -320,8 +344,8 @@ class MobileVoiceSession:
             "tts_enabled": bool(ELEVENLABS_API_KEY or OPENAI_API_KEY)
         })
 
-        # Play greeting
-        greeting = "Hey! I'm Aria. How can I help you today?"
+        # Play greeting - keep it casual and short
+        greeting = "Hey! What's up?"
         await self._speak(greeting)
 
     async def _on_transcript(self, result: Dict[str, Any]):
