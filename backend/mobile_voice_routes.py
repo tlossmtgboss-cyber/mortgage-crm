@@ -234,9 +234,9 @@ class AriaVoiceAgent:
         })
 
         # Import LangGraph chat handler
+        import traceback
         try:
             from ai_command_routes import langgraph_chat_handler
-            import traceback
 
             logger.info(f"[AriaVoiceAgent] Processing: '{transcript}' for user {self.user_id}")
 
