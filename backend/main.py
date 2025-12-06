@@ -53508,6 +53508,132 @@ async def add_leads_import_columns_migration(
 
 
 # ============================================================================
+# NATIVE ACTION DETECTION FOR MOBILE APP
+# ============================================================================
+
+def detect_native_action(message: str, db: Session = None) -> dict | None:
+    """
+    Detect if the user's message requests a native device action (SMS, call, email).
+    These actions should be executed on the mobile device, not the server.
+
+    Returns a native_action dict if detected, None otherwise.
+    """
+    import re
+    message_lower = message.lower()
+
+    # Patterns for SMS/text requests
+    sms_patterns = [
+        r"(send|text|sms)\s+(a\s+)?(text|message|sms)\s+to\s+(.+?)(?:\s+(?:saying|with|about|to say)\s+(.+))?$",
+        r"text\s+(.+?)(?:\s+(?:saying|with|about|to say)\s+(.+))?$",
+        r"(send|shoot)\s+(.+?)\s+a\s+(text|message)(?:\s+(?:saying|with|about)\s+(.+))?$",
+    ]
+
+    # Patterns for call requests
+    call_patterns = [
+        r"(call|dial|phone)\s+(.+?)(?:\s+(?:at|on)\s+)?(\d[\d\s\-\(\)]+)?$",
+        r"(give|make)\s+(a\s+)?call\s+to\s+(.+)",
+    ]
+
+    # Check for SMS/text request
+    for pattern in sms_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            # Extract recipient name from the match
+            groups = match.groups()
+            recipient_name = None
+            message_content = None
+
+            # Pattern-specific extraction
+            if len(groups) >= 4:
+                recipient_name = groups[3] if groups[3] else groups[1]
+                message_content = groups[4] if len(groups) > 4 and groups[4] else None
+            elif len(groups) >= 2:
+                recipient_name = groups[0] if groups[0] else groups[1]
+                message_content = groups[1] if len(groups) > 1 else None
+
+            if recipient_name:
+                # Clean up recipient name
+                recipient_name = recipient_name.strip().rstrip('.')
+
+                # Try to look up phone number from CRM if db available
+                phone_number = None
+                if db and recipient_name:
+                    phone_number = _lookup_contact_phone(db, recipient_name)
+
+                return {
+                    "type": "send_sms",
+                    "recipient_name": recipient_name.title(),
+                    "phone_number": phone_number,
+                    "message": message_content.strip() if message_content else None,
+                    "requires_phone_lookup": phone_number is None
+                }
+
+    # Check for call request
+    for pattern in call_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            groups = match.groups()
+            recipient_name = groups[-1].strip() if groups[-1] else groups[1].strip() if len(groups) > 1 and groups[1] else None
+
+            if recipient_name:
+                recipient_name = recipient_name.strip().rstrip('.')
+
+                # Try to look up phone number from CRM
+                phone_number = None
+                if db and recipient_name:
+                    phone_number = _lookup_contact_phone(db, recipient_name)
+
+                return {
+                    "type": "make_call",
+                    "recipient_name": recipient_name.title(),
+                    "phone_number": phone_number,
+                    "requires_phone_lookup": phone_number is None
+                }
+
+    return None
+
+
+def _lookup_contact_phone(db: Session, name: str) -> str | None:
+    """Look up a contact's phone number from leads, loans, or referral partners."""
+    name_lower = name.lower().strip()
+
+    # Search in leads
+    lead = db.execute(text("""
+        SELECT phone FROM leads
+        WHERE LOWER(first_name || ' ' || last_name) LIKE :name
+           OR LOWER(first_name) LIKE :name
+           OR LOWER(last_name) LIKE :name
+        LIMIT 1
+    """), {"name": f"%{name_lower}%"}).fetchone()
+
+    if lead and lead.phone:
+        return lead.phone
+
+    # Search in loans (borrower)
+    loan = db.execute(text("""
+        SELECT borrower_phone FROM loans
+        WHERE LOWER(borrower_name) LIKE :name
+        LIMIT 1
+    """), {"name": f"%{name_lower}%"}).fetchone()
+
+    if loan and loan.borrower_phone:
+        return loan.borrower_phone
+
+    # Search in referral partners
+    partner = db.execute(text("""
+        SELECT phone FROM referral_partners
+        WHERE LOWER(name) LIKE :name
+           OR LOWER(contact_name) LIKE :name
+        LIMIT 1
+    """), {"name": f"%{name_lower}%"}).fetchone()
+
+    if partner and partner.phone:
+        return partner.phone
+
+    return None
+
+
+# ============================================================================
 # LANGGRAPH AI AGENT ENDPOINT
 # ============================================================================
 
@@ -53660,6 +53786,12 @@ async def langgraph_orchestrator_chat(
             "cached": False,
             "performance": result.get("performance", {})  # Include performance metrics
         }
+
+        # Check for native mobile actions (SMS, calls) that should be executed on device
+        native_action = detect_native_action(message, db)
+        if native_action:
+            response_data["native_action"] = native_action
+            logger.info(f"[NATIVE ACTION] Detected: {native_action['type']} to {native_action.get('recipient_name')}")
 
         # === Cache the response (only for high-confidence, single-turn, no-action queries) ===
         if (use_cache
