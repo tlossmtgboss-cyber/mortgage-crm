@@ -126,7 +126,10 @@ class DeepgramSTTClient:
     async def send_audio(self, audio_bytes: bytes):
         """Send audio data to Deepgram"""
         if self.websocket:
+            logger.debug(f"[DeepgramSTT] Sending {len(audio_bytes)} bytes to Deepgram")
             await self.websocket.send(audio_bytes)
+        else:
+            logger.warning("[DeepgramSTT] Cannot send audio - websocket not connected")
 
     async def close(self):
         """Close the Deepgram connection"""
@@ -420,7 +423,17 @@ class MobileVoiceSession:
             audio_data = message.get("data", "")
             if audio_data and self.stt_client:
                 audio_bytes = base64.b64decode(audio_data)
+                logger.info(f"[MobileVoiceSession] Received audio: {len(audio_bytes)} bytes")
+
+                # Strip WAV header if present (first 44 bytes for standard WAV)
+                # WAV files start with "RIFF"
+                if len(audio_bytes) > 44 and audio_bytes[:4] == b'RIFF':
+                    logger.info("[MobileVoiceSession] Stripping WAV header from audio")
+                    audio_bytes = audio_bytes[44:]  # Skip WAV header
+
                 await self.stt_client.send_audio(audio_bytes)
+            elif not self.stt_client:
+                logger.warning("[MobileVoiceSession] Received audio but STT client not initialized")
 
         elif msg_type == "start_listening":
             self.is_listening = True
