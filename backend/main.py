@@ -54502,24 +54502,34 @@ If you cannot identify a partner or lead, set those fields to null but still ret
 
         # Only create task if we found something
         if entities_created["referral_partner"] or entities_created["lead"]:
-            new_task = Task(
-                title=task_title,
-                description=task_description,
-                status="pending",
-                priority="high" if entities_created["lead"] and entities_created["lead"]["created"] else "medium",
-                due_date=datetime.now(timezone.utc) + timedelta(days=1),
-                owner_id=current_user.id,
-                lead_id=lead_id,
-                related_contact_name=entities_created["lead"]["name"] if entities_created["lead"] else (entities_created["referral_partner"]["name"] if entities_created["referral_partner"] else None),
-                related_type="lead" if lead_id else "partner"
-            )
-            db.add(new_task)
-            db.flush()
+            # Use raw SQL to avoid ORM column mismatch with production database
+            from sqlalchemy import text
+            task_priority = "high" if entities_created["lead"] and entities_created["lead"]["created"] else "medium"
+            task_due = datetime.now(timezone.utc) + timedelta(days=1)
+            task_contact_name = entities_created["lead"]["name"] if entities_created["lead"] else (entities_created["referral_partner"]["name"] if entities_created["referral_partner"] else None)
+            task_related_type = "lead" if lead_id else "partner"
+
+            result = db.execute(text("""
+                INSERT INTO tasks (title, description, status, priority, due_date, owner_id, lead_id, related_contact_name, related_type, created_at, updated_at)
+                VALUES (:title, :description, :status, :priority, :due_date, :owner_id, :lead_id, :contact_name, :related_type, NOW(), NOW())
+                RETURNING id
+            """), {
+                "title": task_title,
+                "description": task_description,
+                "status": "pending",
+                "priority": task_priority,
+                "due_date": task_due,
+                "owner_id": current_user.id,
+                "lead_id": lead_id,
+                "contact_name": task_contact_name,
+                "related_type": task_related_type
+            })
+            task_id = result.scalar()
             entities_created["task"] = {
-                "id": new_task.id,
-                "title": new_task.title
+                "id": task_id,
+                "title": task_title
             }
-            logger.info(f"[SCREENSHOT] Created task: {task_title} (ID: {new_task.id})")
+            logger.info(f"[SCREENSHOT] Created task: {task_title} (ID: {task_id})")
 
         # Commit all changes
         db.commit()
