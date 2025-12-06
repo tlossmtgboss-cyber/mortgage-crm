@@ -205,8 +205,13 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"transcri(be|ption)",
     ],
     "email": [
+        # Action-based email patterns (highest priority - user wants to DO something with email)
+        r"(send|draft|compose|write|forward|reply) (an? )?(email|message|note) to",
+        r"(send|draft|compose|write) .{1,50} (an? )?(email|message)",
+        r"(email|message|write to|send to) [A-Z][a-z]+ [A-Z][a-z]+",  # email John Smith
+        r"(send|email) (it|this|that) to",
+        # General email patterns
         r"\bemail\b",
-        r"(send|draft|compose) (an? )?email",
         r"email (template|thread)",
         r"inbox",
         r"(need|have) to respond",
