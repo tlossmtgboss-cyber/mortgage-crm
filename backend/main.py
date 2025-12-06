@@ -31006,6 +31006,16 @@ Built-in compliance monitoring vs. add-on compliance tools:
             <tr><td>Team Coach</td><td>Performance coaching</td><td>Training, goal tracking, motivation</td></tr>
             <tr><td>Data Analyst</td><td>Analytics</td><td>Reporting, trend analysis, KPIs</td></tr>
             <tr><td>Marketing Manager</td><td>Campaign management</td><td>Lead generation, ROI tracking</td></tr>
+            <tr><td>Quality Controller</td><td>Quality assurance</td><td>File audits, pre-submission checks</td></tr>
+            <tr><td>Underwriting Assistant</td><td>UW support</td><td>Guideline checks, condition prep</td></tr>
+            <tr><td>Closing Coordinator</td><td>Closing management</td><td>Timeline tracking, party coordination</td></tr>
+            <tr><td>Post-Close Manager</td><td>Servicing prep</td><td>Transfer coordination, retention</td></tr>
+            <tr><td>Branch Manager</td><td>Multi-office oversight</td><td>Team management, P&L analysis</td></tr>
+            <tr><td>Vendor Manager</td><td>Third-party coordination</td><td>Appraisal, title, insurance tracking</td></tr>
+            <tr><td>Training Specialist</td><td>Onboarding & training</td><td>Skill assessment, learning paths</td></tr>
+            <tr><td>Innovation Scout</td><td>Industry monitoring</td><td>Tech trends, competitive analysis</td></tr>
+            <tr><td>Executive Assistant</td><td>Productivity</td><td>Scheduling, task management</td></tr>
+            <tr><td>Crisis Manager</td><td>Issue resolution</td><td>Escalation handling, recovery</td></tr>
         </table>
 
         <h2 class="section">Core Features</h2>
