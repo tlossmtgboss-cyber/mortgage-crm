@@ -814,6 +814,32 @@ Format responses with markdown for clarity."""
                 }
             })
 
+        if "get_emails_needing_response" in self._tool_functions:
+            definitions.append({
+                "name": "get_emails_needing_response",
+                "description": "Get emails from your inbox that need a response. Shows unread/pending emails requiring attention. Use this when user asks about emails to respond to, inbox status, or unread emails.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "days": {
+                            "type": "integer",
+                            "description": "Number of days to look back",
+                            "default": 7
+                        },
+                        "unread_only": {
+                            "type": "boolean",
+                            "description": "Only show unread/pending emails",
+                            "default": True
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of emails to return",
+                            "default": 20
+                        }
+                    }
+                }
+            })
+
         return definitions
 
     async def _execute_tool(self, tool_name: str, args: Dict) -> Dict[str, Any]:
