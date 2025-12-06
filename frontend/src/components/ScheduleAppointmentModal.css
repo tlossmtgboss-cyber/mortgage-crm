@@ -258,6 +258,40 @@
   height: 18px;
 }
 
+/* Team Member Selection */
+.schedule-team-section {
+  margin-bottom: 20px;
+}
+
+.schedule-team-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 12px 0;
+}
+
+.schedule-team-dropdown-wrapper {
+  position: relative;
+}
+
+.schedule-team-dropdown {
+  width: 100%;
+  padding: 12px 40px 12px 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 15px;
+  color: #1a1a1a;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.schedule-team-dropdown:focus {
+  outline: none;
+  border-color: #217F8D;
+}
+
 /* Borrower Info */
 .schedule-borrower-info {
   background: #f7f7f7;

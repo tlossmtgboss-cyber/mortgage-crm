@@ -14,6 +14,8 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [selectedTeamMember, setSelectedTeamMember] = useState('');
 
   // Generate week dates starting from weekStart
   const getWeekDates = useCallback(() => {
@@ -60,6 +62,57 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
     return date < today;
   };
 
+  // Fetch team members assigned to this borrower
+  const fetchTeamMembers = useCallback(async () => {
+    if (!borrower?.id) return;
+
+    try {
+      // Try to fetch assigned team members for this lead/loan
+      const response = await fetch(`${API_BASE}/api/v1/leads/${borrower.id}/team-assignments`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const assignments = data.assignments || data || [];
+        setTeamMembers(assignments);
+        // Auto-select first team member if available
+        if (assignments.length > 0) {
+          setSelectedTeamMember(assignments[0].member_id || assignments[0].user_id || assignments[0].id || '');
+        }
+      } else {
+        // Fallback: fetch all team members
+        const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (allMembersResponse.ok) {
+          const data = await allMembersResponse.json();
+          setTeamMembers(data.team_members || data || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      // Try fetching all team members as fallback
+      try {
+        const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (allMembersResponse.ok) {
+          const data = await allMembersResponse.json();
+          setTeamMembers(data.team_members || data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching all team members:', err);
+      }
+    }
+  }, [borrower?.id]);
+
   // Initialize selected date when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -70,10 +123,14 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
       setWeekStart(today);
       setSelectedDate(today);
       setSelectedTime('');
+      setSelectedTeamMember('');
       setError(null);
       setSuccess(false);
+
+      // Fetch team members
+      fetchTeamMembers();
     }
-  }, [isOpen]);
+  }, [isOpen, fetchTeamMembers]);
 
   // Fetch available slots when date changes
   const fetchSlots = useCallback(async () => {
@@ -162,13 +219,26 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
       return;
     }
 
-    if (!borrower?.email) {
+    if (!borrower?.email && !borrower?.borrower_email) {
       setError('Borrower email is required to send confirmation.');
+      return;
+    }
+
+    if (!selectedTeamMember) {
+      setError('Please select a team member for the appointment.');
       return;
     }
 
     setSubmitting(true);
     setError(null);
+
+    // Get selected team member details
+    const selectedMember = teamMembers.find(m =>
+      (m.member_id || m.user_id || m.id)?.toString() === selectedTeamMember?.toString()
+    );
+    const teamMemberName = selectedMember?.name ||
+      `${selectedMember?.first_name || ''} ${selectedMember?.last_name || ''}`.trim() ||
+      'Team Member';
 
     try {
       const response = await fetch(`${API_BASE}/api/v1/scheduler/public/book/demo/confirm`, {
@@ -181,8 +251,10 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
           attendee_name: borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim(),
           attendee_email: borrower.email || borrower.borrower_email,
           attendee_phone: borrower.phone || borrower.borrower_phone || '',
-          notes: `Meeting mode: ${meetingMode === 'video' ? 'Video Call' : 'Phone Call'}`,
-          meeting_mode: meetingMode
+          notes: `Meeting mode: ${meetingMode === 'video' ? 'Video Call' : 'Phone Call'}\nAppointment with: ${teamMemberName}`,
+          meeting_mode: meetingMode,
+          team_member_id: selectedTeamMember,
+          team_member_name: teamMemberName
         })
       });
 
@@ -321,6 +393,33 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
               </div>
             </div>
 
+            {/* Team Member Selection */}
+            <div className="schedule-team-section">
+              <h3>Appointment with</h3>
+              <div className="schedule-team-dropdown-wrapper">
+                <select
+                  className="schedule-team-dropdown"
+                  value={selectedTeamMember}
+                  onChange={(e) => setSelectedTeamMember(e.target.value)}
+                >
+                  <option value="">Select team member...</option>
+                  {teamMembers.map((member, idx) => {
+                    const memberId = member.member_id || member.user_id || member.id;
+                    const memberName = member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim();
+                    const memberRole = member.role || '';
+                    return (
+                      <option key={idx} value={memberId}>
+                        {memberName}{memberRole ? ` - ${memberRole}` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <svg className="schedule-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </div>
+            </div>
+
             {/* Borrower Info */}
             <div className="schedule-borrower-info">
               <p>
@@ -335,7 +434,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
             <button
               className="schedule-submit-btn"
               onClick={handleSubmit}
-              disabled={submitting || !selectedDate || !selectedTime}
+              disabled={submitting || !selectedDate || !selectedTime || !selectedTeamMember}
             >
               {submitting ? 'Scheduling...' : 'Submit'}
             </button>
