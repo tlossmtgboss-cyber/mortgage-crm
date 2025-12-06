@@ -339,7 +339,7 @@ async def process_incoming_email(email: Dict[str, Any], db: Any):
         should_auto_execute = (
             pattern_match and
             pattern_match.get("is_active") and
-            pattern_match.get("confidence_score", 0) >= pattern_match.get("auto_execute_threshold", 0.85)
+            pattern_match.get("confidence_score", 0) >= pattern_match.get("auto_execute_threshold", 0.95)
         )
 
         # Determine priority
@@ -574,7 +574,7 @@ async def check_response_patterns(
                 "response_config": row.response_config,
                 "confidence_score": float(row.confidence_score) if row.confidence_score else 0,
                 "is_active": row.is_active,
-                "auto_execute_threshold": float(row.auto_execute_threshold) if row.auto_execute_threshold else 0.85,
+                "auto_execute_threshold": float(row.auto_execute_threshold) if row.auto_execute_threshold else 0.95,
             }
         return None
 

@@ -25236,7 +25236,7 @@ async def get_email_response_patterns(
                 },
                 "auto_execute": {
                     "enabled": row.is_active,
-                    "threshold": float(row.auto_execute_threshold) if row.auto_execute_threshold else 0.85,
+                    "threshold": float(row.auto_execute_threshold) if row.auto_execute_threshold else 0.95,
                     "requires_entity_match": row.requires_entity_match,
                 },
                 "last_matched_at": row.last_matched_at.isoformat() if row.last_matched_at else None,

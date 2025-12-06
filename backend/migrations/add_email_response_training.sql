@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS email_response_patterns (
 
     -- Auto-execution settings
     is_active BOOLEAN DEFAULT FALSE,  -- User must explicitly enable
-    auto_execute_threshold NUMERIC(3,2) DEFAULT 0.85,  -- Min confidence to auto-execute
+    auto_execute_threshold NUMERIC(3,2) DEFAULT 0.95,  -- Min confidence to auto-execute (95% required)
     requires_entity_match BOOLEAN DEFAULT TRUE,  -- Must match a lead/loan
 
     -- Timestamps
