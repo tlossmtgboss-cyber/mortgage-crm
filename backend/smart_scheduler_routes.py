@@ -1542,12 +1542,64 @@ async def get_public_booking_page(
     """Get public booking page data"""
     BookingLink = _models['BookingLink']
     AppointmentType = _models['AppointmentType']
+    User = _models.get('User')
 
     link = db.query(BookingLink).filter(
         BookingLink.slug == slug,
         BookingLink.is_active == True,
         BookingLink.is_public == True
     ).first()
+
+    # Auto-create demo booking link if it doesn't exist
+    if not link and slug == "demo":
+        try:
+            # Get admin user or first user
+            if User:
+                admin_user = db.query(User).filter(User.is_admin == True).first()
+                if not admin_user:
+                    admin_user = db.query(User).first()
+                if admin_user:
+                    # Create demo appointment type
+                    demo_type = db.query(AppointmentType).filter(AppointmentType.type_key == "demo_consultation").first()
+                    if not demo_type:
+                        demo_type = AppointmentType(
+                            user_id=admin_user.id,
+                            type_name="Product Demo",
+                            type_key="demo_consultation",
+                            description="Schedule a personalized demo of our platform",
+                            default_duration_minutes=30,
+                            allowed_durations=[15, 30, 45, 60],
+                            meeting_type="consultation",
+                            meeting_mode="video",
+                            color="#667eea",
+                            icon="calendar",
+                            is_public=True,
+                            is_active=True,
+                            requires_confirmation=False,
+                            buffer_before_minutes=5,
+                            buffer_after_minutes=5
+                        )
+                        db.add(demo_type)
+                        db.flush()
+
+                    link = BookingLink(
+                        user_id=admin_user.id,
+                        slug="demo",
+                        link_name="Schedule a Demo",
+                        description="Book a personalized demo of Perennia AI - Intelligent Mortgage Production Manager",
+                        is_active=True,
+                        is_public=True,
+                        appointment_type_ids=[demo_type.id],
+                        custom_title="Schedule Your Demo",
+                        custom_description="See how Perennia AI can transform your mortgage operations.",
+                        routing_strategy="round_robin",
+                        max_bookings_per_day=10
+                    )
+                    db.add(link)
+                    db.commit()
+                    logger.info("Auto-created demo booking link")
+        except Exception as e:
+            logger.error(f"Error auto-creating demo link: {e}")
 
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
@@ -1934,10 +1986,54 @@ async def run_scheduler_migration(
 
         logger.info(f"Scheduler migration complete. Created tables: {created}")
 
+        # Ensure demo booking link exists
+        demo_link = db.query(BookingLink).filter(BookingLink.slug == "demo").first()
+        if not demo_link:
+            # Create default appointment types first
+            demo_type = db.query(AppointmentType).filter(AppointmentType.type_key == "demo_consultation").first()
+            if not demo_type:
+                demo_type = AppointmentType(
+                    user_id=user.id,
+                    type_name="Demo Consultation",
+                    type_key="demo_consultation",
+                    description="Schedule a demo of our mortgage production management platform",
+                    default_duration_minutes=30,
+                    allowed_durations=[15, 30, 45, 60],
+                    meeting_type="consultation",
+                    meeting_mode="video",
+                    color="#667eea",
+                    icon="calendar",
+                    is_public=True,
+                    is_active=True,
+                    requires_confirmation=False,
+                    buffer_before_minutes=5,
+                    buffer_after_minutes=5
+                )
+                db.add(demo_type)
+                db.flush()
+
+            demo_link = BookingLink(
+                user_id=user.id,
+                slug="demo",
+                link_name="Schedule a Demo",
+                description="Book a personalized demo of Perennia AI - Intelligent Mortgage Production Manager",
+                is_active=True,
+                is_public=True,
+                appointment_type_ids=[demo_type.id],
+                custom_title="Schedule Your Demo",
+                custom_description="See how Perennia AI can transform your mortgage operations with AI-powered automation.",
+                routing_strategy="round_robin",
+                max_bookings_per_day=10
+            )
+            db.add(demo_link)
+            db.commit()
+            logger.info("Created demo booking link")
+
         return {
             "message": "Scheduler migration complete",
             "created_tables": created,
-            "existing_tables": [t for t in tables_to_create if t in existing_tables]
+            "existing_tables": [t for t in tables_to_create if t in existing_tables],
+            "demo_link_exists": True
         }
 
     except Exception as e:
