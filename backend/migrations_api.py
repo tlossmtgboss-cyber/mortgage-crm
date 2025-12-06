@@ -629,3 +629,53 @@ async def run_weekly_task_columns_migration(
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/add-email-response-training-tables")
+async def run_email_response_training_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Run the Email Response Training tables migration.
+
+    Creates tables for AI email response learning:
+    - email_response_patterns - Stores learned behaviors with confidence tracking
+    - email_response_log - Tracks all email response actions
+    - email_response_queue - Pending responses awaiting user review
+    - Views for analytics and effectiveness tracking
+    - Trigger for automatic confidence score calculation
+
+    This enables the AI to learn from user approvals/rejections and
+    auto-execute email responses when confidence reaches 95%.
+    """
+    try:
+        from migrations.add_email_response_training_tables import run_migration
+
+        logger.info("Starting Email Response Training tables migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Email Response Training tables created successfully",
+                "tables_created": [
+                    "email_response_patterns",
+                    "email_response_log",
+                    "email_response_queue"
+                ],
+                "views_created": [
+                    "email_pattern_effectiveness",
+                    "user_email_response_stats",
+                    "pending_email_responses"
+                ],
+                "auto_execute_threshold": "95% confidence required"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
