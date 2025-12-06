@@ -11,7 +11,7 @@ Comprehensive API endpoints for:
 - AI-powered slot recommendations
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Path, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta, date, time
@@ -19,6 +19,10 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
 import logging
 import pytz
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from enum import Enum
 
 from smart_scheduler_models import (
@@ -60,6 +64,150 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     return await _get_current_user(token=token, request=request, db=db)
+
+
+# ============================================================================
+# APPOINTMENT NOTIFICATION HELPERS
+# ============================================================================
+
+def send_appointment_confirmation_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    duration: str,
+    meeting_mode: str = "Phone Call",
+    team_member_name: str = None
+):
+    """Send appointment confirmation email"""
+    try:
+        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_user = os.getenv("SMTP_USER") or os.getenv("GMAIL_USER")
+        smtp_pass = os.getenv("SMTP_PASS") or os.getenv("GMAIL_APP_PASSWORD")
+
+        if not smtp_user or not smtp_pass:
+            logger.warning("SMTP credentials not configured - skipping email confirmation")
+            return False
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"Appointment Confirmed: {appointment_title}"
+        msg['From'] = smtp_user
+        msg['To'] = attendee_email
+
+        team_member_section = f"<p><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Confirmed!</h1>
+                </div>
+
+                <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px;">Hi {attendee_name},</p>
+
+                    <p style="font-size: 16px;">Your appointment has been scheduled. Here are the details:</p>
+
+                    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #e5e7eb;">
+                        <p style="margin: 8px 0;"><strong>Date:</strong> {appointment_date}</p>
+                        <p style="margin: 8px 0;"><strong>Time:</strong> {appointment_time}</p>
+                        <p style="margin: 8px 0;"><strong>Duration:</strong> {duration}</p>
+                        <p style="margin: 8px 0;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                        {team_member_section}
+                    </div>
+
+                    <p style="font-size: 14px; color: #666;">
+                        We'll send you a reminder before your appointment. If you need to reschedule,
+                        please contact us as soon as possible.
+                    </p>
+
+                    <p style="font-size: 14px; color: #666; margin-top: 30px;">
+                        Looking forward to speaking with you!
+                    </p>
+                </div>
+
+                <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+                    Sent from Perennia AI - Pipeline 360
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+Appointment Confirmed!
+
+Hi {attendee_name},
+
+Your appointment has been scheduled. Here are the details:
+
+Date: {appointment_date}
+Time: {appointment_time}
+Duration: {duration}
+Meeting Type: {meeting_mode}
+{f'Meeting with: {team_member_name}' if team_member_name else ''}
+
+We'll send you a reminder before your appointment. If you need to reschedule, please contact us as soon as possible.
+
+Looking forward to speaking with you!
+
+- Perennia AI Team
+        """
+
+        msg.attach(MIMEText(text_content, 'plain'))
+        msg.attach(MIMEText(html_content, 'html'))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+
+        logger.info(f"Appointment confirmation email sent to {attendee_email}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to send appointment confirmation email: {e}")
+        return False
+
+
+def send_appointment_confirmation_sms(
+    attendee_phone: str,
+    attendee_name: str,
+    appointment_date: str,
+    appointment_time: str,
+    team_member_name: str = None
+):
+    """Send appointment confirmation SMS via Twilio"""
+    try:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not account_sid or not auth_token or not from_number:
+            logger.warning("Twilio credentials not configured - skipping SMS confirmation")
+            return False
+
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+
+        team_member_text = f" with {team_member_name}" if team_member_name else ""
+        message_body = f"Hi {attendee_name}! Your appointment{team_member_text} is confirmed for {appointment_date} at {appointment_time}. We'll send a reminder before your call. Reply HELP for assistance."
+
+        message = client.messages.create(
+            body=message_body,
+            from_=from_number,
+            to=attendee_phone
+        )
+
+        logger.info(f"Appointment confirmation SMS sent to {attendee_phone}, SID: {message.sid}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to send appointment confirmation SMS: {e}")
+        return False
 
 
 # ============================================================================
@@ -1850,6 +1998,50 @@ async def confirm_public_booking(
 
     logger.info(f"Public booking confirmed: {appointment.id} via link {slug}")
 
+    # Prepare confirmation details
+    appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
+    appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
+    duration_str = f"{duration_minutes} minutes"
+    meeting_mode_str = "Phone Call" if appointment.meeting_mode == MeetingMode.PHONE else "Video Call"
+
+    # Get team member name from notes if available
+    team_member_name = None
+    if intake_responses and intake_responses.get("notes"):
+        notes = intake_responses.get("notes", "")
+        if "Appointment with:" in notes:
+            team_member_name = notes.split("Appointment with:")[-1].strip()
+
+    # Send email confirmation (runs in background to not block response)
+    email_sent = False
+    sms_sent = False
+
+    if attendee_email:
+        try:
+            email_sent = send_appointment_confirmation_email(
+                attendee_email=attendee_email,
+                attendee_name=attendee_name,
+                appointment_title=appointment.title,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                duration=duration_str,
+                meeting_mode=meeting_mode_str,
+                team_member_name=team_member_name
+            )
+        except Exception as e:
+            logger.error(f"Error sending confirmation email: {e}")
+
+    if attendee_phone:
+        try:
+            sms_sent = send_appointment_confirmation_sms(
+                attendee_phone=attendee_phone,
+                attendee_name=attendee_name,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                team_member_name=team_member_name
+            )
+        except Exception as e:
+            logger.error(f"Error sending confirmation SMS: {e}")
+
     return {
         "message": "Appointment booked successfully",
         "appointment_id": appointment.id,
@@ -1857,9 +2049,13 @@ async def confirm_public_booking(
         "scheduled_end": appointment.scheduled_end.isoformat(),
         "confirmation_details": {
             "title": appointment.title,
-            "date": appointment.scheduled_start.strftime("%A, %B %d, %Y"),
-            "time": appointment.scheduled_start.strftime("%I:%M %p"),
-            "duration": f"{duration_minutes} minutes"
+            "date": appointment_date,
+            "time": appointment_time,
+            "duration": duration_str
+        },
+        "notifications": {
+            "email_sent": email_sent,
+            "sms_sent": sms_sent
         }
     }
 
