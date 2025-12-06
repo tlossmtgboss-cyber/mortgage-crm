@@ -2273,6 +2273,35 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools["get_data_availability"] = execute_get_data_availability
 
+    # ============ Email Intelligence Tools ============
+    # Tool to check inbox for emails needing response
+
+    from .tools.email_intel import get_emails_needing_response as _get_emails_needing_response
+
+    async def execute_get_emails_needing_response(args):
+        """Get emails from inbox that need a response."""
+        # Pass the current user's ID for email lookup
+        user_id = args.get("user_id") or (current_user.id if hasattr(current_user, 'id') else None)
+        days = args.get("days", 7)
+        unread_only = args.get("unread_only", True)
+        limit = args.get("limit", 20)
+
+        try:
+            result = _get_emails_needing_response(
+                user_id=user_id,
+                days=days,
+                unread_only=unread_only,
+                limit=limit
+            )
+            if hasattr(result, 'to_dict'):
+                return result.to_dict()
+            return result
+        except Exception as e:
+            logger.error(f"Error in get_emails_needing_response: {e}")
+            return {"status": "error", "error": str(e)}
+
+    tools["get_emails_needing_response"] = execute_get_emails_needing_response
+
     return tools
 
 

@@ -209,6 +209,10 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"(send|draft|compose) (an? )?email",
         r"email (template|thread)",
         r"inbox",
+        r"(need|have) to respond",
+        r"respond to",
+        r"unread",
+        r"(urgent|priority) (email|message)",
     ],
     "schedule": [
         r"\bschedul(e|ing)\b",

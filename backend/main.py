@@ -18797,6 +18797,13 @@ app.include_router(document_drop_router, tags=["Document Drop"])
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])
 
+# Include Call Recording routes (mobile app call recording + AI summary)
+try:
+    from backend.api.routes.call_recording import router as call_recording_router
+    app.include_router(call_recording_router, tags=["Call Recording"])
+except Exception as e:
+    logger.warning(f"Could not load call recording routes: {e}")
+
 # Include AI Task Automation routes
 from ai_automation_routes import router as ai_automation_router
 app.include_router(ai_automation_router, tags=["AI Task Automation"])

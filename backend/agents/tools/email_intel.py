@@ -749,3 +749,143 @@ def categorize_email_attachments(
         },
         message=f"Categorized {len(categorized)} attachments",
     )
+
+
+@mortgage_tool(
+    name="get_emails_needing_response",
+    description="Get emails from your inbox that need a response. Shows unread/pending emails requiring attention, "
+                "prioritized by urgency. Use this when user asks about emails to respond to, urgent emails, or inbox status.",
+    agent_roles=["email_intelligence", "all"],
+    risk_level="LOW",
+    parameters={
+        "days": "Number of days to look back (default 7)",
+        "unread_only": "Only show unread/pending emails (default True)",
+        "limit": "Maximum number of emails to return (default 20)",
+        "user_id": "User ID to check inbox for",
+    },
+)
+def get_emails_needing_response(
+    user_id: Optional[int] = None,
+    days: int = 7,
+    unread_only: bool = True,
+    limit: int = 20,
+) -> ToolResult:
+    """
+    Get emails that need a response from the user's inbox.
+
+    Checks the email_reconciliation_queue for pending emails that:
+    - Are unread/pending status
+    - Require action (not just informational)
+    - Are prioritized by urgency and recency
+    """
+    from datetime import timezone
+
+    if not user_id:
+        return ToolResult.error(
+            "Unable to check emails: user_id is required. Please ensure you're logged in.",
+            ["No user context available for email lookup"]
+        )
+
+    try:
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
+
+        # Build query for emails needing response
+        status_filter = "AND e.status = 'pending'" if unread_only else ""
+
+        query = f"""
+            SELECT
+                e.id,
+                e.from_email,
+                e.from_name,
+                e.subject,
+                e.body_preview,
+                COALESCE(e.received_date, e.sent_date, e.created_at) as received_date,
+                e.match_client_name,
+                e.matched_loan_id,
+                e.matched_lead_id,
+                e.is_priority,
+                e.status,
+                e.disposition,
+                e.has_attachments,
+                e.match_confidence
+            FROM email_reconciliation_queue e
+            WHERE e.user_id = :user_id
+            AND e.created_at >= :start_date
+            {status_filter}
+            ORDER BY
+                e.is_priority DESC,
+                COALESCE(e.received_date, e.sent_date, e.created_at) DESC
+            LIMIT :limit
+        """
+
+        results = execute_query(query, {
+            "user_id": user_id,
+            "start_date": start_date,
+            "limit": limit
+        })
+
+        if not results:
+            return ToolResult.success(
+                data={
+                    "emails": [],
+                    "total_count": 0,
+                    "priority_count": 0,
+                    "message": "No emails requiring response found. Your inbox is clear!",
+                    "checked_days": days,
+                },
+                message="No emails need response - inbox is clear!"
+            )
+
+        # Format results
+        emails = []
+        priority_count = 0
+
+        for row in results:
+            is_priority = row.get("is_priority", False)
+            if is_priority:
+                priority_count += 1
+
+            received_date = row.get("received_date")
+            if received_date and hasattr(received_date, 'isoformat'):
+                received_str = received_date.isoformat()
+            else:
+                received_str = str(received_date) if received_date else None
+
+            emails.append({
+                "email_id": row.get("id"),
+                "from_email": row.get("from_email"),
+                "from_name": row.get("from_name"),
+                "subject": row.get("subject"),
+                "preview": (row.get("body_preview") or "")[:200],
+                "received_date": received_str,
+                "client_name": row.get("match_client_name"),
+                "loan_id": row.get("matched_loan_id"),
+                "lead_id": row.get("matched_lead_id"),
+                "is_priority": is_priority,
+                "status": row.get("status"),
+                "disposition": row.get("disposition"),
+                "has_attachments": row.get("has_attachments", False),
+            })
+
+        # Build summary message
+        if priority_count > 0:
+            summary = f"{len(emails)} emails need response ({priority_count} priority)"
+        else:
+            summary = f"{len(emails)} emails need response"
+
+        return ToolResult.success(
+            data={
+                "emails": emails,
+                "total_count": len(emails),
+                "priority_count": priority_count,
+                "checked_days": days,
+                "unread_only": unread_only,
+            },
+            message=summary
+        )
+
+    except Exception as e:
+        return ToolResult.error(
+            f"Failed to retrieve emails: {str(e)}",
+            [str(e)]
+        )
