@@ -9,6 +9,7 @@ import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
 import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
+import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EscalationModal from '../components/EscalationModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
@@ -70,6 +71,7 @@ function LoanDetail() {
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
@@ -649,7 +651,7 @@ function LoanDetail() {
         setShowTaskModal(true);
         break;
       case 'calendar':
-        setShowAppointmentModal(true);
+        setShowScheduleModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
@@ -2464,12 +2466,21 @@ function LoanDetail() {
         />
       )}
 
-      {/* Appointment Modal */}
+      {/* Appointment Modal (legacy) */}
       {loan && (
         <AppointmentModal
           isOpen={showAppointmentModal}
           onClose={() => setShowAppointmentModal(false)}
           lead={{ id: loan.id, name: loan.borrower_name || loan.borrower, phone: loan.borrower_phone, email: loan.borrower_email }}
+        />
+      )}
+
+      {/* Schedule Appointment Modal (Redfin-style) */}
+      {loan && (
+        <ScheduleAppointmentModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          borrower={{ id: loan.id, name: loan.borrower_name || loan.borrower, phone: loan.borrower_phone, email: loan.borrower_email }}
         />
       )}
 

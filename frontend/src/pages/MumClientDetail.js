@@ -12,6 +12,7 @@ import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import VideoMeetings from '../components/VideoMeetings';
 import AppointmentModal from '../components/AppointmentModal';
+import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EmailComposerModal from '../components/EmailComposerModal';
 import './LeadDetail.css';
 
@@ -71,6 +72,7 @@ function MumClientDetail() {
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -584,7 +586,7 @@ function MumClientDetail() {
         navigate('/tasks');
         break;
       case 'calendar':
-        setShowAppointmentModal(true);
+        setShowScheduleModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
@@ -1859,12 +1861,21 @@ function MumClientDetail() {
         />
       )}
 
-      {/* Appointment Modal */}
+      {/* Appointment Modal (legacy) */}
       {client && (
         <AppointmentModal
           isOpen={showAppointmentModal}
           onClose={() => setShowAppointmentModal(false)}
           lead={client}
+        />
+      )}
+
+      {/* Schedule Appointment Modal (Redfin-style) */}
+      {client && (
+        <ScheduleAppointmentModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          borrower={client}
         />
       )}
 

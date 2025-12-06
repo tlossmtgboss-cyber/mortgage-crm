@@ -11,6 +11,7 @@ import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
+import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import VideoMeetings from '../components/VideoMeetings';
@@ -64,6 +65,7 @@ function LeadDetail() {
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
@@ -1178,7 +1180,7 @@ function LeadDetail() {
         setShowTaskModal(true);
         break;
       case 'calendar':
-        setShowAppointmentModal(true);
+        setShowScheduleModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
@@ -3090,12 +3092,21 @@ function LeadDetail() {
         />
       )}
 
-      {/* Appointment Modal */}
+      {/* Appointment Modal (legacy) */}
       {lead && (
         <AppointmentModal
           isOpen={showAppointmentModal}
           onClose={() => setShowAppointmentModal(false)}
           lead={lead}
+        />
+      )}
+
+      {/* Schedule Appointment Modal (Redfin-style) */}
+      {lead && (
+        <ScheduleAppointmentModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          borrower={lead}
         />
       )}
 

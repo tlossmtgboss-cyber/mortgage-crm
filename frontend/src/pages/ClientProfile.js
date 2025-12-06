@@ -10,6 +10,7 @@ import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
+import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -56,6 +57,7 @@ function ClientProfile() {
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [customFields, setCustomFields] = useState([]);
@@ -513,7 +515,7 @@ function ClientProfile() {
         navigate('/tasks');
         break;
       case 'calendar':
-        navigate('/calendar');
+        setShowScheduleModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
@@ -1490,6 +1492,15 @@ function ClientProfile() {
           phoneNumber={client.borrower_phone || client.phone}
           recipientName={client.borrower_name || client.name}
           onClose={() => setShowVoicemailDrop(false)}
+        />
+      )}
+
+      {/* Schedule Appointment Modal */}
+      {client && (
+        <ScheduleAppointmentModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          borrower={client}
         />
       )}
     </div>
