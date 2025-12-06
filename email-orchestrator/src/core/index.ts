@@ -3,4 +3,4 @@
  */
 
 export { IEmailProcessor, BaseEmailProcessor } from './IEmailProcessor';
-export { EmailOrchestrator } from './EmailOrchestrator';
+export { EmailOrchestrator, OrchestratorEvents } from './EmailOrchestrator';

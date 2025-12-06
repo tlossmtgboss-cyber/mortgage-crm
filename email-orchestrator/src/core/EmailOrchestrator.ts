@@ -1,10 +1,12 @@
 /**
  * Email Orchestrator - Core orchestration engine
  * Implements Observer pattern for routing emails to processors
+ * Includes EventEmitter for real-time monitoring
  */
 
 import { Pool } from 'pg';
 import { Logger } from 'winston';
+import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { IEmailProcessor } from './IEmailProcessor';
 import {
@@ -16,7 +18,19 @@ import {
 } from '../types';
 import { RetryManager } from '../utils/RetryManager';
 
-export class EmailOrchestrator {
+// Event types for type safety
+export interface OrchestratorEvents {
+  'email:received': { email: Email };
+  'email:processed': { email: Email; processor: string; result: ProcessingResult };
+  'email:processing:error': { email: Email; processor: string; error: Error };
+  'email:skipped': { email: Email; processor: string; reason: string };
+  'batch:started': { emailCount: number };
+  'batch:processed': { emailCount: number; totalTime: number; results: Map<string, ProcessingResult[]> };
+  'processor:registered': { name: string; priority: number };
+  'processor:unregistered': { name: string };
+}
+
+export class EmailOrchestrator extends EventEmitter {
   private processors: Map<string, IEmailProcessor> = new Map();
   private retryManager: RetryManager;
   private processingStats: Map<string, ProcessorStats> = new Map();
@@ -26,10 +40,31 @@ export class EmailOrchestrator {
     private readonly logger: Logger,
     private readonly config: OrchestratorConfig
   ) {
+    super();
     this.retryManager = new RetryManager(config.retryConfig, logger);
     this.logger.info('EmailOrchestrator initialized', {
       internalDomains: config.internalDomains
     });
+  }
+
+  /**
+   * Type-safe event emission
+   */
+  emitEvent<K extends keyof OrchestratorEvents>(
+    event: K,
+    data: OrchestratorEvents[K]
+  ): boolean {
+    return this.emit(event, data);
+  }
+
+  /**
+   * Type-safe event listener
+   */
+  onEvent<K extends keyof OrchestratorEvents>(
+    event: K,
+    listener: (data: OrchestratorEvents[K]) => void
+  ): this {
+    return this.on(event, listener);
   }
 
   /**
@@ -49,6 +84,7 @@ export class EmailOrchestrator {
       priority: processor.priority,
       description: processor.description
     });
+    this.emitEvent('processor:registered', { name, priority: processor.priority });
   }
 
   /**
@@ -58,6 +94,7 @@ export class EmailOrchestrator {
     const removed = this.processors.delete(name);
     if (removed) {
       this.logger.info(`Processor unregistered: ${name}`);
+      this.emitEvent('processor:unregistered', { name });
     }
     return removed;
   }
@@ -94,6 +131,9 @@ export class EmailOrchestrator {
       from: email.from.address,
       correlationId
     });
+
+    // Emit email received event
+    this.emitEvent('email:received', { email });
 
     const results: ProcessingResult[] = [];
     const sortedProcessors = this.getProcessors();
@@ -134,16 +174,31 @@ export class EmailOrchestrator {
             correlationId
           });
 
+          // Emit processed event
+          this.emitEvent('email:processed', { email, processor: processor.name, result });
+
           // Log to database
           await this.logProcessingResult(email, processor.name, result, context);
+        } else {
+          // Emit skipped event
+          this.emitEvent('email:skipped', {
+            email,
+            processor: processor.name,
+            reason: 'canProcess returned false'
+          });
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const err = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = err.message;
+
         this.logger.error(`Processor ${processor.name} failed`, {
           emailId: email.id,
           error: errorMessage,
           correlationId
         });
+
+        // Emit error event
+        this.emitEvent('email:processing:error', { email, processor: processor.name, error: err });
 
         // Log error to database
         await this.logProcessingError(email, processor.name, errorMessage, context);
@@ -173,8 +228,12 @@ export class EmailOrchestrator {
     userEmail: string
   ): Promise<Map<string, ProcessingResult[]>> {
     const results = new Map<string, ProcessingResult[]>();
+    const startTime = Date.now();
 
     this.logger.info(`Processing batch of ${emails.length} emails`);
+
+    // Emit batch started event
+    this.emitEvent('batch:started', { emailCount: emails.length });
 
     for (const email of emails) {
       try {
@@ -194,6 +253,21 @@ export class EmailOrchestrator {
         }]);
       }
     }
+
+    const totalTime = Date.now() - startTime;
+
+    // Emit batch completed event
+    this.emitEvent('batch:processed', {
+      emailCount: emails.length,
+      totalTime,
+      results
+    });
+
+    this.logger.info(`Batch processing complete`, {
+      emailCount: emails.length,
+      totalTimeMs: totalTime,
+      avgTimePerEmail: Math.round(totalTime / emails.length)
+    });
 
     return results;
   }
