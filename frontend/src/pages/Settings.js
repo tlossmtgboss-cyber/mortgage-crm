@@ -398,7 +398,10 @@ function Settings() {
     email: '',
     phone: '',
     nmls_number: '',
-    job_title: ''
+    job_title: '',
+    work_hours_start: '09:00',
+    work_hours_end: '17:00',
+    work_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
   });
   const [passwordData, setPasswordData] = useState({
     current_password: '',
@@ -469,7 +472,10 @@ function Settings() {
           email: data.email || '',
           phone: data.phone || '',
           nmls_number: data.nmls_number || '',
-          job_title: data.job_title || ''
+          job_title: data.job_title || '',
+          work_hours_start: data.work_hours_start || '09:00',
+          work_hours_end: data.work_hours_end || '17:00',
+          work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
         });
       }
     } catch (error) {
@@ -495,7 +501,10 @@ function Settings() {
           full_name: userProfile.full_name,
           phone: userProfile.phone,
           nmls_number: userProfile.nmls_number,
-          job_title: userProfile.job_title
+          job_title: userProfile.job_title,
+          work_hours_start: userProfile.work_hours_start,
+          work_hours_end: userProfile.work_hours_end,
+          work_days: userProfile.work_days
         })
       });
       if (response.ok) {
@@ -557,7 +566,7 @@ function Settings() {
 
   // Load profile when profile section is active
   useEffect(() => {
-    if (activeSection === 'profile-info' || activeSection === 'account-settings' || activeSection === 'security') {
+    if (activeSection === 'profile-info' || activeSection === 'account-settings' || activeSection === 'security' || activeSection === 'work-hours') {
       loadUserProfile();
     }
   }, [activeSection]);
@@ -2088,6 +2097,12 @@ const API_BASE_URL = isProduction
                 onClick={() => setActiveSection('email-signature')}
               >
                 <span>Email Signature</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'work-hours' ? 'active' : ''}`}
+                onClick={() => setActiveSection('work-hours')}
+              >
+                <span>Work Hours</span>
               </button>
             </div>
           )}
@@ -4455,6 +4470,7 @@ const API_BASE_URL = isProduction
                     className="btn-primary"
                     onClick={saveUserProfile}
                     disabled={savingProfile}
+                    style={{ marginTop: '24px' }}
                   >
                     {savingProfile ? 'Saving...' : 'Save Profile'}
                   </button>
@@ -4545,6 +4561,155 @@ const API_BASE_URL = isProduction
                   {changingPassword ? 'Changing...' : 'Change Password'}
                 </button>
               </div>
+            </div>
+          )}
+
+          {activeSection === 'work-hours' && (
+            <div className="profile-section">
+              <h2>Work Hours</h2>
+              <p className="section-description">
+                Set your available hours for scheduling appointments. All calendars will use these hours to determine your availability.
+              </p>
+
+              {profileMessage.text && (
+                <div className={`profile-message ${profileMessage.type}`}>
+                  {profileMessage.text}
+                </div>
+              )}
+
+              {loadingProfile ? (
+                <div className="loading-state">Loading work hours...</div>
+              ) : (
+                <div className="work-hours-form">
+                  <div className="work-hours-card" style={{
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    marginBottom: '24px'
+                  }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1a1a1a' }}>Daily Schedule</h3>
+                    <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
+                      Set the hours you're available for appointments each day
+                    </p>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                      <div className="form-group">
+                        <label style={{ fontWeight: '500', marginBottom: '8px', display: 'block' }}>Start Time</label>
+                        <select
+                          value={userProfile.work_hours_start}
+                          onChange={(e) => setUserProfile({ ...userProfile, work_hours_start: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '12px 14px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '8px',
+                            fontSize: '15px',
+                            background: 'white'
+                          }}
+                        >
+                          {Array.from({ length: 24 }, (_, i) => {
+                            const hour = i.toString().padStart(2, '0');
+                            const display = i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`;
+                            return <option key={hour} value={`${hour}:00`}>{display}</option>;
+                          })}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: '500', marginBottom: '8px', display: 'block' }}>End Time</label>
+                        <select
+                          value={userProfile.work_hours_end}
+                          onChange={(e) => setUserProfile({ ...userProfile, work_hours_end: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '12px 14px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '8px',
+                            fontSize: '15px',
+                            background: 'white'
+                          }}
+                        >
+                          {Array.from({ length: 24 }, (_, i) => {
+                            const hour = i.toString().padStart(2, '0');
+                            const display = i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`;
+                            return <option key={hour} value={`${hour}:00`}>{display}</option>;
+                          })}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label style={{ fontWeight: '500', marginBottom: '12px', display: 'block' }}>Work Days</label>
+                      <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>
+                        Select the days you're available for appointments
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              const workDays = userProfile.work_days || [];
+                              if (workDays.includes(day)) {
+                                setUserProfile({ ...userProfile, work_days: workDays.filter(d => d !== day) });
+                              } else {
+                                setUserProfile({ ...userProfile, work_days: [...workDays, day] });
+                              }
+                            }}
+                            style={{
+                              padding: '10px 20px',
+                              borderRadius: '24px',
+                              border: '2px solid',
+                              borderColor: (userProfile.work_days || []).includes(day) ? '#217F8D' : '#d1d5db',
+                              background: (userProfile.work_days || []).includes(day) ? 'rgba(33, 127, 141, 0.1)' : 'white',
+                              color: (userProfile.work_days || []).includes(day) ? '#217F8D' : '#666',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: (userProfile.work_days || []).includes(day) ? '600' : '400',
+                              textTransform: 'capitalize',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {day.charAt(0).toUpperCase() + day.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: '#e8f4f6',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    marginBottom: '24px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                  }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#217F8D" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4" />
+                      <path d="M12 8h.01" />
+                    </svg>
+                    <div>
+                      <p style={{ fontSize: '14px', color: '#1a1a1a', fontWeight: '500', marginBottom: '4px' }}>
+                        How this affects scheduling
+                      </p>
+                      <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
+                        When clients or team members schedule appointments with you, they'll only see available time slots within your work hours and on your selected work days.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    onClick={saveUserProfile}
+                    disabled={savingProfile}
+                    style={{ padding: '12px 24px' }}
+                  >
+                    {savingProfile ? 'Saving...' : 'Save Work Hours'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

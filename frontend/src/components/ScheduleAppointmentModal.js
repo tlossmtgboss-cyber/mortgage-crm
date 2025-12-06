@@ -16,6 +16,11 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
   const [success, setSuccess] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedTeamMember, setSelectedTeamMember] = useState('');
+  const [teamMemberWorkHours, setTeamMemberWorkHours] = useState({
+    work_hours_start: '09:00',
+    work_hours_end: '17:00',
+    work_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+  });
 
   // Generate week dates starting from weekStart
   const getWeekDates = useCallback(() => {
@@ -62,6 +67,31 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
     return date < today;
   };
 
+  // Fetch team member's work hours
+  const fetchTeamMemberWorkHours = useCallback(async (memberId) => {
+    if (!memberId) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/team/members/${memberId}/work-hours`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTeamMemberWorkHours({
+          work_hours_start: data.work_hours_start || '09:00',
+          work_hours_end: data.work_hours_end || '17:00',
+          work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching team member work hours:', error);
+      // Keep default work hours
+    }
+  }, []);
+
   // Fetch team members assigned to this borrower
   const fetchTeamMembers = useCallback(async () => {
     if (!borrower?.id) return;
@@ -80,7 +110,12 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
         setTeamMembers(assignments);
         // Auto-select first team member if available
         if (assignments.length > 0) {
-          setSelectedTeamMember(assignments[0].member_id || assignments[0].user_id || assignments[0].id || '');
+          const firstMemberId = assignments[0].member_id || assignments[0].user_id || assignments[0].id || '';
+          setSelectedTeamMember(firstMemberId);
+          // Fetch work hours for first team member
+          if (firstMemberId) {
+            fetchTeamMemberWorkHours(firstMemberId);
+          }
         }
       } else {
         // Fallback: fetch all team members
@@ -111,7 +146,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
         console.error('Error fetching all team members:', err);
       }
     }
-  }, [borrower?.id]);
+  }, [borrower?.id, fetchTeamMemberWorkHours]);
 
   // Initialize selected date when modal opens
   useEffect(() => {
@@ -165,14 +200,32 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
     }
   }, [selectedDate]);
 
-  // Generate default slots (9am-5pm, 30 min intervals)
-  const generateDefaultSlots = () => {
+  // Get day name from date
+  const getDayName = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  };
+
+  // Generate slots based on team member's work hours
+  const generateSlotsFromWorkHours = useCallback(() => {
     if (!selectedDate) return;
+
+    const dayName = getDayName(selectedDate);
+
+    // Check if this day is a work day
+    if (!teamMemberWorkHours.work_days.includes(dayName)) {
+      setAvailableSlots([]);
+      setSelectedTime('');
+      return;
+    }
 
     const slots = [];
     const baseDate = new Date(selectedDate);
 
-    for (let hour = 9; hour < 17; hour++) {
+    // Parse work hours (format: "09:00", "17:00")
+    const startHour = parseInt(teamMemberWorkHours.work_hours_start.split(':')[0], 10);
+    const endHour = parseInt(teamMemberWorkHours.work_hours_end.split(':')[0], 10);
+
+    for (let hour = startHour; hour < endHour; hour++) {
       for (let min = 0; min < 60; min += 30) {
         const slotDate = new Date(baseDate);
         slotDate.setHours(hour, min, 0, 0);
@@ -186,7 +239,14 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
     setAvailableSlots(slots);
     if (slots.length > 0) {
       setSelectedTime(slots[0].start_time);
+    } else {
+      setSelectedTime('');
     }
+  }, [selectedDate, teamMemberWorkHours]);
+
+  // Generate default slots (uses team member work hours or 9am-5pm fallback)
+  const generateDefaultSlots = () => {
+    generateSlotsFromWorkHours();
   };
 
   useEffect(() => {
@@ -194,6 +254,20 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
       fetchSlots();
     }
   }, [selectedDate, fetchSlots]);
+
+  // Regenerate slots when team member work hours change
+  useEffect(() => {
+    if (selectedDate && selectedTeamMember) {
+      generateSlotsFromWorkHours();
+    }
+  }, [teamMemberWorkHours, selectedDate, selectedTeamMember, generateSlotsFromWorkHours]);
+
+  // Fetch work hours when team member selection changes
+  useEffect(() => {
+    if (selectedTeamMember) {
+      fetchTeamMemberWorkHours(selectedTeamMember);
+    }
+  }, [selectedTeamMember, fetchTeamMemberWorkHours]);
 
   // Navigate weeks
   const prevWeek = () => {
@@ -318,15 +392,18 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
 
               <div className="schedule-week-dates">
                 {weekDates.map((date, idx) => {
-                  const disabled = isPast(date);
+                  const dayName = getDayName(date);
+                  const isWorkDay = teamMemberWorkHours.work_days.includes(dayName);
+                  const disabled = isPast(date) || (selectedTeamMember && !isWorkDay);
                   const selected = selectedDate && date.toDateString() === selectedDate.toDateString();
 
                   return (
                     <button
                       key={idx}
-                      className={`schedule-date-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} ${isToday(date) ? 'today' : ''}`}
+                      className={`schedule-date-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} ${isToday(date) ? 'today' : ''} ${!isWorkDay && selectedTeamMember ? 'non-work-day' : ''}`}
                       onClick={() => !disabled && setSelectedDate(date)}
                       disabled={disabled}
+                      title={!isWorkDay && selectedTeamMember ? 'Team member not available' : ''}
                     >
                       <span className="schedule-day-name">{formatDayName(date)}</span>
                       <span className="schedule-day-number">{formatDayNumber(date)}</span>

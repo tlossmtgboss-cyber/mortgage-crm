@@ -143,6 +143,11 @@
   cursor: not-allowed;
 }
 
+.schedule-date-card.non-work-day {
+  background: #f0f0f0;
+  opacity: 0.5;
+}
+
 .schedule-date-card.today:not(.selected) {
   border-color: #217F8D;
 }
