@@ -47285,6 +47285,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ AI Receptionist Dashboard tables creation skipped: {e}")
 
+            # Create Email Response Training tables (AI learns from user email approvals)
+            try:
+                from migrations.add_email_response_training_tables import run_migration as run_email_training_migration
+                run_email_training_migration()
+                logger.info("✅ Email Response Training tables initialized")
+            except Exception as e:
+                logger.warning(f"⚠️ Email Response Training tables creation skipped: {e}")
+
             # Create sample data and seed permission system
             db = SessionLocal()
             try:
