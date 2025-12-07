@@ -71,6 +71,15 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     return emailKeywords.some(keyword => title.includes(keyword) || desc.includes(keyword));
   };
 
+  // Helper to check if a portfolio item is actionable (not just informational funded loan records)
+  const isActionablePortfolioItem = (item) => {
+    // Funded loans are not actionable tasks - they're informational records
+    // Only include portfolio items that have an actual action (touchpoint due, refinance opportunity to contact, etc.)
+    if (item.type === 'funded_loan') return false;
+    // Include touchpoints and other actionable portfolio items
+    return true;
+  };
+
   // Get items for each tab
   const getTaskItems = () => {
     if (!data) return [];
@@ -85,7 +94,8 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       items.push(...data.loans.filter(item => !isPhoneTask(item) && !isEmailTask(item)).map(item => ({ ...item, category: 'loans' })));
     }
     if (data.portfolio?.length) {
-      items.push(...data.portfolio.filter(item => !isPhoneTask(item) && !isEmailTask(item)).map(item => ({ ...item, category: 'portfolio' })));
+      // Filter out non-actionable portfolio items (like funded_loan records)
+      items.push(...data.portfolio.filter(item => !isPhoneTask(item) && !isEmailTask(item) && isActionablePortfolioItem(item)).map(item => ({ ...item, category: 'portfolio' })));
     }
     return items;
   };
@@ -130,7 +140,8 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       items.push(...data.loans.filter(isPhoneTask).map(item => ({ ...item, category: 'loans' })));
     }
     if (data.portfolio?.length) {
-      items.push(...data.portfolio.filter(isPhoneTask).map(item => ({ ...item, category: 'portfolio' })));
+      // Filter out non-actionable portfolio items (like funded_loan records) from calls too
+      items.push(...data.portfolio.filter(item => isPhoneTask(item) && isActionablePortfolioItem(item)).map(item => ({ ...item, category: 'portfolio' })));
     }
     return items;
   };
