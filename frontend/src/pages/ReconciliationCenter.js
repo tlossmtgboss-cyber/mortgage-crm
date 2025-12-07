@@ -848,12 +848,33 @@ function ReconciliationCenter() {
       });
 
       if (response.ok) {
+        // Find the next item to select based on active tab
+        const getCurrentList = () => {
+          switch (activeTab) {
+            case 'new': return newItems;
+            case 'autoProcessing': return autoProcessingItems;
+            case 'pendingReview': return pendingReviewItems;
+            case 'completed': return completedItems;
+            default: return newItems;
+          }
+        };
+
+        const currentList = getCurrentList();
+        const currentIndex = currentList.findIndex(item => item.id === itemId);
+        const nextItem = currentList[currentIndex + 1] || currentList[currentIndex - 1] || null;
+
         // Remove from all lists
         setNewItems(prev => prev.filter(item => item.id !== itemId));
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setCompletedItems(prev => prev.filter(item => item.id !== itemId));
-        setSelectedItem(null);
+
+        // Select the next item instead of clearing selection
+        if (nextItem && nextItem.id !== itemId) {
+          setSelectedItem(nextItem);
+        } else {
+          setSelectedItem(null);
+        }
         setEditedFields({});
         setDeleteFromInboxOverride(null);
       } else {
@@ -1421,11 +1442,18 @@ function ReconciliationCenter() {
                       </div>
                     </div>
                     <div className="item-subject">{item.email_subject || item.email?.subject}</div>
+                    <div className="item-date-display">
+                      {new Date(item.email_received_at || item.email?.received_at).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </div>
                     <div className="item-meta">
-                      <span className="meta-sender">From: {item.email_from || item.email?.sender}</span>
-                      <span className="meta-date">
-                        {new Date(item.email_received_at || item.email?.received_at).toLocaleDateString()}
-                      </span>
+                      <span className="meta-sender">{item.email_from || item.email?.sender}</span>
                     </div>
                     {item.email_body && (
                       <div className="item-body-preview">
@@ -2113,11 +2141,18 @@ function ReconciliationCenter() {
                       </div>
                     </div>
                   <div className="item-subject">{item.email?.subject}</div>
+                  <div className="item-date-display">
+                    {new Date(item.email?.received_at).toLocaleString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    })}
+                  </div>
                   <div className="item-meta">
-                    <span className="meta-sender">From: {item.email?.sender}</span>
-                    <span className="meta-date">
-                      {new Date(item.email?.received_at).toLocaleDateString()}
-                    </span>
+                    <span className="meta-sender">{item.email?.sender}</span>
                   </div>
                   {item.match_entity_type && (
                     <div className="item-match">
@@ -2542,11 +2577,18 @@ function ReconciliationCenter() {
                       </div>
                     </div>
                     <div className="item-subject">{item.email_subject}</div>
+                    <div className="item-date-display">
+                      {new Date(item.email_received_at).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </div>
                     <div className="item-meta">
-                      <span className="item-from">From: {item.email_from}</span>
-                      <span className="item-date">
-                        {new Date(item.email_received_at).toLocaleDateString()}
-                      </span>
+                      <span className="item-from">{item.email_from}</span>
                     </div>
                     {item.email_body && (
                       <div className="item-body-preview">
@@ -3207,8 +3249,18 @@ function ReconciliationCenter() {
                       </div>
                     </div>
                     <div className="item-subject">{item.email?.subject}</div>
+                    <div className="item-date-display">
+                      {item.email?.received_at ? new Date(item.email.received_at).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      }) : 'N/A'}
+                    </div>
                     <div className="item-meta">
-                      <span className="meta-sender">From: {item.email?.sender}</span>
+                      <span className="meta-sender">{item.email?.sender}</span>
                       <span className="meta-date">
                         Reviewed: {item.reviewed_at ? new Date(item.reviewed_at).toLocaleDateString() : 'N/A'}
                       </span>
