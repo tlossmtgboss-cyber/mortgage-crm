@@ -19429,14 +19429,17 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
         # ========== ACTIVE LOAN PROFILE MATCHING (Portfolio) ==========
         # Check ActiveLoanProfile table first (this is the Portfolio data)
+        logger.info(f"[Portfolio Match] Checking ActiveLoanProfile for loan number: {loan_num}")
         try:
             from models.active_loan_profile import ActiveLoanProfile
 
             # Exact match on ActiveLoanProfile
+            logger.info(f"[Portfolio Match] Querying ActiveLoanProfile with exact match")
             active_loan = db.query(ActiveLoanProfile).filter(
                 ActiveLoanProfile.loan_number == loan_num,
                 ActiveLoanProfile.is_deleted == False
             ).first()
+            logger.info(f"[Portfolio Match] Exact match result: {active_loan}")
 
             if active_loan:
                 logger.info(f"Found exact match in ActiveLoanProfile (Portfolio): {active_loan.id}")
@@ -19446,10 +19449,12 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                 return match_results
 
             # Try partial match on ActiveLoanProfile
+            logger.info(f"[Portfolio Match] Trying partial match with ilike")
             active_loans = db.query(ActiveLoanProfile).filter(
                 ActiveLoanProfile.loan_number.ilike(f"%{loan_num}%"),
                 ActiveLoanProfile.is_deleted == False
             ).all()
+            logger.info(f"[Portfolio Match] Partial match found {len(active_loans)} results")
 
             if active_loans:
                 logger.info(f"Found {len(active_loans)} partial matches in ActiveLoanProfile (Portfolio)")
@@ -19458,8 +19463,12 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                 match_results["confidence"] = 0.90
                 return match_results
 
+            logger.info(f"[Portfolio Match] No portfolio match found for {loan_num}")
+
         except Exception as e:
             logger.warning(f"Error checking ActiveLoanProfile: {e}")
+            import traceback
+            logger.warning(f"[Portfolio Match] Traceback: {traceback.format_exc()}")
 
         # ========== REGULAR LOAN TABLE MATCHING ==========
         # First try exact match with user's loans (highest confidence)
