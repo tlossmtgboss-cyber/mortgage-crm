@@ -35786,6 +35786,47 @@ async def get_lead_stage_history(lead_id: int, db: Session = Depends(get_db), cu
         ]
     }
 
+@app.get("/api/v1/leads/{lead_id}/circle-contacts")
+async def get_lead_circle_contacts(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get the circle of cash flow contacts for a lead (trusted professionals from questionnaire)"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get circle contacts from database
+    result = db.execute(text("""
+        SELECT id, name, email, phone, type, notes, rating, source, created_at, updated_at
+        FROM circle_contacts
+        WHERE lead_id = :lead_id
+        ORDER BY type, created_at
+    """), {"lead_id": lead_id})
+
+    contacts = []
+    for row in result:
+        contacts.append({
+            "id": row[0],
+            "name": row[1],
+            "email": row[2],
+            "phone": row[3],
+            "type": row[4],
+            "notes": row[5],
+            "rating": row[6],
+            "source": row[7],
+            "created_at": row[8].isoformat() if row[8] else None,
+            "updated_at": row[9].isoformat() if row[9] else None
+        })
+
+    return {
+        "lead_id": lead_id,
+        "lead_name": lead.name,
+        "contacts": contacts,
+        "total": len(contacts)
+    }
+
+
 @app.get("/api/v1/loans/{loan_id}/stage-history")
 async def get_loan_stage_history(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get the complete stage history for a loan"""

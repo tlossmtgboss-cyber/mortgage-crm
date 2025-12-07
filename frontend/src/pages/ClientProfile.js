@@ -63,6 +63,7 @@ function ClientProfile() {
   const [customFields, setCustomFields] = useState([]);
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
+  const [circleContacts, setCircleContacts] = useState([]);
 
   const handleAddCustomField = () => {
     if (!newFieldName.trim()) return;
@@ -79,6 +80,7 @@ function ClientProfile() {
   useEffect(() => {
     loadClientData();
     loadEmails();
+    loadCircleContacts();
     markLoanAsViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -186,6 +188,22 @@ function ClientProfile() {
       setEmails(emailActivities || []);
     } catch (error) {
       console.error('Failed to load emails:', error);
+    }
+  };
+
+  const loadCircleContacts = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/circle-contacts`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCircleContacts(data.contacts || []);
+      }
+    } catch (error) {
+      console.error('Failed to load circle contacts:', error);
     }
   };
 
@@ -1100,13 +1118,95 @@ function ClientProfile() {
           {/* Circle Tab */}
           {activeTab === 'circle' && (
           <div className="info-section">
-            <h2>Circle</h2>
+            <h2>Circle of Cash Flow</h2>
             <div className="circle-content">
               <p className="circle-description">
-                View and manage the borrower's circle of influence - family members, co-borrowers,
-                real estate agents, and other key contacts involved in the loan process.
+                The borrower's trusted professional network from their Mortgage Planner Questionnaire.
+                These are opportunities to build reciprocal referral relationships.
               </p>
 
+              {/* Circle of Cash Flow - Professional Network */}
+              <h3 style={{ marginTop: '20px', marginBottom: '15px', color: '#2c3e50' }}>Professional Network</h3>
+              <div className="circle-grid">
+                {/* Financial Advisor */}
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>💼 Financial Advisor</h3>
+                  </div>
+                  <div className="circle-list">
+                    {circleContacts.filter(c => c.type === 'Financial Advisor').length > 0 ? (
+                      circleContacts.filter(c => c.type === 'Financial Advisor').map(contact => (
+                        <div key={contact.id} className="circle-contact-item">
+                          <div className="contact-name">{contact.name}</div>
+                          {contact.notes && <div className="contact-notes">{contact.notes}</div>}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">Needs a financial advisor - referral opportunity!</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Accountant */}
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>📊 Accountant / CPA</h3>
+                  </div>
+                  <div className="circle-list">
+                    {circleContacts.filter(c => c.type === 'Accountant').length > 0 ? (
+                      circleContacts.filter(c => c.type === 'Accountant').map(contact => (
+                        <div key={contact.id} className="circle-contact-item">
+                          <div className="contact-name">{contact.name}</div>
+                          {contact.notes && <div className="contact-notes">{contact.notes}</div>}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">Needs an accountant - referral opportunity!</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Life Insurance Agent */}
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>🛡️ Life Insurance Agent</h3>
+                  </div>
+                  <div className="circle-list">
+                    {circleContacts.filter(c => c.type === 'Life Insurance Agent').length > 0 ? (
+                      circleContacts.filter(c => c.type === 'Life Insurance Agent').map(contact => (
+                        <div key={contact.id} className="circle-contact-item">
+                          <div className="contact-name">{contact.name}</div>
+                          {contact.notes && <div className="contact-notes">{contact.notes}</div>}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">Needs insurance agent - referral opportunity!</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Estate Planner */}
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>📜 Estate Planner</h3>
+                  </div>
+                  <div className="circle-list">
+                    {circleContacts.filter(c => c.type === 'Estate Planner').length > 0 ? (
+                      circleContacts.filter(c => c.type === 'Estate Planner').map(contact => (
+                        <div key={contact.id} className="circle-contact-item">
+                          <div className="contact-name">{contact.name}</div>
+                          {contact.notes && <div className="contact-notes">{contact.notes}</div>}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">Needs estate planner - referral opportunity!</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Other Circle Members */}
+              <h3 style={{ marginTop: '30px', marginBottom: '15px', color: '#2c3e50' }}>Other Circle Members</h3>
               <div className="circle-grid">
                 <div className="circle-card">
                   <div className="circle-header">
