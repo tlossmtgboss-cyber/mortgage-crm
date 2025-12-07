@@ -364,7 +364,26 @@ function LeadDetail() {
           return;
         } catch (loanError) {
           console.error('Error creating loan:', loanError);
-          const errorMessage = loanError.response?.data?.detail || loanError.message || 'Failed to create loan';
+          console.error('Error details:', {
+            message: loanError.message,
+            response: loanError.response?.data,
+            status: loanError.response?.status,
+            config: loanError.config
+          });
+
+          let errorMessage = 'Failed to create loan';
+          if (loanError.response?.data?.detail) {
+            errorMessage = loanError.response.data.detail;
+          } else if (loanError.response?.status === 401) {
+            errorMessage = 'Session expired. Please log in again.';
+          } else if (loanError.response?.status === 400) {
+            errorMessage = loanError.response.data?.detail || 'Invalid loan data';
+          } else if (loanError.message === 'Network Error') {
+            errorMessage = 'Unable to connect to server. Please check your connection and try again.';
+          } else {
+            errorMessage = loanError.message || 'Unknown error';
+          }
+
           alert(`Could not convert lead to ${newStatus}: ${errorMessage}`);
           setStatusSaving(false);
           return;

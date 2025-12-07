@@ -113,7 +113,8 @@ export const loansAPI = {
     const response = await api.get(`/api/v1/loans/${id}`);
     return response.data;
   },
-  create: async (data) => {
+  create: async (data, retryCount = 0) => {
+    const maxRetries = 2;
     try {
       console.log('Creating loan with data:', data);
       console.log('API Base URL:', API_BASE_URL);
@@ -134,6 +135,13 @@ export const loansAPI = {
           baseURL: error.config?.baseURL
         }
       });
+
+      // Retry on Network Error (up to maxRetries times)
+      if (error.message === 'Network Error' && retryCount < maxRetries) {
+        console.log(`Network error, retrying (${retryCount + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        return loansAPI.create(data, retryCount + 1);
+      }
 
       // If 405 error, try without trailing slash as fallback
       if (error.response?.status === 405) {
