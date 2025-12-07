@@ -320,8 +320,9 @@ function ReconciliationCenter() {
           if (item.auto_process_enabled || item.status === 'auto_processing') {
             // AI is handling this automatically
             autoProcess.push(enrichedItem);
-          } else if (item.ai_completed || item.status === 'ai_completed' || item.status === 'pending_review') {
+          } else if (item.ai_completed || item.status === 'ai_completed') {
             // AI completed the work, waiting for user verification
+            // Note: 'pending_review' and 'needs_review' are treated as new items awaiting action
             needsReview.push({
               ...enrichedItem,
               needs_human_review: true,
@@ -331,7 +332,7 @@ function ReconciliationCenter() {
                             'AI completed - ready for review')
             });
           } else {
-            // Fresh new message - not yet processed
+            // Fresh items awaiting user action (includes 'pending_review', 'needs_review', or no status)
             newMessages.push(enrichedItem);
           }
         });
