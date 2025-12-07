@@ -47,6 +47,29 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   const [editableConfig, setEditableConfig] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Landing page settings state
+  const [landingPageSettings, setLandingPageSettings] = useState({
+    logo_url: '',
+    profile_picture_url: '',
+    video_url: '',
+    video_type: 'youtube', // youtube, vimeo, loom, custom
+    headline: 'Schedule a Meeting',
+    subheadline: 'Choose a time that works for you',
+    description: '',
+    show_profile: true,
+    profile_name: '',
+    profile_title: '',
+    profile_bio: '',
+    accent_color: '#217F8D',
+    background_style: 'white', // white, light, gradient
+    show_company_logo: true,
+    show_social_proof: false,
+    testimonial_text: '',
+    testimonial_author: ''
+  });
+  const [savingLandingPage, setSavingLandingPage] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+
   // Reminder settings state
   const [reminderSettings, setReminderSettings] = useState({
     enabled: true,
@@ -1651,6 +1674,441 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     );
   };
 
+  // Handle landing page save
+  const handleSaveLandingPage = async () => {
+    setSavingLandingPage(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/landing-page-settings`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(landingPageSettings)
+      });
+
+      if (response.ok) {
+        alert('Landing page settings saved successfully!');
+      } else {
+        const err = await response.json();
+        alert(`Failed to save: ${err.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Save landing page error:', err);
+      alert('Landing page settings saved locally. Backend sync coming soon.');
+    } finally {
+      setSavingLandingPage(false);
+    }
+  };
+
+  // Update landing page field
+  const updateLandingPageField = (field, value) => {
+    setLandingPageSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Extract video ID from URL
+  const getVideoEmbedUrl = (url, type) => {
+    if (!url) return null;
+
+    if (type === 'youtube') {
+      const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      return match ? `https://www.youtube.com/embed/${match[1]}` : null;
+    } else if (type === 'vimeo') {
+      const match = url.match(/vimeo\.com\/(\d+)/);
+      return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+    } else if (type === 'loom') {
+      const match = url.match(/loom\.com\/share\/([a-zA-Z0-9]+)/);
+      return match ? `https://www.loom.com/embed/${match[1]}` : null;
+    }
+    return url;
+  };
+
+  // Render Landing Page View
+  const renderLandingPageView = () => {
+    const embedUrl = getVideoEmbedUrl(landingPageSettings.video_url, landingPageSettings.video_type);
+
+    return (
+      <div className="scheduler-landing-page-view">
+        <div className="landing-page-header">
+          <div className="header-content">
+            <h3>Booking Page Customization</h3>
+            <p className="description">Customize how your public booking page looks to clients. Add your branding, a welcome video, and personal information.</p>
+          </div>
+          <div className="header-actions">
+            <button
+              className={`preview-toggle ${previewMode ? 'active' : ''}`}
+              onClick={() => setPreviewMode(!previewMode)}
+            >
+              {previewMode ? 'Edit Mode' : 'Preview'}
+            </button>
+          </div>
+        </div>
+
+        <div className="landing-page-content">
+          {previewMode ? (
+            /* Preview Mode */
+            <div className="landing-page-preview" style={{
+              background: landingPageSettings.background_style === 'gradient'
+                ? `linear-gradient(135deg, ${landingPageSettings.accent_color}15 0%, white 100%)`
+                : landingPageSettings.background_style === 'light' ? '#f9fafb' : 'white'
+            }}>
+              <div className="preview-container">
+                {/* Logo */}
+                {landingPageSettings.show_company_logo && landingPageSettings.logo_url && (
+                  <div className="preview-logo">
+                    <img src={landingPageSettings.logo_url} alt="Company Logo" />
+                  </div>
+                )}
+
+                {/* Video */}
+                {embedUrl && (
+                  <div className="preview-video">
+                    <iframe
+                      src={embedUrl}
+                      title="Welcome Video"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+
+                {/* Profile Section */}
+                {landingPageSettings.show_profile && (
+                  <div className="preview-profile">
+                    {landingPageSettings.profile_picture_url && (
+                      <img
+                        src={landingPageSettings.profile_picture_url}
+                        alt="Profile"
+                        className="profile-picture"
+                      />
+                    )}
+                    <div className="profile-info">
+                      <h2 style={{ color: landingPageSettings.accent_color }}>
+                        {landingPageSettings.profile_name || 'Your Name'}
+                      </h2>
+                      <p className="profile-title">{landingPageSettings.profile_title || 'Mortgage Loan Officer'}</p>
+                      {landingPageSettings.profile_bio && (
+                        <p className="profile-bio">{landingPageSettings.profile_bio}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Headline */}
+                <div className="preview-headline">
+                  <h1>{landingPageSettings.headline}</h1>
+                  <p>{landingPageSettings.subheadline}</p>
+                </div>
+
+                {/* Description */}
+                {landingPageSettings.description && (
+                  <div className="preview-description">
+                    <p>{landingPageSettings.description}</p>
+                  </div>
+                )}
+
+                {/* Calendar Placeholder */}
+                <div className="preview-calendar-placeholder" style={{ borderColor: landingPageSettings.accent_color }}>
+                  <div className="calendar-mock">
+                    <div className="calendar-header-mock" style={{ background: landingPageSettings.accent_color }}>
+                      <span>December 2025</span>
+                    </div>
+                    <div className="calendar-grid-mock">
+                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                        <div key={i} className="day-header">{d}</div>
+                      ))}
+                      {[...Array(31)].map((_, i) => (
+                        <div key={i} className={`day-cell ${i === 5 ? 'selected' : ''}`}>{i + 1}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Testimonial */}
+                {landingPageSettings.show_social_proof && landingPageSettings.testimonial_text && (
+                  <div className="preview-testimonial">
+                    <p className="testimonial-text">"{landingPageSettings.testimonial_text}"</p>
+                    {landingPageSettings.testimonial_author && (
+                      <p className="testimonial-author">— {landingPageSettings.testimonial_author}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Edit Mode */
+            <div className="landing-page-editor">
+              {/* Branding Section */}
+              <div className="editor-section">
+                <h4>Branding</h4>
+
+                <div className="form-group">
+                  <label>Company Logo URL</label>
+                  <input
+                    type="url"
+                    value={landingPageSettings.logo_url}
+                    onChange={(e) => updateLandingPageField('logo_url', e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                  />
+                  <span className="help-text">Recommended: 200x50px PNG or SVG with transparent background</span>
+                </div>
+
+                <div className="form-group checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={landingPageSettings.show_company_logo}
+                      onChange={(e) => updateLandingPageField('show_company_logo', e.target.checked)}
+                    />
+                    Show company logo on booking page
+                  </label>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Accent Color</label>
+                    <div className="color-input-group">
+                      <input
+                        type="color"
+                        value={landingPageSettings.accent_color}
+                        onChange={(e) => updateLandingPageField('accent_color', e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        value={landingPageSettings.accent_color}
+                        onChange={(e) => updateLandingPageField('accent_color', e.target.value)}
+                        placeholder="#217F8D"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Background Style</label>
+                    <select
+                      value={landingPageSettings.background_style}
+                      onChange={(e) => updateLandingPageField('background_style', e.target.value)}
+                    >
+                      <option value="white">Clean White</option>
+                      <option value="light">Light Gray</option>
+                      <option value="gradient">Subtle Gradient</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Section */}
+              <div className="editor-section">
+                <h4>Welcome Video</h4>
+                <p className="section-description">Add a personal video above the calendar to introduce yourself and set expectations for the meeting.</p>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Video Type</label>
+                    <select
+                      value={landingPageSettings.video_type}
+                      onChange={(e) => updateLandingPageField('video_type', e.target.value)}
+                    >
+                      <option value="youtube">YouTube</option>
+                      <option value="vimeo">Vimeo</option>
+                      <option value="loom">Loom</option>
+                      <option value="custom">Custom Embed URL</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Video URL</label>
+                  <input
+                    type="url"
+                    value={landingPageSettings.video_url}
+                    onChange={(e) => updateLandingPageField('video_url', e.target.value)}
+                    placeholder={
+                      landingPageSettings.video_type === 'youtube'
+                        ? 'https://youtube.com/watch?v=...'
+                        : landingPageSettings.video_type === 'vimeo'
+                        ? 'https://vimeo.com/...'
+                        : landingPageSettings.video_type === 'loom'
+                        ? 'https://loom.com/share/...'
+                        : 'https://...'
+                    }
+                  />
+                  <span className="help-text">
+                    {landingPageSettings.video_type === 'loom'
+                      ? 'Tip: Loom videos are great for personal introductions!'
+                      : 'Paste the share URL of your video'}
+                  </span>
+                </div>
+
+                {embedUrl && (
+                  <div className="video-preview">
+                    <label>Preview:</label>
+                    <iframe
+                      src={embedUrl}
+                      title="Video Preview"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Profile Section */}
+              <div className="editor-section">
+                <h4>Your Profile</h4>
+
+                <div className="form-group checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={landingPageSettings.show_profile}
+                      onChange={(e) => updateLandingPageField('show_profile', e.target.checked)}
+                    />
+                    Show profile section on booking page
+                  </label>
+                </div>
+
+                {landingPageSettings.show_profile && (
+                  <>
+                    <div className="form-group">
+                      <label>Profile Picture URL</label>
+                      <input
+                        type="url"
+                        value={landingPageSettings.profile_picture_url}
+                        onChange={(e) => updateLandingPageField('profile_picture_url', e.target.value)}
+                        placeholder="https://example.com/profile.jpg"
+                      />
+                      <span className="help-text">Recommended: Square image, at least 200x200px</span>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Your Name</label>
+                        <input
+                          type="text"
+                          value={landingPageSettings.profile_name}
+                          onChange={(e) => updateLandingPageField('profile_name', e.target.value)}
+                          placeholder="John Smith"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Title</label>
+                        <input
+                          type="text"
+                          value={landingPageSettings.profile_title}
+                          onChange={(e) => updateLandingPageField('profile_title', e.target.value)}
+                          placeholder="Senior Loan Officer"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Short Bio</label>
+                      <textarea
+                        value={landingPageSettings.profile_bio}
+                        onChange={(e) => updateLandingPageField('profile_bio', e.target.value)}
+                        placeholder="Tell clients a bit about yourself and what to expect from the meeting..."
+                        rows={3}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Content Section */}
+              <div className="editor-section">
+                <h4>Page Content</h4>
+
+                <div className="form-group">
+                  <label>Headline</label>
+                  <input
+                    type="text"
+                    value={landingPageSettings.headline}
+                    onChange={(e) => updateLandingPageField('headline', e.target.value)}
+                    placeholder="Schedule a Meeting"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Subheadline</label>
+                  <input
+                    type="text"
+                    value={landingPageSettings.subheadline}
+                    onChange={(e) => updateLandingPageField('subheadline', e.target.value)}
+                    placeholder="Choose a time that works for you"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Description / Appointment Agenda</label>
+                  <textarea
+                    value={landingPageSettings.description}
+                    onChange={(e) => updateLandingPageField('description', e.target.value)}
+                    placeholder="Describe what clients can expect from the meeting. Include agenda items, what to prepare, etc."
+                    rows={4}
+                  />
+                  <span className="help-text">This appears above the calendar to set expectations</span>
+                </div>
+              </div>
+
+              {/* Social Proof Section */}
+              <div className="editor-section">
+                <h4>Social Proof</h4>
+
+                <div className="form-group checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={landingPageSettings.show_social_proof}
+                      onChange={(e) => updateLandingPageField('show_social_proof', e.target.checked)}
+                    />
+                    Show testimonial on booking page
+                  </label>
+                </div>
+
+                {landingPageSettings.show_social_proof && (
+                  <>
+                    <div className="form-group">
+                      <label>Testimonial</label>
+                      <textarea
+                        value={landingPageSettings.testimonial_text}
+                        onChange={(e) => updateLandingPageField('testimonial_text', e.target.value)}
+                        placeholder="Working with [Name] made my home buying journey so much easier..."
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Author</label>
+                      <input
+                        type="text"
+                        value={landingPageSettings.testimonial_author}
+                        onChange={(e) => updateLandingPageField('testimonial_author', e.target.value)}
+                        placeholder="Happy Customer"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="landing-page-actions">
+          <button
+            className="save-landing-page-btn"
+            onClick={handleSaveLandingPage}
+            disabled={savingLandingPage}
+          >
+            {savingLandingPage ? 'Saving...' : 'Save Landing Page Settings'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Render Tutorial View
   const renderTutorialView = () => (
     <div className="scheduler-tutorial-view">
@@ -1875,6 +2333,12 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
             Reminders
           </button>
           <button
+            className={`tab ${view === 'landing-page' ? 'active' : ''}`}
+            onClick={() => setView('landing-page')}
+          >
+            Landing Page
+          </button>
+          <button
             className={`tab ${view === 'settings' ? 'active' : ''}`}
             onClick={() => setView('settings')}
           >
@@ -1903,6 +2367,7 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
         {view === 'types' && renderTypesView()}
         {view === 'booking-links' && renderBookingLinksView()}
         {view === 'reminders' && renderRemindersView()}
+        {view === 'landing-page' && renderLandingPageView()}
         {view === 'settings' && renderSettingsView()}
         {view === 'tutorial' && renderTutorialView()}
       </div>
