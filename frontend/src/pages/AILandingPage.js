@@ -1430,14 +1430,63 @@ function AILandingPage() {
   const showDailyView = async () => {
     try {
       const allTasks = [];
+      const token = localStorage.getItem('token');
 
-      // Fetch unified tasks from the API (same source as Tasks page)
+      // Fetch workflow tasks (same as Tasks page) - these are the primary tasks
+      try {
+        const workflowResponse = await fetch('/api/v1/workflow-config/all-workflow-tasks?days_ahead=14', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (workflowResponse.ok) {
+          const workflowData = await workflowResponse.json();
+          const workflowTasks = workflowData.tasks || [];
+          workflowTasks.forEach(task => {
+            // Skip phone-only tasks - those go to Power Dialer
+            const preferredMethod = task.communication_methods?.includes('phone') ? 'Phone'
+              : task.communication_methods?.includes('text') ? 'Text' : 'Email';
+            if (preferredMethod === 'Phone') return;
+
+            const priority = task.urgency === 'critical' ? 'URGENT'
+              : task.urgency === 'high' ? 'HIGH'
+              : task.urgency === 'medium' ? 'MEDIUM' : 'LOW';
+            allTasks.push({
+              id: task.id,
+              backendId: task.id,
+              taskType: 'task',
+              title: task.title,
+              client: task.client_name || 'Client',
+              stage: task.stage,
+              priority: priority,
+              type: 'Workflow',
+              source: 'Workflow',
+              owner: 'Loan Officer',
+              dateCreated: task.due_date,
+              details: task.description || '',
+              dueTime: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Today',
+              loanId: task.client_type === 'loan' ? task.client_id : null,
+              leadId: task.client_type === 'lead' ? task.client_id : null,
+              workflowName: task.workflow_name,
+              workflowColor: task.workflow_color,
+              daysUntilDue: task.days_until_due
+            });
+          });
+        }
+      } catch (workflowError) {
+        console.error('Error fetching workflow tasks:', workflowError);
+      }
+
+      // Fetch unified tasks from the API (for manual tasks not in workflows)
       try {
         const unifiedResponse = await tasksAPI.getUnified();
         // API returns { total_count, tasks, by_source } - extract the tasks array
         const unifiedTasks = unifiedResponse?.tasks || unifiedResponse || [];
         if (unifiedTasks && Array.isArray(unifiedTasks)) {
           unifiedTasks.forEach(task => {
+            // Only include manual tasks (workflow tasks already fetched above)
+            if (task.source !== 'task' && task.source !== 'manual') return;
+            // Skip email-related tasks (those are reconciliation)
+            if (task.email_from || task.email_subject) return;
+
             // Convert priority string to uppercase format
             const priority = task.priority?.toUpperCase() || 'MEDIUM';
             allTasks.push({
@@ -1449,7 +1498,7 @@ function AILandingPage() {
               stage: task.loan_stage || task.stage || 'In Progress',
               priority: priority,
               type: task.task_type || 'Task',
-              source: task.source || 'Workflow',
+              source: task.source || 'Manual',
               owner: task.assigned_to_name || 'Loan Officer',
               dateCreated: task.created_at ? new Date(task.created_at).toLocaleString() : new Date().toLocaleString(),
               details: task.description || '',
