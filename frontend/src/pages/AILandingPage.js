@@ -2339,9 +2339,9 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   <strong>Reconcile Emails</strong>
                   <span>Review and process incoming emails</span>
                 </button>
-                <button onClick={() => handleExamplePrompt('What should I do next?')}>
-                  <strong>What Should I Do Next?</strong>
-                  <span>Priority decision guidance</span>
+                <button onClick={() => handleExamplePrompt('Show me my tasks that need to be completed')}>
+                  <strong>Complete Tasks</strong>
+                  <span>View and manage your pending tasks</span>
                 </button>
               </div>
             </div>
