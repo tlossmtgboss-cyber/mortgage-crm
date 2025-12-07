@@ -19805,11 +19805,58 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
     # ========== PORTFOLIO/MUM CLIENT MATCHING ==========
     # Match against past clients (portfolio) for retention/referral opportunities
+    # Also check loan number matches against MUM clients
+
+    # First check if loan_number field matches any MUM client (highest confidence for portfolio)
+    if "loan_number" in fields and fields["loan_number"].get("value"):
+        loan_num = str(fields["loan_number"]["value"]).strip()
+        logger.info(f"Trying MUM client match by loan number: '{loan_num}'")
+        try:
+            # Try exact match first
+            mum_client = db.query(MUMClient).filter(
+                MUMClient.loan_number == loan_num
+            ).first()
+
+            if mum_client:
+                logger.info(f"Found exact MUM client match by loan number: {mum_client.name}")
+                match_results["candidates"].append({
+                    "type": "portfolio",
+                    "id": mum_client.id,
+                    "name": mum_client.name,
+                    "loan_number": mum_client.loan_number,
+                    "confidence": 0.97,  # Very high - exact loan number match
+                    "match_type": "loan_number_exact"
+                })
+            else:
+                # Try partial match
+                mum_clients = db.query(MUMClient).filter(
+                    MUMClient.loan_number.ilike(f"%{loan_num}%")
+                ).all()
+                for client in mum_clients:
+                    logger.info(f"Found partial MUM client match by loan number: {client.name}")
+                    match_results["candidates"].append({
+                        "type": "portfolio",
+                        "id": client.id,
+                        "name": client.name,
+                        "loan_number": client.loan_number,
+                        "confidence": 0.92,
+                        "match_type": "loan_number_partial"
+                    })
+        except Exception as e:
+            logger.warning(f"MUM client loan number matching failed: {e}")
+
+    # Also check by name, email, phone
     if borrower_name or extracted_email or extracted_phone:
-        logger.info("Trying portfolio/MUM client match...")
+        logger.info("Trying portfolio/MUM client match by name/email/phone...")
         try:
             all_mum_clients = db.query(MUMClient).all()
             for client in all_mum_clients:
+                # Skip if already matched by loan number
+                existing = next((c for c in match_results["candidates"]
+                               if c["type"] == "portfolio" and c["id"] == client.id), None)
+                if existing:
+                    continue
+
                 client_conf = 0.0
                 match_reasons = []
 
@@ -19837,6 +19884,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                         "type": "portfolio",
                         "id": client.id,
                         "name": client.name,
+                        "loan_number": client.loan_number,
                         "confidence": client_conf,
                         "match_type": "+".join(match_reasons)
                     })
@@ -19935,6 +19983,14 @@ def get_entity_name(entity_type: str, entity_id: int, db: Session) -> str:
             # Assuming client is a Lead
             client = db.query(Lead).filter(Lead.id == entity_id).first()
             return client.name if client and client.name else f"Client #{entity_id}"
+        elif entity_type == "portfolio":
+            # MUM/Portfolio client
+            mum_client = db.query(MUMClient).filter(MUMClient.id == entity_id).first()
+            return mum_client.name if mum_client and mum_client.name else f"Portfolio Client #{entity_id}"
+        elif entity_type == "partner":
+            # Referral partner
+            partner = db.query(ReferralPartner).filter(ReferralPartner.id == entity_id).first()
+            return partner.name if partner and partner.name else f"Partner #{entity_id}"
     except Exception as e:
         logger.error(f"Error getting entity name: {e}")
 
