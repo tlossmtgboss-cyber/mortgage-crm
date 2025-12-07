@@ -90,7 +90,6 @@ const TaskDetailPanel = ({
   const [showHistory, setShowHistory] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showDelegateModal, setShowDelegateModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // SLA task state
   const [slaMilestoneDate, setSlaMilestoneDate] = useState('');
   const [completingSla, setCompletingSla] = useState(false);
@@ -200,11 +199,8 @@ const TaskDetailPanel = ({
   };
 
   const handleDeleteClick = () => {
-    if (localStorage.getItem('skipDeleteConfirmation') === 'true') {
-      onDelete && onDelete(task.id);
-    } else {
-      setShowDeleteConfirm(true);
-    }
+    // Delete directly without confirmation
+    onDelete && onDelete(task.id);
   };
 
   // Handle SLA task completion with date
@@ -747,49 +743,6 @@ const TaskDetailPanel = ({
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="delete-modal-header">
-              <h3>Delete Task?</h3>
-              <button className="modal-close" onClick={() => setShowDeleteConfirm(false)}>×</button>
-            </div>
-            <div className="delete-modal-content">
-              <p>Are you sure you want to delete this task?</p>
-              <p className="task-title-preview">"{task.title}"</p>
-              <label className="dont-ask-again">
-                <input
-                  type="checkbox"
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      localStorage.setItem('skipDeleteConfirmation', 'true');
-                    }
-                  }}
-                />
-                Don't ask me again
-              </label>
-            </div>
-            <div className="delete-modal-actions">
-              <button
-                className="btn-modal-cancel"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn-modal-danger"
-                onClick={() => {
-                  onDelete && onDelete(task.id);
-                  setShowDeleteConfirm(false);
-                }}
-              >
-                Yes, Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
