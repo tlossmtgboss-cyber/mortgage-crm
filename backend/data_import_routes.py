@@ -682,6 +682,59 @@ async def execute_import(
                             columns.append('name')
                             values.append(fallback_name)
 
+                        # Get name and email for duplicate checking
+                        name_idx = columns.index('name')
+                        lead_name = values[name_idx]
+                        lead_email = row_dict.get('email')
+                        lead_phone = row_dict.get('phone')
+
+                        # Check for duplicate by email first (most reliable)
+                        existing_lead = None
+                        if lead_email:
+                            cursor.execute("SELECT id FROM leads WHERE LOWER(email) = LOWER(%s)", (lead_email,))
+                            existing_lead = cursor.fetchone()
+
+                        # If no email match, check by name + phone
+                        if not existing_lead and lead_name and lead_name != 'Unknown Lead':
+                            if lead_phone:
+                                # Normalize phone for comparison
+                                phone_digits = ''.join(filter(str.isdigit, str(lead_phone)))
+                                if len(phone_digits) >= 10:
+                                    cursor.execute(
+                                        "SELECT id FROM leads WHERE LOWER(name) = LOWER(%s) AND phone LIKE %s",
+                                        (lead_name, f"%{phone_digits[-10:]}%")
+                                    )
+                                    existing_lead = cursor.fetchone()
+                            else:
+                                # Check by name only (less reliable, only for exact matches)
+                                cursor.execute(
+                                    "SELECT id FROM leads WHERE LOWER(name) = LOWER(%s)",
+                                    (lead_name,)
+                                )
+                                existing_lead = cursor.fetchone()
+
+                        if existing_lead:
+                            if duplicate_handling == 'skip':
+                                # Skip this record
+                                continue
+                            elif duplicate_handling == 'update':
+                                # Update existing record
+                                update_cols = []
+                                update_vals = []
+                                for col, val in zip(columns, values):
+                                    if col not in ['created_at'] and val is not None:
+                                        update_cols.append(f"{col} = %s")
+                                        update_vals.append(val)
+                                if update_cols:
+                                    update_vals.append(existing_lead[0])
+                                    cursor.execute(
+                                        f"UPDATE leads SET {', '.join(update_cols)}, updated_at = NOW() WHERE id = %s",
+                                        update_vals
+                                    )
+                                imported += 1
+                                continue
+                            # else: duplicate_handling == 'create_new' - continue to create
+
                         # Add required fields if missing
                         if 'created_at' not in columns:
                             columns.append('created_at')
@@ -712,6 +765,54 @@ async def execute_import(
                         if 'borrower_name' not in columns:
                             columns.append('borrower_name')
                             values.append('Unknown Borrower')
+
+                        # Get borrower_name for duplicate checking
+                        borrower_name_idx = columns.index('borrower_name')
+                        borrower_name = values[borrower_name_idx]
+                        borrower_email = row_dict.get('borrower_email')
+                        loan_number = row_dict.get('loan_number')
+
+                        # Check for duplicate by loan_number first
+                        existing_loan = None
+                        if loan_number:
+                            cursor.execute("SELECT id FROM loans WHERE loan_number = %s", (loan_number,))
+                            existing_loan = cursor.fetchone()
+
+                        # If no loan_number match, check by borrower_name + email
+                        if not existing_loan and borrower_name and borrower_name != 'Unknown Borrower':
+                            if borrower_email:
+                                cursor.execute(
+                                    "SELECT id FROM loans WHERE LOWER(borrower_name) = LOWER(%s) AND LOWER(borrower_email) = LOWER(%s)",
+                                    (borrower_name, borrower_email)
+                                )
+                            else:
+                                cursor.execute(
+                                    "SELECT id FROM loans WHERE LOWER(borrower_name) = LOWER(%s)",
+                                    (borrower_name,)
+                                )
+                            existing_loan = cursor.fetchone()
+
+                        if existing_loan:
+                            if duplicate_handling == 'skip':
+                                # Skip this record
+                                continue
+                            elif duplicate_handling == 'update':
+                                # Update existing record
+                                update_cols = []
+                                update_vals = []
+                                for col, val in zip(columns, values):
+                                    if col not in ['loan_number', 'created_at'] and val is not None:
+                                        update_cols.append(f"{col} = %s")
+                                        update_vals.append(val)
+                                if update_cols:
+                                    update_vals.append(existing_loan[0])
+                                    cursor.execute(
+                                        f"UPDATE loans SET {', '.join(update_cols)}, updated_at = NOW() WHERE id = %s",
+                                        update_vals
+                                    )
+                                imported += 1
+                                continue
+                            # else: duplicate_handling == 'create_new' - continue to create
 
                         # Generate loan_number if not provided
                         if 'loan_number' not in columns:
