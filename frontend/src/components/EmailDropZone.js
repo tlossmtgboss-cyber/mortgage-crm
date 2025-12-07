@@ -18,23 +18,24 @@ function EmailDropZone({ children }) {
   const [parsing, setParsing] = useState(false);
   const [aiParseResult, setAiParseResult] = useState(null);
 
-  // Simple counter to track drag enter/leave
+  // Ref to track drag counter persistently
   const dragCounterRef = useRef(0);
 
-  // Set up global drag listeners on mount
-  useEffect(() => {
-    // Counter to track nested drag enter/leave events
-    let dragCounter = 0;
+  // Ref to store the current processDropEvent function
+  const processDropEventRef = useRef(null);
 
+  // Set up global drag listeners on mount - ONLY ONCE
+  useEffect(() => {
     const handleDragEnter = (e) => {
       e.preventDefault();
-      dragCounter++;
+      e.stopPropagation();
+      dragCounterRef.current++;
 
       const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
-      console.log('[EmailDropZone] DragEnter - counter:', dragCounter, 'types:', types);
+      console.log('[EmailDropZone] DragEnter - counter:', dragCounterRef.current, 'types:', types);
 
-      // Show overlay on ANY drag enter
-      if (dragCounter === 1) {
+      // Show overlay on first drag enter
+      if (dragCounterRef.current === 1) {
         console.log('[EmailDropZone] Showing overlay');
         setIsDragging(true);
       }
@@ -42,13 +43,14 @@ function EmailDropZone({ children }) {
 
     const handleDragLeave = (e) => {
       e.preventDefault();
-      dragCounter--;
+      e.stopPropagation();
+      dragCounterRef.current--;
 
-      console.log('[EmailDropZone] DragLeave - counter:', dragCounter);
+      console.log('[EmailDropZone] DragLeave - counter:', dragCounterRef.current);
 
       // Hide when fully left
-      if (dragCounter <= 0) {
-        dragCounter = 0;
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
         console.log('[EmailDropZone] Hiding overlay');
         setIsDragging(false);
       }
@@ -57,58 +59,69 @@ function EmailDropZone({ children }) {
     const handleDragOver = (e) => {
       // MUST prevent default to allow drop
       e.preventDefault();
+      e.stopPropagation();
 
       // Set drop effect
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
       }
-
-      // Safety: ensure overlay is shown during dragover
-      if (dragCounter > 0 && !isDragging) {
-        setIsDragging(true);
-      }
     };
 
     const handleDrop = (e) => {
       e.preventDefault();
+      e.stopPropagation();
 
       const files = e.dataTransfer?.files;
       const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
       console.log('[EmailDropZone] Drop - files:', files?.length, 'types:', types);
 
       // Reset state
-      dragCounter = 0;
+      dragCounterRef.current = 0;
       setIsDragging(false);
 
-      // Process the drop
-      processDropEvent(e);
+      // Process the drop using the ref to get the latest function
+      if (processDropEventRef.current) {
+        processDropEventRef.current(e);
+      }
     };
 
-    // Add listeners to document (bubbling phase)
-    document.addEventListener('dragenter', handleDragEnter, false);
-    document.addEventListener('dragleave', handleDragLeave, false);
-    document.addEventListener('dragover', handleDragOver, false);
-    document.addEventListener('drop', handleDrop, false);
+    // Also prevent default on window to stop browser from opening file
+    const handleWindowDragOver = (e) => {
+      e.preventDefault();
+    };
+
+    const handleWindowDrop = (e) => {
+      // Only prevent if not handled by document handler
+      if (dragCounterRef.current === 0) {
+        e.preventDefault();
+      }
+    };
+
+    // Add listeners to document
+    document.addEventListener('dragenter', handleDragEnter, true);
+    document.addEventListener('dragleave', handleDragLeave, true);
+    document.addEventListener('dragover', handleDragOver, true);
+    document.addEventListener('drop', handleDrop, true);
 
     // Also add to window for extra coverage
-    window.addEventListener('dragover', handleDragOver, false);
-    window.addEventListener('drop', handleDrop, false);
+    window.addEventListener('dragover', handleWindowDragOver, false);
+    window.addEventListener('drop', handleWindowDrop, false);
 
     console.log('[EmailDropZone] *** Drag listeners ATTACHED ***');
 
     return () => {
-      document.removeEventListener('dragenter', handleDragEnter, false);
-      document.removeEventListener('dragleave', handleDragLeave, false);
-      document.removeEventListener('dragover', handleDragOver, false);
-      document.removeEventListener('drop', handleDrop, false);
-      window.removeEventListener('dragover', handleDragOver, false);
-      window.removeEventListener('drop', handleDrop, false);
+      document.removeEventListener('dragenter', handleDragEnter, true);
+      document.removeEventListener('dragleave', handleDragLeave, true);
+      document.removeEventListener('dragover', handleDragOver, true);
+      document.removeEventListener('drop', handleDrop, true);
+      window.removeEventListener('dragover', handleWindowDragOver, false);
+      window.removeEventListener('drop', handleWindowDrop, false);
       console.log('[EmailDropZone] Drag listeners removed');
     };
-  }, [isDragging]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Process the drop event
-  const processDropEvent = async (e) => {
+  const processDropEvent = useCallback(async (e) => {
     const files = Array.from(e.dataTransfer?.files || []);
 
     // First check for files
@@ -154,7 +167,12 @@ function EmailDropZone({ children }) {
     } else {
       alert('No valid file or email content detected. Try:\n1. Save the email as .eml file and drag that\n2. Or copy/paste the email content');
     }
-  };
+  }, []);
+
+  // Keep the ref updated with the latest processDropEvent function
+  useEffect(() => {
+    processDropEventRef.current = processDropEvent;
+  }, [processDropEvent]);
 
   // Determine if file is an email or document
   const isEmailFile = (file) => {
