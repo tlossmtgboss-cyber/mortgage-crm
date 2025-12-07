@@ -746,7 +746,9 @@ function ReconciliationCenter() {
         });
         setShowAppliedDataModal(true);
 
-        // Remove from list and reset
+        // Remove from ALL lists and reset
+        setNewItems(prev => prev.filter(item => item.id !== itemId));
+        setAutoProcessingItems(prev => prev.filter(item => item.id !== itemId));
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
