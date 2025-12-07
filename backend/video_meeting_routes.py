@@ -1292,6 +1292,85 @@ async def seed_default_templates(
     return {"success": True, "message": f"Seeded {created} default templates"}
 
 
+@router.put("/templates/{template_id}")
+async def update_template(
+    template_id: int,
+    data: MeetingTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Update an existing meeting template."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    MeetingTemplate = _models.get('MeetingTemplate')
+    if MeetingTemplate is None:
+        raise HTTPException(status_code=500, detail="MeetingTemplate model not found")
+
+    template = db.query(MeetingTemplate).filter(MeetingTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Update fields
+    template.template_name = data.template_name
+    template.description = data.description
+    template.default_duration_minutes = data.default_duration_minutes
+    template.recording_enabled = data.recording_enabled
+    template.ai_assistant_enabled = data.ai_assistant_enabled
+    if data.color:
+        template.color = data.color
+    if data.icon:
+        template.icon = data.icon
+    if data.template_key:
+        template.template_key = data.template_key
+
+    db.commit()
+    db.refresh(template)
+
+    return {
+        "success": True,
+        "template": {
+            "id": template.id,
+            "template_key": template.template_key,
+            "template_name": template.template_name,
+            "description": template.description,
+            "default_duration_minutes": template.default_duration_minutes,
+            "recording_enabled": template.recording_enabled,
+            "ai_assistant_enabled": template.ai_assistant_enabled,
+            "color": template.color,
+            "icon": template.icon
+        }
+    }
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Delete a meeting template."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    MeetingTemplate = _models.get('MeetingTemplate')
+    if MeetingTemplate is None:
+        raise HTTPException(status_code=500, detail="MeetingTemplate model not found")
+
+    template = db.query(MeetingTemplate).filter(MeetingTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Prevent deletion of system templates
+    if template.is_system_template:
+        raise HTTPException(status_code=400, detail="Cannot delete system templates")
+
+    db.delete(template)
+    db.commit()
+
+    return {"success": True, "message": "Template deleted"}
+
+
 # ============================================================================
 # RECORDING ENDPOINTS
 # ============================================================================
