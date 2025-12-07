@@ -233,13 +233,33 @@ async def reason_and_respond(
                 "follow_up_suggestions": ["Show me my pipeline", "What are my priorities today?"]
             })
 
-        # Handle greeting case - fast path with friendly response
+        # Handle greeting case - use LLM for natural, human-like response
         intent_str_check = state.get("intent_str", "")
         if data_quality == "not_needed" and intent_str_check == "greeting":
-            logger.info("[REASON_AND_RESPOND] Greeting detected - using fast greeting response")
-            greeting_response = f"Hello! I'm Perennia AI, your mortgage industry assistant. I'm here to help you with your pipeline, leads, tasks, rates, and more. What would you like to work on today?"
+            logger.info("[REASON_AND_RESPOND] Greeting detected - generating natural response via LLM")
+
+            # Initialize client for greeting response
+            if anthropic_client is None:
+                anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+            # Use Haiku for fast, natural greeting response
+            greeting_prompt = f"""The user just said: "{user_message}"
+
+Respond naturally and warmly to their greeting. Match their energy - if they say "good morning", say good morning back. If they say "hey", be casual. If they say "hello", be friendly.
+
+Keep it brief (1-2 sentences max). You're Perennia AI, a helpful mortgage assistant. After greeting them back, gently invite them to ask about their pipeline, leads, or anything else.
+
+DO NOT use a canned/scripted response. Be natural and human."""
+
+            greeting_response_obj = anthropic_client.messages.create(
+                model=MODEL_HAIKU,
+                max_tokens=150,
+                messages=[{"role": "user", "content": greeting_prompt}]
+            )
+            greeting_response = greeting_response_obj.content[0].text.strip()
+
             return update_state(state, {
-                "analysis": "Greeting detected",
+                "analysis": "Greeting - natural response generated",
                 "insights": [],
                 "recommendations": [],
                 "confidence_score": 0.99,
