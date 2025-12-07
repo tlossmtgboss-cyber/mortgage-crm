@@ -2402,9 +2402,6 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
         </div>
       )}
 
-      {/* Stats */}
-      {renderStats()}
-
       {/* Navigation Tabs - Mirroring Smart Scheduler */}
       <div className="scheduler-tabs">
         <button
