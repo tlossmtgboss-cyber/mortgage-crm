@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import './VideoMeetings.css';
+import './SmartScheduler.css';
 import RecordingPlayer from './VideoMeetings/RecordingPlayer';
 import { sanitizeText, SafeHTML } from '../utils/sanitize';
 
@@ -1088,16 +1088,14 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
               onClick={() => handleEditType(type)}
             >
               <div className="type-header">
-                <div className="type-icon" style={{ backgroundColor: type.color }}>
-                  {getTemplateIcon(type.icon)}
-                </div>
                 <h4>{type.template_name || type.type_name}</h4>
               </div>
               <p className="type-description">{type.description}</p>
               <div className="type-meta">
                 <span>{type.default_duration_minutes} min</span>
-                {type.recording_enabled && <span>Recording</span>}
-                {type.ai_assistant_enabled && <span>AI</span>}
+                <span className={`public-badge ${type.is_public ? 'public' : 'private'}`}>
+                  {type.is_public ? 'Public' : 'Private'}
+                </span>
               </div>
               <div className="type-durations">
                 {(type.allowed_durations || [type.default_duration_minutes]).map(d => (
@@ -2377,33 +2375,11 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
   }
 
   return (
-    <div className="video-meetings-container">
+    <div className="smart-scheduler">
       {/* Header */}
-      <div className="meetings-header">
-        <div className="header-left">
-          <h2>Video Meetings</h2>
-          <p className="subtitle">AI-powered video conferencing for mortgage professionals</p>
-        </div>
-        <div className="header-actions">
-          <button className="secondary-btn" onClick={createInstantMeeting} disabled={loading}>
-            <span className="btn-icon">{loading ? '⏳' : '🚀'}</span> {loading ? 'Starting...' : 'Start Instant'}
-          </button>
-          <button className="primary-btn" onClick={() => setShowCreateModal(true)} disabled={loading}>
-            <span className="btn-icon">+</span> Schedule Meeting
-          </button>
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="error-banner">
-          <span>{error}</span>
-          <button onClick={() => setError(null)}>×</button>
-        </div>
-      )}
-
-      {/* Navigation Tabs - Mirroring Smart Scheduler */}
-      <div className="scheduler-tabs">
+      <div className="scheduler-header">
+        <h2>Video Meetings</h2>
+        <div className="scheduler-tabs">
         <button
           className={`tab ${view === 'types' ? 'active' : ''}`}
           onClick={() => setView('types')}
@@ -2440,7 +2416,16 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
         >
           Tutorial
         </button>
+        </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
 
       {/* Content */}
       <div className="scheduler-content">
