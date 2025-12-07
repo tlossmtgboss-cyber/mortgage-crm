@@ -27,11 +27,25 @@ function EmailDropZone({ children }) {
   // Set up global drag listeners on mount - ONLY ONCE
   useEffect(() => {
     const handleDragEnter = (e) => {
+      // Check if this is an internal drag (element being dragged within the page)
+      // Internal drags typically have 'text/html' without 'Files'
+      const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+
+      // Only show overlay for external file drops, not internal drag-and-drop
+      // External drops have 'Files' type, internal drags have text/html or text/plain
+      const hasFiles = types.includes('Files');
+      const isInternalDrag = !hasFiles && (types.includes('text/html') || types.includes('text/plain'));
+
+      // If it's an internal drag (like reordering rows), don't intercept
+      if (isInternalDrag) {
+        console.log('[EmailDropZone] Ignoring internal drag - types:', types);
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
       dragCounterRef.current++;
 
-      const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
       console.log('[EmailDropZone] DragEnter - counter:', dragCounterRef.current, 'types:', types);
 
       // Show overlay on first drag enter
@@ -42,6 +56,11 @@ function EmailDropZone({ children }) {
     };
 
     const handleDragLeave = (e) => {
+      // Only handle if we're tracking this drag (counter > 0)
+      if (dragCounterRef.current === 0) {
+        return; // This was an internal drag we're not tracking
+      }
+
       e.preventDefault();
       e.stopPropagation();
       dragCounterRef.current--;
@@ -57,6 +76,11 @@ function EmailDropZone({ children }) {
     };
 
     const handleDragOver = (e) => {
+      // Only intercept if we're tracking a drag (counter > 0)
+      if (dragCounterRef.current === 0) {
+        return; // This is an internal drag we're not handling
+      }
+
       // MUST prevent default to allow drop
       e.preventDefault();
       e.stopPropagation();
@@ -68,6 +92,11 @@ function EmailDropZone({ children }) {
     };
 
     const handleDrop = (e) => {
+      // Only handle if we're tracking this drag (counter > 0)
+      if (dragCounterRef.current === 0) {
+        return; // This was an internal drag we didn't intercept
+      }
+
       e.preventDefault();
       e.stopPropagation();
 
