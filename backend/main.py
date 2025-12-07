@@ -19471,6 +19471,13 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
             logger.warning(f"[Portfolio Match] Traceback: {traceback.format_exc()}")
 
         # ========== REGULAR LOAN TABLE MATCHING ==========
+        # Helper to determine entity type based on loan stage
+        def get_loan_entity_type(loan_obj):
+            """Return 'portfolio' for funded loans, 'loan' for active loans"""
+            if loan_obj and loan_obj.stage == LoanStage.FUNDED:
+                return "portfolio"
+            return "loan"
+
         # First try exact match with user's loans (highest confidence)
         loan = db.query(Loan).filter(
             Loan.loan_number == loan_num,
@@ -19478,8 +19485,9 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         ).first()
 
         if loan:
-            logger.info(f"Found exact match with user's loan: {loan.id}")
-            match_results["entity_type"] = "loan"
+            entity_type = get_loan_entity_type(loan)
+            logger.info(f"Found exact match with user's loan: {loan.id} (type: {entity_type})")
+            match_results["entity_type"] = entity_type
             match_results["entity_id"] = loan.id
             match_results["confidence"] = 0.98  # Very high - exact match + user owns it
             return match_results
@@ -19487,8 +19495,9 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         # Try exact loan number match without user filter (still high confidence)
         loan = db.query(Loan).filter(Loan.loan_number == loan_num).first()
         if loan:
-            logger.info(f"Found exact match (any user): {loan.id}")
-            match_results["entity_type"] = "loan"
+            entity_type = get_loan_entity_type(loan)
+            logger.info(f"Found exact match (any user): {loan.id} (type: {entity_type})")
+            match_results["entity_type"] = entity_type
             match_results["entity_id"] = loan.id
             match_results["confidence"] = 0.95  # High - exact loan number match
             return match_results
@@ -19503,12 +19512,14 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
             # Prefer user's loan if multiple matches
             user_loan = next((l for l in loans if l.loan_officer_id == user_id), None)
             if user_loan:
-                match_results["entity_type"] = "loan"
+                entity_type = get_loan_entity_type(user_loan)
+                match_results["entity_type"] = entity_type
                 match_results["entity_id"] = user_loan.id
                 match_results["confidence"] = 0.90
                 return match_results
             # Otherwise use first match
-            match_results["entity_type"] = "loan"
+            entity_type = get_loan_entity_type(loans[0])
+            match_results["entity_type"] = entity_type
             match_results["entity_id"] = loans[0].id
             match_results["confidence"] = 0.85
             return match_results
@@ -20064,7 +20075,17 @@ def get_entity_name(entity_type: str, entity_id, db: Session) -> str:
             client = db.query(Lead).filter(Lead.id == entity_id).first()
             return client.name if client and client.name else f"Client #{entity_id}"
         elif entity_type == "portfolio":
-            # MUM/Portfolio client
+            # Portfolio can refer to either:
+            # 1. A funded Loan (from Loan table with stage=FUNDED)
+            # 2. A MUM client (from MUMClient table)
+            # Try Loan first (more common case with integer IDs)
+            try:
+                loan = db.query(Loan).filter(Loan.id == entity_id).first()
+                if loan:
+                    return loan.borrower_name if loan.borrower_name else f"Portfolio Loan #{entity_id}"
+            except Exception:
+                pass
+            # Fall back to MUMClient
             mum_client = db.query(MUMClient).filter(MUMClient.id == entity_id).first()
             return mum_client.name if mum_client and mum_client.name else f"Portfolio Client #{entity_id}"
         elif entity_type == "partner":
