@@ -19427,6 +19427,41 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         loan_num = str(fields["loan_number"]["value"]).strip()
         logger.info(f"Attempting to match loan number: '{loan_num}'")
 
+        # ========== ACTIVE LOAN PROFILE MATCHING (Portfolio) ==========
+        # Check ActiveLoanProfile table first (this is the Portfolio data)
+        try:
+            from models.active_loan_profile import ActiveLoanProfile
+
+            # Exact match on ActiveLoanProfile
+            active_loan = db.query(ActiveLoanProfile).filter(
+                ActiveLoanProfile.loan_number == loan_num,
+                ActiveLoanProfile.is_deleted == False
+            ).first()
+
+            if active_loan:
+                logger.info(f"Found exact match in ActiveLoanProfile (Portfolio): {active_loan.id}")
+                match_results["entity_type"] = "active_loan"
+                match_results["entity_id"] = str(active_loan.id)
+                match_results["confidence"] = 0.99  # Very high - exact match in portfolio
+                return match_results
+
+            # Try partial match on ActiveLoanProfile
+            active_loans = db.query(ActiveLoanProfile).filter(
+                ActiveLoanProfile.loan_number.ilike(f"%{loan_num}%"),
+                ActiveLoanProfile.is_deleted == False
+            ).all()
+
+            if active_loans:
+                logger.info(f"Found {len(active_loans)} partial matches in ActiveLoanProfile (Portfolio)")
+                match_results["entity_type"] = "active_loan"
+                match_results["entity_id"] = str(active_loans[0].id)
+                match_results["confidence"] = 0.90
+                return match_results
+
+        except Exception as e:
+            logger.warning(f"Error checking ActiveLoanProfile: {e}")
+
+        # ========== REGULAR LOAN TABLE MATCHING ==========
         # First try exact match with user's loans (highest confidence)
         loan = db.query(Loan).filter(
             Loan.loan_number == loan_num,
@@ -19967,7 +20002,7 @@ def classify_email_intent(subject: str, content: str, fields: Dict[str, Any]) ->
         "confidence": 0.50
     }
 
-def get_entity_name(entity_type: str, entity_id: int, db: Session) -> str:
+def get_entity_name(entity_type: str, entity_id, db: Session) -> str:
     """Get the name of the matched entity"""
     try:
         if entity_type == "loan":
@@ -19977,8 +20012,44 @@ def get_entity_name(entity_type: str, entity_id: int, db: Session) -> str:
             lead = db.query(Lead).filter(Lead.id == entity_id).first()
             return lead.name if lead and lead.name else f"Lead #{entity_id}"
         elif entity_type == "active_loan":
-            loan = db.query(Loan).filter(Loan.id == entity_id).first()
-            return loan.borrower_name if loan and loan.borrower_name else f"Active Loan #{entity_id}"
+            # Query ActiveLoanProfile table for portfolio loans
+            try:
+                from models.active_loan_profile import ActiveLoanProfile
+                from models.lead_profile import LeadProfile
+                import uuid
+
+                # Handle both UUID string and UUID object
+                if isinstance(entity_id, str):
+                    try:
+                        loan_uuid = uuid.UUID(entity_id)
+                    except ValueError:
+                        loan_uuid = entity_id
+                else:
+                    loan_uuid = entity_id
+
+                active_loan = db.query(ActiveLoanProfile).filter(
+                    ActiveLoanProfile.id == loan_uuid
+                ).first()
+
+                if active_loan:
+                    # Try to get borrower name from linked lead profile
+                    if active_loan.lead_profile_id:
+                        lead_profile = db.query(LeadProfile).filter(
+                            LeadProfile.id == active_loan.lead_profile_id
+                        ).first()
+                        if lead_profile:
+                            name_parts = []
+                            if lead_profile.first_name:
+                                name_parts.append(lead_profile.first_name)
+                            if lead_profile.last_name:
+                                name_parts.append(lead_profile.last_name)
+                            if name_parts:
+                                return " ".join(name_parts)
+                    # Fallback to loan number
+                    return f"Portfolio Loan {active_loan.loan_number}"
+            except Exception as e:
+                logger.error(f"Error getting ActiveLoanProfile: {e}")
+            return f"Portfolio Loan #{entity_id}"
         elif entity_type == "client":
             # Assuming client is a Lead
             client = db.query(Lead).filter(Lead.id == entity_id).first()

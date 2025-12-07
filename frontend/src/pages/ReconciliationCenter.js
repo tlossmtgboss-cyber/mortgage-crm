@@ -1557,16 +1557,16 @@ function ReconciliationCenter() {
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'portfolio' ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                          border: (selectedEntityType === 'portfolio' || selectedEntityType === 'active_loan') ? '2px solid #f59e0b' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: selectedEntityType === 'portfolio' ? '#fef3c7' : 'white',
+                          background: (selectedEntityType === 'portfolio' || selectedEntityType === 'active_loan') ? '#fef3c7' : 'white',
                           cursor: 'pointer',
-                          fontWeight: selectedEntityType === 'portfolio' ? '600' : '400'
+                          fontWeight: (selectedEntityType === 'portfolio' || selectedEntityType === 'active_loan') ? '600' : '400'
                         }}
                       >
                         Portfolio
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                          {selectedItem.match_entity_type === 'portfolio' && selectedItem.match_entity_name ?
+                          {(selectedItem.match_entity_type === 'portfolio' || selectedItem.match_entity_type === 'active_loan') && selectedItem.match_entity_name ?
                             `Match: ${selectedItem.match_entity_name}` : 'No match found'}
                         </div>
                       </button>
@@ -2718,16 +2718,16 @@ function ReconciliationCenter() {
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'portfolio' ? '2px solid #f59e0b' : '1px solid #e5e7eb',
+                          border: (selectedEntityType === 'portfolio' || selectedEntityType === 'active_loan') ? '2px solid #f59e0b' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: selectedEntityType === 'portfolio' ? '#fef3c7' : 'white',
+                          background: (selectedEntityType === 'portfolio' || selectedEntityType === 'active_loan') ? '#fef3c7' : 'white',
                           cursor: 'pointer',
-                          fontWeight: selectedEntityType === 'portfolio' ? '600' : '400'
+                          fontWeight: (selectedEntityType === 'portfolio' || selectedEntityType === 'active_loan') ? '600' : '400'
                         }}
                       >
                         Portfolio
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                          {selectedItem.match_entity_type === 'portfolio' && selectedItem.match_entity_name ?
+                          {(selectedItem.match_entity_type === 'portfolio' || selectedItem.match_entity_type === 'active_loan') && selectedItem.match_entity_name ?
                             `Match: ${selectedItem.match_entity_name}` : 'No match found'}
                         </div>
                       </button>
