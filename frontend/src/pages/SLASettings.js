@@ -204,6 +204,30 @@ const SLASettings = () => {
     }
   };
 
+  const changeMilestoneStage = async (measureId, newStage) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}/stage`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ stage_type: newStage })
+      });
+      if (response.ok) {
+        fetchDashboard();
+      } else {
+        const errorData = await response.json();
+        console.error('Error changing milestone stage:', errorData);
+        alert(`Error changing stage: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error changing milestone stage:', err);
+      alert('Failed to change milestone stage. Please try again.');
+    }
+  };
+
   const deleteMeasure = async (measureId) => {
     try {
       const token = localStorage.getItem('token');
@@ -367,8 +391,8 @@ const SLASettings = () => {
     }
 
     // Only allow reordering within the same stage
-    const draggedStage = getMilestoneStage(draggedItem.milestone_type);
-    const targetStage = getMilestoneStage(targetMeasure.milestone_type);
+    const draggedStage = getMilestoneStage(draggedItem.milestone_type, draggedItem.stage_type);
+    const targetStage = getMilestoneStage(targetMeasure.milestone_type, targetMeasure.stage_type);
 
     if (draggedStage !== targetStage) {
       setDraggedItem(null);
@@ -451,8 +475,11 @@ const SLASettings = () => {
     'closing_docs_out', 'closing_scheduled', 'closed', 'funded', 'loan_funded'
   ];
 
-  // Get stage category for a milestone type
-  const getMilestoneStage = (milestoneType) => {
+  // Get stage category for a milestone type (or use stage_type override if set)
+  const getMilestoneStage = (milestoneType, stageType = null) => {
+    // If stage_type override is set, use it
+    if (stageType === 'lead' || stageType === 'loan') return stageType;
+    // Otherwise, determine from milestone type
     if (leadStageMilestones.includes(milestoneType)) return 'lead';
     if (loanStageMilestones.includes(milestoneType)) return 'loan';
     return 'other';
@@ -469,10 +496,10 @@ const SLASettings = () => {
 
   // Sort measures: Lead stage first, then Loan stage, then by status (Active first), then by display_order or milestone order
   const sortedMeasures = [...measures].sort((a, b) => {
-    // First sort by stage (Lead = 0, Loan = 1, Other = 2)
+    // First sort by stage (Lead = 0, Loan = 1, Other = 2) - using stage_type override if set
     const stageOrder = { lead: 0, loan: 1, other: 2 };
-    const stageA = stageOrder[getMilestoneStage(a.milestone_type)];
-    const stageB = stageOrder[getMilestoneStage(b.milestone_type)];
+    const stageA = stageOrder[getMilestoneStage(a.milestone_type, a.stage_type)];
+    const stageB = stageOrder[getMilestoneStage(b.milestone_type, b.stage_type)];
     if (stageA !== stageB) return stageA - stageB;
 
     // Then sort by active status (Active first)
@@ -484,11 +511,11 @@ const SLASettings = () => {
     return orderA - orderB;
   });
 
-  // Group measures by stage for display
+  // Group measures by stage for display (using stage_type override if set)
   const groupedMeasures = {
-    lead: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'lead'),
-    loan: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'loan'),
-    other: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'other')
+    lead: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type, m.stage_type) === 'lead'),
+    loan: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type, m.stage_type) === 'loan'),
+    other: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type, m.stage_type) === 'other')
   };
 
   // Render a single measure row with drag-and-drop support
@@ -591,6 +618,24 @@ const SLASettings = () => {
           >
             {measure.is_active ? 'Deactivate' : 'Activate'}
           </button>
+          {/* Move to other stage button - only show for lead and loan stages */}
+          {(stage === 'lead' || stage === 'loan') && (
+            <button
+              onClick={() => changeMilestoneStage(measure.id, stage === 'lead' ? 'loan' : 'lead')}
+              style={{
+                padding: '6px 12px',
+                background: stage === 'lead' ? '#e3f2fd' : '#e0f2f1',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: stage === 'lead' ? '#1565c0' : '#00796b'
+              }}
+              title={stage === 'lead' ? 'Move to Active Loan Stage' : 'Move to Lead Stage'}
+            >
+              {stage === 'lead' ? '→ Loan' : '← Lead'}
+            </button>
+          )}
           <button
             onClick={() => deleteMeasure(measure.id)}
             style={{

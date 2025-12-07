@@ -160,6 +160,7 @@ class SLAMeasureResponse(SLAMeasureBase):
     trigger_from: Optional[str] = "previous_milestone"
     trigger_from_is_default: bool = False
     display_order: int = 0
+    stage_type: Optional[str] = None  # Override stage: 'lead' or 'loan', null = auto-detect
     created_at: datetime
     updated_at: datetime
 

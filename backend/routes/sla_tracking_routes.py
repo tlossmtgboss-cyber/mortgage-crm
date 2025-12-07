@@ -395,6 +395,7 @@ async def list_sla_measures(
                 business_hours_only=m.business_hours_only if m.business_hours_only is not None else True,
                 is_active=m.is_active if m.is_active is not None else True,
                 display_order=m.display_order or 0,
+                stage_type=getattr(m, 'stage_type', None),  # Stage override for moving between Lead/Loan stages
                 created_at=m.created_at,
                 updated_at=m.updated_at,
             ))
@@ -450,6 +451,49 @@ async def delete_sla_measure_item(
     if not success:
         raise HTTPException(status_code=404, detail="SLA measure not found")
     return {"status": "success", "message": "SLA measure deactivated"}
+
+
+class StageChangeRequest(BaseModel):
+    """Request model for changing a measure's stage."""
+    stage_type: str = Field(..., description="Stage to move to: 'lead' or 'loan'")
+
+
+@router.put("/measures/{measure_id}/stage")
+async def change_measure_stage(
+    measure_id: int,
+    request: StageChangeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Move a milestone measure between Lead and Active Loan stages.
+    This allows reorganizing milestones regardless of their default stage.
+    """
+    try:
+        measure = db.query(SLAMeasure).filter(SLAMeasure.id == measure_id).first()
+        if not measure:
+            raise HTTPException(status_code=404, detail="SLA measure not found")
+
+        if request.stage_type not in ['lead', 'loan']:
+            raise HTTPException(status_code=400, detail="stage_type must be 'lead' or 'loan'")
+
+        measure.stage_type = request.stage_type
+        db.commit()
+        db.refresh(measure)
+
+        logger.info(f"Moved SLA measure {measure_id} to stage: {request.stage_type}")
+
+        return {
+            "status": "success",
+            "message": f"Milestone moved to {request.stage_type} stage",
+            "measure_id": measure.id,
+            "stage_type": measure.stage_type
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error changing measure stage: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================

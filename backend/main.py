@@ -48477,6 +48477,21 @@ async def startup_event():
                 except Exception as sla_do_e:
                     logger.warning(f"⚠️ sla_measures.display_order column creation skipped: {sla_do_e}")
 
+                # Add stage_type column to sla_measures table if missing (for moving milestones between stages)
+                try:
+                    result = db.execute(text("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'sla_measures' AND column_name = 'stage_type'
+                    """))
+                    if not result.fetchone():
+                        db.execute(text("ALTER TABLE sla_measures ADD COLUMN stage_type VARCHAR(20)"))
+                        db.commit()
+                        logger.info("✅ Added stage_type column to sla_measures table")
+                    else:
+                        logger.info("✅ sla_measures.stage_type column already exists")
+                except Exception as sla_st_e:
+                    logger.warning(f"⚠️ sla_measures.stage_type column creation skipped: {sla_st_e}")
+
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
             finally:

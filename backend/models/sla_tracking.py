@@ -163,6 +163,10 @@ class SLAMeasure(Base):
     # Display order for UI sorting
     display_order = Column(Integer, default=0)
 
+    # Stage type override (allows moving milestones between Lead/Loan stages)
+    # Values: 'lead', 'loan', or null (auto-detect from milestone_type)
+    stage_type = Column(String(20), nullable=True)
+
     # Relationships
     history_records = relationship("LoanMilestoneHistory", back_populates="sla_measure")
 
