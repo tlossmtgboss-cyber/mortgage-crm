@@ -30719,6 +30719,104 @@ async def create_test_reconciliation_item(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/reconciliation/test-match")
+async def test_entity_match(
+    loan_number: str = None,
+    borrower_name: str = None,
+    email: str = None,
+    phone: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Test the entity matching logic with provided fields.
+
+    This endpoint is for development/testing purposes to verify matching works.
+    """
+    try:
+        # Build fields dict
+        fields = {}
+        if loan_number:
+            fields["loan_number"] = {"value": loan_number, "confidence": 0.95}
+        if borrower_name:
+            fields["borrower_name"] = {"value": borrower_name, "confidence": 0.95}
+        if email:
+            fields["borrower_email"] = {"value": email, "confidence": 0.95}
+        if phone:
+            fields["borrower_phone"] = {"value": phone, "confidence": 0.95}
+
+        if not fields:
+            raise HTTPException(status_code=400, detail="At least one field required")
+
+        # Run matching
+        match_result = match_entity(fields, db, current_user.id)
+
+        # Get entity name if matched
+        entity_name = None
+        if match_result.get("entity_type") and match_result.get("entity_id"):
+            entity_name = get_entity_name(match_result["entity_type"], match_result["entity_id"], db)
+
+        return {
+            "status": "success",
+            "input_fields": {k: v["value"] for k, v in fields.items()},
+            "match_result": match_result,
+            "entity_name": entity_name,
+            "message": f"Match found: {match_result.get('entity_type', 'None')} ({entity_name})" if match_result.get("entity_type") else "No match found"
+        }
+    except Exception as e:
+        logger.error(f"Error testing match: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/reconciliation/rematch-all")
+async def rematch_all_pending(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Re-run matching on all pending reconciliation items.
+
+    This is useful after adding new matching logic (like ActiveLoanProfile)
+    to update previously unmatched items.
+    """
+    try:
+        from sqlalchemy import or_
+        pending = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            or_(
+                IncomingDataEvent.user_id == current_user.id,
+                IncomingDataEvent.user_id == None
+            ),
+            ExtractedData.status.in_(["pending_review", "needs_review", "pending"])
+        ).all()
+
+        updated_count = 0
+        for item in pending:
+            # Re-run matching
+            match_result = match_entity(item.fields or {}, db, current_user.id)
+
+            if match_result.get("entity_type"):
+                # Update if we found a match
+                item.match_entity_type = match_result["entity_type"]
+                item.match_entity_id = str(match_result["entity_id"])
+                item.match_confidence = match_result.get("confidence", 0)
+                updated_count += 1
+                logger.info(f"Rematched item {item.id}: {match_result['entity_type']} - {match_result['entity_id']}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "total_items": len(pending),
+            "updated_count": updated_count,
+            "message": f"Rematched {updated_count} of {len(pending)} pending items"
+        }
+    except Exception as e:
+        logger.error(f"Error rematching: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/microsoft/sync-calendar")
 async def sync_microsoft_calendar(
     current_user: User = Depends(get_current_user),
