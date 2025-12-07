@@ -2183,298 +2183,202 @@ const API_BASE_URL = isProduction
       </div>
 
       <div className="settings-content">
-        {/* Sidebar */}
+        {/* Sidebar - Draggable */}
         <div className="settings-sidebar">
-          {/* User Profile - Expandable (TOP) */}
-          <button
-            className={`sidebar-btn parent ${expandedSections.userProfile ? 'expanded' : ''}`}
-            onClick={() => toggleSection('userProfile')}
-          >
-            <span>User Profile</span>
-            <span className="expand-icon">{expandedSections.userProfile ? '▼' : '▶'}</span>
-          </button>
-          {expandedSections.userProfile && (
-            <div className="sidebar-children">
-              <button
-                className={`sidebar-btn child ${activeSection === 'profile-info' ? 'active' : ''}`}
-                onClick={() => setActiveSection('profile-info')}
-              >
-                <span>Profile Info</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'account-settings' ? 'active' : ''}`}
-                onClick={() => setActiveSection('account-settings')}
-              >
-                <span>Account Settings</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'security' ? 'active' : ''}`}
-                onClick={() => setActiveSection('security')}
-              >
-                <span>Security</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'email-signature' ? 'active' : ''}`}
-                onClick={() => setActiveSection('email-signature')}
-              >
-                <span>Email Signature</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'work-hours' ? 'active' : ''}`}
-                onClick={() => setActiveSection('work-hours')}
-              >
-                <span>Work Hours</span>
-              </button>
-            </div>
-          )}
+          <div className="sidebar-header">
+            <span className="drag-hint">Drag to reorder</span>
+            <button className="reset-order-btn" onClick={resetSidebarOrder} title="Reset to default order">
+              ↺
+            </button>
+          </div>
+          {sidebarOrder.map((item) => {
+            // Render User Profile parent with children
+            if (item.id === 'user-profile') {
+              return (
+                <div key={item.id}>
+                  <button
+                    className={`sidebar-btn parent ${expandedSections.userProfile ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                    onClick={() => toggleSection('userProfile')}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, item)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, item)}
+                  >
+                    <span className="drag-handle">⋮⋮</span>
+                    <span>{item.label}</span>
+                    <span className="expand-icon">{expandedSections.userProfile ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedSections.userProfile && (
+                    <div className="sidebar-children">
+                      <button className={`sidebar-btn child ${activeSection === 'profile-info' ? 'active' : ''}`} onClick={() => setActiveSection('profile-info')}><span>Profile Info</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'account-settings' ? 'active' : ''}`} onClick={() => setActiveSection('account-settings')}><span>Account Settings</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'security' ? 'active' : ''}`} onClick={() => setActiveSection('security')}><span>Security</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'email-signature' ? 'active' : ''}`} onClick={() => setActiveSection('email-signature')}><span>Email Signature</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'work-hours' ? 'active' : ''}`} onClick={() => setActiveSection('work-hours')}><span>Work Hours</span></button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
 
-          {/* Organizational Settings - Expandable */}
-          <button
-            className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''}`}
-            onClick={() => toggleSection('organizational')}
-          >
-            <span>Organizational Settings</span>
-            <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
-          </button>
-          {expandedSections.organizational && (
-            <div className="sidebar-children">
-              <button
-                className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`}
-                onClick={() => setActiveSection('company-info')}
-              >
-                <span>Company Info</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`}
-                onClick={() => navigate('/team-members')}
-              >
-                <span>Team Members</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'add-team-member' ? 'active' : ''}`}
-                onClick={() => navigate('/users/create')}
-              >
-                <span>Add Team Member</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'bulk-upload' ? 'active' : ''}`}
-                onClick={() => navigate('/users/bulk-upload')}
-              >
-                <span>Bulk Upload Users</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`}
-                onClick={() => setActiveSection('branding')}
-              >
-                <span>Branding</span>
-              </button>
-            </div>
-          )}
+            // Render Organizational Settings parent with children
+            if (item.id === 'organizational') {
+              return (
+                <div key={item.id}>
+                  <button
+                    className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                    onClick={() => toggleSection('organizational')}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, item)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, item)}
+                  >
+                    <span className="drag-handle">⋮⋮</span>
+                    <span>{item.label}</span>
+                    <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedSections.organizational && (
+                    <div className="sidebar-children">
+                      <button className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`} onClick={() => setActiveSection('company-info')}><span>Company Info</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`} onClick={() => navigate('/team-members')}><span>Team Members</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'add-team-member' ? 'active' : ''}`} onClick={() => navigate('/users/create')}><span>Add Team Member</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'bulk-upload' ? 'active' : ''}`} onClick={() => navigate('/users/bulk-upload')}><span>Bulk Upload Users</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`} onClick={() => setActiveSection('branding')}><span>Branding</span></button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
 
-          <button
-            className={`sidebar-btn ${activeSection === 'command-center' ? 'active' : ''}`}
-            onClick={() => setActiveSection('command-center')}
-          >
-            <span>Command Center</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'sla-tracking' ? 'active' : ''}`}
-            onClick={() => navigate('/sla-tracking')}
-          >
-            <span>SLA Tracking</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'mission-control' ? 'active' : ''}`}
-            onClick={() => setActiveSection('mission-control')}
-          >
-            <span>Mission Control</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'ai-receptionist' ? 'active' : ''}`}
-            onClick={() => setActiveSection('ai-receptionist')}
-          >
-            <span>AI Receptionist</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'voice-os' ? 'active' : ''}`}
-            onClick={() => navigate('/voice-os-dashboard')}
-          >
-            <span>Voice OS</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'document-intake' ? 'active' : ''}`}
-            onClick={() => setActiveSection('document-intake')}
-          >
-            <span>Document Intake</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'email-monitor' ? 'active' : ''}`}
-            onClick={() => setActiveSection('email-monitor')}
-          >
-            <span>Email Monitor</span>
-          </button>
-
-          {/* Marketing */}
-          <button
-            className={`sidebar-btn ${activeSection === 'marketing' ? 'active' : ''}`}
-            onClick={() => setActiveSection('marketing')}
-          >
-            <span>Marketing</span>
-          </button>
-
-          {/* Integrations - Conditionally Expandable based on connected apps */}
-          {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
-            <>
-              <button
-                className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
-                onClick={() => toggleSection('integrations')}
-              >
-                <span>Integrations</span>
-                <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
-              </button>
-              {expandedSections.integrations && (
-                <div className="sidebar-children">
-                  {microsoftStatus.connected && (
+            // Render Integrations parent with conditional children
+            if (item.id === 'integrations') {
+              const hasConnectedApps = microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured;
+              return (
+                <div key={item.id}>
+                  {hasConnectedApps ? (
                     <>
                       <button
-                        className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('outlook-email')}
+                        className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                        onClick={() => toggleSection('integrations')}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, item)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleDragOver(e, item)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, item)}
                       >
-                        <span>Outlook Email</span>
+                        <span className="drag-handle">⋮⋮</span>
+                        <span>{item.label}</span>
+                        <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
                       </button>
-                      <button
-                        className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('outlook-calendar')}
-                      >
-                        <span>Outlook Calendar</span>
-                      </button>
+                      {expandedSections.integrations && (
+                        <div className="sidebar-children">
+                          {microsoftStatus.connected && (
+                            <>
+                              <button className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`} onClick={() => setActiveSection('outlook-email')}><span>Outlook Email</span></button>
+                              <button className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`} onClick={() => setActiveSection('outlook-calendar')}><span>Outlook Calendar</span></button>
+                            </>
+                          )}
+                          {calendlyEventTypes.length > 0 && (
+                            <button className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`} onClick={() => setActiveSection('calendly')}><span>Calendly</span></button>
+                          )}
+                          {twilioStatus.configured && (
+                            <button className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`} onClick={() => setActiveSection('twilio-sms')}><span>Twilio SMS</span></button>
+                          )}
+                        </div>
+                      )}
                     </>
-                  )}
-                  {calendlyEventTypes.length > 0 && (
+                  ) : (
                     <button
-                      className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
-                      onClick={() => setActiveSection('calendly')}
+                      className={`sidebar-btn ${activeSection === 'integration-marketplace' ? 'active' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                      onClick={() => setActiveSection('integration-marketplace')}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => handleDragOver(e, item)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, item)}
                     >
-                      <span>Calendly</span>
-                    </button>
-                  )}
-                  {twilioStatus.configured && (
-                    <button
-                      className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`}
-                      onClick={() => setActiveSection('twilio-sms')}
-                    >
-                      <span>Twilio SMS</span>
+                      <span className="drag-handle">⋮⋮</span>
+                      <span>{item.label}</span>
                     </button>
                   )}
                 </div>
-              )}
-            </>
-          ) : (
-            <button
-              className={`sidebar-btn ${activeSection === 'integration-marketplace' ? 'active' : ''}`}
-              onClick={() => setActiveSection('integration-marketplace')}
-            >
-              <span>Integrations</span>
-            </button>
-          )}
+              );
+            }
 
-          <button
-            className={`sidebar-btn ${activeSection === 'api-keys' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveSection('api-keys');
-              fetchApiKeys();
-            }}
-          >
-            <span>API Keys</span>
-          </button>
+            // Render Master Administrator parent with children
+            if (item.id === 'master-admin') {
+              return (
+                <div key={item.id}>
+                  <button
+                    className={`sidebar-btn parent ${expandedSections.masterAdmin ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                    onClick={() => toggleSection('masterAdmin')}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, item)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, item)}
+                  >
+                    <span className="drag-handle">⋮⋮</span>
+                    <span>{item.label}</span>
+                    <span className="expand-icon">{expandedSections.masterAdmin ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedSections.masterAdmin && (
+                    <div className="sidebar-children">
+                      <button className={`sidebar-btn child ${activeSection === 'user-management' ? 'active' : ''}`} onClick={() => { setActiveSection('user-management'); loadUsers(); }}><span>User Management</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'clear-data' ? 'active' : ''}`} onClick={() => setActiveSection('clear-data')}><span>Clear Dummy Data</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`} onClick={() => setActiveSection('ai-feedback-log')}><span>AI Feedback Log</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`} onClick={() => setActiveSection('it-helpdesk-admin')}><span>IT Helpdesk Admin</span></button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
 
-          <button
-            className={`sidebar-btn ${activeSection === 'it-helpdesk' ? 'active' : ''}`}
-            onClick={() => setActiveSection('it-helpdesk')}
-          >
-            <span>IT Helpdesk</span>
-          </button>
+            // Render standalone items (API Keys has special handler)
+            if (item.id === 'api-keys') {
+              return (
+                <button
+                  key={item.id}
+                  className={`sidebar-btn ${activeSection === item.section ? 'active' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                  onClick={() => { setActiveSection('api-keys'); fetchApiKeys(); }}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, item)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, item)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, item)}
+                >
+                  <span className="drag-handle">⋮⋮</span>
+                  <span>{item.label}</span>
+                </button>
+              );
+            }
 
-          {/* Smart Scheduler */}
-          <button
-            className={`sidebar-btn ${activeSection === 'smart-scheduler' ? 'active' : ''}`}
-            onClick={() => setActiveSection('smart-scheduler')}
-          >
-            <span>Smart Scheduler</span>
-          </button>
-
-          {/* Video Meetings */}
-          <button
-            className={`sidebar-btn ${activeSection === 'video-meetings' ? 'active' : ''}`}
-            onClick={() => setActiveSection('video-meetings')}
-          >
-            <span>Video Meetings</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'notifications' ? 'active' : ''}`}
-            onClick={() => setActiveSection('notifications')}
-          >
-            <span>Notifications</span>
-          </button>
-          <button
-            className={`sidebar-btn ${activeSection === 'dialer-settings' ? 'active' : ''}`}
-            onClick={() => setActiveSection('dialer-settings')}
-          >
-            <span>Power Dialer</span>
-          </button>
-          <button
-            className={`sidebar-btn ${activeSection === 'data-management' ? 'active' : ''}`}
-            onClick={() => navigate('/data-upload')}
-          >
-            <span>Data Management</span>
-          </button>
-
-          {/* Master Administrator - Expandable */}
-          <button
-            className={`sidebar-btn parent ${expandedSections.masterAdmin ? 'expanded' : ''}`}
-            onClick={() => toggleSection('masterAdmin')}
-          >
-            <span>Master Administrator</span>
-            <span className="expand-icon">{expandedSections.masterAdmin ? '▼' : '▶'}</span>
-          </button>
-          {expandedSections.masterAdmin && (
-            <div className="sidebar-children">
+            // Render other standalone items
+            return (
               <button
-                className={`sidebar-btn child ${activeSection === 'user-management' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveSection('user-management');
-                  loadUsers();
-                }}
+                key={item.id}
+                className={`sidebar-btn ${activeSection === item.section ? 'active' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                onClick={() => item.navigate ? navigate(item.navigate) : setActiveSection(item.section)}
+                draggable
+                onDragStart={(e) => handleDragStart(e, item)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, item)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, item)}
               >
-                <span>User Management</span>
+                <span className="drag-handle">⋮⋮</span>
+                <span>{item.label}</span>
               </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'clear-data' ? 'active' : ''}`}
-                onClick={() => setActiveSection('clear-data')}
-              >
-                <span>Clear Dummy Data</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`}
-                onClick={() => setActiveSection('ai-feedback-log')}
-              >
-                <span>AI Feedback Log</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`}
-                onClick={() => setActiveSection('it-helpdesk-admin')}
-              >
-                <span>IT Helpdesk Admin</span>
-              </button>
-            </div>
-          )}
+            );
+          })}
         </div>
 
         {/* Main Content */}

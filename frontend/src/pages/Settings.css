@@ -3724,3 +3724,71 @@ textarea.text-input {
   margin: 0 0 8px 0;
   color: #e65100;
 }
+
+/* Drag and Drop Sidebar Styles */
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px dashed #d0d0d0;
+}
+
+.drag-hint {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+.reset-order-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.reset-order-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.drag-handle {
+  color: #999;
+  font-size: 14px;
+  margin-right: 4px;
+  cursor: grab;
+  user-select: none;
+}
+
+.sidebar-btn:hover .drag-handle {
+  color: #666;
+}
+
+.sidebar-btn[draggable="true"] {
+  cursor: grab;
+}
+
+.sidebar-btn[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.sidebar-btn.drag-over {
+  border: 2px dashed #218D8D;
+  background: #e8f4f4;
+  transform: scale(1.02);
+}
+
+.sidebar-btn.active .drag-handle {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sidebar-btn.parent .drag-handle {
+  margin-right: 8px;
+}
