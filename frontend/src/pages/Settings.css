@@ -3745,6 +3745,17 @@ textarea.text-input {
   border: 1px dashed #d0d0d0;
 }
 
+.drag-hint-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drag-icon {
+  font-size: 14px;
+  color: #888;
+}
+
 .drag-hint {
   font-size: 12px;
   color: #888;

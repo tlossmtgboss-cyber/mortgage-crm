@@ -2187,7 +2187,10 @@ const API_BASE_URL = isProduction
         {/* Sidebar - Draggable */}
         <div className="settings-sidebar">
           <div className="sidebar-header">
-            <span className="drag-hint">Drag to reorder</span>
+            <div className="drag-hint-container">
+              <span className="drag-icon">☰</span>
+              <span className="drag-hint">Drag to reorder</span>
+            </div>
             <button className="reset-order-btn" onClick={resetSidebarOrder} title="Reset to default order">
               ↺
             </button>
