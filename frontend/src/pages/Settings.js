@@ -11,6 +11,7 @@ import EmailSignatureTab from '../components/EmailSignatureTab';
 import SmartScheduler from '../components/SmartScheduler';
 import VideoMeetings from '../components/VideoMeetings';
 import AIFeedbackLog from '../components/AIFeedbackLog';
+import ITHelpdeskAdmin from '../components/ITHelpdeskAdmin';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -333,6 +334,113 @@ function Settings() {
     masterAdmin: false,
     landingPages: false
   });
+
+  // Default sidebar items order
+  const defaultSidebarItems = [
+    { id: 'user-profile', label: 'User Profile', type: 'parent', section: 'userProfile' },
+    { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational' },
+    { id: 'command-center', label: 'Command Center', type: 'standalone', section: 'command-center' },
+    { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
+    { id: 'mission-control', label: 'Mission Control', type: 'standalone', section: 'mission-control' },
+    { id: 'ai-receptionist', label: 'AI Receptionist', type: 'standalone', section: 'ai-receptionist' },
+    { id: 'voice-os', label: 'Voice OS', type: 'standalone', section: 'voice-os', navigate: '/voice-os-dashboard' },
+    { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
+    { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
+    { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
+    { id: 'integrations', label: 'Integrations', type: 'parent', section: 'integrations' },
+    { id: 'api-keys', label: 'API Keys', type: 'standalone', section: 'api-keys' },
+    { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
+    { id: 'smart-scheduler', label: 'Smart Scheduler', type: 'standalone', section: 'smart-scheduler' },
+    { id: 'video-meetings', label: 'Video Meetings', type: 'standalone', section: 'video-meetings' },
+    { id: 'notifications', label: 'Notifications', type: 'standalone', section: 'notifications' },
+    { id: 'power-dialer', label: 'Power Dialer', type: 'standalone', section: 'dialer-settings' },
+    { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
+    { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' }
+  ];
+
+  // Load sidebar order from localStorage or use defaults
+  const [sidebarOrder, setSidebarOrder] = useState(() => {
+    const saved = localStorage.getItem('settings_sidebar_order');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Validate saved order has all items (in case new items were added)
+        const savedIds = new Set(parsed.map(item => item.id));
+        const defaultIds = new Set(defaultSidebarItems.map(item => item.id));
+
+        // If all default items exist in saved, use saved order
+        if (defaultSidebarItems.every(item => savedIds.has(item.id))) {
+          return parsed;
+        }
+        // Otherwise, merge: keep saved order for existing items, append new ones
+        const merged = parsed.filter(item => defaultIds.has(item.id));
+        defaultSidebarItems.forEach(item => {
+          if (!savedIds.has(item.id)) {
+            merged.push(item);
+          }
+        });
+        return merged;
+      } catch (e) {
+        return defaultSidebarItems;
+      }
+    }
+    return defaultSidebarItems;
+  });
+
+  // Drag state
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverItem, setDragOverItem] = useState(null);
+
+  // Drag handlers
+  const handleDragStart = (e, item) => {
+    setDraggedItem(item);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+    e.target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  const handleDragOver = (e, item) => {
+    e.preventDefault();
+    if (draggedItem && draggedItem.id !== item.id) {
+      setDragOverItem(item);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setDragOverItem(null);
+  };
+
+  const handleDrop = (e, targetItem) => {
+    e.preventDefault();
+    if (!draggedItem || draggedItem.id === targetItem.id) return;
+
+    const newOrder = [...sidebarOrder];
+    const draggedIndex = newOrder.findIndex(item => item.id === draggedItem.id);
+    const targetIndex = newOrder.findIndex(item => item.id === targetItem.id);
+
+    // Remove dragged item and insert at target position
+    const [removed] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, removed);
+
+    setSidebarOrder(newOrder);
+    localStorage.setItem('settings_sidebar_order', JSON.stringify(newOrder));
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  // Reset sidebar order to default
+  const resetSidebarOrder = () => {
+    setSidebarOrder(defaultSidebarItems);
+    localStorage.removeItem('settings_sidebar_order');
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [connectedIntegrations, setConnectedIntegrations] = useState(new Set());
   const [calendlyEventTypes, setCalendlyEventTypes] = useState([]);
@@ -2359,6 +2467,12 @@ const API_BASE_URL = isProduction
               >
                 <span>AI Feedback Log</span>
               </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`}
+                onClick={() => setActiveSection('it-helpdesk-admin')}
+              >
+                <span>IT Helpdesk Admin</span>
+              </button>
             </div>
           )}
         </div>
@@ -2391,6 +2505,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'ai-feedback-log' && (
             <AIFeedbackLog />
+          )}
+
+          {activeSection === 'it-helpdesk-admin' && (
+            <ITHelpdeskAdmin />
           )}
 
           {/* MARKETING */}

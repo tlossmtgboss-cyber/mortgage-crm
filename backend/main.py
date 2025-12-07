@@ -27488,6 +27488,227 @@ async def resolve_it_ticket(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# IT HELPDESK ADMIN ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/it-helpdesk/admin/tickets")
+async def get_all_it_tickets_admin(
+    status: Optional[str] = None,
+    urgency: Optional[str] = None,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all IT helpdesk tickets for admin view (all users)"""
+    try:
+        # Build query - no user filter for admin view
+        query = db.query(ITHelpdeskTicket)
+
+        # Apply filters
+        if status:
+            query = query.filter(ITHelpdeskTicket.status == status)
+        if urgency:
+            query = query.filter(ITHelpdeskTicket.urgency == urgency)
+        if category:
+            query = query.filter(ITHelpdeskTicket.category == category)
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    ITHelpdeskTicket.title.ilike(search_pattern),
+                    ITHelpdeskTicket.description.ilike(search_pattern),
+                    ITHelpdeskTicket.root_cause.ilike(search_pattern)
+                )
+            )
+
+        # Get tickets ordered by creation date
+        tickets = query.order_by(ITHelpdeskTicket.created_at.desc()).limit(100).all()
+
+        # Calculate stats
+        all_tickets = db.query(ITHelpdeskTicket).all()
+        stats = {
+            "total": len(all_tickets),
+            "open": len([t for t in all_tickets if t.status not in ['resolved', 'failed']]),
+            "awaiting_approval": len([t for t in all_tickets if t.status == 'awaiting_approval']),
+            "resolved": len([t for t in all_tickets if t.status == 'resolved']),
+            "critical": len([t for t in all_tickets if t.urgency == 'critical'])
+        }
+
+        # Get user names for display
+        user_ids = list(set([t.user_id for t in tickets]))
+        users = db.query(User).filter(User.id.in_(user_ids)).all()
+        user_map = {u.id: u.full_name or u.email for u in users}
+
+        return {
+            "tickets": [
+                {
+                    "id": t.id,
+                    "user_id": t.user_id,
+                    "user_name": user_map.get(t.user_id, f"User #{t.user_id}"),
+                    "title": t.title,
+                    "description": t.description,
+                    "category": t.category,
+                    "urgency": t.urgency,
+                    "status": t.status,
+                    "ai_diagnosis": t.ai_diagnosis,
+                    "root_cause": t.root_cause,
+                    "proposed_fix": t.proposed_fix,
+                    "affected_system": t.affected_system,
+                    "affected_project": t.affected_project,
+                    "resolution_notes": t.resolution_notes,
+                    "admin_notes": t.execution_log.get("admin_notes", []) if t.execution_log else [],
+                    "assigned_to": t.execution_log.get("assigned_to") if t.execution_log else None,
+                    "assigned_to_name": t.execution_log.get("assigned_to_name") if t.execution_log else None,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                    "resolved_at": t.resolved_at.isoformat() if t.resolved_at else None,
+                    "approved_at": t.approved_at.isoformat() if t.approved_at else None
+                }
+                for t in tickets
+            ],
+            "stats": stats
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching admin IT tickets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/it-helpdesk/admin/tickets/{ticket_id}/status")
+async def update_ticket_status_admin(
+    ticket_id: int,
+    status_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update ticket status (admin only)"""
+    try:
+        ticket = db.query(ITHelpdeskTicket).filter(ITHelpdeskTicket.id == ticket_id).first()
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        new_status = status_data.get("status")
+        if new_status:
+            ticket.status = new_status
+            if new_status == "resolved":
+                ticket.resolved_at = datetime.now(timezone.utc)
+
+        db.commit()
+
+        logger.info(f"IT ticket {ticket_id} status updated to {new_status} by admin {current_user.id}")
+
+        return {
+            "success": True,
+            "message": f"Ticket status updated to {new_status}",
+            "ticket_id": ticket.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating IT ticket status {ticket_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/it-helpdesk/admin/tickets/{ticket_id}/assign")
+async def assign_ticket_admin(
+    ticket_id: int,
+    assign_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Assign a ticket to a team member (admin only)"""
+    try:
+        ticket = db.query(ITHelpdeskTicket).filter(ITHelpdeskTicket.id == ticket_id).first()
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        assigned_to_id = assign_data.get("assigned_to")
+
+        # Get assignee name
+        assignee = db.query(User).filter(User.id == assigned_to_id).first()
+        assignee_name = assignee.full_name or assignee.email if assignee else f"User #{assigned_to_id}"
+
+        # Update execution_log with assignment info
+        execution_log = ticket.execution_log or {}
+        execution_log["assigned_to"] = assigned_to_id
+        execution_log["assigned_to_name"] = assignee_name
+        execution_log["assigned_at"] = datetime.now(timezone.utc).isoformat()
+        execution_log["assigned_by"] = current_user.id
+        ticket.execution_log = execution_log
+
+        db.commit()
+
+        logger.info(f"IT ticket {ticket_id} assigned to {assignee_name} by admin {current_user.id}")
+
+        return {
+            "success": True,
+            "message": f"Ticket assigned to {assignee_name}",
+            "ticket_id": ticket.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning IT ticket {ticket_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/it-helpdesk/admin/tickets/{ticket_id}/notes")
+async def add_admin_note(
+    ticket_id: int,
+    note_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Add an admin note to a ticket"""
+    try:
+        ticket = db.query(ITHelpdeskTicket).filter(ITHelpdeskTicket.id == ticket_id).first()
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        note_text = note_data.get("note", "").strip()
+        if not note_text:
+            raise HTTPException(status_code=400, detail="Note cannot be empty")
+
+        # Update execution_log with admin notes
+        execution_log = ticket.execution_log or {}
+        admin_notes = execution_log.get("admin_notes", [])
+        admin_notes.append({
+            "note": note_text,
+            "added_by": current_user.id,
+            "added_by_name": current_user.full_name or current_user.email,
+            "added_at": datetime.now(timezone.utc).isoformat()
+        })
+        execution_log["admin_notes"] = admin_notes
+        ticket.execution_log = execution_log
+
+        db.commit()
+
+        logger.info(f"Admin note added to IT ticket {ticket_id} by {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "Note added successfully",
+            "ticket_id": ticket.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding note to IT ticket {ticket_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/migrations/add-external-message-id")
 async def add_external_message_id_migration(
     current_user: User = Depends(get_current_user),
