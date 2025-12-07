@@ -21258,10 +21258,56 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
 
         entity_match = match_entity(fields, db, user_id) if fields else {"entity_type": None, "entity_id": None, "confidence": 0.0}
 
-        # Determine status based on confidence and category
+        # Check for learned patterns - if user has approved similar emails before, auto-complete
+        learned_pattern = None
+        sender_domain = sender.split("@")[1] if "@" in sender else ""
+        email_intent = classification.get("category", "")
+
+        try:
+            pattern_result = db.execute(text("""
+                SELECT id, pattern_type, pattern_value, response_type, response_config,
+                       confidence_score, auto_execute_threshold, approval_count
+                FROM email_response_patterns
+                WHERE user_id = :user_id
+                  AND is_active = true
+                  AND (
+                      (pattern_type = 'sender_domain' AND pattern_value = :domain)
+                      OR (pattern_type = 'sender_email' AND pattern_value = :email)
+                      OR (pattern_type = 'email_intent' AND pattern_value = :intent)
+                  )
+                ORDER BY confidence_score DESC, approval_count DESC
+                LIMIT 1
+            """), {
+                "user_id": user_id,
+                "domain": sender_domain,
+                "email": sender.lower(),
+                "intent": email_intent,
+            })
+            row = pattern_result.fetchone()
+            if row and row.confidence_score and float(row.confidence_score) >= 0.90 and row.approval_count >= 3:
+                learned_pattern = {
+                    "id": row.id,
+                    "pattern_type": row.pattern_type,
+                    "response_type": row.response_type,
+                    "confidence_score": float(row.confidence_score),
+                    "approval_count": row.approval_count
+                }
+                logger.info(f"Found learned pattern {row.id} ({row.pattern_type}={row.pattern_value}) with {row.approval_count} approvals")
+        except Exception as pattern_error:
+            logger.warning(f"Could not check learned patterns: {pattern_error}")
+
+        # Determine status based on confidence, category, AND learned patterns
         status = "needs_review"  # Default to needs_review for safety
-        if fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+        auto_complete_reason = None
+
+        # Check if we have a learned pattern that should auto-complete
+        if learned_pattern:
             status = "auto_approved"
+            auto_complete_reason = f"Learned pattern: {learned_pattern['pattern_type']} ({learned_pattern['approval_count']} prior approvals)"
+            logger.info(f"Auto-completing email based on learned pattern: {auto_complete_reason}")
+        elif fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+            status = "auto_approved"
+            auto_complete_reason = "High AI confidence with entity match"
         elif fields and avg_confidence >= 0.60 and entity_match["confidence"] >= 0.50:
             status = "pending_review"
         # Everything else stays as needs_review
@@ -21286,7 +21332,20 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             if apply_extracted_data(extracted, db):
                 extracted.status = "applied"
                 db.commit()
-                logger.info(f"Auto-applied extraction from email {db_event.id}")
+                logger.info(f"Auto-applied extraction from email {db_event.id} - Reason: {auto_complete_reason or 'High confidence'}")
+
+                # Update pattern statistics if we used a learned pattern
+                if learned_pattern:
+                    try:
+                        db.execute(text("""
+                            UPDATE email_response_patterns
+                            SET last_matched_at = NOW(),
+                                last_approved_at = NOW()
+                            WHERE id = :pattern_id
+                        """), {"pattern_id": learned_pattern["id"]})
+                        db.commit()
+                    except Exception as update_error:
+                        logger.warning(f"Could not update pattern stats: {update_error}")
 
         return {"status": "success", "event_id": db_event.id}
 
