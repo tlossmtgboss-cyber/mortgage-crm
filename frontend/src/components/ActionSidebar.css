@@ -148,14 +148,31 @@
 
 .action-content.with-detail .action-list {
   flex: 0 0 auto;
-  max-height: 40%;
+  max-height: 200px;
   overflow-y: auto;
   border-bottom: 1px solid #e5e7eb;
 }
 
-.action-content.with-detail .action-detail-panel {
+.action-content.with-detail .action-detail-panel,
+.action-content.with-detail .task-detail-panel {
   flex: 1;
   overflow-y: auto;
+  background: white;
+}
+
+/* TaskDetailPanel overrides for sidebar context */
+.action-sidebar .task-detail-panel {
+  border-left: none;
+  box-shadow: none;
+}
+
+.action-sidebar .task-detail-panel .detail-body {
+  padding: 0;
+}
+
+.action-sidebar .task-detail-panel .detail-info-grid {
+  margin: 0;
+  padding: 12px 16px 16px;
 }
 
 /* Loading State */
