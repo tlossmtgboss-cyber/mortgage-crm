@@ -23580,16 +23580,31 @@ async def get_pending_reconciliation(
             # This ensures newly created loans/leads are found
             fresh_matches = match_entity(item.fields or {}, db, current_user.id)
 
+            # Use fresh match data if it's better than what's stored in the database
+            # This ensures the UI always shows the most up-to-date match information
+            display_entity_type = item.match_entity_type
+            display_entity_id = item.match_entity_id
+            display_confidence = item.match_confidence or 0
+            display_entity_name = entity_name
+
+            fresh_confidence = fresh_matches.get("confidence", 0) if fresh_matches else 0
+            if fresh_confidence > display_confidence and fresh_matches.get("entity_type"):
+                display_entity_type = fresh_matches["entity_type"]
+                display_entity_id = fresh_matches["entity_id"]
+                display_confidence = fresh_confidence
+                display_entity_name = get_entity_name(display_entity_type, display_entity_id, db)
+                logger.info(f"Using fresh match for item {item.id}: {display_entity_type} {display_entity_id} ({display_confidence*100:.0f}%)")
+
             results.append({
                 "id": item.id,
                 "event_id": item.event_id,
                 "category": item.category,
                 "subcategory": item.subcategory,
                 "fields": item.fields,
-                "match_entity_type": item.match_entity_type,
-                "match_entity_id": item.match_entity_id,
-                "match_entity_name": entity_name,
-                "match_confidence": item.match_confidence,
+                "match_entity_type": display_entity_type,
+                "match_entity_id": display_entity_id,
+                "match_entity_name": display_entity_name,
+                "match_confidence": display_confidence,
                 "ai_confidence": item.ai_confidence,
                 "status": item.status,
                 "created_at": item.created_at,
