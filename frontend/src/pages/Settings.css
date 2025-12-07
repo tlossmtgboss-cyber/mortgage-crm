@@ -3786,6 +3786,8 @@ textarea.text-input {
   user-select: none;
   opacity: 0.6;
   transition: opacity 0.2s;
+  margin-right: 8px;
+  min-width: 14px;
 }
 
 .sidebar-btn:hover .drag-handle {
