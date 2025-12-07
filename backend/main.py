@@ -35831,10 +35831,10 @@ async def merge_duplicate_loans(
         merged_info = []
         for merge_loan in merge_loans:
             # Transfer any missing data from merge_loan to keep_loan
+            # Using actual Loan model fields
             fields_to_check = [
                 'borrower_email', 'borrower_phone', 'coborrower_name', 'co_borrower_email',
-                'property_address', 'property_city', 'property_state', 'property_zip',
-                'processor', 'underwriter', 'closer', 'notes'
+                'property_address', 'processor', 'underwriter', 'realtor_agent', 'title_company'
             ]
 
             fields_updated = []
@@ -35849,8 +35849,9 @@ async def merge_duplicate_loans(
                 keep_loan.amount = merge_loan.amount
                 fields_updated.append('amount')
 
+            # Use ai_insights field for merge notes
             merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Merged from loan {merge_loan.loan_number} (ID: {merge_loan.id})"
-            keep_loan.notes = (keep_loan.notes or "") + merge_note
+            keep_loan.ai_insights = (keep_loan.ai_insights or "") + merge_note
 
             merged_info.append({
                 "id": merge_loan.id,
@@ -35917,18 +35918,19 @@ async def auto_deduplicate_loans(
                 merge_loans = db.query(Loan).filter(Loan.id.in_(merge_ids)).all()
 
                 for merge_loan in merge_loans:
+                    # Using actual Loan model fields
                     fields_to_check = [
                         'borrower_email', 'borrower_phone', 'coborrower_name', 'co_borrower_email',
-                        'property_address', 'property_city', 'property_state', 'property_zip',
-                        'processor', 'underwriter', 'closer'
+                        'property_address', 'processor', 'underwriter', 'realtor_agent', 'title_company'
                     ]
                     for field in fields_to_check:
                         keep_val = getattr(keep_loan, field, None)
                         merge_val = getattr(merge_loan, field, None)
                         if not keep_val and merge_val:
                             setattr(keep_loan, field, merge_val)
+                    # Use ai_insights field for merge notes
                     merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Auto-merged from loan {merge_loan.loan_number}"
-                    keep_loan.notes = (keep_loan.notes or "") + merge_note
+                    keep_loan.ai_insights = (keep_loan.ai_insights or "") + merge_note
                     db.delete(merge_loan)
 
             results.append({
