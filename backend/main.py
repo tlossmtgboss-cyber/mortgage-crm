@@ -35739,6 +35739,207 @@ async def get_loans(
         logger.error(f"Error fetching loans: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# NOTE: These static routes must come BEFORE /{loan_id} routes
+@app.get("/api/v1/loans/duplicates")
+async def find_duplicate_loans(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Find potential duplicate loans based on borrower name similarity"""
+    try:
+        # Find loans with same borrower_name (case-insensitive)
+        duplicates = db.execute(text("""
+            SELECT
+                LOWER(TRIM(borrower_name)) as normalized_name,
+                COUNT(*) as count,
+                ARRAY_AGG(id ORDER BY created_at) as loan_ids,
+                ARRAY_AGG(loan_number ORDER BY created_at) as loan_numbers,
+                ARRAY_AGG(stage::text ORDER BY created_at) as stages,
+                ARRAY_AGG(amount ORDER BY created_at) as amounts,
+                ARRAY_AGG(created_at ORDER BY created_at) as created_dates
+            FROM loans
+            WHERE borrower_name IS NOT NULL
+              AND borrower_name != ''
+              AND borrower_name != 'Unknown Borrower'
+            GROUP BY LOWER(TRIM(borrower_name))
+            HAVING COUNT(*) > 1
+            ORDER BY COUNT(*) DESC
+        """)).fetchall()
+
+        duplicate_groups = []
+        for row in duplicates:
+            duplicate_groups.append({
+                "borrower_name": row[0],
+                "count": row[1],
+                "loans": [
+                    {
+                        "id": loan_id,
+                        "loan_number": loan_number,
+                        "stage": stage,
+                        "amount": float(amount) if amount else 0,
+                        "created_at": created_at.isoformat() if created_at else None
+                    }
+                    for loan_id, loan_number, stage, amount, created_at
+                    in zip(row[2], row[3], row[4], row[5], row[6])
+                ]
+            })
+
+        return {
+            "total_duplicate_groups": len(duplicate_groups),
+            "total_duplicate_loans": sum(g["count"] for g in duplicate_groups),
+            "duplicate_groups": duplicate_groups
+        }
+    except Exception as e:
+        logger.error(f"Error finding duplicate loans: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/loans/merge")
+async def merge_duplicate_loans(
+    keep_loan_id: int,
+    merge_loan_ids: List[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Merge duplicate loans into one.
+    Keeps the specified loan and deletes the others after transferring important data.
+    """
+    try:
+        # Get the loan to keep
+        keep_loan = db.query(Loan).filter(Loan.id == keep_loan_id).first()
+        if not keep_loan:
+            raise HTTPException(status_code=404, detail=f"Loan {keep_loan_id} not found")
+
+        # Get loans to merge
+        merge_loans = db.query(Loan).filter(Loan.id.in_(merge_loan_ids)).all()
+        if not merge_loans:
+            raise HTTPException(status_code=404, detail="No loans found to merge")
+
+        merged_info = []
+        for merge_loan in merge_loans:
+            # Transfer any missing data from merge_loan to keep_loan
+            fields_to_check = [
+                'borrower_email', 'borrower_phone', 'coborrower_name', 'co_borrower_email',
+                'property_address', 'property_city', 'property_state', 'property_zip',
+                'processor', 'underwriter', 'closer', 'notes'
+            ]
+
+            fields_updated = []
+            for field in fields_to_check:
+                keep_val = getattr(keep_loan, field, None)
+                merge_val = getattr(merge_loan, field, None)
+                if not keep_val and merge_val:
+                    setattr(keep_loan, field, merge_val)
+                    fields_updated.append(field)
+
+            if merge_loan.amount and keep_loan.amount and merge_loan.amount > keep_loan.amount:
+                keep_loan.amount = merge_loan.amount
+                fields_updated.append('amount')
+
+            merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Merged from loan {merge_loan.loan_number} (ID: {merge_loan.id})"
+            keep_loan.notes = (keep_loan.notes or "") + merge_note
+
+            merged_info.append({
+                "id": merge_loan.id,
+                "loan_number": merge_loan.loan_number,
+                "fields_transferred": fields_updated
+            })
+
+            db.delete(merge_loan)
+
+        db.commit()
+        db.refresh(keep_loan)
+        logger.info(f"Merged {len(merge_loans)} loans into {keep_loan.loan_number}")
+
+        return {
+            "success": True,
+            "kept_loan": {
+                "id": keep_loan.id,
+                "loan_number": keep_loan.loan_number,
+                "borrower_name": keep_loan.borrower_name
+            },
+            "merged_loans": merged_info,
+            "message": f"Successfully merged {len(merge_loans)} duplicate loan(s) into {keep_loan.loan_number}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error merging loans: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/loans/auto-deduplicate")
+async def auto_deduplicate_loans(
+    dry_run: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Automatically find and merge duplicate loans.
+    Set dry_run=False to actually perform the merge.
+    """
+    try:
+        duplicates = db.execute(text("""
+            SELECT
+                LOWER(TRIM(borrower_name)) as normalized_name,
+                ARRAY_AGG(id ORDER BY created_at) as loan_ids
+            FROM loans
+            WHERE borrower_name IS NOT NULL
+              AND borrower_name != ''
+              AND borrower_name != 'Unknown Borrower'
+            GROUP BY LOWER(TRIM(borrower_name))
+            HAVING COUNT(*) > 1
+        """)).fetchall()
+
+        results = []
+        for row in duplicates:
+            normalized_name = row[0]
+            loan_ids = row[1]
+            keep_id = loan_ids[0]
+            merge_ids = loan_ids[1:]
+
+            if not dry_run:
+                keep_loan = db.query(Loan).filter(Loan.id == keep_id).first()
+                merge_loans = db.query(Loan).filter(Loan.id.in_(merge_ids)).all()
+
+                for merge_loan in merge_loans:
+                    fields_to_check = [
+                        'borrower_email', 'borrower_phone', 'coborrower_name', 'co_borrower_email',
+                        'property_address', 'property_city', 'property_state', 'property_zip',
+                        'processor', 'underwriter', 'closer'
+                    ]
+                    for field in fields_to_check:
+                        keep_val = getattr(keep_loan, field, None)
+                        merge_val = getattr(merge_loan, field, None)
+                        if not keep_val and merge_val:
+                            setattr(keep_loan, field, merge_val)
+                    merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Auto-merged from loan {merge_loan.loan_number}"
+                    keep_loan.notes = (keep_loan.notes or "") + merge_note
+                    db.delete(merge_loan)
+
+            results.append({
+                "borrower_name": normalized_name,
+                "kept_loan_id": keep_id,
+                "merged_loan_ids": merge_ids,
+                "action": "merged" if not dry_run else "would_merge"
+            })
+
+        if not dry_run:
+            db.commit()
+            logger.info(f"Auto-deduplicated {len(results)} groups of duplicate loans")
+
+        return {
+            "dry_run": dry_run,
+            "total_groups_processed": len(results),
+            "total_loans_merged": sum(len(r["merged_loan_ids"]) for r in results),
+            "results": results,
+            "message": f"{'Would merge' if dry_run else 'Merged'} {sum(len(r['merged_loan_ids']) for r in results)} duplicate loans from {len(results)} groups"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error auto-deduplicating loans: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get single loan using raw SQL to avoid enum deserialization issues"""
@@ -35866,225 +36067,6 @@ async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user:
     db.commit()
     logger.info(f"Loan deleted: {loan.loan_number}")
     return None
-
-
-# ============================================================================
-# LOAN DUPLICATE DETECTION & MERGE ENDPOINTS
-# ============================================================================
-
-@app.get("/api/v1/loans/duplicates")
-async def find_duplicate_loans(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Find potential duplicate loans based on borrower name similarity"""
-    try:
-        # Find loans with same borrower_name (case-insensitive)
-        duplicates = db.execute(text("""
-            SELECT
-                LOWER(TRIM(borrower_name)) as normalized_name,
-                COUNT(*) as count,
-                ARRAY_AGG(id ORDER BY created_at) as loan_ids,
-                ARRAY_AGG(loan_number ORDER BY created_at) as loan_numbers,
-                ARRAY_AGG(stage::text ORDER BY created_at) as stages,
-                ARRAY_AGG(amount ORDER BY created_at) as amounts,
-                ARRAY_AGG(created_at ORDER BY created_at) as created_dates
-            FROM loans
-            WHERE borrower_name IS NOT NULL
-              AND borrower_name != ''
-              AND borrower_name != 'Unknown Borrower'
-            GROUP BY LOWER(TRIM(borrower_name))
-            HAVING COUNT(*) > 1
-            ORDER BY COUNT(*) DESC
-        """)).fetchall()
-
-        duplicate_groups = []
-        for row in duplicates:
-            duplicate_groups.append({
-                "borrower_name": row[0],
-                "count": row[1],
-                "loans": [
-                    {
-                        "id": loan_id,
-                        "loan_number": loan_number,
-                        "stage": stage,
-                        "amount": float(amount) if amount else 0,
-                        "created_at": created_at.isoformat() if created_at else None
-                    }
-                    for loan_id, loan_number, stage, amount, created_at
-                    in zip(row[2], row[3], row[4], row[5], row[6])
-                ]
-            })
-
-        return {
-            "total_duplicate_groups": len(duplicate_groups),
-            "total_duplicate_loans": sum(g["count"] for g in duplicate_groups),
-            "duplicate_groups": duplicate_groups
-        }
-    except Exception as e:
-        logger.error(f"Error finding duplicate loans: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/v1/loans/merge")
-async def merge_duplicate_loans(
-    keep_loan_id: int,
-    merge_loan_ids: List[int],
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Merge duplicate loans into one.
-    Keeps the specified loan and deletes the others after transferring important data.
-    """
-    try:
-        # Get the loan to keep
-        keep_loan = db.query(Loan).filter(Loan.id == keep_loan_id).first()
-        if not keep_loan:
-            raise HTTPException(status_code=404, detail=f"Loan {keep_loan_id} not found")
-
-        # Get loans to merge
-        merge_loans = db.query(Loan).filter(Loan.id.in_(merge_loan_ids)).all()
-        if not merge_loans:
-            raise HTTPException(status_code=404, detail="No loans found to merge")
-
-        merged_info = []
-        for merge_loan in merge_loans:
-            # Transfer any missing data from merge_loan to keep_loan
-            # Only update fields that are empty in keep_loan but have values in merge_loan
-            fields_to_check = [
-                'borrower_email', 'borrower_phone', 'coborrower_name', 'co_borrower_email',
-                'property_address', 'property_city', 'property_state', 'property_zip',
-                'processor', 'underwriter', 'closer', 'notes'
-            ]
-
-            fields_updated = []
-            for field in fields_to_check:
-                keep_val = getattr(keep_loan, field, None)
-                merge_val = getattr(merge_loan, field, None)
-                if not keep_val and merge_val:
-                    setattr(keep_loan, field, merge_val)
-                    fields_updated.append(field)
-
-            # If merge_loan has a higher loan amount, consider it more recent/accurate
-            if merge_loan.amount and keep_loan.amount and merge_loan.amount > keep_loan.amount:
-                keep_loan.amount = merge_loan.amount
-                fields_updated.append('amount')
-
-            # Add merge note
-            merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Merged from loan {merge_loan.loan_number} (ID: {merge_loan.id})"
-            keep_loan.notes = (keep_loan.notes or "") + merge_note
-
-            merged_info.append({
-                "id": merge_loan.id,
-                "loan_number": merge_loan.loan_number,
-                "fields_transferred": fields_updated
-            })
-
-            # Delete the merged loan
-            db.delete(merge_loan)
-
-        db.commit()
-        db.refresh(keep_loan)
-
-        logger.info(f"Merged {len(merge_loans)} loans into {keep_loan.loan_number}")
-
-        return {
-            "success": True,
-            "kept_loan": {
-                "id": keep_loan.id,
-                "loan_number": keep_loan.loan_number,
-                "borrower_name": keep_loan.borrower_name
-            },
-            "merged_loans": merged_info,
-            "message": f"Successfully merged {len(merge_loans)} duplicate loan(s) into {keep_loan.loan_number}"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error merging loans: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/v1/loans/auto-deduplicate")
-async def auto_deduplicate_loans(
-    dry_run: bool = True,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Automatically find and merge duplicate loans.
-    For each group of duplicates, keeps the oldest loan (first created) and merges others into it.
-    Set dry_run=False to actually perform the merge.
-    """
-    try:
-        # Find duplicates
-        duplicates = db.execute(text("""
-            SELECT
-                LOWER(TRIM(borrower_name)) as normalized_name,
-                ARRAY_AGG(id ORDER BY created_at) as loan_ids
-            FROM loans
-            WHERE borrower_name IS NOT NULL
-              AND borrower_name != ''
-              AND borrower_name != 'Unknown Borrower'
-            GROUP BY LOWER(TRIM(borrower_name))
-            HAVING COUNT(*) > 1
-        """)).fetchall()
-
-        results = []
-        for row in duplicates:
-            normalized_name = row[0]
-            loan_ids = row[1]
-
-            # Keep the first (oldest) loan, merge the rest
-            keep_id = loan_ids[0]
-            merge_ids = loan_ids[1:]
-
-            if not dry_run:
-                # Actually perform the merge
-                keep_loan = db.query(Loan).filter(Loan.id == keep_id).first()
-                merge_loans = db.query(Loan).filter(Loan.id.in_(merge_ids)).all()
-
-                for merge_loan in merge_loans:
-                    # Transfer missing data
-                    fields_to_check = [
-                        'borrower_email', 'borrower_phone', 'coborrower_name', 'co_borrower_email',
-                        'property_address', 'property_city', 'property_state', 'property_zip',
-                        'processor', 'underwriter', 'closer'
-                    ]
-
-                    for field in fields_to_check:
-                        keep_val = getattr(keep_loan, field, None)
-                        merge_val = getattr(merge_loan, field, None)
-                        if not keep_val and merge_val:
-                            setattr(keep_loan, field, merge_val)
-
-                    # Add merge note
-                    merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Auto-merged from loan {merge_loan.loan_number}"
-                    keep_loan.notes = (keep_loan.notes or "") + merge_note
-
-                    db.delete(merge_loan)
-
-            results.append({
-                "borrower_name": normalized_name,
-                "kept_loan_id": keep_id,
-                "merged_loan_ids": merge_ids,
-                "action": "merged" if not dry_run else "would_merge"
-            })
-
-        if not dry_run:
-            db.commit()
-            logger.info(f"Auto-deduplicated {len(results)} groups of duplicate loans")
-
-        return {
-            "dry_run": dry_run,
-            "total_groups_processed": len(results),
-            "total_loans_merged": sum(len(r["merged_loan_ids"]) for r in results),
-            "results": results,
-            "message": f"{'Would merge' if dry_run else 'Merged'} {sum(len(r['merged_loan_ids']) for r in results)} duplicate loans from {len(results)} groups"
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error auto-deduplicating loans: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
