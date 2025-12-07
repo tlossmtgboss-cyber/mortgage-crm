@@ -34992,7 +34992,7 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     }
 
 @app.delete("/api/v1/leads/{lead_id}", status_code=204)
-async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
     query = db.query(Lead).filter(Lead.id == lead_id)
     query = filter_leads_by_permissions(query, current_user, db)

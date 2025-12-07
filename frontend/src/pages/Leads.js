@@ -258,13 +258,18 @@ function Leads() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, leadName) => {
+    // Confirm before deleting
+    if (!window.confirm(`Are you sure you want to delete "${leadName}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
       await leadsAPI.delete(id);
       loadLeads();
     } catch (err) {
       console.error('Failed to delete lead:', err);
-      alert('Failed to delete lead');
+      alert('Failed to delete lead: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -510,10 +515,7 @@ function Leads() {
                 <td>{lead.source || 'N/A'}</td>
                 <td>
                   <div className="table-actions">
-                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleEdit(lead); }} title="Edit">
-                      ✏️
-                    </button>
-                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }} title="Delete">
+                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id, lead.name || `${lead.first_name} ${lead.last_name}`); }} title="Delete">
                       🗑️
                     </button>
                   </div>
