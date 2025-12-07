@@ -332,13 +332,10 @@ class MobileVoiceSession:
             self.tts_client = OpenAITTSClient()
             logger.info("[MobileVoiceSession] Using OpenAI TTS (fallback)")
 
-        # Initialize STT client
-        if DEEPGRAM_API_KEY:
-            self.stt_client = DeepgramSTTClient()
-            await self.stt_client.connect(self._on_transcript)
-            logger.info("[MobileVoiceSession] Using Deepgram STT")
-        else:
-            logger.warning("[MobileVoiceSession] No Deepgram API key - STT disabled")
+        # NOTE: Deepgram STT is initialized lazily when start_listening is called
+        # This prevents Deepgram timeout errors since the connection is only opened
+        # when the mobile app is ready to send audio
+        logger.info(f"[MobileVoiceSession] Deepgram STT configured: {bool(DEEPGRAM_API_KEY)} (will connect on start_listening)")
 
         # Send welcome message
         await self._send_event("session_started", {
@@ -437,6 +434,15 @@ class MobileVoiceSession:
 
         elif msg_type == "start_listening":
             self.is_listening = True
+
+            # Lazily connect to Deepgram only when we're ready to listen
+            # This prevents timeout errors from Deepgram expecting audio too soon
+            if DEEPGRAM_API_KEY and not self.stt_client:
+                logger.info("[MobileVoiceSession] Lazily connecting to Deepgram STT...")
+                self.stt_client = DeepgramSTTClient()
+                await self.stt_client.connect(self._on_transcript)
+                logger.info("[MobileVoiceSession] Deepgram STT connected (lazy init)")
+
             await self._send_event("listening", {})
 
         elif msg_type == "stop_listening":
