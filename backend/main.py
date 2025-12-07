@@ -35859,7 +35859,10 @@ async def merge_duplicate_loans(
                 "fields_transferred": fields_updated
             })
 
-            db.delete(merge_loan)
+            # Use raw SQL delete to avoid relationship cascade issues with tasks table
+            merge_loan_id = merge_loan.id
+            db.execute(text("DELETE FROM tasks WHERE loan_id = :loan_id"), {"loan_id": merge_loan_id})
+            db.execute(text("DELETE FROM loans WHERE id = :loan_id"), {"loan_id": merge_loan_id})
 
         db.commit()
         db.refresh(keep_loan)
@@ -35931,7 +35934,11 @@ async def auto_deduplicate_loans(
                     # Use ai_insights field for merge notes
                     merge_note = f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Auto-merged from loan {merge_loan.loan_number}"
                     keep_loan.ai_insights = (keep_loan.ai_insights or "") + merge_note
-                    db.delete(merge_loan)
+
+                    # Use raw SQL delete to avoid relationship cascade issues with tasks table
+                    merge_loan_id = merge_loan.id
+                    db.execute(text("DELETE FROM tasks WHERE loan_id = :loan_id"), {"loan_id": merge_loan_id})
+                    db.execute(text("DELETE FROM loans WHERE id = :loan_id"), {"loan_id": merge_loan_id})
 
             results.append({
                 "borrower_name": normalized_name,
