@@ -53,12 +53,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Portfolio
           </Link>
           <Link
-            to="/workflow"
-            className={`nav-link ${isActive('/workflow') ? 'active' : ''}`}
-          >
-            Workflow
-          </Link>
-          <Link
             to="/tasks"
             className={`nav-link ${isActive('/tasks') ? 'active' : ''}`}
           >

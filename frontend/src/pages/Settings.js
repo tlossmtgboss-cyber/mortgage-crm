@@ -339,6 +339,7 @@ function Settings() {
   const defaultSidebarItems = [
     { id: 'user-profile', label: 'User Profile', type: 'parent', section: 'userProfile' },
     { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational' },
+    { id: 'workflow', label: 'Workflow', type: 'standalone', section: 'workflow', navigate: '/workflow' },
     { id: 'command-center', label: 'Command Center', type: 'standalone', section: 'command-center' },
     { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
     { id: 'mission-control', label: 'Mission Control', type: 'standalone', section: 'mission-control' },
