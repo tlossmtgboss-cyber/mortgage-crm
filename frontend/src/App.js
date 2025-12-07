@@ -258,6 +258,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
+          <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
