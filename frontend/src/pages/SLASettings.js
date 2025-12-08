@@ -204,30 +204,6 @@ const SLASettings = () => {
     }
   };
 
-  const changeMilestoneStage = async (measureId, newStage) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}/stage`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ stage_type: newStage })
-      });
-      if (response.ok) {
-        fetchDashboard();
-      } else {
-        const errorData = await response.json();
-        console.error('Error changing milestone stage:', errorData);
-        alert(`Error changing stage: ${errorData.detail || 'Unknown error'}`);
-      }
-    } catch (err) {
-      console.error('Error changing milestone stage:', err);
-      alert('Failed to change milestone stage. Please try again.');
-    }
-  };
-
   const deleteMeasure = async (measureId) => {
     try {
       const token = localStorage.getItem('token');
@@ -382,7 +358,7 @@ const SLASettings = () => {
     }
   };
 
-  const handleDrop = async (e, targetMeasure, stage) => {
+  const handleDrop = async (e, targetMeasure) => {
     e.preventDefault();
     setDragOverItem(null);
     if (!draggedItem || draggedItem.id === targetMeasure.id) {
@@ -390,42 +366,23 @@ const SLASettings = () => {
       return;
     }
 
-    // Only allow reordering within the same stage
-    const draggedStage = getMilestoneStage(draggedItem.milestone_type, draggedItem.stage_type);
-    const targetStage = getMilestoneStage(targetMeasure.milestone_type, targetMeasure.stage_type);
-
-    if (draggedStage !== targetStage) {
-      setDraggedItem(null);
-      return;
-    }
-
-    // Get current stage items
-    const stageItems = groupedMeasures[stage];
-    const draggedIdx = stageItems.findIndex(m => m.id === draggedItem.id);
-    const targetIdx = stageItems.findIndex(m => m.id === targetMeasure.id);
+    // Get all sorted measures
+    const allItems = [...sortedMeasures];
+    const draggedIdx = allItems.findIndex(m => m.id === draggedItem.id);
+    const targetIdx = allItems.findIndex(m => m.id === targetMeasure.id);
 
     // Create new order
-    const newItems = [...stageItems];
+    const newItems = [...allItems];
     newItems.splice(draggedIdx, 1);
     newItems.splice(targetIdx, 0, draggedItem);
 
-    // Update measures state to reflect new order
-    const newMeasures = measures.map(m => {
-      const newIndex = newItems.findIndex(ni => ni.id === m.id);
-      if (newIndex !== -1) {
-        return { ...m, display_order: newIndex };
-      }
-      return m;
-    });
+    // Update measures state to reflect new order with sequential display_order values
+    const newMeasures = newItems.map((m, idx) => ({ ...m, display_order: idx }));
     setMeasures(newMeasures);
 
     // Update the local order display
     const newOrder = newItems.map(m => m.id);
-    setMeasureOrder(prev => {
-      const updated = { ...prev };
-      updated[stage] = newOrder;
-      return updated;
-    });
+    setMeasureOrder(newOrder);
 
     // Save the new order to the backend
     try {
@@ -458,75 +415,24 @@ const SLASettings = () => {
     }
   };
 
-  // Define milestone stages for sorting - Lead stage first, then Loan stage
-  const leadStageMilestones = [
-    'lead_response', 'lead_created', 'application_completed', 'application_review', 'pre_qualified', 'preapproval'
-  ];
-
-  const loanStageMilestones = [
-    'application_submitted', 'documents_requested', 'documents_received',
-    'document_collection', 'application_complete',
-    'submitted_to_processing', 'processing_start',
-    'appraisal_ordered', 'appraisal_received',
-    'title_ordered', 'title_received',
-    'insurance_ordered', 'insurance_received',
-    'submitted_to_uw', 'uw_decision', 'approved',
-    'conditions_issued', 'conditions_cleared', 'clear_to_close',
-    'closing_docs_out', 'closing_scheduled', 'closed', 'funded', 'loan_funded'
-  ];
-
-  // Get stage category for a milestone type (or use stage_type override if set)
-  const getMilestoneStage = (milestoneType, stageType = null) => {
-    // If stage_type override is set, use it
-    if (stageType === 'lead' || stageType === 'loan') return stageType;
-    // Otherwise, determine from milestone type
-    if (leadStageMilestones.includes(milestoneType)) return 'lead';
-    if (loanStageMilestones.includes(milestoneType)) return 'loan';
-    return 'other';
-  };
-
-  // Get sort order for a milestone within its stage
-  const getMilestoneOrder = (milestoneType) => {
-    const leadIndex = leadStageMilestones.indexOf(milestoneType);
-    if (leadIndex !== -1) return leadIndex;
-    const loanIndex = loanStageMilestones.indexOf(milestoneType);
-    if (loanIndex !== -1) return loanIndex;
-    return 999;
-  };
-
-  // Sort measures: Lead stage first, then Loan stage, then by status (Active first), then by display_order or milestone order
+  // Sort measures by display_order only - user controls the complete order
   const sortedMeasures = [...measures].sort((a, b) => {
-    // First sort by stage (Lead = 0, Loan = 1, Other = 2) - using stage_type override if set
-    const stageOrder = { lead: 0, loan: 1, other: 2 };
-    const stageA = stageOrder[getMilestoneStage(a.milestone_type, a.stage_type)];
-    const stageB = stageOrder[getMilestoneStage(b.milestone_type, b.stage_type)];
-    if (stageA !== stageB) return stageA - stageB;
-
-    // Then sort by active status (Active first)
-    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-
-    // Then sort by display_order if set, otherwise by default milestone order
-    const orderA = a.display_order !== undefined && a.display_order !== null ? a.display_order : getMilestoneOrder(a.milestone_type);
-    const orderB = b.display_order !== undefined && b.display_order !== null ? b.display_order : getMilestoneOrder(b.milestone_type);
-    return orderA - orderB;
+    // Sort by display_order if set, otherwise by id as fallback
+    const orderA = a.display_order !== undefined && a.display_order !== null ? a.display_order : 9999;
+    const orderB = b.display_order !== undefined && b.display_order !== null ? b.display_order : 9999;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.id - b.id;
   });
 
-  // Group measures by stage for display (using stage_type override if set)
-  const groupedMeasures = {
-    lead: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type, m.stage_type) === 'lead'),
-    loan: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type, m.stage_type) === 'loan'),
-    other: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type, m.stage_type) === 'other')
-  };
-
   // Render a single measure row with drag-and-drop support
-  const renderMeasureRow = (measure, stage) => (
+  const renderMeasureRow = (measure) => (
     <tr
       key={measure.id}
       draggable="true"
       onDragStart={(e) => handleDragStart(e, measure)}
       onDragOver={(e) => handleDragOver(e, measure)}
       onDragLeave={handleDragLeave}
-      onDrop={(e) => handleDrop(e, measure, stage)}
+      onDrop={(e) => handleDrop(e, measure)}
       onDragEnd={handleDragEnd}
       className={`draggable-row ${draggedItem?.id === measure.id ? 'dragging' : ''} ${dragOverItem === measure.id ? 'drag-over' : ''}`}
       style={{
@@ -618,24 +524,6 @@ const SLASettings = () => {
           >
             {measure.is_active ? 'Deactivate' : 'Activate'}
           </button>
-          {/* Move to other stage button - only show for lead and loan stages */}
-          {(stage === 'lead' || stage === 'loan') && (
-            <button
-              onClick={() => changeMilestoneStage(measure.id, stage === 'lead' ? 'loan' : 'lead')}
-              style={{
-                padding: '6px 12px',
-                background: stage === 'lead' ? '#e3f2fd' : '#e0f2f1',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                color: stage === 'lead' ? '#1565c0' : '#00796b'
-              }}
-              title={stage === 'lead' ? 'Move to Active Loan Stage' : 'Move to Lead Stage'}
-            >
-              {stage === 'lead' ? '→ Loan' : '← Lead'}
-            </button>
-          )}
           <button
             onClick={() => deleteMeasure(measure.id)}
             style={{
@@ -912,56 +800,8 @@ const SLASettings = () => {
                 </tr>
               </thead>
               <tbody>
-                {/* Lead Stage Section */}
-                {groupedMeasures.lead.length > 0 && (
-                  <tr className="stage-header-row">
-                    <td colSpan="6" style={{
-                      background: '#e0f2f1',
-                      padding: '10px 16px',
-                      fontWeight: '600',
-                      fontSize: '13px',
-                      color: '#00695c',
-                      borderBottom: '2px solid #26a69a'
-                    }}>
-                      📋 Lead Stage Milestones ({groupedMeasures.lead.length})
-                    </td>
-                  </tr>
-                )}
-                {groupedMeasures.lead.map((measure) => renderMeasureRow(measure, 'lead'))}
-
-                {/* Loan Stage Section */}
-                {groupedMeasures.loan.length > 0 && (
-                  <tr className="stage-header-row">
-                    <td colSpan="6" style={{
-                      background: '#e3f2fd',
-                      padding: '10px 16px',
-                      fontWeight: '600',
-                      fontSize: '13px',
-                      color: '#1565c0',
-                      borderBottom: '2px solid #42a5f5'
-                    }}>
-                      🏦 Active Loan Stage Milestones ({groupedMeasures.loan.length})
-                    </td>
-                  </tr>
-                )}
-                {groupedMeasures.loan.map((measure) => renderMeasureRow(measure, 'loan'))}
-
-                {/* Other Milestones Section */}
-                {groupedMeasures.other.length > 0 && (
-                  <tr className="stage-header-row">
-                    <td colSpan="6" style={{
-                      background: '#f3f4f6',
-                      padding: '10px 16px',
-                      fontWeight: '600',
-                      fontSize: '13px',
-                      color: '#6b7280',
-                      borderBottom: '2px solid #9ca3af'
-                    }}>
-                      📁 Other Milestones ({groupedMeasures.other.length})
-                    </td>
-                  </tr>
-                )}
-                {groupedMeasures.other.map((measure) => renderMeasureRow(measure, 'other'))}
+                {/* Single unified list - drag to reorder */}
+                {sortedMeasures.map((measure) => renderMeasureRow(measure))}
               </tbody>
             </table>
           )}

@@ -2210,7 +2210,6 @@ const API_BASE_URL = isProduction
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, item)}
                   >
-                    <span className="drag-handle">⋮⋮</span>
                     <span>{item.label}</span>
                     <span className="expand-icon">{expandedSections.userProfile ? '▼' : '▶'}</span>
                   </button>
@@ -2241,7 +2240,6 @@ const API_BASE_URL = isProduction
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, item)}
                   >
-                    <span className="drag-handle">⋮⋮</span>
                     <span>{item.label}</span>
                     <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
                   </button>
@@ -2275,7 +2273,6 @@ const API_BASE_URL = isProduction
                         onDragLeave={handleDragLeave}
                         onDrop={(e) => handleDrop(e, item)}
                       >
-                        <span className="drag-handle">⋮⋮</span>
                         <span>{item.label}</span>
                         <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
                       </button>
@@ -2307,7 +2304,6 @@ const API_BASE_URL = isProduction
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, item)}
                     >
-                      <span className="drag-handle">⋮⋮</span>
                       <span>{item.label}</span>
                     </button>
                   )}
@@ -2329,7 +2325,6 @@ const API_BASE_URL = isProduction
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, item)}
                   >
-                    <span className="drag-handle">⋮⋮</span>
                     <span>{item.label}</span>
                     <span className="expand-icon">{expandedSections.masterAdmin ? '▼' : '▶'}</span>
                   </button>
@@ -2359,7 +2354,6 @@ const API_BASE_URL = isProduction
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, item)}
                 >
-                  <span className="drag-handle">⋮⋮</span>
                   <span>{item.label}</span>
                 </button>
               );
@@ -2378,7 +2372,6 @@ const API_BASE_URL = isProduction
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, item)}
               >
-                <span className="drag-handle">⋮⋮</span>
                 <span>{item.label}</span>
               </button>
             );
