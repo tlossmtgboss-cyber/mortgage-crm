@@ -501,12 +501,7 @@ function Dashboard() {
     }
 
     if (containerId === 'efficiency') {
-      // PHASE 4: Only show for Operations and Management roles (NOT Sales)
-      // Always show for demo user
-      if (userRole === 'sales' && !isDemoUser()) {
-        return null;
-      }
-
+      // Show efficiency tracker for all users
       return (
         <div
           key={containerId}
