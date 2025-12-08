@@ -182,12 +182,12 @@ def delete_sla_measure(
     measure_id: int,
     organization_id: int = 1
 ) -> bool:
-    """Soft delete an SLA measure (set is_active=False)."""
+    """Hard delete an SLA measure."""
     db_measure = get_sla_measure(db, measure_id, organization_id)
     if not db_measure:
         return False
 
-    db_measure.is_active = False
+    db.delete(db_measure)
     db.commit()
     return True
 

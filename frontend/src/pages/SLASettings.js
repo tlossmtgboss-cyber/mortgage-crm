@@ -205,6 +205,9 @@ const SLASettings = () => {
   };
 
   const deleteMeasure = async (measureId) => {
+    if (!window.confirm('Are you sure you want to delete this SLA measure? This action cannot be undone.')) {
+      return;
+    }
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
@@ -223,7 +226,7 @@ const SLASettings = () => {
       } else {
         const error = await response.json().catch(() => ({}));
         console.error('Error deleting measure:', error);
-        alert('Failed to delete measure. Please try again.');
+        alert('Failed to delete measure: ' + (error.detail || 'Please try again.'));
       }
     } catch (err) {
       console.error('Error deleting measure:', err);
@@ -1363,8 +1366,8 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
   });
 
   const milestoneTypes = [
-    'lead_response', 'application_completed', 'application_review', 'pre_qualified', 'preapproval',
-    'application_submitted', 'documents_requested', 'documents_received',
+    'lead_created', 'lead_response', 'application_completed', 'application_review', 'pre_qualified', 'preapproval',
+    'contract_received', 'disclosed', 'application_submitted', 'documents_requested', 'documents_received',
     'document_collection', 'application_complete',
     'submitted_to_processing', 'processing_start',
     'appraisal_ordered', 'appraisal_received',
@@ -1385,6 +1388,8 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     { value: 'application_review', label: 'Application Review' },
     { value: 'pre_qualified', label: 'Pre-Qualified' },
     { value: 'preapproval', label: 'Pre-Approval' },
+    { value: 'contract_received', label: 'Contract Received' },
+    { value: 'disclosed', label: 'Disclosed' },
     { value: 'application_submitted', label: 'Application Submitted' },
     { value: 'documents_requested', label: 'Documents Requested' },
     { value: 'documents_received', label: 'Documents Received' },

@@ -446,11 +446,11 @@ async def delete_sla_measure_item(
     measure_id: int,
     db: Session = Depends(get_db)
 ):
-    """Deactivate an SLA measure (soft delete)."""
+    """Delete an SLA measure permanently."""
     success = delete_sla_measure(db, measure_id)
     if not success:
         raise HTTPException(status_code=404, detail="SLA measure not found")
-    return {"status": "success", "message": "SLA measure deactivated"}
+    return {"status": "success", "message": "SLA measure deleted"}
 
 
 class StageChangeRequest(BaseModel):
