@@ -259,6 +259,9 @@ function Leads() {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
+      return;
+    }
     try {
       await leadsAPI.delete(id);
       loadLeads();

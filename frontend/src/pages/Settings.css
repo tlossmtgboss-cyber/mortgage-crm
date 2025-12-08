@@ -3786,8 +3786,8 @@ textarea.text-input {
   user-select: none;
   opacity: 0.6;
   transition: opacity 0.2s;
-  margin-right: 8px;
-  min-width: 14px;
+  margin-right: 12px;
+  min-width: 16px;
 }
 
 .sidebar-btn:hover .drag-handle {
@@ -3815,7 +3815,7 @@ textarea.text-input {
 }
 
 .sidebar-btn.parent .drag-handle {
-  margin-right: 4px;
+  margin-right: 10px;
 }
 
 /* Ensure text in sidebar buttons doesn't truncate */
