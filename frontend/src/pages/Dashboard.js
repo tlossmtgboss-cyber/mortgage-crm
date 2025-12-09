@@ -951,7 +951,7 @@ function Dashboard() {
           </div>
           <button
             className="borrower-app-btn"
-            onClick={() => navigate('/borrower/login')}
+            onClick={() => navigate('/apply/login')}
             title="Open Borrower Application"
           >
             Borrower Application
