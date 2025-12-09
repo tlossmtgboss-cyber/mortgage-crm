@@ -276,6 +276,8 @@ const SLASettings = () => {
     { value: 'approved', label: 'Approved' },
     { value: 'clear_to_close', label: 'Clear to Close' },
     { value: 'closing_docs_out', label: 'Closing Docs Out' },
+    { value: 'closing_scheduled', label: 'Closing Scheduled' },
+    { value: 'closing_date', label: 'Closing Date' },
     { value: 'funded', label: 'Loan Funded' }
   ];
 
@@ -1661,7 +1663,7 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     'insurance_ordered', 'insurance_received',
     'submitted_to_uw', 'uw_decision', 'approved',
     'conditions_issued', 'conditions_cleared', 'clear_to_close',
-    'closing_docs_out', 'closing_scheduled', 'closed', 'funded'
+    'closing_docs_out', 'closing_scheduled', 'closing_date', 'closed', 'funded'
   ];
 
   // Trigger From options - what event starts the SLA timer (same as inline dropdown)
@@ -1688,6 +1690,8 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     { value: 'approved', label: 'Approved' },
     { value: 'clear_to_close', label: 'Clear to Close' },
     { value: 'closing_docs_out', label: 'Closing Docs Out' },
+    { value: 'closing_scheduled', label: 'Closing Scheduled' },
+    { value: 'closing_date', label: 'Closing Date' },
     { value: 'funded', label: 'Loan Funded' }
   ];
 

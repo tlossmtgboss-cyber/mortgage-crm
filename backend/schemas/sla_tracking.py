@@ -69,6 +69,7 @@ class MilestoneTypeEnum(str, Enum):
     CLEAR_TO_CLOSE = "clear_to_close"
     CLOSING_DOCS_OUT = "closing_docs_out"
     CLOSING_SCHEDULED = "closing_scheduled"
+    CLOSING_DATE = "closing_date"
     CLOSED = "closed"
     FUNDED = "funded"
 
@@ -108,6 +109,7 @@ class TriggerFromEventEnum(str, Enum):
     CLEAR_TO_CLOSE = "clear_to_close"
     CLOSING_DOCS_OUT = "closing_docs_out"
     CLOSING_SCHEDULED = "closing_scheduled"
+    CLOSING_DATE = "closing_date"
     CLOSED = "closed"
     LOAN_CREATED = "loan_created"
     PREVIOUS_MILESTONE = "previous_milestone"
