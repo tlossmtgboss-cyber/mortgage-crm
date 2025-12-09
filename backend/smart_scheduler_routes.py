@@ -78,7 +78,8 @@ def send_appointment_confirmation_email(
     appointment_time: str,
     duration: str,
     meeting_mode: str = "Phone Call",
-    team_member_name: str = None
+    team_member_name: str = None,
+    video_link: str = None
 ):
     """Send appointment confirmation email"""
     try:
@@ -97,6 +98,20 @@ def send_appointment_confirmation_email(
         msg['To'] = attendee_email
 
         team_member_section = f"<p><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+
+        # Add video call button if video link is provided
+        video_button_section = ""
+        if video_link:
+            video_button_section = f"""
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                            📹 Join Video Call
+                        </a>
+                    </div>
+                    <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
+                        Or copy this link: <a href="{video_link}" style="color: #217F8D;">{video_link}</a>
+                    </p>
+            """
 
         html_content = f"""
         <html>
@@ -118,7 +133,7 @@ def send_appointment_confirmation_email(
                         <p style="margin: 8px 0;"><strong>Meeting Type:</strong> {meeting_mode}</p>
                         {team_member_section}
                     </div>
-
+                    {video_button_section}
                     <p style="font-size: 14px; color: #666;">
                         We'll send you a reminder before your appointment. If you need to reschedule,
                         please contact us as soon as possible.
@@ -137,6 +152,7 @@ def send_appointment_confirmation_email(
         </html>
         """
 
+        video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""
         text_content = f"""
 Appointment Confirmed!
 
@@ -148,7 +164,7 @@ Date: {appointment_date}
 Time: {appointment_time}
 Duration: {duration}
 Meeting Type: {meeting_mode}
-{f'Meeting with: {team_member_name}' if team_member_name else ''}
+{f'Meeting with: {team_member_name}' if team_member_name else ''}{video_link_text}
 
 We'll send you a reminder before your appointment. If you need to reschedule, please contact us as soon as possible.
 
@@ -1144,6 +1160,11 @@ async def create_appointment(
                     if assigned_user.last_name:
                         team_member_name += f" {assigned_user.last_name}"
 
+            # Get video link if this is a video call
+            video_link = None
+            if appointment.video_link:
+                video_link = appointment.video_link
+
             email_sent = send_appointment_confirmation_email(
                 attendee_email=appt_data.attendee_email,
                 attendee_name=appt_data.attendee_name or "there",
@@ -1152,7 +1173,8 @@ async def create_appointment(
                 appointment_time=appointment_time,
                 duration=duration_str,
                 meeting_mode=meeting_mode_str,
-                team_member_name=team_member_name
+                team_member_name=team_member_name,
+                video_link=video_link
             )
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
@@ -2060,6 +2082,9 @@ async def confirm_public_booking(
 
     if attendee_email:
         try:
+            # Get video link if available
+            video_link = appointment.video_link if hasattr(appointment, 'video_link') else None
+
             email_sent = send_appointment_confirmation_email(
                 attendee_email=attendee_email,
                 attendee_name=attendee_name,
@@ -2068,7 +2093,8 @@ async def confirm_public_booking(
                 appointment_time=appointment_time,
                 duration=duration_str,
                 meeting_mode=meeting_mode_str,
-                team_member_name=team_member_name
+                team_member_name=team_member_name,
+                video_link=video_link
             )
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")

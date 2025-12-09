@@ -29,6 +29,10 @@ const SLASettings = () => {
   const [measureOrder, setMeasureOrder] = useState([]);
   const [dragOverItem, setDragOverItem] = useState(null);
 
+  // Inline editing state
+  const [editingCell, setEditingCell] = useState(null); // { measureId, field }
+  const [pendingChanges, setPendingChanges] = useState({}); // { measureId: { field: value } }
+
   // Reports state
   const [teamMembers, setTeamMembers] = useState([]);
   const [reportHistory, setReportHistory] = useState([]);
@@ -186,6 +190,93 @@ const SLASettings = () => {
       console.error('Error saving measure:', err);
     }
   };
+
+  // Inline edit handlers
+  const handleInlineEdit = (measureId, field, value) => {
+    setPendingChanges(prev => ({
+      ...prev,
+      [measureId]: {
+        ...(prev[measureId] || {}),
+        [field]: value
+      }
+    }));
+    // Update local state immediately for responsive UI
+    setMeasures(prev => prev.map(m =>
+      m.id === measureId ? { ...m, [field]: value } : m
+    ));
+  };
+
+  const saveInlineEdit = async (measureId, field) => {
+    const measure = measures.find(m => m.id === measureId);
+    if (!measure) return;
+
+    const changes = pendingChanges[measureId] || {};
+    if (Object.keys(changes).length === 0) {
+      setEditingCell(null);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(changes)
+      });
+
+      // Clear pending changes for this measure
+      setPendingChanges(prev => {
+        const newPending = { ...prev };
+        delete newPending[measureId];
+        return newPending;
+      });
+      setEditingCell(null);
+    } catch (err) {
+      console.error('Error saving inline edit:', err);
+      // Revert on error
+      fetchDashboard();
+    }
+  };
+
+  const cancelInlineEdit = (measureId) => {
+    // Revert local changes
+    setPendingChanges(prev => {
+      const newPending = { ...prev };
+      delete newPending[measureId];
+      return newPending;
+    });
+    setEditingCell(null);
+    fetchDashboard(); // Refresh to get original values
+  };
+
+  // Trigger From options for inline dropdown
+  const triggerFromOptions = [
+    { value: 'lead_created', label: 'Lead Created' },
+    { value: 'loan_created', label: 'Loan Created' },
+    { value: 'previous_milestone', label: 'Previous Milestone' },
+    { value: 'lead_response', label: 'Lead Response' },
+    { value: 'application_completed', label: 'Application Completed' },
+    { value: 'pre_qualified', label: 'Pre Qualified' },
+    { value: 'preapproval', label: 'Pre-Approval' },
+    { value: 'disclosed', label: 'Disclosed' },
+    { value: 'application_submitted', label: 'Application Submitted' },
+    { value: 'submitted_to_processing', label: 'Submitted To Processing' },
+    { value: 'appraisal_ordered', label: 'Appraisal Ordered' },
+    { value: 'appraisal_received', label: 'Appraisal Received' },
+    { value: 'title_ordered', label: 'Title Ordered' },
+    { value: 'title_received', label: 'Title Received' },
+    { value: 'insurance_ordered', label: 'Insurance Ordered' },
+    { value: 'insurance_received', label: 'Insurance Received' },
+    { value: 'submitted_to_uw', label: 'Submit To Underwriting' },
+    { value: 'uw_decision', label: 'Underwriting Decision' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'clear_to_close', label: 'Clear To Close' },
+    { value: 'closing_docs_out', label: 'Closing Docs Out' },
+    { value: 'funded', label: 'Loan Funded' }
+  ];
 
   const toggleMeasureActive = async (measureId, newActiveState) => {
     try {
@@ -427,125 +518,319 @@ const SLASettings = () => {
     return a.id - b.id;
   });
 
-  // Render a single measure row with drag-and-drop support
-  const renderMeasureRow = (measure) => (
-    <tr
-      key={measure.id}
-      draggable="true"
-      onDragStart={(e) => handleDragStart(e, measure)}
-      onDragOver={(e) => handleDragOver(e, measure)}
-      onDragLeave={handleDragLeave}
-      onDrop={(e) => handleDrop(e, measure)}
-      onDragEnd={handleDragEnd}
-      className={`draggable-row ${draggedItem?.id === measure.id ? 'dragging' : ''} ${dragOverItem === measure.id ? 'drag-over' : ''}`}
-      style={{
-        cursor: 'grab',
-        transition: 'all 0.2s ease',
-        background: dragOverItem === measure.id ? '#e0f2f1' : undefined,
-        borderTop: dragOverItem === measure.id ? '3px solid #218D8D' : undefined
-      }}
-    >
-      <td>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span
-            className="drag-handle"
-            title="Drag to reorder within this section"
-            style={{
-              cursor: 'grab',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              background: '#f3f4f6',
-              fontSize: '16px',
-              color: '#6b7280'
-            }}
-          >☰</span>
+  // Render a single measure row with drag-and-drop support and inline editing
+  const renderMeasureRow = (measure) => {
+    const isEditingTarget = editingCell?.measureId === measure.id && editingCell?.field === 'target';
+    const isEditingTrigger = editingCell?.measureId === measure.id && editingCell?.field === 'trigger';
+    const isEditingWarning = editingCell?.measureId === measure.id && editingCell?.field === 'warning';
+    const hasPendingChanges = pendingChanges[measure.id] && Object.keys(pendingChanges[measure.id]).length > 0;
+
+    return (
+      <tr
+        key={measure.id}
+        draggable="true"
+        onDragStart={(e) => handleDragStart(e, measure)}
+        onDragOver={(e) => handleDragOver(e, measure)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, measure)}
+        onDragEnd={handleDragEnd}
+        className={`draggable-row ${draggedItem?.id === measure.id ? 'dragging' : ''} ${dragOverItem === measure.id ? 'drag-over' : ''}`}
+        style={{
+          cursor: 'grab',
+          transition: 'all 0.2s ease',
+          background: hasPendingChanges ? '#fffbeb' : dragOverItem === measure.id ? '#e0f2f1' : undefined,
+          borderTop: dragOverItem === measure.id ? '3px solid #218D8D' : undefined
+        }}
+      >
+        <td>
           <div>
             <div className="milestone-name">{measure.name}</div>
             <div className="milestone-type">{formatMilestoneType(measure.milestone_type)}</div>
           </div>
-        </div>
-      </td>
-      <td>
-        <span className="target-badge">
-          {formatTargetUnit(measure.target_value, measure.target_unit)}
-        </span>
-      </td>
-      <td>
-        <span style={{ fontSize: '13px', color: '#4b5563' }}>
-          {formatMilestoneType(measure.trigger_from || 'previous_milestone')}
-          {measure.trigger_from_is_default && (
-            <span style={{
-              marginLeft: '6px',
-              fontSize: '10px',
-              padding: '2px 6px',
-              background: '#dbeafe',
-              color: '#1d4ed8',
-              borderRadius: '10px'
+        </td>
+
+        {/* Inline editable Target column */}
+        <td
+          onClick={() => !isEditingTarget && setEditingCell({ measureId: measure.id, field: 'target' })}
+          style={{ cursor: 'pointer' }}
+          title="Click to edit"
+        >
+          {isEditingTarget ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="number"
+                value={measure.target_value}
+                onChange={(e) => handleInlineEdit(measure.id, 'target_value', parseFloat(e.target.value) || 0)}
+                style={{
+                  width: '50px',
+                  padding: '4px 6px',
+                  border: '1px solid #218D8D',
+                  borderRadius: '4px',
+                  fontSize: '13px'
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveInlineEdit(measure.id, 'target');
+                  if (e.key === 'Escape') cancelInlineEdit(measure.id);
+                }}
+              />
+              <select
+                value={measure.target_unit}
+                onChange={(e) => handleInlineEdit(measure.id, 'target_unit', e.target.value)}
+                style={{
+                  padding: '4px 6px',
+                  border: '1px solid #218D8D',
+                  borderRadius: '4px',
+                  fontSize: '13px'
+                }}
+              >
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+                <option value="business_days">biz days</option>
+              </select>
+              <button
+                onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'target'); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#218D8D',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✓
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); cancelInlineEdit(measure.id); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <span className="target-badge editable-cell" style={{
+              borderBottom: '1px dashed #9ca3af',
+              paddingBottom: '2px'
             }}>
-              Default
+              {formatTargetUnit(measure.target_value, measure.target_unit)}
             </span>
           )}
-        </span>
-      </td>
-      <td>{measure.warning_threshold_pct}%</td>
-      <td>
-        <div className={`status-indicator ${measure.is_active ? 'active' : 'inactive'}`}>
-          <span className="dot"></span>
-          {measure.is_active ? 'Active' : 'Inactive'}
-        </div>
-      </td>
-      <td>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          <button
-            onClick={() => {
-              setEditingMeasure(measure);
-              setShowEditModal(true);
-            }}
-            style={{
-              padding: '6px 12px',
-              background: '#f3f4f6',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px'
-            }}
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => toggleMeasureActive(measure.id, !measure.is_active)}
-            style={{
-              padding: '6px 12px',
-              background: measure.is_active ? '#fef3c7' : '#d1fae5',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
+        </td>
+
+        {/* Inline editable Trigger From column */}
+        <td
+          onClick={() => !isEditingTrigger && setEditingCell({ measureId: measure.id, field: 'trigger' })}
+          style={{ cursor: 'pointer' }}
+          title="Click to edit"
+        >
+          {isEditingTrigger ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <select
+                value={measure.trigger_from || 'previous_milestone'}
+                onChange={(e) => handleInlineEdit(measure.id, 'trigger_from', e.target.value)}
+                style={{
+                  padding: '4px 6px',
+                  border: '1px solid #218D8D',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  maxWidth: '150px'
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveInlineEdit(measure.id, 'trigger');
+                  if (e.key === 'Escape') cancelInlineEdit(measure.id);
+                }}
+              >
+                {triggerFromOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'trigger'); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#218D8D',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✓
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); cancelInlineEdit(measure.id); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <span style={{
               fontSize: '13px',
-              color: measure.is_active ? '#92400e' : '#065f46'
-            }}
-            title={measure.is_active ? 'Deactivate this measure' : 'Activate this measure'}
-          >
-            {measure.is_active ? 'Deactivate' : 'Activate'}
-          </button>
-          <button
-            onClick={() => deleteMeasure(measure.id)}
-            style={{
-              padding: '6px 12px',
-              background: '#fee2e2',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              color: '#991b1b'
-            }}
-            title="Delete this measure"
-          >
-            Delete
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
+              color: '#4b5563',
+              borderBottom: '1px dashed #9ca3af',
+              paddingBottom: '2px'
+            }}>
+              {formatMilestoneType(measure.trigger_from || 'previous_milestone')}
+              {measure.trigger_from_is_default && (
+                <span style={{
+                  marginLeft: '6px',
+                  fontSize: '10px',
+                  padding: '2px 6px',
+                  background: '#dbeafe',
+                  color: '#1d4ed8',
+                  borderRadius: '10px'
+                }}>
+                  Default
+                </span>
+              )}
+            </span>
+          )}
+        </td>
+
+        {/* Inline editable Warning At column */}
+        <td
+          onClick={() => !isEditingWarning && setEditingCell({ measureId: measure.id, field: 'warning' })}
+          style={{ cursor: 'pointer' }}
+          title="Click to edit"
+        >
+          {isEditingWarning ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="number"
+                value={measure.warning_threshold_pct}
+                onChange={(e) => handleInlineEdit(measure.id, 'warning_threshold_pct', parseFloat(e.target.value) || 0)}
+                min="0"
+                max="100"
+                style={{
+                  width: '50px',
+                  padding: '4px 6px',
+                  border: '1px solid #218D8D',
+                  borderRadius: '4px',
+                  fontSize: '13px'
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveInlineEdit(measure.id, 'warning');
+                  if (e.key === 'Escape') cancelInlineEdit(measure.id);
+                }}
+              />
+              <span style={{ fontSize: '13px' }}>%</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'warning'); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#218D8D',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✓
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); cancelInlineEdit(measure.id); }}
+                style={{
+                  padding: '4px 8px',
+                  background: '#f3f4f6',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <span style={{
+              borderBottom: '1px dashed #9ca3af',
+              paddingBottom: '2px'
+            }}>
+              {measure.warning_threshold_pct}%
+            </span>
+          )}
+        </td>
+
+        <td>
+          <div className={`status-indicator ${measure.is_active ? 'active' : 'inactive'}`}>
+            <span className="dot"></span>
+            {measure.is_active ? 'Active' : 'Inactive'}
+          </div>
+        </td>
+        <td>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              onClick={() => {
+                setEditingMeasure(measure);
+                setShowEditModal(true);
+              }}
+              style={{
+                padding: '6px 12px',
+                background: '#f3f4f6',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => toggleMeasureActive(measure.id, !measure.is_active)}
+              style={{
+                padding: '6px 12px',
+                background: measure.is_active ? '#fef3c7' : '#d1fae5',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: measure.is_active ? '#92400e' : '#065f46'
+              }}
+              title={measure.is_active ? 'Deactivate this measure' : 'Activate this measure'}
+            >
+              {measure.is_active ? 'Deactivate' : 'Activate'}
+            </button>
+            <button
+              onClick={() => deleteMeasure(measure.id)}
+              style={{
+                padding: '6px 12px',
+                background: '#fee2e2',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#991b1b'
+              }}
+              title="Delete this measure"
+            >
+              Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
 
   const formatTargetUnit = (value, unit) => {
     const absValue = Math.abs(value);
