@@ -260,8 +260,18 @@ function Leads() {
   };
 
   const handleDelete = async (id) => {
+    // Find the lead name for the confirmation
+    const lead = leads.find(l => l.id === id);
+    const leadName = lead?.name || `Lead #${id}`;
+
+    if (!window.confirm(`Are you sure you want to delete "${leadName}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
+      console.log('Deleting lead:', id);
       await leadsAPI.delete(id);
+      console.log('Lead deleted successfully');
       // Clear cache and reload
       localStorage.removeItem('leads_data');
       localStorage.removeItem('leads_data_time');
