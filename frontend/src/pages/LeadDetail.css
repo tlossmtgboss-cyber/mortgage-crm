@@ -939,6 +939,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.email,
 .action-btn.task,
 .action-btn.calendar,
+.action-btn.video,
 .action-btn.teams,
 .action-btn.record,
 .action-btn.voicemail,
@@ -955,6 +956,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.email:hover:not(:disabled),
 .action-btn.task:hover:not(:disabled),
 .action-btn.calendar:hover:not(:disabled),
+.action-btn.video:hover:not(:disabled),
 .action-btn.teams:hover:not(:disabled),
 .action-btn.record:hover:not(:disabled),
 .action-btn.voicemail:hover:not(:disabled),
@@ -970,6 +972,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.email .icon,
 .action-btn.task .icon,
 .action-btn.calendar .icon,
+.action-btn.video .icon,
 .action-btn.teams .icon,
 .action-btn.record .icon,
 .action-btn.voicemail .icon,
@@ -2070,17 +2073,6 @@ button.borrower-btn.add-borrower-btn:hover {
   color: #1f2937;
 }
 
-/* Action button video style */
-.action-btn.video {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  border: none;
-}
-
-.action-btn.video:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  transform: translateY(-1px);
-}
 
 /* ============================================
    Archive Sub-Tabs Styles
