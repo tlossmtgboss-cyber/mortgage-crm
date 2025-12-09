@@ -273,51 +273,49 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
     setError(null);
 
     try {
-      // Create instant video call room
-      const response = await fetch(`${API_BASE}/api/v1/video/create-room`, {
+      // Create instant video call room using the meetings API
+      const borrowerName = borrower?.name || `${borrower?.first_name || ''} ${borrower?.last_name || ''}`.trim() || 'Client';
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({
-          lead_id: borrower?.id,
-          attendee_name: borrower?.name || `${borrower?.first_name || ''} ${borrower?.last_name || ''}`.trim(),
-          attendee_email: borrower?.email || borrower?.borrower_email,
-          instant: true,
+          room_name: `Call with ${borrowerName}`,
+          room_description: `Video call with ${borrowerName}`,
+          provider: 'internal',
+          duration_minutes: 30,
+          waiting_room_enabled: false,
+          recording_enabled: true,
+          transcription_enabled: true,
+          ai_assistant_enabled: true,
+          password_protected: false,
+          max_participants: 10,
+          lead_id: borrower?.id || null,
+          meeting_type: 'client_call',
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        // Open video call in new window or pass to callback
-        if (data.room_url) {
-          window.open(data.room_url, '_blank', 'width=1200,height=800');
-        }
-        if (onStartVideoCall) {
-          onStartVideoCall(data);
+        // Open video call in new window using the room code
+        const roomCode = data.room_code || data.room?.room_code;
+        if (roomCode) {
+          const roomUrl = `${window.location.origin}/meeting/${roomCode}`;
+          window.open(roomUrl, '_blank', 'width=1200,height=800');
+          if (onStartVideoCall) {
+            onStartVideoCall({ room_url: roomUrl, room_code: roomCode, ...data });
+          }
         }
         onClose();
       } else {
-        // Fallback: Try opening a generic video meeting link
-        const meetingId = `meeting-${borrower?.id || Date.now()}`;
-        const roomUrl = `${window.location.origin}/video-room/${meetingId}`;
-        window.open(roomUrl, '_blank', 'width=1200,height=800');
-        if (onStartVideoCall) {
-          onStartVideoCall({ room_url: roomUrl, meeting_id: meetingId });
-        }
-        onClose();
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create meeting room');
       }
     } catch (err) {
       console.error('Error starting video call:', err);
-      // Fallback: Open a basic video room
-      const meetingId = `meeting-${borrower?.id || Date.now()}`;
-      const roomUrl = `${window.location.origin}/video-room/${meetingId}`;
-      window.open(roomUrl, '_blank', 'width=1200,height=800');
-      if (onStartVideoCall) {
-        onStartVideoCall({ room_url: roomUrl, meeting_id: meetingId });
-      }
-      onClose();
+      setError(err.message || 'Failed to start video call. Please try again.');
     } finally {
       setStartingCall(false);
     }
