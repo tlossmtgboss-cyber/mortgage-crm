@@ -1574,4 +1574,149 @@ export const documentDropAPI = {
   }
 };
 
+// Borrower Application API (LO-facing authenticated endpoints)
+export const borrowerApplicationAPI = {
+  // Create a new borrower application
+  create: async (data) => {
+    const response = await api.post('/api/v1/applications/', data);
+    return response.data;
+  },
+
+  // List all applications for current LO
+  getAll: async (params = {}) => {
+    const response = await api.get('/api/v1/applications/', { params });
+    return response.data;
+  },
+
+  // Get specific application by ID
+  getById: async (id) => {
+    const response = await api.get(`/api/v1/applications/${id}`);
+    return response.data;
+  },
+
+  // Get analytics for applications
+  getAnalytics: async (days = 30) => {
+    const response = await api.get('/api/v1/applications/analytics', { params: { days } });
+    return response.data;
+  },
+
+  // Generate application link for a lead
+  createForLead: async (leadId, options = {}) => {
+    const response = await api.post('/api/v1/applications/', {
+      lead_id: leadId,
+      ...options
+    });
+    return response.data;
+  }
+};
+
+// Public Borrower Application API (token-based, no auth required)
+export const publicApplicationAPI = {
+  // Get application by public token
+  get: async (token) => {
+    const response = await axios.get(`${API_BASE_URL}/api/v1/apply/${token}`);
+    return response.data;
+  },
+
+  // Update application data
+  update: async (token, data) => {
+    const response = await axios.patch(`${API_BASE_URL}/api/v1/apply/${token}`, data);
+    return response.data;
+  },
+
+  // Save step data
+  saveStep: async (token, step, data, markCompleted = false) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/apply/${token}/step`, {
+      step,
+      data,
+      mark_completed: markCompleted
+    });
+    return response.data;
+  },
+
+  // Calculate pre-qualification
+  prequalify: async (token, data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/apply/${token}/prequalify`, data);
+    return response.data;
+  },
+
+  // Capture credit authorization
+  captureCreditAuth: async (token, data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/apply/${token}/credit-auth`, data);
+    return response.data;
+  },
+
+  // Submit application
+  submit: async (token) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/apply/${token}/submit`);
+    return response.data;
+  },
+
+  // Upload document
+  uploadDocument: async (token, file, category, description) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category || 'other');
+    if (description) formData.append('description', description);
+
+    const response = await axios.post(`${API_BASE_URL}/api/v1/apply/${token}/documents`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  // List documents
+  getDocuments: async (token) => {
+    const response = await axios.get(`${API_BASE_URL}/api/v1/apply/${token}/documents`);
+    return response.data;
+  },
+
+  // Delete document
+  deleteDocument: async (token, docId) => {
+    const response = await axios.delete(`${API_BASE_URL}/api/v1/apply/${token}/documents/${docId}`);
+    return response.data;
+  },
+
+  // Create co-borrower invitation
+  createCoborrowerInvitation: async (token, data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/apply/${token}/coborrower`, data);
+    return response.data;
+  }
+};
+
+// Co-borrower API (token-based, no auth required)
+export const coborrowerAPI = {
+  // Get invitation by token
+  getInvitation: async (invitationToken) => {
+    const response = await axios.get(`${API_BASE_URL}/api/v1/coborrower/${invitationToken}`);
+    return response.data;
+  },
+
+  // Save co-borrower data
+  saveData: async (invitationToken, data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/coborrower/${invitationToken}/save`, data);
+    return response.data;
+  },
+
+  // Submit co-borrower section
+  submit: async (invitationToken) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/coborrower/${invitationToken}/submit`);
+    return response.data;
+  },
+
+  // Capture credit authorization
+  captureCreditAuth: async (invitationToken, data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/coborrower/${invitationToken}/credit-auth`, data);
+    return response.data;
+  }
+};
+
+// Public pre-qualification calculator (no auth required)
+export const prequalifyAPI = {
+  calculate: async (data) => {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/prequalify`, data);
+    return response.data;
+  }
+};
+
 export default api;

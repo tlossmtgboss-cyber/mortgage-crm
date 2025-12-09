@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -73,6 +73,9 @@ function LeadDetail() {
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [applicationLink, setApplicationLink] = useState(null);
+  const [applicationLoading, setApplicationLoading] = useState(false);
 
   // Email drafts state
   const [emailDrafts, setEmailDrafts] = useState([]);
@@ -1204,6 +1207,54 @@ function LeadDetail() {
     recognition.start();
   };
 
+  // Handle sending application link to lead
+  const handleSendApplication = async () => {
+    if (!lead) return;
+
+    try {
+      setApplicationLoading(true);
+
+      // Create application for this lead
+      const response = await borrowerApplicationAPI.createForLead(lead.id, {
+        send_email: false,  // Don't auto-send email, show modal first
+        send_sms: false
+      });
+
+      const appUrl = `${window.location.origin}/apply/${response.public_token}`;
+      setApplicationLink({
+        url: appUrl,
+        token: response.public_token,
+        application_id: response.id
+      });
+      setShowApplicationModal(true);
+    } catch (err) {
+      console.error('Error creating application:', err);
+      alert('Failed to create application link. Please try again.');
+    } finally {
+      setApplicationLoading(false);
+    }
+  };
+
+  // Copy application link to clipboard
+  const copyApplicationLink = async () => {
+    if (!applicationLink?.url) return;
+
+    try {
+      await navigator.clipboard.writeText(applicationLink.url);
+      alert('Application link copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = applicationLink.url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Application link copied to clipboard!');
+    }
+  };
+
   const handleAction = async (action) => {
     switch(action) {
       case 'call':
@@ -1267,6 +1318,9 @@ function LeadDetail() {
         break;
       case 'escalation':
         setShowEscalationModal(true);
+        break;
+      case 'send_application':
+        handleSendApplication();
         break;
       default:
         break;
@@ -3086,6 +3140,15 @@ function LeadDetail() {
                 <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
               </button>
               <button
+                className="action-btn application"
+                onClick={() => handleAction('send_application')}
+                title="Send borrower application link"
+                disabled={applicationLoading}
+              >
+                <span className="icon">📝</span>
+                <span>{applicationLoading ? 'Creating...' : 'Send Application'}</span>
+              </button>
+              <button
                 className="action-btn escalation"
                 onClick={() => handleAction('escalation')}
                 title="Escalate issue to team member"
@@ -3097,6 +3160,63 @@ function LeadDetail() {
           </div>
         </div>
       </div>
+
+      {/* Send Application Modal */}
+      {showApplicationModal && applicationLink && (
+        <div className="modal-overlay" onClick={() => setShowApplicationModal(false)}>
+          <div className="modal-content application-link-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Application Link Created</h2>
+              <button className="close-btn" onClick={() => setShowApplicationModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>A unique application link has been created for <strong>{lead?.name}</strong>.</p>
+
+              <div className="application-link-container">
+                <input
+                  type="text"
+                  value={applicationLink.url}
+                  readOnly
+                  className="application-link-input"
+                />
+                <button
+                  className="copy-link-btn"
+                  onClick={copyApplicationLink}
+                >
+                  Copy Link
+                </button>
+              </div>
+
+              <div className="application-actions">
+                <p className="action-hint">Share this link with the borrower via:</p>
+                <div className="share-buttons">
+                  <button
+                    className="share-btn email-share"
+                    onClick={() => {
+                      const subject = encodeURIComponent('Complete Your Mortgage Application');
+                      const body = encodeURIComponent(`Hi ${lead?.name?.split(' ')[0] || 'there'},\n\nPlease complete your mortgage application using this secure link:\n\n${applicationLink.url}\n\nThis link is unique to you and will save your progress automatically.\n\nBest regards`);
+                      window.open(`mailto:${lead?.email}?subject=${subject}&body=${body}`, '_blank');
+                    }}
+                    disabled={!lead?.email}
+                  >
+                    📧 Email
+                  </button>
+                  <button
+                    className="share-btn sms-share"
+                    onClick={() => {
+                      const body = encodeURIComponent(`Hi ${lead?.name?.split(' ')[0] || 'there'}! Please complete your mortgage application here: ${applicationLink.url}`);
+                      window.open(`sms:${lead?.phone}?body=${body}`, '_blank');
+                    }}
+                    disabled={!lead?.phone}
+                  >
+                    💬 SMS
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SMS Modal */}
       {lead && (

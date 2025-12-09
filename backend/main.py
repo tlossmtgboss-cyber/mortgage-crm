@@ -2999,6 +2999,477 @@ class ContactDNCStatus(Base):
 
 
 # ============================================================================
+# BORROWER APPLICATION SYSTEM MODELS
+# ============================================================================
+
+class SocialProvider(str, enum.Enum):
+    """Social login providers for borrowers"""
+    GOOGLE = "google"
+    FACEBOOK = "facebook"
+    LINKEDIN = "linkedin"
+    APPLE = "apple"
+    EMAIL = "email"
+
+
+class BorrowerProfile(Base):
+    """
+    Borrower identity profile - created via social login.
+    Links to one or more BorrowerApplications.
+    """
+    __tablename__ = "borrower_profiles"
+    __table_args__ = (
+        Index('ix_borrower_profile_email', 'email'),
+        Index('ix_borrower_profile_provider', 'provider', 'provider_user_id'),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Identity from social provider
+    email = Column(String, nullable=False, index=True)
+    first_name = Column(String)
+    last_name = Column(String)
+    profile_photo = Column(String)  # URL to profile photo
+
+    # Social provider info
+    provider = Column(String(20), nullable=False)  # google, facebook, linkedin, apple, email
+    provider_user_id = Column(String, nullable=False)
+    raw_profile = Column(JSON)  # Full profile data from provider
+
+    # Consent tracking
+    communication_consent = Column(Boolean, default=True)
+    marketing_consent = Column(Boolean, default=False)
+    consent_captured_at = Column(DateTime)
+    consent_ip_address = Column(String)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    applications = relationship("BorrowerApplication", back_populates="borrower_profile")
+    auth_events = relationship("BorrowerAuthEvent", back_populates="borrower_profile")
+
+
+class BorrowerAuthEvent(Base):
+    """Track borrower authentication events for security and analytics."""
+    __tablename__ = "borrower_auth_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    borrower_id = Column(String(36), ForeignKey("borrower_profiles.id", ondelete="CASCADE"), nullable=False)
+
+    event_type = Column(String(20), nullable=False)  # login, logout, token_refresh
+    provider = Column(String(20))
+    ip_address = Column(String)
+    user_agent = Column(String)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationship
+    borrower_profile = relationship("BorrowerProfile", back_populates="auth_events")
+
+
+class BorrowerMagicLink(Base):
+    """Magic link tokens for email-based login."""
+    __tablename__ = "borrower_magic_links"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    borrower_id = Column(String(36), ForeignKey("borrower_profiles.id", ondelete="CASCADE"), nullable=False)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ApplicationStatus(str, enum.Enum):
+    """Status of the borrower application"""
+    DRAFT = "draft"  # Started but not submitted
+    IN_PROGRESS = "in_progress"  # Actively being worked on
+    PENDING_DOCUMENTS = "pending_documents"  # Waiting for document uploads
+    PENDING_COBORROWER = "pending_coborrower"  # Waiting for co-borrower to complete
+    SUBMITTED = "submitted"  # Fully submitted for review
+    UNDER_REVIEW = "under_review"  # Being reviewed by LO
+    APPROVED = "approved"  # Application approved
+    DENIED = "denied"  # Application denied
+    EXPIRED = "expired"  # Token expired before completion
+
+
+class ApplicationStep(str, enum.Enum):
+    """Steps in the borrower application process"""
+    PERSONAL_INFO = "personal_info"
+    COBORROWER = "coborrower"
+    PROPERTY = "property"
+    INCOME = "income"
+    ASSETS = "assets"
+    LIABILITIES = "liabilities"
+    DECLARATIONS = "declarations"
+    DOCUMENTS = "documents"
+    CREDIT_AUTH = "credit_auth"
+    REVIEW = "review"
+
+
+class DocumentCategory(str, enum.Enum):
+    """Categories for uploaded documents"""
+    INCOME = "income"
+    ASSETS = "assets"
+    PROPERTY = "property"
+    IDENTITY = "identity"
+    TAX_RETURNS = "tax_returns"
+    BANK_STATEMENTS = "bank_statements"
+    OTHER = "other"
+
+
+class BorrowerApplication(Base):
+    """
+    Main borrower application - stores full URLA data and tracks progress.
+    Uses public_token for secure borrower access without login.
+    """
+    __tablename__ = "borrower_applications"
+    __table_args__ = (
+        Index('ix_borrower_app_public_token', 'public_token'),
+        Index('ix_borrower_app_lead_id', 'lead_id'),
+        Index('ix_borrower_app_status', 'status'),
+        Index('ix_borrower_app_owner', 'owner_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Public access token (UUID for secure URL-based access)
+    public_token = Column(String(64), unique=True, nullable=False, index=True)
+
+    # Link to borrower profile (for social login users)
+    borrower_profile_id = Column(String(36), ForeignKey("borrower_profiles.id"), nullable=True)
+
+    # Link to internal records
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # LO who created (nullable for self-service)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+
+    # Application status and progress
+    status = Column(SQLEnum(ApplicationStatus), default=ApplicationStatus.DRAFT)
+    current_step = Column(SQLEnum(ApplicationStep), default=ApplicationStep.PERSONAL_INFO)
+    progress_percentage = Column(Integer, default=0)  # 0-100
+
+    # Step completion tracking
+    completed_steps = Column(JSON, default=list)  # ["personal_info", "property", ...]
+    step_data = Column(JSON, default=dict)  # Stores data for each step
+
+    # Borrower information (basic - full URLA data in step_data)
+    borrower_first_name = Column(String)
+    borrower_last_name = Column(String)
+    borrower_email = Column(String, index=True)
+    borrower_phone = Column(String)
+
+    # Co-borrower tracking
+    has_coborrower = Column(Boolean, default=False)
+    coborrower_email = Column(String)
+    coborrower_completed = Column(Boolean, default=False)
+
+    # Pre-qualification data
+    prequalification_amount = Column(Float)
+    prequalification_rate = Column(Float)
+    prequalification_monthly_payment = Column(Float)
+    prequalification_data = Column(JSON)  # Full prequal calculation results
+
+    # Credit authorization
+    credit_auth_captured = Column(Boolean, default=False)
+    credit_auth_timestamp = Column(DateTime)
+    credit_auth_ip_address = Column(String)
+    credit_auth_user_agent = Column(String)
+    credit_auth_ssn_last4 = Column(String(4))  # Last 4 digits for verification
+
+    # Submission tracking
+    submitted_at = Column(DateTime)
+    reviewed_at = Column(DateTime)
+    reviewed_by_id = Column(Integer, ForeignKey("users.id"))
+
+    # Token expiration
+    expires_at = Column(DateTime)  # When the public token expires
+
+    # Analytics
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_activity_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    time_spent_seconds = Column(Integer, default=0)  # Total time spent
+    device_info = Column(JSON)  # Browser, device type, etc.
+
+    # Metadata
+    notes = Column(Text)
+    metadata = Column(JSON, default=dict)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    borrower_profile = relationship("BorrowerProfile", back_populates="applications")
+    lead = relationship("Lead", backref="borrower_applications")
+    loan = relationship("Loan", backref="borrower_applications")
+    owner = relationship("User", foreign_keys=[owner_id], backref="created_applications")
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id], backref="reviewed_applications")
+    documents = relationship("ApplicationDocument", back_populates="application", cascade="all, delete-orphan")
+    coborrower_invitations = relationship("CoborrowerInvitation", back_populates="application", cascade="all, delete-orphan")
+    events = relationship("ApplicationEvent", back_populates="application", cascade="all, delete-orphan")
+    notifications = relationship("ApplicationNotification", back_populates="application", cascade="all, delete-orphan")
+
+
+class ApplicationDocument(Base):
+    """
+    Documents uploaded by borrowers during application process.
+    Supports S3 storage with secure pre-signed URLs.
+    """
+    __tablename__ = "application_documents"
+    __table_args__ = (
+        Index('ix_app_doc_application', 'application_id'),
+        Index('ix_app_doc_category', 'category'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("borrower_applications.id", ondelete="CASCADE"), nullable=False)
+
+    # Document metadata
+    filename = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    file_size = Column(Integer)  # Bytes
+    mime_type = Column(String)
+    category = Column(SQLEnum(DocumentCategory), default=DocumentCategory.OTHER)
+    description = Column(String)
+
+    # Storage info
+    storage_key = Column(String)  # S3 key or file path
+    storage_bucket = Column(String)  # S3 bucket name
+    storage_url = Column(String)  # Direct URL (if applicable)
+
+    # Verification
+    is_verified = Column(Boolean, default=False)
+    verified_at = Column(DateTime)
+    verified_by_id = Column(Integer, ForeignKey("users.id"))
+    verification_notes = Column(Text)
+
+    # AI classification and analysis
+    ai_classified_type = Column(String)
+    ai_confidence = Column(Float)
+    ai_extracted_data = Column(JSON)  # OCR results, extracted fields
+    ai_verified = Column(Boolean, default=False)  # Whether AI verified document is legitimate
+    ai_document_type = Column(String)  # What type AI detected
+    ai_analysis = Column(JSON)  # Full analysis result
+    ai_analyzed_at = Column(DateTime)  # When AI analysis was performed
+
+    # Metadata
+    uploaded_by = Column(String)  # 'borrower', 'coborrower', 'lo'
+    borrower_notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    application = relationship("BorrowerApplication", back_populates="documents")
+    verified_by = relationship("User", backref="verified_app_documents")
+
+
+class CoborrowerInvitation(Base):
+    """
+    Tracks co-borrower invitations and their completion status.
+    Each co-borrower gets their own secure token to complete their section.
+    """
+    __tablename__ = "coborrower_invitations"
+    __table_args__ = (
+        Index('ix_coborrower_inv_token', 'invitation_token'),
+        Index('ix_coborrower_inv_app', 'application_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("borrower_applications.id", ondelete="CASCADE"), nullable=False)
+
+    # Invitation details
+    invitation_token = Column(String(64), unique=True, nullable=False, index=True)
+    email = Column(String, nullable=False)
+    first_name = Column(String)
+    last_name = Column(String)
+    phone = Column(String)
+    relationship_type = Column(String)  # spouse, partner, family_member, other
+
+    # Status tracking
+    status = Column(String, default="pending")  # pending, sent, opened, in_progress, completed, expired
+
+    # Invitation tracking
+    sent_at = Column(DateTime)
+    opened_at = Column(DateTime)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    expires_at = Column(DateTime)
+
+    # Co-borrower data (stored when completed)
+    coborrower_data = Column(JSON, default=dict)  # Full URLA co-borrower section
+
+    # Credit authorization
+    credit_auth_captured = Column(Boolean, default=False)
+    credit_auth_timestamp = Column(DateTime)
+    credit_auth_ip_address = Column(String)
+
+    # Reminder tracking
+    reminder_count = Column(Integer, default=0)
+    last_reminder_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    application = relationship("BorrowerApplication", back_populates="coborrower_invitations")
+
+
+class ApplicationEvent(Base):
+    """
+    Tracks all events/actions in the application process for analytics and audit.
+    """
+    __tablename__ = "application_events"
+    __table_args__ = (
+        Index('ix_app_event_application', 'application_id', 'created_at'),
+        Index('ix_app_event_type', 'event_type'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("borrower_applications.id", ondelete="CASCADE"), nullable=False)
+
+    # Event details
+    event_type = Column(String, nullable=False)  # started, step_completed, document_uploaded, submitted, etc.
+    event_data = Column(JSON, default=dict)  # Additional event-specific data
+
+    # Actor info
+    actor_type = Column(String)  # borrower, coborrower, system, lo
+    actor_email = Column(String)
+
+    # Context
+    step = Column(String)  # Which step was active
+    ip_address = Column(String)
+    user_agent = Column(String)
+    device_type = Column(String)  # mobile, tablet, desktop
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    # Relationships
+    application = relationship("BorrowerApplication", back_populates="events")
+
+
+class ApplicationNotification(Base):
+    """
+    Tracks notifications sent during the application process.
+    Supports email, SMS, and push notifications.
+    """
+    __tablename__ = "application_notifications"
+    __table_args__ = (
+        Index('ix_app_notif_application', 'application_id'),
+        Index('ix_app_notif_type', 'notification_type'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("borrower_applications.id", ondelete="CASCADE"), nullable=False)
+
+    # Notification details
+    notification_type = Column(String, nullable=False)  # reminder, status_update, document_request, etc.
+    channel = Column(String, nullable=False)  # email, sms, push
+    recipient_email = Column(String)
+    recipient_phone = Column(String)
+
+    # Content
+    subject = Column(String)
+    body = Column(Text)
+    template_id = Column(String)  # If using templates
+
+    # Delivery tracking
+    status = Column(String, default="pending")  # pending, sent, delivered, failed, bounced
+    sent_at = Column(DateTime)
+    delivered_at = Column(DateTime)
+    failed_at = Column(DateTime)
+    failure_reason = Column(String)
+
+    # External IDs
+    external_id = Column(String)  # Twilio SID, SendGrid ID, etc.
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    application = relationship("BorrowerApplication", back_populates="notifications")
+
+
+class ApplicationSession(Base):
+    """
+    Tracks active sessions for save/resume functionality.
+    Allows borrowers to continue from where they left off.
+    """
+    __tablename__ = "application_sessions"
+    __table_args__ = (
+        Index('ix_app_session_token', 'session_token'),
+        Index('ix_app_session_app', 'application_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("borrower_applications.id", ondelete="CASCADE"), nullable=False)
+
+    # Session token for resume
+    session_token = Column(String(64), unique=True, nullable=False)
+
+    # Session data
+    last_step = Column(String)
+    unsaved_data = Column(JSON, default=dict)  # Data not yet persisted
+    scroll_position = Column(JSON)  # Where user was on the page
+
+    # Device info
+    device_fingerprint = Column(String)
+    ip_address = Column(String)
+    user_agent = Column(String)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+    expires_at = Column(DateTime)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_activity_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class VoiceApplicationSession(Base):
+    """
+    Tracks AI voice agent sessions for borrower applications.
+    Links voice calls to applications being filled out.
+    """
+    __tablename__ = "voice_application_sessions"
+    __table_args__ = (
+        Index('ix_voice_app_session', 'application_id'),
+        Index('ix_voice_app_call_sid', 'call_sid'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("borrower_applications.id", ondelete="CASCADE"), nullable=False)
+
+    # Call details
+    call_sid = Column(String, unique=True, index=True)  # Twilio/voice provider call ID
+    phone_number = Column(String)
+
+    # Session state
+    current_step = Column(String)
+    conversation_context = Column(JSON, default=dict)  # AI context
+    collected_data = Column(JSON, default=dict)  # Data collected via voice
+
+    # Status
+    status = Column(String, default="active")  # active, completed, abandoned, error
+
+    # Metrics
+    duration_seconds = Column(Integer)
+    fields_collected = Column(Integer, default=0)
+
+    # Timestamps
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    ended_at = Column(DateTime)
+
+    # Relationships
+    application = relationship("BorrowerApplication", backref="voice_sessions")
+
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 
@@ -3475,6 +3946,180 @@ class MUMClientResponse(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# BORROWER APPLICATION SCHEMAS
+# ============================================================================
+
+class BorrowerApplicationCreate(BaseModel):
+    """Schema for creating a new borrower application"""
+    lead_id: Optional[int] = None
+    borrower_first_name: Optional[str] = None
+    borrower_last_name: Optional[str] = None
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    has_coborrower: bool = False
+    coborrower_email: Optional[str] = None
+    expires_in_days: int = 30  # How long until the token expires
+
+class BorrowerApplicationUpdate(BaseModel):
+    """Schema for updating application data"""
+    current_step: Optional[str] = None
+    step_data: Optional[Dict[str, Any]] = None
+    completed_steps: Optional[List[str]] = None
+    progress_percentage: Optional[int] = None
+    borrower_first_name: Optional[str] = None
+    borrower_last_name: Optional[str] = None
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    has_coborrower: Optional[bool] = None
+    coborrower_email: Optional[str] = None
+    notes: Optional[str] = None
+    time_spent_seconds: Optional[int] = None
+
+class StepDataUpdate(BaseModel):
+    """Schema for updating a specific step's data"""
+    step: str
+    data: Dict[str, Any]
+    mark_completed: bool = False
+
+class CreditAuthCapture(BaseModel):
+    """Schema for capturing credit authorization"""
+    ssn_last4: str
+    full_ssn: Optional[str] = None  # Encrypted, only stored temporarily
+    consent_text: str
+    consent_agreed: bool
+    signature_data: Optional[str] = None  # Base64 encoded signature image
+
+class PrequalificationRequest(BaseModel):
+    """Schema for pre-qualification calculation"""
+    annual_income: float
+    monthly_debts: float
+    credit_score_range: str  # "760+", "740-759", "700-739", etc.
+    down_payment: float
+    down_payment_type: str = "percentage"  # "percentage" or "amount"
+    property_value: Optional[float] = None
+    loan_type: str = "conventional"  # conventional, fha, va, usda
+    property_type: str = "single_family"
+    occupancy: str = "primary"  # primary, secondary, investment
+
+class PrequalificationResponse(BaseModel):
+    """Schema for pre-qualification results"""
+    max_loan_amount: float
+    estimated_rate: float
+    estimated_monthly_payment: float
+    front_end_dti: float
+    back_end_dti: float
+    max_home_price: float
+    loan_type: str
+    rate_assumptions: Dict[str, Any]
+    warnings: List[str] = []
+
+class DocumentUploadResponse(BaseModel):
+    """Schema for document upload response"""
+    id: int
+    filename: str
+    original_filename: str
+    category: str
+    file_size: int
+    mime_type: str
+    upload_url: Optional[str] = None  # Pre-signed URL for direct upload
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class CoborrowerInvitationCreate(BaseModel):
+    """Schema for creating co-borrower invitation"""
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    relationship_type: Optional[str] = None
+    send_email: bool = True
+    send_sms: bool = False
+
+class CoborrowerInvitationResponse(BaseModel):
+    """Schema for co-borrower invitation response"""
+    id: int
+    invitation_token: str
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    status: str
+    sent_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class ApplicationEventCreate(BaseModel):
+    """Schema for logging application events"""
+    event_type: str
+    event_data: Optional[Dict[str, Any]] = None
+    step: Optional[str] = None
+
+class BorrowerApplicationResponse(BaseModel):
+    """Full application response schema"""
+    id: int
+    public_token: str
+    status: str
+    current_step: str
+    progress_percentage: int
+    completed_steps: List[str]
+    borrower_first_name: Optional[str] = None
+    borrower_last_name: Optional[str] = None
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    has_coborrower: bool
+    coborrower_email: Optional[str] = None
+    coborrower_completed: bool
+    prequalification_amount: Optional[float] = None
+    prequalification_rate: Optional[float] = None
+    prequalification_monthly_payment: Optional[float] = None
+    credit_auth_captured: bool
+    expires_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    last_activity_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class ApplicationPublicResponse(BaseModel):
+    """Limited public response for borrowers (no internal IDs)"""
+    status: str
+    current_step: str
+    progress_percentage: int
+    completed_steps: List[str]
+    step_data: Dict[str, Any]
+    borrower_first_name: Optional[str] = None
+    borrower_last_name: Optional[str] = None
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    has_coborrower: bool
+    coborrower_completed: bool
+    prequalification_data: Optional[Dict[str, Any]] = None
+    credit_auth_captured: bool
+    expires_at: Optional[datetime] = None
+    lo_name: Optional[str] = None
+    lo_email: Optional[str] = None
+    lo_phone: Optional[str] = None
+    company_name: Optional[str] = None
+    class Config:
+        from_attributes = True
+
+class ApplicationAnalytics(BaseModel):
+    """Schema for application analytics data"""
+    total_applications: int
+    by_status: Dict[str, int]
+    avg_completion_time_minutes: float
+    avg_progress_percentage: float
+    conversion_rate: float
+    drop_off_by_step: Dict[str, int]
+    documents_uploaded: int
+    coborrower_completion_rate: float
+
 
 # ============================================================================
 # ERROR FIX REQUEST SCHEMAS
@@ -18608,6 +19253,14 @@ When scheduling appointments, confirm the time first via SMS before creating the
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
+
+# Include borrower authentication routes (social login for applicants)
+from borrower_auth_routes import router as borrower_auth_router
+app.include_router(borrower_auth_router, tags=["Borrower Auth"])
+
+# Include application analytics routes
+from analytics_routes import router as analytics_router
+app.include_router(analytics_router, tags=["Analytics"])
 
 # Include AI API routes
 from ai_api_endpoints import router as ai_router
@@ -49099,6 +49752,14 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ SLA Tracking scheduler not loaded: {e}")
 
+    # Initialize notification scheduler for borrower application reminders
+    try:
+        from services.scheduler_service import init_scheduler
+        notification_scheduler = init_scheduler()
+        logger.info("✅ Notification scheduler started (application reminders, document expiration checks)")
+    except Exception as e:
+        logger.warning(f"⚠️ Notification scheduler not started: {e}")
+
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Demo Login: demo@example.com / demo123")
@@ -56331,6 +56992,1498 @@ async def langgraph_status():
             "error": str(e),
             "message": "LangGraph dependencies not installed"
         }
+
+
+# ============================================================================
+# BORROWER APPLICATION API ROUTES
+# ============================================================================
+
+def generate_token(length: int = 32) -> str:
+    """Generate a secure random token"""
+    import secrets
+    return secrets.token_urlsafe(length)
+
+
+def calculate_progress(completed_steps: List[str]) -> int:
+    """Calculate progress percentage based on completed steps"""
+    all_steps = [s.value for s in ApplicationStep]
+    if not completed_steps:
+        return 0
+    return int((len(completed_steps) / len(all_steps)) * 100)
+
+
+def calculate_prequalification(data: PrequalificationRequest) -> PrequalificationResponse:
+    """Calculate pre-qualification based on financial data"""
+    # Credit score to rate mapping (simplified)
+    rate_adjustments = {
+        "760+": 0,
+        "740-759": 0.125,
+        "720-739": 0.25,
+        "700-719": 0.375,
+        "680-699": 0.5,
+        "660-679": 0.75,
+        "640-659": 1.0,
+        "620-639": 1.5,
+        "<620": 2.0,
+    }
+
+    # Base rates by loan type (simplified)
+    base_rates = {
+        "conventional": 6.5,
+        "fha": 6.25,
+        "va": 6.0,
+        "usda": 6.25,
+        "jumbo": 7.0,
+    }
+
+    # Calculate DTI limits by loan type
+    dti_limits = {
+        "conventional": {"front": 28, "back": 45},
+        "fha": {"front": 31, "back": 43},
+        "va": {"front": 41, "back": 41},
+        "usda": {"front": 29, "back": 41},
+        "jumbo": {"front": 36, "back": 43},
+    }
+
+    monthly_income = data.annual_income / 12
+    base_rate = base_rates.get(data.loan_type, 6.5)
+    rate_adj = rate_adjustments.get(data.credit_score_range, 0.5)
+    estimated_rate = base_rate + rate_adj
+
+    limits = dti_limits.get(data.loan_type, {"front": 28, "back": 45})
+
+    # Calculate max payment based on DTI
+    max_front_payment = monthly_income * (limits["front"] / 100)
+    max_total_debt = monthly_income * (limits["back"] / 100)
+    max_housing_from_back = max_total_debt - data.monthly_debts
+
+    # Use the more conservative limit
+    max_monthly_payment = min(max_front_payment, max_housing_from_back)
+
+    # Calculate max loan amount (simplified - assumes 30yr fixed, no PMI calc)
+    monthly_rate = estimated_rate / 100 / 12
+    n_payments = 360  # 30 years
+
+    # Reverse mortgage formula: P = PMT * ((1 - (1 + r)^-n) / r)
+    if monthly_rate > 0:
+        max_loan = max_monthly_payment * ((1 - (1 + monthly_rate) ** -n_payments) / monthly_rate)
+    else:
+        max_loan = max_monthly_payment * n_payments
+
+    # Account for taxes/insurance (estimate 1.5% of home value annually)
+    # This is a simplification - would need property value for accurate calc
+    max_loan = max_loan * 0.8  # Conservative adjustment for PITI
+
+    # Calculate down payment
+    if data.down_payment_type == "percentage":
+        down_pct = data.down_payment / 100
+    else:
+        down_pct = data.down_payment / (max_loan / (1 - (data.down_payment / 100))) if data.property_value else 0.2
+
+    max_home_price = max_loan / (1 - down_pct) if down_pct < 1 else max_loan
+
+    # Calculate actual payment for display
+    actual_loan = max_loan
+    if data.property_value:
+        if data.down_payment_type == "percentage":
+            actual_loan = data.property_value * (1 - data.down_payment / 100)
+        else:
+            actual_loan = data.property_value - data.down_payment
+
+    if monthly_rate > 0:
+        monthly_payment = actual_loan * (monthly_rate * (1 + monthly_rate) ** n_payments) / ((1 + monthly_rate) ** n_payments - 1)
+    else:
+        monthly_payment = actual_loan / n_payments
+
+    # Calculate actual DTI ratios
+    front_dti = (monthly_payment / monthly_income) * 100
+    back_dti = ((monthly_payment + data.monthly_debts) / monthly_income) * 100
+
+    warnings = []
+    if back_dti > limits["back"]:
+        warnings.append(f"Back-end DTI ({back_dti:.1f}%) exceeds typical {data.loan_type} limit ({limits['back']}%)")
+    if front_dti > limits["front"]:
+        warnings.append(f"Front-end DTI ({front_dti:.1f}%) exceeds typical {data.loan_type} limit ({limits['front']}%)")
+
+    return PrequalificationResponse(
+        max_loan_amount=round(max_loan, 0),
+        estimated_rate=round(estimated_rate, 3),
+        estimated_monthly_payment=round(monthly_payment, 2),
+        front_end_dti=round(front_dti, 1),
+        back_end_dti=round(back_dti, 1),
+        max_home_price=round(max_home_price, 0),
+        loan_type=data.loan_type,
+        rate_assumptions={
+            "base_rate": base_rate,
+            "credit_adjustment": rate_adj,
+            "term_years": 30,
+            "calculation_date": datetime.now(timezone.utc).isoformat(),
+        },
+        warnings=warnings,
+    )
+
+
+# === LO-facing endpoints (authenticated) ===
+
+@app.post("/api/v1/applications/", response_model=BorrowerApplicationResponse, status_code=201)
+async def create_borrower_application(
+    data: BorrowerApplicationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new borrower application and generate a public token"""
+    # Generate public token
+    public_token = generate_token(32)
+
+    # Calculate expiration date
+    expires_at = datetime.now(timezone.utc) + timedelta(days=data.expires_in_days)
+
+    # Create application
+    application = BorrowerApplication(
+        public_token=public_token,
+        lead_id=data.lead_id,
+        owner_id=current_user.id,
+        organization_id=current_user.organization_id,
+        borrower_first_name=data.borrower_first_name,
+        borrower_last_name=data.borrower_last_name,
+        borrower_email=data.borrower_email,
+        borrower_phone=data.borrower_phone,
+        has_coborrower=data.has_coborrower,
+        coborrower_email=data.coborrower_email,
+        expires_at=expires_at,
+        completed_steps=[],
+        step_data={},
+    )
+
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
+    # Log event
+    event = ApplicationEvent(
+        application_id=application.id,
+        event_type="created",
+        actor_type="lo",
+        actor_email=current_user.email,
+    )
+    db.add(event)
+    db.commit()
+
+    return application
+
+
+@app.get("/api/v1/applications/", response_model=List[BorrowerApplicationResponse])
+async def list_applications(
+    status: Optional[str] = None,
+    lead_id: Optional[int] = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all borrower applications for the current user"""
+    query = db.query(BorrowerApplication).filter(BorrowerApplication.owner_id == current_user.id)
+
+    if status:
+        query = query.filter(BorrowerApplication.status == status)
+    if lead_id:
+        query = query.filter(BorrowerApplication.lead_id == lead_id)
+
+    query = query.order_by(BorrowerApplication.created_at.desc())
+    applications = query.offset(offset).limit(limit).all()
+
+    return applications
+
+
+@app.get("/api/v1/applications/{application_id}", response_model=BorrowerApplicationResponse)
+async def get_application(
+    application_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific application by ID"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    return application
+
+
+@app.get("/api/v1/applications/analytics", response_model=ApplicationAnalytics)
+async def get_application_analytics(
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get analytics for borrower applications"""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    apps = db.query(BorrowerApplication).filter(
+        BorrowerApplication.owner_id == current_user.id,
+        BorrowerApplication.created_at >= since
+    ).all()
+
+    # Calculate metrics
+    total = len(apps)
+    by_status = {}
+    total_time = 0
+    total_progress = 0
+    submitted_count = 0
+    drop_off = {}
+    docs_count = 0
+    coborrower_apps = 0
+    coborrower_completed = 0
+
+    for app in apps:
+        # Count by status
+        status = app.status.value if hasattr(app.status, 'value') else str(app.status)
+        by_status[status] = by_status.get(status, 0) + 1
+
+        # Track time and progress
+        total_time += app.time_spent_seconds or 0
+        total_progress += app.progress_percentage or 0
+
+        if app.submitted_at:
+            submitted_count += 1
+
+        # Track drop-off by step
+        if app.current_step and app.status in [ApplicationStatus.DRAFT, ApplicationStatus.EXPIRED]:
+            step = app.current_step.value if hasattr(app.current_step, 'value') else str(app.current_step)
+            drop_off[step] = drop_off.get(step, 0) + 1
+
+        # Count documents
+        docs_count += len(app.documents) if app.documents else 0
+
+        # Track co-borrower completion
+        if app.has_coborrower:
+            coborrower_apps += 1
+            if app.coborrower_completed:
+                coborrower_completed += 1
+
+    return ApplicationAnalytics(
+        total_applications=total,
+        by_status=by_status,
+        avg_completion_time_minutes=round((total_time / total / 60) if total > 0 else 0, 1),
+        avg_progress_percentage=round((total_progress / total) if total > 0 else 0, 1),
+        conversion_rate=round((submitted_count / total * 100) if total > 0 else 0, 1),
+        drop_off_by_step=drop_off,
+        documents_uploaded=docs_count,
+        coborrower_completion_rate=round((coborrower_completed / coborrower_apps * 100) if coborrower_apps > 0 else 0, 1),
+    )
+
+
+# === Public borrower-facing endpoints (token-based auth) ===
+
+@app.get("/api/v1/apply/{token}", response_model=ApplicationPublicResponse)
+async def get_application_by_token(
+    token: str,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Get application data using public token (borrower-facing)"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Check expiration
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc):
+        application.status = ApplicationStatus.EXPIRED
+        db.commit()
+        raise HTTPException(status_code=410, detail="Application link has expired")
+
+    # Update last activity
+    application.last_activity_at = datetime.now(timezone.utc)
+    db.commit()
+
+    # Get LO info
+    owner = db.query(User).filter(User.id == application.owner_id).first()
+    org = db.query(Organization).filter(Organization.id == application.organization_id).first() if application.organization_id else None
+
+    return ApplicationPublicResponse(
+        status=application.status.value if hasattr(application.status, 'value') else str(application.status),
+        current_step=application.current_step.value if hasattr(application.current_step, 'value') else str(application.current_step),
+        progress_percentage=application.progress_percentage or 0,
+        completed_steps=application.completed_steps or [],
+        step_data=application.step_data or {},
+        borrower_first_name=application.borrower_first_name,
+        borrower_last_name=application.borrower_last_name,
+        borrower_email=application.borrower_email,
+        borrower_phone=application.borrower_phone,
+        has_coborrower=application.has_coborrower,
+        coborrower_completed=application.coborrower_completed,
+        prequalification_data=application.prequalification_data,
+        credit_auth_captured=application.credit_auth_captured,
+        expires_at=application.expires_at,
+        lo_name=owner.full_name if owner else None,
+        lo_email=owner.email if owner else None,
+        lo_phone=owner.phone if owner else None,
+        company_name=org.name if org else None,
+    )
+
+
+@app.patch("/api/v1/apply/{token}")
+async def update_application_by_token(
+    token: str,
+    data: BorrowerApplicationUpdate,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Update application data (borrower-facing)"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Application link has expired")
+
+    # Update fields
+    update_data = data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if hasattr(application, field):
+            setattr(application, field, value)
+
+    # Update status to in_progress if still draft
+    if application.status == ApplicationStatus.DRAFT:
+        application.status = ApplicationStatus.IN_PROGRESS
+
+    application.last_activity_at = datetime.now(timezone.utc)
+    application.updated_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(application)
+
+    return {"status": "success", "progress": application.progress_percentage}
+
+
+@app.post("/api/v1/apply/{token}/step")
+async def save_step_data(
+    token: str,
+    data: StepDataUpdate,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Save data for a specific step"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Application link has expired")
+
+    # Update step data
+    step_data = application.step_data or {}
+    step_data[data.step] = data.data
+    application.step_data = step_data
+
+    # Update completed steps if marked
+    if data.mark_completed:
+        completed = application.completed_steps or []
+        if data.step not in completed:
+            completed.append(data.step)
+            application.completed_steps = completed
+            application.progress_percentage = calculate_progress(completed)
+
+    # Update current step to next step
+    step_order = [s.value for s in ApplicationStep]
+    if data.mark_completed and data.step in step_order:
+        current_idx = step_order.index(data.step)
+        if current_idx < len(step_order) - 1:
+            application.current_step = ApplicationStep(step_order[current_idx + 1])
+
+    application.last_activity_at = datetime.now(timezone.utc)
+    application.status = ApplicationStatus.IN_PROGRESS
+
+    # Log event
+    event = ApplicationEvent(
+        application_id=application.id,
+        event_type="step_saved" if not data.mark_completed else "step_completed",
+        event_data={"step": data.step},
+        actor_type="borrower",
+        actor_email=application.borrower_email,
+        step=data.step,
+        ip_address=request.client.host if request else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
+    db.add(event)
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "step": data.step,
+        "completed": data.mark_completed,
+        "progress": application.progress_percentage,
+        "next_step": application.current_step.value if hasattr(application.current_step, 'value') else str(application.current_step)
+    }
+
+
+@app.post("/api/v1/apply/{token}/prequalify", response_model=PrequalificationResponse)
+async def calculate_prequalification_for_application(
+    token: str,
+    data: PrequalificationRequest,
+    db: Session = Depends(get_db)
+):
+    """Calculate pre-qualification and save to application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    result = calculate_prequalification(data)
+
+    # Save to application
+    application.prequalification_amount = result.max_loan_amount
+    application.prequalification_rate = result.estimated_rate
+    application.prequalification_monthly_payment = result.estimated_monthly_payment
+    application.prequalification_data = result.dict()
+    application.last_activity_at = datetime.now(timezone.utc)
+
+    db.commit()
+
+    return result
+
+
+@app.post("/api/v1/apply/{token}/credit-auth")
+async def capture_credit_authorization(
+    token: str,
+    data: CreditAuthCapture,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Capture credit authorization from borrower"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if not data.consent_agreed:
+        raise HTTPException(status_code=400, detail="Consent must be agreed to")
+
+    # Capture authorization
+    application.credit_auth_captured = True
+    application.credit_auth_timestamp = datetime.now(timezone.utc)
+    application.credit_auth_ip_address = request.client.host if request else None
+    application.credit_auth_user_agent = request.headers.get("user-agent") if request else None
+    application.credit_auth_ssn_last4 = data.ssn_last4
+
+    # Store consent text in metadata
+    meta = application.metadata or {}
+    meta["credit_auth"] = {
+        "consent_text": data.consent_text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "has_signature": bool(data.signature_data),
+    }
+    application.metadata = meta
+
+    # Log event
+    event = ApplicationEvent(
+        application_id=application.id,
+        event_type="credit_auth_captured",
+        actor_type="borrower",
+        actor_email=application.borrower_email,
+        ip_address=request.client.host if request else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
+    db.add(event)
+
+    db.commit()
+
+    return {"status": "success", "captured_at": application.credit_auth_timestamp}
+
+
+@app.post("/api/v1/apply/{token}/submit")
+async def submit_application(
+    token: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Submit the completed application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Validate required steps are completed
+    required_steps = ["personal_info", "property", "income", "credit_auth"]
+    completed = application.completed_steps or []
+    missing = [s for s in required_steps if s not in completed]
+
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing required steps: {', '.join(missing)}")
+
+    # Check co-borrower completion if applicable
+    if application.has_coborrower and not application.coborrower_completed:
+        application.status = ApplicationStatus.PENDING_COBORROWER
+    else:
+        application.status = ApplicationStatus.SUBMITTED
+
+    application.submitted_at = datetime.now(timezone.utc)
+    application.progress_percentage = 100
+
+    # Log event
+    event = ApplicationEvent(
+        application_id=application.id,
+        event_type="submitted",
+        actor_type="borrower",
+        actor_email=application.borrower_email,
+        ip_address=request.client.host if request else None,
+    )
+    db.add(event)
+
+    # Update lead if linked
+    if application.lead_id:
+        lead = db.query(Lead).filter(Lead.id == application.lead_id).first()
+        if lead:
+            lead.application_completed_date = datetime.now(timezone.utc)
+            if lead.stage == LeadStage.NEW:
+                lead.stage = LeadStage.APPLICATION
+
+    db.commit()
+
+    # Send notifications in background
+    try:
+        from services.notification_service import notification_service
+
+        # Get LO info for notifications
+        lo_name = "Your Loan Officer"
+        lo_email = ""
+        lo_phone = None
+        if application.owner_id:
+            lo = db.query(User).filter(User.id == application.owner_id).first()
+            if lo:
+                lo_name = f"{lo.first_name or ''} {lo.last_name or ''}".strip() or lo.email
+                lo_email = lo.email
+                lo_phone = getattr(lo, 'phone', None)
+
+        borrower_name = f"{application.borrower_first_name or ''} {application.borrower_last_name or ''}".strip() or "there"
+
+        # Send borrower confirmation email
+        if application.borrower_email:
+            background_tasks.add_task(
+                notification_service.send_application_confirmation,
+                borrower_email=application.borrower_email,
+                borrower_name=borrower_name,
+                application_id=str(application.id),
+                lo_name=lo_name,
+                lo_email=lo_email,
+                lo_phone=lo_phone,
+            )
+
+        # Send borrower confirmation SMS
+        if application.borrower_phone:
+            background_tasks.add_task(
+                notification_service.send_application_confirmation_sms,
+                borrower_phone=application.borrower_phone,
+                borrower_name=borrower_name,
+                lo_name=lo_name,
+            )
+
+        # Alert LO about new application
+        if lo_email:
+            step_data = application.step_data or {}
+            property_data = step_data.get("property", {})
+            loan_purpose = property_data.get("loan_purpose", "purchase")
+            loan_amount = property_data.get("loan_amount", 0) or application.prequalification_amount or 0
+
+            background_tasks.add_task(
+                notification_service.send_lo_new_application_alert,
+                lo_email=lo_email,
+                lo_name=lo_name,
+                borrower_name=borrower_name,
+                borrower_email=application.borrower_email,
+                borrower_phone=application.borrower_phone,
+                loan_purpose=loan_purpose,
+                loan_amount=float(loan_amount),
+                application_id=str(application.id),
+            )
+
+        logger.info(f"Notification tasks queued for application {application.id}")
+    except Exception as notify_err:
+        logger.warning(f"Failed to queue notifications for application {application.id}: {notify_err}")
+
+    return {"status": "success", "application_status": application.status.value}
+
+
+# === Document upload endpoints ===
+
+@app.post("/api/v1/apply/{token}/documents", response_model=DocumentUploadResponse)
+async def upload_document(
+    token: str,
+    file: UploadFile = File(...),
+    category: str = Form("other"),
+    description: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Upload a document to the application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Generate unique filename
+    import uuid
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'pdf'
+    unique_filename = f"{uuid.uuid4()}.{ext}"
+
+    # For now, store locally (in production, use S3)
+    storage_dir = Path("uploads/applications")
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    storage_path = storage_dir / unique_filename
+
+    # Read and save file
+    contents = await file.read()
+    with open(storage_path, "wb") as f:
+        f.write(contents)
+
+    # Create document record
+    doc = ApplicationDocument(
+        application_id=application.id,
+        filename=unique_filename,
+        original_filename=file.filename,
+        file_size=len(contents),
+        mime_type=file.content_type,
+        category=DocumentCategory(category) if category in [e.value for e in DocumentCategory] else DocumentCategory.OTHER,
+        description=description,
+        storage_key=str(storage_path),
+        uploaded_by="borrower",
+    )
+
+    db.add(doc)
+
+    # Log event
+    event = ApplicationEvent(
+        application_id=application.id,
+        event_type="document_uploaded",
+        event_data={"filename": file.filename, "category": category},
+        actor_type="borrower",
+        actor_email=application.borrower_email,
+    )
+    db.add(event)
+
+    db.commit()
+    db.refresh(doc)
+
+    return doc
+
+
+@app.post("/api/v1/apply/{token}/documents/{doc_id}/analyze")
+async def analyze_document(
+    token: str,
+    doc_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Analyze a document using AI (Claude Vision)"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    doc = db.query(ApplicationDocument).filter(
+        ApplicationDocument.id == doc_id,
+        ApplicationDocument.application_id == application.id
+    ).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Get borrower name for verification
+    borrower_name = f"{application.borrower_first_name or ''} {application.borrower_last_name or ''}".strip()
+
+    try:
+        from services.document_analysis_service import document_analysis_service
+
+        # Run analysis
+        result = await document_analysis_service.analyze_document(
+            file_path=doc.storage_key,
+            claimed_type=doc.category.value if doc.category else None,
+            borrower_name=borrower_name if borrower_name else None,
+        )
+
+        # Update document with analysis results
+        doc.ai_analysis = result.to_dict()
+        doc.ai_verified = result.verified
+        doc.ai_confidence = result.confidence
+        doc.ai_document_type = result.document_type
+        doc.ai_extracted_data = result.extracted_data
+        doc.ai_analyzed_at = datetime.now(timezone.utc)
+
+        # Log event
+        event = ApplicationEvent(
+            application_id=application.id,
+            event_type="document_analyzed",
+            event_data={
+                "doc_id": doc_id,
+                "verified": result.verified,
+                "confidence": result.confidence,
+                "document_type": result.document_type,
+                "issues_count": len(result.issues),
+            },
+            actor_type="system",
+        )
+        db.add(event)
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "analysis": result.to_dict(),
+        }
+
+    except Exception as e:
+        logger.error(f"Document analysis failed for doc {doc_id}: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+        }
+
+
+@app.get("/api/v1/apply/{token}/documents")
+async def list_documents(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """List documents uploaded to an application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    docs = db.query(ApplicationDocument).filter(
+        ApplicationDocument.application_id == application.id
+    ).order_by(ApplicationDocument.created_at.desc()).all()
+
+    return [
+        {
+            "id": d.id,
+            "filename": d.original_filename,
+            "category": d.category.value if hasattr(d.category, 'value') else str(d.category),
+            "file_size": d.file_size,
+            "uploaded_at": d.created_at,
+            "is_verified": d.is_verified,
+        }
+        for d in docs
+    ]
+
+
+@app.delete("/api/v1/apply/{token}/documents/{doc_id}")
+async def delete_document(
+    token: str,
+    doc_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a document from the application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    doc = db.query(ApplicationDocument).filter(
+        ApplicationDocument.id == doc_id,
+        ApplicationDocument.application_id == application.id
+    ).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Delete file from storage
+    if doc.storage_key:
+        try:
+            Path(doc.storage_key).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    db.delete(doc)
+    db.commit()
+
+    return {"status": "success"}
+
+
+# === AI Concierge endpoint ===
+
+class ConciergeMessage(BaseModel):
+    message: str
+    current_stage: str = "greeting"
+    extracted_data: Dict[str, Any] = {}
+    conversation_history: List[Dict[str, str]] = []
+
+
+@app.post("/api/v1/apply/{token}/concierge")
+async def concierge_conversation(
+    token: str,
+    data: ConciergeMessage,
+    db: Session = Depends(get_db)
+):
+    """AI Concierge for conversational mortgage application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        from services.concierge_service import concierge_service
+
+        # Process the message
+        result = await concierge_service.process_message(
+            user_message=data.message,
+            current_stage=data.current_stage,
+            extracted_data=data.extracted_data,
+            conversation_history=data.conversation_history,
+        )
+
+        # Validate and clean extracted data
+        if result.get("extracted_data"):
+            cleaned_data = concierge_service.validate_extracted_data(result["extracted_data"])
+            result["extracted_data"] = cleaned_data
+
+            # Merge with existing application step_data
+            step_data = application.step_data or {}
+            step_data.update(cleaned_data)
+            application.step_data = step_data
+            db.commit()
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Concierge error for application {token}: {e}")
+        return {
+            "response": "I apologize, but I'm experiencing technical difficulties. Please try again or switch to the traditional form.",
+            "extracted_data": {},
+            "next_stage": data.current_stage,
+            "is_complete": False,
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/apply/{token}/concierge/status")
+async def get_concierge_status(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Get AI Concierge completion status"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        from services.concierge_service import concierge_service
+
+        step_data = application.step_data or {}
+        status = concierge_service.get_completion_status(step_data)
+
+        return {
+            "status": "success",
+            "completion": status,
+            "extracted_data": step_data,
+        }
+
+    except Exception as e:
+        logger.error(f"Concierge status error: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+# === Review Call Scheduling endpoints ===
+
+class ReviewCallScheduleRequest(BaseModel):
+    date: str  # YYYY-MM-DD
+    time: str  # HH:MM
+    timezone: str = "America/New_York"
+    contact_method: str = "phone"  # phone or video
+    notes: Optional[str] = None
+
+
+@app.get("/api/v1/apply/{token}/available-slots")
+async def get_available_slots(
+    token: str,
+    date: str,
+    timezone: str = "America/New_York",
+    db: Session = Depends(get_db)
+):
+    """Get available time slots for a given date"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Generate default slots (9 AM - 5 PM, excluding lunch)
+    # In production, this would check the LO's calendar
+    slots = []
+    for hour in range(9, 18):
+        if hour != 12:  # Skip lunch
+            slots.append({"time": f"{hour:02d}:00", "available": True})
+            if hour != 17:
+                slots.append({"time": f"{hour:02d}:30", "available": True})
+
+    return {"date": date, "timezone": timezone, "slots": slots}
+
+
+@app.post("/api/v1/apply/{token}/schedule-review-call")
+async def schedule_review_call(
+    token: str,
+    data: ReviewCallScheduleRequest,
+    db: Session = Depends(get_db)
+):
+    """Schedule a mandatory review call before submission"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        from datetime import datetime as dt
+        import pytz
+
+        # Parse the scheduled time
+        tz = pytz.timezone(data.timezone)
+        scheduled_datetime = dt.strptime(f"{data.date} {data.time}", "%Y-%m-%d %H:%M")
+        scheduled_datetime = tz.localize(scheduled_datetime)
+        scheduled_utc = scheduled_datetime.astimezone(pytz.UTC)
+
+        # Create appointment record
+        appointment = {
+            "application_id": application.id,
+            "scheduled_at": scheduled_utc.isoformat(),
+            "timezone": data.timezone,
+            "contact_method": data.contact_method,
+            "notes": data.notes,
+            "status": "scheduled",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Update application with review call info
+        application.review_call_scheduled = True
+        application.review_call_scheduled_at = scheduled_utc
+
+        # Store appointment in step_data for now
+        step_data = application.step_data or {}
+        step_data["review_appointment"] = appointment
+        application.step_data = step_data
+
+        db.commit()
+
+        # TODO: Send confirmation email
+        # TODO: Create calendar event
+
+        return {
+            "status": "success",
+            "appointment": appointment,
+            "message": f"Review call scheduled for {data.date} at {data.time} {data.timezone}"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to schedule review call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/apply/{token}/review-call")
+async def get_review_call(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Get scheduled review call for an application"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    step_data = application.step_data or {}
+    appointment = step_data.get("review_appointment")
+
+    return {
+        "has_appointment": appointment is not None,
+        "appointment": appointment,
+    }
+
+
+# === MISMO XML Export endpoints ===
+
+@app.get("/api/v1/apply/{token}/export/mismo")
+async def export_mismo_xml(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Export application data as MISMO 3.4 XML"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    try:
+        from services.mismo_generator import MISMOGenerator
+
+        generator = MISMOGenerator()
+
+        # Merge application step_data with model fields
+        data = application.step_data or {}
+
+        # Add borrower info from model
+        data["first_name"] = application.borrower_first_name
+        data["last_name"] = application.borrower_last_name
+        data["email"] = application.borrower_email
+        data["phone"] = application.borrower_phone
+
+        # Generate XML
+        xml_content = generator.generate(data)
+        filename = generator.generate_filename(str(application.id))
+
+        from fastapi.responses import Response
+        return Response(
+            content=xml_content,
+            media_type="application/xml",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-MISMO-Version": "3.4.0",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"MISMO export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+@app.get("/api/v1/admin/applications/{application_id}/export/mismo")
+async def admin_export_mismo_xml(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Admin endpoint to export application as MISMO 3.4 XML"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Check access (must be assigned LO or admin)
+    if current_user.role != "admin" and application.assigned_to_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    try:
+        from services.mismo_generator import MISMOGenerator
+
+        generator = MISMOGenerator()
+
+        # Merge application step_data with model fields
+        data = application.step_data or {}
+        data["first_name"] = application.borrower_first_name
+        data["last_name"] = application.borrower_last_name
+        data["email"] = application.borrower_email
+        data["phone"] = application.borrower_phone
+
+        xml_content = generator.generate(data)
+        filename = generator.generate_filename(str(application.id))
+
+        from fastapi.responses import Response
+        return Response(
+            content=xml_content,
+            media_type="application/xml",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-MISMO-Version": "3.4.0",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"MISMO export failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+# === LO Dashboard endpoints ===
+
+@app.get("/api/v1/lo/dashboard/stats")
+async def get_lo_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get LO dashboard statistics"""
+    from sqlalchemy import func
+
+    # Get pipeline count and volume for this LO
+    pipeline_stats = db.query(
+        func.count(BorrowerApplication.id).label("count"),
+        func.sum(BorrowerApplication.loan_amount).label("volume")
+    ).filter(
+        BorrowerApplication.assigned_to_id == current_user.id,
+        BorrowerApplication.status.notin_(["funded", "denied", "withdrawn"])
+    ).first()
+
+    # Get pending review count
+    pending_count = db.query(func.count(BorrowerApplication.id)).filter(
+        BorrowerApplication.assigned_to_id == current_user.id,
+        BorrowerApplication.status == "submitted"
+    ).scalar()
+
+    # Get calls scheduled today
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    # Count appointments (stored in step_data for now)
+    calls_today = 0  # Would query appointments table in production
+
+    return {
+        "pipeline_count": pipeline_stats[0] or 0,
+        "pipeline_volume": float(pipeline_stats[1] or 0),
+        "pending_review": pending_count or 0,
+        "calls_today": calls_today,
+    }
+
+
+@app.get("/api/v1/lo/applications")
+async def get_lo_applications(
+    status: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get applications assigned to the current LO"""
+    query = db.query(BorrowerApplication).filter(
+        BorrowerApplication.assigned_to_id == current_user.id
+    )
+
+    if status and status != "all":
+        query = query.filter(BorrowerApplication.status == status)
+
+    total = query.count()
+    applications = query.order_by(
+        BorrowerApplication.updated_at.desc()
+    ).offset(offset).limit(limit).all()
+
+    return {
+        "total": total,
+        "applications": [
+            {
+                "id": app.id,
+                "borrower_first_name": app.borrower_first_name,
+                "borrower_last_name": app.borrower_last_name,
+                "borrower_email": app.borrower_email,
+                "loan_amount": float(app.loan_amount or 0),
+                "loan_purpose": app.loan_purpose,
+                "status": app.status,
+                "created_at": app.created_at.isoformat() if app.created_at else None,
+                "updated_at": app.updated_at.isoformat() if app.updated_at else None,
+                "progress_percentage": app.progress_percentage,
+            }
+            for app in applications
+        ],
+    }
+
+
+@app.get("/api/v1/lo/activity")
+async def get_lo_activity(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get recent activity for the current LO"""
+    # In production, this would query an activity log table
+    # For now, return recent application updates
+    recent_apps = db.query(BorrowerApplication).filter(
+        BorrowerApplication.assigned_to_id == current_user.id
+    ).order_by(BorrowerApplication.updated_at.desc()).limit(limit).all()
+
+    activities = []
+    for app in recent_apps:
+        activities.append({
+            "type": "application",
+            "description": f"{app.borrower_first_name} {app.borrower_last_name} - {app.status.replace('_', ' ')}",
+            "created_at": app.updated_at.isoformat() if app.updated_at else None,
+            "application_id": app.id,
+        })
+
+    return {"activities": activities}
+
+
+class SocialContentRequest(BaseModel):
+    type: str  # market_update, tip, rate_alert, success_story, educational
+    platform: str = "all"
+
+
+@app.post("/api/v1/lo/social/generate")
+async def generate_social_content(
+    data: SocialContentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate AI-powered social media content"""
+    try:
+        from services.social_content_service import social_content_service
+
+        content = await social_content_service.generate_content(
+            content_type=data.type,
+            platform=data.platform,
+            lo_name=current_user.name,
+            company_name=None,  # Could get from user profile
+        )
+
+        return {
+            "status": "success",
+            "content": content,
+        }
+
+    except Exception as e:
+        logger.error(f"Social content generation failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "content": [],
+        }
+
+
+@app.get("/api/v1/lo/social/schedule-suggestions")
+async def get_social_schedule_suggestions(
+    platform: str = "all",
+    current_user: User = Depends(get_current_user)
+):
+    """Get optimal posting time suggestions"""
+    from services.social_content_service import social_content_service
+
+    if platform == "all":
+        platforms = ["linkedin", "facebook", "instagram", "twitter"]
+        suggestions = {
+            p: social_content_service.get_posting_schedule_suggestions(p)
+            for p in platforms
+        }
+    else:
+        suggestions = {
+            platform: social_content_service.get_posting_schedule_suggestions(platform)
+        }
+
+    return {"suggestions": suggestions}
+
+
+# === Co-borrower invitation endpoints ===
+
+@app.post("/api/v1/apply/{token}/coborrower", response_model=CoborrowerInvitationResponse)
+async def create_coborrower_invitation(
+    token: str,
+    data: CoborrowerInvitationCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a co-borrower invitation"""
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.public_token == token
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    # Generate invitation token
+    invitation_token = generate_token(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=14)
+
+    invitation = CoborrowerInvitation(
+        application_id=application.id,
+        invitation_token=invitation_token,
+        email=data.email,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        phone=data.phone,
+        relationship_type=data.relationship_type,
+        expires_at=expires_at,
+        status="pending",
+    )
+
+    db.add(invitation)
+
+    # Update application
+    application.has_coborrower = True
+    application.coborrower_email = data.email
+
+    # TODO: Send email/SMS notification
+    if data.send_email:
+        invitation.sent_at = datetime.now(timezone.utc)
+        invitation.status = "sent"
+
+    db.commit()
+    db.refresh(invitation)
+
+    return invitation
+
+
+@app.get("/api/v1/coborrower/{invitation_token}")
+async def get_coborrower_invitation(
+    invitation_token: str,
+    db: Session = Depends(get_db)
+):
+    """Get co-borrower invitation by token"""
+    invitation = db.query(CoborrowerInvitation).filter(
+        CoborrowerInvitation.invitation_token == invitation_token
+    ).first()
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc):
+        invitation.status = "expired"
+        db.commit()
+        raise HTTPException(status_code=410, detail="Invitation has expired")
+
+    # Mark as opened
+    if not invitation.opened_at:
+        invitation.opened_at = datetime.now(timezone.utc)
+        invitation.status = "opened"
+        db.commit()
+
+    # Get application data
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == invitation.application_id
+    ).first()
+
+    return {
+        "invitation_id": invitation.id,
+        "email": invitation.email,
+        "first_name": invitation.first_name,
+        "last_name": invitation.last_name,
+        "relationship_type": invitation.relationship_type,
+        "borrower_first_name": application.borrower_first_name if application else None,
+        "borrower_last_name": application.borrower_last_name if application else None,
+        "coborrower_data": invitation.coborrower_data or {},
+        "status": invitation.status,
+    }
+
+
+@app.post("/api/v1/coborrower/{invitation_token}/save")
+async def save_coborrower_data(
+    invitation_token: str,
+    data: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """Save co-borrower section data"""
+    invitation = db.query(CoborrowerInvitation).filter(
+        CoborrowerInvitation.invitation_token == invitation_token
+    ).first()
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Invitation has expired")
+
+    # Update invitation data
+    invitation.coborrower_data = data
+    invitation.status = "in_progress"
+    if not invitation.started_at:
+        invitation.started_at = datetime.now(timezone.utc)
+
+    db.commit()
+
+    return {"status": "success"}
+
+
+@app.post("/api/v1/coborrower/{invitation_token}/submit")
+async def submit_coborrower_section(
+    invitation_token: str,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Submit the co-borrower section"""
+    invitation = db.query(CoborrowerInvitation).filter(
+        CoborrowerInvitation.invitation_token == invitation_token
+    ).first()
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    # Mark as completed
+    invitation.completed_at = datetime.now(timezone.utc)
+    invitation.status = "completed"
+
+    # Update application
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == invitation.application_id
+    ).first()
+
+    if application:
+        application.coborrower_completed = True
+
+        # If application was waiting for co-borrower, update status
+        if application.status == ApplicationStatus.PENDING_COBORROWER:
+            application.status = ApplicationStatus.SUBMITTED
+
+    db.commit()
+
+    return {"status": "success"}
+
+
+@app.post("/api/v1/coborrower/{invitation_token}/credit-auth")
+async def capture_coborrower_credit_auth(
+    invitation_token: str,
+    data: CreditAuthCapture,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """Capture credit authorization from co-borrower"""
+    invitation = db.query(CoborrowerInvitation).filter(
+        CoborrowerInvitation.invitation_token == invitation_token
+    ).first()
+
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if not data.consent_agreed:
+        raise HTTPException(status_code=400, detail="Consent must be agreed to")
+
+    invitation.credit_auth_captured = True
+    invitation.credit_auth_timestamp = datetime.now(timezone.utc)
+    invitation.credit_auth_ip_address = request.client.host if request else None
+
+    db.commit()
+
+    return {"status": "success", "captured_at": invitation.credit_auth_timestamp}
+
+
+# === Public pre-qualification calculator (no token needed) ===
+
+@app.post("/api/v1/prequalify", response_model=PrequalificationResponse)
+async def calculate_public_prequalification(data: PrequalificationRequest):
+    """Public pre-qualification calculator (no auth required)"""
+    return calculate_prequalification(data)
 
 
 # ============================================================================

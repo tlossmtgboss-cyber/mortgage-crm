@@ -90,6 +90,11 @@ const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
 const PublicBooking = lazy(() => import('./pages/PublicBooking'));
+const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
+const CoborrowerApplication = lazy(() => import('./pages/CoborrowerApplication'));
+const BorrowerLogin = lazy(() => import('./pages/BorrowerLogin'));
+const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
+const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -281,6 +286,22 @@ function App() {
           {/* Public Booking Page */}
           <Route path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />
 
+          {/* Borrower Login (public - social login for applicants) */}
+          <Route path="/apply/login" element={<LazyPage><BorrowerLogin /></LazyPage>} />
+
+          {/* Borrower Application Start (after social login) */}
+          <Route path="/apply/start" element={<LazyPage><BorrowerApplication /></LazyPage>} />
+
+          {/* Borrower OAuth Callbacks */}
+          <Route path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />
+          <Route path="/apply/verify" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />
+
+          {/* Borrower Application (public - token-based access) */}
+          <Route path="/apply/:token" element={<LazyPage><BorrowerApplication /></LazyPage>} />
+
+          {/* Co-borrower Application (public - token-based access) */}
+          <Route path="/coborrower/:token" element={<LazyPage><CoborrowerApplication /></LazyPage>} />
+
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />
 
@@ -453,6 +474,30 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PartnerROIDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Application Analytics Dashboard */}
+          <Route
+            path="/analytics/applications"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ApplicationAnalytics /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

@@ -952,7 +952,8 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.record,
 .action-btn.voicemail,
 .action-btn.voice,
-.action-btn.escalation {
+.action-btn.escalation,
+.action-btn.application {
   background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
   border-color: #218D8D;
   color: white;
@@ -969,7 +970,8 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.record:hover:not(:disabled),
 .action-btn.voicemail:hover:not(:disabled),
 .action-btn.voice:hover:not(:disabled),
-.action-btn.escalation:hover:not(:disabled) {
+.action-btn.escalation:hover:not(:disabled),
+.action-btn.application:hover:not(:disabled) {
   background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
   border-color: #1a7070;
   box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
@@ -985,7 +987,8 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.record .icon,
 .action-btn.voicemail .icon,
 .action-btn.voice .icon,
-.action-btn.escalation .icon {
+.action-btn.escalation .icon,
+.action-btn.application .icon {
   color: white;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
@@ -2488,3 +2491,101 @@ button.borrower-btn.add-borrower-btn:hover {
   border-left: 3px solid #218D8D;
 }
 
+/* Application Link Modal */
+.application-link-modal {
+  max-width: 500px;
+  width: 100%;
+}
+
+.application-link-modal .modal-body {
+  padding: 20px 24px;
+}
+
+.application-link-modal .modal-body > p {
+  margin-bottom: 20px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.application-link-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.application-link-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  background: #f9fafb;
+}
+
+.copy-link-btn {
+  padding: 10px 16px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.copy-link-btn:hover {
+  background: #1a7070;
+}
+
+.application-actions {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+}
+
+.action-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.share-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.share-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.share-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #218D8D;
+}
+
+.share-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.share-btn.email-share {
+  color: #218D8D;
+}
+
+.share-btn.sms-share {
+  color: #218D8D;
+}

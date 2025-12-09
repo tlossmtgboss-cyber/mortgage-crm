@@ -27,6 +27,34 @@
         font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
       }
     </style>
+    <!-- Google Maps/Places API for address autocomplete -->
+    <!-- Replace GOOGLE_PLACES_API_KEY with your actual key in production -->
+    <script>
+      // Dynamically load Google Places API if key is available
+      (function() {
+        // Try to get key from environment or meta tag
+        var apiKey = '';
+        var metaKey = document.querySelector('meta[name="google-places-api-key"]');
+        if (metaKey) {
+          apiKey = metaKey.getAttribute('content');
+        }
+        // Check for window variable set by React app
+        window.__GOOGLE_PLACES_CALLBACK__ = function() {
+          console.log('Google Places API loaded');
+          window.dispatchEvent(new Event('google-places-loaded'));
+        };
+        // Load script only if key is available
+        if (apiKey && apiKey !== 'YOUR_API_KEY') {
+          var script = document.createElement('script');
+          script.src = 'https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&libraries=places&callback=__GOOGLE_PLACES_CALLBACK__';
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+        } else {
+          console.log('Google Places API key not configured - using manual address entry');
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
