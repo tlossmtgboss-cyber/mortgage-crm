@@ -32,7 +32,10 @@ export default function BorrowerLogin() {
       'invalid_link': 'This login link is invalid.',
       'link_expired': 'This login link has expired. Please request a new one.',
       'link_already_used': 'This login link has already been used.',
-      'apple_not_configured': 'Apple Sign In is not available at this time.',
+      'apple_not_configured': 'Apple Sign In is not available at this time. Please use Google or Email.',
+      'facebook_not_configured': 'Facebook login is not available at this time. Please use Google or Email.',
+      'linkedin_not_configured': 'LinkedIn login is not available at this time. Please use Google or Email.',
+      'provider_not_configured': 'This login method is not available. Please use Google or Email.',
     };
     return messages[code] || 'An error occurred. Please try again.';
   };
@@ -62,8 +65,12 @@ export default function BorrowerLogin() {
       if (data.auth_url) {
         // Redirect to OAuth provider
         window.location.href = data.auth_url;
+      } else if (response.status === 500 || data.detail?.includes('not configured')) {
+        // Provider not configured
+        setError(getErrorMessage(`${provider}_not_configured`));
+        setLoading(false);
       } else {
-        setError('Failed to initiate sign-in. Please try again.');
+        setError(data.detail || 'Failed to initiate sign-in. Please try again.');
         setLoading(false);
       }
     } catch (err) {
