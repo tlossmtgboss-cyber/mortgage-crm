@@ -1,7 +1,16 @@
+/* Wrapper for loans page with calendar sidebar */
+.loans-page-wrapper {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 60px);
+}
+
 .loans-page {
+  flex: 1;
   padding: var(--space-xl);
   max-width: 1400px;
-  margin: 0 auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .page-header {

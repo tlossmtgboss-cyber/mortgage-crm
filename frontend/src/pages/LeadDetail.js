@@ -17,6 +17,7 @@ import EmploymentTab from '../components/EmploymentTab';
 import VideoMeetings from '../components/VideoMeetings';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
+import CalendarSidebar from '../components/CalendarSidebar';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -1285,13 +1286,14 @@ function LeadDetail() {
   }
 
   return (
-    <div className="lead-detail-page">
-      {/* Header */}
-      <div className="detail-header">
-        <div className="nav-buttons">
-          <button className="btn-back" onClick={() => navigate('/leads')}>
-            ← Back to Leads
-          </button>
+    <div className="lead-detail-page-wrapper">
+      <div className="lead-detail-page">
+        {/* Header */}
+        <div className="detail-header">
+          <div className="nav-buttons">
+            <button className="btn-back" onClick={() => navigate('/leads')}>
+              ← Back to Leads
+            </button>
           <button className="btn-next" onClick={handleViewNextLead} disabled={leadsList.length === 0}>
             View Next Lead →
           </button>
@@ -3437,6 +3439,8 @@ function LeadDetail() {
           </div>
         </div>
       )}
+      </div>
+      <CalendarSidebar leadId={id} />
     </div>
   );
 }

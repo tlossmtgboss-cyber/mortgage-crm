@@ -1,7 +1,16 @@
+/* Wrapper for portfolio page with calendar sidebar */
+.portfolio-page-wrapper {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 60px);
+}
+
 .portfolio-container {
+  flex: 1;
   padding: 30px;
   max-width: 1400px;
-  margin: 0 auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .portfolio-header {

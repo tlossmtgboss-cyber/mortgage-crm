@@ -1,7 +1,16 @@
+/* Wrapper for leads page with calendar sidebar */
+.leads-page-wrapper {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 60px);
+}
+
 .leads-page {
+  flex: 1;
   padding: var(--space-md);
   max-width: 1400px;
-  margin: 0 auto;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .lead-name.clickable {

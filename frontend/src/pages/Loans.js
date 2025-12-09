@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loansAPI } from '../services/api';
+import CalendarSidebar from '../components/CalendarSidebar';
 import './Loans.css';
 
 // Map pipeline stage IDs to filter names
@@ -383,10 +384,11 @@ function Loans() {
   if (loading) return <div className="loading">Loading loans...</div>;
 
   return (
-    <div className="loans-page">
-      <div className="page-header">
-        <div>
-          <h1>Active Loans</h1>
+    <div className="loans-page-wrapper">
+      <div className="loans-page">
+        <div className="page-header">
+          <div>
+            <h1>Active Loans</h1>
           <p>{safeLoans.filter(loan => !isFundedLoan(loan)).length} active loans</p>
         </div>
         <div className="header-actions">
@@ -953,6 +955,8 @@ function Loans() {
           </div>
         </>
       )}
+      </div>
+      <CalendarSidebar />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import EmploymentTab from '../components/EmploymentTab';
 import RateLockRecommendation from '../components/RateLockRecommendation';
 import VideoMeetings from '../components/VideoMeetings';
 import EmailComposerModal from '../components/EmailComposerModal';
+import CalendarSidebar from '../components/CalendarSidebar';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -697,13 +698,14 @@ function LoanDetail() {
   };
 
   return (
-    <div className="lead-detail-page">
-      {/* Header */}
-      <div className="detail-header">
-        <div className="nav-buttons">
-          <button className="btn-back" onClick={() => navigate('/loans')}>
-            ← Back to Loans
-          </button>
+    <div className="lead-detail-page-wrapper">
+      <div className="lead-detail-page">
+        {/* Header */}
+        <div className="detail-header">
+          <div className="nav-buttons">
+            <button className="btn-back" onClick={() => navigate('/loans')}>
+              ← Back to Loans
+            </button>
           <button className="btn-next" onClick={handleViewNextLoan} disabled={loansList.length === 0}>
             View Next Loan →
           </button>
@@ -2662,6 +2664,8 @@ function LoanDetail() {
           closing_date: loan?.closing_date
         }}
       />
+      </div>
+      <CalendarSidebar loanId={id} />
     </div>
   );
 }

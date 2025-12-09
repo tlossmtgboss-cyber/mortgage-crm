@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portfolioAPI, mumAPI } from '../services/api';
+import CalendarSidebar from '../components/CalendarSidebar';
 import './Portfolio.css';
 
 function Portfolio() {
@@ -152,9 +153,10 @@ function Portfolio() {
   }
 
   return (
-    <div className="portfolio-container">
-      <div className="portfolio-header">
-        <h1 className="portfolio-title">Portfolio</h1>
+    <div className="portfolio-page-wrapper">
+      <div className="portfolio-container">
+        <div className="portfolio-header">
+          <h1 className="portfolio-title">Portfolio</h1>
         <div className="header-actions">
           <button className="btn-totals" onClick={() => navigate('/portfolio/year-over-year')}>
             Totals
@@ -579,6 +581,8 @@ function Portfolio() {
           onAdd={handleAddClient}
         />
       )}
+      </div>
+      <CalendarSidebar />
     </div>
   );
 }

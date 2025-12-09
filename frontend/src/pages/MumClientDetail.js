@@ -14,6 +14,7 @@ import VideoMeetings from '../components/VideoMeetings';
 import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EmailComposerModal from '../components/EmailComposerModal';
+import CalendarSidebar from '../components/CalendarSidebar';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -625,13 +626,14 @@ function MumClientDetail() {
   }
 
   return (
-    <div className="lead-detail-page">
-      {/* Header */}
-      <div className="detail-header">
-        <div className="nav-buttons">
-          <button className="btn-back" onClick={() => navigate('/portfolio')}>
-            ← Back to Portfolio
-          </button>
+    <div className="lead-detail-page-wrapper">
+      <div className="lead-detail-page">
+        {/* Header */}
+        <div className="detail-header">
+          <div className="nav-buttons">
+            <button className="btn-back" onClick={() => navigate('/portfolio')}>
+              ← Back to Portfolio
+            </button>
           <button
             className="btn-next"
             onClick={handleViewNextClient}
@@ -1903,6 +1905,8 @@ function MumClientDetail() {
         entityType="mum"
         entityData={client}
       />
+      </div>
+      <CalendarSidebar />
     </div>
   );
 }

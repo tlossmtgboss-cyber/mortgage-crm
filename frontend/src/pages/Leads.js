@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { leadsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
+import CalendarSidebar from '../components/CalendarSidebar';
 import './Leads.css';
 
 function Leads() {
@@ -427,8 +428,9 @@ function Leads() {
   const currentBorrower = borrowers[activeBorrower] || borrowers[0];
 
   return (
-    <div className="leads-page">
-      <div className="page-header">
+    <div className="leads-page-wrapper">
+      <div className="leads-page">
+        <div className="page-header">
         <div>
           <h1>Leads</h1>
           <p>{leads.length} total leads</p>
@@ -906,6 +908,8 @@ function Leads() {
           </div>
         </>
       )}
+      </div>
+      <CalendarSidebar />
     </div>
   );
 }

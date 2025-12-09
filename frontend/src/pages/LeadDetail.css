@@ -1,9 +1,17 @@
+/* Wrapper for lead detail page with calendar sidebar */
+.lead-detail-page-wrapper {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 60px);
+}
+
 .lead-detail-page {
+  flex: 1;
   padding: 32px;
   max-width: 1600px;
-  margin: 0 auto;
   background: #ffffff;
   min-height: 100vh;
+  min-width: 0;
 }
 
 .detail-header {
