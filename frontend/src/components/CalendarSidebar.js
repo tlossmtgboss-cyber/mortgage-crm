@@ -9,6 +9,9 @@ function CalendarSidebar({ leadId, loanId }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [emailData, setEmailData] = useState(null);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -178,12 +181,221 @@ function CalendarSidebar({ leadId, loanId }) {
       .slice(0, 5);
   };
 
+  // Parse email data from various drag formats
+  const parseEmailData = (dataTransfer) => {
+    const emailInfo = {
+      subject: '',
+      from: '',
+      fromEmail: '',
+      body: '',
+      date: new Date()
+    };
+
+    // Try to get text/plain data (most common from Outlook drag)
+    const textData = dataTransfer.getData('text/plain');
+    const htmlData = dataTransfer.getData('text/html');
+    const uriList = dataTransfer.getData('text/uri-list');
+
+    console.log('Drag data types:', dataTransfer.types);
+    console.log('Text data:', textData);
+    console.log('HTML data:', htmlData?.substring(0, 500));
+
+    if (textData) {
+      // Parse text data - could be email content or subject line
+      const lines = textData.split('\n').filter(l => l.trim());
+
+      // Try to extract email patterns
+      const emailMatch = textData.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+      if (emailMatch) {
+        emailInfo.fromEmail = emailMatch[1];
+      }
+
+      // Try to extract "From:" line
+      const fromMatch = textData.match(/From:\s*([^\n<]+)(?:<([^>]+)>)?/i);
+      if (fromMatch) {
+        emailInfo.from = fromMatch[1].trim();
+        if (fromMatch[2]) {
+          emailInfo.fromEmail = fromMatch[2].trim();
+        }
+      }
+
+      // Try to extract "Subject:" line
+      const subjectMatch = textData.match(/Subject:\s*([^\n]+)/i);
+      if (subjectMatch) {
+        emailInfo.subject = subjectMatch[1].trim();
+      }
+
+      // If no subject found, use first line as subject
+      if (!emailInfo.subject && lines.length > 0) {
+        emailInfo.subject = lines[0].substring(0, 100);
+      }
+
+      // Use remaining content as body
+      emailInfo.body = textData;
+    }
+
+    // Try to parse HTML data for more structured info
+    if (htmlData) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlData, 'text/html');
+
+      // Try to find email subject in title or headers
+      const title = doc.querySelector('title');
+      if (title && !emailInfo.subject) {
+        emailInfo.subject = title.textContent;
+      }
+
+      // Try to find sender info
+      const fromElement = doc.querySelector('[class*="from"], [class*="sender"]');
+      if (fromElement && !emailInfo.from) {
+        emailInfo.from = fromElement.textContent.trim();
+      }
+    }
+
+    // Try to get Outlook-specific data
+    const outlookData = dataTransfer.getData('application/x-moz-file') ||
+                       dataTransfer.getData('text/x-moz-url') ||
+                       dataTransfer.getData('application/vnd.ms-outlook');
+
+    if (outlookData) {
+      console.log('Outlook data:', outlookData);
+    }
+
+    // Check for files (dragged .msg or .eml files)
+    if (dataTransfer.files && dataTransfer.files.length > 0) {
+      const file = dataTransfer.files[0];
+      console.log('Dropped file:', file.name, file.type);
+
+      if (file.name.endsWith('.msg') || file.name.endsWith('.eml')) {
+        emailInfo.subject = file.name.replace(/\.(msg|eml)$/i, '');
+        emailInfo.fileName = file.name;
+        emailInfo.file = file;
+      }
+    }
+
+    return emailInfo;
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragOver to false if leaving the sidebar entirely
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const emailInfo = parseEmailData(e.dataTransfer);
+    console.log('Parsed email info:', emailInfo);
+
+    // Open the appointment modal with extracted email data
+    setEmailData(emailInfo);
+    setShowAppointmentModal(true);
+  };
+
+  // Appointment creation from email
+  const [appointmentForm, setAppointmentForm] = useState({
+    title: '',
+    attendee_name: '',
+    attendee_email: '',
+    date: '',
+    time: '10:00',
+    duration: '30',
+    meeting_mode: 'PHONE',
+    notes: ''
+  });
+
+  useEffect(() => {
+    if (emailData) {
+      // Pre-fill form with email data
+      const defaultDate = selectedDate.toISOString().split('T')[0];
+      setAppointmentForm(prev => ({
+        ...prev,
+        title: emailData.subject ? `Follow-up: ${emailData.subject}` : 'Follow-up from email',
+        attendee_name: emailData.from || '',
+        attendee_email: emailData.fromEmail || '',
+        date: defaultDate,
+        notes: emailData.body ? `Original email:\n${emailData.body.substring(0, 500)}...` : ''
+      }));
+    }
+  }, [emailData, selectedDate]);
+
+  const handleCreateAppointment = async (e) => {
+    e.preventDefault();
+
+    try {
+      const startDateTime = new Date(`${appointmentForm.date}T${appointmentForm.time}`);
+      const endDateTime = new Date(startDateTime.getTime() + parseInt(appointmentForm.duration) * 60000);
+
+      const appointmentData = {
+        title: appointmentForm.title,
+        attendee_name: appointmentForm.attendee_name,
+        attendee_email: appointmentForm.attendee_email,
+        scheduled_start: startDateTime.toISOString(),
+        scheduled_end: endDateTime.toISOString(),
+        meeting_mode: appointmentForm.meeting_mode,
+        attendee_notes: appointmentForm.notes,
+        lead_id: leadId || null,
+        loan_id: loanId || null,
+      };
+
+      await schedulerAPI.createAppointment(appointmentData);
+
+      // Reset and close
+      setShowAppointmentModal(false);
+      setEmailData(null);
+      setAppointmentForm({
+        title: '',
+        attendee_name: '',
+        attendee_email: '',
+        date: '',
+        time: '10:00',
+        duration: '30',
+        meeting_mode: 'PHONE',
+        notes: ''
+      });
+
+      // Reload appointments
+      loadAppointments();
+    } catch (error) {
+      console.error('Failed to create appointment:', error);
+      alert('Failed to create appointment: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   const days = getDaysInMonth();
   const selectedDateAppointments = getAppointmentsForSelectedDate();
   const upcomingAppointments = getUpcomingAppointments();
 
   return (
-    <div className="calendar-sidebar">
+    <div
+      className={`calendar-sidebar ${isDragOver ? 'drag-over' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div className="drag-overlay">
+          <div className="drag-overlay-content">
+            <span className="drag-icon">📧</span>
+            <span className="drag-text">Drop email to create appointment</span>
+          </div>
+        </div>
+      )}
+
       {/* Mini Calendar */}
       <div className="mini-calendar">
         <div className="calendar-header">
@@ -218,6 +430,11 @@ function CalendarSidebar({ leadId, loanId }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Drop zone hint */}
+      <div className="drop-zone-hint">
+        <span>📧 Drag email here to schedule</span>
       </div>
 
       {/* Appointments List */}
@@ -307,6 +524,120 @@ function CalendarSidebar({ leadId, loanId }) {
           View Full Calendar
         </button>
       </div>
+
+      {/* Appointment Creation Modal */}
+      {showAppointmentModal && (
+        <div className="appointment-modal-overlay" onClick={() => setShowAppointmentModal(false)}>
+          <div className="appointment-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="appointment-modal-header">
+              <h3>Create Appointment from Email</h3>
+              <button className="close-btn" onClick={() => setShowAppointmentModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleCreateAppointment}>
+              <div className="form-group">
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={appointmentForm.title}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, title: e.target.value})}
+                  placeholder="Appointment title"
+                  required
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Contact Name</label>
+                  <input
+                    type="text"
+                    value={appointmentForm.attendee_name}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, attendee_name: e.target.value})}
+                    placeholder="Name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Contact Email</label>
+                  <input
+                    type="email"
+                    value={appointmentForm.attendee_email}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, attendee_email: e.target.value})}
+                    placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={appointmentForm.date}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, date: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Time</label>
+                  <input
+                    type="time"
+                    value={appointmentForm.time}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, time: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Duration</label>
+                  <select
+                    value={appointmentForm.duration}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, duration: e.target.value})}
+                  >
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Meeting Type</label>
+                  <select
+                    value={appointmentForm.meeting_mode}
+                    onChange={(e) => setAppointmentForm({...appointmentForm, meeting_mode: e.target.value})}
+                  >
+                    <option value="PHONE">📞 Phone Call</option>
+                    <option value="VIDEO">📹 Video Call</option>
+                    <option value="IN_PERSON">👤 In Person</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea
+                  value={appointmentForm.notes}
+                  onChange={(e) => setAppointmentForm({...appointmentForm, notes: e.target.value})}
+                  placeholder="Additional notes..."
+                  rows="3"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={() => setShowAppointmentModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-create">
+                  Create Appointment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
