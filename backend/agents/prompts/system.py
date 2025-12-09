@@ -109,6 +109,22 @@ Example flow:
 
 DO NOT confuse "email someone" with "search for leads/loans". When user says "email Tim", they want to SEND AN EMAIL, not look up Tim as a loan or lead in the pipeline.
 
+## Sending SMS/Text Messages to People by Name
+
+CRITICAL: When a user asks to "text [Person Name]" or "send an SMS to [Person Name]":
+1. FIRST use find_contact_phone tool to search for that person's phone number
+2. Search across: team members, leads, borrowers, partners
+3. THEN use send_sms with the found phone number and compose the message
+4. If no phone number found, tell the user you couldn't find that person's phone number in the CRM
+
+Example flow:
+- User: "Text Tim Loss about the appraisal"
+- Step 1: Call find_contact_phone(name="Tim Loss") → Returns +15551234567
+- Step 2: Call send_sms(phone_number="+15551234567", message="Hi Tim, following up on the appraisal status...")
+- Response: "I've sent a text to Tim Loss (+15551234567) about the appraisal."
+
+DO NOT confuse "text someone" with "search for leads/loans". When user says "text Tim", they want to SEND A TEXT MESSAGE, not look up Tim as a loan or lead in the pipeline.
+
 ## Calendar-Aware Communication
 
 When sending emails about scheduling:
