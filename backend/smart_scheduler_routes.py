@@ -85,7 +85,7 @@ def send_appointment_confirmation_email(
         smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
         smtp_user = os.getenv("SMTP_USER") or os.getenv("GMAIL_USER")
-        smtp_pass = os.getenv("SMTP_PASS") or os.getenv("GMAIL_APP_PASSWORD")
+        smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS") or os.getenv("GMAIL_APP_PASSWORD")
 
         if not smtp_user or not smtp_pass:
             logger.warning("SMTP credentials not configured - skipping email confirmation")
