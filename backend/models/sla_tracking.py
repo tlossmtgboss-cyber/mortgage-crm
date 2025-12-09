@@ -43,6 +43,7 @@ class MilestoneType(str, enum.Enum):
     INITIAL_CONSULTATION = "initial_consultation"  # Added for existing data compatibility
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
+    CONTRACT_RECEIVED = "contract_received"
     DOCUMENTS_REQUESTED = "documents_requested"
     DOCUMENTS_RECEIVED = "documents_received"
     APPLICATION_COMPLETE = "application_complete"
@@ -96,6 +97,7 @@ class TriggerFromEvent(str, enum.Enum):
     LEAD_RESPONSE = "lead_response"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
+    CONTRACT_RECEIVED = "contract_received"
     DOCUMENTS_REQUESTED = "documents_requested"
     DOCUMENTS_RECEIVED = "documents_received"
     APPLICATION_COMPLETE = "application_complete"

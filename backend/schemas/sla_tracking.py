@@ -39,6 +39,7 @@ class MilestoneTypeEnum(str, Enum):
     INITIAL_CONSULTATION = "initial_consultation"  # Added for existing data compatibility
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
+    CONTRACT_RECEIVED = "contract_received"
 
     # Application Stage
     APPLICATION_SUBMITTED = "application_submitted"
