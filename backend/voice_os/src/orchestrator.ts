@@ -3,11 +3,15 @@ import { WebSocket } from 'ws';
 import { StreamingSTT } from './voice/stt';
 import { StreamingTTS } from './voice/tts';
 import { LLMClient } from './ai/llm';
+import { DeepgramVoiceAgent, createTwilioVoiceAgent, VoiceAgentConfig } from './voice/deepgram-agent';
 import { CallStateManager } from './state/manager';
 import { ToolExecutor } from './tools/executor';
 import { CRMAPIClient } from './crm/client';
 import { logger } from './utils/logger';
 import { metrics } from './monitoring/metrics';
+
+// Use Deepgram Voice Agent for all-in-one voice processing
+const USE_DEEPGRAM_VOICE_AGENT = process.env.USE_DEEPGRAM_VOICE_AGENT === 'true';
 
 interface OutboundCallRequest {
   agentId: string;
@@ -42,6 +46,11 @@ export class VoiceOrchestrator {
 
   async handleMediaStream(callId: string, ws: WebSocket): Promise<void> {
     logger.info('Handling media stream', { callId });
+
+    // Route to Deepgram Voice Agent if enabled
+    if (USE_DEEPGRAM_VOICE_AGENT) {
+      return this.handleMediaStreamWithDeepgramAgent(callId, ws);
+    }
 
     try {
       // Get call session from database (or use defaults for testing)
@@ -237,6 +246,157 @@ export class VoiceOrchestrator {
 
     } catch (error) {
       logger.error('Failed to handle media stream', { callId, error });
+      ws.close(1011, 'Internal server error');
+    }
+  }
+
+  /**
+   * Handle media stream using Deepgram Voice Agent (all-in-one STT + LLM + TTS)
+   * This provides a unified, low-latency voice experience
+   */
+  private async handleMediaStreamWithDeepgramAgent(callId: string, ws: WebSocket): Promise<void> {
+    logger.info('[DeepgramAgent] Handling media stream with unified Voice Agent', { callId });
+
+    try {
+      // Get call session from database (or use defaults for testing)
+      let callSession: any;
+      let agent: any;
+
+      try {
+        callSession = await this.crmClient.getCall(callId);
+        agent = await this.crmClient.getAgent(callSession.agent_id);
+      } catch (error) {
+        logger.info('[DeepgramAgent] Using default agent configuration (CRM not available)');
+        callSession = {
+          id: callId,
+          direction: 'inbound',
+          from_number: callId,
+          agent_id: 'default'
+        };
+        agent = {
+          id: 'default',
+          name: 'Aria - AI Assistant',
+          llm_model: 'claude-3-haiku-20240307',
+          system_prompt: process.env.DEFAULT_SYSTEM_PROMPT || `You are Aria, a warm and professional AI assistant for mortgage loan officers.
+You help them manage their pipeline, follow up with leads, schedule appointments, and answer questions.
+
+Voice conversation guidelines:
+- Keep responses concise and conversational (under 50 words when possible)
+- Use natural speech patterns
+- Be warm, friendly, and professional
+- When asked to perform actions, confirm what you're doing
+- Ask clarifying questions when needed`,
+          voice_id: 'aura-asteria-en'
+        };
+      }
+
+      // Log call start to AI Receptionist Dashboard
+      await this.crmClient.logAIReceptionistActivity({
+        client_phone: callSession.from_number,
+        action_type: 'incoming_call',
+        channel: 'voice',
+        outcome_status: 'in_progress',
+        conversation_id: callId,
+        extra_data: {
+          agent_id: agent.id,
+          agent_name: agent.name,
+          call_direction: callSession.direction,
+          voice_provider: 'deepgram_voice_agent'
+        }
+      });
+
+      // Initialize call state
+      const state = new CallStateManager(callId, agent);
+
+      // Track metrics
+      const callStartTime = Date.now();
+      metrics.activeCalls.inc({ agent_id: agent.id });
+
+      // Identify caller and set context
+      if (callSession.direction === 'inbound') {
+        const contact = await this.identifyCaller(callSession.from_number);
+        if (contact) {
+          state.setContact(contact);
+        }
+      }
+
+      // Build system prompt with caller context
+      let systemPrompt = agent.system_prompt;
+      if (callSession.from_number) {
+        systemPrompt += `\n\nThe caller is calling from phone number: ${callSession.from_number}.`;
+      }
+      if (state.contact) {
+        systemPrompt += `\nCaller identified: ${state.contact.first_name} ${state.contact.last_name}`;
+      }
+
+      // Create Deepgram Voice Agent
+      const voiceAgent = createTwilioVoiceAgent(
+        systemPrompt,
+        (audioBase64: string) => {
+          // Send audio back to Twilio
+          const audioMessage = {
+            event: 'media',
+            media: {
+              payload: audioBase64
+            }
+          };
+          ws.send(JSON.stringify(audioMessage));
+        },
+        {
+          voiceModel: agent.voice_id || 'aura-asteria-en',
+          llmModel: agent.llm_model || 'claude-3-haiku-20240307',
+          sttModel: 'nova-2'
+        }
+      );
+
+      // Connect to Deepgram
+      const connected = await voiceAgent.connect();
+      if (!connected) {
+        logger.error('[DeepgramAgent] Failed to connect to Deepgram Voice Agent');
+        ws.close(1011, 'Voice agent connection failed');
+        return;
+      }
+
+      logger.info('[DeepgramAgent] Connected to Deepgram Voice Agent', { callId });
+
+      // Handle incoming Twilio messages
+      ws.on('message', async (data: Buffer) => {
+        try {
+          const message = JSON.parse(data.toString());
+
+          if (message.event === 'media') {
+            // Forward audio to Deepgram Voice Agent
+            const audioChunk = Buffer.from(message.media.payload, 'base64');
+            voiceAgent.sendAudio(audioChunk);
+          }
+
+          if (message.event === 'stop') {
+            logger.info('[DeepgramAgent] Call ended', { callId });
+            voiceAgent.close();
+            await this.finalizeCall(callId, state, callStartTime);
+            ws.close();
+          }
+
+        } catch (error) {
+          logger.error('[DeepgramAgent] Error processing message', { callId, error });
+        }
+      });
+
+      ws.on('close', async () => {
+        logger.info('[DeepgramAgent] WebSocket closed', { callId });
+        metrics.activeCalls.dec({ agent_id: agent.id });
+        voiceAgent.close();
+        await this.finalizeCall(callId, state, callStartTime);
+      });
+
+      ws.on('error', (error) => {
+        logger.error('[DeepgramAgent] WebSocket error', { callId, error });
+        metrics.activeCalls.dec({ agent_id: agent.id });
+        voiceAgent.close();
+      });
+
+    } catch (error) {
+      logger.error('[DeepgramAgent] Failed to handle media stream', { callId, error });
       ws.close(1011, 'Internal server error');
     }
   }
