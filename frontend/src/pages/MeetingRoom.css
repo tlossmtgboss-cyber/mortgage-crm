@@ -1,13 +1,16 @@
-/* Meeting Room Container */
+/* Meeting Room Container - Zoom-like Dark Theme */
 .meeting-room-container {
   min-height: 100vh;
-  background: #111827;
+  background: #1a1a1a;
   color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .meeting-room-container.in-meeting {
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Loading State */
@@ -23,7 +26,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #3b82f6;
+  border-top-color: #0E72ED;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -34,7 +37,7 @@
 
 .meeting-loading p {
   margin-top: 16px;
-  color: #9ca3af;
+  color: #aaa;
 }
 
 /* Error State */
@@ -51,7 +54,7 @@
 .error-icon {
   width: 64px;
   height: 64px;
-  background: #ef4444;
+  background: #e53935;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -68,12 +71,12 @@
 
 .meeting-error p {
   margin: 0 0 24px;
-  color: #9ca3af;
+  color: #aaa;
 }
 
 .back-btn {
   padding: 12px 24px;
-  background: #3b82f6;
+  background: #0E72ED;
   color: white;
   border: none;
   border-radius: 8px;
@@ -83,7 +86,7 @@
 }
 
 .back-btn:hover {
-  background: #2563eb;
+  background: #0B5FCC;
 }
 
 /* Pre-Join Screen */
@@ -94,6 +97,7 @@
   justify-content: center;
   min-height: 100vh;
   padding: 24px;
+  background: linear-gradient(180deg, #1a1a1a 0%, #242424 100%);
 }
 
 .pre-join-content,
@@ -105,22 +109,23 @@
 
 .meeting-info h2 {
   margin: 0 0 8px;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 600;
 }
 
 .meeting-type {
-  color: #9ca3af;
+  color: #aaa;
   text-transform: capitalize;
   margin: 0 0 32px;
+  font-size: 16px;
 }
 
 .meeting-status {
   display: inline-block;
-  padding: 4px 12px;
-  background: #fbbf24;
-  color: #1f2937;
-  border-radius: 4px;
+  padding: 6px 16px;
+  background: #f59e0b;
+  color: #000;
+  border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -136,15 +141,16 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16/9;
-  background: #1f2937;
-  border-radius: 12px;
+  background: #2d2d2d;
+  border-radius: 16px;
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .video-preview.large {
-  max-width: 400px;
-  margin: 0 auto 16px;
+  max-width: 480px;
+  margin: 0 auto 20px;
 }
 
 .video-preview video {
@@ -160,81 +166,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #374151;
+  background: #2d2d2d;
 }
 
 .avatar {
-  width: 64px;
-  height: 64px;
-  background: #3b82f6;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #0E72ED 0%, #0B5FCC 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 600;
 }
 
 .avatar.large {
-  width: 96px;
-  height: 96px;
-  font-size: 40px;
+  width: 120px;
+  height: 120px;
+  font-size: 48px;
 }
 
+/* Preview Controls - Zoom Style */
 .preview-controls {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.control-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 20px;
-  background: #374151;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
+.preview-controls .control-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 24px;
 }
 
-.control-btn:hover {
-  background: #4b5563;
-}
-
-.control-btn.off {
-  background: #ef4444;
-}
-
-.control-btn.active {
-  background: #3b82f6;
-}
-
-.control-btn.recording {
-  background: #ef4444;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-.control-btn.leave {
-  background: #ef4444;
-}
-
-.control-btn.leave:hover {
-  background: #dc2626;
-}
-
-.btn-label {
-  font-size: 11px;
-  font-weight: 500;
+.preview-controls .control-btn .btn-label {
+  display: none;
 }
 
 /* Waiting Room */
@@ -243,36 +212,39 @@
 }
 
 .waiting-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #fbbf24;
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #0E72ED;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;
 }
 
 .waiting-message p {
-  color: #9ca3af;
+  color: #aaa;
+  font-size: 16px;
 }
 
 .leave-btn {
   padding: 12px 32px;
   background: transparent;
-  border: 1px solid #6b7280;
+  border: 1px solid #666;
   border-radius: 8px;
   color: white;
   font-size: 14px;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .leave-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+  border-color: #888;
 }
 
 /* Join Form */
 .join-form {
-  max-width: 320px;
+  max-width: 360px;
   margin: 0 auto;
 }
 
@@ -283,30 +255,32 @@
 
 .form-group label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 13px;
-  color: #9ca3af;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #ccc;
+  font-weight: 500;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px 16px;
-  background: #1f2937;
-  border: 1px solid #374151;
+  padding: 14px 16px;
+  background: #2d2d2d;
+  border: 1px solid #444;
   border-radius: 8px;
   color: white;
-  font-size: 14px;
+  font-size: 15px;
+  transition: border-color 0.2s;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: #0E72ED;
 }
 
 .join-btn {
   width: 100%;
-  padding: 14px;
-  background: #3b82f6;
+  padding: 16px;
+  background: #0E72ED;
   color: white;
   border: none;
   border-radius: 8px;
@@ -314,20 +288,26 @@
   font-weight: 600;
   cursor: pointer;
   margin-top: 8px;
+  transition: background 0.2s;
 }
 
 .join-btn:hover {
-  background: #2563eb;
+  background: #0B5FCC;
 }
 
-/* Meeting Header */
+/* Meeting Header - Minimal Zoom Style */
 .meeting-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 24px;
-  background: #1f2937;
-  border-bottom: 1px solid #374151;
+  padding: 12px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
 }
 
 .header-left {
@@ -338,29 +318,36 @@
 
 .header-left h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
 }
 
 .room-code {
-  padding: 4px 8px;
-  background: #374151;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   font-size: 12px;
   font-family: monospace;
-  color: #9ca3af;
+  color: #aaa;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .recording-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   background: rgba(239, 68, 68, 0.2);
-  border: 1px solid #ef4444;
-  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 20px;
   color: #ef4444;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -379,26 +366,29 @@
 
 .participant-count {
   font-size: 14px;
-  color: #9ca3af;
+  color: #aaa;
 }
 
-/* Video Grid */
+/* Video Grid - Zoom Layout */
 .video-grid {
   flex: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 16px;
-  padding: 16px;
-  background: #111827;
-  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px 100px;
+  background: #1a1a1a;
+  position: relative;
 }
 
 .video-container {
   position: relative;
+  width: 100%;
+  max-width: 1200px;
   aspect-ratio: 16/9;
-  background: #1f2937;
+  background: #2d2d2d;
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .video-container.local video {
@@ -417,7 +407,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #374151;
+  background: #2d2d2d;
 }
 
 .video-placeholder {
@@ -426,16 +416,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #374151;
+  background: #2d2d2d;
 }
 
 .video-label {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 8px 12px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  bottom: 12px;
+  left: 12px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -443,66 +433,175 @@
 
 .video-label span {
   font-size: 13px;
+  font-weight: 500;
 }
 
 .muted-icon {
   font-size: 14px;
 }
 
-/* Meeting Controls */
+/* Meeting Controls - Zoom Style Bottom Bar */
 .meeting-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  padding: 16px 24px;
-  background: #1f2937;
-  border-top: 1px solid #374151;
+  padding: 12px 20px;
+  background: #232323;
+  border-top: 1px solid #333;
+  gap: 8px;
+  z-index: 100;
 }
 
 .controls-left,
 .controls-center,
 .controls-right {
   display: flex;
-  gap: 12px;
+  gap: 4px;
+  align-items: center;
 }
 
-/* Chat Panel */
+.controls-left {
+  position: absolute;
+  left: 20px;
+}
+
+.controls-right {
+  position: absolute;
+  right: 20px;
+}
+
+/* Zoom-style Control Buttons */
+.control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 56px;
+  height: 56px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.control-btn.off {
+  background: #e53935;
+}
+
+.control-btn.off:hover {
+  background: #c62828;
+}
+
+.control-btn.active {
+  background: #0E72ED;
+}
+
+.control-btn.active:hover {
+  background: #0B5FCC;
+}
+
+.control-btn.recording {
+  background: #e53935;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.control-btn.leave {
+  background: #e53935;
+  border-radius: 8px;
+  padding: 8px 20px;
+  min-width: 80px;
+}
+
+.control-btn.leave:hover {
+  background: #c62828;
+}
+
+.btn-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #ccc;
+  white-space: nowrap;
+}
+
+.control-btn.off .btn-label,
+.control-btn.active .btn-label,
+.control-btn.leave .btn-label {
+  color: #fff;
+}
+
+/* Divider between button groups */
+.controls-center::before,
+.controls-center::after {
+  content: '';
+  width: 1px;
+  height: 32px;
+  background: #444;
+  margin: 0 8px;
+}
+
+/* Chat Panel - Zoom Style */
 .chat-panel {
   position: fixed;
   right: 0;
-  top: 57px;
-  bottom: 89px;
-  width: 320px;
-  background: #1f2937;
-  border-left: 1px solid #374151;
+  top: 0;
+  bottom: 72px;
+  width: 340px;
+  background: #242424;
+  border-left: 1px solid #333;
   display: flex;
   flex-direction: column;
   z-index: 100;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid #374151;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
 }
 
 .chat-header h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .close-chat {
-  width: 28px;
-  height: 28px;
-  background: #374151;
+  width: 32px;
+  height: 32px;
+  background: transparent;
   border: none;
-  border-radius: 50%;
-  color: white;
-  font-size: 18px;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 20px;
   cursor: pointer;
+  transition: all 0.15s;
+}
+
+.close-chat:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .chat-messages {
@@ -512,9 +611,10 @@
 }
 
 .no-messages {
-  color: #6b7280;
+  color: #666;
   text-align: center;
   font-size: 14px;
+  margin-top: 40px;
 }
 
 .chat-message {
@@ -522,49 +622,50 @@
 }
 
 .message-sender {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: #3b82f6;
+  color: #0E72ED;
 }
 
 .message-text {
   margin: 4px 0;
   font-size: 14px;
   color: white;
+  line-height: 1.4;
 }
 
 .message-time {
   font-size: 11px;
-  color: #6b7280;
+  color: #666;
 }
 
 .chat-input-container {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid #374151;
+  padding: 16px;
+  border-top: 1px solid #333;
 }
 
 .chat-input-container input {
   flex: 1;
-  padding: 10px 12px;
-  background: #374151;
-  border: none;
-  border-radius: 6px;
+  padding: 12px 16px;
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 8px;
   color: white;
   font-size: 14px;
 }
 
 .chat-input-container input:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #3b82f6;
+  border-color: #0E72ED;
 }
 
 .chat-input-container button {
-  padding: 10px 16px;
-  background: #3b82f6;
+  padding: 12px 20px;
+  background: #0E72ED;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   color: white;
   font-size: 14px;
   font-weight: 600;
@@ -572,35 +673,63 @@
 }
 
 .chat-input-container button:hover {
-  background: #2563eb;
+  background: #0B5FCC;
 }
 
-/* Invite Button */
+/* Invite Button - Green accent */
 .control-btn.invite {
-  background: #10b981;
+  background: transparent;
 }
 
 .control-btn.invite:hover {
-  background: #059669;
+  background: rgba(255, 255, 255, 0.1);
 }
 
-/* Invite Modal */
+/* Screen Recording Button */
+.control-btn.screen-record {
+  background: transparent;
+}
+
+.control-btn.screen-record:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.control-btn.screen-record.recording {
+  background: #e53935;
+  animation: pulse 1.5s infinite;
+}
+
+.control-btn.screen-record:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Screen Recording Indicator */
+.recording-indicator.screen-rec {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #a78bfa;
+  margin-left: 8px;
+}
+
+/* Invite Modal - Modern Style */
 .invite-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 200;
+  backdrop-filter: blur(4px);
 }
 
 .invite-modal {
-  background: #1f2937;
-  border-radius: 12px;
+  background: #2d2d2d;
+  border-radius: 16px;
   width: 100%;
-  max-width: 400px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  max-width: 420px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -608,8 +737,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #374151;
+  padding: 20px 24px;
+  border-bottom: 1px solid #404040;
 }
 
 .invite-modal-header h3 {
@@ -619,57 +748,60 @@
 }
 
 .close-modal {
-  width: 32px;
-  height: 32px;
-  background: #374151;
+  width: 36px;
+  height: 36px;
+  background: transparent;
   border: none;
-  border-radius: 50%;
-  color: white;
-  font-size: 20px;
+  border-radius: 8px;
+  color: #aaa;
+  font-size: 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s;
 }
 
 .close-modal:hover {
-  background: #4b5563;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .invite-modal-body {
-  padding: 20px;
+  padding: 24px;
 }
 
 .invite-form-group {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .invite-form-group label {
   display: block;
-  font-size: 13px;
-  color: #9ca3af;
-  margin-bottom: 6px;
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .invite-form-group input {
   width: 100%;
-  padding: 12px 16px;
-  background: #374151;
-  border: 1px solid #4b5563;
+  padding: 14px 16px;
+  background: #1a1a1a;
+  border: 1px solid #404040;
   border-radius: 8px;
   color: white;
-  font-size: 14px;
+  font-size: 15px;
+  transition: border-color 0.2s;
 }
 
 .invite-form-group input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: #0E72ED;
 }
 
 .invite-info {
-  padding: 12px;
-  background: #374151;
+  padding: 14px 16px;
+  background: #1a1a1a;
   border-radius: 8px;
   margin-top: 16px;
 }
@@ -677,29 +809,29 @@
 .invite-info p {
   margin: 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: #888;
 }
 
 .invite-success {
   text-align: center;
-  padding: 32px;
+  padding: 40px;
 }
 
 .invite-success .success-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
-  background: #10b981;
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   border-radius: 50%;
-  font-size: 32px;
-  margin-bottom: 16px;
+  font-size: 36px;
+  margin-bottom: 20px;
 }
 
 .invite-success p {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   color: white;
 }
 
@@ -707,37 +839,41 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid #374151;
+  padding: 20px 24px;
+  border-top: 1px solid #404040;
 }
 
 .cancel-btn {
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: transparent;
-  border: 1px solid #4b5563;
+  border: 1px solid #555;
   border-radius: 8px;
   color: white;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s;
 }
 
 .cancel-btn:hover {
-  background: #374151;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #777;
 }
 
 .send-invite-btn {
-  padding: 10px 24px;
-  background: #10b981;
+  padding: 12px 28px;
+  background: #0E72ED;
   border: none;
   border-radius: 8px;
   color: white;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .send-invite-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #0B5FCC;
 }
 
 .send-invite-btn:disabled {
@@ -745,70 +881,44 @@
   cursor: not-allowed;
 }
 
-/* Screen Recording Button */
-.control-btn.screen-record {
-  background: #8b5cf6;
-}
-
-.control-btn.screen-record:hover {
-  background: #7c3aed;
-}
-
-.control-btn.screen-record.recording {
-  background: #ef4444;
-  animation: pulse 1.5s infinite;
-}
-
-.control-btn.screen-record:disabled {
-  background: #6b7280;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-/* Screen Recording Indicator */
-.recording-indicator.screen-rec {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: #8b5cf6;
-  color: #8b5cf6;
-  margin-left: 8px;
-}
-
 /* Screen Recording Modal */
 .screen-recording-modal {
-  background: #1f2937;
-  border-radius: 12px;
+  background: #2d2d2d;
+  border-radius: 16px;
   width: 100%;
-  max-width: 480px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
 .screen-recording-modal-body {
-  padding: 24px;
+  padding: 32px;
   text-align: center;
 }
 
 .recording-success-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
+  font-size: 72px;
+  margin-bottom: 20px;
 }
 
 .recording-ready-text {
-  font-size: 18px;
-  color: #e5e7eb;
-  margin: 0 0 24px;
+  font-size: 20px;
+  color: #fff;
+  margin: 0 0 28px;
+  font-weight: 500;
 }
 
 .share-link-container {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   text-align: left;
 }
 
 .share-link-container label {
   display: block;
-  font-size: 13px;
-  color: #9ca3af;
-  margin-bottom: 6px;
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .share-link-input {
@@ -818,9 +928,9 @@
 
 .share-link-input input {
   flex: 1;
-  padding: 12px 16px;
-  background: #374151;
-  border: 1px solid #4b5563;
+  padding: 14px 16px;
+  background: #1a1a1a;
+  border: 1px solid #404040;
   border-radius: 8px;
   color: white;
   font-size: 13px;
@@ -828,93 +938,52 @@
 }
 
 .copy-link-btn {
-  padding: 12px 16px;
-  background: #3b82f6;
+  padding: 14px 18px;
+  background: #0E72ED;
   border: none;
   border-radius: 8px;
   color: white;
   font-size: 18px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
 
 .copy-link-btn:hover {
-  background: #2563eb;
+  background: #0B5FCC;
 }
 
 .recording-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .download-recording-btn {
-  padding: 12px 24px;
-  background: #374151;
-  border: 1px solid #4b5563;
+  padding: 14px 28px;
+  background: #1a1a1a;
+  border: 1px solid #404040;
   border-radius: 8px;
   color: white;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .download-recording-btn:hover {
-  background: #4b5563;
+  background: #2d2d2d;
+  border-color: #555;
 }
 
 .activity-log-note {
-  margin-top: 16px;
-  padding: 12px;
-  background: #374151;
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 8px;
   font-size: 13px;
   color: #10b981;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .video-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .meeting-controls {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .controls-left,
-  .controls-center,
-  .controls-right {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .control-btn {
-    padding: 10px 14px;
-    font-size: 18px;
-  }
-
-  .btn-label {
-    display: none;
-  }
-
-  .chat-panel {
-    width: 100%;
-    left: 0;
-  }
-
-  .meeting-header {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .header-left h3 {
-    font-size: 14px;
-  }
 }
 
 /* Waiting Room Panel (Host) */
@@ -922,24 +991,24 @@
   position: fixed;
   top: 80px;
   left: 20px;
-  width: 320px;
-  max-height: 400px;
-  background: #1f2937;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  width: 340px;
+  max-height: 420px;
+  background: #2d2d2d;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   z-index: 100;
   overflow: hidden;
-  animation: slideIn 0.3s ease;
+  animation: slideIn 0.25s ease;
 }
 
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateX(-20px);
+    transform: translateY(-10px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
@@ -947,28 +1016,28 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  background: #374151;
-  border-bottom: 1px solid #4b5563;
+  padding: 18px 20px;
+  background: #353535;
+  border-bottom: 1px solid #404040;
 }
 
 .waiting-panel-header h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #f59e0b;
 }
 
 .admit-all-btn {
-  padding: 6px 12px;
+  padding: 8px 16px;
   background: #10b981;
   color: white;
   border: none;
   border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
 
 .admit-all-btn:hover {
@@ -976,16 +1045,16 @@
 }
 
 .waiting-list {
-  max-height: 300px;
+  max-height: 320px;
   overflow-y: auto;
 }
 
 .waiting-participant {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #374151;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #353535;
 }
 
 .waiting-participant:last-child {
@@ -993,22 +1062,22 @@
 }
 
 .participant-avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: linear-gradient(135deg, #0E72ED 0%, #0B5FCC 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 
 .participant-name {
   flex: 1;
   font-size: 14px;
-  color: #e5e7eb;
+  color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1021,13 +1090,13 @@
 
 .admit-btn,
 .reject-btn {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border: none;
   border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .admit-btn {
@@ -1040,68 +1109,58 @@
 }
 
 .reject-btn {
-  background: #6b7280;
+  background: #404040;
   color: white;
 }
 
 .reject-btn:hover {
-  background: #ef4444;
+  background: #e53935;
 }
 
 /* Join note for guests */
 .join-note {
-  margin-top: 12px;
-  font-size: 13px;
-  color: #9ca3af;
+  margin-top: 16px;
+  font-size: 14px;
+  color: #888;
   text-align: center;
-}
-
-/* Mobile responsive for waiting room panel */
-@media (max-width: 768px) {
-  .waiting-room-panel {
-    left: 10px;
-    right: 10px;
-    width: auto;
-    max-width: none;
-  }
 }
 
 /* Email Summary Section */
 .email-summary-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #374151;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #404040;
 }
 
 .section-divider {
   display: flex;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .section-divider span {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #9ca3af;
+  color: #888;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .email-summary-description {
-  font-size: 13px;
-  color: #9ca3af;
-  margin-bottom: 15px;
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 16px;
   line-height: 1.5;
 }
 
 .generate-summary-btn {
   width: 100%;
-  padding: 12px 20px;
+  padding: 14px 24px;
   background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
   border: none;
   border-radius: 8px;
   color: white;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1123,8 +1182,71 @@
 }
 
 .email-summary-success {
-  margin-top: 12px;
-  font-size: 13px;
+  margin-top: 14px;
+  font-size: 14px;
   color: #10b981;
   text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .video-grid {
+    padding: 50px 12px 90px;
+  }
+
+  .video-container {
+    border-radius: 8px;
+  }
+
+  .meeting-controls {
+    padding: 10px 12px;
+    gap: 4px;
+  }
+
+  .controls-left,
+  .controls-right {
+    position: static;
+  }
+
+  .controls-center::before,
+  .controls-center::after {
+    display: none;
+  }
+
+  .control-btn {
+    min-width: 48px;
+    height: 48px;
+    font-size: 20px;
+    padding: 6px 8px;
+  }
+
+  .btn-label {
+    display: none;
+  }
+
+  .control-btn.leave {
+    padding: 6px 16px;
+    min-width: 64px;
+  }
+
+  .chat-panel {
+    width: 100%;
+    left: 0;
+  }
+
+  .meeting-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .header-left h3 {
+    font-size: 13px;
+  }
+
+  .waiting-room-panel {
+    left: 10px;
+    right: 10px;
+    width: auto;
+  }
 }
