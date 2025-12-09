@@ -1996,6 +1996,32 @@
   gap: 16px;
 }
 
+/* Borrower Application Button */
+.borrower-app-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.borrower-app-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
+}
+
+.borrower-app-btn:active {
+  transform: translateY(0);
+}
+
 .ai-landing-btn {
   display: flex;
   align-items: center;
@@ -2026,6 +2052,11 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 8px;
+  }
+
+  .borrower-app-btn {
+    font-size: 12px;
+    padding: 6px 12px;
   }
 
   .ai-landing-btn {

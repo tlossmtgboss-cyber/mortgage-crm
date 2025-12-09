@@ -950,6 +950,13 @@ function Dashboard() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
           <button
+            className="borrower-app-btn"
+            onClick={() => navigate('/borrower/login')}
+            title="Open Borrower Application"
+          >
+            Borrower Application
+          </button>
+          <button
             className="ai-landing-btn"
             onClick={() => navigate('/ai')}
             title="Open AI Assistant"
