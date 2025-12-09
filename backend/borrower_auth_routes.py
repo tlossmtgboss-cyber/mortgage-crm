@@ -26,6 +26,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 from database import get_db
+from email_service import email_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower-auth", tags=["borrower-auth"])
@@ -234,6 +235,152 @@ def get_or_create_borrower(db: Session, profile: BorrowerProfile) -> dict:
 def generate_state_token() -> str:
     """Generate a secure state token for OAuth CSRF protection."""
     return secrets.token_urlsafe(32)
+
+
+def send_magic_link_email(to_email: str, first_name: str, magic_link: str) -> bool:
+    """Send magic link login email to borrower."""
+    subject = "🔐 Your Secure Login Link - Perennia Mortgage"
+
+    html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .logo {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .logo h1 {{
+            color: #218D8D;
+            font-size: 28px;
+            margin: 0;
+        }}
+        h2 {{
+            color: #1a1a2e;
+            margin-top: 0;
+        }}
+        p {{
+            color: #4b5563;
+            font-size: 16px;
+        }}
+        .btn-login {{
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white !important;
+            padding: 16px 48px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            margin: 24px 0;
+        }}
+        .btn-login:hover {{
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }}
+        .info-box {{
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 16px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }}
+        .info-box p {{
+            margin: 0;
+            color: #065f46;
+        }}
+        .expires {{
+            font-size: 14px;
+            color: #6b7280;
+            background: #fef3c7;
+            padding: 12px 16px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .footer {{
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>Perennia Mortgage</h1>
+        </div>
+
+        <h2>Hi {first_name},</h2>
+
+        <p>Click the button below to securely sign in to your mortgage application:</p>
+
+        <div style="text-align: center;">
+            <a href="{magic_link}" class="btn-login">Sign In to Your Application</a>
+        </div>
+
+        <div class="info-box">
+            <p>🔒 This is a secure, one-time login link that works only for your email address.</p>
+        </div>
+
+        <div class="expires">
+            ⏰ This link expires in <strong>24 hours</strong>
+        </div>
+
+        <p style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 24px;">
+            Or copy and paste this link:<br>
+            <a href="{magic_link}" style="color: #10b981; word-break: break-all;">{magic_link}</a>
+        </p>
+
+        <div class="footer">
+            <p>If you didn't request this email, you can safely ignore it.</p>
+            <p>This email was sent by Perennia Mortgage</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+    plain_text = f"""
+Hi {first_name},
+
+Click the link below to securely sign in to your mortgage application:
+
+{magic_link}
+
+This is a secure, one-time login link that expires in 24 hours.
+
+If you didn't request this email, you can safely ignore it.
+
+- Perennia Mortgage
+"""
+
+    try:
+        return email_service.send_html_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            plain_text_body=plain_text
+        )
+    except Exception as e:
+        logger.error(f"Failed to send magic link email: {e}")
+        return False
 
 
 # =============================================================================
@@ -836,14 +983,19 @@ async def request_email_login(
     # TODO: Send email with magic link
     magic_link = f"{FRONTEND_URL}/apply/verify?token={magic_token}"
 
-    # In production, send email here
-    logger.info(f"Magic link for {request.email}: {magic_link}")
+    # Send the magic link email
+    first_name = request.first_name or "there"
+    email_sent = send_magic_link_email(request.email, first_name, magic_link)
+
+    if not email_sent:
+        logger.error(f"Failed to send magic link email to {request.email}")
+        # Still return success since link was created - user can request again
+
+    logger.info(f"Magic link created for {request.email}")
 
     return {
         "success": True,
         "message": "Check your email for a login link",
-        # For development only:
-        "debug_link": magic_link if os.getenv("DEBUG") else None,
     }
 
 
