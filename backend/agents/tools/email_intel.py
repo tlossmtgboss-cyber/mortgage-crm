@@ -1088,13 +1088,19 @@ def find_contact_email(
     # Sort by match score
     results.sort(key=lambda x: x.get("match_score", 0), reverse=True)
 
+    # If no CRM results, search user's email inbox
+    if not results and user_id:
+        inbox_results = _search_inbox_for_contact(name, user_id)
+        if inbox_results:
+            results.extend(inbox_results)
+
     if not results:
         return ToolResult.success(
             data={
                 "contacts": [],
                 "count": 0,
                 "search_name": name,
-                "message": f"No contacts found matching '{name}'. Try a different spelling or check if they're in the CRM.",
+                "message": f"No contacts found matching '{name}' in CRM or email inbox. Try a different spelling.",
             },
             message=f"No contacts found for '{name}'"
         )
@@ -1111,6 +1117,178 @@ def find_contact_email(
         },
         message=f"Found {best_match['name']} ({best_match['email']}) - {best_match['type']}"
     )
+
+
+def _search_inbox_for_contact(name: str, user_id: int) -> List[Dict[str, Any]]:
+    """
+    Search user's Microsoft 365 inbox for emails from someone matching the name.
+    Returns email addresses found in inbox that match the search name.
+    """
+    import os
+    import requests
+    from datetime import timezone
+
+    results = []
+    search_name = name.strip().lower()
+
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            # Check for Microsoft OAuth token
+            oauth = db.execute(text("""
+                SELECT access_token, refresh_token, token_expires_at
+                FROM microsoft_oauth_tokens
+                WHERE user_id = :user_id
+                AND access_token IS NOT NULL
+                AND sync_enabled = true
+                LIMIT 1
+            """), {"user_id": user_id}).fetchone()
+
+            if not oauth or not oauth.access_token:
+                return []
+
+            # Decrypt and possibly refresh token
+            from main import decrypt_token, encrypt_token
+            access_token = decrypt_token(oauth.access_token)
+
+            now = datetime.now(timezone.utc)
+            if oauth.token_expires_at and oauth.token_expires_at.replace(tzinfo=timezone.utc) < now:
+                # Token expired - try to refresh
+                refresh_token = decrypt_token(oauth.refresh_token) if oauth.refresh_token else None
+                if refresh_token:
+                    client_id = os.getenv("MICROSOFT_CLIENT_ID")
+                    client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+                    tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+                    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+                    refresh_response = requests.post(token_url, data={
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "refresh_token": refresh_token,
+                        "grant_type": "refresh_token",
+                        "scope": "https://graph.microsoft.com/Mail.Read offline_access",
+                    }, timeout=30)
+
+                    if refresh_response.status_code == 200:
+                        tokens = refresh_response.json()
+                        access_token = tokens["access_token"]
+
+                        # Update stored tokens
+                        new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
+                        db.execute(text("""
+                            UPDATE microsoft_oauth_tokens
+                            SET access_token = :access_token,
+                                refresh_token = :refresh_token,
+                                token_expires_at = :expires_at,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE user_id = :user_id
+                        """), {
+                            "access_token": encrypt_token(access_token),
+                            "refresh_token": encrypt_token(tokens.get("refresh_token", refresh_token)),
+                            "expires_at": new_expires_at,
+                            "user_id": user_id,
+                        })
+                        db.commit()
+                    else:
+                        return []
+                else:
+                    return []
+
+            # Search inbox for emails from this person
+            # Use $search to find by name in from field
+            search_filter = f'"{name}"'
+
+            response = requests.get(
+                "https://graph.microsoft.com/v1.0/me/messages",
+                params={
+                    "$search": search_filter,
+                    "$top": 50,
+                    "$select": "from,receivedDateTime",
+                    "$orderby": "receivedDateTime desc",
+                },
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+
+            if response.status_code != 200:
+                return []
+
+            messages = response.json().get("value", [])
+
+            # Extract unique email addresses that match the name
+            seen_emails = set()
+            for msg in messages:
+                from_info = msg.get("from", {}).get("emailAddress", {})
+                from_name = from_info.get("name", "")
+                from_email = from_info.get("address", "")
+
+                if not from_email or from_email in seen_emails:
+                    continue
+
+                # Check if name matches
+                if search_name in from_name.lower() or any(part in from_name.lower() for part in search_name.split()):
+                    seen_emails.add(from_email)
+                    results.append({
+                        "type": "email_contact",
+                        "name": from_name,
+                        "email": from_email,
+                        "source": "inbox",
+                        "match_score": 70 if search_name in from_name.lower() else 50,
+                    })
+
+            # Also search sent items to find people user has emailed
+            sent_response = requests.get(
+                "https://graph.microsoft.com/v1.0/me/mailFolders/sentitems/messages",
+                params={
+                    "$search": search_filter,
+                    "$top": 50,
+                    "$select": "toRecipients,receivedDateTime",
+                    "$orderby": "receivedDateTime desc",
+                },
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+
+            if sent_response.status_code == 200:
+                sent_messages = sent_response.json().get("value", [])
+
+                for msg in sent_messages:
+                    for recipient in msg.get("toRecipients", []):
+                        to_info = recipient.get("emailAddress", {})
+                        to_name = to_info.get("name", "")
+                        to_email = to_info.get("address", "")
+
+                        if not to_email or to_email in seen_emails:
+                            continue
+
+                        # Check if name matches
+                        if search_name in to_name.lower() or any(part in to_name.lower() for part in search_name.split()):
+                            seen_emails.add(to_email)
+                            results.append({
+                                "type": "email_contact",
+                                "name": to_name,
+                                "email": to_email,
+                                "source": "sent_items",
+                                "match_score": 70 if search_name in to_name.lower() else 50,
+                            })
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        # Log but don't fail - just return empty results
+        pass
+
+    return results
 
 
 @mortgage_tool(
