@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { calendarAPI } from '../services/api';
+import { calendarAPI, schedulerAPI } from '../services/api';
 import './Calendar.css';
 
 // Mock calendar events generator
@@ -134,6 +134,26 @@ function Calendar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
+  // Convert scheduler appointment to calendar event format
+  const appointmentToEvent = (appt) => ({
+    id: `appt-${appt.id}`,
+    title: appt.title || `Appointment with ${appt.attendee_name || 'Client'}`,
+    description: appt.description || appt.attendee_notes || '',
+    start_time: appt.scheduled_start,
+    end_time: appt.scheduled_end,
+    event_type: appt.meeting_mode === 'VIDEO' ? 'video_call' :
+                appt.meeting_mode === 'PHONE' ? 'phone_call' : 'meeting',
+    location: appt.meeting_mode === 'VIDEO' ? 'Video Call' :
+              appt.meeting_mode === 'PHONE' ? 'Phone Call' :
+              appt.meeting_mode === 'IN_PERSON' ? 'In Person' : '',
+    related_lead_id: appt.lead_id,
+    isAppointment: true,
+    appointmentId: appt.id,
+    attendee_name: appt.attendee_name,
+    attendee_email: appt.attendee_email,
+    status: appt.status
+  });
+
   const loadEvents = async () => {
     try {
       setLoading(true);
@@ -141,11 +161,24 @@ function Calendar() {
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
 
-      const data = await calendarAPI.getAll({
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-      });
-      setEvents(data);
+      // Fetch both calendar events and scheduler appointments
+      const [calendarData, appointmentsData] = await Promise.all([
+        calendarAPI.getAll({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+        }).catch(() => []),
+        schedulerAPI.getAppointments({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+        }).catch(() => [])
+      ]);
+
+      // Convert appointments to event format and combine
+      const appointmentEvents = (appointmentsData || [])
+        .filter(appt => appt.status !== 'CANCELLED')
+        .map(appointmentToEvent);
+
+      setEvents([...(calendarData || []), ...appointmentEvents]);
     } catch (error) {
       console.error('Failed to load events:', error);
       // Load mock events on error
@@ -170,11 +203,24 @@ function Calendar() {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 6);
 
-      const data = await calendarAPI.getAll({
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-      });
-      setAllEvents(data || []);
+      // Fetch both calendar events and scheduler appointments
+      const [calendarData, appointmentsData] = await Promise.all([
+        calendarAPI.getAll({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+        }).catch(() => []),
+        schedulerAPI.getAppointments({
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+        }).catch(() => [])
+      ]);
+
+      // Convert appointments to event format and combine
+      const appointmentEvents = (appointmentsData || [])
+        .filter(appt => appt.status !== 'CANCELLED')
+        .map(appointmentToEvent);
+
+      setAllEvents([...(calendarData || []), ...appointmentEvents]);
     } catch (error) {
       console.error('Failed to load all events:', error);
       // Load mock events on error

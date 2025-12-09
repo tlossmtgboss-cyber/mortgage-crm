@@ -540,6 +540,30 @@ export const calendarAPI = {
   },
 };
 
+// Scheduler Appointments API
+export const schedulerAPI = {
+  getAppointments: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/appointments', { params });
+    return ensureArray(response.data, 'appointments');
+  },
+  getAppointmentById: async (id) => {
+    const response = await api.get(`/api/v1/scheduler/appointments/${id}`);
+    return response.data;
+  },
+  createAppointment: async (data) => {
+    const response = await api.post('/api/v1/scheduler/appointments', data);
+    return response.data;
+  },
+  updateAppointment: async (id, data) => {
+    const response = await api.put(`/api/v1/scheduler/appointments/${id}`, data);
+    return response.data;
+  },
+  cancelAppointment: async (id, reason) => {
+    const response = await api.post(`/api/v1/scheduler/appointments/${id}/cancel`, { reason });
+    return response.data;
+  },
+};
+
 // Process Templates API
 export const processTemplatesAPI = {
   getAll: async () => {
