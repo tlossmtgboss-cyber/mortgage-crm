@@ -16,9 +16,9 @@
 .schedule-modal {
   background: white;
   border-radius: 12px;
-  max-width: 500px;
+  max-width: 680px;
   width: 100%;
-  padding: 32px;
+  padding: 32px 40px;
   position: relative;
   max-height: 90vh;
   overflow-y: auto;
@@ -113,14 +113,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 14px 10px;
+  padding: 14px 8px;
   border: 2px solid transparent;
   border-radius: 10px;
   background: #f7f7f7;
   cursor: pointer;
-  width: 64px;
-  min-width: 64px;
-  height: 80px;
+  width: 76px;
+  min-width: 76px;
+  height: 88px;
   transition: all 0.15s;
 }
 
@@ -155,12 +155,13 @@
 }
 
 .schedule-day-name {
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 600;
   color: #666;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   margin-bottom: 4px;
+  white-space: nowrap;
 }
 
 .schedule-day-number {
@@ -385,9 +386,10 @@
 }
 
 /* Responsive */
-@media (max-width: 500px) {
+@media (max-width: 720px) {
   .schedule-modal {
-    padding: 24px 16px;
+    max-width: 95%;
+    padding: 24px 20px;
     margin: 10px;
   }
 
@@ -396,9 +398,9 @@
   }
 
   .schedule-date-card {
-    width: 52px;
-    min-width: 52px;
-    height: 68px;
+    width: 60px;
+    min-width: 60px;
+    height: 76px;
     padding: 10px 6px;
   }
 
@@ -406,7 +408,10 @@
     font-size: 18px;
   }
 
-  .schedule-day-name,
+  .schedule-day-name {
+    font-size: 8px;
+  }
+
   .schedule-month {
     font-size: 9px;
   }

@@ -259,11 +259,11 @@ function Leads() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
-      return;
-    }
     try {
       await leadsAPI.delete(id);
+      // Clear cache and reload
+      localStorage.removeItem('leads_data');
+      localStorage.removeItem('leads_data_time');
       loadLeads();
     } catch (err) {
       console.error('Failed to delete lead:', err);

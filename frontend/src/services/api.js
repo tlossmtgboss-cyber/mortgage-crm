@@ -1,10 +1,13 @@
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
 import { ensureArray } from '../utils/arrayHelpers';
 
 // Use direct Railway URL for production, localhost for development
 // Bypassing Vercel proxy due to POST request issues
+// Also use production URL for native mobile apps (Capacitor)
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-export const API_BASE_URL = isProduction
+const isNativeApp = Capacitor.isNativePlatform();
+export const API_BASE_URL = (isProduction || isNativeApp)
   ? 'https://mortgage-crm-production-7a9a.up.railway.app' // Direct Railway URL
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 

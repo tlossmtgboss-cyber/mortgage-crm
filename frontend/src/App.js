@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
@@ -254,8 +255,12 @@ function App() {
             <ImpersonationBanner />
             <div className="app">
         <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
+          {/* Public routes - Mobile app skips landing page */}
+          <Route path="/" element={
+            Capacitor.isNativePlatform()
+              ? (isAuthenticated() ? <Navigate to="/dashboard" /> : <Navigate to="/login" />)
+              : <LandingPage />
+          } />
           <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
