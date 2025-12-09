@@ -15,6 +15,7 @@ import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import VideoMeetings from '../components/VideoMeetings';
+import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
 import './LeadDetail.css';
 
@@ -3147,18 +3148,15 @@ function LeadDetail() {
         />
       )}
 
-      {/* UVIP Video Meetings Modal */}
-      {showVideoMeetings && (
-        <div className="modal-overlay" onClick={() => setShowVideoMeetings(false)}>
-          <div className="modal-content video-meetings-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => setShowVideoMeetings(false)}>×</button>
-            <VideoMeetings
-              onClose={() => setShowVideoMeetings(false)}
-              leadId={lead?.id}
-            />
-          </div>
-        </div>
-      )}
+      {/* UVIP Video Call Schedule Modal */}
+      <VideoCallScheduleModal
+        isOpen={showVideoMeetings}
+        onClose={() => setShowVideoMeetings(false)}
+        borrower={lead}
+        onStartVideoCall={(data) => {
+          console.log('Video call started:', data);
+        }}
+      />
 
       {/* Email Composer Modal */}
       <EmailComposerModal

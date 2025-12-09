@@ -1,0 +1,449 @@
+/* Video Call Schedule Modal Styles */
+
+.video-schedule-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.video-schedule-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.video-schedule-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.video-schedule-modal-close:hover {
+  background: #f3f4f6;
+}
+
+.video-schedule-modal-close svg {
+  width: 20px;
+  height: 20px;
+  color: #6b7280;
+}
+
+.video-schedule-modal h2 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Start Video Call Now Section */
+.video-start-now-section {
+  margin-bottom: 20px;
+}
+
+.video-start-now-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.video-start-now-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.video-start-now-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.video-start-now-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Divider */
+.video-schedule-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.video-schedule-divider::before,
+.video-schedule-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.video-schedule-divider span {
+  padding: 0 16px;
+}
+
+/* Week Picker */
+.video-schedule-week-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.video-schedule-week-nav {
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.video-schedule-week-nav:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.video-schedule-week-nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.video-schedule-week-nav svg {
+  width: 18px;
+  height: 18px;
+  color: #6b7280;
+}
+
+.video-schedule-week-dates {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.video-schedule-date-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.video-schedule-date-card:hover:not(:disabled) {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.video-schedule-date-card.selected {
+  background: #10b981;
+  border-color: #10b981;
+  color: white;
+}
+
+.video-schedule-date-card.selected .video-schedule-day-name,
+.video-schedule-date-card.selected .video-schedule-day-number,
+.video-schedule-date-card.selected .video-schedule-month {
+  color: white;
+}
+
+.video-schedule-date-card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.video-schedule-date-card.today {
+  border-color: #10b981;
+}
+
+.video-schedule-day-name {
+  font-size: 9px;
+  font-weight: 500;
+  color: #9ca3af;
+  letter-spacing: 0.5px;
+}
+
+.video-schedule-day-number {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.2;
+}
+
+.video-schedule-month {
+  font-size: 10px;
+  font-weight: 500;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+/* Time Section */
+.video-schedule-time-section {
+  margin-bottom: 20px;
+}
+
+.video-schedule-time-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.video-schedule-time-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.video-schedule-time-dropdown-wrapper {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.video-schedule-time-dropdown {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1f2937;
+  background: white;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.video-schedule-time-dropdown:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.video-schedule-dropdown-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+/* Meeting Mode Indicator */
+.video-schedule-mode-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #059669;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.video-schedule-mode-indicator svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Team Section */
+.video-schedule-team-section {
+  margin-bottom: 20px;
+}
+
+.video-schedule-team-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.video-schedule-team-dropdown-wrapper {
+  position: relative;
+}
+
+.video-schedule-team-dropdown {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1f2937;
+  background: white;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.video-schedule-team-dropdown:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+/* Borrower Info */
+.video-schedule-borrower-info {
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.video-schedule-borrower-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.video-schedule-borrower-info strong {
+  color: #374151;
+}
+
+/* Submit Button */
+.video-schedule-submit-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: #1f2937;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.video-schedule-submit-btn:hover:not(:disabled) {
+  background: #374151;
+}
+
+.video-schedule-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Error Message */
+.video-schedule-error {
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+/* Success State */
+.video-schedule-success {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.video-schedule-success .success-icon {
+  width: 64px;
+  height: 64px;
+  background: #10b981;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+
+.video-schedule-success .success-icon svg {
+  width: 32px;
+  height: 32px;
+  color: white;
+}
+
+.video-schedule-success h2 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  color: #1f2937;
+}
+
+.video-schedule-success p {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .video-schedule-modal {
+    padding: 20px;
+    margin: 10px;
+    max-height: 95vh;
+  }
+
+  .video-schedule-week-dates {
+    gap: 4px;
+  }
+
+  .video-schedule-date-card {
+    padding: 8px 8px;
+    min-width: 48px;
+  }
+
+  .video-schedule-day-number {
+    font-size: 18px;
+  }
+
+  .video-start-now-btn {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+}
