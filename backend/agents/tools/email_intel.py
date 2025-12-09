@@ -956,6 +956,164 @@ def search_email_inbox(
 
 
 @mortgage_tool(
+    name="find_contact_email",
+    description="Find a person's email address by searching CRM contacts, leads, team members, and users. "
+                "Use this when user wants to email someone and you need their email address. "
+                "Searches across: team members/users, leads, loan borrowers, and partners.",
+    agent_roles=["email_intelligence", "all"],
+    risk_level="LOW",
+    parameters={
+        "name": "Name to search for (first name, last name, or full name)",
+        "user_id": "Current user ID for context",
+    },
+)
+def find_contact_email(
+    name: str,
+    user_id: Optional[int] = None,
+) -> ToolResult:
+    """
+    Find a contact's email address by searching across all CRM data sources.
+    Searches: users/team members, leads, loan borrowers, partners.
+    """
+    if not name or len(name.strip()) < 2:
+        return ToolResult.error(
+            "Please provide a name to search for (at least 2 characters).",
+            ["Name too short"]
+        )
+
+    search_name = name.strip().lower()
+    search_parts = search_name.split()
+
+    results = []
+
+    # Search users/team members first (most likely for internal emails)
+    try:
+        users = execute_query("""
+            SELECT id, name, email, role, phone
+            FROM users
+            WHERE LOWER(name) LIKE :search
+            OR LOWER(email) LIKE :search
+            LIMIT 10
+        """, {"search": f"%{search_name}%"})
+
+        for u in users:
+            if u.get("email"):
+                results.append({
+                    "type": "team_member",
+                    "id": u.get("id"),
+                    "name": u.get("name"),
+                    "email": u.get("email"),
+                    "role": u.get("role"),
+                    "phone": u.get("phone"),
+                    "match_score": 100 if search_name in (u.get("name") or "").lower() else 80,
+                })
+    except Exception as e:
+        pass  # Continue searching other sources
+
+    # Search leads
+    try:
+        leads = execute_query("""
+            SELECT id, name, email, phone, stage
+            FROM leads
+            WHERE LOWER(name) LIKE :search
+            OR LOWER(email) LIKE :search
+            LIMIT 10
+        """, {"search": f"%{search_name}%"})
+
+        for l in leads:
+            if l.get("email"):
+                results.append({
+                    "type": "lead",
+                    "id": l.get("id"),
+                    "name": l.get("name"),
+                    "email": l.get("email"),
+                    "phone": l.get("phone"),
+                    "stage": l.get("stage"),
+                    "match_score": 90 if search_name in (l.get("name") or "").lower() else 70,
+                })
+    except Exception as e:
+        pass
+
+    # Search loan borrowers
+    try:
+        loans = execute_query("""
+            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone, stage
+            FROM loans
+            WHERE LOWER(borrower_name) LIKE :search
+            OR LOWER(borrower_email) LIKE :search
+            LIMIT 10
+        """, {"search": f"%{search_name}%"})
+
+        for loan in loans:
+            if loan.get("borrower_email"):
+                results.append({
+                    "type": "borrower",
+                    "id": loan.get("id"),
+                    "loan_number": loan.get("loan_number"),
+                    "name": loan.get("borrower_name"),
+                    "email": loan.get("borrower_email"),
+                    "phone": loan.get("borrower_phone"),
+                    "stage": loan.get("stage"),
+                    "match_score": 85 if search_name in (loan.get("borrower_name") or "").lower() else 65,
+                })
+    except Exception as e:
+        pass
+
+    # Search partners/referral sources
+    try:
+        partners = execute_query("""
+            SELECT id, name, email, phone, company, partner_type
+            FROM partners
+            WHERE LOWER(name) LIKE :search
+            OR LOWER(email) LIKE :search
+            OR LOWER(company) LIKE :search
+            LIMIT 10
+        """, {"search": f"%{search_name}%"})
+
+        for p in partners:
+            if p.get("email"):
+                results.append({
+                    "type": "partner",
+                    "id": p.get("id"),
+                    "name": p.get("name"),
+                    "email": p.get("email"),
+                    "phone": p.get("phone"),
+                    "company": p.get("company"),
+                    "partner_type": p.get("partner_type"),
+                    "match_score": 75,
+                })
+    except Exception as e:
+        pass
+
+    # Sort by match score
+    results.sort(key=lambda x: x.get("match_score", 0), reverse=True)
+
+    if not results:
+        return ToolResult.success(
+            data={
+                "contacts": [],
+                "count": 0,
+                "search_name": name,
+                "message": f"No contacts found matching '{name}'. Try a different spelling or check if they're in the CRM.",
+            },
+            message=f"No contacts found for '{name}'"
+        )
+
+    # Return best match prominently
+    best_match = results[0]
+
+    return ToolResult.success(
+        data={
+            "contacts": results[:5],  # Top 5 matches
+            "count": len(results),
+            "search_name": name,
+            "best_match": best_match,
+        },
+        message=f"Found {best_match['name']} ({best_match['email']}) - {best_match['type']}"
+    )
+
+
+@mortgage_tool(
     name="get_emails_needing_response",
     description="Get emails from your inbox that need a response. Shows unread/pending emails requiring attention, "
                 "prioritized by urgency. Use this when user asks about emails to respond to, urgent emails, or inbox status.",
