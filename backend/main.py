@@ -3194,7 +3194,7 @@ class BorrowerApplication(Base):
 
     # Metadata
     notes = Column(Text)
-    metadata = Column(JSON, default=dict)
+    application_metadata = Column(JSON, default=dict)  # Renamed from 'metadata' to avoid SQLAlchemy reserved word
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
