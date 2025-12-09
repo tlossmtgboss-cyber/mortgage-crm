@@ -869,20 +869,38 @@ PROFESSIONAL NETWORK (Circle of Cashflow)
                 missing_professionals.append(type_name)
             elif has_professional == 'Yes':
                 # Create a circle contact placeholder for this professional
+                # Use savepoint to avoid transaction abort on table-not-exists
                 try:
-                    db.execute(text("""
-                        INSERT INTO circle_contacts (lead_id, name, type, notes, created_at)
-                        VALUES (:lead_id, :name, :type, :notes, NOW())
-                        ON CONFLICT DO NOTHING
-                    """), {
-                        "lead_id": lead.id,
-                        "name": f"{submission.name}'s {type_name}",
-                        "type": type_name,
-                        "notes": f"Rating: {rating or 'Not rated'}. Added from Mortgage Planner Questionnaire."
-                    })
-                    circle_contacts_created.append(type_name)
+                    # Check if table exists first to avoid transaction abort
+                    table_check = db.execute(text("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_name = 'circle_contacts'
+                        )
+                    """)).scalar()
+
+                    if table_check:
+                        db.execute(text("""
+                            INSERT INTO circle_contacts (lead_id, name, type, notes, created_at)
+                            VALUES (:lead_id, :name, :type, :notes, NOW())
+                            ON CONFLICT DO NOTHING
+                        """), {
+                            "lead_id": lead.id,
+                            "name": f"{submission.name}'s {type_name}",
+                            "type": type_name,
+                            "notes": f"Rating: {rating or 'Not rated'}. Added from Mortgage Planner Questionnaire."
+                        })
+                        circle_contacts_created.append(type_name)
+                    else:
+                        logger.info(f"circle_contacts table doesn't exist, skipping for {type_name}")
                 except Exception as e:
                     logger.warning(f"Could not create circle contact for {type_name}: {e}")
+                    # Rollback to a clean state if there was an error
+                    db.rollback()
+                    # Re-add the lead since we rolled back
+                    if not existing_lead:
+                        db.add(lead)
+                        db.flush()
 
                 # If rated Excellent, create task to get introduction
                 if rating == 'Excellent':
