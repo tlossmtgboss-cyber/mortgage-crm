@@ -1,0 +1,360 @@
+"""
+Deepgram Voice Agent API Integration
+All-in-one voice agent using Deepgram's Voice Agent API
+Handles STT, LLM, and TTS in a single WebSocket connection
+"""
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+import logging
+import json
+import asyncio
+import base64
+import os
+from typing import Optional, Dict, Any
+import uuid
+
+# Database imports
+from database import get_db
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/voice-agent", tags=["voice-agent"])
+
+# Configuration
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
+
+# Aria system prompt for voice interactions
+ARIA_SYSTEM_PROMPT = """You are Aria, a warm and professional AI assistant for mortgage loan officers.
+You help them manage their pipeline, follow up with leads, schedule appointments, and answer questions.
+
+Voice conversation guidelines:
+- Keep responses concise and conversational (under 50 words when possible)
+- Use natural speech patterns
+- Be warm, friendly, and professional
+- When asked to perform actions, confirm what you're doing
+- Ask clarifying questions when needed
+
+You can help with:
+- Looking up leads and contacts
+- Checking pipeline status
+- Scheduling appointments
+- Sending text messages
+- Creating tasks and follow-ups
+- Providing loan and market information"""
+
+
+class DeepgramVoiceAgentSession:
+    """
+    Manages a voice conversation session using Deepgram's Voice Agent API.
+    Acts as a proxy between the mobile client and Deepgram.
+    """
+
+    def __init__(self, client_ws: WebSocket, user_id: str, db: Session):
+        self.client_ws = client_ws
+        self.user_id = user_id
+        self.db = db
+        self.session_id = str(uuid.uuid4())
+        self.is_active = True
+        self.deepgram_ws = None
+
+    async def start(self):
+        """Initialize the voice agent session"""
+        logger.info(f"[VoiceAgent] Starting session {self.session_id} for user {self.user_id}")
+
+        try:
+            # Connect to Deepgram Voice Agent API
+            await self._connect_deepgram()
+
+            # Send session started to client
+            await self._send_to_client("session_started", {
+                "session_id": self.session_id,
+                "provider": "deepgram_voice_agent"
+            })
+
+        except Exception as e:
+            logger.error(f"[VoiceAgent] Failed to start session: {e}")
+            await self._send_to_client("error", {"message": str(e)})
+            raise
+
+    async def _connect_deepgram(self):
+        """Connect to Deepgram Voice Agent WebSocket"""
+        import websockets
+
+        # Deepgram Voice Agent WebSocket URL
+        url = "wss://agent.deepgram.com/agent"
+
+        headers = {
+            "Authorization": f"Token {DEEPGRAM_API_KEY}"
+        }
+
+        logger.info("[VoiceAgent] Connecting to Deepgram Voice Agent API...")
+        self.deepgram_ws = await websockets.connect(url, extra_headers=headers)
+        logger.info("[VoiceAgent] Connected to Deepgram Voice Agent API")
+
+        # Configure the agent
+        config = {
+            "type": "SettingsConfiguration",
+            "audio": {
+                "input": {
+                    "encoding": "linear16",
+                    "sample_rate": 16000
+                },
+                "output": {
+                    "encoding": "linear16",
+                    "sample_rate": 16000,
+                    "container": "none"
+                }
+            },
+            "agent": {
+                "listen": {
+                    "model": "nova-2"
+                },
+                "think": {
+                    "provider": {
+                        "type": "anthropic"
+                    },
+                    "model": "claude-3-haiku-20240307",
+                    "instructions": ARIA_SYSTEM_PROMPT
+                },
+                "speak": {
+                    "model": "aura-asteria-en"
+                }
+            }
+        }
+
+        await self.deepgram_ws.send(json.dumps(config))
+        logger.info("[VoiceAgent] Sent configuration to Deepgram")
+
+        # Start listening for Deepgram responses
+        asyncio.create_task(self._listen_deepgram())
+
+    async def _listen_deepgram(self):
+        """Listen for messages from Deepgram and forward to client"""
+        try:
+            async for message in self.deepgram_ws:
+                if not self.is_active:
+                    break
+
+                # Check if binary (audio) or text (JSON)
+                if isinstance(message, bytes):
+                    # Audio data - send to client
+                    await self._send_to_client("audio", {
+                        "data": base64.b64encode(message).decode("utf-8"),
+                        "format": "linear16",
+                        "sample_rate": 16000
+                    })
+                else:
+                    # JSON message
+                    try:
+                        data = json.loads(message)
+                        msg_type = data.get("type", "")
+
+                        logger.debug(f"[VoiceAgent] Deepgram message: {msg_type}")
+
+                        if msg_type == "Welcome":
+                            logger.info("[VoiceAgent] Deepgram welcome received")
+
+                        elif msg_type == "SettingsApplied":
+                            logger.info("[VoiceAgent] Settings applied, ready for audio")
+                            await self._send_to_client("ready", {})
+
+                        elif msg_type == "ConversationText":
+                            # Transcription or response text
+                            role = data.get("role", "")
+                            content = data.get("content", "")
+
+                            if role == "user":
+                                await self._send_to_client("transcript", {
+                                    "text": content,
+                                    "is_final": True
+                                })
+                            elif role == "assistant":
+                                await self._send_to_client("response_text", {
+                                    "text": content
+                                })
+
+                        elif msg_type == "UserStartedSpeaking":
+                            await self._send_to_client("user_speaking", {})
+
+                        elif msg_type == "AgentThinking":
+                            await self._send_to_client("processing", {})
+
+                        elif msg_type == "AgentStartedSpeaking":
+                            await self._send_to_client("speaking", {})
+
+                        elif msg_type == "AgentAudioDone":
+                            await self._send_to_client("speech_complete", {})
+
+                        elif msg_type == "Error":
+                            error_msg = data.get("message", "Unknown error")
+                            logger.error(f"[VoiceAgent] Deepgram error: {error_msg}")
+                            await self._send_to_client("error", {"message": error_msg})
+
+                    except json.JSONDecodeError:
+                        logger.warning(f"[VoiceAgent] Could not parse message: {message[:100]}")
+
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.info(f"[VoiceAgent] Deepgram connection closed: {e}")
+        except Exception as e:
+            logger.error(f"[VoiceAgent] Error in Deepgram listener: {e}")
+        finally:
+            self.is_active = False
+
+    async def handle_client_message(self, message: Dict[str, Any]):
+        """Handle incoming message from mobile client"""
+        msg_type = message.get("type", "")
+
+        if msg_type == "audio":
+            # Forward audio to Deepgram
+            audio_data = message.get("data", "")
+            if audio_data and self.deepgram_ws:
+                audio_bytes = base64.b64decode(audio_data)
+
+                # Strip WAV header if present
+                if len(audio_bytes) > 44 and audio_bytes[:4] == b'RIFF':
+                    audio_bytes = audio_bytes[44:]
+
+                await self.deepgram_ws.send(audio_bytes)
+                logger.debug(f"[VoiceAgent] Forwarded {len(audio_bytes)} bytes to Deepgram")
+
+        elif msg_type == "text_input":
+            # Send text directly (for testing or fallback)
+            text = message.get("text", "")
+            if text and self.deepgram_ws:
+                inject_msg = {
+                    "type": "InjectAgentMessage",
+                    "message": text
+                }
+                await self.deepgram_ws.send(json.dumps(inject_msg))
+
+        elif msg_type == "interrupt":
+            # Interrupt the agent
+            if self.deepgram_ws:
+                interrupt_msg = {"type": "ClearPlayback"}
+                await self.deepgram_ws.send(json.dumps(interrupt_msg))
+
+        elif msg_type == "ping":
+            await self._send_to_client("pong", {})
+
+    async def _send_to_client(self, event_type: str, data: Dict[str, Any]):
+        """Send event to mobile client"""
+        try:
+            await self.client_ws.send_json({
+                "type": event_type,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                **data
+            })
+        except Exception as e:
+            logger.error(f"[VoiceAgent] Error sending to client: {e}")
+
+    async def close(self):
+        """Close the session"""
+        self.is_active = False
+
+        if self.deepgram_ws:
+            try:
+                await self.deepgram_ws.close()
+            except:
+                pass
+
+        logger.info(f"[VoiceAgent] Session {self.session_id} closed")
+
+
+# =============================================================================
+# WebSocket Endpoint
+# =============================================================================
+
+@router.websocket("/ws")
+async def voice_agent_websocket(
+    websocket: WebSocket,
+    db: Session = Depends(get_db)
+):
+    """
+    WebSocket endpoint for Deepgram Voice Agent.
+
+    This proxies between the mobile app and Deepgram's Voice Agent API,
+    providing a unified STT + LLM + TTS solution.
+
+    Message Types (Client -> Server):
+    - {"type": "audio", "data": "<base64-audio>"}
+    - {"type": "text_input", "text": "..."}
+    - {"type": "interrupt"}
+    - {"type": "ping"}
+
+    Message Types (Server -> Client):
+    - {"type": "session_started", "session_id": "..."}
+    - {"type": "ready"}
+    - {"type": "transcript", "text": "...", "is_final": bool}
+    - {"type": "user_speaking"}
+    - {"type": "processing"}
+    - {"type": "speaking"}
+    - {"type": "response_text", "text": "..."}
+    - {"type": "audio", "data": "<base64-audio>", "format": "linear16"}
+    - {"type": "speech_complete"}
+    - {"type": "error", "message": "..."}
+    - {"type": "pong"}
+    """
+    logger.info(f"[VoiceAgent] WebSocket connection from {websocket.client}")
+
+    session = None
+
+    try:
+        await websocket.accept()
+        logger.info("[VoiceAgent] WebSocket accepted")
+
+        # Get user from auth token
+        user_id = "demo@example.com"
+        token = websocket.query_params.get("token")
+
+        if token:
+            try:
+                from jose import jwt, JWTError
+                SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                user_id = payload.get("sub", user_id)
+                logger.info(f"[VoiceAgent] Authenticated user: {user_id}")
+            except Exception as e:
+                logger.warning(f"[VoiceAgent] Token validation failed: {e}")
+
+        # Create and start session
+        session = DeepgramVoiceAgentSession(websocket, user_id, db)
+        await session.start()
+
+        # Main message loop
+        while session.is_active:
+            try:
+                message = await websocket.receive_json()
+                await session.handle_client_message(message)
+            except WebSocketDisconnect:
+                logger.info("[VoiceAgent] Client disconnected")
+                break
+
+    except Exception as e:
+        logger.error(f"[VoiceAgent] Error: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except:
+            pass
+
+    finally:
+        if session:
+            await session.close()
+
+
+@router.get("/status")
+async def get_voice_agent_status():
+    """Get voice agent status"""
+    return {
+        "enabled": bool(DEEPGRAM_API_KEY),
+        "provider": "deepgram_voice_agent",
+        "features": {
+            "stt": "nova-2",
+            "llm": "claude-3-haiku",
+            "tts": "aura-asteria-en"
+        }
+    }

@@ -18634,6 +18634,10 @@ app.include_router(voice_router, tags=["Voice AI"])
 from mobile_voice_routes import router as mobile_voice_router
 app.include_router(mobile_voice_router, tags=["Mobile Voice"])
 
+# Include Deepgram Voice Agent routes (new all-in-one voice API)
+from deepgram_voice_agent import router as deepgram_voice_agent_router
+app.include_router(deepgram_voice_agent_router, tags=["Voice Agent"])
+
 # Include Vapi AI Receptionist routes
 from vapi_routes import router as vapi_router
 app.include_router(vapi_router, tags=["Vapi AI"])
