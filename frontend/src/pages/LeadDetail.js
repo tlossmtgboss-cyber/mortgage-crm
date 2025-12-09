@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -1207,7 +1207,36 @@ function LeadDetail() {
   const handleAction = async (action) => {
     switch(action) {
       case 'call':
-        window.open(`tel:${lead.phone}`, '_self');
+        // Use click-to-dial - calls your phone first, then bridges to the contact
+        if (!lead.phone) {
+          alert('No phone number available for this lead');
+          return;
+        }
+        try {
+          // Clean up phone number (remove formatting)
+          const cleanPhone = lead.phone.replace(/[^\d+]/g, '');
+          const result = await dialerAPI.clickToDial({
+            phone_number: cleanPhone,
+            contact_name: lead.name || 'Contact',
+            lead_id: lead.id
+          });
+          if (result.success) {
+            alert(`Calling your phone now... When you answer, you'll be connected to ${lead.name || 'the contact'}.`);
+          } else {
+            // If click-to-dial fails (no settings configured), fall back to tel: link
+            if (result.error?.includes('cell phone not configured') || result.error?.includes('caller ID')) {
+              alert('Click-to-dial is not configured. Please set up your phone number in Settings > Telephony.\n\nFalling back to phone app...');
+              window.open(`tel:${lead.phone}`, '_self');
+            } else {
+              alert(`Call failed: ${result.error || 'Unknown error'}`);
+            }
+          }
+        } catch (err) {
+          console.error('Click-to-dial error:', err);
+          // Fall back to tel: link if API call fails
+          alert('Click-to-dial service unavailable. Opening phone app instead...');
+          window.open(`tel:${lead.phone}`, '_self');
+        }
         break;
       case 'sms':
         setShowSMSModal(true);

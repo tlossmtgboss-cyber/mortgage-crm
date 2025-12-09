@@ -697,6 +697,30 @@ export const teamAPI = {
   },
 };
 
+// Dialer / Click-to-Call API
+export const dialerAPI = {
+  // Click-to-dial - calls your phone first, then bridges to the contact
+  clickToDial: async (data) => {
+    const response = await api.post('/api/v1/dialer/click-to-dial', data);
+    return response.data;
+  },
+  // Get agent's telephony settings
+  getSettings: async () => {
+    const response = await api.get('/api/v1/dialer/settings');
+    return response.data;
+  },
+  // Update agent's telephony settings
+  updateSettings: async (data) => {
+    const response = await api.put('/api/v1/dialer/settings', data);
+    return response.data;
+  },
+  // Get call history
+  getCallLogs: async (params = {}) => {
+    const response = await api.get('/api/v1/dialer/call-logs', { params });
+    return response.data;
+  },
+};
+
 // Voice AI Receptionist
 export const voiceAPI = {
   makeCall: async (data) => {
