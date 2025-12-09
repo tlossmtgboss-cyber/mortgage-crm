@@ -82,8 +82,8 @@ class DeepgramVoiceAgentSession:
         """Connect to Deepgram Voice Agent WebSocket"""
         import websockets
 
-        # Deepgram Voice Agent WebSocket URL
-        url = "wss://agent.deepgram.com/agent"
+        # Deepgram Voice Agent WebSocket URL (correct endpoint)
+        url = "wss://agent.deepgram.com/v1/agent/converse"
 
         headers = {
             "Authorization": f"Token {DEEPGRAM_API_KEY}"
