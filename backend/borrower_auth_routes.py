@@ -42,24 +42,26 @@ BORROWER_TOKEN_EXPIRY_DAYS = 90
 # Google OAuth
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_BORROWER_REDIRECT_URI", f"{FRONTEND_URL}/apply/oauth/google/callback")
+# Callback goes to backend, which then redirects to frontend with token
+BACKEND_URL = os.getenv("BACKEND_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_BORROWER_REDIRECT_URI", f"{BACKEND_URL}/api/v1/borrower-auth/google/callback")
 
 # Facebook OAuth
 FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID", "")
 FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET", "")
-FACEBOOK_REDIRECT_URI = os.getenv("FACEBOOK_BORROWER_REDIRECT_URI", f"{FRONTEND_URL}/apply/oauth/facebook/callback")
+FACEBOOK_REDIRECT_URI = os.getenv("FACEBOOK_BORROWER_REDIRECT_URI", f"{BACKEND_URL}/api/v1/borrower-auth/facebook/callback")
 
 # LinkedIn OAuth
 LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID", "")
 LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET", "")
-LINKEDIN_REDIRECT_URI = os.getenv("LINKEDIN_BORROWER_REDIRECT_URI", f"{FRONTEND_URL}/apply/oauth/linkedin/callback")
+LINKEDIN_REDIRECT_URI = os.getenv("LINKEDIN_BORROWER_REDIRECT_URI", f"{BACKEND_URL}/api/v1/borrower-auth/linkedin/callback")
 
 # Apple Sign In
 APPLE_CLIENT_ID = os.getenv("APPLE_CLIENT_ID", "")  # Service ID
 APPLE_TEAM_ID = os.getenv("APPLE_TEAM_ID", "")
 APPLE_KEY_ID = os.getenv("APPLE_KEY_ID", "")
 APPLE_PRIVATE_KEY = os.getenv("APPLE_PRIVATE_KEY", "")  # Contents of .p8 file
-APPLE_REDIRECT_URI = os.getenv("APPLE_BORROWER_REDIRECT_URI", f"{FRONTEND_URL}/apply/oauth/apple/callback")
+APPLE_REDIRECT_URI = os.getenv("APPLE_BORROWER_REDIRECT_URI", f"{BACKEND_URL}/api/v1/borrower-auth/apple/callback")
 
 
 # =============================================================================
