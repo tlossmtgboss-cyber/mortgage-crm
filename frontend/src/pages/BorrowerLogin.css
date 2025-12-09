@@ -355,6 +355,54 @@
   margin: 0;
 }
 
+/* Demo Section */
+.demo-section {
+  margin-top: 24px;
+}
+
+.demo-divider {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.demo-divider::before,
+.demo-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #fcd34d;
+}
+
+.demo-divider span {
+  padding: 0 12px;
+  font-size: 11px;
+  color: #b45309;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.btn-demo {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.btn-demo:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .login-container {

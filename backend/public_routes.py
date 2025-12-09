@@ -873,11 +873,12 @@ PROFESSIONAL NETWORK (Circle of Cashflow)
                 if rating == 'Excellent':
                     excellent_professionals.append(type_name)
 
+        # Create tasks using raw SQL to avoid column mismatch issues
+        # (The ORM model may have columns that don't exist in production DB)
+
         # Create tasks for excellent-rated professionals (get introductions)
         for prof_type in excellent_professionals:
-            intro_task = Task(
-                title=f"Get Introduction to {submission.name}'s {prof_type}",
-                description=f"""{submission.name} has rated their {prof_type} as "Excellent" in their Mortgage Planner Questionnaire.
+            intro_description = f"""{submission.name} has rated their {prof_type} as "Excellent" in their Mortgage Planner Questionnaire.
 
 ACTION REQUIRED:
 Ask {submission.name} for an introduction to their {prof_type}. This is a great opportunity to:
@@ -891,22 +892,25 @@ CONTACT INFO:
 - Phone: {submission.phone}
 
 Suggested approach: Mention that you work with many clients who need a {prof_type}, and you'd love to connect with professionals your clients trust.
-""",
-                priority="high",
-                status="pending",
-                owner_id=loan_officer_id,
-                lead_id=lead.id,
-                due_date=datetime.utcnow() + timedelta(days=7),
-                related_type="introduction_request",
-                related_contact_name=submission.name
-            )
-            db.add(intro_task)
+"""
+            db.execute(text("""
+                INSERT INTO tasks (title, description, priority, status, owner_id, lead_id, due_date, related_type, related_contact_name, created_at, updated_at)
+                VALUES (:title, :description, :priority, :status, :owner_id, :lead_id, :due_date, :related_type, :related_contact_name, NOW(), NOW())
+            """), {
+                "title": f"Get Introduction to {submission.name}'s {prof_type}",
+                "description": intro_description,
+                "priority": "high",
+                "status": "pending",
+                "owner_id": loan_officer_id,
+                "lead_id": lead.id,
+                "due_date": datetime.utcnow() + timedelta(days=7),
+                "related_type": "introduction_request",
+                "related_contact_name": submission.name
+            })
 
         # Create tasks for missing professionals (make referrals)
         if missing_professionals:
-            referral_task = Task(
-                title=f"Make Referrals for {submission.name}",
-                description=f"""{submission.name} needs the following professionals based on their Mortgage Planner Questionnaire:
+            referral_description = f"""{submission.name} needs the following professionals based on their Mortgage Planner Questionnaire:
 
 PROFESSIONALS NEEDED:
 {chr(10).join(['- ' + p for p in missing_professionals])}
@@ -923,21 +927,24 @@ CONTACT INFO:
 - Phone: {submission.phone}
 
 Track which partners you introduce and follow up on the outcomes for your Circle of Cashflow records.
-""",
-                priority="medium",
-                status="pending",
-                owner_id=loan_officer_id,
-                lead_id=lead.id,
-                due_date=datetime.utcnow() + timedelta(days=3),
-                related_type="referral_opportunity",
-                related_contact_name=submission.name
-            )
-            db.add(referral_task)
+"""
+            db.execute(text("""
+                INSERT INTO tasks (title, description, priority, status, owner_id, lead_id, due_date, related_type, related_contact_name, created_at, updated_at)
+                VALUES (:title, :description, :priority, :status, :owner_id, :lead_id, :due_date, :related_type, :related_contact_name, NOW(), NOW())
+            """), {
+                "title": f"Make Referrals for {submission.name}",
+                "description": referral_description,
+                "priority": "medium",
+                "status": "pending",
+                "owner_id": loan_officer_id,
+                "lead_id": lead.id,
+                "due_date": datetime.utcnow() + timedelta(days=3),
+                "related_type": "referral_opportunity",
+                "related_contact_name": submission.name
+            })
 
         # Create review task for questionnaire
-        review_task = Task(
-            title=f"Review Questionnaire - {submission.name}",
-            description=f"""Review {submission.name}'s Mortgage Planner Questionnaire responses.
+        review_description = f"""Review {submission.name}'s Mortgage Planner Questionnaire responses.
 
 CONTACT INFO:
 - Email: {submission.email}
@@ -952,16 +959,21 @@ CIRCLE OF CASHFLOW STATUS:
 - Excellent-rated professionals to get introductions: {len(excellent_professionals)}
 - Missing professionals to refer: {len(missing_professionals)}
 - Circle contacts created: {len(circle_contacts_created)}
-""",
-            priority="high",
-            status="pending",
-            owner_id=loan_officer_id,
-            lead_id=lead.id,
-            due_date=datetime.utcnow() + timedelta(days=1),
-            related_type="questionnaire",
-            related_contact_name=submission.name
-        )
-        db.add(review_task)
+"""
+        db.execute(text("""
+            INSERT INTO tasks (title, description, priority, status, owner_id, lead_id, due_date, related_type, related_contact_name, created_at, updated_at)
+            VALUES (:title, :description, :priority, :status, :owner_id, :lead_id, :due_date, :related_type, :related_contact_name, NOW(), NOW())
+        """), {
+            "title": f"Review Questionnaire - {submission.name}",
+            "description": review_description,
+            "priority": "high",
+            "status": "pending",
+            "owner_id": loan_officer_id,
+            "lead_id": lead.id,
+            "due_date": datetime.utcnow() + timedelta(days=1),
+            "related_type": "questionnaire",
+            "related_contact_name": submission.name
+        })
 
         db.commit()
 
