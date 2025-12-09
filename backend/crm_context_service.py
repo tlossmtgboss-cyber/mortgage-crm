@@ -83,19 +83,18 @@ class CRMContextService:
     def _get_leads_context(db: Session, user_id: int) -> Dict[str, Any]:
         """Get leads summary and details"""
         try:
-            # Get lead counts by stage
+            # Get lead counts by stage (all leads, not filtered by owner)
             result = db.execute(text("""
                 SELECT stage, COUNT(*) as count
                 FROM leads
-                WHERE owner_id = :user_id
                 GROUP BY stage
-            """), {"user_id": user_id})
+            """))
             status_counts = {str(row[0]): row[1] for row in result}
 
             # Get total leads
             total = sum(status_counts.values())
 
-            # Get recent leads with comprehensive details
+            # Get recent leads with comprehensive details (all leads, not filtered by owner)
             result = db.execute(text("""
                 SELECT id, name, email, phone, co_applicant_name,
                        stage, source, loan_type, preapproval_amount,
@@ -109,10 +108,9 @@ class CRMContextService:
                        ai_score, sentiment, notes, last_contact,
                        created_at
                 FROM leads
-                WHERE owner_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT 50
-            """), {"user_id": user_id})
+            """))
 
             leads = []
             for row in result:
@@ -491,15 +489,14 @@ class CRMContextService:
             row = result.fetchone()
             closing_this_month = {"count": row[0], "volume": float(row[1])}
 
-            # Get conversion rates
+            # Get conversion rates (all leads)
             result = db.execute(text("""
                 SELECT
-                    COUNT(*) FILTER (WHERE stage = 'pre-approved') as pre_approved,
-                    COUNT(*) FILTER (WHERE stage = 'application') as applications,
-                    COUNT(*) FILTER (WHERE stage = 'closed') as closed
+                    COUNT(*) FILTER (WHERE stage = 'Pre-Approved') as pre_approved,
+                    COUNT(*) FILTER (WHERE stage = 'Application') as applications,
+                    COUNT(*) FILTER (WHERE stage IN ('Closed Won', 'Funded')) as closed
                 FROM leads
-                WHERE owner_id = :user_id
-            """), {"user_id": user_id})
+            """))
             row = result.fetchone()
 
             return {
@@ -1194,7 +1191,7 @@ class CRMContextService:
     def _get_top_referral_borrowers(db: Session, user_id: int) -> Dict[str, Any]:
         """Get top borrowers by referral score"""
         try:
-            # Get top 20 leads/borrowers by referral_source_score
+            # Get top 20 leads/borrowers by referral_source_score (all leads)
             result = db.execute(text("""
                 SELECT
                     id,
@@ -1210,12 +1207,11 @@ class CRMContextService:
                     job_title,
                     created_at
                 FROM leads
-                WHERE owner_id = :user_id
-                AND referral_source_score IS NOT NULL
+                WHERE referral_source_score IS NOT NULL
                 AND referral_source_score > 0
                 ORDER BY referral_source_score DESC
                 LIMIT 20
-            """), {"user_id": user_id})
+            """))
 
             borrowers = []
             for row in result:
