@@ -246,17 +246,31 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                 bot_record.video_url = bot_data.get("video_url")
 
                 # Fetch transcript text
+                transcript_text = ""
                 if bot_data.get("transcript_url"):
                     try:
                         transcript_response = requests.get(bot_data["transcript_url"], timeout=30)
                         if transcript_response.status_code == 200:
                             transcript_data = transcript_response.json()
                             words = transcript_data.get("words", [])
-                            bot_record.transcript_text = " ".join([w.get("text", "") for w in words])
+                            transcript_text = " ".join([w.get("text", "") for w in words])
+                            bot_record.transcript_text = transcript_text
                     except Exception as e:
                         logger.warning(f"Could not fetch transcript: {e}")
 
                 db.commit()
+
+                # Process the video call: summarize and create email draft
+                if transcript_text:
+                    import asyncio
+                    asyncio.create_task(
+                        process_video_call_recording(
+                            bot_record=bot_record,
+                            transcript=transcript_text,
+                            video_url=bot_data.get("video_url"),
+                            db=db
+                        )
+                    )
 
         return {"status": "success"}
 
@@ -298,6 +312,187 @@ async def list_bots(limit: int = 10):
     except Exception as e:
         logger.error(f"Error listing bots: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def process_video_call_recording(
+    bot_record,
+    transcript: str,
+    video_url: str,
+    db: Session
+):
+    """Process video call recording: summarize with AI and create email draft"""
+    import os
+    import httpx
+    from anthropic import Anthropic
+    from msal import ConfidentialClientApplication
+
+    logger.info(f"Processing video call recording for bot {bot_record.bot_id}...")
+
+    try:
+        # Get user email for draft creation
+        user_email = None
+        lead_name = None
+
+        if bot_record.user_id:
+            from main import User
+            user = db.query(User).filter(User.id == bot_record.user_id).first()
+            if user:
+                user_email = user.email
+
+        if bot_record.lead_id:
+            from main import Lead
+            lead = db.query(Lead).filter(Lead.id == bot_record.lead_id).first()
+            if lead:
+                lead_name = lead.name
+
+        # Step 1: Summarize with Claude
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        if not anthropic_key:
+            logger.error("Anthropic API key not configured")
+            return
+
+        logger.info("Generating professional summary with Claude...")
+        anthropic_client = Anthropic(api_key=anthropic_key)
+
+        client_identifier = lead_name or "Client"
+        meeting_platform = "Video Meeting"
+        if "zoom" in (bot_record.meeting_url or "").lower():
+            meeting_platform = "Zoom Meeting"
+        elif "teams" in (bot_record.meeting_url or "").lower():
+            meeting_platform = "Microsoft Teams Meeting"
+        elif "meet.google" in (bot_record.meeting_url or "").lower():
+            meeting_platform = "Google Meet"
+
+        summary_prompt = f"""You are a professional assistant for a mortgage loan officer.
+Summarize the following video meeting transcript into a professional meeting summary.
+
+Meeting Details:
+- Client: {client_identifier}
+- Platform: {meeting_platform}
+- Date: {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p')}
+
+Transcript:
+{transcript[:15000]}
+
+Create a professional meeting summary with the following sections:
+1. **Meeting Overview** - Brief 1-2 sentence summary
+2. **Key Discussion Points** - Bullet points of main topics discussed
+3. **Client Needs/Requests** - What the client is looking for
+4. **Decisions Made** - Any decisions or agreements reached
+5. **Action Items** - Any follow-up tasks or commitments made
+6. **Next Steps** - Recommended next actions
+
+Keep the summary concise but comprehensive. Use professional language appropriate for client records."""
+
+        summary_response = anthropic_client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": summary_prompt}]
+        )
+
+        summary = summary_response.content[0].text
+        logger.info(f"Summary generated: {len(summary)} characters")
+
+        # Store summary in database
+        bot_record.summary = summary
+        db.commit()
+
+        # Step 2: Create email draft in user's Outlook
+        if not user_email:
+            logger.warning("No user email available, skipping draft creation")
+            return
+
+        # Get Microsoft Graph token
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+        tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+
+        if not all([client_id, client_secret, tenant_id]):
+            logger.warning("Microsoft Graph credentials not configured, skipping draft creation")
+            return
+
+        app = ConfidentialClientApplication(
+            client_id=client_id,
+            client_credential=client_secret,
+            authority=f"https://login.microsoftonline.com/{tenant_id}"
+        )
+
+        result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+
+        if "access_token" not in result:
+            logger.error(f"Failed to get Graph token: {result.get('error_description')}")
+            return
+
+        token = result["access_token"]
+
+        # Format email body
+        email_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+<h2 style="color: #2c3e50;">🎥 {meeting_platform} Summary - {client_identifier}</h2>
+
+<table style="margin-bottom: 20px; border-collapse: collapse;">
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Client:</td><td>{client_identifier}</td></tr>
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Platform:</td><td>{meeting_platform}</td></tr>
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Date:</td><td>{datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p')}</td></tr>
+{f'<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Recording:</td><td><a href="{video_url}">View Recording</a></td></tr>' if video_url else ''}
+</table>
+
+<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+{summary.replace(chr(10), '<br>')}
+</div>
+
+<details style="margin-top: 20px;">
+<summary style="cursor: pointer; font-weight: bold; color: #3498db;">📝 View Full Transcript</summary>
+<div style="background: #f0f0f0; padding: 15px; margin-top: 10px; border-radius: 5px; white-space: pre-wrap; font-size: 13px; max-height: 500px; overflow-y: auto;">
+{transcript[:10000]}{'...' if len(transcript) > 10000 else ''}
+</div>
+</details>
+
+<p style="margin-top: 20px; color: #7f8c8d; font-size: 12px;">
+<em>This summary was automatically generated by Perennia AI. Please review before sending to the client.</em>
+</p>
+</body>
+</html>
+"""
+
+        # Create draft email via Microsoft Graph
+        draft_data = {
+            "subject": f"{meeting_platform} Summary - {client_identifier} - {datetime.now(timezone.utc).strftime('%m/%d/%Y')}",
+            "body": {
+                "contentType": "HTML",
+                "content": email_body
+            },
+            "importance": "normal"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://graph.microsoft.com/v1.0/users/{user_email}/messages",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                },
+                json=draft_data,
+                timeout=30.0
+            )
+
+            if response.status_code in [200, 201]:
+                draft_id = response.json().get("id")
+                logger.info(f"Email draft created successfully for video meeting: {draft_id}")
+
+                # Update bot record with draft info
+                if bot_record.meeting_metadata is None:
+                    bot_record.meeting_metadata = {}
+                bot_record.meeting_metadata['email_draft_id'] = draft_id
+                db.commit()
+            else:
+                logger.error(f"Failed to create draft: {response.status_code} - {response.text}")
+
+        logger.info(f"Video call recording processing complete for bot {bot_record.bot_id}")
+
+    except Exception as e:
+        logger.error(f"Error processing video call recording: {e}")
 
 
 # Export router

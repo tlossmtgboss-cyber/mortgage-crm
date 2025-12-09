@@ -252,28 +252,28 @@ const SLASettings = () => {
     fetchDashboard(); // Refresh to get original values
   };
 
-  // Trigger From options for inline dropdown
+  // Trigger From options for inline dropdown - consolidated list
   const triggerFromOptions = [
     { value: 'lead_created', label: 'Lead Created' },
     { value: 'loan_created', label: 'Loan Created' },
     { value: 'previous_milestone', label: 'Previous Milestone' },
     { value: 'lead_response', label: 'Lead Response' },
     { value: 'application_completed', label: 'Application Completed' },
-    { value: 'pre_qualified', label: 'Pre Qualified' },
+    { value: 'pre_qualified', label: 'Pre-Qualified' },
     { value: 'preapproval', label: 'Pre-Approval' },
     { value: 'disclosed', label: 'Disclosed' },
     { value: 'application_submitted', label: 'Application Submitted' },
-    { value: 'submitted_to_processing', label: 'Submitted To Processing' },
+    { value: 'submitted_to_processing', label: 'Submitted to Processing' },
     { value: 'appraisal_ordered', label: 'Appraisal Ordered' },
     { value: 'appraisal_received', label: 'Appraisal Received' },
     { value: 'title_ordered', label: 'Title Ordered' },
     { value: 'title_received', label: 'Title Received' },
     { value: 'insurance_ordered', label: 'Insurance Ordered' },
     { value: 'insurance_received', label: 'Insurance Received' },
-    { value: 'submitted_to_uw', label: 'Submit To Underwriting' },
+    { value: 'submitted_to_uw', label: 'Submitted to Underwriting' },
     { value: 'uw_decision', label: 'Underwriting Decision' },
     { value: 'approved', label: 'Approved' },
-    { value: 'clear_to_close', label: 'Clear To Close' },
+    { value: 'clear_to_close', label: 'Clear to Close' },
     { value: 'closing_docs_out', label: 'Closing Docs Out' },
     { value: 'funded', label: 'Loan Funded' }
   ];
@@ -1663,25 +1663,18 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     'closing_docs_out', 'closing_scheduled', 'closed', 'funded'
   ];
 
-  // Trigger From options - what event starts the SLA timer
+  // Trigger From options - what event starts the SLA timer (same as inline dropdown)
   const triggerFromOptions = [
     { value: 'lead_created', label: 'Lead Created' },
     { value: 'loan_created', label: 'Loan Created' },
-    { value: 'previous_milestone', label: 'Previous Milestone Completed' },
+    { value: 'previous_milestone', label: 'Previous Milestone' },
     { value: 'lead_response', label: 'Lead Response' },
     { value: 'application_completed', label: 'Application Completed' },
-    { value: 'application_review', label: 'Application Review' },
     { value: 'pre_qualified', label: 'Pre-Qualified' },
     { value: 'preapproval', label: 'Pre-Approval' },
-    { value: 'contract_received', label: 'Contract Received' },
     { value: 'disclosed', label: 'Disclosed' },
     { value: 'application_submitted', label: 'Application Submitted' },
-    { value: 'documents_requested', label: 'Documents Requested' },
-    { value: 'documents_received', label: 'Documents Received' },
-    { value: 'document_collection', label: 'Document Collection' },
-    { value: 'application_complete', label: 'Application Complete' },
     { value: 'submitted_to_processing', label: 'Submitted to Processing' },
-    { value: 'processing_start', label: 'Processing Start' },
     { value: 'appraisal_ordered', label: 'Appraisal Ordered' },
     { value: 'appraisal_received', label: 'Appraisal Received' },
     { value: 'title_ordered', label: 'Title Ordered' },
@@ -1691,12 +1684,9 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     { value: 'submitted_to_uw', label: 'Submitted to Underwriting' },
     { value: 'uw_decision', label: 'Underwriting Decision' },
     { value: 'approved', label: 'Approved' },
-    { value: 'conditions_issued', label: 'Conditions Issued' },
-    { value: 'conditions_cleared', label: 'Conditions Cleared' },
     { value: 'clear_to_close', label: 'Clear to Close' },
     { value: 'closing_docs_out', label: 'Closing Docs Out' },
-    { value: 'closing_scheduled', label: 'Closing Scheduled' },
-    { value: 'closed', label: 'Closed' }
+    { value: 'funded', label: 'Loan Funded' }
   ];
 
   const handleSubmit = (e) => {

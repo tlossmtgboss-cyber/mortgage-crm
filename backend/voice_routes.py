@@ -512,16 +512,25 @@ async def handle_call_status(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/recording-ready")
 async def handle_recording_ready(request: Request, db: Session = Depends(get_db)):
-    """Webhook when call recording is ready"""
+    """Webhook when call recording is ready - transcribes, summarizes, and creates email draft"""
     try:
         form_data = await request.form()
         call_sid = form_data.get("CallSid")
         recording_url = form_data.get("RecordingUrl")
         recording_sid = form_data.get("RecordingSid")
+        caller_number = form_data.get("From", "Unknown")
+        called_number = form_data.get("To", "")
+        call_duration = form_data.get("RecordingDuration", "0")
 
         logger.info(f"Recording ready for call {call_sid}: {recording_url}")
 
         # Update AI Receptionist Dashboard activity with recording URL
+        activity = None
+        user_id = None
+        lead_id = None
+        lead_name = None
+        user_email = None
+
         try:
             activity = db.query(AIReceptionistActivity).filter(
                 AIReceptionistActivity.conversation_id == call_sid
@@ -532,16 +541,302 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
                     activity.extra_data = {}
                 activity.extra_data['recording_url'] = recording_url
                 activity.extra_data['recording_sid'] = recording_sid
+                user_id = activity.user_id
+                lead_id = activity.lead_id
                 db.commit()
                 logger.info(f"Updated activity with recording for call {call_sid}")
+
+                # Get user email for draft creation
+                if user_id:
+                    from main import User
+                    user = db.query(User).filter(User.id == user_id).first()
+                    if user:
+                        user_email = user.email
+
+                # Get lead name if available
+                if lead_id:
+                    from main import Lead
+                    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                    if lead:
+                        lead_name = lead.name
+
         except Exception as update_error:
             logger.warning(f"Could not update recording for call {call_sid}: {update_error}")
+
+        # Process recording asynchronously (transcribe, summarize, create draft)
+        import asyncio
+        asyncio.create_task(
+            process_call_recording(
+                recording_url=recording_url,
+                recording_sid=recording_sid,
+                call_sid=call_sid,
+                caller_number=caller_number,
+                call_duration=call_duration,
+                user_id=user_id,
+                user_email=user_email,
+                lead_id=lead_id,
+                lead_name=lead_name,
+                db=db
+            )
+        )
 
         return {"status": "ok"}
 
     except Exception as e:
         logger.error(f"Error handling recording: {e}")
         return {"status": "error"}
+
+
+async def process_call_recording(
+    recording_url: str,
+    recording_sid: str,
+    call_sid: str,
+    caller_number: str,
+    call_duration: str,
+    user_id: int,
+    user_email: str,
+    lead_id: int,
+    lead_name: str,
+    db: Session
+):
+    """Process call recording: transcribe, summarize with AI, create email draft"""
+    import httpx
+    import os
+    from anthropic import Anthropic
+
+    logger.info(f"Processing call recording {recording_sid}...")
+
+    try:
+        # Step 1: Download the recording from Twilio
+        twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+        if not twilio_account_sid or not twilio_auth_token:
+            logger.error("Twilio credentials not configured")
+            return
+
+        # Twilio recording URL needs authentication
+        recording_mp3_url = f"{recording_url}.mp3"
+
+        async with httpx.AsyncClient() as client:
+            # Download recording
+            logger.info(f"Downloading recording from {recording_mp3_url}")
+            recording_response = await client.get(
+                recording_mp3_url,
+                auth=(twilio_account_sid, twilio_auth_token),
+                timeout=60.0
+            )
+
+            if recording_response.status_code != 200:
+                logger.error(f"Failed to download recording: {recording_response.status_code}")
+                return
+
+            audio_data = recording_response.content
+            logger.info(f"Downloaded {len(audio_data)} bytes of audio")
+
+            # Step 2: Transcribe with OpenAI Whisper
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                logger.error("OpenAI API key not configured")
+                return
+
+            logger.info("Transcribing audio with Whisper...")
+            transcribe_response = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                files={"file": ("recording.mp3", audio_data, "audio/mpeg")},
+                data={"model": "whisper-1", "language": "en"},
+                timeout=120.0
+            )
+
+            if transcribe_response.status_code != 200:
+                logger.error(f"Transcription failed: {transcribe_response.text}")
+                return
+
+            transcript = transcribe_response.json().get("text", "")
+            logger.info(f"Transcription complete: {len(transcript)} characters")
+
+        # Step 3: Summarize with Claude
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        if not anthropic_key:
+            logger.error("Anthropic API key not configured")
+            return
+
+        logger.info("Generating professional summary with Claude...")
+        anthropic_client = Anthropic(api_key=anthropic_key)
+
+        client_identifier = lead_name or caller_number
+
+        summary_prompt = f"""You are a professional assistant for a mortgage loan officer.
+Summarize the following phone call transcript into a professional call summary.
+
+Call Details:
+- Client: {client_identifier}
+- Phone: {caller_number}
+- Duration: {call_duration} seconds
+- Date: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+
+Transcript:
+{transcript}
+
+Create a professional call summary with the following sections:
+1. **Call Overview** - Brief 1-2 sentence summary
+2. **Key Discussion Points** - Bullet points of main topics discussed
+3. **Client Needs/Requests** - What the client is looking for
+4. **Action Items** - Any follow-up tasks or commitments made
+5. **Next Steps** - Recommended next actions
+
+Keep the summary concise but comprehensive. Use professional language appropriate for client records."""
+
+        summary_response = anthropic_client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": summary_prompt}]
+        )
+
+        summary = summary_response.content[0].text
+        logger.info(f"Summary generated: {len(summary)} characters")
+
+        # Step 4: Create email draft in user's Outlook
+        if user_email:
+            await create_call_summary_email_draft(
+                user_email=user_email,
+                client_name=client_identifier,
+                caller_number=caller_number,
+                call_duration=call_duration,
+                summary=summary,
+                transcript=transcript,
+                recording_url=recording_url
+            )
+        else:
+            logger.warning("No user email available, skipping draft creation")
+
+        # Step 5: Store summary in database
+        try:
+            activity = db.query(AIReceptionistActivity).filter(
+                AIReceptionistActivity.conversation_id == call_sid
+            ).first()
+
+            if activity:
+                if activity.extra_data is None:
+                    activity.extra_data = {}
+                activity.extra_data['transcript'] = transcript
+                activity.extra_data['summary'] = summary
+                activity.summary = summary[:500] if len(summary) > 500 else summary
+                db.commit()
+                logger.info(f"Stored summary for call {call_sid}")
+        except Exception as db_error:
+            logger.error(f"Failed to store summary: {db_error}")
+
+        logger.info(f"Call recording processing complete for {call_sid}")
+
+    except Exception as e:
+        logger.error(f"Error processing call recording: {e}")
+
+
+async def create_call_summary_email_draft(
+    user_email: str,
+    client_name: str,
+    caller_number: str,
+    call_duration: str,
+    summary: str,
+    transcript: str,
+    recording_url: str
+):
+    """Create an email draft in the user's Outlook drafts folder"""
+    import os
+    import httpx
+    from msal import ConfidentialClientApplication
+
+    logger.info(f"Creating email draft for {user_email}...")
+
+    try:
+        # Get Microsoft Graph token
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+        tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+
+        if not all([client_id, client_secret, tenant_id]):
+            logger.warning("Microsoft Graph credentials not configured, skipping draft creation")
+            return
+
+        app = ConfidentialClientApplication(
+            client_id=client_id,
+            client_credential=client_secret,
+            authority=f"https://login.microsoftonline.com/{tenant_id}"
+        )
+
+        result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+
+        if "access_token" not in result:
+            logger.error(f"Failed to get Graph token: {result.get('error_description')}")
+            return
+
+        token = result["access_token"]
+
+        # Format email body
+        duration_mins = int(call_duration) // 60 if call_duration.isdigit() else 0
+        duration_secs = int(call_duration) % 60 if call_duration.isdigit() else 0
+
+        email_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+<h2 style="color: #2c3e50;">📞 Call Summary - {client_name}</h2>
+
+<table style="margin-bottom: 20px; border-collapse: collapse;">
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Client:</td><td>{client_name}</td></tr>
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Phone:</td><td>{caller_number}</td></tr>
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Duration:</td><td>{duration_mins}m {duration_secs}s</td></tr>
+<tr><td style="padding: 5px 15px 5px 0; font-weight: bold;">Date:</td><td>{datetime.now().strftime('%B %d, %Y at %I:%M %p')}</td></tr>
+</table>
+
+<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+{summary.replace(chr(10), '<br>')}
+</div>
+
+<details style="margin-top: 20px;">
+<summary style="cursor: pointer; font-weight: bold; color: #3498db;">📝 View Full Transcript</summary>
+<div style="background: #f0f0f0; padding: 15px; margin-top: 10px; border-radius: 5px; white-space: pre-wrap; font-size: 13px;">
+{transcript}
+</div>
+</details>
+
+<p style="margin-top: 20px; color: #7f8c8d; font-size: 12px;">
+<em>This summary was automatically generated by Perennia AI. Please review before sending to the client.</em>
+</p>
+</body>
+</html>
+"""
+
+        # Create draft email via Microsoft Graph
+        draft_data = {
+            "subject": f"Call Summary - {client_name} - {datetime.now().strftime('%m/%d/%Y')}",
+            "body": {
+                "contentType": "HTML",
+                "content": email_body
+            },
+            "importance": "normal"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://graph.microsoft.com/v1.0/users/{user_email}/messages",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                },
+                json=draft_data,
+                timeout=30.0
+            )
+
+            if response.status_code in [200, 201]:
+                draft_id = response.json().get("id")
+                logger.info(f"Email draft created successfully: {draft_id}")
+            else:
+                logger.error(f"Failed to create draft: {response.status_code} - {response.text}")
+
+    except Exception as e:
+        logger.error(f"Error creating email draft: {e}")
 
 
 @router.post("/voicemail-transcription")
