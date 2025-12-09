@@ -259,8 +259,11 @@ function Leads() {
   };
 
   const handleDelete = async (id) => {
+    console.log('handleDelete called with id:', id);
     try {
+      console.log('Calling leadsAPI.delete...');
       await leadsAPI.delete(id);
+      console.log('Delete successful, clearing cache...');
       // Clear cache and reload
       localStorage.removeItem('leads_data');
       localStorage.removeItem('leads_data_time');
@@ -513,7 +516,7 @@ function Leads() {
                 <td>{lead.source || 'N/A'}</td>
                 <td>
                   <div className="table-actions">
-                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }} title="Delete">
+                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); console.log('Delete button clicked for lead:', lead.id); handleDelete(lead.id); }} title="Delete">
                       🗑️
                     </button>
                   </div>

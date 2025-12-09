@@ -1115,11 +1115,54 @@ async def create_appointment(
 
     logger.info(f"Appointment created: {appointment.id} by user {user.id}")
 
+    # Send confirmation email if attendee email is provided
+    email_sent = False
+    if appt_data.attendee_email:
+        try:
+            # Format date and time for email
+            appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
+            appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
+            duration_str = f"{appointment.duration_minutes} minutes"
+
+            # Get meeting mode display name
+            meeting_mode_str = "Phone Call"
+            if appointment.meeting_mode:
+                mode_display = {
+                    "VIDEO": "Video Call",
+                    "PHONE": "Phone Call",
+                    "IN_PERSON": "In Person",
+                    "SCREEN_SHARE": "Screen Share"
+                }
+                meeting_mode_str = mode_display.get(appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode), "Phone Call")
+
+            # Get team member name
+            team_member_name = None
+            if appointment.assigned_user_id:
+                assigned_user = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+                if assigned_user:
+                    team_member_name = assigned_user.first_name
+                    if assigned_user.last_name:
+                        team_member_name += f" {assigned_user.last_name}"
+
+            email_sent = send_appointment_confirmation_email(
+                attendee_email=appt_data.attendee_email,
+                attendee_name=appt_data.attendee_name or "there",
+                appointment_title=appointment.title,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                duration=duration_str,
+                meeting_mode=meeting_mode_str,
+                team_member_name=team_member_name
+            )
+        except Exception as e:
+            logger.error(f"Error sending confirmation email: {e}")
+
     return {
         "message": "Appointment created",
         "appointment_id": appointment.id,
         "scheduled_start": appointment.scheduled_start.isoformat(),
-        "scheduled_end": appointment.scheduled_end.isoformat()
+        "scheduled_end": appointment.scheduled_end.isoformat(),
+        "email_sent": email_sent
     }
 
 
