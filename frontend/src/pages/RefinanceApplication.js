@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import AddressAutocomplete from '../components/AddressAutocomplete';
+import EmployerAutocomplete from '../components/EmployerAutocomplete';
 import './AdaptiveURLA.css';
 
 /**
@@ -1184,39 +1186,23 @@ export default function RefinanceApplication() {
 
         {incomeData.primaryType === 'employed' && (
           <div className="form-card">
-            <div className="form-group employer-autocomplete">
-              <label>Employer Name</label>
-              <input
-                type="text"
-                value={incomeData.employerName || ''}
-                onChange={(e) => {
-                  setIncomeData(prev => ({ ...prev, employerName: e.target.value }));
-                  filterEmployers(e.target.value);
-                }}
-                onFocus={() => incomeData.employerName?.length >= 2 && filterEmployers(incomeData.employerName)}
-                onBlur={() => setTimeout(() => setShowEmployerDropdown(false), 200)}
-                placeholder="Start typing company name..."
-                className="fun-input"
-                autoComplete="off"
-              />
-              {showEmployerDropdown && employerSuggestions.length > 0 && (
-                <div className="employer-dropdown">
-                  {employerSuggestions.map((emp, idx) => (
-                    <div
-                      key={idx}
-                      className="employer-option"
-                      onMouseDown={() => {
-                        setIncomeData(prev => ({ ...prev, employerName: emp }));
-                        setShowEmployerDropdown(false);
-                      }}
-                    >
-                      <span className="employer-icon"><Icon name="building" size={16} /></span>
-                      {emp}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <EmployerAutocomplete
+              value={incomeData.employerName || ''}
+              onChange={(value) => setIncomeData(prev => ({ ...prev, employerName: value }))}
+              onEmployerSelect={(employer) => {
+                setIncomeData(prev => ({
+                  ...prev,
+                  employerName: employer.name,
+                  employerAddress: employer.address,
+                  employerCity: employer.city,
+                  employerState: employer.state,
+                  employerPhone: employer.phone,
+                }));
+              }}
+              label="Employer Name"
+              placeholder="Start typing company name..."
+              className="fun-input-wrapper"
+            />
             <div className="form-row">
               <div className="form-group">
                 <label>Job Title</label>
@@ -1415,13 +1401,23 @@ export default function RefinanceApplication() {
 
       <div className="form-card">
         <div className="form-group">
-          <label>Property Address</label>
-          <input
-            type="text"
+          <AddressAutocomplete
             value={propertyData.address || ''}
-            onChange={(e) => setPropertyData(prev => ({ ...prev, address: e.target.value }))}
+            onChange={(value) => setPropertyData(prev => ({ ...prev, address: value }))}
+            onAddressSelect={(addressData) => {
+              setPropertyData(prev => ({
+                ...prev,
+                address: addressData.formatted,
+                street: addressData.street,
+                city: addressData.city,
+                state: addressData.state_code,
+                zip: addressData.zip,
+                county: addressData.county,
+              }));
+            }}
+            label="Property Address"
             placeholder="Enter your home address..."
-            className="fun-input"
+            className="fun-input-wrapper"
           />
         </div>
 
