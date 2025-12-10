@@ -158,6 +158,46 @@ export default function AdaptiveURLA() {
   const [showMicroWin, setShowMicroWin] = useState(false);
   const [microWinMessage, setMicroWinMessage] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  const [employerSuggestions, setEmployerSuggestions] = useState([]);
+  const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
+
+  // Common employers database for autocomplete
+  const COMMON_EMPLOYERS = [
+    'CMG Home Loans', 'CMG Financial', 'Wells Fargo', 'Bank of America', 'JPMorgan Chase',
+    'Citibank', 'US Bank', 'PNC Bank', 'Capital One', 'TD Bank',
+    'Amazon', 'Apple', 'Google', 'Microsoft', 'Meta', 'Netflix', 'Tesla',
+    'Walmart', 'Target', 'Costco', 'Home Depot', 'Lowes',
+    'UnitedHealth Group', 'CVS Health', 'Cigna', 'Anthem', 'Kaiser Permanente',
+    'AT&T', 'Verizon', 'T-Mobile', 'Comcast', 'Charter Communications',
+    'FedEx', 'UPS', 'USPS', 'DHL',
+    'Boeing', 'Lockheed Martin', 'Raytheon', 'Northrop Grumman',
+    'General Motors', 'Ford', 'Toyota', 'Honda', 'BMW',
+    'Starbucks', 'McDonalds', 'Chipotle', 'Subway',
+    'United Airlines', 'Delta Airlines', 'American Airlines', 'Southwest Airlines',
+    'Marriott', 'Hilton', 'Hyatt',
+    'Disney', 'Warner Bros', 'NBC Universal', 'Paramount',
+    'Deloitte', 'PwC', 'EY', 'KPMG', 'Accenture', 'McKinsey',
+    'IBM', 'Oracle', 'Salesforce', 'Adobe', 'SAP', 'Intuit',
+    'Johnson & Johnson', 'Pfizer', 'Merck', 'Abbott', 'AbbVie',
+    'ExxonMobil', 'Chevron', 'Shell', 'BP',
+    'Caterpillar', 'John Deere', '3M', 'Honeywell', 'General Electric',
+    'State Farm', 'Allstate', 'Progressive', 'GEICO', 'Liberty Mutual',
+    'Goldman Sachs', 'Morgan Stanley', 'BlackRock', 'Fidelity', 'Charles Schwab',
+  ];
+
+  // Filter employers based on input
+  const filterEmployers = (input) => {
+    if (!input || input.length < 2) {
+      setEmployerSuggestions([]);
+      setShowEmployerDropdown(false);
+      return;
+    }
+    const filtered = COMMON_EMPLOYERS.filter(emp =>
+      emp.toLowerCase().includes(input.toLowerCase())
+    ).slice(0, 8);
+    setEmployerSuggestions(filtered);
+    setShowEmployerDropdown(filtered.length > 0);
+  };
 
   // Calculate progress
   const getProgress = useCallback(() => {
@@ -496,16 +536,45 @@ export default function AdaptiveURLA() {
         {incomeData.primaryType === 'employed' && (
           <div className="form-card">
             <h3>Employment Details</h3>
-            <div className="form-group">
+            <div className="form-group employer-autocomplete">
               <label>Employer Name</label>
               <input
                 type="text"
                 value={incomeData.employerName || ''}
-                onChange={(e) => setIncomeData(prev => ({ ...prev, employerName: e.target.value }))}
+                onChange={(e) => {
+                  setIncomeData(prev => ({ ...prev, employerName: e.target.value }));
+                  filterEmployers(e.target.value);
+                }}
+                onFocus={() => {
+                  if (incomeData.employerName?.length >= 2) {
+                    filterEmployers(incomeData.employerName);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowEmployerDropdown(false), 200)}
                 placeholder="Start typing company name..."
                 className="fun-input"
+                autoComplete="off"
               />
-              <span className="input-hint">🔍 AI will help find your employer</span>
+              {showEmployerDropdown && employerSuggestions.length > 0 && (
+                <div className="employer-dropdown">
+                  {employerSuggestions.map((emp, idx) => (
+                    <div
+                      key={idx}
+                      className="employer-option"
+                      onMouseDown={() => {
+                        setIncomeData(prev => ({ ...prev, employerName: emp }));
+                        setShowEmployerDropdown(false);
+                      }}
+                    >
+                      <span className="employer-icon">🏢</span>
+                      {emp}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <span className="input-hint">
+                {showEmployerDropdown ? '👆 Select from suggestions or keep typing' : '🔍 Start typing to see suggestions'}
+              </span>
             </div>
 
             <div className="form-row">
