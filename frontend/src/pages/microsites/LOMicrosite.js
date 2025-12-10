@@ -34,6 +34,14 @@ const LOMicrosite = () => {
   const fetchLoProfile = async () => {
     try {
       const identifier = slug || userId;
+
+      // If no identifier provided, show helpful error
+      if (!identifier) {
+        setError('No loan officer specified. Please use a valid microsite URL like /lo/john-smith');
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/api/v1/public/loan-officer/${identifier}`);
       if (response.ok) {
         const data = await response.json();
@@ -97,9 +105,30 @@ const LOMicrosite = () => {
 
   if (error) {
     return (
-      <div className="lo-microsite-error">
-        <h2>Profile Not Found</h2>
-        <p>{error}</p>
+      <div className="lo-microsite-error" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        padding: '40px',
+        textAlign: 'center',
+        background: 'linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%)'
+      }}>
+        <div style={{
+          background: 'white',
+          padding: '60px',
+          borderRadius: '16px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+          maxWidth: '500px'
+        }}>
+          <div style={{ fontSize: '64px', marginBottom: '20px' }}>🏠</div>
+          <h2 style={{ fontSize: '28px', color: '#374151', marginBottom: '16px' }}>Profile Not Found</h2>
+          <p style={{ color: '#6b7280', fontSize: '16px', lineHeight: '1.6' }}>{error}</p>
+          <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '24px' }}>
+            Looking for a loan officer? Contact your mortgage company for the correct link.
+          </p>
+        </div>
       </div>
     );
   }
