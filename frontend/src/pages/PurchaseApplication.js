@@ -978,6 +978,7 @@ export default function PurchaseApplication() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [scheduleStep, setScheduleStep] = useState(1); // 1 = calendar, 2 = video/next steps
+  const [planningStep, setPlanningStep] = useState(1); // 1-5 for each planning question
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -2003,110 +2004,167 @@ export default function PurchaseApplication() {
     });
   };
 
-  // Render planning stage with mortgage questionnaire
-  const renderPlanningStage = () => (
-    <div className="stage-content planning-stage">
-      <div className="stage-header">
-        <h2>Let's Plan Your Mortgage</h2>
-        <p>A few quick questions to help us find the perfect loan for your situation</p>
-      </div>
+  // Render planning stage with mortgage questionnaire - split into 5 pages
+  const renderPlanningStage = () => {
+    // Step 1: Mortgage Priorities
+    if (planningStep === 1) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>What matters most to you in your mortgage?</h2>
+            <p>Select all that apply - this helps us find the best loan options for you.</p>
+          </div>
 
-      {/* Mortgage Priorities - Multi-select */}
-      <div className="form-card planning-section">
-        <h3>{PLANNING_QUESTIONS.mortgagePriorities.question}</h3>
-        <p className="section-hint">{PLANNING_QUESTIONS.mortgagePriorities.hint}</p>
-        <div className="multi-select-grid">
-          {PLANNING_QUESTIONS.mortgagePriorities.options.map(option => (
-            <button
-              key={option.value}
-              className={`multi-select-option ${planningData.mortgagePriorities.includes(option.value) ? 'selected' : ''}`}
-              onClick={() => togglePlanningOption('mortgagePriorities', option.value)}
-            >
-              <span className="option-icon"><Icon name={option.icon} size={22} /></span>
-              <span className="option-label">{option.label}</span>
-            </button>
-          ))}
+          <div className="form-card planning-section">
+            <div className="multi-select-grid">
+              {PLANNING_QUESTIONS.mortgagePriorities.options.map(option => (
+                <button
+                  key={option.value}
+                  className={`multi-select-option ${planningData.mortgagePriorities.includes(option.value) ? 'selected' : ''}`}
+                  onClick={() => togglePlanningOption('mortgagePriorities', option.value)}
+                >
+                  <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                  <span className="option-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(2)}>Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 2: Personal Goals
+    if (planningStep === 2) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>What are your personal financial goals?</h2>
+            <p>Select all that apply - help us align your mortgage with your life plans.</p>
+          </div>
+
+          <div className="form-card planning-section">
+            <div className="multi-select-grid">
+              {PLANNING_QUESTIONS.personalGoals.options.map(option => (
+                <button
+                  key={option.value}
+                  className={`multi-select-option ${planningData.personalGoals.includes(option.value) ? 'selected' : ''}`}
+                  onClick={() => togglePlanningOption('personalGoals', option.value)}
+                >
+                  <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                  <span className="option-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setPlanningStep(1)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(3)}>Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 3: Financial Philosophy
+    if (planningStep === 3) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>How would you describe your financial approach?</h2>
+            <p>This helps us recommend the right loan structure for your style.</p>
+          </div>
+
+          <div className="form-card planning-section">
+            <div className="philosophy-options">
+              {PLANNING_QUESTIONS.financialPhilosophy.options.map(option => (
+                <button
+                  key={option.value}
+                  className={`philosophy-option ${planningData.financialPhilosophy === option.value ? 'selected' : ''}`}
+                  onClick={() => setPlanningData(prev => ({ ...prev, financialPhilosophy: option.value }))}
+                >
+                  <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                  <span className="option-label">{option.label}</span>
+                  <span className="option-description">{option.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setPlanningStep(2)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(4)}>Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 4: Tax-Deferred Retirement
+    if (planningStep === 4) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>Are you currently contributing to a tax-deferred retirement account?</h2>
+            <p>We can coordinate with your existing team for a comprehensive financial plan.</p>
+          </div>
+
+          <div className="form-card planning-section">
+            <div className="single-select-options">
+              {PLANNING_QUESTIONS.taxDeferredRetirement.options.map(option => (
+                <button
+                  key={option.value}
+                  className={`single-select-option ${planningData.taxDeferredRetirement === option.value ? 'selected' : ''}`}
+                  onClick={() => setPlanningData(prev => ({ ...prev, taxDeferredRetirement: option.value }))}
+                >
+                  <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                  <span className="option-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setPlanningStep(3)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(5)}>Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 5: Professional Network
+    return (
+      <div className="stage-content planning-stage">
+        <div className="stage-header">
+          <h2>Do you currently work with any of these professionals?</h2>
+          <p>We can coordinate with your existing team for a comprehensive financial plan.</p>
+        </div>
+
+        <div className="form-card planning-section">
+          <div className="multi-select-grid compact">
+            {PLANNING_QUESTIONS.professionalNetwork.options.map(option => (
+              <button
+                key={option.value}
+                className={`multi-select-option ${planningData.professionalNetwork.includes(option.value) ? 'selected' : ''}`}
+                onClick={() => togglePlanningOption('professionalNetwork', option.value)}
+              >
+                <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                <span className="option-label">{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="stage-navigation">
+          <button className="btn-back" onClick={() => setPlanningStep(4)}>← Back</button>
+          <button className="btn-continue" onClick={() => { setPlanningStep(1); goToNextStage(); }}>Continue →</button>
         </div>
       </div>
-
-      {/* Personal Goals - Multi-select */}
-      <div className="form-card planning-section">
-        <h3>{PLANNING_QUESTIONS.personalGoals.question}</h3>
-        <p className="section-hint">{PLANNING_QUESTIONS.personalGoals.hint}</p>
-        <div className="multi-select-grid">
-          {PLANNING_QUESTIONS.personalGoals.options.map(option => (
-            <button
-              key={option.value}
-              className={`multi-select-option ${planningData.personalGoals.includes(option.value) ? 'selected' : ''}`}
-              onClick={() => togglePlanningOption('personalGoals', option.value)}
-            >
-              <span className="option-icon"><Icon name={option.icon} size={22} /></span>
-              <span className="option-label">{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Financial Philosophy - Single select */}
-      <div className="form-card planning-section">
-        <h3>{PLANNING_QUESTIONS.financialPhilosophy.question}</h3>
-        <div className="philosophy-options">
-          {PLANNING_QUESTIONS.financialPhilosophy.options.map(option => (
-            <button
-              key={option.value}
-              className={`philosophy-option ${planningData.financialPhilosophy === option.value ? 'selected' : ''}`}
-              onClick={() => setPlanningData(prev => ({ ...prev, financialPhilosophy: option.value }))}
-            >
-              <span className="option-icon"><Icon name={option.icon} size={32} /></span>
-              <span className="option-label">{option.label}</span>
-              <span className="option-description">{option.description}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tax-Deferred Retirement - Single select */}
-      <div className="form-card planning-section">
-        <h3>{PLANNING_QUESTIONS.taxDeferredRetirement.question}</h3>
-        <p className="section-hint">{PLANNING_QUESTIONS.taxDeferredRetirement.hint}</p>
-        <div className="single-select-options">
-          {PLANNING_QUESTIONS.taxDeferredRetirement.options.map(option => (
-            <button
-              key={option.value}
-              className={`single-select-option ${planningData.taxDeferredRetirement === option.value ? 'selected' : ''}`}
-              onClick={() => setPlanningData(prev => ({ ...prev, taxDeferredRetirement: option.value }))}
-            >
-              <span className="option-icon"><Icon name={option.icon} size={22} /></span>
-              <span className="option-label">{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Professional Network - Multi-select */}
-      <div className="form-card planning-section">
-        <h3>{PLANNING_QUESTIONS.professionalNetwork.question}</h3>
-        <p className="section-hint">{PLANNING_QUESTIONS.professionalNetwork.hint}</p>
-        <div className="multi-select-grid compact">
-          {PLANNING_QUESTIONS.professionalNetwork.options.map(option => (
-            <button
-              key={option.value}
-              className={`multi-select-option ${planningData.professionalNetwork.includes(option.value) ? 'selected' : ''}`}
-              onClick={() => togglePlanningOption('professionalNetwork', option.value)}
-            >
-              <span className="option-icon"><Icon name={option.icon} size={22} /></span>
-              <span className="option-label">{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="stage-navigation">
-        <button className="btn-back" onClick={goToPrevStage}>← Back</button>
-        <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // Generate available time slots
   const generateTimeSlots = () => {
