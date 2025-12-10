@@ -317,6 +317,22 @@ const Icon = ({ name, size = 24, className = '' }) => {
         <polygon points="5,3 19,12 5,21"/>
       </svg>
     ),
+    car: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+        <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
+      </svg>
+    ),
+    search: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    ),
+    refresh: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+      </svg>
+    ),
   };
 
   return (
@@ -341,6 +357,19 @@ const DECLARATION_QUESTIONS = [
     hint: 'This helps us know how many borrowers to include in the application.',
   },
   {
+    id: 'co_borrower_relationship',
+    question: 'What is your relationship to the other borrower(s)?',
+    type: 'choice',
+    options: [
+      { value: 'spouse', label: 'Spouse/Partner', icon: 'heart' },
+      { value: 'relative', label: 'Family member', icon: 'family' },
+      { value: 'friend', label: 'Friend/Non-relative', icon: 'users' },
+      { value: 'business_partner', label: 'Business partner', icon: 'briefcase' },
+    ],
+    hint: 'This helps us understand the borrower structure.',
+    showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
+  },
+  {
     id: 'first_time_buyer',
     question: 'Is this your first home purchase?',
     type: 'choice',
@@ -351,6 +380,40 @@ const DECLARATION_QUESTIONS = [
     hint: 'First-time buyers may qualify for special programs!',
   },
   {
+    id: 'previous_home_status',
+    question: 'What happened to your previous home?',
+    type: 'choice',
+    options: [
+      { value: 'sold', label: 'Sold it', icon: 'check' },
+      { value: 'still_own', label: 'Still own it', icon: 'home' },
+      { value: 'renting_out', label: 'Renting it out', icon: 'dollarSign' },
+      { value: 'foreclosure', label: 'Lost to foreclosure/short sale', icon: 'alertTriangle' },
+    ],
+    hint: 'This affects your loan options and what we need to document.',
+    showIf: { field: 'first_time_buyer', values: ['no'] },
+  },
+  {
+    id: 'foreclosure_timeline',
+    question: 'When did the foreclosure or short sale occur?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_2_years', label: 'Less than 2 years ago', icon: 'clock' },
+      { value: '2_to_4_years', label: '2-4 years ago', icon: 'clock' },
+      { value: '4_to_7_years', label: '4-7 years ago', icon: 'calendar' },
+      { value: 'more_than_7_years', label: 'More than 7 years ago', icon: 'calendar' },
+    ],
+    hint: 'Different loan programs have different waiting periods after foreclosure.',
+    showIf: { field: 'previous_home_status', values: ['foreclosure'] },
+  },
+  {
+    id: 'rental_income_previous',
+    question: 'How much rental income do you receive monthly from the property?',
+    type: 'currency',
+    placeholder: 'Monthly rental income',
+    hint: 'This rental income can help qualify you for more home.',
+    showIf: { field: 'previous_home_status', values: ['renting_out'] },
+  },
+  {
     id: 'marital_status',
     question: 'Are you married?',
     type: 'choice',
@@ -358,8 +421,32 @@ const DECLARATION_QUESTIONS = [
       { value: 'married', label: 'Yes, married', icon: 'heart' },
       { value: 'single', label: 'Single', icon: 'user' },
       { value: 'divorced', label: 'Divorced', icon: 'document' },
+      { value: 'separated', label: 'Separated', icon: 'users' },
+      { value: 'widowed', label: 'Widowed', icon: 'heart' },
     ],
     unlocks: ['spouse_section'],
+  },
+  {
+    id: 'spouse_on_loan',
+    question: 'Will your spouse be on the loan application?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, both of us', icon: 'users' },
+      { value: 'no', label: 'No, just me', icon: 'user' },
+    ],
+    hint: 'In community property states, spouse income/debts may still be considered.',
+    showIf: { field: 'marital_status', values: ['married'] },
+  },
+  {
+    id: 'divorce_finalized',
+    question: 'Is your divorce finalized?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, finalized', icon: 'check' },
+      { value: 'pending', label: 'Still pending', icon: 'clock' },
+    ],
+    hint: 'A pending divorce may require additional documentation.',
+    showIf: { field: 'marital_status', values: ['divorced', 'separated'] },
   },
   {
     id: 'child_support_alimony',
@@ -434,6 +521,30 @@ const DECLARATION_QUESTIONS = [
     hint: 'Veterans can get VA loans with $0 down!',
   },
   {
+    id: 'va_loan_before',
+    question: 'Have you used a VA loan before?',
+    type: 'choice',
+    options: [
+      { value: 'yes_paid_off', label: 'Yes, paid it off', icon: 'check' },
+      { value: 'yes_still_have', label: 'Yes, still have it', icon: 'home' },
+      { value: 'no', label: 'No, first VA loan', icon: 'star' },
+    ],
+    hint: 'You can use your VA benefit multiple times!',
+    showIf: { field: 'veteran', values: ['yes', 'active', 'spouse'] },
+  },
+  {
+    id: 'va_disability',
+    question: 'Do you have a VA disability rating?',
+    type: 'choice',
+    options: [
+      { value: 'yes_10_plus', label: 'Yes, 10% or higher', icon: 'shield' },
+      { value: 'pending', label: 'Claim pending', icon: 'clock' },
+      { value: 'no', label: 'No disability rating', icon: 'arrowRight' },
+    ],
+    hint: '10%+ disability rating waives the VA funding fee - saves thousands!',
+    showIf: { field: 'veteran', values: ['yes', 'active'] },
+  },
+  {
     id: 'self_employed',
     question: 'Are you self-employed or own a business?',
     type: 'choice',
@@ -443,6 +554,31 @@ const DECLARATION_QUESTIONS = [
       { value: 'no', label: 'No, I\'m an employee', icon: 'tie' },
     ],
     hint: 'This helps us know what income documents you\'ll need.',
+  },
+  {
+    id: 'business_years',
+    question: 'How long have you been self-employed?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_1_year', label: 'Less than 1 year', icon: 'clock' },
+      { value: '1_to_2_years', label: '1-2 years', icon: 'calendar' },
+      { value: 'more_than_2_years', label: 'More than 2 years', icon: 'check' },
+    ],
+    hint: 'Most loan programs require 2 years of self-employment history.',
+    showIf: { field: 'self_employed', values: ['yes'] },
+  },
+  {
+    id: 'business_type',
+    question: 'What type of business do you have?',
+    type: 'choice',
+    options: [
+      { value: 'sole_proprietor', label: 'Sole proprietor', icon: 'user' },
+      { value: 'llc', label: 'LLC', icon: 'building' },
+      { value: 's_corp', label: 'S-Corp', icon: 'briefcase' },
+      { value: 'partnership', label: 'Partnership', icon: 'users' },
+    ],
+    hint: 'This determines what tax documents we\'ll need.',
+    showIf: { field: 'self_employed', values: ['yes', 'side_business'] },
   },
   {
     id: 'write_off_expenses',
@@ -468,6 +604,25 @@ const DECLARATION_QUESTIONS = [
     hint: 'Having a balance doesn\'t disqualify you - we just need to know.',
   },
   {
+    id: 'irs_amount_owed',
+    question: 'Approximately how much do you owe the IRS?',
+    type: 'currency',
+    placeholder: 'Amount owed',
+    hint: 'This helps us understand your full financial picture.',
+    showIf: { field: 'irs_balance_owed', values: ['yes', 'payment_plan'] },
+  },
+  {
+    id: 'irs_payment_current',
+    question: 'Are you current on your IRS payment plan?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, fully current', icon: 'check' },
+      { value: 'behind', label: 'Behind on payments', icon: 'alertTriangle' },
+    ],
+    hint: 'Being current on payments is usually required for loan approval.',
+    showIf: { field: 'irs_balance_owed', values: ['payment_plan'] },
+  },
+  {
     id: 'recent_credit_applications',
     question: 'Have you applied for any credit in the past 3 months?',
     type: 'choice',
@@ -476,6 +631,31 @@ const DECLARATION_QUESTIONS = [
       { value: 'no', label: 'No recent applications', icon: 'check' },
     ],
     hint: 'Car loans, credit cards, personal loans, etc. Recent inquiries can affect your score.',
+  },
+  {
+    id: 'credit_application_type',
+    question: 'What type of credit did you apply for?',
+    type: 'choice',
+    options: [
+      { value: 'auto_loan', label: 'Auto loan', icon: 'car' },
+      { value: 'credit_card', label: 'Credit card', icon: 'creditCard' },
+      { value: 'personal_loan', label: 'Personal loan', icon: 'dollarSign' },
+      { value: 'other', label: 'Other', icon: 'document' },
+    ],
+    hint: 'Recent auto loans can significantly impact your debt-to-income ratio.',
+    showIf: { field: 'recent_credit_applications', values: ['yes'] },
+  },
+  {
+    id: 'credit_application_approved',
+    question: 'Was the credit application approved?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, approved', icon: 'check' },
+      { value: 'pending', label: 'Still pending', icon: 'clock' },
+      { value: 'no', label: 'No, denied', icon: 'x' },
+    ],
+    hint: 'If approved, we\'ll need to factor in the new payment.',
+    showIf: { field: 'recent_credit_applications', values: ['yes'] },
   },
   {
     id: 'gift_funds',
@@ -489,6 +669,28 @@ const DECLARATION_QUESTIONS = [
     hint: 'Gift funds from family are totally okay!',
   },
   {
+    id: 'gift_amount',
+    question: 'How much gift money will you receive?',
+    type: 'currency',
+    placeholder: 'Gift amount',
+    hint: 'We\'ll need a gift letter from the donor.',
+    showIf: { field: 'gift_funds', values: ['yes'] },
+  },
+  {
+    id: 'gift_donor',
+    question: 'Who is providing the gift?',
+    type: 'choice',
+    options: [
+      { value: 'parent', label: 'Parent', icon: 'family' },
+      { value: 'grandparent', label: 'Grandparent', icon: 'family' },
+      { value: 'sibling', label: 'Sibling', icon: 'users' },
+      { value: 'other_relative', label: 'Other relative', icon: 'users' },
+      { value: 'non_relative', label: 'Non-relative', icon: 'user' },
+    ],
+    hint: 'Gift rules vary based on relationship and loan type.',
+    showIf: { field: 'gift_funds', values: ['yes'] },
+  },
+  {
     id: 'found_property',
     question: 'Have you found a property yet?',
     type: 'choice',
@@ -497,6 +699,42 @@ const DECLARATION_QUESTIONS = [
       { value: 'looking', label: 'Still shopping', icon: 'search' },
       { value: 'pre_approval', label: 'Just getting pre-approved', icon: 'check' },
     ],
+  },
+  {
+    id: 'offer_accepted',
+    question: 'Has your offer been accepted?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, offer accepted', icon: 'check' },
+      { value: 'pending', label: 'Offer pending', icon: 'clock' },
+      { value: 'multiple', label: 'Making offers on multiple', icon: 'search' },
+    ],
+    hint: 'If accepted, we\'ll move quickly to meet your closing date.',
+    showIf: { field: 'found_property', values: ['yes'] },
+  },
+  {
+    id: 'closing_date',
+    question: 'When is your target closing date?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_30', label: 'Less than 30 days', icon: 'clock' },
+      { value: '30_to_45', label: '30-45 days', icon: 'calendar' },
+      { value: '45_to_60', label: '45-60 days', icon: 'calendar' },
+      { value: 'more_than_60', label: 'More than 60 days', icon: 'calendar' },
+    ],
+    hint: 'Knowing your timeline helps us prioritize appropriately.',
+    showIf: { field: 'found_property', values: ['yes'] },
+  },
+  {
+    id: 'working_with_agent',
+    question: 'Are you working with a real estate agent?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, have an agent', icon: 'users' },
+      { value: 'no', label: 'Not yet', icon: 'search' },
+    ],
+    hint: 'We can recommend great agents in your area if needed.',
+    showIf: { field: 'found_property', values: ['looking', 'pre_approval'] },
   },
   {
     id: 'credit_estimate',
@@ -509,6 +747,42 @@ const DECLARATION_QUESTIONS = [
       { value: 'building', label: 'Below 640', icon: 'trendUp', description: 'Building' },
     ],
     hint: 'Don\'t worry - we have programs for all credit levels!',
+  },
+  {
+    id: 'credit_issues',
+    question: 'Have you had any credit challenges in the past 2 years?',
+    type: 'choice',
+    options: [
+      { value: 'none', label: 'No issues', icon: 'check' },
+      { value: 'late_payments', label: 'Late payments', icon: 'clock' },
+      { value: 'collections', label: 'Collections/charge-offs', icon: 'alertTriangle' },
+      { value: 'bankruptcy', label: 'Bankruptcy', icon: 'document' },
+    ],
+    hint: 'Being upfront helps us find the right program for you.',
+    showIf: { field: 'credit_estimate', values: ['fair', 'building'] },
+  },
+  {
+    id: 'bankruptcy_type',
+    question: 'What type of bankruptcy did you file?',
+    type: 'choice',
+    options: [
+      { value: 'chapter_7', label: 'Chapter 7', icon: 'document' },
+      { value: 'chapter_13', label: 'Chapter 13', icon: 'document' },
+    ],
+    hint: 'Different waiting periods apply for each type.',
+    showIf: { field: 'credit_issues', values: ['bankruptcy'] },
+  },
+  {
+    id: 'bankruptcy_discharge',
+    question: 'When was your bankruptcy discharged?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_2_years', label: 'Less than 2 years ago', icon: 'clock' },
+      { value: '2_to_4_years', label: '2-4 years ago', icon: 'calendar' },
+      { value: 'more_than_4_years', label: 'More than 4 years ago', icon: 'check' },
+    ],
+    hint: 'FHA allows financing 2 years after Chapter 7 discharge.',
+    showIf: { field: 'credit_issues', values: ['bankruptcy'] },
   },
 ];
 

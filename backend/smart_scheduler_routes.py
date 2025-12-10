@@ -404,6 +404,9 @@ class PublicBookingConfirmRequest(BaseModel):
     user_ids: List[int] = []  # Empty = any available user
     lead_id: Optional[int] = None
     loan_id: Optional[int] = None
+    meeting_mode: Optional[str] = None  # video, phone, in_person
+    team_member_id: Optional[int] = None
+    team_member_name: Optional[str] = None
 
 
 class SlotRecommendation(BaseModel):
@@ -2027,8 +2030,14 @@ async def confirm_public_booking(
     if not appt_type:
         raise HTTPException(status_code=404, detail="Appointment type not found")
 
-    # Determine assigned user (for now, use link owner)
-    assigned_user_id = link.user_id
+    # Determine assigned user - use team_member_id if provided, otherwise link owner
+    assigned_user_id = booking_data.team_member_id or link.user_id
+
+    # Determine meeting mode from request or default to VIDEO
+    meeting_mode = MeetingMode.VIDEO
+    if booking_data.meeting_mode:
+        mode_map = {"video": MeetingMode.VIDEO, "phone": MeetingMode.PHONE, "in_person": MeetingMode.IN_PERSON}
+        meeting_mode = mode_map.get(booking_data.meeting_mode.lower(), MeetingMode.VIDEO)
 
     # Create appointment
     slot_end = slot_start + timedelta(minutes=duration_minutes)
@@ -2039,7 +2048,7 @@ async def confirm_public_booking(
         title=f"{appt_type.type_name} with {attendee_name}",
         description=appt_type.description,
         meeting_type=appt_type.meeting_type,
-        meeting_mode=MeetingMode.VIDEO,
+        meeting_mode=meeting_mode,
         scheduled_start=slot_start,
         scheduled_end=slot_end,
         duration_minutes=duration_minutes,
@@ -2058,6 +2067,53 @@ async def confirm_public_booking(
     link.current_bookings += 1
     link.last_booked_at = datetime.utcnow()
 
+    # Create video meeting room if meeting mode is VIDEO
+    video_link = None
+    room_code = None
+    if meeting_mode == MeetingMode.VIDEO:
+        try:
+            # Try to create a video meeting room
+            VideoMeetingRoom = _models.get('VideoMeetingRoom')
+            if VideoMeetingRoom:
+                import secrets
+                import string
+
+                # Generate room code
+                chars = string.ascii_uppercase + string.digits
+                code = ''.join(secrets.choice(chars) for _ in range(9))
+                room_code = f"MTG-{code[:3]}-{code[3:6]}-{code[6:]}"
+
+                video_room = VideoMeetingRoom(
+                    room_code=room_code,
+                    room_name=f"Video Call - {attendee_name}",
+                    room_description=f"Scheduled video call with {attendee_name}",
+                    provider="internal",
+                    host_user_id=assigned_user_id,
+                    scheduled_start=slot_start,
+                    scheduled_end=slot_end,
+                    duration_minutes=duration_minutes,
+                    status="scheduled",
+                    waiting_room_enabled=True,
+                    recording_enabled=True,
+                    transcription_enabled=True,
+                    ai_assistant_enabled=True,
+                    meeting_type="scheduled_call",
+                    created_by=assigned_user_id
+                )
+                db.add(video_room)
+                db.flush()  # Get the video room ID
+
+                # Update appointment with video link
+                base_url = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+                video_link = f"{base_url}/meeting/{room_code}"
+                appointment.video_link = video_link
+                appointment.video_meeting_id = video_room.id
+
+                logger.info(f"Created video meeting room {room_code} for appointment")
+        except Exception as e:
+            logger.warning(f"Could not create video meeting room: {e}")
+            # Continue without video room - appointment still gets created
+
     db.commit()
     db.refresh(appointment)
 
@@ -2067,11 +2123,17 @@ async def confirm_public_booking(
     appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
     appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
     duration_str = f"{duration_minutes} minutes"
-    meeting_mode_str = "Phone Call" if appointment.meeting_mode == MeetingMode.PHONE else "Video Call"
 
-    # Get team member name from notes if available
-    team_member_name = None
-    if intake_responses and intake_responses.get("notes"):
+    # Get meeting mode display string
+    meeting_mode_str = "Video Call"
+    if meeting_mode == MeetingMode.PHONE:
+        meeting_mode_str = "Phone Call"
+    elif meeting_mode == MeetingMode.IN_PERSON:
+        meeting_mode_str = "In Person"
+
+    # Get team member name - prefer explicit parameter, then try to parse from notes
+    team_member_name = booking_data.team_member_name
+    if not team_member_name and intake_responses and intake_responses.get("notes"):
         notes = intake_responses.get("notes", "")
         if "Appointment with:" in notes:
             team_member_name = notes.split("Appointment with:")[-1].strip()
@@ -2082,9 +2144,6 @@ async def confirm_public_booking(
 
     if attendee_email:
         try:
-            # Get video link if available
-            video_link = appointment.video_link if hasattr(appointment, 'video_link') else None
-
             email_sent = send_appointment_confirmation_email(
                 attendee_email=attendee_email,
                 attendee_name=attendee_name,
@@ -2096,6 +2155,7 @@ async def confirm_public_booking(
                 team_member_name=team_member_name,
                 video_link=video_link
             )
+            logger.info(f"Confirmation email sent to {attendee_email}, email_sent={email_sent}, video_link={video_link}")
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
 
@@ -2116,11 +2176,15 @@ async def confirm_public_booking(
         "appointment_id": appointment.id,
         "scheduled_start": appointment.scheduled_start.isoformat(),
         "scheduled_end": appointment.scheduled_end.isoformat(),
+        "video_link": video_link,
+        "room_code": room_code,
         "confirmation_details": {
             "title": appointment.title,
             "date": appointment_date,
             "time": appointment_time,
-            "duration": duration_str
+            "duration": duration_str,
+            "meeting_mode": meeting_mode_str,
+            "team_member": team_member_name
         },
         "notifications": {
             "email_sent": email_sent,
