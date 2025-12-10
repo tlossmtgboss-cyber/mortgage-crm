@@ -601,6 +601,7 @@ export default function PurchaseApplication() {
   const [declarations, setDeclarations] = useState({});
   const [profileData, setProfileData] = useState({});
   const [incomeData, setIncomeData] = useState({});
+  const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
   const [assetData, setAssetData] = useState({});
   const [propertyData, setPropertyData] = useState({});
   const [planningData, setPlanningData] = useState({
@@ -1005,45 +1006,81 @@ export default function PurchaseApplication() {
   const renderIncomeStage = () => {
     const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
 
+    // Step 1: Income type selection
+    if (incomeStep === 1) {
+      return (
+        <div className="stage-content">
+          <div className="stage-header">
+            <h2>Tell us about your income</h2>
+            <p>This helps us find the best loan for you</p>
+          </div>
+          <div className="income-type-selector">
+            <h3>How do you earn income?</h3>
+            <div className="income-cards">
+              <div
+                className={`income-card ${incomeData.primaryType === 'employed' ? 'selected' : ''}`}
+                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'employed' }))}
+              >
+                <span className="card-icon"><Icon name="tie" size={28} /></span>
+                <span className="card-label">Employed</span>
+                <span className="card-desc">W-2 employee</span>
+              </div>
+              <div
+                className={`income-card ${incomeData.primaryType === 'self_employed' ? 'selected' : ''}`}
+                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'self_employed' }))}
+              >
+                <span className="card-icon"><Icon name="building" size={28} /></span>
+                <span className="card-label">Self-Employed</span>
+                <span className="card-desc">Business owner</span>
+              </div>
+              <div
+                className={`income-card ${incomeData.primaryType === 'retired' ? 'selected' : ''}`}
+                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'retired' }))}
+              >
+                <span className="card-icon"><Icon name="beach" size={28} /></span>
+                <span className="card-label">Retired</span>
+                <span className="card-desc">Pension/SS</span>
+              </div>
+              <div
+                className={`income-card ${incomeData.primaryType === 'other' ? 'selected' : ''}`}
+                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'other' }))}
+              >
+                <span className="card-icon"><Icon name="dollarSign" size={28} /></span>
+                <span className="card-label">Other</span>
+                <span className="card-desc">Rental, investments</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+            <button
+              className="btn-continue"
+              onClick={() => incomeData.primaryType && setIncomeStep(2)}
+              disabled={!incomeData.primaryType}
+            >
+              Continue →
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 2: Income details based on type
     return (
       <div className="stage-content">
         <div className="stage-header">
-          <h2>Tell us about your income</h2>
-          <p>This helps us find the best loan for your new home</p>
-        </div>
-        <div className="income-type-selector">
-          <h3>How do you earn income?</h3>
-          <div className="income-cards">
-            <div
-              className={`income-card ${incomeData.primaryType === 'employed' ? 'selected' : ''}`}
-              onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'employed' }))}
-            >
-              <span className="card-icon"><Icon name="tie" size={28} /></span>
-              <span className="card-label">Employed</span>
-              <span className="card-desc">W-2 employee</span>
-            </div>
-            <div
-              className={`income-card ${incomeData.primaryType === 'self_employed' ? 'selected' : ''}`}
-              onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'self_employed' }))}
-            >
-              <span className="card-icon"><Icon name="building" size={28} /></span>
-              <span className="card-label">Self-Employed</span>
-              <span className="card-desc">Business owner</span>
-            </div>
-            <div
-              className={`income-card ${incomeData.primaryType === 'retired' ? 'selected' : ''}`}
-              onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'retired' }))}
-            >
-              <span className="card-icon"><Icon name="beach" size={28} /></span>
-              <span className="card-label">Retired</span>
-              <span className="card-desc">Pension/SS</span>
-            </div>
-          </div>
+          <h2>
+            {incomeData.primaryType === 'employed' && 'Employment Details'}
+            {incomeData.primaryType === 'self_employed' && 'Business Details'}
+            {incomeData.primaryType === 'retired' && 'Retirement Income'}
+            {incomeData.primaryType === 'other' && 'Other Income'}
+          </h2>
+          <p>Tell us more about your income</p>
         </div>
 
         {incomeData.primaryType === 'employed' && (
           <div className="form-card">
-            <h3>Employment Details</h3>
             <div className="form-group employer-autocomplete">
               <label>Employer Name</label>
               <input
@@ -1116,7 +1153,6 @@ export default function PurchaseApplication() {
 
         {(incomeData.primaryType === 'self_employed' || isSelfEmployed) && (
           <div className="form-card">
-            <h3><Icon name="building" size={20} /> Business Details</h3>
             <div className="form-group">
               <label>Business Name</label>
               <input
@@ -1142,18 +1178,20 @@ export default function PurchaseApplication() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Years in Business</label>
+                <label>Ownership %</label>
                 <input
                   type="number"
-                  value={incomeData.yearsInBusiness || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, yearsInBusiness: e.target.value }))}
+                  value={incomeData.ownershipPercent || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, ownershipPercent: e.target.value }))}
                   className="fun-input"
                   min="0"
+                  max="100"
+                  placeholder="25"
                 />
               </div>
             </div>
             <div className="form-group">
-              <label>Annual Net Income</label>
+              <label>Annual Net Income (from business)</label>
               <div className="input-with-prefix">
                 <span className="input-prefix">$</span>
                 <input
@@ -1163,12 +1201,101 @@ export default function PurchaseApplication() {
                   className="fun-input"
                 />
               </div>
+              <span className="input-hint">Use your net income from Schedule C or K-1</span>
+            </div>
+          </div>
+        )}
+
+        {incomeData.primaryType === 'retired' && (
+          <div className="form-card">
+            <div className="form-group">
+              <label>Monthly Social Security</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.socialSecurity || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, socialSecurity: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Monthly Pension</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.pension || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, pension: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Monthly Retirement Distributions (401k, IRA)</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.retirementDistributions || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, retirementDistributions: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {incomeData.primaryType === 'other' && (
+          <div className="form-card">
+            <div className="form-group">
+              <label>Monthly Rental Income</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.rentalIncome || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, rentalIncome: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Monthly Investment Income</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.investmentIncome || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, investmentIncome: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Other Monthly Income</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.otherIncome || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, otherIncome: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
             </div>
           </div>
         )}
 
         <div className="stage-navigation">
-          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+          <button className="btn-back" onClick={() => setIncomeStep(1)}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
         </div>
       </div>
