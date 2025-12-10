@@ -98,6 +98,10 @@ const CoborrowerApplication = lazy(() => import('./pages/CoborrowerApplication')
 const BorrowerLogin = lazy(() => import('./pages/BorrowerLogin'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
+const LOMicrosite = lazy(() => import('./pages/microsites/LOMicrosite'));
+const LODashboard = lazy(() => import('./pages/LODashboard'));
+const RealtorDashboard = lazy(() => import('./pages/RealtorDashboard'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -288,6 +292,10 @@ function App() {
 
           {/* Public Booking Page */}
           <Route path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />
+
+          {/* Loan Officer Microsite (public) */}
+          <Route path="/lo/:slug" element={<LazyPage><LOMicrosite /></LazyPage>} />
+          <Route path="/microsite/loan-officer/:userId" element={<LazyPage><LOMicrosite /></LazyPage>} />
 
           {/* Borrower Login (public - social login for applicants) */}
           <Route path="/apply/login" element={<LazyPage><BorrowerLogin /></LazyPage>} />
@@ -1705,6 +1713,72 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ProcessTemplates /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dashboard/loan-officer"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><LODashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dashboard/realtor"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><RealtorDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AdminPanel /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

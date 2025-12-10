@@ -19254,6 +19254,10 @@ When scheduling appointments, confirm the time first via SMS before creating the
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
 
+# Include microsite routes (public LO profiles, lead capture)
+from microsite_routes import router as microsite_router
+app.include_router(microsite_router, tags=["Microsite"])
+
 # Include borrower authentication routes (social login for applicants)
 from borrower_auth_routes import router as borrower_auth_router
 app.include_router(borrower_auth_router, tags=["Borrower Auth"])
