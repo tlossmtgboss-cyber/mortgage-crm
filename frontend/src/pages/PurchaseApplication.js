@@ -2247,8 +2247,9 @@ export default function PurchaseApplication() {
             return (
               <div
                 key={stage.id}
-                className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''}`}
-                onClick={() => isComplete && setCurrentStage(stage.id)}
+                className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''} clickable`}
+                onClick={() => setCurrentStage(stage.id)}
+                style={{ cursor: 'pointer' }}
               >
                 <span className="chapter-icon">{isComplete ? <Icon name="check" size={20} /> : <Icon name={stage.icon} size={20} />}</span>
                 <span className="chapter-label">{stage.label}</span>
