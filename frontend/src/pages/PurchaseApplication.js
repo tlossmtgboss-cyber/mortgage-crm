@@ -192,6 +192,11 @@ const Icon = ({ name, size = 24, className = '' }) => {
         <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/>
       </svg>
     ),
+    edit: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+    ),
     thumbsUp: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
@@ -370,6 +375,36 @@ const DECLARATION_QUESTIONS = [
     showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
   },
   {
+    id: 'co_borrower_first_name',
+    question: 'What is the co-borrower\'s first name?',
+    type: 'text',
+    placeholder: 'First name',
+    hint: 'We\'ll need their information for the application.',
+    showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
+  },
+  {
+    id: 'co_borrower_last_name',
+    question: 'What is the co-borrower\'s last name?',
+    type: 'text',
+    placeholder: 'Last name',
+    showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
+  },
+  {
+    id: 'co_borrower_email',
+    question: 'What is the co-borrower\'s email address?',
+    type: 'email',
+    placeholder: 'email@example.com',
+    hint: 'They\'ll receive updates about the application.',
+    showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
+  },
+  {
+    id: 'co_borrower_phone',
+    question: 'What is the co-borrower\'s phone number?',
+    type: 'phone',
+    placeholder: '(555) 555-5555',
+    showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
+  },
+  {
     id: 'first_time_buyer',
     question: 'Is this your first home purchase?',
     type: 'choice',
@@ -425,6 +460,7 @@ const DECLARATION_QUESTIONS = [
       { value: 'widowed', label: 'Widowed', icon: 'heart' },
     ],
     unlocks: ['spouse_section'],
+    hideIf: { field: 'co_borrower_relationship', values: ['spouse'] }, // Skip if already indicated spouse/partner
   },
   {
     id: 'spouse_on_loan',
@@ -752,18 +788,6 @@ const DECLARATION_QUESTIONS = [
     ],
   },
   {
-    id: 'offer_accepted',
-    question: 'Has your offer been accepted?',
-    type: 'choice',
-    options: [
-      { value: 'yes', label: 'Yes, offer accepted', icon: 'check' },
-      { value: 'pending', label: 'Offer pending', icon: 'clock' },
-      { value: 'multiple', label: 'Making offers on multiple', icon: 'search' },
-    ],
-    hint: 'If accepted, we\'ll move quickly to meet your closing date.',
-    showIf: { field: 'found_property', values: ['yes'] },
-  },
-  {
     id: 'closing_date',
     question: 'When is your target closing date?',
     type: 'choice',
@@ -785,19 +809,29 @@ const DECLARATION_QUESTIONS = [
       { value: 'no', label: 'Not yet', icon: 'search' },
     ],
     hint: 'We can recommend great agents in your area if needed.',
-    showIf: { field: 'found_property', values: ['looking', 'pre_approval'] },
   },
   {
-    id: 'credit_estimate',
-    question: 'What\'s your estimated credit score?',
-    type: 'choice',
-    options: [
-      { value: 'excellent', label: '740+', icon: 'star', description: 'Excellent' },
-      { value: 'good', label: '700-739', icon: 'thumbsUp', description: 'Good' },
-      { value: 'fair', label: '640-699', icon: 'barChart', description: 'Fair' },
-      { value: 'building', label: 'Below 640', icon: 'trendUp', description: 'Building' },
-    ],
-    hint: 'Don\'t worry - we have programs for all credit levels!',
+    id: 'agent_name',
+    question: 'What is your real estate agent\'s name?',
+    type: 'text',
+    placeholder: 'Agent\'s full name',
+    hint: 'We\'ll coordinate with your agent throughout the process.',
+    showIf: { field: 'working_with_agent', values: ['yes'] },
+  },
+  {
+    id: 'agent_phone',
+    question: 'What is your agent\'s phone number?',
+    type: 'phone',
+    placeholder: '(555) 555-5555',
+    showIf: { field: 'working_with_agent', values: ['yes'] },
+  },
+  {
+    id: 'agent_email',
+    question: 'What is your agent\'s email address?',
+    type: 'email',
+    placeholder: 'agent@example.com',
+    hint: 'We\'ll send them updates on your loan progress.',
+    showIf: { field: 'working_with_agent', values: ['yes'] },
   },
   {
     id: 'credit_issues',
@@ -810,7 +844,6 @@ const DECLARATION_QUESTIONS = [
       { value: 'bankruptcy', label: 'Bankruptcy', icon: 'document' },
     ],
     hint: 'Being upfront helps us find the right program for you.',
-    showIf: { field: 'credit_estimate', values: ['fair', 'building'] },
   },
   {
     id: 'bankruptcy_type',
@@ -830,9 +863,9 @@ const DECLARATION_QUESTIONS = [
     options: [
       { value: 'less_than_2_years', label: 'Less than 2 years ago', icon: 'clock' },
       { value: '2_to_4_years', label: '2-4 years ago', icon: 'calendar' },
-      { value: 'more_than_4_years', label: 'More than 4 years ago', icon: 'check' },
+      { value: 'more_than_4_years', label: 'More than 4 years ago', icon: 'calendar' },
     ],
-    hint: 'FHA allows financing 2 years after Chapter 7 discharge.',
+    hint: 'Most loan programs require at least 2-4 years since discharge.',
     showIf: { field: 'credit_issues', values: ['bankruptcy'] },
   },
 ];
@@ -929,6 +962,7 @@ export default function PurchaseApplication() {
   const [profileData, setProfileData] = useState({});
   const [incomeData, setIncomeData] = useState({});
   const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
+  const [propertyStep, setPropertyStep] = useState(1); // 1 = type/occupancy, 2 = price/down, 3 = loan program
   const [assetData, setAssetData] = useState({});
   const [propertyData, setPropertyData] = useState({});
   const [planningData, setPlanningData] = useState({
@@ -943,6 +977,7 @@ export default function PurchaseApplication() {
   const [microWinMessage, setMicroWinMessage] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
+  const [scheduleStep, setScheduleStep] = useState(1); // 1 = calendar, 2 = video/next steps
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -973,6 +1008,14 @@ export default function PurchaseApplication() {
 
   // Helper to check if a question should be shown based on conditions
   const shouldShowQuestion = useCallback((question, currentDeclarations) => {
+    // Check hideIf condition first - if matches, hide the question
+    if (question.hideIf) {
+      const { field, values } = question.hideIf;
+      if (values.includes(currentDeclarations[field])) {
+        return false;
+      }
+    }
+    // Then check showIf condition
     if (!question.showIf) return true;
     const { field, values } = question.showIf;
     return values.includes(currentDeclarations[field]);
@@ -1333,80 +1376,28 @@ export default function PurchaseApplication() {
   const renderIncomeStage = () => {
     const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
 
-    // Step 1: Income type selection
-    if (incomeStep === 1) {
-      return (
-        <div className="stage-content">
-          <div className="stage-header">
-            <h2>Tell us about your income</h2>
-            <p>This helps us find the best loan for you</p>
-          </div>
-          <div className="income-type-selector">
-            <h3>How do you earn income?</h3>
-            <div className="income-cards">
-              <div
-                className={`income-card ${incomeData.primaryType === 'employed' ? 'selected' : ''}`}
-                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'employed' }))}
-              >
-                <span className="card-icon"><Icon name="tie" size={28} /></span>
-                <span className="card-label">Employed</span>
-                <span className="card-desc">W-2 employee</span>
-              </div>
-              <div
-                className={`income-card ${incomeData.primaryType === 'self_employed' ? 'selected' : ''}`}
-                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'self_employed' }))}
-              >
-                <span className="card-icon"><Icon name="building" size={28} /></span>
-                <span className="card-label">Self-Employed</span>
-                <span className="card-desc">Business owner</span>
-              </div>
-              <div
-                className={`income-card ${incomeData.primaryType === 'retired' ? 'selected' : ''}`}
-                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'retired' }))}
-              >
-                <span className="card-icon"><Icon name="beach" size={28} /></span>
-                <span className="card-label">Retired</span>
-                <span className="card-desc">Pension/SS</span>
-              </div>
-              <div
-                className={`income-card ${incomeData.primaryType === 'other' ? 'selected' : ''}`}
-                onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'other' }))}
-              >
-                <span className="card-icon"><Icon name="dollarSign" size={28} /></span>
-                <span className="card-label">Other</span>
-                <span className="card-desc">Rental, investments</span>
-              </div>
-            </div>
-          </div>
+    // Determine income type from declarations
+    const getIncomeType = () => {
+      if (declarations.self_employed === 'yes') return 'self_employed';
+      if (declarations.self_employed === 'side_business') return 'employed_with_business';
+      return 'employed'; // Default to employed if 'no' or not set
+    };
 
-          <div className="stage-navigation">
-            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
-            <button
-              className="btn-continue"
-              onClick={() => incomeData.primaryType && setIncomeStep(2)}
-              disabled={!incomeData.primaryType}
-            >
-              Continue →
-            </button>
-          </div>
-        </div>
-      );
-    }
+    const currentIncomeType = getIncomeType();
 
-    // Step 2: Income details based on type
+    // Show income details directly (skip the duplicate question)
     return (
       <div className="stage-content">
         <div className="stage-header">
           <h2>
-            {incomeData.primaryType === 'employed' && 'Employment Details'}
-            {incomeData.primaryType === 'self_employed' && 'Business Details'}
-            {incomeData.primaryType === 'retired' && 'Retirement Income'}
-            {incomeData.primaryType === 'other' && 'Other Income'}
+            {currentIncomeType === 'employed' && 'Employment Details'}
+            {currentIncomeType === 'self_employed' && 'Business Details'}
+            {currentIncomeType === 'employed_with_business' && 'Employment & Business Details'}
           </h2>
           <p>Tell us more about your income</p>
         </div>
 
-        {incomeData.primaryType === 'employed' && (
+        {(currentIncomeType === 'employed' || currentIncomeType === 'employed_with_business') && (
           <div className="form-card">
             <EmployerAutocomplete
               value={incomeData.employerName || ''}
@@ -1462,7 +1453,7 @@ export default function PurchaseApplication() {
           </div>
         )}
 
-        {(incomeData.primaryType === 'self_employed' || isSelfEmployed) && (
+        {(currentIncomeType === 'self_employed' || currentIncomeType === 'employed_with_business') && (
           <div className="form-card">
             <div className="form-group">
               <label>Business Name</label>
@@ -1517,52 +1508,10 @@ export default function PurchaseApplication() {
           </div>
         )}
 
-        {incomeData.primaryType === 'retired' && (
-          <div className="form-card">
-            <div className="form-group">
-              <label>Monthly Social Security</label>
-              <div className="input-with-prefix">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  value={incomeData.socialSecurity || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, socialSecurity: e.target.value }))}
-                  className="fun-input"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Monthly Pension</label>
-              <div className="input-with-prefix">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  value={incomeData.pension || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, pension: e.target.value }))}
-                  className="fun-input"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Monthly Retirement Distributions (401k, IRA)</label>
-              <div className="input-with-prefix">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  value={incomeData.retirementDistributions || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, retirementDistributions: e.target.value }))}
-                  className="fun-input"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {incomeData.primaryType === 'other' && (
-          <div className="form-card">
+        {/* Additional income section for rental, retirement, etc. */}
+        <div className="form-card">
+          <h3>Additional Income (Optional)</h3>
+          <div className="form-row">
             <div className="form-group">
               <label>Monthly Rental Income</label>
               <div className="input-with-prefix">
@@ -1571,19 +1520,6 @@ export default function PurchaseApplication() {
                   type="number"
                   value={incomeData.rentalIncome || ''}
                   onChange={(e) => setIncomeData(prev => ({ ...prev, rentalIncome: e.target.value }))}
-                  className="fun-input"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Monthly Investment Income</label>
-              <div className="input-with-prefix">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  value={incomeData.investmentIncome || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, investmentIncome: e.target.value }))}
                   className="fun-input"
                   placeholder="0"
                 />
@@ -1603,10 +1539,10 @@ export default function PurchaseApplication() {
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         <div className="stage-navigation">
-          <button className="btn-back" onClick={() => setIncomeStep(1)}>← Back</button>
+          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
         </div>
       </div>
@@ -1764,59 +1700,109 @@ export default function PurchaseApplication() {
     const isVeteran = declarations.veteran === 'yes' || declarations.veteran === 'active';
     const isFirstTimeBuyer = declarations.first_time_buyer === 'yes';
 
+    // Step 1: Property Type and Occupancy
+    if (propertyStep === 1) {
+      return (
+        <div className="stage-content">
+          <div className="stage-header">
+            <h2>Property Type</h2>
+            <p>What type of property are you looking for?</p>
+          </div>
+
+          <div className="form-card">
+            <div className="property-type-selector">
+              <label>Property Type</label>
+              <div className="type-pills">
+                {['Single Family', 'Condo', 'Townhouse', 'Multi-Family'].map(type => (
+                  <button
+                    key={type}
+                    className={`type-pill ${propertyData.propertyType === type ? 'selected' : ''}`}
+                    onClick={() => setPropertyData(prev => ({ ...prev, propertyType: type }))}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+            <button
+              className="btn-continue"
+              onClick={() => setPropertyStep(2)}
+              disabled={!propertyData.propertyType}
+            >
+              Continue →
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 2: Occupancy Type
+    if (propertyStep === 2) {
+      return (
+        <div className="stage-content">
+          <div className="stage-header">
+            <h2>How Will You Use This Home?</h2>
+            <p>This affects your loan options and rates</p>
+          </div>
+
+          <div className="form-card">
+            <div className="occupancy-selector">
+              <div className="income-cards">
+                <div
+                  className={`income-card ${propertyData.occupancy === 'primary' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, occupancy: 'primary' }))}
+                >
+                  <span className="card-icon"><Icon name="home" size={28} /></span>
+                  <span className="card-label">Primary Home</span>
+                  <span className="card-desc">I'll live here</span>
+                </div>
+                <div
+                  className={`income-card ${propertyData.occupancy === 'second' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, occupancy: 'second' }))}
+                >
+                  <span className="card-icon"><Icon name="beach" size={28} /></span>
+                  <span className="card-label">Second Home</span>
+                  <span className="card-desc">Vacation property</span>
+                </div>
+                <div
+                  className={`income-card ${propertyData.occupancy === 'investment' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, occupancy: 'investment' }))}
+                >
+                  <span className="card-icon"><Icon name="trendUp" size={28} /></span>
+                  <span className="card-label">Investment</span>
+                  <span className="card-desc">Rental income</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setPropertyStep(1)}>← Back</button>
+            <button
+              className="btn-continue"
+              onClick={() => setPropertyStep(3)}
+              disabled={!propertyData.occupancy}
+            >
+              Continue →
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 3: Price, Down Payment, and Loan Program
     return (
       <div className="stage-content">
         <div className="stage-header">
-          <h2>Your New Home</h2>
-          <p>Tell us about the property you want to buy</p>
+          <h2>Price & Loan Details</h2>
+          <p>Tell us about your budget and preferred loan program</p>
         </div>
 
         <div className="form-card">
-          <div className="property-type-selector">
-            <label>Property Type</label>
-            <div className="type-pills">
-              {['Single Family', 'Condo', 'Townhouse', 'Multi-Family'].map(type => (
-                <button
-                  key={type}
-                  className={`type-pill ${propertyData.propertyType === type ? 'selected' : ''}`}
-                  onClick={() => setPropertyData(prev => ({ ...prev, propertyType: type }))}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="occupancy-selector">
-            <label>How will you use this home?</label>
-            <div className="income-cards">
-              <div
-                className={`income-card ${propertyData.occupancy === 'primary' ? 'selected' : ''}`}
-                onClick={() => setPropertyData(prev => ({ ...prev, occupancy: 'primary' }))}
-              >
-                <span className="card-icon"><Icon name="home" size={28} /></span>
-                <span className="card-label">Primary Home</span>
-                <span className="card-desc">I'll live here</span>
-              </div>
-              <div
-                className={`income-card ${propertyData.occupancy === 'second' ? 'selected' : ''}`}
-                onClick={() => setPropertyData(prev => ({ ...prev, occupancy: 'second' }))}
-              >
-                <span className="card-icon"><Icon name="beach" size={28} /></span>
-                <span className="card-label">Second Home</span>
-                <span className="card-desc">Vacation property</span>
-              </div>
-              <div
-                className={`income-card ${propertyData.occupancy === 'investment' ? 'selected' : ''}`}
-                onClick={() => setPropertyData(prev => ({ ...prev, occupancy: 'investment' }))}
-              >
-                <span className="card-icon"><Icon name="trendUp" size={28} /></span>
-                <span className="card-label">Investment</span>
-                <span className="card-desc">Rental income</span>
-              </div>
-            </div>
-          </div>
-
           {declarations.found_property === 'yes' && (
             <AddressAutocomplete
               value={propertyData.address || ''}
@@ -1917,7 +1903,7 @@ export default function PurchaseApplication() {
         </div>
 
         <div className="stage-navigation">
-          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+          <button className="btn-back" onClick={() => setPropertyStep(2)}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
         </div>
       </div>
@@ -1936,7 +1922,7 @@ export default function PurchaseApplication() {
         <div className="review-section">
           <div className="section-header">
             <h3><Icon name="profile" size={18} /> Your Profile</h3>
-            <button className="edit-link" onClick={() => setCurrentStage('profile')}>Edit</button>
+            <button className="edit-btn" onClick={() => setCurrentStage('profile')}><Icon name="edit" size={14} /></button>
           </div>
           <div className="section-content">
             <p><strong>Name:</strong> {profileData.firstName} {profileData.lastName}</p>
@@ -1948,7 +1934,7 @@ export default function PurchaseApplication() {
         <div className="review-section">
           <div className="section-header">
             <h3><Icon name="briefcase" size={18} /> Income</h3>
-            <button className="edit-link" onClick={() => setCurrentStage('income')}>Edit</button>
+            <button className="edit-btn" onClick={() => setCurrentStage('income')}><Icon name="edit" size={14} /></button>
           </div>
           <div className="section-content">
             <p><strong>Type:</strong> {incomeData.primaryType}</p>
@@ -1960,7 +1946,7 @@ export default function PurchaseApplication() {
         <div className="review-section">
           <div className="section-header">
             <h3><Icon name="dollarSign" size={18} /> Down Payment</h3>
-            <button className="edit-link" onClick={() => setCurrentStage('assets')}>Edit</button>
+            <button className="edit-btn" onClick={() => setCurrentStage('assets')}><Icon name="edit" size={14} /></button>
           </div>
           <div className="section-content">
             <p><strong>Total Available:</strong> ${(
@@ -1978,7 +1964,7 @@ export default function PurchaseApplication() {
         <div className="review-section">
           <div className="section-header">
             <h3><Icon name="home" size={18} /> New Home</h3>
-            <button className="edit-link" onClick={() => setCurrentStage('property')}>Edit</button>
+            <button className="edit-btn" onClick={() => setCurrentStage('property')}><Icon name="edit" size={14} /></button>
           </div>
           <div className="section-content">
             <p><strong>Property Type:</strong> {propertyData.propertyType}</p>
@@ -1987,20 +1973,6 @@ export default function PurchaseApplication() {
             <p><strong>Loan Program:</strong> {propertyData.program?.toUpperCase()}</p>
           </div>
         </div>
-      </div>
-
-      <div className="needs-list-section">
-        <h3><Icon name="clipboard" size={18} /> Your Document Checklist</h3>
-        <p>We'll need these documents to process your application:</p>
-        <ul className="needs-list">
-          {needsList.map(item => (
-            <li key={item.id} className="needs-item">
-              <span className="needs-icon"><Icon name="document" size={18} /></span>
-              <span className="needs-label">{item.label}</span>
-              <span className={`needs-category ${item.category}`}>{item.category}</span>
-            </li>
-          ))}
-        </ul>
       </div>
 
       <div className="stage-navigation">
@@ -2147,15 +2119,64 @@ export default function PurchaseApplication() {
     return slots.slice(0, 12); // Return first 12 slots
   };
 
-  // Render schedule stage with video and calendar
+  // Render schedule stage - split into 2 steps: calendar first, then video/next steps
   const renderScheduleStage = () => {
     const timeSlots = generateTimeSlots();
 
+    // Step 1: Calendar selection
+    if (scheduleStep === 1) {
+      return (
+        <div className="stage-content scheduling-page">
+          <div className="scheduling-header">
+            <h2>Schedule Your Consultation</h2>
+            <p>Let's find a time that works for you to discuss your mortgage options.</p>
+          </div>
+
+          <div className="calendar-section">
+            <div className="calendar-placeholder">
+              <span className="cal-icon"><Icon name="calendar" size={48} /></span>
+              <h4>Pick a Time That Works For You</h4>
+              <p>Select an available time slot below for your 15-minute consultation call</p>
+
+              <div className="time-slots">
+                {timeSlots.map(slot => (
+                  <div
+                    key={slot.id}
+                    className={`time-slot ${selectedTimeSlot === slot.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedTimeSlot(slot.id)}
+                  >
+                    <div className="time-slot-time">{slot.time}</div>
+                    <div className="time-slot-date">{slot.date}</div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                className="btn-schedule"
+                disabled={!selectedTimeSlot}
+                onClick={() => {
+                  showMicroWinAnimation('Consultation Scheduled!');
+                  setScheduleStep(2);
+                }}
+              >
+                {selectedTimeSlot ? 'Confirm Appointment' : 'Select a Time Slot'}
+              </button>
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 2: Video and next steps
     return (
       <div className="stage-content scheduling-page">
         <div className="scheduling-header">
-          <h2>You're Almost Done!</h2>
-          <p>Watch this quick video to learn what happens next, then schedule your consultation.</p>
+          <h2>You're All Set!</h2>
+          <p>Your consultation is scheduled. Here's what to expect next.</p>
         </div>
 
         <div className="video-section">
@@ -2177,39 +2198,17 @@ export default function PurchaseApplication() {
           </div>
         </div>
 
-        <div className="calendar-section">
-          <h3>Schedule Your Consultation</h3>
-
-          <div className="calendar-placeholder">
-            <span className="cal-icon"><Icon name="calendar" size={48} /></span>
-            <h4>Pick a Time That Works For You</h4>
-            <p>Select an available time slot below for your 15-minute consultation call</p>
-
-            <div className="time-slots">
-              {timeSlots.map(slot => (
-                <div
-                  key={slot.id}
-                  className={`time-slot ${selectedTimeSlot === slot.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedTimeSlot(slot.id)}
-                >
-                  <div className="time-slot-time">{slot.time}</div>
-                  <div className="time-slot-date">{slot.date}</div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              className="btn-schedule"
-              disabled={!selectedTimeSlot}
-              onClick={() => showMicroWinAnimation('Consultation Scheduled! Check your email for confirmation.')}
-            >
-              {selectedTimeSlot ? 'Confirm Appointment' : 'Select a Time Slot'}
-            </button>
-          </div>
+        <div className="submit-section">
+          <p className="demo-notice">
+            <span>DEMO:</span> Check your email for confirmation and document upload instructions.
+          </p>
+          <button className="btn-submit" onClick={() => showMicroWinAnimation('Application Complete! Welcome to your home buying journey.')}>
+            Complete Application
+          </button>
         </div>
 
         <div className="stage-navigation">
-          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+          <button className="btn-back" onClick={() => setScheduleStep(1)}>← Back</button>
         </div>
       </div>
     );
@@ -2275,20 +2274,6 @@ export default function PurchaseApplication() {
       <main className="urla-content">
         {renderStage()}
       </main>
-
-      {currentStage !== 'declarations' && needsList.length > 0 && (
-        <aside className="needs-sidebar">
-          <h4><Icon name="clipboard" size={16} /> Your Checklist</h4>
-          <ul>
-            {needsList.slice(0, 5).map(item => (
-              <li key={item.id}>{item.label}</li>
-            ))}
-          </ul>
-          {needsList.length > 5 && (
-            <span className="more-items">+{needsList.length - 5} more</span>
-          )}
-        </aside>
-      )}
     </div>
   );
 }

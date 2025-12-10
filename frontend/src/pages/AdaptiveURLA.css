@@ -832,6 +832,31 @@
   cursor: pointer;
 }
 
+.edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-btn:hover {
+  background: #e5e7eb;
+  color: #218D8D;
+  border-color: #218D8D;
+}
+
+.edit-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .section-content p {
   margin: 8px 0;
   font-size: 14px;
