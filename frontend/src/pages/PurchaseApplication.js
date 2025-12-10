@@ -1180,6 +1180,12 @@ export default function PurchaseApplication() {
     const visibleQuestions = getVisibleQuestions();
     const visibleQuestionNum = getVisibleQuestionNumber();
 
+    // Guard: if question is undefined, reset to first question
+    if (!question) {
+      setCurrentQuestionIndex(0);
+      return <div className="stage-content">Loading...</div>;
+    }
+
     // Render different input types
     const renderQuestionInput = () => {
       if (question.type === 'currency') {
@@ -1234,6 +1240,9 @@ export default function PurchaseApplication() {
       }
 
       // Default: choice type
+      if (!question.options) {
+        return <div className="declaration-options">No options available</div>;
+      }
       return (
         <div className="declaration-options">
           {question.options.map(option => (
