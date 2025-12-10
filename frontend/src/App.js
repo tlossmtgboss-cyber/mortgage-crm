@@ -92,6 +92,8 @@ const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntell
 const PublicBooking = lazy(() => import('./pages/PublicBooking'));
 const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazy(() => import('./pages/AdaptiveURLA'));
+const PurchaseApplication = lazy(() => import('./pages/PurchaseApplication'));
+const RefinanceApplication = lazy(() => import('./pages/RefinanceApplication'));
 const CoborrowerApplication = lazy(() => import('./pages/CoborrowerApplication'));
 const BorrowerLogin = lazy(() => import('./pages/BorrowerLogin'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
@@ -292,6 +294,10 @@ function App() {
 
           {/* Borrower Application Start (after social login) - New Adaptive URLA */}
           <Route path="/apply/start" element={<LazyPage><AdaptiveURLA /></LazyPage>} />
+
+          {/* Purpose-specific applications */}
+          <Route path="/apply/purchase" element={<LazyPage><PurchaseApplication /></LazyPage>} />
+          <Route path="/apply/refinance" element={<LazyPage><RefinanceApplication /></LazyPage>} />
 
           {/* Borrower OAuth Callbacks */}
           <Route path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />
