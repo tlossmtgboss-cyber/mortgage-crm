@@ -1996,13 +1996,13 @@
   gap: 16px;
 }
 
-/* Borrower Application Button */
-.borrower-app-btn {
+/* Purchase Application Button */
+.purchase-app-btn {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -2010,15 +2010,41 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 4px rgba(20, 184, 166, 0.3);
 }
 
-.borrower-app-btn:hover {
+.purchase-app-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 8px rgba(20, 184, 166, 0.4);
 }
 
-.borrower-app-btn:active {
+.purchase-app-btn:active {
+  transform: translateY(0);
+}
+
+/* Refinance Application Button */
+.refinance-app-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(20, 184, 166, 0.3);
+}
+
+.refinance-app-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(20, 184, 166, 0.4);
+}
+
+.refinance-app-btn:active {
   transform: translateY(0);
 }
 
@@ -2054,7 +2080,8 @@
     gap: 8px;
   }
 
-  .borrower-app-btn {
+  .purchase-app-btn,
+  .refinance-app-btn {
     font-size: 12px;
     padding: 6px 12px;
   }

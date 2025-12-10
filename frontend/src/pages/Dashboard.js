@@ -950,11 +950,18 @@ function Dashboard() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
           <button
-            className="borrower-app-btn"
-            onClick={() => navigate('/apply/login')}
-            title="Open Borrower Application"
+            className="purchase-app-btn"
+            onClick={() => navigate('/apply/purchase')}
+            title="Start Purchase Application"
           >
-            Borrower Application
+            Purchase Application
+          </button>
+          <button
+            className="refinance-app-btn"
+            onClick={() => navigate('/apply/refinance')}
+            title="Start Refinance Application"
+          >
+            Refinance Application
           </button>
           <button
             className="ai-landing-btn"
