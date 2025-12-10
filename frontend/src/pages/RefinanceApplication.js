@@ -14,15 +14,418 @@ import './AdaptiveURLA.css';
  * 6. Review - Summary and submit
  */
 
+// Professional Icon component with SVG icons
+const Icon = ({ name, size = 24, className = '' }) => {
+  const icons = {
+    story: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+      </svg>
+    ),
+    profile: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    ),
+    income: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+      </svg>
+    ),
+    home: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+      </svg>
+    ),
+    target: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <circle cx="12" cy="12" r="6"></circle>
+        <circle cx="12" cy="12" r="2"></circle>
+      </svg>
+    ),
+    review: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+    ),
+    goals: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"></line>
+        <line x1="12" y1="20" x2="12" y2="4"></line>
+        <line x1="6" y1="20" x2="6" y2="14"></line>
+      </svg>
+    ),
+    calendar: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    ),
+    check: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    ),
+    user: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    ),
+    users: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+    ),
+    family: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+    ),
+    trendDown: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
+        <polyline points="17 18 23 18 23 12"></polyline>
+      </svg>
+    ),
+    dollarSign: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"></line>
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+      </svg>
+    ),
+    money: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+        <circle cx="12" cy="12" r="3"></circle>
+        <line x1="1" y1="8" x2="5" y2="8"></line>
+        <line x1="19" y1="8" x2="23" y2="8"></line>
+        <line x1="1" y1="16" x2="5" y2="16"></line>
+        <line x1="19" y1="16" x2="23" y2="16"></line>
+      </svg>
+    ),
+    timer: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+    ),
+    couple: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+    ),
+    document: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+        <polyline points="10 9 9 9 8 9"></polyline>
+      </svg>
+    ),
+    medal: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="6"></circle>
+        <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"></path>
+      </svg>
+    ),
+    star: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+      </svg>
+    ),
+    arrowRight: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+        <polyline points="12 5 19 12 12 19"></polyline>
+      </svg>
+    ),
+    building: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+        <path d="M9 22v-4h6v4"></path>
+        <line x1="8" y1="6" x2="8" y2="6"></line>
+        <line x1="16" y1="6" x2="16" y2="6"></line>
+        <line x1="8" y1="10" x2="8" y2="10"></line>
+        <line x1="16" y1="10" x2="16" y2="10"></line>
+        <line x1="8" y1="14" x2="8" y2="14"></line>
+        <line x1="16" y1="14" x2="16" y2="14"></line>
+      </svg>
+    ),
+    briefcase: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+      </svg>
+    ),
+    tie: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22l-4-4 1-9h6l1 9-4 4z"></path>
+        <path d="M9 2h6v4l-3 1-3-1V2z"></path>
+      </svg>
+    ),
+    warning: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    ),
+    clipboard: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+      </svg>
+    ),
+    checkCircle: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+    ),
+    creditCard: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+        <line x1="1" y1="10" x2="23" y2="10"></line>
+      </svg>
+    ),
+    bank: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18"></path>
+        <path d="M3 10h18"></path>
+        <path d="M5 6l7-3 7 3"></path>
+        <path d="M4 10v11"></path>
+        <path d="M20 10v11"></path>
+        <path d="M8 10v11"></path>
+        <path d="M12 10v11"></path>
+        <path d="M16 10v11"></path>
+      </svg>
+    ),
+    government: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18"></path>
+        <path d="M5 21V7l7-4 7 4v14"></path>
+        <path d="M9 21v-6h6v6"></path>
+      </svg>
+    ),
+    wheat: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 9l6 6 6-6"></path>
+        <path d="M6 15l6 6 6-6"></path>
+        <path d="M12 3v18"></path>
+      </svg>
+    ),
+    helpCircle: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    ),
+    condo: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+        <path d="M9 22v-4h6v4"></path>
+        <line x1="8" y1="6" x2="8" y2="6"></line>
+        <line x1="16" y1="6" x2="16" y2="6"></line>
+        <line x1="8" y1="10" x2="8" y2="10"></line>
+        <line x1="16" y1="10" x2="16" y2="10"></line>
+        <line x1="8" y1="14" x2="8" y2="14"></line>
+        <line x1="16" y1="14" x2="16" y2="14"></line>
+      </svg>
+    ),
+    townhouse: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h6V10L6 7l-3 3v11z"></path>
+        <path d="M9 21h6V10l-3-3-3 3v11z"></path>
+        <path d="M15 21h6V10l-3-3-3 3v11z"></path>
+      </svg>
+    ),
+    multiFamily: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+        <line x1="4" y1="12" x2="20" y2="12"></line>
+        <line x1="12" y1="2" x2="12" y2="22"></line>
+      </svg>
+    ),
+    starFilled: (
+      <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+      </svg>
+    ),
+    thumbsUp: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+      </svg>
+    ),
+    trendUp: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+        <polyline points="17 6 23 6 23 12"></polyline>
+      </svg>
+    ),
+    info: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+    ),
+    balance: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v18"></path>
+        <path d="M5 6l14 0"></path>
+        <path d="M3 10l4-4 4 4"></path>
+        <path d="M13 10l4-4 4 4"></path>
+        <circle cx="5" cy="18" r="2"></circle>
+        <circle cx="19" cy="18" r="2"></circle>
+      </svg>
+    ),
+    beach: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="5" r="3"></circle>
+        <path d="M12 8v4"></path>
+        <path d="M6 12l6 4 6-4"></path>
+        <path d="M3 20h18"></path>
+      </svg>
+    ),
+    flash: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+      </svg>
+    ),
+    refresh: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>
+    ),
+    homeHeart: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+        <path d="M12 14.5c-1.5-2-4-2-4 0s4 4 4 4 4-2 4-4-2.5-2-4 0z"></path>
+      </svg>
+    ),
+    eagle: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+        <path d="M2 17l10 5 10-5"></path>
+        <path d="M2 12l10 5 10-5"></path>
+      </svg>
+    ),
+    scissors: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="6" cy="6" r="3"></circle>
+        <circle cx="6" cy="18" r="3"></circle>
+        <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+        <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+        <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+      </svg>
+    ),
+    graduation: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+        <path d="M6 12v5c0 2 6 3 6 3s6-1 6-3v-5"></path>
+      </svg>
+    ),
+    chart: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"></line>
+        <line x1="12" y1="20" x2="12" y2="4"></line>
+        <line x1="6" y1="20" x2="6" y2="14"></line>
+      </svg>
+    ),
+    rocket: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path>
+        <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path>
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path>
+        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
+      </svg>
+    ),
+    shield: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      </svg>
+    ),
+    calculator: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="2" width="16" height="20" rx="2"></rect>
+        <line x1="8" y1="6" x2="16" y2="6"></line>
+        <line x1="8" y1="10" x2="8" y2="10"></line>
+        <line x1="12" y1="10" x2="12" y2="10"></line>
+        <line x1="16" y1="10" x2="16" y2="10"></line>
+        <line x1="8" y1="14" x2="8" y2="14"></line>
+        <line x1="12" y1="14" x2="12" y2="14"></line>
+        <line x1="16" y1="14" x2="16" y2="14"></line>
+        <line x1="8" y1="18" x2="8" y2="18"></line>
+        <line x1="12" y1="18" x2="12" y2="18"></line>
+        <line x1="16" y1="18" x2="16" y2="18"></line>
+      </svg>
+    ),
+    scroll: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"></path>
+        <path d="M19 17V5a2 2 0 0 0-2-2H4"></path>
+      </svg>
+    ),
+    play: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+      </svg>
+    ),
+    x: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    ),
+    thinking: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    ),
+  };
+
+  return (
+    <span className={`icon ${className}`} style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+      {icons[name] || icons.document}
+    </span>
+  );
+};
+
 const STAGES = [
-  { id: 'declarations', label: 'Your Story', icon: '🧩', description: 'Quick questions' },
-  { id: 'profile', label: 'About You', icon: '👤', description: 'The basics' },
-  { id: 'income', label: 'Your Income', icon: '💼', description: 'How you earn' },
-  { id: 'property', label: 'Current Home', icon: '🏠', description: 'Property details' },
-  { id: 'goals', label: 'Refi Goals', icon: '🎯', description: 'Refinance options' },
-  { id: 'review', label: 'Review', icon: '✅', description: 'Review your info' },
-  { id: 'planning', label: 'Planning', icon: '📊', description: 'Your preferences' },
-  { id: 'schedule', label: 'Schedule', icon: '📅', description: 'Book a call' },
+  { id: 'declarations', label: 'Your Story', icon: 'story', description: 'Quick questions' },
+  { id: 'profile', label: 'About You', icon: 'profile', description: 'The basics' },
+  { id: 'income', label: 'Your Income', icon: 'income', description: 'How you earn' },
+  { id: 'property', label: 'Current Home', icon: 'home', description: 'Property details' },
+  { id: 'goals', label: 'Refi Goals', icon: 'target', description: 'Refinance options' },
+  { id: 'review', label: 'Review', icon: 'review', description: 'Review your info' },
+  { id: 'planning', label: 'Planning', icon: 'goals', description: 'Your preferences' },
+  { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
 ];
 
 // Refinance-specific declaration questions
@@ -32,10 +435,10 @@ const DECLARATION_QUESTIONS = [
     question: 'How many people will be on this loan application?',
     type: 'choice',
     options: [
-      { value: '1', label: 'Just me', icon: '👤' },
-      { value: '2', label: 'Two of us', icon: '👥' },
-      { value: '3', label: 'Three people', icon: '👨‍👩‍👦' },
-      { value: '4+', label: 'Four or more', icon: '👨‍👩‍👧‍👦' },
+      { value: '1', label: 'Just me', icon: 'user' },
+      { value: '2', label: 'Two of us', icon: 'users' },
+      { value: '3', label: 'Three people', icon: 'family' },
+      { value: '4+', label: 'Four or more', icon: 'family' },
     ],
     hint: 'This helps us know how many borrowers to include in the application.',
   },
@@ -44,10 +447,10 @@ const DECLARATION_QUESTIONS = [
     question: 'What\'s your main goal for refinancing?',
     type: 'choice',
     options: [
-      { value: 'lower_rate', label: 'Lower my interest rate', icon: '📉' },
-      { value: 'lower_payment', label: 'Lower my monthly payment', icon: '💵' },
-      { value: 'cash_out', label: 'Get cash from my equity', icon: '💰' },
-      { value: 'shorter_term', label: 'Pay off faster', icon: '⏱️' },
+      { value: 'lower_rate', label: 'Lower my interest rate', icon: 'trendDown' },
+      { value: 'lower_payment', label: 'Lower my monthly payment', icon: 'dollarSign' },
+      { value: 'cash_out', label: 'Get cash from my equity', icon: 'money' },
+      { value: 'shorter_term', label: 'Pay off faster', icon: 'timer' },
     ],
   },
   {
@@ -55,9 +458,9 @@ const DECLARATION_QUESTIONS = [
     question: 'Are you married?',
     type: 'choice',
     options: [
-      { value: 'married', label: 'Yes, married', icon: '💑' },
-      { value: 'single', label: 'Single', icon: '👤' },
-      { value: 'divorced', label: 'Divorced', icon: '📝' },
+      { value: 'married', label: 'Yes, married', icon: 'couple' },
+      { value: 'single', label: 'Single', icon: 'user' },
+      { value: 'divorced', label: 'Divorced', icon: 'document' },
     ],
     unlocks: ['spouse_section'],
   },
@@ -66,10 +469,10 @@ const DECLARATION_QUESTIONS = [
     question: 'Have you or your spouse served in the military?',
     type: 'choice',
     options: [
-      { value: 'yes', label: 'Yes, I\'m a Veteran', icon: '🎖️' },
-      { value: 'active', label: 'Currently Active Duty', icon: '⭐' },
-      { value: 'spouse', label: 'My spouse served', icon: '💑' },
-      { value: 'no', label: 'No military service', icon: '➡️' },
+      { value: 'yes', label: 'Yes, I\'m a Veteran', icon: 'medal' },
+      { value: 'active', label: 'Currently Active Duty', icon: 'star' },
+      { value: 'spouse', label: 'My spouse served', icon: 'couple' },
+      { value: 'no', label: 'No military service', icon: 'arrowRight' },
     ],
     hint: 'VA streamline refinance options available!',
   },
@@ -78,9 +481,9 @@ const DECLARATION_QUESTIONS = [
     question: 'Are you self-employed or own a business?',
     type: 'choice',
     options: [
-      { value: 'yes', label: 'Yes, self-employed', icon: '🏢' },
-      { value: 'side_business', label: 'I have a side business', icon: '💼' },
-      { value: 'no', label: 'No, I\'m an employee', icon: '👔' },
+      { value: 'yes', label: 'Yes, self-employed', icon: 'building' },
+      { value: 'side_business', label: 'I have a side business', icon: 'briefcase' },
+      { value: 'no', label: 'No, I\'m an employee', icon: 'tie' },
     ],
     hint: 'This helps us know what income documents you\'ll need.',
   },
@@ -89,9 +492,9 @@ const DECLARATION_QUESTIONS = [
     question: 'Do you write off most expenses to minimize taxable income?',
     type: 'choice',
     options: [
-      { value: 'yes', label: 'Yes, I maximize deductions', icon: '📉' },
-      { value: 'some', label: 'Some, but I show decent income', icon: '⚖️' },
-      { value: 'no', label: 'No, I show most of my income', icon: '📈' },
+      { value: 'yes', label: 'Yes, I maximize deductions', icon: 'trendDown' },
+      { value: 'some', label: 'Some, but I show decent income', icon: 'balance' },
+      { value: 'no', label: 'No, I show most of my income', icon: 'trendUp' },
     ],
     hint: 'Self-employed income is based on your adjusted gross income after expenses. If you write off heavily, we may need 12 months of business bank statements.',
     showIf: { field: 'self_employed', values: ['yes', 'side_business'] },
@@ -101,9 +504,9 @@ const DECLARATION_QUESTIONS = [
     question: 'Do you have an outstanding balance owed to the IRS?',
     type: 'choice',
     options: [
-      { value: 'yes', label: 'Yes, I owe the IRS', icon: '⚠️' },
-      { value: 'payment_plan', label: 'Yes, but on a payment plan', icon: '📋' },
-      { value: 'no', label: 'No outstanding balance', icon: '✅' },
+      { value: 'yes', label: 'Yes, I owe the IRS', icon: 'warning' },
+      { value: 'payment_plan', label: 'Yes, but on a payment plan', icon: 'clipboard' },
+      { value: 'no', label: 'No outstanding balance', icon: 'checkCircle' },
     ],
     hint: 'Having a balance doesn\'t disqualify you - we just need to know.',
   },
@@ -112,8 +515,8 @@ const DECLARATION_QUESTIONS = [
     question: 'Have you applied for any credit in the past 3 months?',
     type: 'choice',
     options: [
-      { value: 'yes', label: 'Yes, I applied recently', icon: '💳' },
-      { value: 'no', label: 'No recent applications', icon: '✅' },
+      { value: 'yes', label: 'Yes, I applied recently', icon: 'creditCard' },
+      { value: 'no', label: 'No recent applications', icon: 'checkCircle' },
     ],
     hint: 'Car loans, credit cards, personal loans, etc. Recent inquiries can affect your score.',
   },
@@ -122,11 +525,11 @@ const DECLARATION_QUESTIONS = [
     question: 'What type of loan do you currently have?',
     type: 'choice',
     options: [
-      { value: 'conventional', label: 'Conventional', icon: '🏦' },
-      { value: 'fha', label: 'FHA', icon: '🏛️' },
-      { value: 'va', label: 'VA', icon: '🎖️' },
-      { value: 'usda', label: 'USDA', icon: '🌾' },
-      { value: 'not_sure', label: 'Not sure', icon: '❓' },
+      { value: 'conventional', label: 'Conventional', icon: 'bank' },
+      { value: 'fha', label: 'FHA', icon: 'government' },
+      { value: 'va', label: 'VA', icon: 'medal' },
+      { value: 'usda', label: 'USDA', icon: 'wheat' },
+      { value: 'not_sure', label: 'Not sure', icon: 'helpCircle' },
     ],
   },
   {
@@ -134,10 +537,10 @@ const DECLARATION_QUESTIONS = [
     question: 'What type of property is it?',
     type: 'choice',
     options: [
-      { value: 'single_family', label: 'Single Family', icon: '🏠' },
-      { value: 'condo', label: 'Condo', icon: '🏢' },
-      { value: 'townhouse', label: 'Townhouse', icon: '🏘️' },
-      { value: 'multi_family', label: 'Multi-Family (2-4 units)', icon: '🏗️' },
+      { value: 'single_family', label: 'Single Family', icon: 'home' },
+      { value: 'condo', label: 'Condo', icon: 'condo' },
+      { value: 'townhouse', label: 'Townhouse', icon: 'townhouse' },
+      { value: 'multi_family', label: 'Multi-Family (2-4 units)', icon: 'multiFamily' },
     ],
   },
   {
@@ -145,10 +548,10 @@ const DECLARATION_QUESTIONS = [
     question: 'What\'s your estimated credit score?',
     type: 'choice',
     options: [
-      { value: 'excellent', label: '740+', icon: '🌟', description: 'Excellent' },
-      { value: 'good', label: '700-739', icon: '👍', description: 'Good' },
-      { value: 'fair', label: '640-699', icon: '📊', description: 'Fair' },
-      { value: 'building', label: 'Below 640', icon: '📈', description: 'Building' },
+      { value: 'excellent', label: '740+', icon: 'starFilled', description: 'Excellent' },
+      { value: 'good', label: '700-739', icon: 'thumbsUp', description: 'Good' },
+      { value: 'fair', label: '640-699', icon: 'chart', description: 'Fair' },
+      { value: 'building', label: 'Below 640', icon: 'trendUp', description: 'Building' },
     ],
     hint: 'Better credit often means better rates!',
   },
@@ -179,56 +582,56 @@ const PLANNING_QUESTIONS = {
     question: 'What matters most to you in your new mortgage?',
     hint: 'Select all that apply - this helps us find the best loan structure for you.',
     options: [
-      { value: 'lowest_payment', label: 'Lowest Monthly Payment', icon: '💵' },
-      { value: 'lowest_rate', label: 'Lowest Interest Rate', icon: '📉' },
-      { value: 'fastest_payoff', label: 'Pay Off Fastest', icon: '⚡' },
-      { value: 'lowest_total', label: 'Lowest Total Cost', icon: '🎯' },
-      { value: 'flexibility', label: 'Maximum Flexibility', icon: '🔄' },
-      { value: 'tax_benefits', label: 'Tax Benefits', icon: '📋' },
-      { value: 'build_equity', label: 'Build Equity Faster', icon: '📈' },
-      { value: 'predictable', label: 'Predictable Payments', icon: '📊' },
+      { value: 'lowest_payment', label: 'Lowest Monthly Payment', icon: 'dollarSign' },
+      { value: 'lowest_rate', label: 'Lowest Interest Rate', icon: 'trendDown' },
+      { value: 'fastest_payoff', label: 'Pay Off Fastest', icon: 'flash' },
+      { value: 'lowest_total', label: 'Lowest Total Cost', icon: 'target' },
+      { value: 'flexibility', label: 'Maximum Flexibility', icon: 'refresh' },
+      { value: 'tax_benefits', label: 'Tax Benefits', icon: 'clipboard' },
+      { value: 'build_equity', label: 'Build Equity Faster', icon: 'trendUp' },
+      { value: 'predictable', label: 'Predictable Payments', icon: 'chart' },
     ],
   },
   personalGoals: {
     question: 'What are your personal financial goals?',
     hint: 'Select all that apply - helps us align your refinance with your life plans.',
     options: [
-      { value: 'net_worth', label: 'Building Net Worth', icon: '💰' },
-      { value: 'larger_home', label: 'Moving to Larger Home', icon: '🏡' },
-      { value: 'financial_freedom', label: 'Financial Freedom', icon: '🦅' },
-      { value: 'pay_debt', label: 'Paying Off Debt', icon: '✂️' },
-      { value: 'retirement', label: 'Saving for Retirement', icon: '🏖️' },
-      { value: 'education', label: 'Children\'s Education', icon: '🎓' },
-      { value: 'investments', label: 'Investment Portfolio', icon: '📊' },
-      { value: 'business', label: 'Starting a Business', icon: '🚀' },
+      { value: 'net_worth', label: 'Building Net Worth', icon: 'money' },
+      { value: 'larger_home', label: 'Moving to Larger Home', icon: 'homeHeart' },
+      { value: 'financial_freedom', label: 'Financial Freedom', icon: 'eagle' },
+      { value: 'pay_debt', label: 'Paying Off Debt', icon: 'scissors' },
+      { value: 'retirement', label: 'Saving for Retirement', icon: 'beach' },
+      { value: 'education', label: 'Children\'s Education', icon: 'graduation' },
+      { value: 'investments', label: 'Investment Portfolio', icon: 'chart' },
+      { value: 'business', label: 'Starting a Business', icon: 'rocket' },
     ],
   },
   financialPhilosophy: {
     question: 'How would you describe your financial approach?',
     options: [
-      { value: 'conservative', label: 'Conservative', icon: '🛡️', description: 'Prefer stability and lower risk' },
-      { value: 'moderate', label: 'Moderate', icon: '⚖️', description: 'Balance between safety and growth' },
-      { value: 'aggressive', label: 'Aggressive', icon: '🚀', description: 'Willing to take risks for higher returns' },
+      { value: 'conservative', label: 'Conservative', icon: 'shield', description: 'Prefer stability and lower risk' },
+      { value: 'moderate', label: 'Moderate', icon: 'balance', description: 'Balance between safety and growth' },
+      { value: 'aggressive', label: 'Aggressive', icon: 'rocket', description: 'Willing to take risks for higher returns' },
     ],
   },
   professionalNetwork: {
     question: 'Do you currently work with any of these professionals?',
     hint: 'We can coordinate with your existing team for a comprehensive financial plan.',
     options: [
-      { value: 'financial_planner', label: 'Financial Planner', icon: '📈' },
-      { value: 'accountant', label: 'CPA / Accountant', icon: '🧮' },
-      { value: 'insurance_agent', label: 'Life Insurance Agent', icon: '🛡️' },
-      { value: 'estate_planner', label: 'Estate Planner', icon: '📜' },
+      { value: 'financial_planner', label: 'Financial Planner', icon: 'trendUp' },
+      { value: 'accountant', label: 'CPA / Accountant', icon: 'calculator' },
+      { value: 'insurance_agent', label: 'Life Insurance Agent', icon: 'shield' },
+      { value: 'estate_planner', label: 'Estate Planner', icon: 'scroll' },
     ],
   },
   taxDeferredRetirement: {
     question: 'Are you currently contributing to a tax-deferred retirement account?',
     hint: '401(k), IRA, or similar retirement savings',
     options: [
-      { value: 'yes', label: 'Yes, I contribute regularly', icon: '✅' },
-      { value: 'some', label: 'Sometimes / Not maxing out', icon: '🔄' },
-      { value: 'no', label: 'Not currently', icon: '❌' },
-      { value: 'not_sure', label: 'Not sure', icon: '🤔' },
+      { value: 'yes', label: 'Yes, I contribute regularly', icon: 'checkCircle' },
+      { value: 'some', label: 'Sometimes / Not maxing out', icon: 'refresh' },
+      { value: 'no', label: 'Not currently', icon: 'x' },
+      { value: 'not_sure', label: 'Not sure', icon: 'thinking' },
     ],
   },
 };
@@ -428,7 +831,7 @@ export default function RefinanceApplication() {
           Question {visibleQuestionNum} of {visibleQuestions.length}
         </div>
         <h2 className="declaration-question">{question.question}</h2>
-        {question.hint && <p className="declaration-hint">💡 {question.hint}</p>}
+        {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
         <div className="declaration-options">
           {question.options.map(option => (
             <button
@@ -436,7 +839,7 @@ export default function RefinanceApplication() {
               className={`declaration-option ${declarations[question.id] === option.value ? 'selected' : ''}`}
               onClick={() => handleDeclarationAnswer(question.id, option.value)}
             >
-              <span className="option-icon">{option.icon}</span>
+              <span className="option-icon"><Icon name={option.icon} size={32} /></span>
               <span className="option-label">{option.label}</span>
               {option.description && <span className="option-description">{option.description}</span>}
             </button>
@@ -514,7 +917,7 @@ export default function RefinanceApplication() {
         </div>
         {declarations.marital_status === 'married' && (
           <div className="spouse-section">
-            <h3>👥 Spouse Information</h3>
+            <h3><Icon name="users" size={18} /> Spouse Information</h3>
             <div className="form-row">
               <div className="form-group">
                 <label>Spouse's First Name</label>
@@ -562,7 +965,7 @@ export default function RefinanceApplication() {
               className={`income-card ${incomeData.primaryType === 'employed' ? 'selected' : ''}`}
               onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'employed' }))}
             >
-              <span className="card-icon">👔</span>
+              <span className="card-icon"><Icon name="tie" size={28} /></span>
               <span className="card-label">Employed</span>
               <span className="card-desc">W-2 employee</span>
             </div>
@@ -570,7 +973,7 @@ export default function RefinanceApplication() {
               className={`income-card ${incomeData.primaryType === 'self_employed' ? 'selected' : ''}`}
               onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'self_employed' }))}
             >
-              <span className="card-icon">🏢</span>
+              <span className="card-icon"><Icon name="building" size={28} /></span>
               <span className="card-label">Self-Employed</span>
               <span className="card-desc">Business owner</span>
             </div>
@@ -578,7 +981,7 @@ export default function RefinanceApplication() {
               className={`income-card ${incomeData.primaryType === 'retired' ? 'selected' : ''}`}
               onClick={() => setIncomeData(prev => ({ ...prev, primaryType: 'retired' }))}
             >
-              <span className="card-icon">🏖️</span>
+              <span className="card-icon"><Icon name="beach" size={28} /></span>
               <span className="card-label">Retired</span>
               <span className="card-desc">Pension/SS</span>
             </div>
@@ -614,7 +1017,7 @@ export default function RefinanceApplication() {
                         setShowEmployerDropdown(false);
                       }}
                     >
-                      <span className="employer-icon">🏢</span>
+                      <span className="employer-icon"><Icon name="building" size={16} /></span>
                       {emp}
                     </div>
                   ))}
@@ -660,7 +1063,7 @@ export default function RefinanceApplication() {
 
         {(incomeData.primaryType === 'self_employed' || isSelfEmployed) && (
           <div className="form-card">
-            <h3>🏢 Business Details</h3>
+            <h3><Icon name="building" size={20} /> Business Details</h3>
             <div className="form-group">
               <label>Business Name</label>
               <input
@@ -752,7 +1155,7 @@ export default function RefinanceApplication() {
                 placeholder="0"
               />
             </div>
-            <span className="input-hint">🏠 Based on recent comparable sales</span>
+            <span className="input-hint"><Icon name="home" size={14} /> Based on recent comparable sales</span>
           </div>
           <div className="form-group">
             <label>Current Mortgage Balance</label>
@@ -851,14 +1254,14 @@ export default function RefinanceApplication() {
               className={`income-card ${propertyData.hasSecondLien === 'yes' ? 'selected' : ''}`}
               onClick={() => setPropertyData(prev => ({ ...prev, hasSecondLien: 'yes' }))}
             >
-              <span className="card-icon">📋</span>
+              <span className="card-icon"><Icon name="clipboard" size={24} /></span>
               <span className="card-label">Yes</span>
             </div>
             <div
               className={`income-card ${propertyData.hasSecondLien === 'no' ? 'selected' : ''}`}
               onClick={() => setPropertyData(prev => ({ ...prev, hasSecondLien: 'no' }))}
             >
-              <span className="card-icon">✓</span>
+              <span className="card-icon"><Icon name="check" size={24} /></span>
               <span className="card-label">No</span>
             </div>
           </div>
@@ -914,7 +1317,7 @@ export default function RefinanceApplication() {
               className={`income-card ${goalsData.refiType === 'rate_term' ? 'selected' : ''}`}
               onClick={() => setGoalsData(prev => ({ ...prev, refiType: 'rate_term' }))}
             >
-              <span className="card-icon">📉</span>
+              <span className="card-icon"><Icon name="trendDown" size={28} /></span>
               <span className="card-label">Rate & Term</span>
               <span className="card-desc">Lower rate or change term</span>
             </div>
@@ -922,7 +1325,7 @@ export default function RefinanceApplication() {
               className={`income-card ${goalsData.refiType === 'cash_out' ? 'selected' : ''}`}
               onClick={() => setGoalsData(prev => ({ ...prev, refiType: 'cash_out' }))}
             >
-              <span className="card-icon">💰</span>
+              <span className="card-icon"><Icon name="money" size={28} /></span>
               <span className="card-label">Cash-Out</span>
               <span className="card-desc">Get cash from equity</span>
             </div>
@@ -931,7 +1334,7 @@ export default function RefinanceApplication() {
                 className={`income-card ${goalsData.refiType === 'va_irrrl' ? 'selected' : ''}`}
                 onClick={() => setGoalsData(prev => ({ ...prev, refiType: 'va_irrrl' }))}
               >
-                <span className="card-icon">🎖️</span>
+                <span className="card-icon"><Icon name="medal" size={28} /></span>
                 <span className="card-label">VA Streamline</span>
                 <span className="card-desc">Fast, limited docs</span>
               </div>
@@ -941,7 +1344,7 @@ export default function RefinanceApplication() {
                 className={`income-card ${goalsData.refiType === 'fha_streamline' ? 'selected' : ''}`}
                 onClick={() => setGoalsData(prev => ({ ...prev, refiType: 'fha_streamline' }))}
               >
-                <span className="card-icon">🏛️</span>
+                <span className="card-icon"><Icon name="government" size={28} /></span>
                 <span className="card-label">FHA Streamline</span>
                 <span className="card-desc">No appraisal needed</span>
               </div>
@@ -952,7 +1355,7 @@ export default function RefinanceApplication() {
         {/* Cash-Out Amount */}
         {goalsData.refiType === 'cash_out' && (
           <div className="form-card">
-            <h3>💵 Cash-Out Amount</h3>
+            <h3><Icon name="dollarSign" size={20} /> Cash-Out Amount</h3>
             <p className="section-hint">
               Based on your equity, you may be able to access up to <strong>${maxCashOut.toLocaleString()}</strong>
             </p>
@@ -997,7 +1400,7 @@ export default function RefinanceApplication() {
               className={`income-card ${goalsData.newTerm === '30' ? 'selected' : ''}`}
               onClick={() => setGoalsData(prev => ({ ...prev, newTerm: '30' }))}
             >
-              <span className="card-icon">📅</span>
+              <span className="card-icon"><Icon name="calendar" size={28} /></span>
               <span className="card-label">30 Year</span>
               <span className="card-desc">Lowest payment</span>
             </div>
@@ -1005,7 +1408,7 @@ export default function RefinanceApplication() {
               className={`income-card ${goalsData.newTerm === '20' ? 'selected' : ''}`}
               onClick={() => setGoalsData(prev => ({ ...prev, newTerm: '20' }))}
             >
-              <span className="card-icon">⏱️</span>
+              <span className="card-icon"><Icon name="timer" size={28} /></span>
               <span className="card-label">20 Year</span>
               <span className="card-desc">Balance</span>
             </div>
@@ -1013,7 +1416,7 @@ export default function RefinanceApplication() {
               className={`income-card ${goalsData.newTerm === '15' ? 'selected' : ''}`}
               onClick={() => setGoalsData(prev => ({ ...prev, newTerm: '15' }))}
             >
-              <span className="card-icon">🚀</span>
+              <span className="card-icon"><Icon name="rocket" size={28} /></span>
               <span className="card-label">15 Year</span>
               <span className="card-desc">Pay off faster</span>
             </div>
@@ -1029,7 +1432,7 @@ export default function RefinanceApplication() {
                 className={`program-card va ${goalsData.program === 'va' ? 'selected' : ''}`}
                 onClick={() => setGoalsData(prev => ({ ...prev, program: 'va' }))}
               >
-                <span className="program-badge">🎖️ FOR YOU</span>
+                <span className="program-badge"><Icon name="medal" size={14} /> FOR YOU</span>
                 <span className="program-name">VA</span>
                 <span className="program-rate">~6.0% APR</span>
                 <span className="program-note">No PMI, great rates</span>
@@ -1078,7 +1481,7 @@ export default function RefinanceApplication() {
         <div className="review-sections">
           <div className="review-section">
             <div className="section-header">
-              <h3>👤 Your Profile</h3>
+              <h3><Icon name="profile" size={18} /> Your Profile</h3>
               <button className="edit-link" onClick={() => setCurrentStage('profile')}>Edit</button>
             </div>
             <div className="section-content">
@@ -1090,7 +1493,7 @@ export default function RefinanceApplication() {
 
           <div className="review-section">
             <div className="section-header">
-              <h3>💼 Income</h3>
+              <h3><Icon name="briefcase" size={18} /> Income</h3>
               <button className="edit-link" onClick={() => setCurrentStage('income')}>Edit</button>
             </div>
             <div className="section-content">
@@ -1102,7 +1505,7 @@ export default function RefinanceApplication() {
 
           <div className="review-section">
             <div className="section-header">
-              <h3>🏠 Current Home</h3>
+              <h3><Icon name="home" size={18} /> Current Home</h3>
               <button className="edit-link" onClick={() => setCurrentStage('property')}>Edit</button>
             </div>
             <div className="section-content">
@@ -1115,7 +1518,7 @@ export default function RefinanceApplication() {
 
           <div className="review-section">
             <div className="section-header">
-              <h3>🎯 Refinance Details</h3>
+              <h3><Icon name="target" size={18} /> Refinance Details</h3>
               <button className="edit-link" onClick={() => setCurrentStage('goals')}>Edit</button>
             </div>
             <div className="section-content">
@@ -1129,12 +1532,12 @@ export default function RefinanceApplication() {
         </div>
 
         <div className="needs-list-section">
-          <h3>📋 Your Document Checklist</h3>
+          <h3><Icon name="clipboard" size={18} /> Your Document Checklist</h3>
           <p>We'll need these documents to process your refinance:</p>
           <ul className="needs-list">
             {needsList.map(item => (
               <li key={item.id} className="needs-item">
-                <span className="needs-icon">📄</span>
+                <span className="needs-icon"><Icon name="document" size={16} /></span>
                 <span className="needs-label">{item.label}</span>
                 <span className={`needs-category ${item.category}`}>{item.category}</span>
               </li>
@@ -1181,7 +1584,7 @@ export default function RefinanceApplication() {
               className={`multi-select-option ${planningData.mortgagePriorities.includes(option.value) ? 'selected' : ''}`}
               onClick={() => togglePlanningOption('mortgagePriorities', option.value)}
             >
-              <span className="option-icon">{option.icon}</span>
+              <span className="option-icon"><Icon name={option.icon} size={32} /></span>
               <span className="option-label">{option.label}</span>
             </button>
           ))}
@@ -1199,7 +1602,7 @@ export default function RefinanceApplication() {
               className={`multi-select-option ${planningData.personalGoals.includes(option.value) ? 'selected' : ''}`}
               onClick={() => togglePlanningOption('personalGoals', option.value)}
             >
-              <span className="option-icon">{option.icon}</span>
+              <span className="option-icon"><Icon name={option.icon} size={32} /></span>
               <span className="option-label">{option.label}</span>
             </button>
           ))}
@@ -1216,7 +1619,7 @@ export default function RefinanceApplication() {
               className={`philosophy-option ${planningData.financialPhilosophy === option.value ? 'selected' : ''}`}
               onClick={() => setPlanningData(prev => ({ ...prev, financialPhilosophy: option.value }))}
             >
-              <span className="option-icon">{option.icon}</span>
+              <span className="option-icon"><Icon name={option.icon} size={32} /></span>
               <span className="option-label">{option.label}</span>
               <span className="option-description">{option.description}</span>
             </button>
@@ -1235,7 +1638,7 @@ export default function RefinanceApplication() {
               className={`single-select-option ${planningData.taxDeferredRetirement === option.value ? 'selected' : ''}`}
               onClick={() => setPlanningData(prev => ({ ...prev, taxDeferredRetirement: option.value }))}
             >
-              <span className="option-icon">{option.icon}</span>
+              <span className="option-icon"><Icon name={option.icon} size={22} /></span>
               <span className="option-label">{option.label}</span>
             </button>
           ))}
@@ -1253,7 +1656,7 @@ export default function RefinanceApplication() {
               className={`multi-select-option ${planningData.professionalNetwork.includes(option.value) ? 'selected' : ''}`}
               onClick={() => togglePlanningOption('professionalNetwork', option.value)}
             >
-              <span className="option-icon">{option.icon}</span>
+              <span className="option-icon"><Icon name={option.icon} size={22} /></span>
               <span className="option-label">{option.label}</span>
             </button>
           ))}
@@ -1301,13 +1704,13 @@ export default function RefinanceApplication() {
         <div className="video-section">
           <div className="video-container">
             <div className="video-placeholder">
-              <span className="play-icon">▶️</span>
+              <span className="play-icon"><Icon name="play" size={32} /></span>
               <p>What to Expect: Your Refinance Journey</p>
             </div>
           </div>
 
           <div className="next-steps-list">
-            <h3>📋 What Happens Next</h3>
+            <h3><Icon name="clipboard" size={18} /> What Happens Next</h3>
             <ol>
               <li><strong>Consultation Call</strong> - We'll review your refinance goals and answer questions</li>
               <li><strong>Rate Lock</strong> - Lock in your new rate once you're ready</li>
@@ -1322,7 +1725,7 @@ export default function RefinanceApplication() {
           <h3>Schedule Your Consultation</h3>
 
           <div className="calendar-placeholder">
-            <span className="cal-icon">📅</span>
+            <span className="cal-icon"><Icon name="calendar" size={32} /></span>
             <h4>Pick a Time That Works For You</h4>
             <p>Select an available time slot below for your 15-minute consultation call</p>
 
@@ -1392,7 +1795,7 @@ export default function RefinanceApplication() {
                 className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''}`}
                 onClick={() => isComplete && setCurrentStage(stage.id)}
               >
-                <span className="chapter-icon">{isComplete ? '✓' : stage.icon}</span>
+                <span className="chapter-icon">{isComplete ? <Icon name="check" size={20} /> : <Icon name={stage.icon} size={20} />}</span>
                 <span className="chapter-label">{stage.label}</span>
               </div>
             );
@@ -1408,7 +1811,7 @@ export default function RefinanceApplication() {
 
       {showMicroWin && (
         <div className="micro-win-toast">
-          <span className="micro-win-icon">🎉</span>
+          <span className="micro-win-icon"><Icon name="checkCircle" size={24} /></span>
           <span className="micro-win-message">{microWinMessage}</span>
         </div>
       )}
@@ -1419,7 +1822,7 @@ export default function RefinanceApplication() {
 
       {currentStage !== 'declarations' && needsList.length > 0 && (
         <aside className="needs-sidebar">
-          <h4>📋 Your Checklist</h4>
+          <h4><Icon name="clipboard" size={16} /> Your Checklist</h4>
           <ul>
             {needsList.slice(0, 5).map(item => (
               <li key={item.id}>{item.label}</li>
