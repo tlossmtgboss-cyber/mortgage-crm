@@ -85,6 +85,39 @@ const DECLARATION_QUESTIONS = [
     hint: 'This helps us know what income documents you\'ll need.',
   },
   {
+    id: 'write_off_expenses',
+    question: 'Do you write off most expenses to minimize taxable income?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, I maximize deductions', icon: '📉' },
+      { value: 'some', label: 'Some, but I show decent income', icon: '⚖️' },
+      { value: 'no', label: 'No, I show most of my income', icon: '📈' },
+    ],
+    hint: 'Self-employed income is based on your adjusted gross income after expenses. If you write off heavily, we may need 12 months of business bank statements.',
+    showIf: { field: 'self_employed', values: ['yes', 'side_business'] },
+  },
+  {
+    id: 'irs_balance_owed',
+    question: 'Do you have an outstanding balance owed to the IRS?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, I owe the IRS', icon: '⚠️' },
+      { value: 'payment_plan', label: 'Yes, but on a payment plan', icon: '📋' },
+      { value: 'no', label: 'No outstanding balance', icon: '✅' },
+    ],
+    hint: 'Having a balance doesn\'t disqualify you - we just need to know.',
+  },
+  {
+    id: 'recent_credit_applications',
+    question: 'Have you applied for any credit in the past 3 months?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, I applied recently', icon: '💳' },
+      { value: 'no', label: 'No recent applications', icon: '✅' },
+    ],
+    hint: 'Car loans, credit cards, personal loans, etc. Recent inquiries can affect your score.',
+  },
+  {
     id: 'current_loan_type',
     question: 'What type of loan do you currently have?',
     type: 'choice',
@@ -253,6 +286,18 @@ export default function RefinanceApplication() {
     return Math.round(stageProgress);
   }, [currentStage, currentQuestionIndex]);
 
+  // Helper to check if a question should be shown based on conditions
+  const shouldShowQuestion = useCallback((question, currentDeclarations) => {
+    if (!question.showIf) return true;
+    const { field, values } = question.showIf;
+    return values.includes(currentDeclarations[field]);
+  }, []);
+
+  // Get filtered questions based on current declarations
+  const getVisibleQuestions = useCallback(() => {
+    return DECLARATION_QUESTIONS.filter(q => shouldShowQuestion(q, declarations));
+  }, [declarations, shouldShowQuestion]);
+
   // Update needs list
   useEffect(() => {
     const newNeeds = [];
@@ -261,6 +306,11 @@ export default function RefinanceApplication() {
     if (declarations.self_employed === 'yes' || declarations.self_employed === 'side_business') {
       newNeeds.push({ id: 'tax_returns', label: '2 years tax returns', category: 'income' });
       newNeeds.push({ id: 'profit_loss', label: 'Year-to-date P&L statement', category: 'income' });
+
+      // If they write off heavily, need 12 months business bank statements
+      if (declarations.write_off_expenses === 'yes') {
+        newNeeds.push({ id: 'business_bank_statements', label: '12 months business bank statements', category: 'income' });
+      }
     } else {
       newNeeds.push({ id: 'paystubs', label: 'Recent pay stubs (30 days)', category: 'income' });
       newNeeds.push({ id: 'w2', label: 'W-2s (last 2 years)', category: 'income' });
@@ -268,6 +318,11 @@ export default function RefinanceApplication() {
 
     if (declarations.veteran && declarations.veteran !== 'no') {
       newNeeds.push({ id: 'dd214', label: 'DD-214 or Certificate of Eligibility', category: 'military' });
+    }
+
+    // IRS payment plan documentation
+    if (declarations.irs_balance_owed === 'yes' || declarations.irs_balance_owed === 'payment_plan') {
+      newNeeds.push({ id: 'irs_docs', label: 'IRS payment arrangement documentation', category: 'legal' });
     }
 
     newNeeds.push({ id: 'mortgage_statement', label: 'Current mortgage statement', category: 'property' });
@@ -291,17 +346,47 @@ export default function RefinanceApplication() {
   // Handle declaration answer
   const handleDeclarationAnswer = (questionId, value) => {
     setIsAnimating(true);
-    setDeclarations(prev => ({ ...prev, [questionId]: value }));
+    const newDeclarations = { ...declarations, [questionId]: value };
+    setDeclarations(newDeclarations);
 
     setTimeout(() => {
       setIsAnimating(false);
-      if (currentQuestionIndex < DECLARATION_QUESTIONS.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-      } else {
-        showMicroWinAnimation('Great! Your checklist is ready!');
-        setTimeout(() => setCurrentStage('profile'), 1500);
+
+      // Find next visible question
+      let nextIndex = currentQuestionIndex + 1;
+      while (nextIndex < DECLARATION_QUESTIONS.length) {
+        const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+        if (shouldShowQuestion(nextQuestion, newDeclarations)) {
+          setCurrentQuestionIndex(nextIndex);
+          return;
+        }
+        nextIndex++;
       }
+
+      // No more visible questions - move to next stage
+      showMicroWinAnimation('Great! Your checklist is ready!');
+      setTimeout(() => setCurrentStage('profile'), 1500);
     }, 300);
+  };
+
+  // Go back to previous visible question
+  const goToPrevQuestion = () => {
+    let prevIndex = currentQuestionIndex - 1;
+    while (prevIndex >= 0) {
+      const prevQuestion = DECLARATION_QUESTIONS[prevIndex];
+      if (shouldShowQuestion(prevQuestion, declarations)) {
+        setCurrentQuestionIndex(prevIndex);
+        return;
+      }
+      prevIndex--;
+    }
+  };
+
+  // Get current visible question number for display
+  const getVisibleQuestionNumber = () => {
+    const visibleQuestions = getVisibleQuestions();
+    const currentQuestion = DECLARATION_QUESTIONS[currentQuestionIndex];
+    return visibleQuestions.findIndex(q => q.id === currentQuestion.id) + 1;
   };
 
   // Navigation
@@ -334,10 +419,13 @@ export default function RefinanceApplication() {
   // Render declarations
   const renderDeclarationsStage = () => {
     const question = DECLARATION_QUESTIONS[currentQuestionIndex];
+    const visibleQuestions = getVisibleQuestions();
+    const visibleQuestionNum = getVisibleQuestionNumber();
+
     return (
       <div className={`declaration-screen ${isAnimating ? 'animating-out' : 'animating-in'}`}>
         <div className="question-number">
-          Question {currentQuestionIndex + 1} of {DECLARATION_QUESTIONS.length}
+          Question {visibleQuestionNum} of {visibleQuestions.length}
         </div>
         <h2 className="declaration-question">{question.question}</h2>
         {question.hint && <p className="declaration-hint">💡 {question.hint}</p>}
@@ -355,7 +443,7 @@ export default function RefinanceApplication() {
           ))}
         </div>
         {currentQuestionIndex > 0 && (
-          <button className="back-link" onClick={() => setCurrentQuestionIndex(prev => prev - 1)}>
+          <button className="back-link" onClick={goToPrevQuestion}>
             ← Go back
           </button>
         )}
