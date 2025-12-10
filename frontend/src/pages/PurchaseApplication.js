@@ -290,6 +290,16 @@ const Icon = ({ name, size = 24, className = '' }) => {
         <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
       </svg>
     ),
+    clock: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+      </svg>
+    ),
+    mapPin: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+    ),
     x: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -348,6 +358,66 @@ const DECLARATION_QUESTIONS = [
       { value: 'divorced', label: 'Divorced', icon: 'document' },
     ],
     unlocks: ['spouse_section'],
+  },
+  {
+    id: 'child_support_alimony',
+    question: 'Do you receive or pay child support or alimony?',
+    type: 'choice',
+    options: [
+      { value: 'receive', label: 'I receive payments', icon: 'dollarSign' },
+      { value: 'pay', label: 'I make payments', icon: 'creditCard' },
+      { value: 'both', label: 'Both receive and pay', icon: 'refresh' },
+      { value: 'neither', label: 'Neither', icon: 'arrowRight' },
+    ],
+    hint: 'This income/expense will be considered in your loan qualification.',
+    showIf: { field: 'marital_status', values: ['divorced'] },
+  },
+  {
+    id: 'support_amount_received',
+    question: 'How much do you receive per month in child support/alimony?',
+    type: 'currency',
+    placeholder: 'Monthly amount received',
+    hint: 'This can count as qualifying income if documented.',
+    showIf: { field: 'child_support_alimony', values: ['receive', 'both'] },
+  },
+  {
+    id: 'support_duration_received',
+    question: 'How long have you been receiving this income?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_6_months', label: 'Less than 6 months', icon: 'clock' },
+      { value: '6_to_12_months', label: '6-12 months', icon: 'clock' },
+      { value: '1_to_3_years', label: '1-3 years', icon: 'calendar' },
+      { value: 'more_than_3_years', label: 'More than 3 years', icon: 'calendar' },
+    ],
+    hint: 'Income must typically continue for at least 3 more years to count.',
+    showIf: { field: 'child_support_alimony', values: ['receive', 'both'] },
+  },
+  {
+    id: 'support_amount_paid',
+    question: 'How much do you pay per month in child support/alimony?',
+    type: 'currency',
+    placeholder: 'Monthly amount paid',
+    hint: 'This will be factored into your debt-to-income ratio.',
+    showIf: { field: 'child_support_alimony', values: ['pay', 'both'] },
+  },
+  {
+    id: 'property_interest',
+    question: 'Do you have interest in any other real estate property?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, I own property', icon: 'home' },
+      { value: 'no', label: 'No other properties', icon: 'arrowRight' },
+    ],
+    hint: 'This includes properties you own, co-own, or have ownership interest in.',
+  },
+  {
+    id: 'property_interest_address',
+    question: 'What is the address of the property you have interest in?',
+    type: 'address',
+    placeholder: 'Enter property address',
+    hint: 'We\'ll need details about this property for your application.',
+    showIf: { field: 'property_interest', values: ['yes'] },
   },
   {
     id: 'veteran',
@@ -707,18 +777,93 @@ export default function PurchaseApplication() {
   };
 
   // Render declarations
+  // Handle input-type declaration answers (currency, address)
+  const handleInputAnswer = (questionId, value) => {
+    setDeclarations(prev => ({ ...prev, [questionId]: value }));
+  };
+
+  const submitInputAnswer = (questionId) => {
+    if (declarations[questionId]) {
+      setIsAnimating(true);
+      setTimeout(() => {
+        setIsAnimating(false);
+        // Find next visible question
+        let nextIndex = currentQuestionIndex + 1;
+        while (nextIndex < DECLARATION_QUESTIONS.length) {
+          const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+          if (shouldShowQuestion(nextQuestion, declarations)) {
+            setCurrentQuestionIndex(nextIndex);
+            return;
+          }
+          nextIndex++;
+        }
+        // No more visible questions - move to next stage
+        showMicroWinAnimation('Great! Your checklist is ready!');
+        setTimeout(() => setCurrentStage('profile'), 1500);
+      }, 300);
+    }
+  };
+
   const renderDeclarationsStage = () => {
     const question = DECLARATION_QUESTIONS[currentQuestionIndex];
     const visibleQuestions = getVisibleQuestions();
     const visibleQuestionNum = getVisibleQuestionNumber();
 
-    return (
-      <div className={`declaration-screen ${isAnimating ? 'animating-out' : 'animating-in'}`}>
-        <div className="question-number">
-          Question {visibleQuestionNum} of {visibleQuestions.length}
-        </div>
-        <h2 className="declaration-question">{question.question}</h2>
-        {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
+    // Render different input types
+    const renderQuestionInput = () => {
+      if (question.type === 'currency') {
+        return (
+          <div className="declaration-input-container">
+            <div className="currency-input-wrapper">
+              <span className="currency-prefix">$</span>
+              <input
+                type="number"
+                className="declaration-currency-input fun-input"
+                value={declarations[question.id] || ''}
+                onChange={(e) => handleInputAnswer(question.id, e.target.value)}
+                placeholder={question.placeholder || '0'}
+                onKeyPress={(e) => e.key === 'Enter' && submitInputAnswer(question.id)}
+              />
+              <span className="currency-suffix">/month</span>
+            </div>
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => submitInputAnswer(question.id)}
+              disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
+      if (question.type === 'address') {
+        return (
+          <div className="declaration-input-container">
+            <div className="address-input-wrapper">
+              <Icon name="mapPin" size={20} className="address-icon" />
+              <input
+                type="text"
+                className="declaration-address-input fun-input"
+                value={declarations[question.id] || ''}
+                onChange={(e) => handleInputAnswer(question.id, e.target.value)}
+                placeholder={question.placeholder || 'Enter address'}
+                onKeyPress={(e) => e.key === 'Enter' && submitInputAnswer(question.id)}
+              />
+            </div>
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => submitInputAnswer(question.id)}
+              disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
+      // Default: choice type
+      return (
         <div className="declaration-options">
           {question.options.map(option => (
             <button
@@ -732,6 +877,17 @@ export default function PurchaseApplication() {
             </button>
           ))}
         </div>
+      );
+    };
+
+    return (
+      <div className={`declaration-screen ${isAnimating ? 'animating-out' : 'animating-in'}`}>
+        <div className="question-number">
+          Question {visibleQuestionNum} of {visibleQuestions.length}
+        </div>
+        <h2 className="declaration-question">{question.question}</h2>
+        {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
+        {renderQuestionInput()}
         {currentQuestionIndex > 0 && (
           <button className="back-link" onClick={goToPrevQuestion}>
             ← Go back
