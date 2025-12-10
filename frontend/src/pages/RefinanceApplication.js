@@ -19,13 +19,26 @@ const STAGES = [
   { id: 'profile', label: 'About You', icon: '👤', description: 'The basics' },
   { id: 'income', label: 'Your Income', icon: '💼', description: 'How you earn' },
   { id: 'property', label: 'Current Home', icon: '🏠', description: 'Property details' },
-  { id: 'goals', label: 'Your Goals', icon: '🎯', description: 'Refinance options' },
+  { id: 'goals', label: 'Refi Goals', icon: '🎯', description: 'Refinance options' },
   { id: 'review', label: 'Review', icon: '✅', description: 'Review your info' },
+  { id: 'planning', label: 'Planning', icon: '📊', description: 'Your preferences' },
   { id: 'schedule', label: 'Schedule', icon: '📅', description: 'Book a call' },
 ];
 
 // Refinance-specific declaration questions
 const DECLARATION_QUESTIONS = [
+  {
+    id: 'borrower_count',
+    question: 'How many people will be on this loan application?',
+    type: 'choice',
+    options: [
+      { value: '1', label: 'Just me', icon: '👤' },
+      { value: '2', label: 'Two of us', icon: '👥' },
+      { value: '3', label: 'Three people', icon: '👨‍👩‍👦' },
+      { value: '4+', label: 'Four or more', icon: '👨‍👩‍👧‍👦' },
+    ],
+    hint: 'This helps us know how many borrowers to include in the application.',
+  },
   {
     id: 'refi_goal',
     question: 'What\'s your main goal for refinancing?',
@@ -127,6 +140,66 @@ const COMMON_EMPLOYERS = [
   'IBM', 'Oracle', 'Salesforce', 'Adobe', 'SAP', 'Intuit',
 ];
 
+// Planning questions - mortgage priorities and goals (excludes questions already asked in declarations)
+const PLANNING_QUESTIONS = {
+  mortgagePriorities: {
+    question: 'What matters most to you in your new mortgage?',
+    hint: 'Select all that apply - this helps us find the best loan structure for you.',
+    options: [
+      { value: 'lowest_payment', label: 'Lowest Monthly Payment', icon: '💵' },
+      { value: 'lowest_rate', label: 'Lowest Interest Rate', icon: '📉' },
+      { value: 'fastest_payoff', label: 'Pay Off Fastest', icon: '⚡' },
+      { value: 'lowest_total', label: 'Lowest Total Cost', icon: '🎯' },
+      { value: 'flexibility', label: 'Maximum Flexibility', icon: '🔄' },
+      { value: 'tax_benefits', label: 'Tax Benefits', icon: '📋' },
+      { value: 'build_equity', label: 'Build Equity Faster', icon: '📈' },
+      { value: 'predictable', label: 'Predictable Payments', icon: '📊' },
+    ],
+  },
+  personalGoals: {
+    question: 'What are your personal financial goals?',
+    hint: 'Select all that apply - helps us align your refinance with your life plans.',
+    options: [
+      { value: 'net_worth', label: 'Building Net Worth', icon: '💰' },
+      { value: 'larger_home', label: 'Moving to Larger Home', icon: '🏡' },
+      { value: 'financial_freedom', label: 'Financial Freedom', icon: '🦅' },
+      { value: 'pay_debt', label: 'Paying Off Debt', icon: '✂️' },
+      { value: 'retirement', label: 'Saving for Retirement', icon: '🏖️' },
+      { value: 'education', label: 'Children\'s Education', icon: '🎓' },
+      { value: 'investments', label: 'Investment Portfolio', icon: '📊' },
+      { value: 'business', label: 'Starting a Business', icon: '🚀' },
+    ],
+  },
+  financialPhilosophy: {
+    question: 'How would you describe your financial approach?',
+    options: [
+      { value: 'conservative', label: 'Conservative', icon: '🛡️', description: 'Prefer stability and lower risk' },
+      { value: 'moderate', label: 'Moderate', icon: '⚖️', description: 'Balance between safety and growth' },
+      { value: 'aggressive', label: 'Aggressive', icon: '🚀', description: 'Willing to take risks for higher returns' },
+    ],
+  },
+  professionalNetwork: {
+    question: 'Do you currently work with any of these professionals?',
+    hint: 'We can coordinate with your existing team for a comprehensive financial plan.',
+    options: [
+      { value: 'financial_planner', label: 'Financial Planner', icon: '📈' },
+      { value: 'accountant', label: 'CPA / Accountant', icon: '🧮' },
+      { value: 'insurance_agent', label: 'Life Insurance Agent', icon: '🛡️' },
+      { value: 'estate_planner', label: 'Estate Planner', icon: '📜' },
+    ],
+  },
+  taxDeferredRetirement: {
+    question: 'Are you currently contributing to a tax-deferred retirement account?',
+    hint: '401(k), IRA, or similar retirement savings',
+    options: [
+      { value: 'yes', label: 'Yes, I contribute regularly', icon: '✅' },
+      { value: 'some', label: 'Sometimes / Not maxing out', icon: '🔄' },
+      { value: 'no', label: 'Not currently', icon: '❌' },
+      { value: 'not_sure', label: 'Not sure', icon: '🤔' },
+    ],
+  },
+};
+
 export default function RefinanceApplication() {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -140,6 +213,13 @@ export default function RefinanceApplication() {
   const [incomeData, setIncomeData] = useState({});
   const [propertyData, setPropertyData] = useState({});
   const [goalsData, setGoalsData] = useState({});
+  const [planningData, setPlanningData] = useState({
+    mortgagePriorities: [],
+    personalGoals: [],
+    financialPhilosophy: '',
+    professionalNetwork: [],
+    taxDeferredRetirement: '',
+  });
   const [needsList, setNeedsList] = useState([]);
   const [showMicroWin, setShowMicroWin] = useState(false);
   const [microWinMessage, setMicroWinMessage] = useState('');
@@ -982,6 +1062,123 @@ export default function RefinanceApplication() {
     );
   };
 
+  // Toggle multi-select options for planning
+  const togglePlanningOption = (field, value) => {
+    setPlanningData(prev => {
+      const current = prev[field] || [];
+      if (current.includes(value)) {
+        return { ...prev, [field]: current.filter(v => v !== value) };
+      } else {
+        return { ...prev, [field]: [...current, value] };
+      }
+    });
+  };
+
+  // Render planning stage with mortgage questionnaire
+  const renderPlanningStage = () => (
+    <div className="stage-content planning-stage">
+      <div className="stage-header">
+        <h2>Let's Plan Your Refinance</h2>
+        <p>A few quick questions to help us find the perfect loan for your situation</p>
+      </div>
+
+      {/* Mortgage Priorities - Multi-select */}
+      <div className="form-card planning-section">
+        <h3>{PLANNING_QUESTIONS.mortgagePriorities.question}</h3>
+        <p className="section-hint">{PLANNING_QUESTIONS.mortgagePriorities.hint}</p>
+        <div className="multi-select-grid">
+          {PLANNING_QUESTIONS.mortgagePriorities.options.map(option => (
+            <button
+              key={option.value}
+              className={`multi-select-option ${planningData.mortgagePriorities.includes(option.value) ? 'selected' : ''}`}
+              onClick={() => togglePlanningOption('mortgagePriorities', option.value)}
+            >
+              <span className="option-icon">{option.icon}</span>
+              <span className="option-label">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Personal Goals - Multi-select */}
+      <div className="form-card planning-section">
+        <h3>{PLANNING_QUESTIONS.personalGoals.question}</h3>
+        <p className="section-hint">{PLANNING_QUESTIONS.personalGoals.hint}</p>
+        <div className="multi-select-grid">
+          {PLANNING_QUESTIONS.personalGoals.options.map(option => (
+            <button
+              key={option.value}
+              className={`multi-select-option ${planningData.personalGoals.includes(option.value) ? 'selected' : ''}`}
+              onClick={() => togglePlanningOption('personalGoals', option.value)}
+            >
+              <span className="option-icon">{option.icon}</span>
+              <span className="option-label">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Financial Philosophy - Single select */}
+      <div className="form-card planning-section">
+        <h3>{PLANNING_QUESTIONS.financialPhilosophy.question}</h3>
+        <div className="philosophy-options">
+          {PLANNING_QUESTIONS.financialPhilosophy.options.map(option => (
+            <button
+              key={option.value}
+              className={`philosophy-option ${planningData.financialPhilosophy === option.value ? 'selected' : ''}`}
+              onClick={() => setPlanningData(prev => ({ ...prev, financialPhilosophy: option.value }))}
+            >
+              <span className="option-icon">{option.icon}</span>
+              <span className="option-label">{option.label}</span>
+              <span className="option-description">{option.description}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tax-Deferred Retirement - Single select */}
+      <div className="form-card planning-section">
+        <h3>{PLANNING_QUESTIONS.taxDeferredRetirement.question}</h3>
+        <p className="section-hint">{PLANNING_QUESTIONS.taxDeferredRetirement.hint}</p>
+        <div className="single-select-options">
+          {PLANNING_QUESTIONS.taxDeferredRetirement.options.map(option => (
+            <button
+              key={option.value}
+              className={`single-select-option ${planningData.taxDeferredRetirement === option.value ? 'selected' : ''}`}
+              onClick={() => setPlanningData(prev => ({ ...prev, taxDeferredRetirement: option.value }))}
+            >
+              <span className="option-icon">{option.icon}</span>
+              <span className="option-label">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Professional Network - Multi-select */}
+      <div className="form-card planning-section">
+        <h3>{PLANNING_QUESTIONS.professionalNetwork.question}</h3>
+        <p className="section-hint">{PLANNING_QUESTIONS.professionalNetwork.hint}</p>
+        <div className="multi-select-grid compact">
+          {PLANNING_QUESTIONS.professionalNetwork.options.map(option => (
+            <button
+              key={option.value}
+              className={`multi-select-option ${planningData.professionalNetwork.includes(option.value) ? 'selected' : ''}`}
+              onClick={() => togglePlanningOption('professionalNetwork', option.value)}
+            >
+              <span className="option-icon">{option.icon}</span>
+              <span className="option-label">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="stage-navigation">
+        <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+        <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
+      </div>
+    </div>
+  );
+
   // Generate available time slots
   const generateTimeSlots = () => {
     const slots = [];
@@ -1080,6 +1277,7 @@ export default function RefinanceApplication() {
       case 'property': return renderPropertyStage();
       case 'goals': return renderGoalsStage();
       case 'review': return renderReviewStage();
+      case 'planning': return renderPlanningStage();
       case 'schedule': return renderScheduleStage();
       default: return renderDeclarationsStage();
     }
