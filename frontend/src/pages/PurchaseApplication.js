@@ -1869,49 +1869,6 @@ export default function PurchaseApplication() {
           </div>
         </div>
 
-        {/* Loan Program Selection */}
-        <div className="form-card">
-          <h3>Recommended Loan Programs</h3>
-          <div className="program-cards">
-            {isVeteran && (
-              <div
-                className={`program-card va ${propertyData.program === 'va' ? 'selected' : ''}`}
-                onClick={() => setPropertyData(prev => ({ ...prev, program: 'va' }))}
-              >
-                <span className="program-badge"><Icon name="medal" size={12} /> FOR YOU</span>
-                <span className="program-name">VA Loan</span>
-                <span className="program-rate">~6.0% APR</span>
-                <span className="program-note">$0 down, no PMI</span>
-              </div>
-            )}
-            <div
-              className={`program-card ${propertyData.program === 'conventional' ? 'selected' : ''}`}
-              onClick={() => setPropertyData(prev => ({ ...prev, program: 'conventional' }))}
-            >
-              <span className="program-name">Conventional</span>
-              <span className="program-rate">~6.5% APR</span>
-              <span className="program-note">Best for 20%+ down</span>
-            </div>
-            <div
-              className={`program-card ${propertyData.program === 'fha' ? 'selected' : ''}`}
-              onClick={() => setPropertyData(prev => ({ ...prev, program: 'fha' }))}
-            >
-              {isFirstTimeBuyer && <span className="program-badge"><Icon name="thumbsUp" size={12} /> POPULAR</span>}
-              <span className="program-name">FHA</span>
-              <span className="program-rate">~6.25% APR</span>
-              <span className="program-note">3.5% down, flexible credit</span>
-            </div>
-            <div
-              className={`program-card ${propertyData.program === 'usda' ? 'selected' : ''}`}
-              onClick={() => setPropertyData(prev => ({ ...prev, program: 'usda' }))}
-            >
-              <span className="program-name">USDA</span>
-              <span className="program-rate">~6.25% APR</span>
-              <span className="program-note">$0 down, rural areas</span>
-            </div>
-          </div>
-        </div>
-
         <div className="stage-navigation">
           <button className="btn-back" onClick={() => setPropertyStep(2)}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
