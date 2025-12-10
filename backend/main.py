@@ -58157,19 +58157,19 @@ async def get_lo_dashboard_stats(
     """Get LO dashboard statistics"""
     from sqlalchemy import func
 
-    # Get pipeline count and volume for this LO
+    # Get pipeline count and volume for this LO (use owner_id which is the correct field)
     pipeline_stats = db.query(
         func.count(BorrowerApplication.id).label("count"),
-        func.sum(BorrowerApplication.loan_amount).label("volume")
+        func.sum(BorrowerApplication.prequalification_amount).label("volume")
     ).filter(
-        BorrowerApplication.assigned_to_id == current_user.id,
-        BorrowerApplication.status.notin_(["funded", "denied", "withdrawn"])
+        BorrowerApplication.owner_id == current_user.id,
+        BorrowerApplication.status.notin_([ApplicationStatus.FUNDED, ApplicationStatus.DENIED, ApplicationStatus.WITHDRAWN])
     ).first()
 
     # Get pending review count
     pending_count = db.query(func.count(BorrowerApplication.id)).filter(
-        BorrowerApplication.assigned_to_id == current_user.id,
-        BorrowerApplication.status == "submitted"
+        BorrowerApplication.owner_id == current_user.id,
+        BorrowerApplication.status == ApplicationStatus.SUBMITTED
     ).scalar()
 
     # Get calls scheduled today
@@ -58197,16 +58197,28 @@ async def get_lo_applications(
 ):
     """Get applications assigned to the current LO"""
     query = db.query(BorrowerApplication).filter(
-        BorrowerApplication.assigned_to_id == current_user.id
+        BorrowerApplication.owner_id == current_user.id
     )
 
     if status and status != "all":
-        query = query.filter(BorrowerApplication.status == status)
+        # Convert string status to enum
+        try:
+            status_enum = ApplicationStatus(status)
+            query = query.filter(BorrowerApplication.status == status_enum)
+        except ValueError:
+            pass  # Invalid status, ignore filter
 
     total = query.count()
     applications = query.order_by(
         BorrowerApplication.updated_at.desc()
     ).offset(offset).limit(limit).all()
+
+    # Get loan purpose from step_data if available
+    def get_loan_purpose(app):
+        if app.step_data and isinstance(app.step_data, dict):
+            property_data = app.step_data.get('property', {})
+            return property_data.get('loan_purpose', 'Purchase')
+        return 'Purchase'
 
     return {
         "total": total,
@@ -58216,9 +58228,9 @@ async def get_lo_applications(
                 "borrower_first_name": app.borrower_first_name,
                 "borrower_last_name": app.borrower_last_name,
                 "borrower_email": app.borrower_email,
-                "loan_amount": float(app.loan_amount or 0),
-                "loan_purpose": app.loan_purpose,
-                "status": app.status,
+                "loan_amount": float(app.prequalification_amount or 0),
+                "loan_purpose": get_loan_purpose(app),
+                "status": app.status.value if hasattr(app.status, 'value') else str(app.status),
                 "created_at": app.created_at.isoformat() if app.created_at else None,
                 "updated_at": app.updated_at.isoformat() if app.updated_at else None,
                 "progress_percentage": app.progress_percentage,
@@ -58238,14 +58250,15 @@ async def get_lo_activity(
     # In production, this would query an activity log table
     # For now, return recent application updates
     recent_apps = db.query(BorrowerApplication).filter(
-        BorrowerApplication.assigned_to_id == current_user.id
+        BorrowerApplication.owner_id == current_user.id
     ).order_by(BorrowerApplication.updated_at.desc()).limit(limit).all()
 
     activities = []
     for app in recent_apps:
+        status_str = app.status.value if hasattr(app.status, 'value') else str(app.status)
         activities.append({
             "type": "application",
-            "description": f"{app.borrower_first_name} {app.borrower_last_name} - {app.status.replace('_', ' ')}",
+            "description": f"{app.borrower_first_name or 'Unknown'} {app.borrower_last_name or 'Borrower'} - {status_str.replace('_', ' ')}",
             "created_at": app.updated_at.isoformat() if app.updated_at else None,
             "application_id": app.id,
         })
