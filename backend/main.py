@@ -408,6 +408,8 @@ class User(Base):
     business_hours = Column(JSON)
     email_verified_at = Column(DateTime)
     phone_verified_at = Column(DateTime)
+    # Microsite slug - URL-friendly identifier for LO public profile
+    slug = Column(String, unique=True, index=True)
     # Note: timezone column added via migration - use getattr() to safely access
     # timezone = Column(String, default="America/Chicago")  # User's timezone for AI and display
     branch = relationship("Branch", back_populates="users")
@@ -33071,6 +33073,13 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     # Parse business_hours JSON if it exists
     business_hours = getattr(current_user, 'business_hours', None) or {}
 
+    # Generate a slug from name if not set
+    user_slug = getattr(current_user, 'slug', None)
+    if not user_slug and current_user.full_name:
+        # Create URL-friendly slug from name
+        import re
+        user_slug = re.sub(r'[^a-z0-9]+', '-', current_user.full_name.lower()).strip('-')
+
     return {
         "id": current_user.id,
         "email": current_user.email,
@@ -33083,6 +33092,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "phone": getattr(current_user, 'phone', None),
         "nmls_number": getattr(current_user, 'nmls_number', None),
         "job_title": getattr(current_user, 'job_title', None),
+        "slug": user_slug,
         "work_hours_start": business_hours.get('start', '09:00') if business_hours else '09:00',
         "work_hours_end": business_hours.get('end', '17:00') if business_hours else '17:00',
         "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) if business_hours else ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
