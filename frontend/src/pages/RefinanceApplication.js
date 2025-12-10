@@ -422,6 +422,17 @@ const Icon = ({ name, size = 24, className = '' }) => {
         <circle cx="12" cy="10" r="3"></circle>
       </svg>
     ),
+    car: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+        <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
+      </svg>
+    ),
+    search: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    ),
   };
 
   return (
@@ -609,6 +620,30 @@ const DECLARATION_QUESTIONS = [
     hint: 'VA streamline refinance options available!',
   },
   {
+    id: 'va_loan_before',
+    question: 'Have you used a VA loan before?',
+    type: 'choice',
+    options: [
+      { value: 'yes_current', label: 'Yes, current loan is VA', icon: 'checkCircle' },
+      { value: 'yes_previous', label: 'Yes, had one before', icon: 'home' },
+      { value: 'no', label: 'No, first VA loan', icon: 'star' },
+    ],
+    hint: 'VA IRRRL streamline requires a current VA loan.',
+    showIf: { field: 'veteran', values: ['yes', 'active', 'spouse'] },
+  },
+  {
+    id: 'va_disability',
+    question: 'Do you have a VA disability rating?',
+    type: 'choice',
+    options: [
+      { value: 'yes_10_plus', label: 'Yes, 10% or higher', icon: 'shield' },
+      { value: 'pending', label: 'Claim pending', icon: 'clock' },
+      { value: 'no', label: 'No disability rating', icon: 'arrowRight' },
+    ],
+    hint: '10%+ disability rating waives the VA funding fee - saves thousands!',
+    showIf: { field: 'veteran', values: ['yes', 'active'] },
+  },
+  {
     id: 'self_employed',
     question: 'Are you self-employed or own a business?',
     type: 'choice',
@@ -618,6 +653,31 @@ const DECLARATION_QUESTIONS = [
       { value: 'no', label: 'No, I\'m an employee', icon: 'tie' },
     ],
     hint: 'This helps us know what income documents you\'ll need.',
+  },
+  {
+    id: 'business_years',
+    question: 'How long have you been self-employed?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_1_year', label: 'Less than 1 year', icon: 'clock' },
+      { value: '1_to_2_years', label: '1-2 years', icon: 'calendar' },
+      { value: 'more_than_2_years', label: 'More than 2 years', icon: 'checkCircle' },
+    ],
+    hint: 'Most loan programs require 2 years of self-employment history.',
+    showIf: { field: 'self_employed', values: ['yes'] },
+  },
+  {
+    id: 'business_type',
+    question: 'What type of business do you have?',
+    type: 'choice',
+    options: [
+      { value: 'sole_proprietor', label: 'Sole proprietor', icon: 'user' },
+      { value: 'llc', label: 'LLC', icon: 'building' },
+      { value: 's_corp', label: 'S-Corp', icon: 'briefcase' },
+      { value: 'partnership', label: 'Partnership', icon: 'users' },
+    ],
+    hint: 'This determines what tax documents we\'ll need.',
+    showIf: { field: 'self_employed', values: ['yes', 'side_business'] },
   },
   {
     id: 'write_off_expenses',
@@ -643,6 +703,25 @@ const DECLARATION_QUESTIONS = [
     hint: 'Having a balance doesn\'t disqualify you - we just need to know.',
   },
   {
+    id: 'irs_amount_owed',
+    question: 'Approximately how much do you owe the IRS?',
+    type: 'currency',
+    placeholder: 'Amount owed',
+    hint: 'This helps us understand your full financial picture.',
+    showIf: { field: 'irs_balance_owed', values: ['yes', 'payment_plan'] },
+  },
+  {
+    id: 'irs_payment_current',
+    question: 'Are you current on your IRS payment plan?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, fully current', icon: 'checkCircle' },
+      { value: 'behind', label: 'Behind on payments', icon: 'warning' },
+    ],
+    hint: 'Being current on payments is usually required for loan approval.',
+    showIf: { field: 'irs_balance_owed', values: ['payment_plan'] },
+  },
+  {
     id: 'recent_credit_applications',
     question: 'Have you applied for any credit in the past 3 months?',
     type: 'choice',
@@ -651,6 +730,31 @@ const DECLARATION_QUESTIONS = [
       { value: 'no', label: 'No recent applications', icon: 'checkCircle' },
     ],
     hint: 'Car loans, credit cards, personal loans, etc. Recent inquiries can affect your score.',
+  },
+  {
+    id: 'credit_application_type',
+    question: 'What type of credit did you apply for?',
+    type: 'choice',
+    options: [
+      { value: 'auto_loan', label: 'Auto loan', icon: 'car' },
+      { value: 'credit_card', label: 'Credit card', icon: 'creditCard' },
+      { value: 'personal_loan', label: 'Personal loan', icon: 'dollarSign' },
+      { value: 'other', label: 'Other', icon: 'document' },
+    ],
+    hint: 'Recent auto loans can significantly impact your debt-to-income ratio.',
+    showIf: { field: 'recent_credit_applications', values: ['yes'] },
+  },
+  {
+    id: 'credit_application_approved',
+    question: 'Was the credit application approved?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, approved', icon: 'checkCircle' },
+      { value: 'pending', label: 'Still pending', icon: 'clock' },
+      { value: 'no', label: 'No, denied', icon: 'x' },
+    ],
+    hint: 'If approved, we\'ll need to factor in the new payment.',
+    showIf: { field: 'recent_credit_applications', values: ['yes'] },
   },
   {
     id: 'current_loan_type',
@@ -665,6 +769,17 @@ const DECLARATION_QUESTIONS = [
     ],
   },
   {
+    id: 'fha_streamline',
+    question: 'Would you like to explore FHA Streamline refinance?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, tell me more', icon: 'checkCircle' },
+      { value: 'no', label: 'No, prefer full refinance', icon: 'arrowRight' },
+    ],
+    hint: 'FHA Streamline requires less documentation and no appraisal in most cases.',
+    showIf: { field: 'current_loan_type', values: ['fha'] },
+  },
+  {
     id: 'property_type',
     question: 'What type of property is it?',
     type: 'choice',
@@ -674,6 +789,18 @@ const DECLARATION_QUESTIONS = [
       { value: 'townhouse', label: 'Townhouse', icon: 'townhouse' },
       { value: 'multi_family', label: 'Multi-Family (2-4 units)', icon: 'multiFamily' },
     ],
+  },
+  {
+    id: 'rental_units',
+    question: 'Do you rent out any of the units?',
+    type: 'choice',
+    options: [
+      { value: 'yes_all', label: 'Yes, all units', icon: 'dollarSign' },
+      { value: 'yes_some', label: 'Yes, some units', icon: 'home' },
+      { value: 'no', label: 'No, I live in all', icon: 'user' },
+    ],
+    hint: 'Rental income can help you qualify for a larger loan.',
+    showIf: { field: 'property_type', values: ['multi_family'] },
   },
   {
     id: 'credit_estimate',
@@ -686,6 +813,53 @@ const DECLARATION_QUESTIONS = [
       { value: 'building', label: 'Below 640', icon: 'trendUp', description: 'Building' },
     ],
     hint: 'Better credit often means better rates!',
+  },
+  {
+    id: 'credit_issues',
+    question: 'Have you had any credit challenges in the past 2 years?',
+    type: 'choice',
+    options: [
+      { value: 'none', label: 'No issues', icon: 'checkCircle' },
+      { value: 'late_payments', label: 'Late payments', icon: 'clock' },
+      { value: 'collections', label: 'Collections/charge-offs', icon: 'warning' },
+      { value: 'bankruptcy', label: 'Bankruptcy', icon: 'document' },
+    ],
+    hint: 'Being upfront helps us find the right program for you.',
+    showIf: { field: 'credit_estimate', values: ['fair', 'building'] },
+  },
+  {
+    id: 'bankruptcy_type',
+    question: 'What type of bankruptcy did you file?',
+    type: 'choice',
+    options: [
+      { value: 'chapter_7', label: 'Chapter 7', icon: 'document' },
+      { value: 'chapter_13', label: 'Chapter 13', icon: 'document' },
+    ],
+    hint: 'Different waiting periods apply for each type.',
+    showIf: { field: 'credit_issues', values: ['bankruptcy'] },
+  },
+  {
+    id: 'bankruptcy_discharge',
+    question: 'When was your bankruptcy discharged?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_2_years', label: 'Less than 2 years ago', icon: 'clock' },
+      { value: '2_to_4_years', label: '2-4 years ago', icon: 'calendar' },
+      { value: 'more_than_4_years', label: 'More than 4 years ago', icon: 'checkCircle' },
+    ],
+    hint: 'FHA allows financing 2 years after Chapter 7 discharge.',
+    showIf: { field: 'credit_issues', values: ['bankruptcy'] },
+  },
+  {
+    id: 'late_mortgage_payments',
+    question: 'Have you had any late mortgage payments in the past 12 months?',
+    type: 'choice',
+    options: [
+      { value: 'none', label: 'No late payments', icon: 'checkCircle' },
+      { value: 'one', label: 'One late payment', icon: 'clock' },
+      { value: 'multiple', label: 'Multiple late payments', icon: 'warning' },
+    ],
+    hint: 'Recent mortgage lates can affect refinance options.',
   },
 ];
 
