@@ -354,8 +354,52 @@ export default function BorrowerApplication() {
     setUseConversationMode(false);
   };
 
-  // Show mode choice for new applications
+  // Show mode choice for new applications (skip in demo mode - go straight to form)
   if (showModeChoice && !application?.current_step) {
+    // In demo mode, skip mode choice and go directly to traditional form
+    if (isDemoMode) {
+      return (
+        <div className="borrower-application">
+          {/* Demo Mode Banner */}
+          <div className="demo-mode-banner">
+            <span>Demo Mode</span> - This is a test application. Data will not be saved.
+          </div>
+          <div className="mode-choice-container">
+            <div className="mode-choice-content">
+              <h1>Welcome to Your Mortgage Application</h1>
+              <p className="mode-choice-subtitle">
+                You're in demo mode. Click below to explore the application form.
+              </p>
+
+              <div className="mode-options" style={{ justifyContent: 'center' }}>
+                <div
+                  className="mode-option traditional"
+                  onClick={() => {
+                    setUseConversationMode(false);
+                    setShowModeChoice(false);
+                  }}
+                >
+                  <div className="mode-icon">📝</div>
+                  <h2>Explore Application Form</h2>
+                  <p>Try out the mortgage application form with sample data. No account required.</p>
+                  <ul className="mode-features">
+                    <li>See all fields</li>
+                    <li>Test all steps</li>
+                    <li>No data saved</li>
+                  </ul>
+                  <button className="mode-select-btn">Start Demo</button>
+                </div>
+              </div>
+
+              <p className="mode-switch-note">
+                This is a demo application. To submit a real application, please log in first.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="borrower-application">
         <div className="mode-choice-container">
