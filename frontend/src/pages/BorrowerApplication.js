@@ -24,9 +24,20 @@ export default function BorrowerApplication() {
   const { token } = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
+  // Check if we're in demo mode (no token or "start" token)
+  const isDemoMode = !token || token === 'start';
+
+  const [loading, setLoading] = useState(!isDemoMode);
   const [error, setError] = useState(null);
-  const [application, setApplication] = useState(null);
+  const [application, setApplication] = useState(isDemoMode ? {
+    id: 'demo',
+    status: 'in_progress',
+    progress_percentage: 0,
+    completed_steps: [],
+    has_coborrower: false,
+    company_name: 'Demo Mortgage Company',
+    lo_name: 'Demo Loan Officer',
+  } : null);
   const [currentStep, setCurrentStep] = useState('personal_info');
   const [stepData, setStepData] = useState({});
   const [saving, setSaving] = useState(false);
@@ -38,6 +49,12 @@ export default function BorrowerApplication() {
 
   // Load application data
   const loadApplication = useCallback(async () => {
+    // Skip API call in demo mode
+    if (isDemoMode) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const data = await publicApplicationAPI.get(token);
@@ -58,7 +75,7 @@ export default function BorrowerApplication() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, isDemoMode]);
 
   useEffect(() => {
     loadApplication();
@@ -84,6 +101,20 @@ export default function BorrowerApplication() {
   const saveStepData = async (step, data, markCompleted = false) => {
     try {
       setSaving(true);
+
+      // In demo mode, just save locally
+      if (isDemoMode) {
+        setStepData(prev => ({ ...prev, [step]: data }));
+        if (markCompleted) {
+          setApplication(prev => ({
+            ...prev,
+            completed_steps: [...(prev?.completed_steps || []), step],
+            progress_percentage: Math.min(100, (prev?.progress_percentage || 0) + 10),
+          }));
+        }
+        return;
+      }
+
       await publicApplicationAPI.saveStep(token, step, data, markCompleted);
       setStepData(prev => ({ ...prev, [step]: data }));
     } catch (err) {
@@ -132,6 +163,24 @@ export default function BorrowerApplication() {
   // Calculate pre-qualification
   const calculatePrequal = async (data) => {
     try {
+      // In demo mode, simulate a pre-qualification result
+      if (isDemoMode) {
+        const annualIncome = data.annual_income || 100000;
+        const monthlyIncome = annualIncome / 12;
+        const maxMonthlyPayment = monthlyIncome * 0.28;
+        const estimatedRate = 6.5;
+        const maxLoanAmount = Math.round((maxMonthlyPayment * 12 * 30) / (1 + estimatedRate * 0.3));
+
+        const result = {
+          max_loan_amount: Math.min(maxLoanAmount, 750000),
+          estimated_rate: estimatedRate,
+          estimated_monthly_payment: Math.round(maxMonthlyPayment),
+          warnings: [],
+        };
+        setPrequalResult(result);
+        return result;
+      }
+
       const result = await publicApplicationAPI.prequalify(token, data);
       setPrequalResult(result);
       return result;
@@ -145,6 +194,20 @@ export default function BorrowerApplication() {
   const handleDocumentUpload = async (file, category) => {
     try {
       setUploading(true);
+
+      // In demo mode, just add to local state
+      if (isDemoMode) {
+        const newDoc = {
+          id: `demo-${Date.now()}`,
+          filename: file.name,
+          category: category,
+          file_size: file.size,
+          is_verified: false,
+        };
+        setDocuments(prev => [...prev, newDoc]);
+        return;
+      }
+
       await publicApplicationAPI.uploadDocument(token, file, category);
       await loadDocuments();
     } catch (err) {
@@ -157,6 +220,12 @@ export default function BorrowerApplication() {
   // Handle document delete
   const handleDocumentDelete = async (docId) => {
     try {
+      // In demo mode, just remove from local state
+      if (isDemoMode) {
+        setDocuments(prev => prev.filter(d => d.id !== docId));
+        return;
+      }
+
       await publicApplicationAPI.deleteDocument(token, docId);
       await loadDocuments();
     } catch (err) {
@@ -167,6 +236,15 @@ export default function BorrowerApplication() {
   // Capture credit authorization
   const captureCreditAuth = async (data) => {
     try {
+      // In demo mode, just update local state
+      if (isDemoMode) {
+        setApplication(prev => ({
+          ...prev,
+          credit_auth_captured: true,
+        }));
+        return;
+      }
+
       await publicApplicationAPI.captureCreditAuth(token, data);
       await loadApplication();
     } catch (err) {
@@ -179,6 +257,17 @@ export default function BorrowerApplication() {
   const submitApplication = async () => {
     try {
       setSaving(true);
+
+      // In demo mode, just update local state to show submitted
+      if (isDemoMode) {
+        setApplication(prev => ({
+          ...prev,
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+        }));
+        return;
+      }
+
       await publicApplicationAPI.submit(token);
       // Reload application to show submitted state
       await loadApplication();
@@ -342,6 +431,12 @@ export default function BorrowerApplication() {
 
   return (
     <div className="borrower-application">
+      {/* Demo Mode Banner */}
+      {isDemoMode && (
+        <div className="demo-mode-banner">
+          <span>Demo Mode</span> - This is a test application. Data will not be saved.
+        </div>
+      )}
       {/* Header */}
       <header className="borrower-app-header">
         <div className="header-content">
