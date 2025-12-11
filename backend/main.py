@@ -33067,7 +33067,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         }
     }
 
-@app.post("/api/v1/admin/reset-password-temp")
+@app.post("/api/v1/reset-password-temp-xyz123")
 async def temp_reset_admin_password(db: Session = Depends(get_db)):
     """
     TEMPORARY: Reset admin@perenniaai.com password.
