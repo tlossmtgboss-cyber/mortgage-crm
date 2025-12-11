@@ -19,12 +19,12 @@ import './AdaptiveURLA.css';
 
 const STAGES = [
   { id: 'declarations', label: 'Your Story', icon: 'story', description: 'Quick questions to personalize' },
+  { id: 'planning', label: 'Your Goals', icon: 'goals', description: 'Mortgage preferences' },
   { id: 'profile', label: 'About You', icon: 'profile', description: 'The basics about you' },
   { id: 'income', label: 'Your Income', icon: 'income', description: 'How you earn' },
   { id: 'assets', label: 'Your Assets', icon: 'assets', description: 'Down payment funds' },
   { id: 'property', label: 'New Home', icon: 'home', description: 'Property details' },
   { id: 'review', label: 'Review', icon: 'review', description: 'Review your info' },
-  { id: 'planning', label: 'Your Goals', icon: 'goals', description: 'Mortgage preferences' },
   { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
 ];
 

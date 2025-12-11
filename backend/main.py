@@ -33049,23 +33049,7 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == form_data.username).first()
-
-    # Debug: log password length and first char
-    pwd_len = len(form_data.password) if form_data.password else 0
-    logger.info(f"Login attempt: user={form_data.username}, pwd_len={pwd_len}")
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Debug: verify password
-    pwd_ok = verify_password(form_data.password, user.hashed_password)
-    logger.info(f"Password verification: {pwd_ok}")
-
-    if not pwd_ok:
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -33082,38 +33066,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             "role": user.role
         }
     }
-
-@app.post("/api/v1/reset-password-temp-xyz123")
-async def temp_reset_admin_password(db: Session = Depends(get_db)):
-    """
-    TEMPORARY: Reset admin@perenniaai.com password.
-    This endpoint should be removed after use.
-    """
-    try:
-        user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        if not user:
-            raise HTTPException(status_code=404, detail="Admin user not found")
-
-        new_password = "Woodwindow00!"
-        new_hash = get_password_hash(new_password)
-        user.hashed_password = new_hash
-        db.commit()
-
-        # Read back and verify
-        db.refresh(user)
-        verify_test = verify_password(new_password, user.hashed_password)
-
-        return {
-            "success": True,
-            "message": "Password reset for admin@perenniaai.com",
-            "verify_test": verify_test,
-            "hash_prefix": new_hash[:20]
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Password reset error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
