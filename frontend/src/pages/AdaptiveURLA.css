@@ -337,6 +337,42 @@
   margin: 0 0 20px 0;
 }
 
+/* Yes/No Button Styles */
+.yes-no-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.yes-no-btn {
+  flex: 1;
+  padding: 16px 24px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.yes-no-btn:hover {
+  border-color: #218D8D;
+  background: #f0fafa;
+}
+
+.yes-no-btn.selected {
+  border-color: #218D8D;
+  background: #218D8D;
+  color: white;
+}
+
+.section-hint {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

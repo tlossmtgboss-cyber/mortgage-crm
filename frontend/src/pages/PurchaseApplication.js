@@ -1606,21 +1606,21 @@ export default function PurchaseApplication() {
         {(currentIncomeType === 'employed' || currentIncomeType === 'employed_with_business') && (
           <div className="form-card">
             <h3>Do you have a second job?</h3>
-            <div className="income-cards" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-              <div
-                className={`income-card ${incomeData.hasSecondJob === 'yes' ? 'selected' : ''}`}
+            <div className="yes-no-buttons">
+              <button
+                type="button"
+                className={`yes-no-btn ${incomeData.hasSecondJob === 'yes' ? 'selected' : ''}`}
                 onClick={() => setIncomeData(prev => ({ ...prev, hasSecondJob: 'yes' }))}
               >
-                <span className="card-icon"><Icon name="check" size={24} /></span>
-                <span className="card-label">Yes</span>
-              </div>
-              <div
-                className={`income-card ${incomeData.hasSecondJob === 'no' ? 'selected' : ''}`}
+                Yes
+              </button>
+              <button
+                type="button"
+                className={`yes-no-btn ${incomeData.hasSecondJob === 'no' ? 'selected' : ''}`}
                 onClick={() => setIncomeData(prev => ({ ...prev, hasSecondJob: 'no' }))}
               >
-                <span className="card-icon"><Icon name="x" size={24} /></span>
-                <span className="card-label">No</span>
-              </div>
+                No
+              </button>
             </div>
           </div>
         )}
