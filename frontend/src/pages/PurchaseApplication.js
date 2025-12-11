@@ -1099,9 +1099,9 @@ export default function PurchaseApplication() {
         nextIndex++;
       }
 
-      // No more visible questions - move to next stage
+      // No more visible questions - move to next stage (planning/Your Goals)
       showMicroWinAnimation('Great! Your checklist is ready!');
-      setTimeout(() => setCurrentStage('profile'), 1500);
+      setTimeout(() => goToNextStage(), 1500);
     }, 300);
   };
 
@@ -1173,9 +1173,9 @@ export default function PurchaseApplication() {
           }
           nextIndex++;
         }
-        // No more visible questions - move to next stage
+        // No more visible questions - move to next stage (planning/Your Goals)
         showMicroWinAnimation('Great! Your checklist is ready!');
-        setTimeout(() => setCurrentStage('profile'), 1500);
+        setTimeout(() => goToNextStage(), 1500);
       }, 300);
     }
   };
