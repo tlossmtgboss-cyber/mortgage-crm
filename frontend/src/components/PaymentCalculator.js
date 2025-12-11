@@ -11,8 +11,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { statesList, getCountyByFips, getCountyByName, getDefaultEffectiveRate, getCountiesForState } from '../lib/propertyTax/countyData';
-import { estimatePropertyTax, calculateMonthlyPayment, estimatePMI, formatCurrency } from '../lib/propertyTax/calculator';
+import { estimatePropertyTax, calculateMonthlyPayment, formatCurrency } from '../lib/propertyTax/calculator';
 import { estimateInsuranceSimple } from '../lib/insurance/calculator';
+import { calculateMortgageInsurance, LOAN_TYPES } from '../lib/mortgageInsurance';
 
 const PaymentCalculator = ({
   // Pre-filled values from application
@@ -21,6 +22,8 @@ const PaymentCalculator = ({
   initialState = '',
   initialCounty = '',
   initialPropertyUse = 'primaryResidence',
+  initialCreditScore = 720,
+  initialLoanType = 'conventional',
   // Callbacks
   onCalculationComplete,
   // Display options
@@ -41,6 +44,9 @@ const PaymentCalculator = ({
   const [propertyUse, setPropertyUse] = useState(initialPropertyUse);
   const [hoaMonthly, setHoaMonthly] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
+  const [creditScore, setCreditScore] = useState(initialCreditScore);
+  const [loanType, setLoanType] = useState(initialLoanType);
+  const [showMIDetails, setShowMIDetails] = useState(false);
 
   // Get available counties for selected state
   const availableCounties = useMemo(() => {
@@ -120,8 +126,14 @@ const PaymentCalculator = ({
       deductible: 1000,
     });
 
-    // PMI estimate
-    const pmiMonthly = estimatePMI(loanAmount, homeValue);
+    // Mortgage Insurance estimate (PMI, MIP, VA Funding Fee, or USDA Guarantee Fee)
+    const mortgageInsurance = calculateMortgageInsurance({
+      loanType,
+      loanAmount,
+      homeValue,
+      creditScore,
+      loanTermYears,
+    });
 
     // Full payment calculation
     const payment = calculateMonthlyPayment({
@@ -131,7 +143,7 @@ const PaymentCalculator = ({
       propertyTaxMonthly: taxEstimate.monthlyTax,
       homeownersInsuranceMonthly: insuranceEstimate.monthlyPremium,
       hoaMonthly,
-      pmiMonthly,
+      pmiMonthly: mortgageInsurance.monthlyPremium,
     });
 
     return {
@@ -141,13 +153,16 @@ const PaymentCalculator = ({
       loanAmount,
       interestRate,
       loanTermYears,
+      loanType,
+      creditScore,
       taxEstimate,
       insuranceEstimate,
-      pmiMonthly,
+      mortgageInsurance,
+      pmiMonthly: mortgageInsurance.monthlyPremium,
       payment,
       ltv: ((loanAmount / homeValue) * 100).toFixed(1),
     };
-  }, [homeValue, downPaymentPercent, interestRate, loanTermYears, selectedState, selectedCountyFips, propertyUse, hoaMonthly]);
+  }, [homeValue, downPaymentPercent, interestRate, loanTermYears, selectedState, selectedCountyFips, propertyUse, hoaMonthly, creditScore, loanType]);
 
   // Notify parent of calculation
   useEffect(() => {
