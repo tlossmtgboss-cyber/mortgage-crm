@@ -982,6 +982,7 @@ export default function PurchaseApplication() {
   const [planningStep, setPlanningStep] = useState(1); // 1 = payment calculator, 2-6 for each planning question
   const [paymentEstimate, setPaymentEstimate] = useState(null); // Stores calculated payment data
   const [eConsentAgreed, setEConsentAgreed] = useState(false); // E-consent agreement tracking
+  const [creditAuthAgreed, setCreditAuthAgreed] = useState(false); // Credit authorization agreement tracking
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -2703,16 +2704,66 @@ export default function PurchaseApplication() {
           </div>
         </div>
 
+        {/* Credit Authorization Section */}
+        <div className="econsent-section credit-auth-section">
+          <div className="econsent-header">
+            <Icon name="shield" size={24} />
+            <h3>Credit Authorization</h3>
+          </div>
+
+          <div className="econsent-content">
+            <p className="econsent-intro">
+              Your credit information will help us understand more about your personal and financial background and
+              ensure we give you the most accurate mortgage options. To help us, we need the following authorization:
+            </p>
+
+            <div className="credit-auth-box">
+              <p>
+                I authorize my Lender to perform a credit check, via either a soft or hard pull of my credit; I understand this
+                may affect my credit score. I acknowledge that any owner of a completed loan, its servicers, successors and
+                assigns, may verify or re-verify any information contained in this form or obtain any information or data
+                relating to a completed loan, for any legitimate purpose, through any source, including a source named in this
+                form or a consumer reporting agency.
+              </p>
+            </div>
+
+            <div className="econsent-actions">
+              <button
+                className={`econsent-btn agree ${creditAuthAgreed ? 'selected' : ''}`}
+                onClick={() => setCreditAuthAgreed(true)}
+              >
+                <Icon name="check" size={18} />
+                I Authorize
+              </button>
+              <button
+                className={`econsent-btn disagree`}
+                onClick={() => {
+                  setCreditAuthAgreed(false);
+                  alert('Credit authorization is required to process your mortgage application. Without it, we cannot verify your creditworthiness.');
+                }}
+              >
+                I Do Not Authorize
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="submit-section">
           <p className="demo-notice">
             <span>DEMO:</span> Check your email for confirmation and document upload instructions.
           </p>
           <button
             className="btn-submit"
-            disabled={!eConsentAgreed}
+            disabled={!eConsentAgreed || !creditAuthAgreed}
             onClick={() => showMicroWinAnimation('Application Complete! Welcome to your home buying journey.')}
           >
-            {eConsentAgreed ? 'Complete Application' : 'Please Accept E-Consent to Continue'}
+            {!eConsentAgreed && !creditAuthAgreed
+              ? 'Please Accept Both Agreements to Continue'
+              : !eConsentAgreed
+                ? 'Please Accept E-Consent to Continue'
+                : !creditAuthAgreed
+                  ? 'Please Authorize Credit Check to Continue'
+                  : 'Complete Application'}
           </button>
         </div>
 

@@ -1230,6 +1230,34 @@
   background: #fef2f2;
 }
 
+/* Credit Authorization Section */
+.credit-auth-section {
+  border-color: #3b82f6;
+}
+
+.credit-auth-section .econsent-header {
+  border-bottom-color: #3b82f6;
+}
+
+.credit-auth-section .econsent-header svg {
+  color: #3b82f6;
+}
+
+.credit-auth-box {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.credit-auth-box p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #1e40af;
+}
+
 /* Submit Section */
 .submit-section {
   text-align: center;
