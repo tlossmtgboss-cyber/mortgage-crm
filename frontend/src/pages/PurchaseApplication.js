@@ -2040,12 +2040,64 @@ export default function PurchaseApplication() {
     }
 
     // Step 3: Price, Down Payment, and Loan Program
+    // Pre-fill from payment calculator if available
+    const prefilledPrice = paymentEstimate?.homeValue || propertyData.purchasePrice;
+    const prefilledDownPayment = paymentEstimate?.downPaymentAmount || propertyData.downPayment;
+
     return (
       <div className="stage-content">
         <div className="stage-header">
           <h2>Price & Loan Details</h2>
           <p>Tell us about your budget and preferred loan program</p>
         </div>
+
+        {/* Budget Summary from Payment Calculator */}
+        {paymentEstimate && (
+          <div className="form-card budget-summary-card">
+            <div className="budget-summary-header">
+              <Icon name="calculator" size={24} />
+              <h3>Your Budget Summary</h3>
+            </div>
+            <div className="budget-summary-grid">
+              <div className="budget-item">
+                <span className="budget-label">Home Value</span>
+                <span className="budget-value">${paymentEstimate.homeValue?.toLocaleString()}</span>
+              </div>
+              <div className="budget-item">
+                <span className="budget-label">Down Payment</span>
+                <span className="budget-value">${paymentEstimate.downPaymentAmount?.toLocaleString()} ({paymentEstimate.downPaymentPercent}%)</span>
+              </div>
+              <div className="budget-item">
+                <span className="budget-label">Loan Amount</span>
+                <span className="budget-value">${paymentEstimate.loanAmount?.toLocaleString()}</span>
+              </div>
+              <div className="budget-item highlight">
+                <span className="budget-label">Est. Monthly Payment</span>
+                <span className="budget-value">${paymentEstimate.payment?.totalMonthly?.toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="budget-breakdown">
+              <div className="breakdown-row">
+                <span>Principal & Interest</span>
+                <span>${paymentEstimate.payment?.principalAndInterest?.toLocaleString()}</span>
+              </div>
+              <div className="breakdown-row">
+                <span>Property Tax</span>
+                <span>${paymentEstimate.payment?.propertyTax?.toLocaleString()}/mo</span>
+              </div>
+              <div className="breakdown-row">
+                <span>Insurance</span>
+                <span>${paymentEstimate.payment?.homeownersInsurance?.toLocaleString()}/mo</span>
+              </div>
+              {paymentEstimate.payment?.pmi > 0 && (
+                <div className="breakdown-row">
+                  <span>Mortgage Insurance</span>
+                  <span>${paymentEstimate.payment?.pmi?.toLocaleString()}/mo</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="form-card">
           {declarations.found_property === 'yes' && (
@@ -2076,10 +2128,10 @@ export default function PurchaseApplication() {
                 <span className="input-prefix">$</span>
                 <input
                   type="number"
-                  value={propertyData.purchasePrice || ''}
+                  value={propertyData.purchasePrice || prefilledPrice || ''}
                   onChange={(e) => setPropertyData(prev => ({ ...prev, purchasePrice: e.target.value }))}
                   className="fun-input"
-                  placeholder="0"
+                  placeholder={paymentEstimate ? '' : '0'}
                 />
               </div>
             </div>
@@ -2089,27 +2141,27 @@ export default function PurchaseApplication() {
                 <span className="input-prefix">$</span>
                 <input
                   type="number"
-                  value={propertyData.downPayment || ''}
+                  value={propertyData.downPayment || prefilledDownPayment || ''}
                   onChange={(e) => setPropertyData(prev => ({ ...prev, downPayment: e.target.value }))}
                   className="fun-input"
-                  placeholder="0"
+                  placeholder={paymentEstimate ? '' : '0'}
                 />
               </div>
-              {propertyData.purchasePrice && propertyData.downPayment && (
+              {(propertyData.purchasePrice || prefilledPrice) && (propertyData.downPayment || prefilledDownPayment) && (
                 <span className="calculated-hint">
-                  {((propertyData.downPayment / propertyData.purchasePrice) * 100).toFixed(1)}% down
+                  {(((propertyData.downPayment || prefilledDownPayment) / (propertyData.purchasePrice || prefilledPrice)) * 100).toFixed(1)}% down
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Payment Calculator - shows when purchase price is entered */}
-        {propertyData.purchasePrice && parseFloat(propertyData.purchasePrice) > 0 && (
+        {/* Payment Calculator - shows when purchase price is entered and no budget summary exists */}
+        {!paymentEstimate && (propertyData.purchasePrice || prefilledPrice) && parseFloat(propertyData.purchasePrice || prefilledPrice) > 0 && (
           <div className="form-card payment-calculator-section">
             <PaymentCalculator
-              initialHomeValue={parseFloat(propertyData.purchasePrice) || 0}
-              initialDownPayment={parseFloat(propertyData.downPayment) || 0}
+              initialHomeValue={parseFloat(propertyData.purchasePrice || prefilledPrice) || 0}
+              initialDownPayment={parseFloat(propertyData.downPayment || prefilledDownPayment) || 0}
               initialState={propertyData.state || ''}
               initialCounty={propertyData.county || ''}
               initialPropertyUse={propertyData.occupancy === 'primary' ? 'primaryResidence' :

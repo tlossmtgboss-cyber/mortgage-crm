@@ -367,6 +367,101 @@
   color: white;
 }
 
+/* Budget Summary Card */
+.budget-summary-card {
+  background: linear-gradient(135deg, #f0fafa 0%, #e6f7f7 100%);
+  border: 2px solid #218D8D;
+  margin-bottom: 20px;
+}
+
+.budget-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(33, 141, 141, 0.2);
+}
+
+.budget-summary-header svg {
+  color: #218D8D;
+}
+
+.budget-summary-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a7070;
+}
+
+.budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.budget-item {
+  background: white;
+  padding: 16px;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.budget-item.highlight {
+  background: #218D8D;
+  grid-column: span 2;
+}
+
+.budget-item.highlight .budget-label,
+.budget-item.highlight .budget-value {
+  color: white;
+}
+
+.budget-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.budget-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.budget-item.highlight .budget-value {
+  font-size: 24px;
+}
+
+.budget-breakdown {
+  background: white;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.breakdown-row:not(:last-child) {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.breakdown-row span:last-child {
+  font-weight: 600;
+  color: #1f2937;
+}
+
 .section-hint {
   font-size: 14px;
   color: #6b7280;
