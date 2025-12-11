@@ -1290,13 +1290,14 @@ async def submit_application(
         else:
             borrower_id = str(uuid.uuid4())
             db.execute(text("""
-                INSERT INTO borrower_profiles (id, email, first_name, last_name, provider, created_at, updated_at)
-                VALUES (:id, :email, :first_name, :last_name, 'application', :now, :now)
+                INSERT INTO borrower_profiles (id, email, first_name, last_name, provider, provider_user_id, created_at, updated_at)
+                VALUES (:id, :email, :first_name, :last_name, 'application', :provider_user_id, :now, :now)
             """), {
                 "id": borrower_id,
                 "email": borrower_email,
                 "first_name": submission.profileData.get("firstName", ""),
                 "last_name": submission.profileData.get("lastName", ""),
+                "provider_user_id": borrower_email,
                 "now": datetime.utcnow(),
             })
 
