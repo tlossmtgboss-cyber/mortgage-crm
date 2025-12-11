@@ -50,7 +50,7 @@ Created test lead successfully with all fields:
 
 ### Option 1: Use Live Website (Recommended)
 1. Go to https://mortgage-crm-nine.vercel.app
-2. Login with: `demo@example.com` / `demo123`
+2. Login with: `admin@perenniaai.com` / `demo123`
 3. Click "Leads" → "+ Add Lead"
 4. Fill out the form with all fields
 5. Click "Create Lead"
@@ -61,7 +61,7 @@ Created test lead successfully with all fields:
 # Get token
 curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123"
+  -d "username=admin@perenniaai.com&password=demo123"
 
 # Create lead (use token from above)
 curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/ \

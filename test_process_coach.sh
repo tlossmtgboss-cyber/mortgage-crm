@@ -9,7 +9,7 @@ echo ""
 echo "Step 1: Logging in as demo user..."
 LOGIN_RESPONSE=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123")
+  -d "username=admin@perenniaai.com&password=demo123")
 
 TOKEN=$(echo $LOGIN_RESPONSE | grep -o '"access_token":"[^"]*' | sed 's/"access_token":"//')
 

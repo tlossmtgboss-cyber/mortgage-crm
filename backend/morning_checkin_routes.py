@@ -74,7 +74,7 @@ class CheckinSettings(BaseModel):
 
 def get_current_user_id(db: Session) -> int:
     """Get current user ID (simplified for demo)"""
-    result = db.execute(text("SELECT id FROM users WHERE email = 'demo@example.com' LIMIT 1"))
+    result = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1"))
     row = result.fetchone()
     return row[0] if row else 1
 

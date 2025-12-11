@@ -26,7 +26,7 @@ SAMPLE_EMAILS = [
         "id": "sample-email-001",
         "subject": "Pre-approval request for Austin home",
         "from": {"emailAddress": {"address": "sarah.martinez@gmail.com"}},
-        "toRecipients": [{"emailAddress": {"address": "demo@example.com"}}],
+        "toRecipients": [{"emailAddress": {"address": "admin@perenniaai.com"}}],
         "receivedDateTime": "2025-11-16T14:30:00Z",
         "body": {
             "contentType": "text",
@@ -65,7 +65,7 @@ Sarah Martinez
         "id": "sample-email-002",
         "subject": "Rate lock expiring soon - Loan #98765432",
         "from": {"emailAddress": {"address": "processor@lendco.com"}},
-        "toRecipients": [{"emailAddress": {"address": "demo@example.com"}}],
+        "toRecipients": [{"emailAddress": {"address": "admin@perenniaai.com"}}],
         "receivedDateTime": "2025-11-16T15:00:00Z",
         "body": {
             "contentType": "text",
@@ -103,7 +103,7 @@ LendCo Mortgage
         "id": "sample-email-003",
         "subject": "Refinance inquiry",
         "from": {"emailAddress": {"address": "robert.williams@email.com"}},
-        "toRecipients": [{"emailAddress": {"address": "demo@example.com"}}],
+        "toRecipients": [{"emailAddress": {"address": "admin@perenniaai.com"}}],
         "receivedDateTime": "2025-11-16T16:30:00Z",
         "body": {
             "contentType": "text",
@@ -144,7 +144,7 @@ robert.williams@email.com
         "id": "sample-email-004",
         "subject": "First-time homebuyer - need guidance",
         "from": {"emailAddress": {"address": "jessica.taylor@yahoo.com"}},
-        "toRecipients": [{"emailAddress": {"address": "demo@example.com"}}],
+        "toRecipients": [{"emailAddress": {"address": "admin@perenniaai.com"}}],
         "receivedDateTime": "2025-11-16T17:15:00Z",
         "body": {
             "contentType": "text",
@@ -189,7 +189,7 @@ jessica.taylor@yahoo.com
         "id": "sample-email-005",
         "subject": "Clear to Close - Loan #55566677",
         "from": {"emailAddress": {"address": "underwriting@nationalmtg.com"}},
-        "toRecipients": [{"emailAddress": {"address": "demo@example.com"}}],
+        "toRecipients": [{"emailAddress": {"address": "admin@perenniaai.com"}}],
         "receivedDateTime": "2025-11-16T18:00:00Z",
         "body": {
             "contentType": "text",
@@ -252,7 +252,7 @@ async def import_and_process():
         result = conn.execute(text("""
             SELECT id, email
             FROM users
-            WHERE email = 'demo@example.com'
+            WHERE email = 'admin@perenniaai.com'
             LIMIT 1
         """))
         user = result.fetchone()

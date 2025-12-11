@@ -24,7 +24,7 @@ All with password: `demo123`
 - emily.patterson@company.com - Loan Officer
 - brandon.lee@company.com - Loan Officer
 
-#### 🎯 Leads (5 prospects) - Owned by demo@example.com
+#### 🎯 Leads (5 prospects) - Owned by admin@perenniaai.com
 1. **James Wilson** - New ($360,000 loan)
    - Property: $450,000
    - Down Payment: $90,000 (20%)
@@ -53,7 +53,7 @@ All with password: `demo123`
    - Credit: 780
    - **Pre-approval Amount: $680,000**
 
-#### 💰 Active Loans (4 in pipeline) - Owned by demo@example.com
+#### 💰 Active Loans (4 in pipeline) - Owned by admin@perenniaai.com
 
 1. **2025-001234** - Michael & Sarah Roberts
    - Amount: $420,000
@@ -168,7 +168,7 @@ Each client should show:
 
 ### Option 1: Login as Demo User
 ```
-Email: demo@example.com
+Email: admin@perenniaai.com
 Password: demo123
 ```
 
@@ -189,7 +189,7 @@ brandon.lee@company.com / demo123
 
 ## 📈 Expected Dashboard Values
 
-When logged in as demo@example.com (after assigning data):
+When logged in as admin@perenniaai.com (after assigning data):
 
 **Leads Section:**
 - Total Leads: 5
@@ -226,7 +226,7 @@ When logged in as demo@example.com (after assigning data):
 
 3. **View in Browser:**
    - https://mortgage-crm-nine.vercel.app/login
-   - Login: demo@example.com / demo123
+   - Login: admin@perenniaai.com / demo123
    - Navigate to:
      - Dashboard (should show pipeline stats)
      - Leads (should show 5 leads)
@@ -242,7 +242,7 @@ If dashboard shows "Internal Server Error":
 
 If leads/loans don't appear:
 - Run `./update_demo_user_data.sh` to assign to your user
-- Check you're logged in as demo@example.com
+- Check you're logged in as admin@perenniaai.com
 - Verify data exists: Check API directly via curl scripts
 
 ## 🔄 Re-seeding Data

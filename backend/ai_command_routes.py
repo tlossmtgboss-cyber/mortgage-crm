@@ -3998,7 +3998,7 @@ async def process_command(
         # Get user from database based on demo user for now
         # In a real implementation, this would use proper token auth
         User = main.User
-        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user_id = demo_user.id if demo_user else 1
     except Exception:
         current_user_id = 1  # Fallback
@@ -4111,7 +4111,7 @@ async def execute_action(
     main = get_main_module()
     try:
         User = main.User
-        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user_id = demo_user.id if demo_user else 1
     except Exception:
         current_user_id = 1  # Fallback
@@ -4360,7 +4360,7 @@ async def send_daily_priorities_email(
     main = get_main_module()
     try:
         User = main.User
-        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user_id = demo_user.id if demo_user else 1
         user_name = f"{demo_user.first_name} {demo_user.last_name}" if demo_user else "User"
         user_email = demo_user.email if demo_user else ""
@@ -4611,7 +4611,7 @@ async def create_lead_from_screenshot(
     # Get current user
     try:
         User = main.User
-        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user_id = demo_user.id if demo_user else 1
     except Exception:
         current_user_id = 1
@@ -4736,11 +4736,11 @@ async def generate_ai_email(
         # Get current user lazily to avoid circular import
         main = get_main_module()
         User = main.User
-        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user = {
             "id": demo_user.id if demo_user else 1,
             "name": demo_user.full_name if demo_user else "Loan Officer",
-            "email": demo_user.email if demo_user else "demo@example.com",
+            "email": demo_user.email if demo_user else "admin@perenniaai.com",
             "phone": getattr(demo_user, 'phone', '') if demo_user else "",
             "title": getattr(demo_user, 'current_role', 'Loan Officer') if demo_user else "Loan Officer",
             "nmls_id": getattr(demo_user, 'nmls_number', '') if demo_user else ""
@@ -4866,11 +4866,11 @@ async def send_composed_email(
         # Get current user lazily to avoid circular import
         main = get_main_module()
         User = main.User
-        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user = {
             "id": demo_user.id if demo_user else 1,
             "name": demo_user.full_name if demo_user else "Pipeline 360",
-            "email": demo_user.email if demo_user else "demo@example.com"
+            "email": demo_user.email if demo_user else "admin@perenniaai.com"
         }
 
         # Get sender info

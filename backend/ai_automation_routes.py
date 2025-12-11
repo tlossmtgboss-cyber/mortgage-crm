@@ -47,7 +47,7 @@ async def get_current_user(
     if not credentials:
         result = db.execute(
             text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": "demo@example.com"}
+            {"email": "admin@perenniaai.com"}
         )
         user_row = result.fetchone()
         if user_row:

@@ -35,9 +35,9 @@
 
 ### 3. Authentication ✅ **CONFIRMED WORKING**
 - ✅ Login endpoint exists at `/token`
-- ✅ Demo credentials work: `demo@example.com` / `demo123`
+- ✅ Demo credentials work: `admin@perenniaai.com` / `demo123`
 - ✅ Returns valid JWT token
-- ✅ User object returned: `{"email":"demo@example.com","full_name":"Demo User","role":"loan_officer"}`
+- ✅ User object returned: `{"email":"admin@perenniaai.com","full_name":"Demo User","role":"loan_officer"}`
 
 **Evidence**: Successfully authenticated via API call
 ```json
@@ -45,7 +45,7 @@
   "access_token":"eyJhbGc...XmI",
   "token_type":"bearer",
   "user": {
-    "email":"demo@example.com",
+    "email":"admin@perenniaai.com",
     "full_name":"Demo User",
     "role":"loan_officer"
   }
@@ -203,7 +203,7 @@
 
 1. **Test Voice Chat** (10 minutes)
    - Open https://mortgage-crm-nine.vercel.app
-   - Log in (demo@example.com / demo123)
+   - Log in (admin@perenniaai.com / demo123)
    - Click Process Coach → Pipeline Audit
    - Click 🎤 microphone button
    - **Speak a command**

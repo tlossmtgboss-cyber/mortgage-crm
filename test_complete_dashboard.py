@@ -9,7 +9,7 @@ API_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
 token_response = requests.post(
     f"{API_URL}/token",
     headers={"Content-Type": "application/x-www-form-urlencoded"},
-    data={"username": "demo@example.com", "password": "demo123"}
+    data={"username": "admin@perenniaai.com", "password": "demo123"}
 )
 token = token_response.json()["access_token"]
 

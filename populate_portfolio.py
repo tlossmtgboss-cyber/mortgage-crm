@@ -7,7 +7,7 @@ import random
 from datetime import datetime, timedelta
 
 API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
-USER_EMAIL = "demo@example.com"
+USER_EMAIL = "admin@perenniaai.com"
 USER_PASSWORD = "demo123"
 
 # Realistic borrower data

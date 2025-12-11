@@ -18,7 +18,7 @@ def print_section(title):
 print_section("🔐 AUTHENTICATING")
 login_response = requests.post(
     f"{BACKEND_URL}/token",
-    data={"username": "demo@example.com", "password": "demo123"},
+    data={"username": "admin@perenniaai.com", "password": "demo123"},
     timeout=10
 )
 

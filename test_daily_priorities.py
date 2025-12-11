@@ -19,7 +19,7 @@ Session = sessionmaker(bind=engine)
 db = Session()
 
 # Get demo user ID
-result = db.execute(text('SELECT id, email, first_name, last_name FROM users WHERE email = :email'), {'email': 'demo@example.com'})
+result = db.execute(text('SELECT id, email, first_name, last_name FROM users WHERE email = :email'), {'email': 'admin@perenniaai.com'})
 user = result.fetchone()
 
 if not user:

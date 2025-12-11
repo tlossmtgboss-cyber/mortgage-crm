@@ -800,7 +800,7 @@ def get_current_user_id(db: Session) -> int:
     """Get current user ID - placeholder for auth integration"""
     # In production, this would come from JWT token
     # For now, return demo user
-    result = db.execute(text("SELECT id FROM users WHERE email = 'demo@example.com' LIMIT 1")).fetchone()
+    result = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1")).fetchone()
     return result[0] if result else 1
 
 

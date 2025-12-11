@@ -22,7 +22,7 @@ with engine.connect() as conn:
     result = conn.execute(text("""
         SELECT id, email, username
         FROM users
-        WHERE email = 'demo@example.com' OR username = 'demo@example.com'
+        WHERE email = 'admin@perenniaai.com' OR username = 'admin@perenniaai.com'
         LIMIT 1
     """))
 

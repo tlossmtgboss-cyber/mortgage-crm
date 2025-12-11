@@ -246,7 +246,7 @@ TEAM_WORKFLOWS = {
 }
 
 # Get the demo user ID to use as creator
-cur.execute("SELECT id FROM users WHERE email = 'demo@example.com'")
+cur.execute("SELECT id FROM users WHERE email = 'admin@perenniaai.com'")
 demo_user_id = cur.fetchone()[0]
 
 print(f"Using demo user ID: {demo_user_id}")

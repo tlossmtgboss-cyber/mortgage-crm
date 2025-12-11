@@ -53,7 +53,7 @@ This script will DELETE all users except @cmgfi.com emails
 
 📋 Found 15 users to delete:
 
-   • ID:  123 | demo@example.com                       | John Demo                      | Created: 2025-01-10 10:30:00
+   • ID:  123 | admin@perenniaai.com                       | John Demo                      | Created: 2025-01-10 10:30:00
    • ID:  124 | test@test.com                          | Test User                      | Created: 2025-01-11 14:20:00
    ...
 
@@ -67,7 +67,7 @@ This script will DELETE all users except @cmgfi.com emails
 Type 'DELETE' to confirm deletion: DELETE
 
 🗑️  Deleting users...
-   ✓ Deleted: demo@example.com (ID: 123)
+   ✓ Deleted: admin@perenniaai.com (ID: 123)
    ✓ Deleted: test@test.com (ID: 124)
    ...
 

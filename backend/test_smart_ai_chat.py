@@ -8,7 +8,7 @@ API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
 print("🔐 Getting authentication token...")
 auth_response = requests.post(
     f"{API_BASE}/token",
-    data={"username": "demo@example.com", "password": "demo"}
+    data={"username": "admin@perenniaai.com", "password": "demo"}
 )
 
 if auth_response.status_code == 200:

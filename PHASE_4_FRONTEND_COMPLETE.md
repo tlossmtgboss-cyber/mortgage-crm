@@ -188,7 +188,7 @@ return (
 
 ### Scenario: Manager Impersonates Sales Rep
 
-1. **Manager logs in** as `demo@example.com` (Management role)
+1. **Manager logs in** as `admin@perenniaai.com` (Management role)
    - PermissionContext fetches management permissions
    - `userRole = "management"`
    - All widgets visible

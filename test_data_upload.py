@@ -53,7 +53,7 @@ print("   Getting auth token...")
 login_response = requests.post(
     f"{BACKEND_URL}/token",
     data={
-        "username": "demo@example.com",
+        "username": "admin@perenniaai.com",
         "password": "demo123"
     }
 )

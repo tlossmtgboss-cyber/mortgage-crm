@@ -66,7 +66,7 @@ vercel --prod --yes
 # Get auth token
 TOKEN=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"username": "demo@example.com", "password": "password"}' | jq -r '.access_token')
+  -d '{"username": "admin@perenniaai.com", "password": "password"}' | jq -r '.access_token')
 
 # Test AI query
 curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/ai/query" \
@@ -86,7 +86,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/a
 ### 2. Test Frontend
 
 1. Go to https://mortgage-crm-nine.vercel.app
-2. Log in as demo@example.com
+2. Log in as admin@perenniaai.com
 3. Navigate to Profitability (in toolbar)
 4. Verify dashboard loads
 5. Click "AI Assistant" tab

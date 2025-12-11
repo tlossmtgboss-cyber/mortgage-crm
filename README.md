@@ -34,7 +34,7 @@ npm start
 ```
 
 **Demo Login:**
-- Email: `demo@example.com`
+- Email: `admin@perenniaai.com`
 - Password: `demo123`
 
 📚 **[Read the full Quick Start Guide →](QUICK-START.md)**

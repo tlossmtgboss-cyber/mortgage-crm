@@ -14,7 +14,7 @@ def test_referral_partner_creation():
     # Step 1: Login to get token
     print("🔐 Step 1: Logging in...")
     login_data = {
-        "username": "demo@example.com",  # Change to your test user
+        "username": "admin@perenniaai.com",  # Change to your test user
         "password": "demo123"  # Change to your test password
     }
 

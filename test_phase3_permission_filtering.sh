@@ -10,22 +10,22 @@ echo "===================================="
 echo ""
 
 # Step 1: Login as demo user (Management role)
-echo "Step 1: Login as demo@example.com (Management role)"
+echo "Step 1: Login as admin@perenniaai.com (Management role)"
 echo "----------------------------------------------------"
 
 LOGIN_RESPONSE=$(curl -s -X POST "$API_URL/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123")
+  -d "username=admin@perenniaai.com&password=demo123")
 
 MANAGER_TOKEN=$(echo $LOGIN_RESPONSE | jq -r '.access_token')
 
 if [ "$MANAGER_TOKEN" == "null" ] || [ -z "$MANAGER_TOKEN" ]; then
-  echo "❌ Login failed for demo@example.com"
+  echo "❌ Login failed for admin@perenniaai.com"
   echo "Response: $LOGIN_RESPONSE"
   exit 1
 fi
 
-echo "✅ Login successful as demo@example.com"
+echo "✅ Login successful as admin@perenniaai.com"
 echo ""
 
 # Step 2: Get leads as manager (should see ALL leads)

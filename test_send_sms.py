@@ -8,7 +8,7 @@ BASE_URL = "http://localhost:8000"
 print("Logging in...")
 login_response = requests.post(
     f"{BASE_URL}/token",
-    data={"username": "demo@example.com", "password": "demo123"}
+    data={"username": "admin@perenniaai.com", "password": "demo123"}
 )
 
 if login_response.status_code != 200:

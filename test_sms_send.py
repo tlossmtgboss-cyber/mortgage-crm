@@ -14,7 +14,7 @@ def login():
 
     # Try with demo credentials
     login_data = {
-        "username": "demo@example.com",
+        "username": "admin@perenniaai.com",
         "password": "demo123"
     }
 

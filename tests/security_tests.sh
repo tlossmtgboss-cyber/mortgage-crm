@@ -52,7 +52,7 @@ info() {
 get_token() {
     TOKEN=$(curl -s -X POST "$API_URL/token" $API_KEY_HEADER \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=demo@example.com&password=demo123" | \
+        -d "username=admin@perenniaai.com&password=demo123" | \
         python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
 
     if [ -z "$TOKEN" ]; then

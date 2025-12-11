@@ -24,7 +24,7 @@ def get_token():
     response = requests.post(
         f"{BASE_URL}/token",
         data={
-            "username": "demo@example.com",
+            "username": "admin@perenniaai.com",
             "password": "demo123"
         }
     )

@@ -9,7 +9,7 @@ echo ""
 echo "Step 1: Getting auth token..."
 LOGIN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/login" \
   -H "Content-Type: application/json" \
-  -d '{"email": "demo@example.com", "password": "demo123"}')
+  -d '{"email": "admin@perenniaai.com", "password": "demo123"}')
 
 TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.access_token' 2>/dev/null)
 

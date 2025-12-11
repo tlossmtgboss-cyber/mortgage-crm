@@ -15,7 +15,7 @@ print()
 
 # Step 1: Login
 print("Step 1: Logging in...")
-username = input("Enter your email (demo@example.com): ") or "demo@example.com"
+username = input("Enter your email (admin@perenniaai.com): ") or "admin@perenniaai.com"
 password = input("Enter your password (demo123): ") or "demo123"
 
 login_response = requests.post(

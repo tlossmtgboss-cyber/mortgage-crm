@@ -56,9 +56,9 @@ All Phase 2 backend components have been **successfully tested and verified** on
 ```json
 {
   "success": true,
-  "message": "Successfully bootstrapped user demo@example.com with management permissions",
+  "message": "Successfully bootstrapped user admin@perenniaai.com with management permissions",
   "user_id": 1,
-  "email": "demo@example.com",
+  "email": "admin@perenniaai.com",
   "role": "management"
 }
 ```
@@ -118,13 +118,13 @@ All Phase 2 backend components have been **successfully tested and verified** on
 ### TEST 4: Get User Permissions (Management Role) ✅
 
 **Endpoint**: `GET /api/v1/users/1/permissions`
-**User**: demo@example.com (Management Role)
+**User**: admin@perenniaai.com (Management Role)
 
 **Result Summary**:
 ```json
 {
   "user_id": 1,
-  "email": "demo@example.com",
+  "email": "admin@perenniaai.com",
   "permission_role": "management",
   "permission_count": 102,
   "permissions": {

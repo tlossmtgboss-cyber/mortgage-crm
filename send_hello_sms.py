@@ -15,7 +15,7 @@ print("="*70)
 print("\n🔐 Logging in...")
 login_response = requests.post(
     f"{BACKEND_URL}/token",
-    data={"username": "demo@example.com", "password": "demo123"},
+    data={"username": "admin@perenniaai.com", "password": "demo123"},
     timeout=10
 )
 

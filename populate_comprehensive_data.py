@@ -12,7 +12,7 @@ import random
 API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
 
 # User credentials - using Quick Login demo account
-USER_EMAIL = "demo@example.com"
+USER_EMAIL = "admin@perenniaai.com"
 USER_PASSWORD = "demo123"
 
 # Global token storage

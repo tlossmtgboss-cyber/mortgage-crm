@@ -9,7 +9,7 @@ print("Testing backend health...")
 print("\n1. Testing /token endpoint...")
 response = requests.post(
     f"{API_BASE_URL}/token",
-    data={"username": "demo@example.com", "password": "demo123"}
+    data={"username": "admin@perenniaai.com", "password": "demo123"}
 )
 print(f"Status: {response.status_code}")
 print(f"Response: {response.text[:500]}")

@@ -9,7 +9,7 @@ echo "📝 Step 1: Authentication"
 echo "-------------------------"
 TOKEN_RESPONSE=$(curl -s -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123")
+  -d "username=admin@perenniaai.com&password=demo123")
 
 TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.access_token')
 
@@ -18,7 +18,7 @@ if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-echo "✅ Authenticated as demo@example.com"
+echo "✅ Authenticated as admin@perenniaai.com"
 echo ""
 
 # Test 1: Get Voicemail Templates

@@ -305,7 +305,7 @@ async def voice_agent_websocket(
         logger.info("[VoiceAgent] WebSocket accepted")
 
         # Get user from auth token
-        user_id = "demo@example.com"
+        user_id = "admin@perenniaai.com"
         token = websocket.query_params.get("token")
 
         if token:

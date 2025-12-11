@@ -244,13 +244,17 @@ async def connect_to_openai_realtime():
 
     ws = await websockets.connect(url, extra_headers=headers)
 
-    # Configure the session
+    # Wait for session.created event
+    initial_response = await ws.recv()
+    logger.info(f"OpenAI Realtime connected: {initial_response[:100]}")
+
+    # Configure the session for natural two-way conversation
     await ws.send(json.dumps({
         "type": "session.update",
         "session": {
             "modalities": ["text", "audio"],
             "instructions": ai_config.system_prompt.format(business_name=ai_config.business_name),
-            "voice": "alloy",
+            "voice": "shimmer",  # More natural, warm voice for phone conversations
             "input_audio_format": "g711_ulaw",
             "output_audio_format": "g711_ulaw",
             "input_audio_transcription": {
@@ -258,9 +262,9 @@ async def connect_to_openai_realtime():
             },
             "turn_detection": {
                 "type": "server_vad",
-                "threshold": 0.5,
-                "prefix_padding_ms": 300,
-                "silence_duration_ms": 500
+                "threshold": 0.6,  # Slightly higher to reduce false triggers
+                "prefix_padding_ms": 400,  # More context before speech
+                "silence_duration_ms": 900  # Wait longer before responding (more natural)
             },
             "tools": [
                 {
@@ -308,6 +312,17 @@ async def connect_to_openai_realtime():
             ]
         }
     }))
+
+    # Trigger Sam to greet the caller immediately (don't wait for them to speak)
+    await ws.send(json.dumps({
+        "type": "response.create",
+        "response": {
+            "modalities": ["text", "audio"],
+            "instructions": "Greet the caller warmly. Say something like: 'Hi, this is Sam with CMG Home Loans. Thanks for calling! How can I help you today?' Keep it natural and friendly."
+        }
+    }))
+
+    logger.info("OpenAI Realtime session configured, initial greeting triggered")
 
     return ws
 

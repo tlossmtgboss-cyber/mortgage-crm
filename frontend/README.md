@@ -68,7 +68,7 @@ src/
 ## Demo Credentials
 
 ```
-Email: demo@example.com
+Email: admin@perenniaai.com
 Password: demo123
 ```
 

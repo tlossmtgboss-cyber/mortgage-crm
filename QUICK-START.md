@@ -49,7 +49,7 @@ You should see:
 ✅ Sample data created successfully
 ✅ CRM is ready!
 📚 API Documentation: http://localhost:8000/docs
-🔐 Demo Login: demo@example.com / demo123
+🔐 Demo Login: admin@perenniaai.com / demo123
 ```
 
 **Backend is now running at http://localhost:8000**
@@ -77,7 +77,7 @@ Your browser will automatically open to http://localhost:3000
 ## Step 4: Login
 
 Use the demo account:
-- **Email:** demo@example.com
+- **Email:** admin@perenniaai.com
 - **Password:** demo123
 
 Click "Use Demo Account" button or enter credentials manually.
@@ -165,7 +165,7 @@ npm install
 | Frontend | http://localhost:3000 |
 | Backend API | http://localhost:8000 |
 | API Docs | http://localhost:8000/docs |
-| Demo Email | demo@example.com |
+| Demo Email | admin@perenniaai.com |
 | Demo Password | demo123 |
 
 ---

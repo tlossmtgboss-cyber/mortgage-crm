@@ -17,7 +17,7 @@ def upgrade_demo_user():
         result = conn.execute(text("""
             SELECT email, role, full_name
             FROM users
-            WHERE email = 'demo@example.com'
+            WHERE email = 'admin@perenniaai.com'
         """))
         user = result.fetchone()
 
@@ -32,14 +32,14 @@ def upgrade_demo_user():
                 conn.execute(text("""
                     UPDATE users
                     SET role = 'admin'
-                    WHERE email = 'demo@example.com'
+                    WHERE email = 'admin@perenniaai.com'
                 """))
                 conn.commit()
                 print("✅ User upgraded to 'admin' role!")
 
                 # Verify
                 result = conn.execute(text("""
-                    SELECT role FROM users WHERE email = 'demo@example.com'
+                    SELECT role FROM users WHERE email = 'admin@perenniaai.com'
                 """))
                 new_role = result.fetchone()[0]
                 print(f"✅ Verified new role: {new_role}")

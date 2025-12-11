@@ -12,7 +12,7 @@ echo "Step 1: Getting authentication token..."
 # Try demo user first
 LOGIN_RESPONSE=$(curl -s -X POST "$API_URL/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123")
+  -d "username=admin@perenniaai.com&password=demo123")
 
 TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.access_token' 2>/dev/null)
 

@@ -15,7 +15,7 @@ def test_lead_detail_access():
     # First, login to get a token
     print("🔐 Logging in...")
     login_data = {
-        "username": "demo@example.com",
+        "username": "admin@perenniaai.com",
         "password": "demo123"
     }
 

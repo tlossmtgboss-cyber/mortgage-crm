@@ -20,7 +20,7 @@ echo -e "${BLUE}=== Onboarding Wizard API Test ===${NC}\n"
 echo -e "${YELLOW}Step 1: Logging in...${NC}"
 curl -s -X POST "${API_URL}/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d 'username=demo@example.com&password=password123' \
+  -d 'username=admin@perenniaai.com&password=password123' \
   > "$TOKEN_FILE"
 
 if [ $? -ne 0 ]; then
@@ -176,11 +176,11 @@ echo -e "${BLUE}=== Test Summary ===${NC}"
 echo -e "${GREEN}All API endpoints tested successfully!${NC}"
 echo -e "\n${YELLOW}Next Steps:${NC}"
 echo -e "1. Test the UI at: https://mortgage-crm-nine.vercel.app/onboarding/1"
-echo -e "2. Login with: demo@example.com / password123"
+echo -e "2. Login with: admin@perenniaai.com / password123"
 echo -e "3. Fill out the form and test verification flows"
 echo -e "4. Check auto-save after 30 seconds"
 echo -e "5. Test 'Save & Exit' and resume functionality"
 echo -e "\n${YELLOW}Database Verification:${NC}"
 echo -e "Check the database with:"
-echo -e "  railway run psql -c 'SELECT * FROM onboarding_progress WHERE user_id = (SELECT id FROM users WHERE email = \"demo@example.com\");'"
+echo -e "  railway run psql -c 'SELECT * FROM onboarding_progress WHERE user_id = (SELECT id FROM users WHERE email = \"admin@perenniaai.com\");'"
 echo ""

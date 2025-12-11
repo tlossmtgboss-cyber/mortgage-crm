@@ -535,7 +535,7 @@ async def mobile_voice_websocket(
 
         # Get user from auth token in query params or headers
         # For now, use a default user - in production, validate the token
-        user_id = "demo@example.com"  # TODO: Extract from auth token
+        user_id = "admin@perenniaai.com"  # TODO: Extract from auth token
 
         # Check for token in query params
         token = websocket.query_params.get("token")

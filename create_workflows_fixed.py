@@ -250,7 +250,7 @@ def get_auth_token():
     print("Logging in as demo user...")
     response = requests.post(
         f"{API_BASE}/token",
-        data={"username": "demo@example.com", "password": "demo123"},
+        data={"username": "admin@perenniaai.com", "password": "demo123"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
 

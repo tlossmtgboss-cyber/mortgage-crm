@@ -12,7 +12,7 @@ from datetime import datetime
 FRONTEND_URL = "https://mortgage-crm-git-main-tim-loss-projects.vercel.app"
 BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
 TEST_CREDENTIALS = {
-    "username": "demo@example.com",
+    "username": "admin@perenniaai.com",
     "password": "demo123"
 }
 

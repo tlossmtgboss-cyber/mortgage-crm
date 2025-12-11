@@ -2,7 +2,7 @@
 # Trigger Claude extraction on imported emails
 
 BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
-EMAIL="demo@example.com"
+EMAIL="admin@perenniaai.com"
 PASSWORD="demo123"
 
 echo "================================================================================"

@@ -2,7 +2,7 @@
 # Check demo account emails via production API
 
 BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"
-EMAIL="demo@example.com"
+EMAIL="admin@perenniaai.com"
 PASSWORD="demo123"
 
 echo "================================================================================"
@@ -11,7 +11,7 @@ echo "==========================================================================
 
 # Login
 echo ""
-echo "1️⃣  Logging in as demo@example.com..."
+echo "1️⃣  Logging in as admin@perenniaai.com..."
 LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=$EMAIL&password=$PASSWORD")

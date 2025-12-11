@@ -21,7 +21,7 @@ try:
 except ImportError:
     # Fallback for standalone testing
     async def get_current_user():
-        return {"email": "demo@example.com"}
+        return {"email": "admin@perenniaai.com"}
 
     def get_db_connection():
         import psycopg2

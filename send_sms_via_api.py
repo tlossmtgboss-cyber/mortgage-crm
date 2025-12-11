@@ -16,7 +16,7 @@ def main():
     # Step 1: Login to get token
     print("\n🔐 Step 1: Authenticating...")
     login_data = {
-        "username": "demo@example.com",
+        "username": "admin@perenniaai.com",
         "password": "demo123"
     }
 

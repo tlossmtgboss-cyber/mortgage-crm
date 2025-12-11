@@ -16,7 +16,7 @@ echo ""
 echo "=== AUTHENTICATION ==="
 TOKEN=$(curl -s -X POST "$BASE_URL/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123" | jq -r '.access_token')
+  -d "username=admin@perenniaai.com&password=demo123" | jq -r '.access_token')
 
 if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
   echo "❌ Authentication failed"

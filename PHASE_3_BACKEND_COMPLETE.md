@@ -53,7 +53,7 @@ When a manager impersonates a sales rep, they now see **ONLY the data that sales
 🧪 Phase 3 Permission Filtering Test
 ====================================
 
-Step 1: Login as demo@example.com (Management role)
+Step 1: Login as admin@perenniaai.com (Management role)
 ----------------------------------------------------
 ✅ Login successful
 
@@ -294,7 +294,7 @@ return actual_user  # No impersonation
 1. **Login as manager**
    ```bash
    curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/token" \
-     -d "username=demo@example.com&password=demo123"
+     -d "username=admin@perenniaai.com&password=demo123"
    ```
 
 2. **Get leads as manager**

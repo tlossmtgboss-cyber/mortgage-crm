@@ -10,14 +10,14 @@ def get_database_url():
     return os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/mortgage_crm')
 
 def reset_onboarding():
-    """Reset onboarding for demo@example.com"""
+    """Reset onboarding for admin@perenniaai.com"""
     engine = create_engine(get_database_url())
     Session = sessionmaker(bind=engine)
     session = Session()
 
     try:
         # Get demo user
-        user_query = text("SELECT id, email FROM users WHERE email = 'demo@example.com'")
+        user_query = text("SELECT id, email FROM users WHERE email = 'admin@perenniaai.com'")
         result = session.execute(user_query).fetchone()
 
         if not result:

@@ -15,7 +15,7 @@ function Dashboard() {
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        return user.email === 'demo@example.com';
+        return user.email === 'admin@perenniaai.com';
       }
     } catch (error) {
       console.error('Error checking demo user:', error);

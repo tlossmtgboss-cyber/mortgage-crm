@@ -10,7 +10,7 @@ print("1. Getting authentication token...")
 try:
     response = requests.post(
         f"{API_BASE_URL}/token",
-        data={"username": "demo@example.com", "password": "demo123"}
+        data={"username": "admin@perenniaai.com", "password": "demo123"}
     )
     print(f"   Response status: {response.status_code}")
     print(f"   Response: {response.json()}")

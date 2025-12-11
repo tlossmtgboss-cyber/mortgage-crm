@@ -20,7 +20,7 @@ try:
     # Login first
     login_response = requests.post(
         f"{backend_url}/token",
-        data={"username": "demo@example.com", "password": "demo123"},
+        data={"username": "admin@perenniaai.com", "password": "demo123"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
 

@@ -230,7 +230,7 @@ python3 test_vapi_webhook_integration.py
 
 ### AI Receptionist Dashboard
 - **URL:** https://mortgage-crm-nine.vercel.app/ai-receptionist-dashboard
-- **Login:** demo@example.com / demo123
+- **Login:** admin@perenniaai.com / demo123
 - **Shows:** Call metrics, activity feed, conversation insights
 
 ### Railway Logs

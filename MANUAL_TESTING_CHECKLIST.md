@@ -37,7 +37,7 @@
 ### Test 1.1: Login Flow
 - [ ] Navigate to https://mortgage-crm-nine.vercel.app
 - [ ] See login page (not redirected to error)
-- [ ] Enter credentials: **demo@example.com** / **demo123**
+- [ ] Enter credentials: **admin@perenniaai.com** / **demo123**
 - [ ] Click "Login" button
 - [ ] Successfully redirected to dashboard
 - [ ] No console errors (open browser DevTools → Console)

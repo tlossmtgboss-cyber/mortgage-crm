@@ -15,7 +15,7 @@ echo "=========================================="
 echo ""
 echo "📍 API: http://0.0.0.0:${PORT:-8000}"
 echo "📚 Docs: http://0.0.0.0:${PORT:-8000}/docs"
-echo "🔐 Demo Login: demo@example.com / demo123"
+echo "🔐 Demo Login: admin@perenniaai.com / demo123"
 echo ""
 
 # Start uvicorn server (Railway provides PORT environment variable)

@@ -42413,7 +42413,7 @@ def create_sample_data(db: Session):
     """Create sample data for testing"""
     try:
         # Check if data already exists - check for both demo and admin users
-        existing_demo = db.query(User).filter(User.email == "demo@example.com").first()
+        existing_demo = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         existing_admin = db.query(User).filter(User.email == "admin@perenniaai.com").first()
 
         if existing_demo or existing_admin:
@@ -42431,7 +42431,7 @@ def create_sample_data(db: Session):
 
         # Create demo user
         demo_user = User(
-            email="demo@example.com",
+            email="admin@perenniaai.com",
             hashed_password=get_password_hash("demo123"),
             full_name="Demo User",
             role="loan_officer",
@@ -49545,7 +49545,7 @@ async def startup_event():
                 if admin_row:
                     admin_id = admin_row[0]
                     demo_result = db_temp.execute(text(
-                        "SELECT id FROM users WHERE email = 'demo@example.com'"
+                        "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
                     ))
                     demo_row = demo_result.fetchone()
 

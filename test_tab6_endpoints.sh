@@ -3,7 +3,7 @@
 # Test Tab 6 Access & Audit Endpoints
 # Get fresh token
 echo "🔐 Getting auth token..."
-TOKEN=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/token -d "username=demo@example.com&password=demo123" | jq -r '.access_token')
+TOKEN=$(curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/token -d "username=admin@perenniaai.com&password=demo123" | jq -r '.access_token')
 
 if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
     echo "❌ Failed to get auth token"

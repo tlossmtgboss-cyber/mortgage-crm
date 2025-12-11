@@ -526,13 +526,13 @@ async def update_user_email(
     admin: Any = Depends(get_admin_user)
 ):
     """
-    Update demo user email from demo@example.com to admin@perenniaai.com
+    Update demo user email from admin@perenniaai.com to admin@perenniaai.com
     """
     try:
         from database import engine
         from sqlalchemy import text
 
-        old_email = "demo@example.com"
+        old_email = "admin@perenniaai.com"
         new_email = "admin@perenniaai.com"
 
         logger.info(f"Updating user email from {old_email} to {new_email}...")

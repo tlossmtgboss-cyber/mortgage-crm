@@ -937,9 +937,9 @@ def create_leads(db):
     """Create demo leads at various stages"""
     logger.info("🎯 Creating demo leads...")
 
-    # First try to find demo@example.com user (for AI chat to work)
+    # First try to find admin@perenniaai.com user (for AI chat to work)
     demo_user = db.execute(text("""
-        SELECT id FROM users WHERE email = 'demo@example.com' LIMIT 1
+        SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1
     """)).fetchone()
 
     if demo_user:
@@ -1033,9 +1033,9 @@ def create_active_loans(db):
     """Create demo active loans"""
     logger.info("💰 Creating active loans...")
 
-    # First try to find demo@example.com user (for AI chat to work)
+    # First try to find admin@perenniaai.com user (for AI chat to work)
     demo_user = db.execute(text("""
-        SELECT id FROM users WHERE email = 'demo@example.com' LIMIT 1
+        SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1
     """)).fetchone()
 
     if demo_user:

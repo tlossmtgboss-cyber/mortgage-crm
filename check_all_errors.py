@@ -37,7 +37,7 @@ def check_twilio_configuration():
         # Login
         login_response = requests.post(
             f"{BACKEND_URL}/token",
-            data={"username": "demo@example.com", "password": "demo123"},
+            data={"username": "admin@perenniaai.com", "password": "demo123"},
             timeout=10
         )
 
@@ -102,7 +102,7 @@ def check_sms_failures():
         # Login
         login_response = requests.post(
             f"{BACKEND_URL}/token",
-            data={"username": "demo@example.com", "password": "demo123"},
+            data={"username": "admin@perenniaai.com", "password": "demo123"},
             timeout=10
         )
 
@@ -160,7 +160,7 @@ def test_live_send():
         # Login
         login_response = requests.post(
             f"{BACKEND_URL}/token",
-            data={"username": "demo@example.com", "password": "demo123"},
+            data={"username": "admin@perenniaai.com", "password": "demo123"},
             timeout=10
         )
 

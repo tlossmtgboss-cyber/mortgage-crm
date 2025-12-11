@@ -10,7 +10,7 @@ Your compliance system frontend is deployed to Vercel. The WebFetch tool cannot 
 
 1. Open: https://mortgage-crm-nine.vercel.app/login
 2. Login with:
-   - Email: `demo@example.com`
+   - Email: `admin@perenniaai.com`
    - Password: `demo123`
 3. Verify you're logged in (should redirect to dashboard)
 

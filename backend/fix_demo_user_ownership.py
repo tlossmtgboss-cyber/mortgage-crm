@@ -17,7 +17,7 @@ def main():
     with engine.connect() as conn:
         # Get demo user ID
         result = conn.execute(text("""
-            SELECT id, email FROM users WHERE email = 'demo@example.com' LIMIT 1
+            SELECT id, email FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1
         """))
         demo_user = result.fetchone()
 

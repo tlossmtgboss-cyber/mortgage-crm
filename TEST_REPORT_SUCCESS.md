@@ -174,7 +174,7 @@ Successfully executed 20 comprehensive tests against the production CRM system a
 - **Method:** OAuth2 Password Flow
 - **Endpoint:** `/token`
 - **Format:** Form-encoded (application/x-www-form-urlencoded)
-- **Credentials:** Demo user (demo@example.com)
+- **Credentials:** Demo user (admin@perenniaai.com)
 
 ### Test Execution
 1. Authenticate and obtain JWT access token

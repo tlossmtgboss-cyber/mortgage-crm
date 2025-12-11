@@ -11,7 +11,7 @@ API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
 # Try multiple credentials
 credentials = [
     {"username": "tloss@cmgfi.com", "password": "Up2024!"},
-    {"username": "demo@example.com", "password": "demo123"},
+    {"username": "admin@perenniaai.com", "password": "demo123"},
 ]
 
 print("🔑 Attempting to authenticate...")

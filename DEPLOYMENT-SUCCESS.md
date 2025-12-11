@@ -82,7 +82,7 @@ Visit: https://mortgage-crm-production-7a9a.up.railway.app/docs
 
 ### 3. Test Authentication
 Try demo login at: https://mortgage-crm-nine.vercel.app
-- **Email**: `demo@example.com`
+- **Email**: `admin@perenniaai.com`
 - **Password**: `demo123`
 
 **Expected Result**:
@@ -196,7 +196,7 @@ Try demo login at: https://mortgage-crm-nine.vercel.app
 ### Login Not Working
 1. Ensure backend deployment is "Active" in Railway
 2. Check that REACT_APP_API_URL matches Railway URL
-3. Try using demo credentials: `demo@example.com` / `demo123`
+3. Try using demo credentials: `admin@perenniaai.com` / `demo123`
 
 ---
 

@@ -79,12 +79,12 @@ echo "========================================"
 echo "Testing login..."
 AUTH_RESPONSE=$(curl -sL -X POST "$BASE_URL/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "username=demo@example.com&password=demo123")
+    -d "username=admin@perenniaai.com&password=demo123")
 
 TOKEN=$(echo "$AUTH_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
 
 if [ -n "$TOKEN" ] && [ "$TOKEN" != "" ]; then
-    log_pass "User login (demo@example.com)"
+    log_pass "User login (admin@perenniaai.com)"
     echo "  Token obtained: ${TOKEN:0:50}..."
 else
     log_fail "User login - no token received"

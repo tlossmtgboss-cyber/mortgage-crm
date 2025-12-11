@@ -9,7 +9,7 @@ API_BASE = "https://mortgage-crm-production-7a9a.up.railway.app"
 # Login
 response = requests.post(
     f"{API_BASE}/token",
-    data={"username": "demo@example.com", "password": "demo123"},
+    data={"username": "admin@perenniaai.com", "password": "demo123"},
     headers={"Content-Type": "application/x-www-form-urlencoded"}
 )
 

@@ -124,7 +124,7 @@ The API will be available at:
 ## Default Demo Account
 
 ```
-Email: demo@example.com
+Email: admin@perenniaai.com
 Password: demo123
 ```
 
@@ -196,7 +196,7 @@ curl -X POST "http://localhost:8000/api/v1/register" \
 ```bash
 curl -X POST "http://localhost:8000/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123"
+  -d "username=admin@perenniaai.com&password=demo123"
 ```
 
 Save the `access_token` from response.

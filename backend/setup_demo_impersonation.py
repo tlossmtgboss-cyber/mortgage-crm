@@ -28,7 +28,7 @@ try:
         print("\n1️⃣  Finding demo user...")
         demo_user = conn.execute(text("""
             SELECT id, email, full_name FROM users
-            WHERE email = 'demo@example.com'
+            WHERE email = 'admin@perenniaai.com'
             LIMIT 1
         """)).fetchone()
 
@@ -52,7 +52,7 @@ try:
                 INSERT INTO employees
                 (user_id, first_name, last_name, email, employment_status, hire_date, created_at)
                 VALUES
-                (:user_id, 'Demo', 'User', 'demo@example.com', 'active', CURRENT_DATE, CURRENT_TIMESTAMP)
+                (:user_id, 'Demo', 'User', 'admin@perenniaai.com', 'active', CURRENT_DATE, CURRENT_TIMESTAMP)
                 RETURNING id
             """), {'user_id': demo_user_id})
             employee_id = employee_result.fetchone()[0]
@@ -197,7 +197,7 @@ try:
 
         print("\n🎉 Demo account setup complete!")
         print(f"\n📋 Login credentials:")
-        print(f"   Email: demo@example.com")
+        print(f"   Email: admin@perenniaai.com")
         print(f"   Password: demo123")
         print(f"\n✨ The demo account can now:")
         print(f"   - Impersonate other employees")

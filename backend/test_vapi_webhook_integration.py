@@ -122,11 +122,11 @@ print("\n📋 TEST 3: Verify Dashboard Can Retrieve Activity")
 
 # We need to authenticate first - using demo user
 auth_payload = {
-    "username": "demo@example.com",
+    "username": "admin@perenniaai.com",
     "password": "demo123"
 }
 
-print(f"   Authenticating as demo@example.com...")
+print(f"   Authenticating as admin@perenniaai.com...")
 try:
     auth_response = requests.post(
         "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/auth/login",

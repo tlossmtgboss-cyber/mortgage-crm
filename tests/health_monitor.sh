@@ -89,7 +89,7 @@ except: pass
     echo "3. Authentication Endpoint"
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/token" $API_KEY_HEADER -X POST \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "username=demo@example.com&password=demo123" --max-time 10 || echo "000")
+        -d "username=admin@perenniaai.com&password=demo123" --max-time 10 || echo "000")
     if [ "$HTTP_CODE" = "200" ]; then
         echo "   ✅ /token: OK (HTTP $HTTP_CODE)"
     else
@@ -104,7 +104,7 @@ except: pass
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/loans/" $API_KEY_HEADER \
         -H "Authorization: Bearer $(curl -s -X POST "$API_URL/token" $API_KEY_HEADER \
             -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "username=demo@example.com&password=demo123" | \
+            -d "username=admin@perenniaai.com&password=demo123" | \
             python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)" \
         --max-time 15 || echo "000")
     END_TIME=$(python3 -c "import time; print(time.time())")

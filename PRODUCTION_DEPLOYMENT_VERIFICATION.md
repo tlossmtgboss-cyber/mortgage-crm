@@ -316,7 +316,7 @@ All created features have been successfully deployed to production and verified 
 ### Voice Chat Feature
 **Where to Find**:
 1. Go to https://mortgage-crm-nine.vercel.app
-2. Login (demo@example.com / demo123)
+2. Login (admin@perenniaai.com / demo123)
 3. Click "Process Coach" (🏆 icon)
 4. Select any coaching mode
 5. After receiving coaching guidance, scroll down

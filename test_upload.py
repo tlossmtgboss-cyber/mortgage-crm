@@ -12,7 +12,7 @@ API_BASE_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
 def get_auth_token():
     """Login and get authentication token"""
     login_data = {
-        "username": "demo@example.com",
+        "username": "admin@perenniaai.com",
         "password": "demo123"
     }
 

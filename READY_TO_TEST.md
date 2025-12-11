@@ -214,7 +214,7 @@ Sam: "Great! I can help collect your application. May I have your full name?"
 
 **AI Receptionist Dashboard:**
 - URL: https://mortgage-crm-nine.vercel.app/ai-receptionist-dashboard
-- Login: demo@example.com / demo123
+- Login: admin@perenniaai.com / demo123
 - You should see:
   - Call in activity feed
   - Updated metrics (total calls, duration, etc.)

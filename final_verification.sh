@@ -7,10 +7,10 @@ echo "  FINAL VERIFICATION - Demo Data & Calculations"
 echo "═══════════════════════════════════════════════════════"
 echo ""
 
-echo "🔐 Logging in as demo@example.com..."
+echo "🔐 Logging in as admin@perenniaai.com..."
 TOKEN_RESPONSE=$(curl -s "$API_URL/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123")
+  -d "username=admin@perenniaai.com&password=demo123")
 
 TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))" 2>/dev/null)
 
@@ -89,7 +89,7 @@ if [ "$LEAD_COUNT" -gt "0" ] && [ "$LOAN_COUNT" -gt "0" ]; then
   echo ""
   echo "🎯 Next Steps:"
   echo "   1. Open https://mortgage-crm-nine.vercel.app"
-  echo "   2. Login: demo@example.com / demo123"
+  echo "   2. Login: admin@perenniaai.com / demo123"
   echo "   3. View your dashboard with live data!"
 else
   echo "⚠️  DATA ASSIGNMENT NEEDED"

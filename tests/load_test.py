@@ -59,7 +59,7 @@ class LoadTester:
                 f"{self.api_url}/token",
                 headers=headers,
                 data={
-                    "username": "demo@example.com",
+                    "username": "admin@perenniaai.com",
                     "password": "demo123"
                 }
             ) as response:

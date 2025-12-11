@@ -166,7 +166,7 @@ Status: UPDATED
 ### AI Receptionist Dashboard (Your CRM)
 - URL: https://mortgage-crm-nine.vercel.app/ai-receptionist-dashboard
 - View: Call metrics, activity feed, conversation insights
-- Login: Use your CRM credentials (demo@example.com)
+- Login: Use your CRM credentials (admin@perenniaai.com)
 
 ### Railway Logs (Backend)
 ```bash

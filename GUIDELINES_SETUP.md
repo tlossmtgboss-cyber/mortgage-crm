@@ -103,7 +103,7 @@ The current implementation shows the guidelines site in an iframe. Future versio
 # Get your auth token
 curl -X POST https://mortgage-crm-production-7a9a.up.railway.app/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=demo@example.com&password=demo123"
+  -d "username=admin@perenniaai.com&password=demo123"
 
 # Test guidelines endpoint
 curl -X GET https://mortgage-crm-production-7a9a.up.railway.app/api/v1/guidelines/session \

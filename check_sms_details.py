@@ -10,7 +10,7 @@ BACKEND_URL = "https://mortgage-crm-production-7a9a.up.railway.app"
 # Login
 login_response = requests.post(
     f"{BACKEND_URL}/token",
-    data={"username": "demo@example.com", "password": "demo123"}
+    data={"username": "admin@perenniaai.com", "password": "demo123"}
 )
 token = login_response.json()["access_token"]
 
