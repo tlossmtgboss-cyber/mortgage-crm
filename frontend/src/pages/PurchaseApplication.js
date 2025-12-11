@@ -639,7 +639,7 @@ const DECLARATION_QUESTIONS = [
     options: [
       { value: 'yes', label: 'Yes, self-employed', icon: 'building' },
       { value: 'side_business', label: 'I have a side business', icon: 'briefcase' },
-      { value: 'no', label: 'No, I\'m an employee', icon: 'tie' },
+      { value: 'no', label: 'No, I\'m a W-2\'d employee', icon: 'tie' },
     ],
     hint: 'This helps us know what income documents you\'ll need.',
   },
