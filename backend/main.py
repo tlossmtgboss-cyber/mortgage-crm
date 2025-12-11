@@ -42412,9 +42412,11 @@ def init_db():
 def create_sample_data(db: Session):
     """Create sample data for testing"""
     try:
-        # Check if data already exists
-        existing_user = db.query(User).filter(User.email == "demo@example.com").first()
-        if existing_user:
+        # Check if data already exists - check for both demo and admin users
+        existing_demo = db.query(User).filter(User.email == "demo@example.com").first()
+        existing_admin = db.query(User).filter(User.email == "admin@perenniaai.com").first()
+
+        if existing_demo or existing_admin:
             logger.info("Sample data already exists")
             return
 
@@ -49520,6 +49522,32 @@ async def startup_event():
                 db_temp.close()
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
+
+            # Clean up demo user and ensure admin account exists
+            try:
+                db_temp = SessionLocal()
+                # Check if admin user exists
+                admin_result = db_temp.execute(text(
+                    "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
+                ))
+                admin_exists = admin_result.fetchone()
+
+                if admin_exists:
+                    # Delete demo user if it exists (we only want admin@perenniaai.com)
+                    db_temp.execute(text("DELETE FROM users WHERE email = 'demo@example.com'"))
+                    db_temp.commit()
+                    logger.info("✅ Cleaned up demo@example.com user")
+
+                    # Reset admin password for recovery
+                    new_hash = get_password_hash("Woodwindow00!")
+                    db_temp.execute(text(
+                        "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
+                    ), {"pwd": new_hash})
+                    db_temp.commit()
+                    logger.info("✅ Admin password reset")
+                db_temp.close()
+            except Exception as admin_e:
+                logger.warning(f"⚠️ Admin account cleanup skipped: {admin_e}")
 
             # Run Phase 2 permission migration
             run_phase2_permission_migration()
