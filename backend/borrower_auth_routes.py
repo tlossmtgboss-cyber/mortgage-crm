@@ -1360,7 +1360,6 @@ async def submit_application(
         # =================================================================
         # CREATE LEAD IN CRM
         # =================================================================
-        lead_id = str(uuid.uuid4())
 
         # Calculate loan details
         purchase_price = float(submission.propertyData.get("purchasePrice", 0) or 0)
@@ -1377,16 +1376,10 @@ async def submit_application(
         # Determine if first-time buyer
         first_time_buyer = submission.declarations.get("first_time_buyer", "no") == "yes"
 
-        # Get total assets
-        checking = float(submission.assetData.get("checking", 0) or 0)
-        savings = float(submission.assetData.get("savings", 0) or 0)
-        investments = float(submission.assetData.get("investments", 0) or 0)
-        total_assets = checking + savings + investments
-
-        # Create lead in CRM
-        db.execute(text("""
+        # Create lead in CRM (let database auto-generate ID)
+        result = db.execute(text("""
             INSERT INTO leads (
-                id, name, first_name, last_name, email, phone,
+                name, first_name, last_name, email, phone,
                 address, city, state, zip_code,
                 property_type, property_value, down_payment, loan_amount,
                 annual_income, credit_score, employer_name, job_title,
@@ -1396,7 +1389,7 @@ async def submit_application(
                 created_at, updated_at
             )
             VALUES (
-                :id, :name, :first_name, :last_name, :email, :phone,
+                :name, :first_name, :last_name, :email, :phone,
                 :address, :city, :state, :zip_code,
                 :property_type, :property_value, :down_payment, :loan_amount,
                 :annual_income, :credit_score, :employer_name, :job_title,
@@ -1405,8 +1398,8 @@ async def submit_application(
                 :application_completed_date, :stage_changed_at,
                 :created_at, :updated_at
             )
+            RETURNING id
         """), {
-            "id": lead_id,
             "name": borrower_name,
             "first_name": submission.profileData.get("firstName", ""),
             "last_name": submission.profileData.get("lastName", ""),
@@ -1421,10 +1414,10 @@ async def submit_application(
             "down_payment": down_payment,
             "loan_amount": loan_amount,
             "annual_income": annual_income,
-            "credit_score": submission.declarations.get("credit_score_range", None),
+            "credit_score": None,  # Will be populated after credit pull
             "employer_name": submission.incomeData.get("employerName", ""),
             "job_title": submission.incomeData.get("jobTitle", ""),
-            "stage": "Application",
+            "stage": "New",  # Standard stage for new leads
             "source": "Online Application",
             "loan_type": submission.propertyData.get("loanProgram", "Conventional"),
             "first_time_buyer": first_time_buyer,
@@ -1436,6 +1429,9 @@ async def submit_application(
             "created_at": submission_date,
             "updated_at": submission_date,
         })
+
+        lead_row = result.fetchone()
+        lead_id = lead_row[0] if lead_row else None
 
         db.commit()
         logger.info(f"Created lead {lead_id} in CRM for {borrower_name}")
