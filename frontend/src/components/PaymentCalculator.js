@@ -87,6 +87,14 @@ const PaymentCalculator = ({
     if (initialState) setSelectedState(initialState);
   }, [initialState]);
 
+  useEffect(() => {
+    if (initialCreditScore > 0) setCreditScore(initialCreditScore);
+  }, [initialCreditScore]);
+
+  useEffect(() => {
+    if (initialLoanType) setLoanType(initialLoanType);
+  }, [initialLoanType]);
+
   // Calculate all payment components
   const calculation = useMemo(() => {
     if (!homeValue || homeValue <= 0) return null;
@@ -235,9 +243,18 @@ const PaymentCalculator = ({
             <span className="prefix">$</span>
             <input
               type="number"
-              value={homeValue || ''}
-              onChange={(e) => setHomeValue(Number(e.target.value))}
-              placeholder="450,000"
+              value={homeValue > 0 ? homeValue : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Handle empty input
+                if (val === '' || val === null || val === undefined) {
+                  setHomeValue(0);
+                } else {
+                  const num = parseFloat(val.replace(/,/g, ''));
+                  setHomeValue(isNaN(num) ? 0 : num);
+                }
+              }}
+              placeholder="Enter home value (e.g. 450000)"
             />
           </div>
         </div>
@@ -246,9 +263,11 @@ const PaymentCalculator = ({
         <div className="input-group slider-group">
           <label>
             Down Payment: {downPaymentPercent}%
-            <span className="calculated">
-              ({formatCurrency(homeValue * (downPaymentPercent / 100))})
-            </span>
+            {homeValue > 0 && (
+              <span className="calculated">
+                ({formatCurrency(homeValue * (downPaymentPercent / 100))})
+              </span>
+            )}
           </label>
           <input
             type="range"
@@ -387,6 +406,13 @@ const PaymentCalculator = ({
           </>
         )}
       </div>
+
+      {/* Message when no home value */}
+      {!calculation && homeValue <= 0 && (
+        <div className="calculator-prompt">
+          <p>Enter a home value above to see your estimated monthly payment breakdown.</p>
+        </div>
+      )}
 
       {/* Results */}
       {calculation && (
@@ -791,6 +817,20 @@ const PaymentCalculator = ({
           justify-content: space-between;
           font-size: 14px;
           padding: 4px 0;
+        }
+
+        .calculator-prompt {
+          background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 100%);
+          border-radius: 12px;
+          padding: 24px;
+          text-align: center;
+          border: 2px dashed #ccd5e0;
+        }
+
+        .calculator-prompt p {
+          margin: 0;
+          color: #666;
+          font-size: 15px;
         }
 
         .disclaimer {
