@@ -1962,6 +1962,25 @@ export default function PurchaseApplication() {
           </div>
         </div>
 
+        {/* Payment Calculator - shows when purchase price is entered */}
+        {propertyData.purchasePrice && parseFloat(propertyData.purchasePrice) > 0 && (
+          <div className="form-card payment-calculator-section">
+            <PaymentCalculator
+              initialHomeValue={parseFloat(propertyData.purchasePrice) || 0}
+              initialDownPayment={parseFloat(propertyData.downPayment) || 0}
+              initialState={propertyData.state || ''}
+              initialCounty={propertyData.county || ''}
+              initialPropertyUse={propertyData.occupancy === 'primary' ? 'primaryResidence' :
+                                  propertyData.occupancy === 'second' ? 'secondHome' :
+                                  propertyData.occupancy === 'investment' ? 'rental' : 'primaryResidence'}
+              showAdvancedOptions={false}
+              onCalculationComplete={(calculation) => {
+                setPaymentEstimate(calculation);
+              }}
+            />
+          </div>
+        )}
+
         <div className="stage-navigation">
           <button className="btn-back" onClick={() => setPropertyStep(2)}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
