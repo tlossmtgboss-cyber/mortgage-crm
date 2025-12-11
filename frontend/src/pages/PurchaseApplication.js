@@ -1242,6 +1242,75 @@ export default function PurchaseApplication() {
         );
       }
 
+      // Text input type
+      if (question.type === 'text') {
+        return (
+          <div className="declaration-input-container">
+            <input
+              type="text"
+              className="declaration-text-input fun-input"
+              value={declarations[question.id] || ''}
+              onChange={(e) => handleInputAnswer(question.id, e.target.value)}
+              placeholder={question.placeholder || 'Enter your answer'}
+              onKeyPress={(e) => e.key === 'Enter' && submitInputAnswer(question.id)}
+            />
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => submitInputAnswer(question.id)}
+              disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
+      // Phone input type
+      if (question.type === 'phone') {
+        return (
+          <div className="declaration-input-container">
+            <input
+              type="tel"
+              className="declaration-text-input fun-input"
+              value={declarations[question.id] || ''}
+              onChange={(e) => handleInputAnswer(question.id, e.target.value)}
+              placeholder={question.placeholder || '(555) 555-5555'}
+              onKeyPress={(e) => e.key === 'Enter' && submitInputAnswer(question.id)}
+            />
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => submitInputAnswer(question.id)}
+              disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
+      // Email input type
+      if (question.type === 'email') {
+        return (
+          <div className="declaration-input-container">
+            <input
+              type="email"
+              className="declaration-text-input fun-input"
+              value={declarations[question.id] || ''}
+              onChange={(e) => handleInputAnswer(question.id, e.target.value)}
+              placeholder={question.placeholder || 'email@example.com'}
+              onKeyPress={(e) => e.key === 'Enter' && submitInputAnswer(question.id)}
+            />
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => submitInputAnswer(question.id)}
+              disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
       // Default: choice type
       if (!question.options) {
         return <div className="declaration-options">No options available</div>;
