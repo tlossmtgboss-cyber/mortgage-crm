@@ -33078,11 +33078,21 @@ async def temp_reset_admin_password(db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=404, detail="Admin user not found")
 
-        new_hash = get_password_hash("Woodwindow00!")
+        # Test password: admin123
+        new_password = "admin123"
+        new_hash = get_password_hash(new_password)
         user.hashed_password = new_hash
         db.commit()
 
-        return {"success": True, "message": "Password reset for admin@perenniaai.com"}
+        # Verify it works
+        verify_result = verify_password(new_password, new_hash)
+
+        return {
+            "success": True,
+            "message": "Password reset for admin@perenniaai.com",
+            "test_password": new_password,
+            "verification_test": verify_result
+        }
     except HTTPException:
         raise
     except Exception as e:
