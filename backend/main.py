@@ -33049,7 +33049,23 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+
+    # Debug: log password length and first char
+    pwd_len = len(form_data.password) if form_data.password else 0
+    logger.info(f"Login attempt: user={form_data.username}, pwd_len={pwd_len}")
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Debug: verify password
+    pwd_ok = verify_password(form_data.password, user.hashed_password)
+    logger.info(f"Password verification: {pwd_ok}")
+
+    if not pwd_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
