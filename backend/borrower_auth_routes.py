@@ -1392,11 +1392,95 @@ async def submit_application(
                 }]
             )
 
+        # =================================================================
+        # CREATE LEAD IN CRM
+        # =================================================================
+        lead_id = str(uuid.uuid4())
+
+        # Calculate loan details
+        purchase_price = float(submission.propertyData.get("purchasePrice", 0) or 0)
+        down_payment = float(submission.propertyData.get("downPayment", 0) or 0)
+        loan_amount = purchase_price - down_payment
+        ltv = (loan_amount / purchase_price * 100) if purchase_price > 0 else 0
+        annual_income = float(submission.incomeData.get("annualSalary", 0) or 0)
+
+        # Calculate DTI (rough estimate based on loan amount)
+        estimated_monthly_payment = loan_amount * 0.006  # ~6% of loan amount as rough monthly
+        monthly_income = annual_income / 12 if annual_income > 0 else 1
+        dti = (estimated_monthly_payment / monthly_income * 100) if monthly_income > 0 else 0
+
+        # Determine if first-time buyer
+        first_time_buyer = submission.declarations.get("first_time_buyer", "no") == "yes"
+
+        # Get total assets
+        checking = float(submission.assetData.get("checking", 0) or 0)
+        savings = float(submission.assetData.get("savings", 0) or 0)
+        investments = float(submission.assetData.get("investments", 0) or 0)
+        total_assets = checking + savings + investments
+
+        # Create lead in CRM
+        db.execute(text("""
+            INSERT INTO leads (
+                id, name, first_name, last_name, email, phone,
+                address, city, state, zip_code,
+                property_type, property_value, down_payment, loan_amount,
+                annual_income, credit_score, employer_name, job_title,
+                stage, source, loan_type, first_time_buyer,
+                ltv, dti, owner_id,
+                application_completed_date, stage_changed_at,
+                created_at, updated_at
+            )
+            VALUES (
+                :id, :name, :first_name, :last_name, :email, :phone,
+                :address, :city, :state, :zip_code,
+                :property_type, :property_value, :down_payment, :loan_amount,
+                :annual_income, :credit_score, :employer_name, :job_title,
+                :stage, :source, :loan_type, :first_time_buyer,
+                :ltv, :dti, :owner_id,
+                :application_completed_date, :stage_changed_at,
+                :created_at, :updated_at
+            )
+        """), {
+            "id": lead_id,
+            "name": borrower_name,
+            "first_name": submission.profileData.get("firstName", ""),
+            "last_name": submission.profileData.get("lastName", ""),
+            "email": borrower_email,
+            "phone": submission.profileData.get("phone", ""),
+            "address": submission.profileData.get("address", ""),
+            "city": submission.profileData.get("city", ""),
+            "state": submission.profileData.get("state", ""),
+            "zip_code": submission.profileData.get("zip", ""),
+            "property_type": submission.propertyData.get("propertyType", "Single Family"),
+            "property_value": purchase_price,
+            "down_payment": down_payment,
+            "loan_amount": loan_amount,
+            "annual_income": annual_income,
+            "credit_score": submission.declarations.get("credit_score_range", None),
+            "employer_name": submission.incomeData.get("employerName", ""),
+            "job_title": submission.incomeData.get("jobTitle", ""),
+            "stage": "Application",
+            "source": "Online Application",
+            "loan_type": submission.propertyData.get("loanProgram", "Conventional"),
+            "first_time_buyer": first_time_buyer,
+            "ltv": round(ltv, 2),
+            "dti": round(dti, 2),
+            "owner_id": submission.loId,
+            "application_completed_date": submission_date,
+            "stage_changed_at": submission_date,
+            "created_at": submission_date,
+            "updated_at": submission_date,
+        })
+
+        db.commit()
+        logger.info(f"Created lead {lead_id} in CRM for {borrower_name}")
+
         return {
             "success": True,
             "message": "Application submitted successfully",
             "data": {
                 "borrower_id": borrower_id,
+                "lead_id": lead_id,
                 "documents": {
                     "econsent_id": econsent_doc_id,
                     "credit_auth_id": credit_auth_doc_id,
