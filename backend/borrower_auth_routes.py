@@ -1285,63 +1285,10 @@ async def submit_application(
                 "now": datetime.utcnow(),
             })
 
-        # Save documents to database
+        # Prepare submission timestamp
         submission_date = datetime.utcnow()
         date_str = submission_date.strftime("%Y%m%d_%H%M%S")
-
-        # Save E-Consent document
-        econsent_doc_id = str(uuid.uuid4())
-        db.execute(text("""
-            INSERT INTO documents (id, borrower_id, doc_type, doc_category, filename, original_filename,
-                                   file_size, mime_type, file_content, status, uploaded_at, source)
-            VALUES (:id, :borrower_id, 'e_consent', 'legal', :filename, :original_filename,
-                    :file_size, 'application/pdf', :file_content, 'active', :uploaded_at, 'APPLICATION')
-        """), {
-            "id": econsent_doc_id,
-            "borrower_id": borrower_id,
-            "filename": f"econsent_{date_str}.pdf",
-            "original_filename": f"E-Consent_{borrower_name.replace(' ', '_')}_{date_str}.pdf",
-            "file_size": len(econsent_pdf),
-            "file_content": econsent_pdf,
-            "uploaded_at": submission_date,
-        })
-
-        # Save Credit Authorization document
-        credit_auth_doc_id = str(uuid.uuid4())
-        db.execute(text("""
-            INSERT INTO documents (id, borrower_id, doc_type, doc_category, filename, original_filename,
-                                   file_size, mime_type, file_content, status, uploaded_at, source)
-            VALUES (:id, :borrower_id, 'credit_authorization', 'legal', :filename, :original_filename,
-                    :file_size, 'application/pdf', :file_content, 'active', :uploaded_at, 'APPLICATION')
-        """), {
-            "id": credit_auth_doc_id,
-            "borrower_id": borrower_id,
-            "filename": f"credit_auth_{date_str}.pdf",
-            "original_filename": f"Credit_Authorization_{borrower_name.replace(' ', '_')}_{date_str}.pdf",
-            "file_size": len(credit_auth_pdf),
-            "file_content": credit_auth_pdf,
-            "uploaded_at": submission_date,
-        })
-
-        # Save Fannie Mae 3.4 file
-        fannie_mae_doc_id = str(uuid.uuid4())
         fannie_mae_bytes = fannie_mae_xml.encode('utf-8')
-        db.execute(text("""
-            INSERT INTO documents (id, borrower_id, doc_type, doc_category, filename, original_filename,
-                                   file_size, mime_type, file_content, status, uploaded_at, source)
-            VALUES (:id, :borrower_id, 'fannie_mae_34', 'application', :filename, :original_filename,
-                    :file_size, 'application/xml', :file_content, 'active', :uploaded_at, 'APPLICATION')
-        """), {
-            "id": fannie_mae_doc_id,
-            "borrower_id": borrower_id,
-            "filename": f"fannie_mae_34_{date_str}.xml",
-            "original_filename": f"FannieMae34_{borrower_name.replace(' ', '_')}_{date_str}.xml",
-            "file_size": len(fannie_mae_bytes),
-            "file_content": fannie_mae_bytes,
-            "uploaded_at": submission_date,
-        })
-
-        db.commit()
 
         # Get loan officer email to send Fannie Mae file
         lo_email = None
@@ -1352,7 +1299,7 @@ async def submit_application(
             if lo_result:
                 lo_email = lo_result[0]
 
-        # Send email to loan officer with Fannie Mae file
+        # Send email to loan officer with all application documents
         if lo_email:
             import base64
             email_html = f"""
@@ -1372,7 +1319,12 @@ async def submit_application(
                         <li><strong>Down Payment:</strong> ${float(submission.propertyData.get('downPayment', 0)):,.0f}</li>
                         <li><strong>Property Type:</strong> {submission.propertyData.get('propertyType', 'N/A')}</li>
                     </ul>
-                    <p>The Fannie Mae 3.4 file is attached for import into your LOS.</p>
+                    <h3>Attached Documents</h3>
+                    <ul>
+                        <li>E-Consent Agreement (signed)</li>
+                        <li>Credit Authorization (signed)</li>
+                        <li>Fannie Mae 3.4 File (for LOS import)</li>
+                    </ul>
                     <p style="color: #666; font-size: 12px; margin-top: 30px;">
                         This is an automated message from Perennia AI Mortgage Platform.
                     </p>
@@ -1381,15 +1333,28 @@ async def submit_application(
             </html>
             """
 
+            safe_borrower_name = borrower_name.replace(' ', '_').replace('/', '_')
             email_service.send_html_email(
                 to_email=lo_email,
                 subject=f"New Application: {borrower_name}",
                 html_body=email_html,
-                attachments=[{
-                    "filename": f"FannieMae34_{borrower_name.replace(' ', '_')}_{date_str}.xml",
-                    "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
-                    "type": "application/xml",
-                }]
+                attachments=[
+                    {
+                        "filename": f"E-Consent_{safe_borrower_name}_{date_str}.pdf",
+                        "content": base64.b64encode(econsent_pdf).decode('utf-8'),
+                        "type": "application/pdf",
+                    },
+                    {
+                        "filename": f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf",
+                        "content": base64.b64encode(credit_auth_pdf).decode('utf-8'),
+                        "type": "application/pdf",
+                    },
+                    {
+                        "filename": f"FannieMae34_{safe_borrower_name}_{date_str}.xml",
+                        "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
+                        "type": "application/xml",
+                    }
+                ]
             )
 
         # =================================================================
@@ -1481,12 +1446,8 @@ async def submit_application(
             "data": {
                 "borrower_id": borrower_id,
                 "lead_id": lead_id,
-                "documents": {
-                    "econsent_id": econsent_doc_id,
-                    "credit_auth_id": credit_auth_doc_id,
-                    "fannie_mae_id": fannie_mae_doc_id,
-                },
                 "submission_date": submission_date.isoformat(),
+                "documents_sent_to_lo": lo_email is not None,
             }
         }
 
