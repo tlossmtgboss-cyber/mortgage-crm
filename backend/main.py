@@ -49546,7 +49546,12 @@ async def startup_event():
                     admin_id = admin_row[0]
 
                     # Fix lead stages with incorrect case (e.g., 'New' -> 'NEW')
-                    db_temp.execute(text("UPDATE leads SET stage = UPPER(stage) WHERE stage != UPPER(stage)"))
+                    # The stage column is an enum, so we cast to text, uppercase, then back to enum
+                    db_temp.execute(text("""
+                        UPDATE leads
+                        SET stage = UPPER(stage::text)::leadstage
+                        WHERE stage::text != UPPER(stage::text)
+                    """))
                     db_temp.commit()
                     logger.info("✅ Fixed any lead stages with incorrect case")
 
@@ -52689,10 +52694,11 @@ async def fix_admin_user_ownership_migration(
         logger.info(f"Found admin user: {admin_user[1]} (ID: {admin_user_id})")
 
         # Fix lead stages with incorrect case (e.g., 'New' -> 'NEW')
+        # Fix lead stages with incorrect case (enum requires casting)
         stage_fix_result = db.execute(text("""
             UPDATE leads
-            SET stage = UPPER(stage)
-            WHERE stage != UPPER(stage)
+            SET stage = UPPER(stage::text)::leadstage
+            WHERE stage::text != UPPER(stage::text)
         """))
         stages_fixed = stage_fix_result.rowcount
         logger.info(f"Fixed {stages_fixed} lead stages with incorrect case")
