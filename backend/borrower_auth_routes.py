@@ -1195,18 +1195,29 @@ async def submit_application(
         # Get client IP for signature
         client_ip = request.client.host if request.client else "Unknown"
 
-        # Prepare borrower data for PDFs
-        borrower_data = {
-            "firstName": submission.profileData.get("firstName", ""),
-            "lastName": submission.profileData.get("lastName", ""),
-            "email": submission.profileData.get("email", ""),
-            "phone": submission.profileData.get("phone", ""),
-            "ipAddress": client_ip,
-        }
+        # Initialize PDF variables (may fail if reportlab not installed)
+        econsent_pdf = None
+        credit_auth_pdf = None
+        fannie_mae_xml = None
+        pdf_generation_error = None
 
-        # Generate PDFs
-        econsent_pdf = application_submission_service.generate_econsent_pdf(borrower_data)
-        credit_auth_pdf = application_submission_service.generate_credit_auth_pdf(borrower_data)
+        # Try to generate PDFs (non-critical - lead creation still works without them)
+        try:
+            # Prepare borrower data for PDFs
+            borrower_data = {
+                "firstName": submission.profileData.get("firstName", ""),
+                "lastName": submission.profileData.get("lastName", ""),
+                "email": submission.profileData.get("email", ""),
+                "phone": submission.profileData.get("phone", ""),
+                "ipAddress": client_ip,
+            }
+
+            # Generate PDFs
+            econsent_pdf = application_submission_service.generate_econsent_pdf(borrower_data)
+            credit_auth_pdf = application_submission_service.generate_credit_auth_pdf(borrower_data)
+        except Exception as pdf_error:
+            logger.warning(f"PDF generation failed (non-critical): {pdf_error}")
+            pdf_generation_error = str(pdf_error)
 
         # Prepare full application data for Fannie Mae 3.4
         application_data = {
@@ -1258,8 +1269,12 @@ async def submit_application(
             },
         }
 
-        # Generate Fannie Mae 3.4 file
-        fannie_mae_xml = application_submission_service.generate_fannie_mae_34(application_data)
+        # Generate Fannie Mae 3.4 file (also non-critical)
+        try:
+            fannie_mae_xml = application_submission_service.generate_fannie_mae_34(application_data)
+        except Exception as xml_error:
+            logger.warning(f"Fannie Mae XML generation failed (non-critical): {xml_error}")
+            fannie_mae_xml = None
 
         # Create borrower record if doesn't exist
         borrower_email = submission.profileData.get("email", "")
@@ -1288,7 +1303,7 @@ async def submit_application(
         # Prepare submission timestamp
         submission_date = datetime.utcnow()
         date_str = submission_date.strftime("%Y%m%d_%H%M%S")
-        fannie_mae_bytes = fannie_mae_xml.encode('utf-8')
+        fannie_mae_bytes = fannie_mae_xml.encode('utf-8') if fannie_mae_xml else None
 
         # Get loan officer email to send Fannie Mae file
         lo_email = None
@@ -1299,63 +1314,68 @@ async def submit_application(
             if lo_result:
                 lo_email = lo_result[0]
 
-        # Send email to loan officer with all application documents
-        if lo_email:
-            import base64
-            email_html = f"""
-            <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #218D8D;">New Mortgage Application Submitted</h2>
-                    <p>A new mortgage application has been submitted by:</p>
-                    <ul>
-                        <li><strong>Name:</strong> {borrower_name}</li>
-                        <li><strong>Email:</strong> {borrower_email}</li>
-                        <li><strong>Phone:</strong> {submission.profileData.get('phone', 'N/A')}</li>
-                    </ul>
-                    <h3>Property Details</h3>
-                    <ul>
-                        <li><strong>Purchase Price:</strong> ${float(submission.propertyData.get('purchasePrice', 0)):,.0f}</li>
-                        <li><strong>Down Payment:</strong> ${float(submission.propertyData.get('downPayment', 0)):,.0f}</li>
-                        <li><strong>Property Type:</strong> {submission.propertyData.get('propertyType', 'N/A')}</li>
-                    </ul>
-                    <h3>Attached Documents</h3>
-                    <ul>
-                        <li>E-Consent Agreement (signed)</li>
-                        <li>Credit Authorization (signed)</li>
-                        <li>Fannie Mae 3.4 File (for LOS import)</li>
-                    </ul>
-                    <p style="color: #666; font-size: 12px; margin-top: 30px;">
-                        This is an automated message from Perennia AI Mortgage Platform.
-                    </p>
-                </div>
-            </body>
-            </html>
-            """
+        # Send email to loan officer with all application documents (non-critical)
+        email_sent = False
+        if lo_email and econsent_pdf and credit_auth_pdf and fannie_mae_bytes:
+            try:
+                import base64
+                email_html = f"""
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #218D8D;">New Mortgage Application Submitted</h2>
+                        <p>A new mortgage application has been submitted by:</p>
+                        <ul>
+                            <li><strong>Name:</strong> {borrower_name}</li>
+                            <li><strong>Email:</strong> {borrower_email}</li>
+                            <li><strong>Phone:</strong> {submission.profileData.get('phone', 'N/A')}</li>
+                        </ul>
+                        <h3>Property Details</h3>
+                        <ul>
+                            <li><strong>Purchase Price:</strong> ${float(submission.propertyData.get('purchasePrice', 0)):,.0f}</li>
+                            <li><strong>Down Payment:</strong> ${float(submission.propertyData.get('downPayment', 0)):,.0f}</li>
+                            <li><strong>Property Type:</strong> {submission.propertyData.get('propertyType', 'N/A')}</li>
+                        </ul>
+                        <h3>Attached Documents</h3>
+                        <ul>
+                            <li>E-Consent Agreement (signed)</li>
+                            <li>Credit Authorization (signed)</li>
+                            <li>Fannie Mae 3.4 File (for LOS import)</li>
+                        </ul>
+                        <p style="color: #666; font-size: 12px; margin-top: 30px;">
+                            This is an automated message from Perennia AI Mortgage Platform.
+                        </p>
+                    </div>
+                </body>
+                </html>
+                """
 
-            safe_borrower_name = borrower_name.replace(' ', '_').replace('/', '_')
-            email_service.send_html_email(
-                to_email=lo_email,
-                subject=f"New Application: {borrower_name}",
-                html_body=email_html,
-                attachments=[
-                    {
-                        "filename": f"E-Consent_{safe_borrower_name}_{date_str}.pdf",
-                        "content": base64.b64encode(econsent_pdf).decode('utf-8'),
-                        "type": "application/pdf",
-                    },
-                    {
-                        "filename": f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf",
-                        "content": base64.b64encode(credit_auth_pdf).decode('utf-8'),
-                        "type": "application/pdf",
-                    },
-                    {
-                        "filename": f"FannieMae34_{safe_borrower_name}_{date_str}.xml",
-                        "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
-                        "type": "application/xml",
-                    }
-                ]
-            )
+                safe_borrower_name = borrower_name.replace(' ', '_').replace('/', '_')
+                email_service.send_html_email(
+                    to_email=lo_email,
+                    subject=f"New Application: {borrower_name}",
+                    html_body=email_html,
+                    attachments=[
+                        {
+                            "filename": f"E-Consent_{safe_borrower_name}_{date_str}.pdf",
+                            "content": base64.b64encode(econsent_pdf).decode('utf-8'),
+                            "type": "application/pdf",
+                        },
+                        {
+                            "filename": f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf",
+                            "content": base64.b64encode(credit_auth_pdf).decode('utf-8'),
+                            "type": "application/pdf",
+                        },
+                        {
+                            "filename": f"FannieMae34_{safe_borrower_name}_{date_str}.xml",
+                            "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
+                            "type": "application/xml",
+                        }
+                    ]
+                )
+                email_sent = True
+            except Exception as email_error:
+                logger.warning(f"Email sending failed (non-critical): {email_error}")
 
         # =================================================================
         # CREATE LEAD IN CRM
@@ -1443,7 +1463,9 @@ async def submit_application(
                 "borrower_id": borrower_id,
                 "lead_id": lead_id,
                 "submission_date": submission_date.isoformat(),
-                "documents_sent_to_lo": lo_email is not None,
+                "pdfs_generated": econsent_pdf is not None and credit_auth_pdf is not None,
+                "fannie_mae_generated": fannie_mae_xml is not None,
+                "email_sent_to_lo": email_sent,
             }
         }
 
