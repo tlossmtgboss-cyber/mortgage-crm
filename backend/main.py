@@ -52694,6 +52694,15 @@ async def fix_admin_user_ownership_migration(
         admin_user_id = admin_user[0]
         logger.info(f"Found admin user: {admin_user[1]} (ID: {admin_user_id})")
 
+        # Fix lead stages with incorrect case (e.g., 'New' -> 'NEW')
+        stage_fix_result = db.execute(text("""
+            UPDATE leads
+            SET stage = UPPER(stage)
+            WHERE stage != UPPER(stage)
+        """))
+        stages_fixed = stage_fix_result.rowcount
+        logger.info(f"Fixed {stages_fixed} lead stages with incorrect case")
+
         # Update leads owner_id
         result = db.execute(text("""
             UPDATE leads
@@ -52737,7 +52746,8 @@ async def fix_admin_user_ownership_migration(
             "updated": {
                 "leads": leads_updated,
                 "loans": loans_updated,
-                "tasks": tasks_updated
+                "tasks": tasks_updated,
+                "stages_fixed": stages_fixed
             },
             "totals": {
                 "leads": counts[0],
