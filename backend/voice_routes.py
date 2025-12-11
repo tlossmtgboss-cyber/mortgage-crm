@@ -143,9 +143,20 @@ async def voice_stream_websocket(websocket: WebSocket, db: Session = Depends(get
         "intent": None
     }
 
+    openai_ws = None
     try:
-        # Connect to OpenAI Realtime API
-        openai_ws = await connect_to_openai_realtime()
+        # Connect to OpenAI Realtime API with timeout
+        try:
+            openai_ws = await connect_to_openai_realtime()
+            logger.info("✅ OpenAI Realtime API connected successfully")
+        except asyncio.TimeoutError:
+            logger.error("❌ OpenAI Realtime connection timed out")
+            await websocket.close(code=1011, reason="AI service timeout")
+            return
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to OpenAI Realtime: {e}")
+            await websocket.close(code=1011, reason=f"AI service error: {str(e)[:50]}")
+            return
 
         # Handle bidirectional streaming
         async def twilio_to_openai():
@@ -156,8 +167,9 @@ async def voice_stream_websocket(websocket: WebSocket, db: Session = Depends(get
 
                     if data['event'] == 'start':
                         call_context['call_sid'] = data['start']['callSid']
-                        call_context['caller_number'] = data['start']['customParameters'].get('From')
-                        logger.info(f"Call started: {call_context['call_sid']}")
+                        call_context['stream_sid'] = data['start']['streamSid']  # Capture stream SID
+                        call_context['caller_number'] = data['start'].get('customParameters', {}).get('From')
+                        logger.info(f"📞 Call started: {call_context['call_sid']}, stream: {call_context['stream_sid']}")
 
                     elif data['event'] == 'media':
                         # Forward audio payload to OpenAI
@@ -218,16 +230,20 @@ async def voice_stream_websocket(websocket: WebSocket, db: Session = Depends(get
         )
 
     except WebSocketDisconnect:
-        logger.info("Voice stream WebSocket disconnected")
+        logger.info("📴 Voice stream WebSocket disconnected")
     except Exception as e:
-        logger.error(f"Error in voice stream: {e}")
+        logger.error(f"❌ Error in voice stream: {e}")
     finally:
         try:
             await websocket.close()
-            if 'openai_ws' in locals():
+        except:
+            pass
+        try:
+            if openai_ws:
                 await openai_ws.close()
         except:
             pass
+        logger.info("🔚 Voice stream cleanup complete")
 
 
 async def connect_to_openai_realtime():
@@ -235,6 +251,9 @@ async def connect_to_openai_realtime():
     import websockets
 
     openai_api_key = openai.api_key
+    if not openai_api_key:
+        raise Exception("OpenAI API key not configured")
+
     url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
 
     headers = {
@@ -242,10 +261,14 @@ async def connect_to_openai_realtime():
         "OpenAI-Beta": "realtime=v1"
     }
 
-    ws = await websockets.connect(url, extra_headers=headers)
+    # Connect with timeout
+    ws = await asyncio.wait_for(
+        websockets.connect(url, extra_headers=headers),
+        timeout=10.0
+    )
 
-    # Wait for session.created event
-    initial_response = await ws.recv()
+    # Wait for session.created event with timeout
+    initial_response = await asyncio.wait_for(ws.recv(), timeout=5.0)
     logger.info(f"OpenAI Realtime connected: {initial_response[:100]}")
 
     # Configure the session for natural two-way conversation
@@ -928,9 +951,10 @@ async def handle_transfer_status(request: Request):
         return {"status": "error"}
 
 
+@router.post("/voicemail")
 @router.get("/voicemail")
 async def voicemail_twiml():
-    """Return voicemail TwiML"""
+    """Return voicemail TwiML - supports both GET and POST for Twilio"""
     twiml = voice_client.create_voicemail_response()
     return Response(content=str(twiml), media_type="application/xml")
 

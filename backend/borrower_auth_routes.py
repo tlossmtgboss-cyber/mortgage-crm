@@ -1437,7 +1437,7 @@ async def submit_application(
             "annual_income": annual_income,
             "credit_score": None,  # Will be populated after credit pull
             "employer_name": submission.incomeData.get("employerName", ""),
-            "stage": "New",  # Standard stage for new leads
+            "stage": "NEW",  # Standard stage for new leads (uppercase enum)
             "source": "Online Application",
             "loan_type": submission.propertyData.get("loanProgram", "Conventional"),
             "first_time_buyer": first_time_buyer,
