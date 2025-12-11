@@ -42620,7 +42620,7 @@ def create_sample_data(db: Session):
         db.commit()
 
         logger.info("✅ Sample data created successfully")
-        logger.info(f"   Demo user: demo@example.com / demo123")
+        logger.info(f"   Admin user: admin@perenniaai.com")
         logger.info(f"   Created {len(sample_leads)} leads, {len(sample_loans)} loans, {len(sample_tasks)} tasks")
 
     except Exception as e:
@@ -46281,36 +46281,30 @@ async def run_certification_reminders(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# TEMPORARY: Upgrade demo user to admin for testing compliance features
-@app.post("/api/v1/admin/upgrade-demo-user")
-async def upgrade_demo_user_to_admin(db: Session = Depends(get_db)):
+# Endpoint to verify admin user exists
+@app.post("/api/v1/admin/verify-admin-user")
+async def verify_admin_user(db: Session = Depends(get_db)):
     """
-    TEMPORARY ENDPOINT: Upgrade demo@example.com to admin role
-    This allows testing of admin-only compliance features
+    Verify admin@perenniaai.com user exists and has admin role
     """
     try:
-        user = db.query(User).filter(User.email == "demo@example.com").first()
+        user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         if not user:
-            raise HTTPException(status_code=404, detail="Demo user not found")
-
-        old_role = user.role
-        user.role = "admin"
-        db.commit()
+            raise HTTPException(status_code=404, detail="Admin user not found")
 
         return {
             "success": True,
-            "message": f"Demo user upgraded from '{old_role}' to 'admin'",
+            "message": f"Admin user verified with role '{user.role}'",
             "user": {
                 "email": user.email,
                 "name": user.full_name,
-                "old_role": old_role,
-                "new_role": user.role
+                "role": user.role
             }
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Upgrade demo user error: {e}")
+        logger.error(f"Verify admin user error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -49570,7 +49564,7 @@ async def startup_event():
                         # Now delete demo user
                         db_temp.execute(text("DELETE FROM users WHERE id = :demo_id"), {"demo_id": demo_id})
                         db_temp.commit()
-                        logger.info("✅ Cleaned up demo@example.com user and reassigned data")
+                        logger.info("✅ Cleaned up legacy demo user and reassigned data to admin")
                 db_temp.close()
             except Exception as cleanup_e:
                 logger.warning(f"⚠️ Demo user cleanup skipped: {cleanup_e}")
@@ -49845,7 +49839,7 @@ async def startup_event():
 
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
-    logger.info("🔐 Demo Login: demo@example.com / demo123")
+    logger.info("🔐 Admin Login: admin@perenniaai.com")
 
 # ============================================================================
 # TEMPORARY MIGRATION ENDPOINTS (Remove after AI system is initialized)
@@ -52673,39 +52667,39 @@ async def add_workflow_config_tables_migration(
         }
 
 
-@app.post("/api/v1/migrations/fix-demo-user-ownership", response_model=None)
-async def fix_demo_user_ownership_migration(
+@app.post("/api/v1/migrations/fix-admin-user-ownership", response_model=None)
+async def fix_admin_user_ownership_migration(
     db: Session = Depends(get_db)
 ):
     """
-    Migration: Fix demo user ownership of leads, loans, and tasks.
-    Updates all records to be owned by demo@example.com for AI chat to work.
+    Migration: Fix admin user ownership of leads, loans, and tasks.
+    Updates all records to be owned by admin@perenniaai.com for AI chat to work.
     """
     try:
-        logger.info("Running migration: fix demo user ownership")
+        logger.info("Running migration: fix admin user ownership")
 
-        # Get demo user ID
+        # Get admin user ID
         result = db.execute(text("""
-            SELECT id, email FROM users WHERE email = 'demo@example.com' LIMIT 1
+            SELECT id, email FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1
         """))
-        demo_user = result.fetchone()
+        admin_user = result.fetchone()
 
-        if not demo_user:
+        if not admin_user:
             return {
                 "success": False,
-                "message": "Demo user not found",
-                "error": "No user with email demo@example.com"
+                "message": "Admin user not found",
+                "error": "No user with email admin@perenniaai.com"
             }
 
-        demo_user_id = demo_user[0]
-        logger.info(f"Found demo user: {demo_user[1]} (ID: {demo_user_id})")
+        admin_user_id = admin_user[0]
+        logger.info(f"Found admin user: {admin_user[1]} (ID: {admin_user_id})")
 
         # Update leads owner_id
         result = db.execute(text("""
             UPDATE leads
             SET owner_id = :user_id
             WHERE owner_id IS NULL OR owner_id != :user_id
-        """), {"user_id": demo_user_id})
+        """), {"user_id": admin_user_id})
         leads_updated = result.rowcount
 
         # Update loans loan_officer_id
@@ -52713,7 +52707,7 @@ async def fix_demo_user_ownership_migration(
             UPDATE loans
             SET loan_officer_id = :user_id
             WHERE loan_officer_id IS NULL OR loan_officer_id != :user_id
-        """), {"user_id": demo_user_id})
+        """), {"user_id": admin_user_id})
         loans_updated = result.rowcount
 
         # Update tasks owner_id
@@ -52721,7 +52715,7 @@ async def fix_demo_user_ownership_migration(
             UPDATE tasks
             SET owner_id = :user_id
             WHERE owner_id IS NULL OR owner_id != :user_id
-        """), {"user_id": demo_user_id})
+        """), {"user_id": admin_user_id})
         tasks_updated = result.rowcount
 
         db.commit()
@@ -52732,14 +52726,14 @@ async def fix_demo_user_ownership_migration(
                 (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id) as leads,
                 (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id) as loans,
                 (SELECT COUNT(*) FROM tasks WHERE owner_id = :user_id) as tasks
-        """), {"user_id": demo_user_id})
+        """), {"user_id": admin_user_id})
         counts = result.fetchone()
 
         logger.info(f"Migration completed: {leads_updated} leads, {loans_updated} loans, {tasks_updated} tasks updated")
 
         return {
             "success": True,
-            "message": "Demo user ownership fixed",
+            "message": "Admin user ownership fixed",
             "updated": {
                 "leads": leads_updated,
                 "loans": loans_updated,
