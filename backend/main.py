@@ -33083,9 +33083,15 @@ async def temp_reset_admin_password(db: Session = Depends(get_db)):
         user.hashed_password = new_hash
         db.commit()
 
+        # Read back and verify
+        db.refresh(user)
+        verify_test = verify_password(new_password, user.hashed_password)
+
         return {
             "success": True,
-            "message": "Password reset for admin@perenniaai.com"
+            "message": "Password reset for admin@perenniaai.com",
+            "verify_test": verify_test,
+            "hash_prefix": new_hash[:20]
         }
     except HTTPException:
         raise

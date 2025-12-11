@@ -269,6 +269,34 @@ const PaymentCalculator = ({
           )}
         </div>
 
+        {/* Loan Type & Credit Score */}
+        <div className="input-row">
+          <div className="input-group half">
+            <label>Loan Type</label>
+            <select
+              value={loanType}
+              onChange={(e) => setLoanType(e.target.value)}
+            >
+              <option value="conventional">Conventional</option>
+              <option value="fha">FHA</option>
+              <option value="va">VA</option>
+              <option value="usda">USDA</option>
+            </select>
+          </div>
+          <div className="input-group half">
+            <label>Credit Score</label>
+            <input
+              type="number"
+              min="500"
+              max="850"
+              step="1"
+              value={creditScore}
+              onChange={(e) => setCreditScore(Number(e.target.value))}
+              placeholder="720"
+            />
+          </div>
+        </div>
+
         {/* Interest Rate & Term */}
         <div className="input-row">
           <div className="input-group half">
@@ -394,11 +422,63 @@ const PaymentCalculator = ({
               </span>
             </div>
 
-            {calculation.payment.pmi > 0 && (
-              <div className="breakdown-item warning">
-                <span className="item-label">PMI</span>
-                <span className="item-amount">{formatCurrency(calculation.payment.pmi)}</span>
-                <span className="item-note">Removed at 80% LTV</span>
+            {calculation.mortgageInsurance?.required && (
+              <div className="breakdown-item warning mi-section">
+                <div className="mi-header">
+                  <span className="item-label">{calculation.mortgageInsurance.type}</span>
+                  <span className="item-amount">{formatCurrency(calculation.payment.pmi)}</span>
+                </div>
+                {calculation.mortgageInsurance.upfrontPremium > 0 && (
+                  <span className="item-note upfront">
+                    + {formatCurrency(calculation.mortgageInsurance.upfrontPremium)} upfront (can be financed)
+                  </span>
+                )}
+                <span className="item-note">
+                  {calculation.mortgageInsurance.cancellation?.canCancel
+                    ? `Can be removed at ${calculation.mortgageInsurance.cancellation.requestLTV || 80}% LTV`
+                    : calculation.mortgageInsurance.cancellation?.method === 'refinance_only'
+                    ? 'Required for life of loan (refinance to remove)'
+                    : calculation.mortgageInsurance.type === 'VA Funding Fee'
+                    ? 'One-time fee (no monthly MI)'
+                    : ''}
+                </span>
+                <button
+                  className="mi-details-toggle"
+                  onClick={() => setShowMIDetails(!showMIDetails)}
+                >
+                  {showMIDetails ? 'Hide Details' : 'View Details'}
+                </button>
+                {showMIDetails && (
+                  <div className="mi-details">
+                    <div className="mi-detail-row">
+                      <span>Annual Rate:</span>
+                      <span>{((calculation.mortgageInsurance.annualRate || 0) * 100).toFixed(2)}%</span>
+                    </div>
+                    {calculation.mortgageInsurance.creditTier && (
+                      <div className="mi-detail-row">
+                        <span>Credit Tier:</span>
+                        <span style={{textTransform: 'capitalize'}}>{calculation.mortgageInsurance.creditTier}</span>
+                      </div>
+                    )}
+                    {calculation.mortgageInsurance.cancellation?.estimatedMonths && (
+                      <div className="mi-detail-row">
+                        <span>Est. Time to Remove:</span>
+                        <span>~{Math.floor(calculation.mortgageInsurance.cancellation.estimatedMonths / 12)} years</span>
+                      </div>
+                    )}
+                    {calculation.mortgageInsurance.notes && (
+                      <p className="mi-notes">{calculation.mortgageInsurance.notes}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!calculation.mortgageInsurance?.required && downPaymentPercent >= 20 && (
+              <div className="breakdown-item success">
+                <span className="item-label">Mortgage Insurance</span>
+                <span className="item-amount success-text">Not Required</span>
+                <span className="item-note">20%+ down payment eliminates MI</span>
               </div>
             )}
 
@@ -616,6 +696,72 @@ const PaymentCalculator = ({
 
         .breakdown-item.warning .item-label {
           color: #fbbf24;
+        }
+
+        .breakdown-item.success .item-label {
+          color: #10b981;
+        }
+
+        .success-text {
+          color: #10b981;
+        }
+
+        /* Mortgage Insurance Section Styles */
+        .mi-section {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .mi-header {
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+          align-items: center;
+        }
+
+        .item-note.upfront {
+          color: #fbbf24;
+          font-weight: 500;
+        }
+
+        .mi-details-toggle {
+          background: rgba(255, 255, 255, 0.15);
+          border: none;
+          color: white;
+          padding: 6px 12px;
+          border-radius: 4px;
+          font-size: 12px;
+          cursor: pointer;
+          margin-top: 8px;
+          transition: background 0.2s;
+        }
+
+        .mi-details-toggle:hover {
+          background: rgba(255, 255, 255, 0.25);
+        }
+
+        .mi-details {
+          width: 100%;
+          background: rgba(0, 0, 0, 0.15);
+          border-radius: 6px;
+          padding: 12px;
+          margin-top: 8px;
+        }
+
+        .mi-detail-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 13px;
+          padding: 4px 0;
+        }
+
+        .mi-notes {
+          font-size: 12px;
+          opacity: 0.85;
+          margin: 8px 0 0 0;
+          line-height: 1.4;
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+          padding-top: 8px;
         }
 
         .item-label {
