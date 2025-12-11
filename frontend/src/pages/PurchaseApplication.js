@@ -1792,17 +1792,39 @@ export default function PurchaseApplication() {
 
           <div className="form-card">
             <div className="property-type-selector">
-              <label>Property Type</label>
-              <div className="type-pills">
-                {['Single Family', 'Condo', 'Townhouse', 'Multi-Family'].map(type => (
-                  <button
-                    key={type}
-                    className={`type-pill ${propertyData.propertyType === type ? 'selected' : ''}`}
-                    onClick={() => setPropertyData(prev => ({ ...prev, propertyType: type }))}
-                  >
-                    {type}
-                  </button>
-                ))}
+              <div className="income-cards">
+                <div
+                  className={`income-card ${propertyData.propertyType === 'Single Family' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, propertyType: 'Single Family' }))}
+                >
+                  <span className="card-icon"><Icon name="home" size={28} /></span>
+                  <span className="card-label">Single Family</span>
+                  <span className="card-desc">Detached home</span>
+                </div>
+                <div
+                  className={`income-card ${propertyData.propertyType === 'Condo' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, propertyType: 'Condo' }))}
+                >
+                  <span className="card-icon"><Icon name="building" size={28} /></span>
+                  <span className="card-label">Condo</span>
+                  <span className="card-desc">Condominium unit</span>
+                </div>
+                <div
+                  className={`income-card ${propertyData.propertyType === 'Townhouse' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, propertyType: 'Townhouse' }))}
+                >
+                  <span className="card-icon"><Icon name="layers" size={28} /></span>
+                  <span className="card-label">Townhouse</span>
+                  <span className="card-desc">Attached home</span>
+                </div>
+                <div
+                  className={`income-card ${propertyData.propertyType === 'Multi-Family' ? 'selected' : ''}`}
+                  onClick={() => setPropertyData(prev => ({ ...prev, propertyType: 'Multi-Family' }))}
+                >
+                  <span className="card-icon"><Icon name="users" size={28} /></span>
+                  <span className="card-label">Multi-Family</span>
+                  <span className="card-desc">2-4 units</span>
+                </div>
               </div>
             </div>
           </div>
