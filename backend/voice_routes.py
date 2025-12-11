@@ -1235,20 +1235,33 @@ async def get_voice_os_status():
     """Get Voice OS system status and health"""
     import os
 
-    # Check if Voice OS is actually running
-    voice_os_running = os.path.exists("/tmp/voice_os.log")
+    # Voice OS runs through the main Python backend with Twilio + OpenAI integration
+    # Check if the essential services are configured and enabled
+    twilio_healthy = voice_client.enabled and bool(voice_client.from_number)
+    openai_healthy = voice_client.openai_enabled
+
+    # System is "running" if both Twilio and OpenAI are configured
+    system_running = twilio_healthy and openai_healthy
 
     return {
-        "system_status": "running" if voice_os_running else "stopped",
-        "voice_os_url": "http://localhost:8080" if voice_os_running else None,
+        "system_status": "running" if system_running else "degraded" if (twilio_healthy or openai_healthy) else "stopped",
+        "voice_os_url": os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://mortgage-crm-production-7a9a.up.railway.app"),
         "twilio_configured": bool(voice_client.from_number),
         "openai_configured": voice_client.openai_enabled,
+        "phone_number": voice_client.from_number,
         "crm_integration": "active",
         "health_checks": {
-            "twilio": "healthy" if voice_client.enabled else "disconnected",
-            "openai": "healthy" if voice_client.openai_enabled else "disconnected",
+            "twilio": "healthy" if twilio_healthy else "disconnected",
+            "openai": "healthy" if openai_healthy else "disconnected",
             "database": "healthy",
             "webhooks": "configured"
+        },
+        "capabilities": {
+            "inbound_calls": twilio_healthy,
+            "outbound_calls": twilio_healthy,
+            "ai_responses": openai_healthy,
+            "call_transcription": openai_healthy,
+            "voicemail": twilio_healthy
         }
     }
 
