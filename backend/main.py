@@ -49506,6 +49506,21 @@ async def startup_event():
             except Exception as org_e:
                 logger.warning(f"⚠️ Organization migration skipped: {org_e}")
 
+            # Add missing slug column to users table (microsite URL identifier)
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = 'slug'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("ALTER TABLE users ADD COLUMN slug VARCHAR UNIQUE"))
+                    db_temp.commit()
+                    logger.info("✅ Added 'slug' column to users table")
+                db_temp.close()
+            except Exception as slug_e:
+                logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
+
             # Run Phase 2 permission migration
             run_phase2_permission_migration()
 
