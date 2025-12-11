@@ -49524,7 +49524,7 @@ async def startup_event():
                     "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
                 ))
                 if admin_check.fetchone():
-                    new_hash = get_password_hash("Woodwindow00!")
+                    new_hash = get_password_hash("demo123")
                     db_temp.execute(text(
                         "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
                     ), {"pwd": new_hash})
