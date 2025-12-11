@@ -1258,6 +1258,54 @@
   color: #1e40af;
 }
 
+/* Full Page Consent Styles */
+.econsent-full-page {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.econsent-full-page .econsent-scrollbox {
+  max-height: 400px;
+}
+
+/* Confirmation Page */
+.confirmation-page .scheduling-header {
+  text-align: center;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+}
+
+.success-icon svg {
+  color: white;
+}
+
+.confirmation-message {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  margin-top: 24px;
+}
+
+.confirmation-message p {
+  margin: 0;
+  color: #065f46;
+  font-size: 16px;
+}
+
 /* Submit Section */
 .submit-section {
   text-align: center;
