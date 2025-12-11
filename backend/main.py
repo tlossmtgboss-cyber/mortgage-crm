@@ -33067,6 +33067,28 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         }
     }
 
+@app.post("/api/v1/admin/reset-password-temp")
+async def temp_reset_admin_password(db: Session = Depends(get_db)):
+    """
+    TEMPORARY: Reset admin@perenniaai.com password.
+    This endpoint should be removed after use.
+    """
+    try:
+        user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+
+        new_hash = get_password_hash("Woodwindow00!")
+        user.hashed_password = new_hash
+        db.commit()
+
+        return {"success": True, "message": "Password reset for admin@perenniaai.com"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Password reset error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
