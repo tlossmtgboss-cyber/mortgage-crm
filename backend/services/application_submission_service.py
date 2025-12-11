@@ -43,7 +43,7 @@ class ApplicationSubmissionService:
             textColor=colors.HexColor('#218D8D')
         ))
         self.styles.add(ParagraphStyle(
-            name='BodyText',
+            name='CustomBodyText',
             parent=self.styles['Normal'],
             fontSize=10,
             leading=14,
@@ -81,7 +81,7 @@ class ApplicationSubmissionService:
             "To use electronic signatures and receive documents electronically in connection with your use of this "
             "platform, you must read and consent to the terms outlined in this document, which require your ability to "
             "access and retain electronic documents.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         story.append(Paragraph(
@@ -89,14 +89,14 @@ class ApplicationSubmissionService:
             "desktop, laptop, tablet, mobile, or any other electronic device, and to any Document, including loan "
             "documents, disclosures (initial disclosures, pre-close disclosures, closing disclosures), records, and servicing "
             "notices, and any other loan documents that we provide to you in electronic form.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         story.append(Paragraph(
             "If you provide eConsent, we will be able to provide electronic Documents to you within this platform, in "
             "other portals, and/or through other methods we may use for delivery of electronic Documents. With Your "
             "eConsent, You will also be able to sign and authorize these Documents electronically, rather than on paper.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         # Your Consent Section
@@ -105,13 +105,13 @@ class ApplicationSubmissionService:
             "Your consent to participate in this transaction electronically will apply to all Loan Documents for the "
             "applicable loans for which You are applying. By providing Your consent, We will conduct this transaction "
             "electronically, instead of providing You with the Loan Documents in paper form.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
         story.append(Paragraph(
             "If a document related to Your loan is not available in electronic form, a paper copy will be provided to "
             "You free of charge. Conducting this transaction electronically is an option. If You choose not to receive "
             "Documents electronically, paper Documents will be mailed to You.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         # Withdrawal of Consent
@@ -120,7 +120,7 @@ class ApplicationSubmissionService:
             "You have the right to withdraw Your consent at any time. By declining or revoking Your consent to "
             "receive Documents electronically, We will provide You with the Documents in paper form. "
             "You will not be required to pay a fee for withdrawing consent and receiving paper copies of the Documents.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         # System Requirements
@@ -130,7 +130,7 @@ class ApplicationSubmissionService:
             "Internet email account and address; an Internet browser using 128-bit encryption or higher, Adobe "
             "Acrobat 7.0 or higher, SSL encryption and access to a printer or the ability to download information in "
             "order to keep copies of Your Documents electronically for Your records.",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         story.append(Spacer(1, 30))
@@ -201,7 +201,7 @@ class ApplicationSubmissionService:
         story.append(Paragraph(
             "Your credit information will help us understand more about your personal and financial background and "
             "ensure we give you the most accurate mortgage options. The following authorization has been provided:",
-            self.styles['BodyText']
+            self.styles['CustomBodyText']
         ))
 
         story.append(Spacer(1, 15))
@@ -228,7 +228,7 @@ class ApplicationSubmissionService:
             backColor=colors.HexColor('#eff6ff'),
         )
 
-        story.append(Paragraph(auth_text, self.styles['BodyText']))
+        story.append(Paragraph(auth_text, self.styles['CustomBodyText']))
 
         story.append(Spacer(1, 40))
 
