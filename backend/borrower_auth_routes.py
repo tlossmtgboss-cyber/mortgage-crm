@@ -1156,3 +1156,257 @@ async def logout_borrower(request: Request):
     # Server-side logout is a no-op for JWT tokens
     # Could add token to blacklist for extra security
     return {"success": True, "message": "Logged out successfully"}
+
+
+# =============================================================================
+# APPLICATION SUBMISSION
+# =============================================================================
+
+class ApplicationSubmissionRequest(BaseModel):
+    """Request model for application submission"""
+    profileData: dict
+    incomeData: dict
+    assetData: dict
+    propertyData: dict
+    declarations: dict
+    paymentEstimate: Optional[dict] = None
+    eConsentAgreed: bool
+    creditAuthAgreed: bool
+    loId: Optional[str] = None
+
+
+@router.post("/submit-application")
+async def submit_application(
+    request: Request,
+    submission: ApplicationSubmissionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Submit completed application:
+    1. Generate E-Consent PDF with signature
+    2. Generate Credit Authorization PDF with signature
+    3. Save documents to borrower's profile
+    4. Generate Fannie Mae 3.4 file
+    5. Email Fannie Mae file to loan officer
+    """
+    from services.application_submission_service import application_submission_service
+
+    try:
+        # Get client IP for signature
+        client_ip = request.client.host if request.client else "Unknown"
+
+        # Prepare borrower data for PDFs
+        borrower_data = {
+            "firstName": submission.profileData.get("firstName", ""),
+            "lastName": submission.profileData.get("lastName", ""),
+            "email": submission.profileData.get("email", ""),
+            "phone": submission.profileData.get("phone", ""),
+            "ipAddress": client_ip,
+        }
+
+        # Generate PDFs
+        econsent_pdf = application_submission_service.generate_econsent_pdf(borrower_data)
+        credit_auth_pdf = application_submission_service.generate_credit_auth_pdf(borrower_data)
+
+        # Prepare full application data for Fannie Mae 3.4
+        application_data = {
+            "firstName": submission.profileData.get("firstName", ""),
+            "middleName": submission.profileData.get("middleName", ""),
+            "lastName": submission.profileData.get("lastName", ""),
+            "email": submission.profileData.get("email", ""),
+            "phone": submission.profileData.get("phone", ""),
+            "currentAddress": {
+                "street": submission.profileData.get("address", ""),
+                "city": submission.profileData.get("city", ""),
+                "state": submission.profileData.get("state", ""),
+                "zip": submission.profileData.get("zip", ""),
+            },
+            "employment": {
+                "employerName": submission.incomeData.get("employerName", ""),
+                "startDate": submission.incomeData.get("startDate", ""),
+                "monthlyIncome": float(submission.incomeData.get("annualSalary", 0)) / 12 if submission.incomeData.get("annualSalary") else 0,
+                "jobTitle": submission.incomeData.get("jobTitle", ""),
+            },
+            "annualIncome": submission.incomeData.get("annualSalary", 0),
+            "assets": {
+                "checking": submission.assetData.get("checking", 0),
+                "savings": submission.assetData.get("savings", 0),
+                "investments": submission.assetData.get("investments", 0),
+                "giftAmount": submission.assetData.get("giftAmount", 0),
+            },
+            "declarations": {
+                "citizenship": submission.declarations.get("citizenship", "us_citizen"),
+                "occupancy": submission.propertyData.get("occupancy", "primary"),
+                "firstTimeBuyer": submission.declarations.get("first_time_buyer", "no"),
+            },
+            "property": {
+                "street": submission.propertyData.get("address", ""),
+                "city": submission.propertyData.get("city", ""),
+                "state": submission.propertyData.get("state", ""),
+                "zip": submission.propertyData.get("zip", ""),
+                "county": submission.propertyData.get("county", ""),
+                "propertyType": submission.propertyData.get("propertyType", "Single Family"),
+                "occupancy": submission.propertyData.get("occupancy", "primary"),
+            },
+            "loan": {
+                "purpose": "Purchase",
+                "loanAmount": float(submission.propertyData.get("purchasePrice", 0)) - float(submission.propertyData.get("downPayment", 0)),
+                "purchasePrice": submission.propertyData.get("purchasePrice", 0),
+                "downPayment": submission.propertyData.get("downPayment", 0),
+                "amortizationType": "Fixed",
+                "termMonths": 360,
+            },
+        }
+
+        # Generate Fannie Mae 3.4 file
+        fannie_mae_xml = application_submission_service.generate_fannie_mae_34(application_data)
+
+        # Create borrower record if doesn't exist
+        borrower_email = submission.profileData.get("email", "")
+        borrower_name = f"{submission.profileData.get('firstName', '')} {submission.profileData.get('lastName', '')}"
+
+        # Check for existing borrower
+        existing = db.execute(text("""
+            SELECT id FROM borrower_profiles WHERE email = :email
+        """), {"email": borrower_email}).fetchone()
+
+        if existing:
+            borrower_id = existing[0]
+        else:
+            borrower_id = str(uuid.uuid4())
+            db.execute(text("""
+                INSERT INTO borrower_profiles (id, email, first_name, last_name, provider, created_at, updated_at)
+                VALUES (:id, :email, :first_name, :last_name, 'application', :now, :now)
+            """), {
+                "id": borrower_id,
+                "email": borrower_email,
+                "first_name": submission.profileData.get("firstName", ""),
+                "last_name": submission.profileData.get("lastName", ""),
+                "now": datetime.utcnow(),
+            })
+
+        # Save documents to database
+        submission_date = datetime.utcnow()
+        date_str = submission_date.strftime("%Y%m%d_%H%M%S")
+
+        # Save E-Consent document
+        econsent_doc_id = str(uuid.uuid4())
+        db.execute(text("""
+            INSERT INTO documents (id, borrower_id, doc_type, doc_category, filename, original_filename,
+                                   file_size, mime_type, file_content, status, uploaded_at, source)
+            VALUES (:id, :borrower_id, 'e_consent', 'legal', :filename, :original_filename,
+                    :file_size, 'application/pdf', :file_content, 'active', :uploaded_at, 'APPLICATION')
+        """), {
+            "id": econsent_doc_id,
+            "borrower_id": borrower_id,
+            "filename": f"econsent_{date_str}.pdf",
+            "original_filename": f"E-Consent_{borrower_name.replace(' ', '_')}_{date_str}.pdf",
+            "file_size": len(econsent_pdf),
+            "file_content": econsent_pdf,
+            "uploaded_at": submission_date,
+        })
+
+        # Save Credit Authorization document
+        credit_auth_doc_id = str(uuid.uuid4())
+        db.execute(text("""
+            INSERT INTO documents (id, borrower_id, doc_type, doc_category, filename, original_filename,
+                                   file_size, mime_type, file_content, status, uploaded_at, source)
+            VALUES (:id, :borrower_id, 'credit_authorization', 'legal', :filename, :original_filename,
+                    :file_size, 'application/pdf', :file_content, 'active', :uploaded_at, 'APPLICATION')
+        """), {
+            "id": credit_auth_doc_id,
+            "borrower_id": borrower_id,
+            "filename": f"credit_auth_{date_str}.pdf",
+            "original_filename": f"Credit_Authorization_{borrower_name.replace(' ', '_')}_{date_str}.pdf",
+            "file_size": len(credit_auth_pdf),
+            "file_content": credit_auth_pdf,
+            "uploaded_at": submission_date,
+        })
+
+        # Save Fannie Mae 3.4 file
+        fannie_mae_doc_id = str(uuid.uuid4())
+        fannie_mae_bytes = fannie_mae_xml.encode('utf-8')
+        db.execute(text("""
+            INSERT INTO documents (id, borrower_id, doc_type, doc_category, filename, original_filename,
+                                   file_size, mime_type, file_content, status, uploaded_at, source)
+            VALUES (:id, :borrower_id, 'fannie_mae_34', 'application', :filename, :original_filename,
+                    :file_size, 'application/xml', :file_content, 'active', :uploaded_at, 'APPLICATION')
+        """), {
+            "id": fannie_mae_doc_id,
+            "borrower_id": borrower_id,
+            "filename": f"fannie_mae_34_{date_str}.xml",
+            "original_filename": f"FannieMae34_{borrower_name.replace(' ', '_')}_{date_str}.xml",
+            "file_size": len(fannie_mae_bytes),
+            "file_content": fannie_mae_bytes,
+            "uploaded_at": submission_date,
+        })
+
+        db.commit()
+
+        # Get loan officer email to send Fannie Mae file
+        lo_email = None
+        if submission.loId:
+            lo_result = db.execute(text("""
+                SELECT email FROM users WHERE id = :lo_id
+            """), {"lo_id": submission.loId}).fetchone()
+            if lo_result:
+                lo_email = lo_result[0]
+
+        # Send email to loan officer with Fannie Mae file
+        if lo_email:
+            import base64
+            email_html = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #218D8D;">New Mortgage Application Submitted</h2>
+                    <p>A new mortgage application has been submitted by:</p>
+                    <ul>
+                        <li><strong>Name:</strong> {borrower_name}</li>
+                        <li><strong>Email:</strong> {borrower_email}</li>
+                        <li><strong>Phone:</strong> {submission.profileData.get('phone', 'N/A')}</li>
+                    </ul>
+                    <h3>Property Details</h3>
+                    <ul>
+                        <li><strong>Purchase Price:</strong> ${float(submission.propertyData.get('purchasePrice', 0)):,.0f}</li>
+                        <li><strong>Down Payment:</strong> ${float(submission.propertyData.get('downPayment', 0)):,.0f}</li>
+                        <li><strong>Property Type:</strong> {submission.propertyData.get('propertyType', 'N/A')}</li>
+                    </ul>
+                    <p>The Fannie Mae 3.4 file is attached for import into your LOS.</p>
+                    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+                        This is an automated message from Perennia AI Mortgage Platform.
+                    </p>
+                </div>
+            </body>
+            </html>
+            """
+
+            email_service.send_html_email(
+                to_email=lo_email,
+                subject=f"New Application: {borrower_name}",
+                html_body=email_html,
+                attachments=[{
+                    "filename": f"FannieMae34_{borrower_name.replace(' ', '_')}_{date_str}.xml",
+                    "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
+                    "type": "application/xml",
+                }]
+            )
+
+        return {
+            "success": True,
+            "message": "Application submitted successfully",
+            "data": {
+                "borrower_id": borrower_id,
+                "documents": {
+                    "econsent_id": econsent_doc_id,
+                    "credit_auth_id": credit_auth_doc_id,
+                    "fannie_mae_id": fannie_mae_doc_id,
+                },
+                "submission_date": submission_date.isoformat(),
+            }
+        }
+
+    except Exception as e:
+        logger.exception("Application submission failed")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Submission failed: {str(e)}")

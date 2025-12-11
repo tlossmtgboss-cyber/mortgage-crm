@@ -956,6 +956,12 @@ export default function PurchaseApplication() {
   const navigate = useNavigate();
   const isDemoMode = !token || token === 'start';
 
+  // API Configuration
+  const isProduction = window.location.hostname !== 'localhost';
+  const API_URL = isProduction
+    ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+    : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
   // State
   const [currentStage, setCurrentStage] = useState('declarations');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -983,6 +989,8 @@ export default function PurchaseApplication() {
   const [paymentEstimate, setPaymentEstimate] = useState(null); // Stores calculated payment data
   const [eConsentAgreed, setEConsentAgreed] = useState(false); // E-consent agreement tracking
   const [creditAuthAgreed, setCreditAuthAgreed] = useState(false); // Credit authorization agreement tracking
+  const [isSubmitting, setIsSubmitting] = useState(false); // Application submission loading state
+  const [submitError, setSubmitError] = useState(null); // Application submission error state
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -1077,6 +1085,59 @@ export default function PurchaseApplication() {
     setMicroWinMessage(message);
     setShowMicroWin(true);
     setTimeout(() => setShowMicroWin(false), 2500);
+  };
+
+  // Handle application submission
+  const handleSubmitApplication = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Get loan officer ID from token if available (from microsite)
+      let loId = null;
+      if (token && token !== 'start') {
+        // Token might contain LO info - try to extract from localStorage or context
+        const storedLoId = localStorage.getItem('lo_id');
+        if (storedLoId) {
+          loId = storedLoId;
+        }
+      }
+
+      const submissionData = {
+        profileData,
+        incomeData,
+        assetData,
+        propertyData,
+        declarations,
+        paymentEstimate,
+        eConsentAgreed,
+        creditAuthAgreed,
+        loId,
+      };
+
+      const response = await fetch(`${API_URL}/api/v1/borrower-auth/submit-application`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || 'Submission failed');
+      }
+
+      // Success - show animation and move to confirmation page
+      showMicroWinAnimation('Application Submitted!');
+      setScheduleStep(4);
+    } catch (error) {
+      console.error('Application submission error:', error);
+      setSubmitError(error.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle declaration answer
@@ -2726,21 +2787,35 @@ export default function PurchaseApplication() {
             </div>
           </div>
 
+          {submitError && (
+            <div className="error-message" style={{
+              color: '#dc3545',
+              backgroundColor: '#f8d7da',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              {submitError}
+            </div>
+          )}
+
           <div className="submit-section">
             <button
               className="btn-submit"
-              disabled={!creditAuthAgreed}
-              onClick={() => {
-                showMicroWinAnimation('Application Submitted!');
-                setScheduleStep(4);
-              }}
+              disabled={!creditAuthAgreed || isSubmitting}
+              onClick={handleSubmitApplication}
             >
-              {creditAuthAgreed ? 'Submit Application' : 'Please Authorize Credit Check to Submit'}
+              {isSubmitting
+                ? 'Submitting...'
+                : creditAuthAgreed
+                  ? 'Submit Application'
+                  : 'Please Authorize Credit Check to Submit'}
             </button>
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={() => setScheduleStep(2)}>← Back</button>
+            <button className="btn-back" onClick={() => setScheduleStep(2)} disabled={isSubmitting}>← Back</button>
           </div>
         </div>
       );
