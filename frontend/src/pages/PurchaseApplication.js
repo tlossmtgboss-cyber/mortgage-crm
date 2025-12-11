@@ -1508,13 +1508,13 @@ export default function PurchaseApplication() {
                 />
               </div>
               <div className="form-group">
-                <label>Years There</label>
+                <label>Start Date</label>
                 <input
-                  type="number"
-                  value={incomeData.yearsAtJob || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, yearsAtJob: e.target.value }))}
+                  type="month"
+                  value={incomeData.employmentStartDate || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, employmentStartDate: e.target.value }))}
                   className="fun-input"
-                  min="0"
+                  max={new Date().toISOString().slice(0, 7)}
                 />
               </div>
             </div>
@@ -1526,6 +1526,148 @@ export default function PurchaseApplication() {
                   type="number"
                   value={incomeData.annualSalary || ''}
                   onChange={(e) => setIncomeData(prev => ({ ...prev, annualSalary: e.target.value }))}
+                  className="fun-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Previous Employer - shown if less than 2 years at current job */}
+        {(currentIncomeType === 'employed' || currentIncomeType === 'employed_with_business') &&
+         incomeData.employmentStartDate && (() => {
+           const startDate = new Date(incomeData.employmentStartDate + '-01');
+           const twoYearsAgo = new Date();
+           twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+           return startDate > twoYearsAgo;
+         })() && (
+          <div className="form-card">
+            <h3>Previous Employer</h3>
+            <p className="section-hint">Since you've been at your current job less than 2 years, we need your previous employment history.</p>
+            <div className="form-group">
+              <label>Previous Employer Name</label>
+              <input
+                type="text"
+                value={incomeData.prevEmployerName || ''}
+                onChange={(e) => setIncomeData(prev => ({ ...prev, prevEmployerName: e.target.value }))}
+                className="fun-input"
+                placeholder="Previous company name"
+              />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Job Title</label>
+                <input
+                  type="text"
+                  value={incomeData.prevJobTitle || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, prevJobTitle: e.target.value }))}
+                  className="fun-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Start Date</label>
+                <input
+                  type="month"
+                  value={incomeData.prevEmploymentStartDate || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, prevEmploymentStartDate: e.target.value }))}
+                  className="fun-input"
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>End Date</label>
+                <input
+                  type="month"
+                  value={incomeData.prevEmploymentEndDate || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, prevEmploymentEndDate: e.target.value }))}
+                  className="fun-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Annual Salary (at that job)</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={incomeData.prevAnnualSalary || ''}
+                    onChange={(e) => setIncomeData(prev => ({ ...prev, prevAnnualSalary: e.target.value }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Second Job Question */}
+        {(currentIncomeType === 'employed' || currentIncomeType === 'employed_with_business') && (
+          <div className="form-card">
+            <h3>Do you have a second job?</h3>
+            <div className="income-cards" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              <div
+                className={`income-card ${incomeData.hasSecondJob === 'yes' ? 'selected' : ''}`}
+                onClick={() => setIncomeData(prev => ({ ...prev, hasSecondJob: 'yes' }))}
+              >
+                <span className="card-icon"><Icon name="check" size={24} /></span>
+                <span className="card-label">Yes</span>
+              </div>
+              <div
+                className={`income-card ${incomeData.hasSecondJob === 'no' ? 'selected' : ''}`}
+                onClick={() => setIncomeData(prev => ({ ...prev, hasSecondJob: 'no' }))}
+              >
+                <span className="card-icon"><Icon name="x" size={24} /></span>
+                <span className="card-label">No</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Second Job Details */}
+        {incomeData.hasSecondJob === 'yes' && (
+          <div className="form-card">
+            <h3>Second Job Details</h3>
+            <div className="form-group">
+              <label>Employer Name</label>
+              <input
+                type="text"
+                value={incomeData.secondEmployerName || ''}
+                onChange={(e) => setIncomeData(prev => ({ ...prev, secondEmployerName: e.target.value }))}
+                className="fun-input"
+                placeholder="Second employer name"
+              />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Job Title</label>
+                <input
+                  type="text"
+                  value={incomeData.secondJobTitle || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, secondJobTitle: e.target.value }))}
+                  className="fun-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Start Date</label>
+                <input
+                  type="month"
+                  value={incomeData.secondEmploymentStartDate || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, secondEmploymentStartDate: e.target.value }))}
+                  className="fun-input"
+                  max={new Date().toISOString().slice(0, 7)}
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Annual Income (from second job)</label>
+              <div className="input-with-prefix">
+                <span className="input-prefix">$</span>
+                <input
+                  type="number"
+                  value={incomeData.secondJobIncome || ''}
+                  onChange={(e) => setIncomeData(prev => ({ ...prev, secondJobIncome: e.target.value }))}
                   className="fun-input"
                   placeholder="0"
                 />
