@@ -49523,22 +49523,13 @@ async def startup_event():
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
 
-            # Clean up demo user and ensure admin account exists
+            # Reset admin password (always runs)
             try:
                 db_temp = SessionLocal()
-                # Check if admin user exists
-                admin_result = db_temp.execute(text(
+                admin_check = db_temp.execute(text(
                     "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
                 ))
-                admin_exists = admin_result.fetchone()
-
-                if admin_exists:
-                    # Delete demo user if it exists (we only want admin@perenniaai.com)
-                    db_temp.execute(text("DELETE FROM users WHERE email = 'demo@example.com'"))
-                    db_temp.commit()
-                    logger.info("✅ Cleaned up demo@example.com user")
-
-                    # Reset admin password for recovery
+                if admin_check.fetchone():
                     new_hash = get_password_hash("Woodwindow00!")
                     db_temp.execute(text(
                         "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
@@ -49546,8 +49537,43 @@ async def startup_event():
                     db_temp.commit()
                     logger.info("✅ Admin password reset")
                 db_temp.close()
-            except Exception as admin_e:
-                logger.warning(f"⚠️ Admin account cleanup skipped: {admin_e}")
+            except Exception as pwd_e:
+                logger.warning(f"⚠️ Admin password reset skipped: {pwd_e}")
+
+            # Clean up demo user if admin exists
+            try:
+                db_temp = SessionLocal()
+                admin_result = db_temp.execute(text(
+                    "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
+                ))
+                admin_row = admin_result.fetchone()
+
+                if admin_row:
+                    admin_id = admin_row[0]
+                    demo_result = db_temp.execute(text(
+                        "SELECT id FROM users WHERE email = 'demo@example.com'"
+                    ))
+                    demo_row = demo_result.fetchone()
+
+                    if demo_row:
+                        demo_id = demo_row[0]
+                        # Reassign all demo user's data to admin before deleting
+                        db_temp.execute(text("UPDATE leads SET owner_id = :admin_id WHERE owner_id = :demo_id"),
+                                        {"admin_id": admin_id, "demo_id": demo_id})
+                        db_temp.execute(text("UPDATE loans SET loan_officer_id = :admin_id WHERE loan_officer_id = :demo_id"),
+                                        {"admin_id": admin_id, "demo_id": demo_id})
+                        db_temp.execute(text("UPDATE tasks SET owner_id = :admin_id WHERE owner_id = :demo_id"),
+                                        {"admin_id": admin_id, "demo_id": demo_id})
+                        db_temp.execute(text("UPDATE tasks SET assigned_to_id = :admin_id WHERE assigned_to_id = :demo_id"),
+                                        {"admin_id": admin_id, "demo_id": demo_id})
+                        db_temp.commit()
+                        # Now delete demo user
+                        db_temp.execute(text("DELETE FROM users WHERE id = :demo_id"), {"demo_id": demo_id})
+                        db_temp.commit()
+                        logger.info("✅ Cleaned up demo@example.com user and reassigned data")
+                db_temp.close()
+            except Exception as cleanup_e:
+                logger.warning(f"⚠️ Demo user cleanup skipped: {cleanup_e}")
 
             # Run Phase 2 permission migration
             run_phase2_permission_migration()

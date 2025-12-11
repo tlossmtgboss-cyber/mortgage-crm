@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
+import PaymentCalculator from '../components/PaymentCalculator';
 import './AdaptiveURLA.css';
 
 /**
@@ -978,7 +979,8 @@ export default function PurchaseApplication() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [scheduleStep, setScheduleStep] = useState(1); // 1 = calendar, 2 = video/next steps
-  const [planningStep, setPlanningStep] = useState(1); // 1-5 for each planning question
+  const [planningStep, setPlanningStep] = useState(1); // 1 = payment calculator, 2-6 for each planning question
+  const [paymentEstimate, setPaymentEstimate] = useState(null); // Stores calculated payment data
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -1961,10 +1963,43 @@ export default function PurchaseApplication() {
     });
   };
 
-  // Render planning stage with mortgage questionnaire - split into 5 pages
+  // Render planning stage with mortgage questionnaire - split into 6 pages
   const renderPlanningStage = () => {
-    // Step 1: Mortgage Priorities
+    // Step 1: Payment Calculator - How much do you want to borrow?
     if (planningStep === 1) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>Your Monthly Payment Estimate</h2>
+            <p>See how your down payment affects your monthly cost. Adjust the values to find your comfort zone.</p>
+          </div>
+
+          <div className="form-card planning-section payment-calculator-section">
+            <PaymentCalculator
+              initialHomeValue={parseFloat(propertyData.purchasePrice) || 0}
+              initialDownPayment={parseFloat(propertyData.downPayment) || 0}
+              initialState={propertyData.state || ''}
+              initialCounty={propertyData.county || ''}
+              initialPropertyUse={propertyData.occupancy === 'primary' ? 'primaryResidence' :
+                                  propertyData.occupancy === 'second' ? 'secondHome' :
+                                  propertyData.occupancy === 'investment' ? 'rental' : 'primaryResidence'}
+              showAdvancedOptions={true}
+              onCalculationComplete={(calculation) => {
+                setPaymentEstimate(calculation);
+              }}
+            />
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(2)}>Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 2: Mortgage Priorities
+    if (planningStep === 2) {
       return (
         <div className="stage-content planning-stage">
           <div className="stage-header">
@@ -1988,15 +2023,15 @@ export default function PurchaseApplication() {
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
-            <button className="btn-continue" onClick={() => setPlanningStep(2)}>Continue →</button>
+            <button className="btn-back" onClick={() => setPlanningStep(1)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(3)}>Continue →</button>
           </div>
         </div>
       );
     }
 
-    // Step 2: Personal Goals
-    if (planningStep === 2) {
+    // Step 3: Personal Goals
+    if (planningStep === 3) {
       return (
         <div className="stage-content planning-stage">
           <div className="stage-header">
@@ -2020,15 +2055,15 @@ export default function PurchaseApplication() {
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={() => setPlanningStep(1)}>← Back</button>
-            <button className="btn-continue" onClick={() => setPlanningStep(3)}>Continue →</button>
+            <button className="btn-back" onClick={() => setPlanningStep(2)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(4)}>Continue →</button>
           </div>
         </div>
       );
     }
 
-    // Step 3: Financial Philosophy
-    if (planningStep === 3) {
+    // Step 4: Financial Philosophy
+    if (planningStep === 4) {
       return (
         <div className="stage-content planning-stage">
           <div className="stage-header">
@@ -2053,15 +2088,15 @@ export default function PurchaseApplication() {
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={() => setPlanningStep(2)}>← Back</button>
-            <button className="btn-continue" onClick={() => setPlanningStep(4)}>Continue →</button>
+            <button className="btn-back" onClick={() => setPlanningStep(3)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(5)}>Continue →</button>
           </div>
         </div>
       );
     }
 
-    // Step 4: Tax-Deferred Retirement
-    if (planningStep === 4) {
+    // Step 5: Tax-Deferred Retirement
+    if (planningStep === 5) {
       return (
         <div className="stage-content planning-stage">
           <div className="stage-header">
@@ -2085,14 +2120,14 @@ export default function PurchaseApplication() {
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={() => setPlanningStep(3)}>← Back</button>
-            <button className="btn-continue" onClick={() => setPlanningStep(5)}>Continue →</button>
+            <button className="btn-back" onClick={() => setPlanningStep(4)}>← Back</button>
+            <button className="btn-continue" onClick={() => setPlanningStep(6)}>Continue →</button>
           </div>
         </div>
       );
     }
 
-    // Step 5: Professional Network
+    // Step 6: Professional Network
     return (
       <div className="stage-content planning-stage">
         <div className="stage-header">
@@ -2116,7 +2151,7 @@ export default function PurchaseApplication() {
         </div>
 
         <div className="stage-navigation">
-          <button className="btn-back" onClick={() => setPlanningStep(4)}>← Back</button>
+          <button className="btn-back" onClick={() => setPlanningStep(5)}>← Back</button>
           <button className="btn-continue" onClick={() => { setPlanningStep(1); goToNextStage(); }}>Continue →</button>
         </div>
       </div>
