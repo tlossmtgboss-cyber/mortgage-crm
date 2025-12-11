@@ -1403,7 +1403,7 @@ async def submit_application(
                 name, first_name, last_name, email, phone,
                 address, city, state, zip_code,
                 property_type, property_value, down_payment, loan_amount,
-                annual_income, credit_score, employer_name, job_title,
+                annual_income, credit_score, employer_name,
                 stage, source, loan_type, first_time_buyer,
                 ltv, dti, owner_id,
                 application_completed_date, stage_changed_at,
@@ -1413,7 +1413,7 @@ async def submit_application(
                 :name, :first_name, :last_name, :email, :phone,
                 :address, :city, :state, :zip_code,
                 :property_type, :property_value, :down_payment, :loan_amount,
-                :annual_income, :credit_score, :employer_name, :job_title,
+                :annual_income, :credit_score, :employer_name,
                 :stage, :source, :loan_type, :first_time_buyer,
                 :ltv, :dti, :owner_id,
                 :application_completed_date, :stage_changed_at,
@@ -1437,7 +1437,6 @@ async def submit_application(
             "annual_income": annual_income,
             "credit_score": None,  # Will be populated after credit pull
             "employer_name": submission.incomeData.get("employerName", ""),
-            "job_title": submission.incomeData.get("jobTitle", ""),
             "stage": "New",  # Standard stage for new leads
             "source": "Online Application",
             "loan_type": submission.propertyData.get("loanProgram", "Conventional"),
