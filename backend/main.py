@@ -49636,13 +49636,14 @@ async def startup_event():
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
 
-            # Add document type enum values for e-sign documents
+            # Add document type and category enum values for e-sign documents
             try:
                 engine = SessionLocal().get_bind()
                 connection = engine.raw_connection()
                 connection.set_isolation_level(0)  # AUTOCOMMIT required for ALTER TYPE
                 cursor = connection.cursor()
 
+                # Add document types
                 doc_types_to_add = [
                     "E-Consent Agreement",
                     "Credit Authorization",
@@ -49661,10 +49662,33 @@ async def startup_event():
                         except Exception as e:
                             logger.warning(f"⚠️ Could not add '{doc_type}': {e}")
 
+                # Add document categories (might be missing in database)
+                doc_categories_to_add = [
+                    "Disclosures",
+                    "Income",
+                    "Assets",
+                    "Credit",
+                    "Property",
+                    "Identity",
+                    "Miscellaneous",
+                ]
+
+                for doc_cat in doc_categories_to_add:
+                    cursor.execute("""
+                        SELECT 1 FROM pg_enum WHERE enumlabel = %s
+                        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'documentcategory')
+                    """, (doc_cat,))
+                    if not cursor.fetchone():
+                        try:
+                            cursor.execute(f"ALTER TYPE documentcategory ADD VALUE '{doc_cat}'")
+                            logger.info(f"✅ Added '{doc_cat}' to documentcategory enum")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Could not add '{doc_cat}': {e}")
+
                 cursor.close()
                 connection.close()
             except Exception as dt_e:
-                logger.warning(f"⚠️ Document type enum migration skipped: {dt_e}")
+                logger.warning(f"⚠️ Document enum migration skipped: {dt_e}")
 
             # Reset admin password (always runs)
             try:
