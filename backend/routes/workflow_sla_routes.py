@@ -841,3 +841,58 @@ async def get_dialer_queue(
     )
 
     return result
+
+
+# =============================================================================
+# INITIALIZATION / SETUP ENDPOINTS
+# =============================================================================
+
+@router.post("/init/ensure-tasks-columns")
+async def ensure_tasks_table_columns(
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Ensure all required columns exist on the tasks table.
+    This is a safe operation that only adds missing columns.
+    """
+    from sqlalchemy import text
+
+    # List of columns to ensure exist
+    columns_to_add = [
+        ("sla_milestone_id", "INTEGER"),
+        ("sla_milestone_type", "VARCHAR(100)"),
+        ("sla_date_field", "VARCHAR(100)"),
+        ("milestone_date", "TIMESTAMP WITH TIME ZONE"),
+        ("workflow_task_instance_id", "INTEGER"),
+        ("task_group_key", "VARCHAR(100)"),
+    ]
+
+    added = []
+    already_exists = []
+    errors = []
+
+    for col_name, col_type in columns_to_add:
+        try:
+            result = db.execute(text(f"""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'tasks' AND column_name = '{col_name}'
+            """))
+            if not result.fetchone():
+                db.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
+                db.commit()
+                added.append(col_name)
+                logger.info(f"✅ Added '{col_name}' column to tasks table")
+            else:
+                already_exists.append(col_name)
+        except Exception as e:
+            db.rollback()
+            errors.append({"column": col_name, "error": str(e)})
+            logger.warning(f"⚠️ Error with '{col_name}': {e}")
+
+    return {
+        "success": len(errors) == 0,
+        "added": added,
+        "already_exists": already_exists,
+        "errors": errors
+    }
