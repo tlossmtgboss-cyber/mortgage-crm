@@ -55,14 +55,20 @@ class TwilioVoiceClient:
         """
         response = VoiceResponse()
 
-        # Connect DIRECTLY to Sam via OpenAI Realtime API
-        # Sam will greet the caller with his natural AI voice
+        # First, say a greeting to confirm the call is working
+        response.say(
+            f"Hello, thank you for calling {business_name}. Please hold while I connect you to our AI assistant.",
+            voice='Polly.Joanna'
+        )
+
+        # Connect to Sam via OpenAI Realtime API
         # Use PRODUCTION_DOMAIN if available, fallback to RAILWAY_PUBLIC_DOMAIN
         domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')
+        logger.info(f"Connecting to WebSocket at: wss://{domain}/api/v1/voice/ws/voice-stream")
+
         connect = response.connect()
-        connect.stream(
-            url=f"wss://{domain}/api/v1/voice/ws/voice-stream",
-            track='both_tracks'
+        stream = connect.stream(
+            url=f"wss://{domain}/api/v1/voice/ws/voice-stream"
         )
 
         return response
