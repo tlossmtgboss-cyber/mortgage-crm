@@ -15,17 +15,17 @@ from sqlalchemy import (
     JSON, Float, Index, UniqueConstraint, Table
 )
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime, timezone
 import uuid
 
-# Import Base from main - will be set dynamically
-Base = None
+# Use declarative_base directly to avoid circular imports
+# This creates models that work with any SQLAlchemy session
+Base = declarative_base()
 
 def set_base(base):
-    """Set the Base for models - called from main.py"""
-    global Base
-    Base = base
+    """Legacy function - no longer needed"""
+    pass
 
 
 # ============================================================================
