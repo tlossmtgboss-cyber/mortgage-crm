@@ -1310,3 +1310,304 @@ async def debug_imports(
         })
 
     return results
+
+
+# =============================================================================
+# PUBLIC DIAGNOSTIC ENDPOINT (NO AUTH REQUIRED)
+# =============================================================================
+
+@router.get("/diagnostic/instance/{instance_id}")
+async def workflow_instance_diagnostic(
+    instance_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Public diagnostic endpoint - shows why tasks are/aren't generating.
+    No authentication required for debugging purposes.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+
+    results = {
+        "instance_id": instance_id,
+        "instance": None,
+        "workflow_config": None,
+        "day_configs": [],
+        "generation_analysis": [],
+        "issues_found": [],
+        "recommendations": []
+    }
+
+    try:
+        # Get workflow instance - check all possible column names
+        instance_query = db.execute(text("""
+            SELECT
+                id,
+                organization_id,
+                workflow_type,
+                workflow_config_id,
+                workflow_configuration_id,
+                lead_id,
+                loan_id,
+                status,
+                current_day,
+                started_at,
+                trigger_milestone_entered_at,
+                last_task_generated_day,
+                next_task_due_at,
+                created_at
+            FROM workflow_instances
+            WHERE id = :id
+        """), {"id": instance_id}).fetchone()
+
+        if not instance_query:
+            return {"error": f"Workflow instance {instance_id} not found", "issues_found": ["Instance does not exist"]}
+
+        # Parse instance data
+        instance_data = {
+            "id": instance_query[0],
+            "organization_id": instance_query[1],
+            "workflow_type": instance_query[2],
+            "workflow_config_id": instance_query[3],
+            "workflow_configuration_id": instance_query[4],
+            "lead_id": instance_query[5],
+            "loan_id": instance_query[6],
+            "status": instance_query[7],
+            "current_day": instance_query[8],
+            "started_at": str(instance_query[9]) if instance_query[9] else None,
+            "trigger_milestone_entered_at": str(instance_query[10]) if instance_query[10] else None,
+            "last_task_generated_day": instance_query[11],
+            "next_task_due_at": str(instance_query[12]) if instance_query[12] else None,
+            "created_at": str(instance_query[13]) if instance_query[13] else None
+        }
+        results["instance"] = instance_data
+
+        # Check for column mismatch issue
+        config_id = instance_data["workflow_configuration_id"] or instance_data["workflow_config_id"]
+        if instance_data["workflow_configuration_id"] is None and instance_data["workflow_config_id"] is not None:
+            results["issues_found"].append("COLUMN_MISMATCH: workflow_configuration_id is NULL but workflow_config_id has value")
+            results["recommendations"].append("Run: UPDATE workflow_instances SET workflow_configuration_id = workflow_config_id WHERE id = " + str(instance_id))
+
+        if config_id is None:
+            results["issues_found"].append("NO_WORKFLOW_CONFIG: Both workflow_configuration_id and workflow_config_id are NULL")
+            results["recommendations"].append("Re-enroll lead/loan in workflow")
+            return results
+
+        # Calculate days elapsed
+        trigger_time = instance_query[10] or instance_query[9]  # trigger_milestone_entered_at or started_at
+        if trigger_time:
+            now = datetime.now(timezone.utc)
+            if trigger_time.tzinfo is None:
+                trigger_time = trigger_time.replace(tzinfo=timezone.utc)
+            days_elapsed = (now - trigger_time).days
+            results["instance"]["days_elapsed"] = days_elapsed
+        else:
+            days_elapsed = 0
+            results["issues_found"].append("NO_START_TIME: Neither trigger_milestone_entered_at nor started_at is set")
+
+        # Get workflow configuration
+        config_query = db.execute(text("""
+            SELECT id, workflow_key, workflow_name, is_active
+            FROM workflow_configurations
+            WHERE id = :id
+        """), {"id": config_id}).fetchone()
+
+        if not config_query:
+            results["issues_found"].append(f"WORKFLOW_CONFIG_NOT_FOUND: No workflow_configurations record with id={config_id}")
+            return results
+
+        results["workflow_config"] = {
+            "id": config_query[0],
+            "workflow_key": config_query[1],
+            "workflow_name": config_query[2],
+            "is_active": config_query[3]
+        }
+
+        # Get day configs
+        day_configs_query = db.execute(text("""
+            SELECT
+                id, day_label, day_order, day_value, is_active,
+                phone_enabled, phone_am_enabled, phone_pm_enabled,
+                text_enabled, text_am_enabled, text_pm_enabled,
+                email_enabled, referral_partner_enabled,
+                lo_responsible, jr_lo_responsible, production_asst_responsible,
+                concierge_responsible, ai_responsible
+            FROM workflow_day_configs
+            WHERE workflow_id = :config_id
+            ORDER BY day_order
+        """), {"config_id": config_id}).fetchall()
+
+        if not day_configs_query:
+            results["issues_found"].append(f"NO_DAY_CONFIGS: workflow_day_configs table has no records for workflow_id={config_id}")
+            results["recommendations"].append("Run workflow seed: POST /api/v1/workflow-config/seed-defaults")
+            return results
+
+        last_generated = instance_data["last_task_generated_day"] or 0
+
+        for row in day_configs_query:
+            day_config = {
+                "id": row[0],
+                "day_label": row[1],
+                "day_order": row[2],
+                "day_value": row[3],
+                "is_active": row[4],
+                "phone_enabled": row[5],
+                "phone_am_enabled": row[6],
+                "phone_pm_enabled": row[7],
+                "text_enabled": row[8],
+                "text_am_enabled": row[9],
+                "text_pm_enabled": row[10],
+                "email_enabled": row[11],
+                "referral_partner_enabled": row[12]
+            }
+
+            # Count enabled task types
+            enabled_types = []
+            if row[5]: enabled_types.append("phone")
+            if row[6]: enabled_types.append("phone_am")
+            if row[7]: enabled_types.append("phone_pm")
+            if row[8]: enabled_types.append("text")
+            if row[9]: enabled_types.append("text_am")
+            if row[10]: enabled_types.append("text_pm")
+            if row[11]: enabled_types.append("email")
+            if row[12]: enabled_types.append("referral_partner")
+
+            day_config["enabled_task_types"] = enabled_types
+            day_config["enabled_count"] = len(enabled_types)
+            results["day_configs"].append(day_config)
+
+            # Analyze generation status
+            day_value = row[3] or 0
+            analysis = {
+                "day_label": row[1],
+                "day_value": day_value,
+                "should_generate": False,
+                "reason": "",
+                "enabled_types": enabled_types
+            }
+
+            if not row[4]:  # is_active
+                analysis["reason"] = "SKIPPED: Day config is not active"
+            elif day_value <= last_generated:
+                analysis["reason"] = f"SKIPPED: Already generated (day_value={day_value} <= last_generated={last_generated})"
+            elif day_value > days_elapsed:
+                analysis["reason"] = f"NOT_DUE: Day not yet due (day_value={day_value} > days_elapsed={days_elapsed})"
+            elif len(enabled_types) == 0:
+                analysis["reason"] = "SKIPPED: No task types enabled for this day"
+                results["issues_found"].append(f"Day {row[1]} has no enabled task types")
+            else:
+                analysis["should_generate"] = True
+                analysis["reason"] = f"SHOULD_GENERATE: Due and has {len(enabled_types)} enabled types"
+
+            results["generation_analysis"].append(analysis)
+
+        # Count existing tasks
+        task_count = db.execute(text("""
+            SELECT COUNT(*) FROM workflow_task_instances
+            WHERE workflow_instance_id = :id
+        """), {"id": instance_id}).scalar()
+
+        results["existing_task_count"] = task_count
+
+        # Summary
+        should_generate_count = len([a for a in results["generation_analysis"] if a["should_generate"]])
+        results["summary"] = {
+            "total_day_configs": len(day_configs_query),
+            "days_should_generate": should_generate_count,
+            "days_elapsed": days_elapsed,
+            "last_task_generated_day": last_generated,
+            "existing_tasks": task_count,
+            "issues_count": len(results["issues_found"])
+        }
+
+        if should_generate_count == 0 and len(results["issues_found"]) == 0:
+            if days_elapsed < 1:
+                results["issues_found"].append(f"TOO_EARLY: Workflow started less than 1 day ago (days_elapsed={days_elapsed})")
+                results["recommendations"].append("Wait until Day 1 is due, or backdate trigger_milestone_entered_at for testing")
+            elif all(a["reason"].startswith("SKIPPED: Already generated") for a in results["generation_analysis"] if a["day_value"] <= days_elapsed):
+                results["issues_found"].append("ALL_GENERATED: All due days have already been generated")
+
+        return results
+
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "instance_id": instance_id
+        }
+
+
+@router.get("/diagnostic/summary")
+async def workflow_diagnostic_summary(
+    db: Session = Depends(get_db)
+):
+    """
+    Public diagnostic endpoint - shows overall workflow system health.
+    No authentication required for debugging purposes.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Count tables
+        summary = {}
+
+        # Workflow instances by status
+        instances = db.execute(text("""
+            SELECT status, COUNT(*) as count
+            FROM workflow_instances
+            GROUP BY status
+        """)).fetchall()
+        summary["workflow_instances"] = {row[0]: row[1] for row in instances}
+        summary["total_instances"] = sum(row[1] for row in instances)
+
+        # Workflow configurations
+        configs = db.execute(text("""
+            SELECT COUNT(*) FROM workflow_configurations
+        """)).scalar()
+        summary["workflow_configurations"] = configs
+
+        # Day configs
+        day_configs = db.execute(text("""
+            SELECT COUNT(*) FROM workflow_day_configs
+        """)).scalar()
+        summary["workflow_day_configs"] = day_configs
+
+        # Task instances
+        tasks = db.execute(text("""
+            SELECT status, COUNT(*) as count
+            FROM workflow_task_instances
+            GROUP BY status
+        """)).fetchall()
+        summary["workflow_task_instances"] = {row[0]: row[1] for row in tasks} if tasks else {}
+        summary["total_tasks"] = sum(row[1] for row in tasks) if tasks else 0
+
+        # Recent task generation
+        recent = db.execute(text("""
+            SELECT id, workflow_instance_id, task_type, status, created_at
+            FROM workflow_task_instances
+            ORDER BY created_at DESC
+            LIMIT 5
+        """)).fetchall()
+        summary["recent_tasks"] = [
+            {"id": r[0], "instance_id": r[1], "type": r[2], "status": r[3], "created": str(r[4])}
+            for r in recent
+        ] if recent else []
+
+        # Potential issues
+        issues = []
+
+        if configs == 0:
+            issues.append("NO_WORKFLOW_CONFIGS: No workflow configurations exist - run seed")
+        if day_configs == 0:
+            issues.append("NO_DAY_CONFIGS: No workflow day configs exist - run seed")
+        if summary["total_instances"] > 0 and summary["total_tasks"] == 0:
+            issues.append("NO_TASKS_GENERATED: Active instances exist but no tasks have been generated")
+
+        summary["issues"] = issues
+
+        return summary
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
