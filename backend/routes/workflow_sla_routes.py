@@ -1118,6 +1118,11 @@ async def repair_workflow_tables(
             ("paused_at", "TIMESTAMP WITH TIME ZONE"),
             ("completed_at", "TIMESTAMP WITH TIME ZONE"),
             ("cancelled_at", "TIMESTAMP WITH TIME ZONE"),
+            ("cancelled_by_id", "INTEGER"),  # User who cancelled
+            ("cancellation_reason", "TEXT"),  # Reason for cancellation
+            ("superseded_by_id", "INTEGER"),  # Reference to new workflow instance
+            ("trigger_milestone_status", "VARCHAR(100)"),  # Status that triggered enrollment
+            ("trigger_milestone_entered_at", "TIMESTAMP WITH TIME ZONE"),  # When trigger status was entered
             ("next_check_at", "TIMESTAMP WITH TIME ZONE"),
             ("next_task_due_at", "TIMESTAMP WITH TIME ZONE"),  # For task scheduling
             ("last_task_generated_day", "INTEGER DEFAULT 0"),  # Track task generation progress
@@ -1127,15 +1132,26 @@ async def repair_workflow_tables(
         ],
         "workflow_task_instances": [
             ("workflow_instance_id", "INTEGER"),
+            ("workflow_id", "INTEGER"),  # Reference to workflow configuration
+            ("day_config_id", "INTEGER"),  # Reference to day configuration
+            ("organization_id", "INTEGER"),  # Organization for the task
             ("task_type", "VARCHAR(50) NOT NULL DEFAULT 'manual'"),
             ("task_name", "VARCHAR(255) NOT NULL DEFAULT 'Task'"),
+            ("task_description", "TEXT"),  # Task description from day config
             ("day_number", "INTEGER NOT NULL DEFAULT 1"),
             ("status", "VARCHAR(50) DEFAULT 'scheduled'"),
             ("route", "VARCHAR(50) DEFAULT 'task_list'"),
+            ("task_group_key", "VARCHAR(100)"),  # For sibling task cancellation
             ("assigned_user_id", "INTEGER"),
+            ("assigned_role_id", "INTEGER"),  # Role responsible for task
             ("lead_id", "INTEGER"),
             ("loan_id", "INTEGER"),
+            ("scheduled_date", "TIMESTAMP WITH TIME ZONE"),  # Scheduled date
             ("due_date", "TIMESTAMP WITH TIME ZONE"),
+            ("ai_eligible", "BOOLEAN DEFAULT FALSE"),  # Can AI execute this task
+            ("linked_task_id", "INTEGER"),  # Link to main tasks table
+            ("completion_source", "VARCHAR(50)"),  # user, ai, dialer, automation
+            ("completed_by_id", "INTEGER"),  # User who completed
             ("health_status", "VARCHAR(50) DEFAULT 'healthy'"),  # For escalation tracking
             ("error_message", "TEXT"),  # For error details
             ("started_at", "TIMESTAMP WITH TIME ZONE"),
