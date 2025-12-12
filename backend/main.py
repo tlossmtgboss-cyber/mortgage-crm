@@ -19561,6 +19561,23 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ User Onboarding System not loaded: {e}")
 
+# Include User Invitation routes
+try:
+    from routes.user_invitation_routes import router as invitation_router_template, get_user_invitation_routes
+    from email_service import email_service
+    invitation_router = get_user_invitation_routes(
+        get_db=get_db,
+        get_current_user=get_current_user,
+        User=User,
+        get_password_hash=get_password_hash,
+        create_access_token=create_access_token,
+        email_service=email_service
+    )
+    app.include_router(invitation_router, tags=["User Invitations"])
+    logger.info("✅ User Invitation routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ User Invitation routes not loaded: {e}")
+
 # Include Beta Application routes
 try:
     from routes.beta_routes import router as beta_router
