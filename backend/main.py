@@ -27242,7 +27242,16 @@ async def get_microsoft_auth_url(
         if not db_config:
             db_config = db.query(MicrosoftAppConfig).first()
 
-        if db_config and db_config.client_id:
+        # Validate db_config client_id looks like a valid Azure App ID (UUID format)
+        # Skip invalid values like 'admin' that were entered incorrectly
+        def is_valid_client_id(cid):
+            if not cid or len(cid) < 20:
+                return False
+            # Basic UUID format check
+            import re
+            return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', cid.lower()))
+
+        if db_config and db_config.client_id and is_valid_client_id(db_config.client_id):
             client_id = db_config.client_id
             tenant_id = db_config.tenant_id or "common"
         else:
@@ -27308,7 +27317,14 @@ async def connect_microsoft365(
         if not db_config:
             db_config = db.query(MicrosoftAppConfig).first()
 
-        if db_config and db_config.client_id and db_config.client_secret:
+        # Validate db_config client_id looks like a valid Azure App ID (UUID format)
+        def is_valid_client_id(cid):
+            if not cid or len(cid) < 20:
+                return False
+            import re
+            return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', cid.lower()))
+
+        if db_config and db_config.client_id and db_config.client_secret and is_valid_client_id(db_config.client_id):
             client_id = db_config.client_id
             client_secret = decrypt_token(db_config.client_secret)
             tenant_id = db_config.tenant_id or "common"
