@@ -54724,10 +54724,13 @@ def seed_workflow_configurations():
     """Seed default SLA workflow configurations for all workflow types."""
     db = SessionLocal()
     try:
-        from workflow_config_models import create_workflow_config_models
+        from workflow_config_models import get_workflow_config_models
 
-        # Create workflow config models
-        workflow_models = create_workflow_config_models(Base)
+        # Get existing workflow config models (don't recreate them)
+        workflow_models = get_workflow_config_models()
+        if not workflow_models:
+            logger.warning("Workflow config models not available, skipping seed")
+            return
         WorkflowConfiguration = workflow_models['WorkflowConfiguration']
         WorkflowDayConfig = workflow_models['WorkflowDayConfig']
 

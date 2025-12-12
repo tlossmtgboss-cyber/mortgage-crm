@@ -40,10 +40,30 @@ class TaskHealthStatus(str, enum.Enum):
     DISABLED = "disabled"  # Gray dot - task is turned off
 
 
+# Cache for workflow config models to avoid duplicate class registration
+_workflow_models_cache = {}
+
+
+def get_workflow_config_models():
+    """
+    Get the cached workflow config models if they exist.
+    Returns None if models haven't been created yet.
+    """
+    if _workflow_models_cache:
+        # Return the first (and only) cached models
+        return list(_workflow_models_cache.values())[0]
+    return None
+
+
 def create_workflow_config_models(Base):
     """
     Factory function to create workflow config models with the provided SQLAlchemy Base.
+    Returns cached models if already created to avoid duplicate class registration.
     """
+    # Return cached models if already created for this Base
+    base_id = id(Base)
+    if base_id in _workflow_models_cache:
+        return _workflow_models_cache[base_id]
 
     class WorkflowConfiguration(Base):
         """
