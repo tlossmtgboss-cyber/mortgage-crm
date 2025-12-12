@@ -407,6 +407,47 @@ BEGIN
     END IF;
 END $$;
 
+-- Add SLA milestone tracking columns to tasks table
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM information_schema.columns
+                   WHERE table_name = 'tasks'
+                   AND column_name = 'sla_milestone_id') THEN
+        ALTER TABLE tasks
+            ADD COLUMN sla_milestone_id INTEGER;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM information_schema.columns
+                   WHERE table_name = 'tasks'
+                   AND column_name = 'sla_milestone_type') THEN
+        ALTER TABLE tasks
+            ADD COLUMN sla_milestone_type VARCHAR(100);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM information_schema.columns
+                   WHERE table_name = 'tasks'
+                   AND column_name = 'sla_date_field') THEN
+        ALTER TABLE tasks
+            ADD COLUMN sla_date_field VARCHAR(100);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM information_schema.columns
+                   WHERE table_name = 'tasks'
+                   AND column_name = 'milestone_date') THEN
+        ALTER TABLE tasks
+            ADD COLUMN milestone_date TIMESTAMP WITH TIME ZONE;
+    END IF;
+END $$;
+
 -- Add abbreviation to roles table
 DO $$
 BEGIN
