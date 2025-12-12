@@ -1507,6 +1507,7 @@ async def submit_application(
         # STORE E-SIGN DOCUMENTS IN DATABASE
         # =================================================================
         documents_stored = []
+        doc_error_msg = None
         if lead_id:
             try:
                 import base64
@@ -1583,7 +1584,12 @@ async def submit_application(
             except Exception as doc_error:
                 logger.error(f"Document storage failed: {doc_error}")
                 import traceback
+                doc_error_msg = str(doc_error)
                 logger.error(traceback.format_exc())
+
+        # Track if no lead_id was available
+        if not lead_id:
+            doc_error_msg = "No lead_id available for document storage"
 
         return {
             "success": True,
@@ -1596,6 +1602,7 @@ async def submit_application(
                 "fannie_mae_generated": fannie_mae_xml is not None,
                 "email_sent_to_lo": email_sent,
                 "documents_stored": documents_stored,
+                "document_storage_error": doc_error_msg,
             }
         }
 
