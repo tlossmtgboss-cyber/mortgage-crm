@@ -213,9 +213,9 @@ class LoanMilestoneHistory(Base):
     variance_hours = Column(Float)  # Difference (negative = ahead, positive = behind)
     variance_pct = Column(Float)  # Percentage over/under
 
-    # Assignment
-    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    completed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Assignment - use_alter defers FK creation to avoid import order issues
+    assigned_to_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_milestone_assigned_to"), nullable=True)
+    completed_by_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_milestone_completed_by"), nullable=True)
 
     # Notes
     notes = Column(Text)
@@ -303,9 +303,9 @@ class SLAAlert(Base):
     # Status
     status = Column(SQLEnum(AlertStatus), default=AlertStatus.ACTIVE, index=True)
 
-    # Assignment
-    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    escalated_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Assignment - use_alter defers FK creation to avoid import order issues
+    assigned_to_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_alert_assigned_to"), nullable=True)
+    escalated_to_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_alert_escalated_to"), nullable=True)
 
     # Timing
     triggered_at = Column(DateTime(timezone=True), server_default=func.now())

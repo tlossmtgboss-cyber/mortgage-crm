@@ -580,7 +580,7 @@ class TimeBasedWorkflowEngine:
         try:
             # Find stale new leads
             result = self.db.execute(text("""
-                SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.name as owner_name, l.created_at
+                SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.full_name as owner_name, l.created_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'New'
@@ -634,7 +634,7 @@ class TimeBasedWorkflowEngine:
 
         try:
             result = self.db.execute(text("""
-                SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.name as owner_name, l.updated_at
+                SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.full_name as owner_name, l.updated_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'Attempted Contact'
@@ -671,7 +671,7 @@ class TimeBasedWorkflowEngine:
 
         try:
             result = self.db.execute(text("""
-                SELECT l.id, l.name, l.email, l.owner_id, u.name as owner_name, l.updated_at
+                SELECT l.id, l.name, l.email, l.owner_id, u.full_name as owner_name, l.updated_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'Prospect'
@@ -708,7 +708,7 @@ class TimeBasedWorkflowEngine:
 
         try:
             result = self.db.execute(text("""
-                SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.name as owner_name, l.updated_at
+                SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.full_name as owner_name, l.updated_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'Application Started'
