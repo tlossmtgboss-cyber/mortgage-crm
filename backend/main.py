@@ -313,6 +313,10 @@ class DocumentType(str, enum.Enum):
     LOAN_ESTIMATE = "Loan Estimate"
     CLOSING_DISCLOSURE = "Closing Disclosure"
     INITIAL_DISCLOSURES = "Initial Disclosures"
+    # E-Sign Documents
+    E_CONSENT = "E-Consent Agreement"
+    CREDIT_AUTHORIZATION = "Credit Authorization"
+    FANNIE_MAE_34 = "Fannie Mae 3.4 File"
     # Other
     DIVORCE_DECREE = "Divorce Decree"
     BANKRUPTCY_DISCHARGE = "Bankruptcy Discharge"

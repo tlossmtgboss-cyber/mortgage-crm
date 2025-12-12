@@ -1320,31 +1320,75 @@ async def submit_application(
         if lo_email and econsent_pdf and credit_auth_pdf and fannie_mae_bytes:
             try:
                 import base64
+
+                # Calculate loan amount for email
+                email_purchase_price = float(submission.propertyData.get('purchasePrice', 0) or 0)
+                email_down_payment = float(submission.propertyData.get('downPayment', 0) or 0)
+                email_loan_amount = email_purchase_price - email_down_payment
+                email_ltv = (email_loan_amount / email_purchase_price * 100) if email_purchase_price > 0 else 0
+
                 email_html = f"""
                 <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                        <h2 style="color: #218D8D;">New Mortgage Application Submitted</h2>
-                        <p>A new mortgage application has been submitted by:</p>
-                        <ul>
-                            <li><strong>Name:</strong> {borrower_name}</li>
-                            <li><strong>Email:</strong> {borrower_email}</li>
-                            <li><strong>Phone:</strong> {submission.profileData.get('phone', 'N/A')}</li>
-                        </ul>
-                        <h3>Property Details</h3>
-                        <ul>
-                            <li><strong>Purchase Price:</strong> ${float(submission.propertyData.get('purchasePrice', 0)):,.0f}</li>
-                            <li><strong>Down Payment:</strong> ${float(submission.propertyData.get('downPayment', 0)):,.0f}</li>
-                            <li><strong>Property Type:</strong> {submission.propertyData.get('propertyType', 'N/A')}</li>
-                        </ul>
-                        <h3>Attached Documents</h3>
-                        <ul>
+                    <div style="max-width: 700px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #218D8D; border-bottom: 2px solid #218D8D; padding-bottom: 10px;">New Mortgage Application Submitted</h2>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">📋 PERSONAL INFORMATION</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Full Name:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{borrower_name}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Email:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{borrower_email}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Phone:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.profileData.get('phone', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Address:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.profileData.get('address', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>City, State, ZIP:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.profileData.get('city', '')}, {submission.profileData.get('state', '')} {submission.profileData.get('zip', '')}</td></tr>
+                        </table>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">🏠 PROPERTY DETAILS</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Property Address:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.propertyData.get('address', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>City, State, ZIP:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.propertyData.get('city', '')}, {submission.propertyData.get('state', '')} {submission.propertyData.get('zip', '')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Property Type:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.propertyData.get('propertyType', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Occupancy:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.propertyData.get('occupancy', 'Primary Residence')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Purchase Price:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${email_purchase_price:,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Down Payment:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${email_down_payment:,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Loan Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${email_loan_amount:,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>LTV:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{email_ltv:.1f}%</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Loan Program:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.propertyData.get('loanProgram', 'Conventional')}</td></tr>
+                        </table>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">💼 EMPLOYMENT & INCOME</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Employer Name:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.incomeData.get('employerName', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Job Title:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.incomeData.get('jobTitle', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Employment Start Date:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.incomeData.get('startDate', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Annual Salary:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${float(submission.incomeData.get('annualSalary', 0) or 0):,.0f}</td></tr>
+                        </table>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">💰 ASSETS</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Checking Account:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${float(submission.assetData.get('checking', 0) or 0):,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Savings Account:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${float(submission.assetData.get('savings', 0) or 0):,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Investments:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${float(submission.assetData.get('investments', 0) or 0):,.0f}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Gift Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${float(submission.assetData.get('giftAmount', 0) or 0):,.0f}</td></tr>
+                        </table>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">📝 DECLARATIONS</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Citizenship:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('citizenship', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>First-Time Buyer:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('first_time_buyer', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>E-Consent Agreed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{'Yes' if submission.eConsentAgreed else 'No'}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Credit Auth Agreed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{'Yes' if submission.creditAuthAgreed else 'No'}</td></tr>
+                        </table>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">📎 ATTACHED DOCUMENTS</h3>
+                        <ul style="background: #f8f9fa; padding: 15px 30px; border-radius: 5px;">
                             <li>E-Consent Agreement (signed)</li>
                             <li>Credit Authorization (signed)</li>
                             <li>Fannie Mae 3.4 File (for LOS import)</li>
                         </ul>
-                        <p style="color: #666; font-size: 12px; margin-top: 30px;">
-                            This is an automated message from Perennia AI Mortgage Platform.
+
+                        <p style="color: #666; font-size: 12px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                            This is an automated message from Perennia AI Mortgage Platform.<br>
+                            Submitted: {submission_date.strftime('%B %d, %Y at %I:%M %p')}
                         </p>
                     </div>
                 </body>
@@ -1456,6 +1500,94 @@ async def submit_application(
         db.commit()
         logger.info(f"Created lead {lead_id} in CRM for {borrower_name}")
 
+        # =================================================================
+        # STORE E-SIGN DOCUMENTS IN DATABASE
+        # =================================================================
+        documents_stored = []
+        if lead_id:
+            try:
+                import base64
+                import os
+
+                # Create documents directory if it doesn't exist
+                docs_dir = os.path.join(os.path.dirname(__file__), "generated_documents", str(lead_id))
+                os.makedirs(docs_dir, exist_ok=True)
+
+                # Store E-Consent PDF
+                if econsent_pdf:
+                    econsent_filename = f"E-Consent_{safe_borrower_name}_{date_str}.pdf"
+                    econsent_path = os.path.join(docs_dir, econsent_filename)
+                    with open(econsent_path, 'wb') as f:
+                        f.write(econsent_pdf)
+
+                    db.execute(text("""
+                        INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
+                            file_size, mime_type, file_location, source, status, created_at)
+                        VALUES (:borrower_id, 'E-Consent Agreement', 'Disclosures', :filename, :original_filename,
+                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :created_at)
+                    """), {
+                        "borrower_id": lead_id,
+                        "filename": econsent_filename,
+                        "original_filename": econsent_filename,
+                        "file_size": len(econsent_pdf),
+                        "file_location": econsent_path,
+                        "created_at": submission_date,
+                    })
+                    documents_stored.append("E-Consent")
+                    logger.info(f"Stored E-Consent document for lead {lead_id}")
+
+                # Store Credit Authorization PDF
+                if credit_auth_pdf:
+                    credit_auth_filename = f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf"
+                    credit_auth_path = os.path.join(docs_dir, credit_auth_filename)
+                    with open(credit_auth_path, 'wb') as f:
+                        f.write(credit_auth_pdf)
+
+                    db.execute(text("""
+                        INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
+                            file_size, mime_type, file_location, source, status, created_at)
+                        VALUES (:borrower_id, 'Credit Authorization', 'Disclosures', :filename, :original_filename,
+                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :created_at)
+                    """), {
+                        "borrower_id": lead_id,
+                        "filename": credit_auth_filename,
+                        "original_filename": credit_auth_filename,
+                        "file_size": len(credit_auth_pdf),
+                        "file_location": credit_auth_path,
+                        "created_at": submission_date,
+                    })
+                    documents_stored.append("Credit Authorization")
+                    logger.info(f"Stored Credit Authorization document for lead {lead_id}")
+
+                # Store Fannie Mae 3.4 file
+                if fannie_mae_xml:
+                    fannie_filename = f"FannieMae34_{safe_borrower_name}_{date_str}.xml"
+                    fannie_path = os.path.join(docs_dir, fannie_filename)
+                    with open(fannie_path, 'w') as f:
+                        f.write(fannie_mae_xml)
+
+                    db.execute(text("""
+                        INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
+                            file_size, mime_type, file_location, source, status, created_at)
+                        VALUES (:borrower_id, 'Fannie Mae 3.4 File', 'Disclosures', :filename, :original_filename,
+                            :file_size, 'application/xml', :file_location, 'APPLICATION', 'active', :created_at)
+                    """), {
+                        "borrower_id": lead_id,
+                        "filename": fannie_filename,
+                        "original_filename": fannie_filename,
+                        "file_size": len(fannie_mae_xml),
+                        "file_location": fannie_path,
+                        "created_at": submission_date,
+                    })
+                    documents_stored.append("Fannie Mae 3.4")
+                    logger.info(f"Stored Fannie Mae 3.4 document for lead {lead_id}")
+
+                db.commit()
+                logger.info(f"Stored {len(documents_stored)} documents for lead {lead_id}: {documents_stored}")
+
+            except Exception as doc_error:
+                logger.warning(f"Document storage failed (non-critical): {doc_error}")
+
         return {
             "success": True,
             "message": "Application submitted successfully",
@@ -1466,6 +1598,7 @@ async def submit_application(
                 "pdfs_generated": econsent_pdf is not None and credit_auth_pdf is not None,
                 "fannie_mae_generated": fannie_mae_xml is not None,
                 "email_sent_to_lo": email_sent,
+                "documents_stored": documents_stored,
             }
         }
 
