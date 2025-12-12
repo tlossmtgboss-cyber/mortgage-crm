@@ -27626,6 +27626,44 @@ async def save_microsoft_oauth_config(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/migrations/fix-microsoft-oauth-config")
+async def fix_microsoft_oauth_config(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Fix Microsoft OAuth config by using environment variables"""
+    try:
+        env_client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        env_client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+        env_tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+        env_redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI")
+
+        if not env_client_id:
+            return {"status": "error", "message": "MICROSOFT_CLIENT_ID not set in environment"}
+
+        # Get existing config
+        existing = db.query(MicrosoftAppConfig).first()
+
+        if existing:
+            old_client_id = existing.client_id
+            existing.client_id = env_client_id
+            if env_client_secret:
+                existing.client_secret = env_client_secret
+            existing.tenant_id = env_tenant_id
+            if env_redirect_uri:
+                existing.redirect_uri = env_redirect_uri
+            db.commit()
+            return {
+                "status": "success",
+                "message": f"Updated Microsoft OAuth config: changed client_id from '{old_client_id}' to '{env_client_id[:8]}...'"
+            }
+        else:
+            return {"status": "info", "message": "No existing config found - system will use environment variables"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error fixing Microsoft OAuth config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/v1/migrations/create-microsoft-app-config-table")
 async def create_microsoft_app_config_table(
     current_user: User = Depends(get_current_user),
