@@ -1105,6 +1105,7 @@ async def repair_workflow_tables(
             ("loan_id", "INTEGER"),
             ("workflow_type", "VARCHAR(100) NOT NULL DEFAULT 'prospect'"),
             ("workflow_config_id", "INTEGER"),
+            ("workflow_configuration_id", "INTEGER"),  # Alias for workflow_config_id
             ("status", "VARCHAR(50) DEFAULT 'active'"),
             ("current_day", "INTEGER DEFAULT 1"),
             ("started_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
@@ -1112,6 +1113,8 @@ async def repair_workflow_tables(
             ("completed_at", "TIMESTAMP WITH TIME ZONE"),
             ("cancelled_at", "TIMESTAMP WITH TIME ZONE"),
             ("next_check_at", "TIMESTAMP WITH TIME ZONE"),
+            ("next_task_due_at", "TIMESTAMP WITH TIME ZONE"),  # For task scheduling
+            ("last_task_generated_day", "INTEGER DEFAULT 0"),  # Track task generation progress
             ("metadata", "JSONB DEFAULT '{}'"),
             ("created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
             ("updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
@@ -1127,6 +1130,8 @@ async def repair_workflow_tables(
             ("lead_id", "INTEGER"),
             ("loan_id", "INTEGER"),
             ("due_date", "TIMESTAMP WITH TIME ZONE"),
+            ("health_status", "VARCHAR(50) DEFAULT 'healthy'"),  # For escalation tracking
+            ("error_message", "TEXT"),  # For error details
             ("started_at", "TIMESTAMP WITH TIME ZONE"),
             ("completed_at", "TIMESTAMP WITH TIME ZONE"),
             ("outcome", "VARCHAR(100)"),
