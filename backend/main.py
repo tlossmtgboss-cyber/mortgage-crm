@@ -49636,6 +49636,36 @@ async def startup_event():
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
 
+            # Add document type enum values for e-sign documents
+            try:
+                engine = SessionLocal().get_bind()
+                connection = engine.raw_connection()
+                connection.set_isolation_level(0)  # AUTOCOMMIT required for ALTER TYPE
+                cursor = connection.cursor()
+
+                doc_types_to_add = [
+                    "E-Consent Agreement",
+                    "Credit Authorization",
+                    "Fannie Mae 3.4 File",
+                ]
+
+                for doc_type in doc_types_to_add:
+                    cursor.execute("""
+                        SELECT 1 FROM pg_enum WHERE enumlabel = %s
+                        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'documenttype')
+                    """, (doc_type,))
+                    if not cursor.fetchone():
+                        try:
+                            cursor.execute(f"ALTER TYPE documenttype ADD VALUE '{doc_type}'")
+                            logger.info(f"✅ Added '{doc_type}' to documenttype enum")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Could not add '{doc_type}': {e}")
+
+                cursor.close()
+                connection.close()
+            except Exception as dt_e:
+                logger.warning(f"⚠️ Document type enum migration skipped: {dt_e}")
+
             # Reset admin password (always runs)
             try:
                 db_temp = SessionLocal()
