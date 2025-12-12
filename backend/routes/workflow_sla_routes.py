@@ -896,3 +896,184 @@ async def ensure_tasks_table_columns(
         "already_exists": already_exists,
         "errors": errors
     }
+
+
+@router.post("/init/run-migrations")
+async def run_workflow_migrations(
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Run the full workflow SLA migrations.
+    Creates all required tables and enum types for the workflow system.
+    """
+    from sqlalchemy import text
+    import os
+
+    results = {
+        "enums": [],
+        "tables": [],
+        "indexes": [],
+        "errors": []
+    }
+
+    # Define all migrations inline for reliability
+    migrations = [
+        # Enum types
+        ("""DO $$ BEGIN
+            CREATE TYPE workflow_instance_status AS ENUM (
+                'active', 'paused', 'completed', 'cancelled', 'error'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$;""", "enum", "workflow_instance_status"),
+
+        ("""DO $$ BEGIN
+            CREATE TYPE workflow_task_status AS ENUM (
+                'scheduled', 'pending', 'in_progress', 'completed', 'skipped', 'failed', 'cancelled'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$;""", "enum", "workflow_task_status"),
+
+        ("""DO $$ BEGIN
+            CREATE TYPE workflow_task_type AS ENUM (
+                'phone', 'phone_am', 'phone_pm', 'text', 'text_am', 'text_pm',
+                'email', 'referral_partner', 'dialer', 'manual'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$;""", "enum", "workflow_task_type"),
+
+        ("""DO $$ BEGIN
+            CREATE TYPE workflow_route AS ENUM (
+                'task_list', 'dialer_queue', 'ai_autonomous', 'email_automation', 'sms_automation'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$;""", "enum", "workflow_route"),
+
+        ("""DO $$ BEGIN
+            CREATE TYPE lead_source_category AS ENUM (
+                'organic', 'purchased', 'partner', 'marketing', 'other'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL; END $$;""", "enum", "lead_source_category"),
+
+        # Tables
+        ("""CREATE TABLE IF NOT EXISTS workflow_instances (
+            id SERIAL PRIMARY KEY,
+            organization_id INTEGER NOT NULL,
+            lead_id INTEGER,
+            loan_id INTEGER,
+            workflow_type VARCHAR(100) NOT NULL,
+            workflow_config_id INTEGER,
+            status VARCHAR(50) DEFAULT 'active',
+            current_day INTEGER DEFAULT 1,
+            started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            paused_at TIMESTAMP WITH TIME ZONE,
+            completed_at TIMESTAMP WITH TIME ZONE,
+            cancelled_at TIMESTAMP WITH TIME ZONE,
+            next_check_at TIMESTAMP WITH TIME ZONE,
+            metadata JSONB DEFAULT '{}',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );""", "table", "workflow_instances"),
+
+        ("""CREATE TABLE IF NOT EXISTS workflow_task_instances (
+            id SERIAL PRIMARY KEY,
+            workflow_instance_id INTEGER NOT NULL,
+            task_type VARCHAR(50) NOT NULL,
+            task_name VARCHAR(255) NOT NULL,
+            day_number INTEGER NOT NULL,
+            status VARCHAR(50) DEFAULT 'scheduled',
+            route VARCHAR(50) DEFAULT 'task_list',
+            assigned_user_id INTEGER,
+            lead_id INTEGER,
+            loan_id INTEGER,
+            due_date TIMESTAMP WITH TIME ZONE,
+            started_at TIMESTAMP WITH TIME ZONE,
+            completed_at TIMESTAMP WITH TIME ZONE,
+            outcome VARCHAR(100),
+            outcome_notes TEXT,
+            ai_confidence DECIMAL(5,4),
+            ai_executed BOOLEAN DEFAULT FALSE,
+            execution_details JSONB DEFAULT '{}',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );""", "table", "workflow_task_instances"),
+
+        ("""CREATE TABLE IF NOT EXISTS workflow_role_assignments (
+            id SERIAL PRIMARY KEY,
+            organization_id INTEGER NOT NULL,
+            lead_id INTEGER,
+            loan_id INTEGER,
+            workflow_type VARCHAR(100) NOT NULL,
+            role_type VARCHAR(50) NOT NULL,
+            user_id INTEGER NOT NULL,
+            assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            assigned_by INTEGER,
+            active BOOLEAN DEFAULT TRUE,
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );""", "table", "workflow_role_assignments"),
+
+        ("""CREATE TABLE IF NOT EXISTS workflow_ai_actions (
+            id SERIAL PRIMARY KEY,
+            workflow_task_instance_id INTEGER NOT NULL,
+            action_type VARCHAR(100) NOT NULL,
+            confidence_score DECIMAL(5,4) NOT NULL,
+            confidence_threshold DECIMAL(5,4) NOT NULL,
+            was_executed BOOLEAN DEFAULT FALSE,
+            required_approval BOOLEAN DEFAULT FALSE,
+            approval_status VARCHAR(50),
+            approved_by INTEGER,
+            approved_at TIMESTAMP WITH TIME ZONE,
+            execution_result JSONB,
+            error_message TEXT,
+            rollback_available BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );""", "table", "workflow_ai_actions"),
+
+        ("""CREATE TABLE IF NOT EXISTS workflow_transitions (
+            id SERIAL PRIMARY KEY,
+            workflow_instance_id INTEGER NOT NULL,
+            from_status VARCHAR(50),
+            to_status VARCHAR(50) NOT NULL,
+            trigger_type VARCHAR(100) NOT NULL,
+            trigger_details JSONB,
+            transitioned_by INTEGER,
+            notes TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );""", "table", "workflow_transitions"),
+
+        # Indexes
+        ("""CREATE INDEX IF NOT EXISTS idx_workflow_instances_org_status
+            ON workflow_instances(organization_id, status);""", "index", "idx_workflow_instances_org_status"),
+        ("""CREATE INDEX IF NOT EXISTS idx_workflow_instances_lead
+            ON workflow_instances(lead_id) WHERE lead_id IS NOT NULL;""", "index", "idx_workflow_instances_lead"),
+        ("""CREATE INDEX IF NOT EXISTS idx_workflow_instances_loan
+            ON workflow_instances(loan_id) WHERE loan_id IS NOT NULL;""", "index", "idx_workflow_instances_loan"),
+        ("""CREATE INDEX IF NOT EXISTS idx_workflow_task_instances_workflow
+            ON workflow_task_instances(workflow_instance_id, status);""", "index", "idx_workflow_task_instances_workflow"),
+        ("""CREATE INDEX IF NOT EXISTS idx_workflow_task_instances_assigned
+            ON workflow_task_instances(assigned_user_id, status, due_date);""", "index", "idx_workflow_task_instances_assigned"),
+    ]
+
+    for sql, migration_type, name in migrations:
+        try:
+            db.execute(text(sql))
+            db.commit()
+            results[f"{migration_type}s"].append({"name": name, "status": "success"})
+            logger.info(f"✅ Created {migration_type}: {name}")
+        except Exception as e:
+            db.rollback()
+            error_msg = str(e)
+            if "already exists" in error_msg.lower():
+                results[f"{migration_type}s"].append({"name": name, "status": "exists"})
+            else:
+                results["errors"].append({"name": name, "type": migration_type, "error": error_msg})
+                logger.error(f"❌ Failed {migration_type} {name}: {e}")
+
+    return {
+        "success": len(results["errors"]) == 0,
+        "results": results,
+        "summary": {
+            "enums": len([e for e in results["enums"] if e["status"] == "success"]),
+            "tables": len([t for t in results["tables"] if t["status"] == "success"]),
+            "indexes": len([i for i in results["indexes"] if i["status"] == "success"]),
+            "errors": len(results["errors"])
+        }
+    }
