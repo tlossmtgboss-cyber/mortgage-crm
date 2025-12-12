@@ -1206,3 +1206,77 @@ async def repair_workflow_tables(
             "errors": len(results["errors"])
         }
     }
+
+
+@router.get("/init/debug-imports")
+async def debug_imports(
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to test imports and model initialization.
+    """
+    results = {
+        "main_imports": {},
+        "workflow_config_imports": {},
+        "service_init": {},
+        "errors": []
+    }
+
+    # Test main imports
+    try:
+        from main import Lead, Loan, Task, User, Organization, Base
+        results["main_imports"]["Lead"] = str(type(Lead))
+        results["main_imports"]["Loan"] = str(type(Loan))
+        results["main_imports"]["Task"] = str(type(Task))
+        results["main_imports"]["User"] = str(type(User))
+        results["main_imports"]["Organization"] = str(type(Organization))
+        results["main_imports"]["Base"] = str(type(Base))
+    except Exception as e:
+        results["errors"].append({"stage": "main_imports", "error": str(e)})
+
+    # Test workflow_config_models
+    try:
+        from workflow_config_models import create_workflow_config_models
+        from main import Base
+        workflow_models = create_workflow_config_models(Base)
+        results["workflow_config_imports"]["WorkflowConfiguration"] = str(type(workflow_models.get('WorkflowConfiguration')))
+        results["workflow_config_imports"]["WorkflowDayConfig"] = str(type(workflow_models.get('WorkflowDayConfig')))
+        results["workflow_config_imports"]["WorkflowTaskInstance"] = str(type(workflow_models.get('WorkflowTaskInstance')))
+    except Exception as e:
+        results["errors"].append({"stage": "workflow_config_imports", "error": str(e)})
+
+    # Test models.user_onboarding
+    try:
+        from models.user_onboarding import Role
+        results["main_imports"]["Role"] = str(type(Role))
+    except Exception as e:
+        results["errors"].append({"stage": "role_import", "error": str(e)})
+
+    # Test TaskGeneratorService
+    try:
+        from services.workflow_task_generator import TaskGeneratorService
+        generator = TaskGeneratorService(db)
+        results["service_init"]["TaskGeneratorService"] = "success"
+    except Exception as e:
+        import traceback
+        results["errors"].append({
+            "stage": "TaskGeneratorService",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
+
+    # Test WorkflowSLAService
+    try:
+        from services.workflow_sla_service import WorkflowSLAService
+        service = WorkflowSLAService(db)
+        results["service_init"]["WorkflowSLAService"] = "success"
+    except Exception as e:
+        import traceback
+        results["errors"].append({
+            "stage": "WorkflowSLAService",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
+
+    return results
