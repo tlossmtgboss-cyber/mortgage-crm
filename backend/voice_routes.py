@@ -352,13 +352,39 @@ async def connect_to_openai_realtime():
         }
     }))
 
-    # Trigger Sam to greet the caller immediately (don't wait for them to speak)
+    # Wait for session.updated confirmation before triggering greeting
+    session_ready = False
+    for _ in range(10):  # Wait up to 5 seconds
+        try:
+            response = await asyncio.wait_for(ws.recv(), timeout=0.5)
+            data = json.loads(response)
+            logger.info(f"OpenAI setup event: {data.get('type')}")
+            if data.get('type') == 'session.updated':
+                session_ready = True
+                break
+        except asyncio.TimeoutError:
+            continue
+
+    if not session_ready:
+        logger.warning("Session update not confirmed, proceeding anyway")
+
+    # Trigger Sam to greet the caller
     await ws.send(json.dumps({
-        "type": "response.create",
-        "response": {
-            "modalities": ["text", "audio"],
-            "instructions": "Greet the caller warmly. Say something like: 'Hi, this is Sam with CMG Home Loans. Thanks for calling! How can I help you today?' Keep it natural and friendly."
+        "type": "conversation.item.create",
+        "item": {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "A caller just connected. Please greet them warmly."
+                }
+            ]
         }
+    }))
+
+    await ws.send(json.dumps({
+        "type": "response.create"
     }))
 
     logger.info("OpenAI Realtime session configured, initial greeting triggered")
