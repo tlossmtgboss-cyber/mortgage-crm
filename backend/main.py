@@ -52640,6 +52640,73 @@ async def add_loanstage_values_migration(
         }
 
 
+@app.post("/api/v1/migrations/add-documenttype-values", response_model=None)
+async def add_documenttype_values_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add missing values to documenttype enum type.
+    Adds E-Consent, Credit Authorization, and Fannie Mae 3.4 document types.
+    """
+    try:
+        logger.info(f"Running migration: add documenttype enum values (user: {current_user.id})")
+
+        # New document type values to add
+        values_to_add = [
+            "E-Consent Agreement",
+            "Credit Authorization",
+            "Fannie Mae 3.4 File",
+        ]
+
+        added = []
+        existing = []
+
+        # Get raw connection for ALTER TYPE (needs autocommit)
+        engine = db.get_bind()
+        connection = engine.raw_connection()
+
+        try:
+            connection.set_isolation_level(0)  # AUTOCOMMIT
+            cursor = connection.cursor()
+
+            for value in values_to_add:
+                cursor.execute("""
+                    SELECT 1 FROM pg_enum WHERE enumlabel = %s
+                    AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'documenttype')
+                """, (value,))
+                exists = cursor.fetchone()
+
+                if not exists:
+                    try:
+                        cursor.execute(f"ALTER TYPE documenttype ADD VALUE '{value}'")
+                        added.append(value)
+                        logger.info(f"Added '{value}' to documenttype enum")
+                    except Exception as e:
+                        logger.warning(f"Could not add '{value}': {e}")
+                else:
+                    existing.append(value)
+
+            cursor.close()
+        finally:
+            connection.close()
+
+        return {
+            "success": True,
+            "message": f"Added {len(added)} values to documenttype enum",
+            "added": added,
+            "already_existing": existing
+        }
+
+    except Exception as e:
+        logger.error(f"Documenttype values migration failed: {e}")
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-workflow-config-tables", response_model=None)
 async def add_workflow_config_tables_migration(
     current_user: User = Depends(get_current_user),
