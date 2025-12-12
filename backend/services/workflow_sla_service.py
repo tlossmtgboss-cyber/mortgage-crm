@@ -679,20 +679,30 @@ class WorkflowSLAService:
         workflow_config_id: int,
         lead_id: int = None,
         loan_id: int = None,
-        trigger_status: str = None
+        trigger_status: str = None,
+        workflow_type: str = None
     ) -> Any:
         """Create a new workflow instance."""
         now = datetime.now(timezone.utc)
 
+        # Get workflow_type from config if not provided
+        if not workflow_type:
+            config = self.db.execute(text("""
+                SELECT workflow_key FROM workflow_configurations WHERE id = :config_id
+            """), {"config_id": workflow_config_id}).fetchone()
+            workflow_type = config.workflow_key if config else 'prospect'
+
         self.db.execute(text("""
             INSERT INTO workflow_instances (
                 organization_id, workflow_configuration_id,
+                workflow_type,
                 lead_id, loan_id, status,
                 trigger_milestone_status, trigger_milestone_entered_at,
                 started_at, last_task_generated_day,
                 created_at, updated_at
             ) VALUES (
                 :org_id, :config_id,
+                :workflow_type,
                 :lead_id, :loan_id, 'active',
                 :trigger_status, :trigger_time,
                 :started_at, 0,
@@ -701,6 +711,7 @@ class WorkflowSLAService:
         """), {
             "org_id": organization_id,
             "config_id": workflow_config_id,
+            "workflow_type": workflow_type,
             "lead_id": lead_id,
             "loan_id": loan_id,
             "trigger_status": trigger_status,
