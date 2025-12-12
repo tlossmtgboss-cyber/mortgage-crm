@@ -35077,15 +35077,24 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     db.commit()
     db.refresh(db_lead)
 
+    # Capture lead info before SLA tracking (in case SLA tracking fails and corrupts session)
+    lead_id = db_lead.id
+    lead_name = db_lead.name
+    lead_score = db_lead.ai_score
+
     # Start SLA tracking for LEAD_RESPONSE milestone
     # This triggers the SLA timer for responding to new leads
     try:
-        track_lead_created(db, db_lead.id)
-        logger.info(f"SLA milestone LEAD_RESPONSE started for lead {db_lead.id}")
+        track_lead_created(db, lead_id)
+        logger.info(f"SLA milestone LEAD_RESPONSE started for lead {lead_id}")
     except Exception as e:
-        logger.warning(f"Failed to start SLA tracking for lead {db_lead.id}: {e}")
+        # Rollback to reset session state after SLA tracking failure
+        db.rollback()
+        logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
+        # Re-fetch the lead after rollback to return a valid response
+        db_lead = db.query(Lead).filter(Lead.id == lead_id).first()
 
-    logger.info(f"Lead created: {db_lead.name} (Score: {db_lead.ai_score})")
+    logger.info(f"Lead created: {lead_name} (Score: {lead_score})")
     return db_lead
 
 @app.get("/api/v1/leads/")
