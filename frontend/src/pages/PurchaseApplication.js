@@ -2184,39 +2184,42 @@ export default function PurchaseApplication() {
             />
           )}
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>{declarations.found_property === 'yes' ? 'Purchase Price' : 'Target Price Range'}</label>
-              <div className="input-with-prefix">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  value={propertyData.purchasePrice || prefilledPrice || ''}
-                  onChange={(e) => setPropertyData(prev => ({ ...prev, purchasePrice: e.target.value }))}
-                  className="fun-input"
-                  placeholder={paymentEstimate ? '' : '0'}
-                />
+          {/* Only show manual price/down payment inputs when no budget summary exists */}
+          {!paymentEstimate && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>{declarations.found_property === 'yes' ? 'Purchase Price' : 'Target Price Range'}</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={propertyData.purchasePrice || prefilledPrice || ''}
+                    onChange={(e) => setPropertyData(prev => ({ ...prev, purchasePrice: e.target.value }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Down Payment</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={propertyData.downPayment || prefilledDownPayment || ''}
+                    onChange={(e) => setPropertyData(prev => ({ ...prev, downPayment: e.target.value }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+                {(propertyData.purchasePrice || prefilledPrice) && (propertyData.downPayment || prefilledDownPayment) && (
+                  <span className="calculated-hint">
+                    {(((propertyData.downPayment || prefilledDownPayment) / (propertyData.purchasePrice || prefilledPrice)) * 100).toFixed(1)}% down
+                  </span>
+                )}
               </div>
             </div>
-            <div className="form-group">
-              <label>Down Payment</label>
-              <div className="input-with-prefix">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  value={propertyData.downPayment || prefilledDownPayment || ''}
-                  onChange={(e) => setPropertyData(prev => ({ ...prev, downPayment: e.target.value }))}
-                  className="fun-input"
-                  placeholder={paymentEstimate ? '' : '0'}
-                />
-              </div>
-              {(propertyData.purchasePrice || prefilledPrice) && (propertyData.downPayment || prefilledDownPayment) && (
-                <span className="calculated-hint">
-                  {(((propertyData.downPayment || prefilledDownPayment) / (propertyData.purchasePrice || prefilledPrice)) * 100).toFixed(1)}% down
-                </span>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Payment Calculator - shows when purchase price is entered and no budget summary exists */}

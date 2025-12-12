@@ -229,6 +229,8 @@
   gap: var(--space-xl);
   margin-top: var(--space-lg);
   padding-bottom: 100px;
+  height: calc(100vh - 200px);
+  min-height: 500px;
 }
 
 /* Items List */
@@ -1267,8 +1269,7 @@
   background: white;
   border-radius: 12px;
   border: 1px solid #e5e7eb;
-  max-height: none;
-  overflow-y: visible;
+  overflow-y: auto;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 

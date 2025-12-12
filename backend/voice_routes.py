@@ -119,13 +119,16 @@ async def handle_outbound_script(request: Request):
 # ============================================================================
 
 @router.websocket("/ws/voice-stream")
-async def voice_stream_websocket(websocket: WebSocket, db: Session = Depends(get_db)):
+async def voice_stream_websocket(websocket: WebSocket):
     """
     WebSocket endpoint for Twilio Media Streams -> OpenAI Realtime API
     Handles bidirectional audio streaming for AI conversations
     """
     logger.info(f"🔌 WebSocket connection attempt from: {websocket.client}")
     logger.info(f"🔌 Headers: {dict(websocket.headers)}")
+
+    # Get database session manually to avoid dependency issues
+    db = get_db().__next__()
 
     try:
         await websocket.accept()
@@ -241,6 +244,10 @@ async def voice_stream_websocket(websocket: WebSocket, db: Session = Depends(get
         try:
             if openai_ws:
                 await openai_ws.close()
+        except:
+            pass
+        try:
+            db.close()
         except:
             pass
         logger.info("🔚 Voice stream cleanup complete")
