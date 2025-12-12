@@ -104,6 +104,18 @@ function LeadDetail() {
   const [callArchive, setCallArchive] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
 
+  // Documents state
+  const [documents, setDocuments] = useState({
+    income_verification: [],
+    credit_reports: [],
+    property_documents: [],
+    disclosures_forms: [],
+    bank_statements: [],
+    other: [],
+  });
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsError, setDocumentsError] = useState(null);
+
   // Status dropdown state
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
@@ -895,6 +907,32 @@ function LeadDetail() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, lead?.stage]);
+
+  // Load documents when Documents tab is selected
+  const loadDocuments = async () => {
+    if (!id) return;
+
+    setDocumentsLoading(true);
+    setDocumentsError(null);
+    try {
+      const response = await leadsAPI.getDocuments(id);
+      if (response && response.documents) {
+        setDocuments(response.documents);
+      }
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      setDocumentsError('Failed to load documents');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'documents' && id) {
+      loadDocuments();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, id]);
 
   const handleSave = async () => {
     try {
@@ -2716,67 +2754,145 @@ function LeadDetail() {
                 </button>
               </div>
 
+              {documentsLoading ? (
+                <div className="loading-state">Loading documents...</div>
+              ) : documentsError ? (
+                <div className="error-state">{documentsError}</div>
+              ) : (
               <div className="documents-grid">
                 <div className="document-category">
                   <div className="category-header">
                     <h3>📋 Income Verification</h3>
-                    <span className="doc-count">0 files</span>
+                    <span className="doc-count">{documents.income_verification?.length || 0} files</span>
                   </div>
                   <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
+                    {documents.income_verification?.length > 0 ? (
+                      documents.income_verification.map(doc => (
+                        <div key={doc.id} className="document-item">
+                          <span className="doc-icon">📄</span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
+                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">No documents uploaded yet</div>
+                    )}
                   </div>
                 </div>
 
                 <div className="document-category">
                   <div className="category-header">
                     <h3>💳 Credit Reports</h3>
-                    <span className="doc-count">0 files</span>
+                    <span className="doc-count">{documents.credit_reports?.length || 0} files</span>
                   </div>
                   <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
+                    {documents.credit_reports?.length > 0 ? (
+                      documents.credit_reports.map(doc => (
+                        <div key={doc.id} className="document-item">
+                          <span className="doc-icon">📄</span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
+                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">No documents uploaded yet</div>
+                    )}
                   </div>
                 </div>
 
                 <div className="document-category">
                   <div className="category-header">
                     <h3>🏠 Property Documents</h3>
-                    <span className="doc-count">0 files</span>
+                    <span className="doc-count">{documents.property_documents?.length || 0} files</span>
                   </div>
                   <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
+                    {documents.property_documents?.length > 0 ? (
+                      documents.property_documents.map(doc => (
+                        <div key={doc.id} className="document-item">
+                          <span className="doc-icon">📄</span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
+                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">No documents uploaded yet</div>
+                    )}
                   </div>
                 </div>
 
                 <div className="document-category">
                   <div className="category-header">
                     <h3>✍️ Disclosures & Forms</h3>
-                    <span className="doc-count">0 files</span>
+                    <span className="doc-count">{documents.disclosures_forms?.length || 0} files</span>
                   </div>
                   <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
+                    {documents.disclosures_forms?.length > 0 ? (
+                      documents.disclosures_forms.map(doc => (
+                        <div key={doc.id} className="document-item">
+                          <span className="doc-icon">📄</span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
+                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">No documents uploaded yet</div>
+                    )}
                   </div>
                 </div>
 
                 <div className="document-category">
                   <div className="category-header">
                     <h3>🏦 Bank Statements</h3>
-                    <span className="doc-count">0 files</span>
+                    <span className="doc-count">{documents.bank_statements?.length || 0} files</span>
                   </div>
                   <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
+                    {documents.bank_statements?.length > 0 ? (
+                      documents.bank_statements.map(doc => (
+                        <div key={doc.id} className="document-item">
+                          <span className="doc-icon">📄</span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
+                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">No documents uploaded yet</div>
+                    )}
                   </div>
                 </div>
 
                 <div className="document-category">
                   <div className="category-header">
                     <h3>📑 Other Documents</h3>
-                    <span className="doc-count">0 files</span>
+                    <span className="doc-count">{documents.other?.length || 0} files</span>
                   </div>
                   <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
+                    {documents.other?.length > 0 ? (
+                      documents.other.map(doc => (
+                        <div key={doc.id} className="document-item">
+                          <span className="doc-icon">📄</span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
+                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">No documents uploaded yet</div>
+                    )}
                   </div>
                 </div>
               </div>
+              )}
             </div>
           </div>
           )}

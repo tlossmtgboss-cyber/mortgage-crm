@@ -104,6 +104,10 @@ export const leadsAPI = {
   delete: async (id) => {
     await api.delete(`/api/v1/leads/${id}`);
   },
+  getDocuments: async (leadId) => {
+    const response = await api.get(`/api/v1/leads/${leadId}/documents`);
+    return response.data;
+  },
 };
 
 // Loans
