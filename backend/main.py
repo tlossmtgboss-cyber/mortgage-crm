@@ -49879,6 +49879,44 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Email Response Training tables creation skipped: {e}")
 
+            # Add SLA milestone columns to tasks table (required for Task model)
+            try:
+                db_temp = SessionLocal()
+                engine = db_temp.get_bind()
+                connection = engine.raw_connection()
+                cursor = connection.cursor()
+
+                # List of columns to add with their types
+                task_columns = [
+                    ("sla_milestone_id", "INTEGER"),
+                    ("sla_milestone_type", "VARCHAR(100)"),
+                    ("sla_date_field", "VARCHAR(100)"),
+                    ("milestone_date", "TIMESTAMP WITH TIME ZONE"),
+                    ("workflow_task_instance_id", "INTEGER"),
+                    ("task_group_key", "VARCHAR(100)"),
+                ]
+
+                for col_name, col_type in task_columns:
+                    try:
+                        cursor.execute(f"""
+                            SELECT column_name FROM information_schema.columns
+                            WHERE table_name = 'tasks' AND column_name = '{col_name}'
+                        """)
+                        if not cursor.fetchone():
+                            cursor.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}")
+                            connection.commit()
+                            logger.info(f"✅ Added '{col_name}' column to tasks table")
+                    except Exception as col_e:
+                        logger.warning(f"⚠️ Could not add '{col_name}' column: {col_e}")
+                        connection.rollback()
+
+                cursor.close()
+                connection.close()
+                db_temp.close()
+                logger.info("✅ Tasks table SLA columns migration complete")
+            except Exception as e:
+                logger.warning(f"⚠️ Tasks table migration skipped: {e}")
+
             # Create SLA Workflow System tables (AI-driven task generation)
             try:
                 from migrations.add_workflow_sla_system import run_migration as run_workflow_sla_migration
