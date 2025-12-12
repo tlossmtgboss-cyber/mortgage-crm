@@ -262,13 +262,16 @@ def create_workflow_config_models(Base):
         resolved_by = relationship("User", foreign_keys=[resolved_by_id])
 
 
-    return {
+    # Cache the models before returning
+    models = {
         'WorkflowConfiguration': WorkflowConfiguration,
         'WorkflowDayConfig': WorkflowDayConfig,
         'WorkflowRoleAssignment': WorkflowRoleAssignment,
         'WorkflowTaskInstance': WorkflowTaskInstance,
         'BrokenTaskAlert': BrokenTaskAlert
     }
+    _workflow_models_cache[base_id] = models
+    return models
 
 
 # Default workflow configurations matching the spreadsheet
