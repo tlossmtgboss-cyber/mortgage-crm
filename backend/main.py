@@ -49882,10 +49882,6 @@ async def startup_event():
             # Add SLA milestone columns to tasks table (required for Task model)
             try:
                 db_temp = SessionLocal()
-                engine = db_temp.get_bind()
-                connection = engine.raw_connection()
-                cursor = connection.cursor()
-
                 # List of columns to add with their types
                 task_columns = [
                     ("sla_milestone_id", "INTEGER"),
@@ -49898,20 +49894,18 @@ async def startup_event():
 
                 for col_name, col_type in task_columns:
                     try:
-                        cursor.execute(f"""
+                        result = db_temp.execute(text(f"""
                             SELECT column_name FROM information_schema.columns
                             WHERE table_name = 'tasks' AND column_name = '{col_name}'
-                        """)
-                        if not cursor.fetchone():
-                            cursor.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}")
-                            connection.commit()
+                        """))
+                        if not result.fetchone():
+                            db_temp.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
+                            db_temp.commit()
                             logger.info(f"✅ Added '{col_name}' column to tasks table")
                     except Exception as col_e:
+                        db_temp.rollback()
                         logger.warning(f"⚠️ Could not add '{col_name}' column: {col_e}")
-                        connection.rollback()
 
-                cursor.close()
-                connection.close()
                 db_temp.close()
                 logger.info("✅ Tasks table SLA columns migration complete")
             except Exception as e:
