@@ -49809,6 +49809,35 @@ async def startup_event():
             except Exception as dt_e:
                 logger.warning(f"⚠️ Document enum migration skipped: {dt_e}")
 
+            # Add missing leadstage enum values (Disclosed is critical for workflow)
+            try:
+                engine = SessionLocal().get_bind()
+                connection = engine.raw_connection()
+                connection.set_isolation_level(0)  # AUTOCOMMIT required for ALTER TYPE
+                cursor = connection.cursor()
+
+                leadstage_values_to_add = [
+                    "New", "Prospect", "Disclosed",  # Display values
+                    "NEW", "PROSPECT", "DISCLOSED",  # SQLAlchemy enum names
+                ]
+
+                for val in leadstage_values_to_add:
+                    cursor.execute("""
+                        SELECT 1 FROM pg_enum WHERE enumlabel = %s
+                        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'leadstage')
+                    """, (val,))
+                    if not cursor.fetchone():
+                        try:
+                            cursor.execute(f"ALTER TYPE leadstage ADD VALUE '{val}'")
+                            logger.info(f"✅ Added '{val}' to leadstage enum")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Could not add '{val}' to leadstage: {e}")
+
+                cursor.close()
+                connection.close()
+            except Exception as ls_e:
+                logger.warning(f"⚠️ Leadstage enum migration skipped: {ls_e}")
+
             # Reset admin password (always runs)
             try:
                 db_temp = SessionLocal()
