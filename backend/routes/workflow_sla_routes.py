@@ -1077,3 +1077,127 @@ async def run_workflow_migrations(
             "errors": len(results["errors"])
         }
     }
+
+
+@router.post("/init/repair-tables")
+async def repair_workflow_tables(
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Repair workflow tables by adding any missing columns.
+    Safe to run multiple times - skips existing columns.
+    """
+    from sqlalchemy import text
+
+    results = {
+        "workflow_instances": [],
+        "workflow_task_instances": [],
+        "workflow_role_assignments": [],
+        "errors": []
+    }
+
+    # Define expected columns for each table
+    table_columns = {
+        "workflow_instances": [
+            ("organization_id", "INTEGER NOT NULL DEFAULT 1"),
+            ("lead_id", "INTEGER"),
+            ("loan_id", "INTEGER"),
+            ("workflow_type", "VARCHAR(100) NOT NULL DEFAULT 'prospect'"),
+            ("workflow_config_id", "INTEGER"),
+            ("status", "VARCHAR(50) DEFAULT 'active'"),
+            ("current_day", "INTEGER DEFAULT 1"),
+            ("started_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+            ("paused_at", "TIMESTAMP WITH TIME ZONE"),
+            ("completed_at", "TIMESTAMP WITH TIME ZONE"),
+            ("cancelled_at", "TIMESTAMP WITH TIME ZONE"),
+            ("next_check_at", "TIMESTAMP WITH TIME ZONE"),
+            ("metadata", "JSONB DEFAULT '{}'"),
+            ("created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+            ("updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+        ],
+        "workflow_task_instances": [
+            ("workflow_instance_id", "INTEGER"),
+            ("task_type", "VARCHAR(50) NOT NULL DEFAULT 'manual'"),
+            ("task_name", "VARCHAR(255) NOT NULL DEFAULT 'Task'"),
+            ("day_number", "INTEGER NOT NULL DEFAULT 1"),
+            ("status", "VARCHAR(50) DEFAULT 'scheduled'"),
+            ("route", "VARCHAR(50) DEFAULT 'task_list'"),
+            ("assigned_user_id", "INTEGER"),
+            ("lead_id", "INTEGER"),
+            ("loan_id", "INTEGER"),
+            ("due_date", "TIMESTAMP WITH TIME ZONE"),
+            ("started_at", "TIMESTAMP WITH TIME ZONE"),
+            ("completed_at", "TIMESTAMP WITH TIME ZONE"),
+            ("outcome", "VARCHAR(100)"),
+            ("outcome_notes", "TEXT"),
+            ("ai_confidence", "DECIMAL(5,4)"),
+            ("ai_executed", "BOOLEAN DEFAULT FALSE"),
+            ("execution_details", "JSONB DEFAULT '{}'"),
+            ("created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+            ("updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+        ],
+        "workflow_role_assignments": [
+            ("organization_id", "INTEGER NOT NULL DEFAULT 1"),
+            ("lead_id", "INTEGER"),
+            ("loan_id", "INTEGER"),
+            ("workflow_type", "VARCHAR(100) NOT NULL DEFAULT 'prospect'"),
+            ("role_type", "VARCHAR(50) NOT NULL DEFAULT 'lo'"),
+            ("user_id", "INTEGER NOT NULL DEFAULT 1"),
+            ("assigned_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+            ("assigned_by", "INTEGER"),
+            ("active", "BOOLEAN DEFAULT TRUE"),
+            ("notes", "TEXT"),
+            ("created_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+            ("updated_at", "TIMESTAMP WITH TIME ZONE DEFAULT NOW()"),
+        ],
+    }
+
+    for table_name, columns in table_columns.items():
+        for col_name, col_def in columns:
+            try:
+                # Check if column exists
+                result = db.execute(text(f"""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = '{table_name}' AND column_name = '{col_name}'
+                """))
+                if not result.fetchone():
+                    # Add the column
+                    db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
+                    db.commit()
+                    results[table_name].append({"column": col_name, "status": "added"})
+                    logger.info(f"✅ Added column {col_name} to {table_name}")
+                else:
+                    results[table_name].append({"column": col_name, "status": "exists"})
+            except Exception as e:
+                db.rollback()
+                results["errors"].append({"table": table_name, "column": col_name, "error": str(e)})
+                logger.error(f"❌ Error adding {col_name} to {table_name}: {e}")
+
+    # Create indexes
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_wf_instances_org_status ON workflow_instances(organization_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_wf_instances_lead ON workflow_instances(lead_id) WHERE lead_id IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_wf_instances_loan ON workflow_instances(loan_id) WHERE loan_id IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_wf_task_workflow ON workflow_task_instances(workflow_instance_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_wf_task_assigned ON workflow_task_instances(assigned_user_id, status, due_date)",
+    ]
+
+    for idx_sql in indexes:
+        try:
+            db.execute(text(idx_sql))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            # Ignore index errors - not critical
+
+    added_count = sum(len([c for c in cols if c.get("status") == "added"]) for cols in results.values() if isinstance(cols, list))
+
+    return {
+        "success": len(results["errors"]) == 0,
+        "results": results,
+        "summary": {
+            "columns_added": added_count,
+            "errors": len(results["errors"])
+        }
+    }
