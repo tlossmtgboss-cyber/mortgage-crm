@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Your Loan Portal</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <tr>
+            <td>
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                    <h1 style="margin: 0; font-size: 28px; font-weight: 600;">Welcome to Your Loan Portal</h1>
+                    <p style="margin: 10px 0 0; opacity: 0.9;">Your personalized mortgage experience awaits</p>
+                </div>
+
+                <!-- Body -->
+                <div style="background: white; padding: 40px 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 20px;">
+                        Hi {{ first_name }},
+                    </p>
+
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 20px;">
+                        {{ loan_officer_name }} has created a personalized loan portal just for you. This secure portal will be your home base throughout the mortgage process.
+                    </p>
+
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 30px;">
+                        With your portal, you can:
+                    </p>
+
+                    <ul style="font-size: 15px; color: #475569; line-height: 1.8; margin: 0 0 30px; padding-left: 20px;">
+                        <li>Complete your loan application online</li>
+                        <li>Upload documents securely</li>
+                        <li>Track your loan progress in real-time</li>
+                        <li>Communicate directly with your loan team</li>
+                        <li>View important milestones and deadlines</li>
+                    </ul>
+
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{{ purl_url }}" style="display: inline-block; background: #3b82f6; color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            Access My Portal
+                        </a>
+                    </div>
+
+                    <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 30px 0 0; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                        If the button above doesn't work, copy and paste this link into your browser:<br>
+                        <a href="{{ purl_url }}" style="color: #3b82f6; word-break: break-all;">{{ purl_url }}</a>
+                    </p>
+
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin-top: 30px;">
+                        <p style="font-size: 14px; color: #475569; margin: 0 0 10px;">
+                            <strong>Your Loan Officer:</strong>
+                        </p>
+                        <p style="font-size: 15px; color: #1e293b; margin: 0;">
+                            {{ loan_officer_name }}<br>
+                            <a href="mailto:{{ loan_officer_email }}" style="color: #3b82f6;">{{ loan_officer_email }}</a>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="text-align: center; padding: 30px; color: #64748b; font-size: 13px;">
+                    <p style="margin: 0 0 10px;">&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
+                    <p style="margin: 0;">This is a secure, personalized link. Please do not share it with others.</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

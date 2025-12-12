@@ -1,0 +1,19 @@
+New Task: {{ task_title }}
+==========================
+
+Hi {{ first_name }},
+
+A new task has been assigned to you for your loan application:
+
+Task: {{ task_title }}
+Description: {{ task_description }}
+Due Date: {{ due_date }}
+Priority: {{ priority }}
+
+Complete this task in your portal:
+{{ portal_url }}
+
+Complete this task to keep your loan moving forward.
+
+---
+(c) {{ year }} {{ company_name }}. All rights reserved.

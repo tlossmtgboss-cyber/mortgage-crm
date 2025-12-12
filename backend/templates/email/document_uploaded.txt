@@ -1,0 +1,16 @@
+Document Received
+=================
+
+Hi {{ first_name }},
+
+We've received your document upload. Here are the details:
+
+Document: {{ document_name }}
+Type: {{ document_type }}
+Uploaded: {{ uploaded_at }}
+Status: Pending Review
+
+Our team will review this document and update you on its status. You'll receive a notification once it's been approved.
+
+---
+(c) {{ year }} {{ company_name }}. All rights reserved.

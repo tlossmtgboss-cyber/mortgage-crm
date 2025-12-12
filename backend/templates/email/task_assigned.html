@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Task Assigned</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <tr>
+            <td>
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                    <div style="font-size: 36px; margin-bottom: 10px;">&#9745;</div>
+                    <h1 style="margin: 0; font-size: 24px; font-weight: 600;">New Task: {{ task_title }}</h1>
+                </div>
+
+                <!-- Body -->
+                <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 20px;">
+                        Hi {{ first_name }},
+                    </p>
+
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 20px;">
+                        A new task has been assigned to you for your loan application:
+                    </p>
+
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid {% if priority == 'high' %}#ef4444{% elif priority == 'medium' %}#f59e0b{% else %}#22c55e{% endif %};">
+                        <h3 style="margin: 0 0 10px; color: #1e293b; font-size: 18px;">{{ task_title }}</h3>
+                        <p style="margin: 0 0 15px; color: #475569; line-height: 1.6;">{{ task_description }}</p>
+                        <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px;">
+                            <tr>
+                                <td style="color: #64748b; padding: 4px 0;">Due Date:</td>
+                                <td style="color: #1e293b; font-weight: 500; padding: 4px 0;">{{ due_date }}</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #64748b; padding: 4px 0;">Priority:</td>
+                                <td style="padding: 4px 0;">
+                                    <span style="background: {% if priority == 'high' %}#fef2f2{% elif priority == 'medium' %}#fefce8{% else %}#f0fdf4{% endif %}; color: {% if priority == 'high' %}#dc2626{% elif priority == 'medium' %}#ca8a04{% else %}#16a34a{% endif %}; padding: 2px 10px; border-radius: 10px; font-size: 12px; text-transform: capitalize;">{{ priority }}</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- CTA Button -->
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{{ portal_url }}" style="display: inline-block; background: #7c3aed; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                            Complete This Task
+                        </a>
+                    </div>
+
+                    <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 20px 0 0; text-align: center;">
+                        Complete this task in your portal to keep your loan moving forward.
+                    </p>
+                </div>
+
+                <!-- Footer -->
+                <div style="text-align: center; padding: 30px; color: #64748b; font-size: 13px;">
+                    <p style="margin: 0;">&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

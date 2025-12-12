@@ -1,0 +1,755 @@
+"""
+PURL Workspace Service
+
+Provides business logic for PURL workspace operations including:
+- Workspace creation and management
+- Contact management
+- Team member management
+- Portal module configuration
+- Workspace lifecycle transitions
+"""
+
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional, Dict, Any, List
+
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_
+
+from models.purl import (
+    PURLWorkspace,
+    PURLContact,
+    PURLWorkspaceMember,
+    PURLPortalModule,
+    PURLLoan,
+    PURLDocument,
+    PURLTask,
+    PURLMessage,
+    PURLEventsOutbox,
+    WorkspaceStatus,
+    ContactType,
+    MemberRole,
+    PortalModule,
+    TaskStatus,
+    EventStatus,
+    SlugGenerator,
+    WorkspaceCreate,
+    WorkspaceResponse,
+    ContactCreate,
+    ContactResponse,
+    PortalModuleResponse,
+    PURLWorkspaceData
+)
+
+logger = logging.getLogger(__name__)
+
+
+# Default portal module configurations
+DEFAULT_PORTAL_MODULES = [
+    {
+        "module_key": PortalModule.APPLICATION.value,
+        "is_enabled": True,
+        "is_visible": True,
+        "order_index": 1,
+        "config": {"title": "Application", "description": "Complete your loan application"}
+    },
+    {
+        "module_key": PortalModule.DOCUMENTS.value,
+        "is_enabled": True,
+        "is_visible": True,
+        "order_index": 2,
+        "config": {"title": "Documents", "description": "Upload required documents"}
+    },
+    {
+        "module_key": PortalModule.TIMELINE.value,
+        "is_enabled": True,
+        "is_visible": True,
+        "order_index": 3,
+        "config": {"title": "Timeline", "description": "Track your loan progress"}
+    },
+    {
+        "module_key": PortalModule.MESSAGES.value,
+        "is_enabled": True,
+        "is_visible": True,
+        "order_index": 4,
+        "config": {"title": "Messages", "description": "Communicate with your loan team"}
+    },
+    {
+        "module_key": PortalModule.TASKS.value,
+        "is_enabled": True,
+        "is_visible": True,
+        "order_index": 5,
+        "config": {"title": "Tasks", "description": "View and complete action items"}
+    },
+    {
+        "module_key": PortalModule.CLOSING_VAULT.value,
+        "is_enabled": False,
+        "is_visible": False,
+        "order_index": 6,
+        "config": {"title": "Closing Vault", "description": "Access your closing documents"}
+    },
+    {
+        "module_key": PortalModule.RESOURCES.value,
+        "is_enabled": True,
+        "is_visible": True,
+        "order_index": 7,
+        "config": {"title": "Resources", "description": "Helpful guides and information"}
+    }
+]
+
+
+class PURLWorkspaceService:
+    """
+    Service for PURL workspace operations.
+    Manages workspaces, contacts, members, and modules.
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    # =========================================================================
+    # WORKSPACE CRUD
+    # =========================================================================
+
+    def create_workspace(
+        self,
+        organization_id: int,
+        data: WorkspaceCreate,
+        owner_user_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a new workspace with initial setup.
+
+        Args:
+            organization_id: Organization ID
+            data: Workspace creation data
+            owner_user_id: Owner user ID (LO)
+
+        Returns:
+            Dict with workspace id, slug, and created_at
+        """
+        # Generate slug if not provided
+        slug = data.slug or SlugGenerator.generate(data.display_name)
+
+        # Ensure slug is unique
+        existing = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.organization_id == organization_id,
+            PURLWorkspace.slug == slug
+        ).first()
+
+        if existing:
+            # Add extra random suffix
+            slug = SlugGenerator.generate(data.display_name, suffix_length=12)
+
+        # Create workspace
+        workspace = PURLWorkspace(
+            organization_id=organization_id,
+            slug=slug,
+            display_name=data.display_name,
+            status=WorkspaceStatus.LEAD.value,
+            source=data.source,
+            owner_user_id=owner_user_id or data.owner_user_id,
+            metadata=data.metadata or {},
+            lead_at=datetime.now(timezone.utc)
+        )
+
+        self.db.add(workspace)
+        self.db.flush()  # Get ID without committing
+
+        # Add owner as workspace member
+        if workspace.owner_user_id:
+            member = PURLWorkspaceMember(
+                organization_id=organization_id,
+                workspace_id=workspace.id,
+                user_id=workspace.owner_user_id,
+                role=MemberRole.OWNER.value
+            )
+            self.db.add(member)
+
+        # Initialize portal modules
+        self._initialize_portal_modules(organization_id, workspace.id)
+
+        self.db.commit()
+        self.db.refresh(workspace)
+
+        # Emit event
+        self._emit_event(
+            organization_id=organization_id,
+            workspace_id=workspace.id,
+            event_key="workspace_created",
+            payload={
+                "workspace_id": workspace.id,
+                "slug": slug,
+                "display_name": data.display_name,
+                "owner_user_id": workspace.owner_user_id
+            }
+        )
+
+        logger.info(f"Created workspace {workspace.id}: {slug}")
+
+        return {
+            "id": workspace.id,
+            "slug": workspace.slug,
+            "created_at": workspace.created_at.isoformat() if workspace.created_at else None
+        }
+
+    def get_workspace_by_id(
+        self,
+        workspace_id: int,
+        organization_id: Optional[int] = None
+    ) -> Optional[PURLWorkspace]:
+        """Get workspace by ID."""
+        query = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == workspace_id
+        )
+
+        if organization_id:
+            query = query.filter(PURLWorkspace.organization_id == organization_id)
+
+        return query.first()
+
+    def get_workspace_by_slug(
+        self,
+        organization_id: int,
+        slug: str
+    ) -> Optional[PURLWorkspace]:
+        """Get workspace by slug."""
+        return self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.organization_id == organization_id,
+            PURLWorkspace.slug == slug
+        ).first()
+
+    def update_workspace(
+        self,
+        workspace_id: int,
+        updates: Dict[str, Any]
+    ) -> Optional[PURLWorkspace]:
+        """Update workspace fields."""
+        workspace = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == workspace_id
+        ).first()
+
+        if not workspace:
+            return None
+
+        # Update allowed fields
+        allowed_fields = ["display_name", "source", "owner_user_id", "metadata"]
+        for field in allowed_fields:
+            if field in updates and updates[field] is not None:
+                setattr(workspace, field, updates[field])
+
+        self.db.commit()
+        self.db.refresh(workspace)
+
+        return workspace
+
+    def update_workspace_status(
+        self,
+        workspace_id: int,
+        new_status: WorkspaceStatus
+    ) -> bool:
+        """
+        Update workspace lifecycle status with timestamp tracking.
+
+        Returns:
+            True if successful
+        """
+        workspace = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == workspace_id
+        ).first()
+
+        if not workspace:
+            return False
+
+        old_status = workspace.status
+        workspace.status = new_status.value
+        now = datetime.now(timezone.utc)
+
+        # Update appropriate timestamp
+        if new_status == WorkspaceStatus.APPLICATION:
+            workspace.application_at = now
+        elif new_status == WorkspaceStatus.ACTIVE_LOAN:
+            workspace.active_loan_at = now
+        elif new_status == WorkspaceStatus.CLOSING:
+            workspace.closing_at = now
+            # Enable closing vault module
+            self._enable_module(workspace_id, PortalModule.CLOSING_VAULT)
+        elif new_status == WorkspaceStatus.POST_CLOSE:
+            workspace.post_close_at = now
+
+        self.db.commit()
+
+        # Emit event
+        self._emit_event(
+            organization_id=workspace.organization_id,
+            workspace_id=workspace_id,
+            event_key=f"workspace_status_changed_{new_status.value}",
+            payload={
+                "workspace_id": workspace_id,
+                "old_status": old_status,
+                "new_status": new_status.value
+            }
+        )
+
+        logger.info(f"Workspace {workspace_id} status: {old_status} -> {new_status.value}")
+        return True
+
+    # =========================================================================
+    # COMPLETE WORKSPACE DATA
+    # =========================================================================
+
+    def get_complete_workspace_data(
+        self,
+        organization_id: int,
+        workspace_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get complete workspace data for borrower portal.
+
+        Returns comprehensive workspace data including contacts,
+        loans, documents, tasks, and module configuration.
+        """
+        workspace = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == workspace_id,
+            PURLWorkspace.organization_id == organization_id
+        ).first()
+
+        if not workspace:
+            return None
+
+        # Get contacts
+        contacts = self.db.query(PURLContact).filter(
+            PURLContact.workspace_id == workspace_id
+        ).all()
+
+        # Get loans
+        loans = self.db.query(PURLLoan).filter(
+            PURLLoan.workspace_id == workspace_id
+        ).order_by(PURLLoan.created_at.desc()).all()
+
+        # Get current active loan
+        current_loan = next(
+            (l for l in loans if l.status in ["active", "processing", "underwriting", "closing"]),
+            None
+        )
+
+        # Get portal modules
+        modules = self.db.query(PURLPortalModule).filter(
+            PURLPortalModule.workspace_id == workspace_id
+        ).order_by(PURLPortalModule.order_index).all()
+
+        # Get pending tasks
+        pending_tasks = self.db.query(PURLTask).filter(
+            PURLTask.workspace_id == workspace_id,
+            PURLTask.status.in_([TaskStatus.OPEN.value, TaskStatus.IN_PROGRESS.value])
+        ).order_by(PURLTask.due_at.asc().nullslast()).all()
+
+        # Get recent documents
+        recent_docs = self.db.query(PURLDocument).filter(
+            PURLDocument.workspace_id == workspace_id
+        ).order_by(PURLDocument.created_at.desc()).limit(10).all()
+
+        # Get unread message count
+        unread_count = self.db.query(func.count(PURLMessage.id)).filter(
+            PURLMessage.workspace_id == workspace_id,
+            PURLMessage.is_read_by_borrower == False
+        ).scalar() or 0
+
+        return {
+            "workspace": self._workspace_to_dict(workspace),
+            "contacts": [self._contact_to_dict(c) for c in contacts],
+            "current_loan": self._loan_to_dict(current_loan) if current_loan else None,
+            "all_loans": [self._loan_to_dict(l) for l in loans],
+            "modules": [self._module_to_dict(m) for m in modules],
+            "pending_tasks": [self._task_to_dict(t) for t in pending_tasks],
+            "recent_documents": [self._document_to_dict(d) for d in recent_docs],
+            "unread_messages_count": unread_count
+        }
+
+    # =========================================================================
+    # CONTACT MANAGEMENT
+    # =========================================================================
+
+    def add_contact(
+        self,
+        organization_id: int,
+        workspace_id: int,
+        data: ContactCreate
+    ) -> int:
+        """
+        Add a contact to workspace.
+
+        Returns:
+            Contact ID
+        """
+        contact = PURLContact(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            contact_type=data.contact_type.value,
+            first_name=data.first_name,
+            last_name=data.last_name,
+            email=data.email,
+            phone=data.phone,
+            metadata=data.metadata or {}
+        )
+
+        self.db.add(contact)
+        self.db.commit()
+        self.db.refresh(contact)
+
+        # Emit event
+        self._emit_event(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            event_key="contact_added",
+            payload={
+                "contact_id": contact.id,
+                "contact_type": data.contact_type.value,
+                "email": data.email
+            }
+        )
+
+        logger.info(f"Added contact {contact.id} to workspace {workspace_id}")
+        return contact.id
+
+    def get_workspace_contacts(self, workspace_id: int) -> List[PURLContact]:
+        """Get all contacts for a workspace."""
+        return self.db.query(PURLContact).filter(
+            PURLContact.workspace_id == workspace_id
+        ).all()
+
+    def update_contact(
+        self,
+        contact_id: int,
+        updates: Dict[str, Any]
+    ) -> Optional[PURLContact]:
+        """Update contact fields."""
+        contact = self.db.query(PURLContact).filter(
+            PURLContact.id == contact_id
+        ).first()
+
+        if not contact:
+            return None
+
+        allowed_fields = ["first_name", "last_name", "email", "phone", "metadata"]
+        for field in allowed_fields:
+            if field in updates and updates[field] is not None:
+                setattr(contact, field, updates[field])
+
+        self.db.commit()
+        self.db.refresh(contact)
+
+        return contact
+
+    # =========================================================================
+    # MEMBER MANAGEMENT
+    # =========================================================================
+
+    def add_member(
+        self,
+        organization_id: int,
+        workspace_id: int,
+        user_id: int,
+        role: MemberRole
+    ) -> int:
+        """Add a team member to workspace."""
+        # Check if already a member
+        existing = self.db.query(PURLWorkspaceMember).filter(
+            PURLWorkspaceMember.workspace_id == workspace_id,
+            PURLWorkspaceMember.user_id == user_id
+        ).first()
+
+        if existing:
+            # Update role
+            existing.role = role.value
+            self.db.commit()
+            return existing.id
+
+        member = PURLWorkspaceMember(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            role=role.value
+        )
+
+        self.db.add(member)
+        self.db.commit()
+        self.db.refresh(member)
+
+        logger.info(f"Added member {user_id} to workspace {workspace_id} as {role.value}")
+        return member.id
+
+    def remove_member(self, workspace_id: int, user_id: int) -> bool:
+        """Remove a team member from workspace."""
+        result = self.db.query(PURLWorkspaceMember).filter(
+            PURLWorkspaceMember.workspace_id == workspace_id,
+            PURLWorkspaceMember.user_id == user_id
+        ).delete()
+
+        self.db.commit()
+        return result > 0
+
+    def get_workspace_members(self, workspace_id: int) -> List[Dict[str, Any]]:
+        """Get all team members for a workspace."""
+        members = self.db.query(PURLWorkspaceMember).filter(
+            PURLWorkspaceMember.workspace_id == workspace_id
+        ).all()
+
+        return [
+            {
+                "id": m.id,
+                "user_id": m.user_id,
+                "role": m.role,
+                "created_at": m.created_at.isoformat() if m.created_at else None
+            }
+            for m in members
+        ]
+
+    def user_has_workspace_access(
+        self,
+        user_id: int,
+        workspace_id: int
+    ) -> bool:
+        """Check if user has access to workspace."""
+        return self.db.query(PURLWorkspaceMember).filter(
+            PURLWorkspaceMember.workspace_id == workspace_id,
+            PURLWorkspaceMember.user_id == user_id
+        ).first() is not None
+
+    # =========================================================================
+    # PORTAL MODULE MANAGEMENT
+    # =========================================================================
+
+    def _initialize_portal_modules(
+        self,
+        organization_id: int,
+        workspace_id: int
+    ):
+        """Initialize default portal modules for new workspace."""
+        for module_config in DEFAULT_PORTAL_MODULES:
+            module = PURLPortalModule(
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                module_key=module_config["module_key"],
+                is_enabled=module_config["is_enabled"],
+                is_visible=module_config["is_visible"],
+                order_index=module_config["order_index"],
+                config=module_config["config"]
+            )
+            self.db.add(module)
+
+    def _enable_module(self, workspace_id: int, module: PortalModule):
+        """Enable a specific portal module."""
+        self.db.query(PURLPortalModule).filter(
+            PURLPortalModule.workspace_id == workspace_id,
+            PURLPortalModule.module_key == module.value
+        ).update({
+            "is_enabled": True,
+            "is_visible": True
+        })
+        self.db.commit()
+
+    def update_module_config(
+        self,
+        workspace_id: int,
+        module_key: str,
+        config: Dict[str, Any]
+    ) -> bool:
+        """Update module configuration."""
+        module = self.db.query(PURLPortalModule).filter(
+            PURLPortalModule.workspace_id == workspace_id,
+            PURLPortalModule.module_key == module_key
+        ).first()
+
+        if not module:
+            return False
+
+        module.config = config
+        module.config_version += 1
+        self.db.commit()
+
+        return True
+
+    # =========================================================================
+    # SEARCH & LISTING
+    # =========================================================================
+
+    def search_workspaces(
+        self,
+        organization_id: int,
+        query: Optional[str] = None,
+        status: Optional[WorkspaceStatus] = None,
+        owner_user_id: Optional[int] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Tuple[List[PURLWorkspace], int]:
+        """
+        Search workspaces with filtering.
+
+        Returns:
+            Tuple of (workspaces, total_count)
+        """
+        base_query = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.organization_id == organization_id
+        )
+
+        if query:
+            search_term = f"%{query}%"
+            base_query = base_query.filter(
+                or_(
+                    PURLWorkspace.display_name.ilike(search_term),
+                    PURLWorkspace.slug.ilike(search_term)
+                )
+            )
+
+        if status:
+            base_query = base_query.filter(PURLWorkspace.status == status.value)
+
+        if owner_user_id:
+            base_query = base_query.filter(PURLWorkspace.owner_user_id == owner_user_id)
+
+        total = base_query.count()
+
+        workspaces = base_query.order_by(
+            PURLWorkspace.updated_at.desc()
+        ).offset(offset).limit(limit).all()
+
+        return workspaces, total
+
+    # =========================================================================
+    # HELPER METHODS
+    # =========================================================================
+
+    def _workspace_to_dict(self, workspace: PURLWorkspace) -> Dict[str, Any]:
+        """Convert workspace to dict."""
+        return {
+            "id": workspace.id,
+            "organization_id": workspace.organization_id,
+            "slug": workspace.slug,
+            "status": workspace.status,
+            "display_name": workspace.display_name,
+            "source": workspace.source,
+            "owner_user_id": workspace.owner_user_id,
+            "lead_at": workspace.lead_at.isoformat() if workspace.lead_at else None,
+            "application_at": workspace.application_at.isoformat() if workspace.application_at else None,
+            "active_loan_at": workspace.active_loan_at.isoformat() if workspace.active_loan_at else None,
+            "closing_at": workspace.closing_at.isoformat() if workspace.closing_at else None,
+            "post_close_at": workspace.post_close_at.isoformat() if workspace.post_close_at else None,
+            "metadata": workspace.metadata,
+            "created_at": workspace.created_at.isoformat() if workspace.created_at else None,
+            "updated_at": workspace.updated_at.isoformat() if workspace.updated_at else None
+        }
+
+    def _contact_to_dict(self, contact: PURLContact) -> Dict[str, Any]:
+        """Convert contact to dict."""
+        return {
+            "id": contact.id,
+            "organization_id": contact.organization_id,
+            "workspace_id": contact.workspace_id,
+            "contact_type": contact.contact_type,
+            "first_name": contact.first_name,
+            "last_name": contact.last_name,
+            "email": contact.email,
+            "phone": contact.phone,
+            "auth_user_id": contact.auth_user_id,
+            "auth_provider": contact.auth_provider,
+            "metadata": contact.metadata,
+            "created_at": contact.created_at.isoformat() if contact.created_at else None,
+            "updated_at": contact.updated_at.isoformat() if contact.updated_at else None
+        }
+
+    def _loan_to_dict(self, loan: PURLLoan) -> Dict[str, Any]:
+        """Convert loan to dict."""
+        return {
+            "id": loan.id,
+            "organization_id": loan.organization_id,
+            "workspace_id": loan.workspace_id,
+            "application_id": loan.application_id,
+            "loan_number": loan.loan_number,
+            "status": loan.status,
+            "loan_purpose": loan.loan_purpose,
+            "product_type": loan.product_type,
+            "loan_amount": float(loan.loan_amount) if loan.loan_amount else None,
+            "interest_rate": float(loan.interest_rate) if loan.interest_rate else None,
+            "property_address": loan.property_address,
+            "property_type": loan.property_type,
+            "target_close_date": loan.target_close_date.isoformat() if loan.target_close_date else None,
+            "actual_close_date": loan.actual_close_date.isoformat() if loan.actual_close_date else None,
+            "los_loan_id": loan.los_loan_id,
+            "metadata": loan.metadata,
+            "created_at": loan.created_at.isoformat() if loan.created_at else None,
+            "updated_at": loan.updated_at.isoformat() if loan.updated_at else None
+        }
+
+    def _module_to_dict(self, module: PURLPortalModule) -> Dict[str, Any]:
+        """Convert module to dict."""
+        return {
+            "id": module.id,
+            "module_key": module.module_key,
+            "is_enabled": module.is_enabled,
+            "is_visible": module.is_visible,
+            "order_index": module.order_index,
+            "config": module.config,
+            "config_version": module.config_version
+        }
+
+    def _task_to_dict(self, task: PURLTask) -> Dict[str, Any]:
+        """Convert task to dict."""
+        return {
+            "id": task.id,
+            "organization_id": task.organization_id,
+            "workspace_id": task.workspace_id,
+            "loan_id": task.loan_id,
+            "title": task.title,
+            "description": task.description,
+            "task_type": task.task_type,
+            "status": task.status,
+            "priority": task.priority,
+            "assigned_to_user_id": task.assigned_to_user_id,
+            "assigned_to_contact_id": task.assigned_to_contact_id,
+            "due_at": task.due_at.isoformat() if task.due_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "metadata": task.metadata,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None
+        }
+
+    def _document_to_dict(self, doc: PURLDocument) -> Dict[str, Any]:
+        """Convert document to dict."""
+        return {
+            "id": doc.id,
+            "organization_id": doc.organization_id,
+            "workspace_id": doc.workspace_id,
+            "loan_id": doc.loan_id,
+            "doc_type": doc.doc_type,
+            "doc_category": doc.doc_category,
+            "status": doc.status,
+            "file_name": doc.file_name,
+            "size_bytes": doc.size_bytes,
+            "mime_type": doc.mime_type,
+            "sha256": doc.sha256,
+            "uploaded_by_contact_id": doc.uploaded_by_contact_id,
+            "uploaded_by_user_id": doc.uploaded_by_user_id,
+            "retention_policy": doc.retention_policy,
+            "legal_hold": doc.legal_hold,
+            "expires_at": doc.expires_at.isoformat() if doc.expires_at else None,
+            "created_at": doc.created_at.isoformat() if doc.created_at else None,
+            "updated_at": doc.updated_at.isoformat() if doc.updated_at else None
+        }
+
+    def _emit_event(
+        self,
+        organization_id: int,
+        workspace_id: int,
+        event_key: str,
+        payload: Dict[str, Any]
+    ):
+        """Emit event to outbox."""
+        event = PURLEventsOutbox(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            event_key=event_key,
+            payload=payload,
+            status=EventStatus.PENDING.value
+        )
+        self.db.add(event)

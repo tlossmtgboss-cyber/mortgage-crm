@@ -1,0 +1,24 @@
+Welcome to Your Loan Portal
+============================
+
+Hi {{ first_name }},
+
+{{ loan_officer_name }} has created a personalized loan portal just for you. This secure portal will be your home base throughout the mortgage process.
+
+With your portal, you can:
+- Complete your loan application online
+- Upload documents securely
+- Track your loan progress in real-time
+- Communicate directly with your loan team
+- View important milestones and deadlines
+
+Access your portal here:
+{{ purl_url }}
+
+Your Loan Officer:
+{{ loan_officer_name }}
+{{ loan_officer_email }}
+
+---
+(c) {{ year }} {{ company_name }}. All rights reserved.
+This is a secure, personalized link. Please do not share it with others.

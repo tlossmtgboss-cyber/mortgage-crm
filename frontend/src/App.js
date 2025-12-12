@@ -102,6 +102,12 @@ const LOMicrosite = lazy(() => import('./pages/microsites/LOMicrosite'));
 const LODashboard = lazy(() => import('./pages/LODashboard'));
 const RealtorDashboard = lazy(() => import('./pages/RealtorDashboard'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
+const AgentProfile = lazy(() => import('./pages/AgentProfile'));
+const AgentGym = lazy(() => import('./pages/AgentGym'));
+const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
+const PURLPortal = lazy(() => import('./pages/PURLPortal'));
+const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -1101,6 +1107,108 @@ function App() {
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
+            }
+          />
+          <Route
+            path="/agents"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AgentDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/agent/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AgentProfile /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/agent-gym"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AgentGym /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          {/* PURL Client Portal Routes */}
+          <Route
+            path="/client-portals"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><PURLDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          {/* Public PURL Portal (no auth required) */}
+          <Route
+            path="/portal/:slug"
+            element={
+              <LazyPage><PURLPortal /></LazyPage>
+            }
+          />
+          <Route
+            path="/portal/:slug/apply"
+            element={
+              <LazyPage><PURLApplication /></LazyPage>
             }
           />
           <Route

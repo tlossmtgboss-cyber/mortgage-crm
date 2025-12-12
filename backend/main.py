@@ -19698,6 +19698,47 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ OAuth routes not loaded: {e}")
 
+# Agent Governance routes (Agent Management & Monitoring)
+try:
+    from routes.agent_governance_routes import router as agent_governance_router
+    app.include_router(agent_governance_router, tags=["Agent Governance"])
+    logger.info("✅ Agent Governance routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Agent Governance routes not loaded: {e}")
+
+# Agent Gym routes (Agent Training & Simulation)
+try:
+    from routes.agent_gym_routes import router as agent_gym_router
+    app.include_router(agent_gym_router, tags=["Agent Gym"])
+    logger.info("✅ Agent Gym routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Agent Gym routes not loaded: {e}")
+
+# Agent Chat routes (Interactive Agent Chat)
+try:
+    from routes.agent_chat_routes import router as agent_chat_router
+    app.include_router(agent_chat_router, tags=["Agent Chat"])
+    logger.info("✅ Agent Chat routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Agent Chat routes not loaded: {e}")
+
+# Agent WebSocket routes (Real-time Agent Metrics & Updates)
+try:
+    from routes.agent_websocket import router as agent_websocket_router
+    app.include_router(agent_websocket_router, tags=["Agent WebSocket"])
+    logger.info("✅ Agent WebSocket routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Agent WebSocket routes not loaded: {e}")
+
+# PURL (Persistent URL) Borrower Portal routes
+try:
+    from routes.purl_routes import purl_router, purl_admin_router
+    app.include_router(purl_router, tags=["PURL Portal"])
+    app.include_router(purl_admin_router, tags=["PURL Administration"])
+    logger.info("✅ PURL Portal routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ PURL Portal routes not loaded: {e}")
+
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")
 async def debug_tools_registry_status():

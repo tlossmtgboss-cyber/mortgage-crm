@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Received</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <tr>
+            <td>
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                    <div style="font-size: 36px; margin-bottom: 10px;">&#128196;</div>
+                    <h1 style="margin: 0; font-size: 24px; font-weight: 600;">Document Received</h1>
+                </div>
+
+                <!-- Body -->
+                <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 20px;">
+                        Hi {{ first_name }},
+                    </p>
+
+                    <p style="font-size: 16px; color: #334155; line-height: 1.6; margin: 0 0 20px;">
+                        We've received your document upload. Here are the details:
+                    </p>
+
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 15px;">
+                            <tr>
+                                <td style="color: #64748b; padding: 8px 0;">Document:</td>
+                                <td style="color: #1e293b; font-weight: 500; padding: 8px 0;">{{ document_name }}</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #64748b; padding: 8px 0;">Type:</td>
+                                <td style="color: #1e293b; padding: 8px 0;">{{ document_type }}</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #64748b; padding: 8px 0;">Uploaded:</td>
+                                <td style="color: #1e293b; padding: 8px 0;">{{ uploaded_at }}</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #64748b; padding: 8px 0;">Status:</td>
+                                <td style="padding: 8px 0;">
+                                    <span style="background: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 12px; font-size: 13px;">Pending Review</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <p style="font-size: 14px; color: #64748b; line-height: 1.6; margin: 20px 0 0;">
+                        Our team will review this document and update you on its status. You'll receive a notification once it's been approved.
+                    </p>
+                </div>
+
+                <!-- Footer -->
+                <div style="text-align: center; padding: 30px; color: #64748b; font-size: 13px;">
+                    <p style="margin: 0;">&copy; {{ year }} {{ company_name }}. All rights reserved.</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

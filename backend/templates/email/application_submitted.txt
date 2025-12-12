@@ -1,0 +1,22 @@
+Application Submitted Successfully!
+===================================
+
+Hi {{ first_name }},
+
+Great news! Your loan application has been successfully submitted. {{ loan_officer_name }} will review your information and reach out with next steps.
+
+What happens next?
+1. Your loan officer will review your application (1-2 business days)
+2. You may receive requests for additional documents
+3. Pre-approval decision will be communicated to you
+
+Track your application status in your portal:
+{{ portal_url }}
+
+Questions? Contact your loan officer:
+{{ loan_officer_name }}
+{{ loan_officer_email }}
+{% if loan_officer_phone %}{{ loan_officer_phone }}{% endif %}
+
+---
+(c) {{ year }} {{ company_name }}. All rights reserved.
