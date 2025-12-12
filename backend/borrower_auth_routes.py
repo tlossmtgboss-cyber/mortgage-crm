@@ -1396,7 +1396,7 @@ async def submit_application(
                 """
 
                 safe_borrower_name = borrower_name.replace(' ', '_').replace('/', '_')
-                email_service.send_html_email(
+                email_sent = email_service.send_html_email(
                     to_email=lo_email,
                     subject=f"New Application: {borrower_name}",
                     html_body=email_html,
@@ -1418,9 +1418,12 @@ async def submit_application(
                         }
                     ]
                 )
-                email_sent = True
+                if email_sent:
+                    logger.info(f"Email sent successfully to {lo_email} for {borrower_name}")
+                else:
+                    logger.warning(f"Email send returned False for {lo_email}")
             except Exception as email_error:
-                logger.warning(f"Email sending failed (non-critical): {email_error}")
+                logger.error(f"Email sending failed: {email_error}")
 
         # =================================================================
         # CREATE LEAD IN CRM
@@ -1507,31 +1510,25 @@ async def submit_application(
         if lead_id:
             try:
                 import base64
-                import os
 
-                # Create documents directory if it doesn't exist
-                docs_dir = os.path.join(os.path.dirname(__file__), "generated_documents", str(lead_id))
-                os.makedirs(docs_dir, exist_ok=True)
-
-                # Store E-Consent PDF
+                # Store E-Consent PDF in database (using notes field for base64 content)
                 if econsent_pdf:
                     econsent_filename = f"E-Consent_{safe_borrower_name}_{date_str}.pdf"
-                    econsent_path = os.path.join(docs_dir, econsent_filename)
-                    with open(econsent_path, 'wb') as f:
-                        f.write(econsent_pdf)
+                    econsent_b64 = base64.b64encode(econsent_pdf).decode('utf-8')
 
                     db.execute(text("""
                         INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
-                            file_size, mime_type, file_location, source, status, created_at)
+                            file_size, mime_type, file_location, source, status, notes, uploaded_at)
                         VALUES (:borrower_id, 'E-Consent Agreement', 'Disclosures', :filename, :original_filename,
-                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :created_at)
+                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :notes, :uploaded_at)
                     """), {
                         "borrower_id": lead_id,
                         "filename": econsent_filename,
                         "original_filename": econsent_filename,
                         "file_size": len(econsent_pdf),
-                        "file_location": econsent_path,
-                        "created_at": submission_date,
+                        "file_location": f"db://documents/econsent/{lead_id}/{econsent_filename}",
+                        "notes": econsent_b64,
+                        "uploaded_at": submission_date,
                     })
                     documents_stored.append("E-Consent")
                     logger.info(f"Stored E-Consent document for lead {lead_id}")
@@ -1539,22 +1536,21 @@ async def submit_application(
                 # Store Credit Authorization PDF
                 if credit_auth_pdf:
                     credit_auth_filename = f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf"
-                    credit_auth_path = os.path.join(docs_dir, credit_auth_filename)
-                    with open(credit_auth_path, 'wb') as f:
-                        f.write(credit_auth_pdf)
+                    credit_auth_b64 = base64.b64encode(credit_auth_pdf).decode('utf-8')
 
                     db.execute(text("""
                         INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
-                            file_size, mime_type, file_location, source, status, created_at)
+                            file_size, mime_type, file_location, source, status, notes, uploaded_at)
                         VALUES (:borrower_id, 'Credit Authorization', 'Disclosures', :filename, :original_filename,
-                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :created_at)
+                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :notes, :uploaded_at)
                     """), {
                         "borrower_id": lead_id,
                         "filename": credit_auth_filename,
                         "original_filename": credit_auth_filename,
                         "file_size": len(credit_auth_pdf),
-                        "file_location": credit_auth_path,
-                        "created_at": submission_date,
+                        "file_location": f"db://documents/credit_auth/{lead_id}/{credit_auth_filename}",
+                        "notes": credit_auth_b64,
+                        "uploaded_at": submission_date,
                     })
                     documents_stored.append("Credit Authorization")
                     logger.info(f"Stored Credit Authorization document for lead {lead_id}")
@@ -1562,22 +1558,21 @@ async def submit_application(
                 # Store Fannie Mae 3.4 file
                 if fannie_mae_xml:
                     fannie_filename = f"FannieMae34_{safe_borrower_name}_{date_str}.xml"
-                    fannie_path = os.path.join(docs_dir, fannie_filename)
-                    with open(fannie_path, 'w') as f:
-                        f.write(fannie_mae_xml)
+                    fannie_b64 = base64.b64encode(fannie_mae_xml.encode('utf-8')).decode('utf-8')
 
                     db.execute(text("""
                         INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
-                            file_size, mime_type, file_location, source, status, created_at)
+                            file_size, mime_type, file_location, source, status, notes, uploaded_at)
                         VALUES (:borrower_id, 'Fannie Mae 3.4 File', 'Disclosures', :filename, :original_filename,
-                            :file_size, 'application/xml', :file_location, 'APPLICATION', 'active', :created_at)
+                            :file_size, 'application/xml', :file_location, 'APPLICATION', 'active', :notes, :uploaded_at)
                     """), {
                         "borrower_id": lead_id,
                         "filename": fannie_filename,
                         "original_filename": fannie_filename,
                         "file_size": len(fannie_mae_xml),
-                        "file_location": fannie_path,
-                        "created_at": submission_date,
+                        "file_location": f"db://documents/fannie_mae/{lead_id}/{fannie_filename}",
+                        "notes": fannie_b64,
+                        "uploaded_at": submission_date,
                     })
                     documents_stored.append("Fannie Mae 3.4")
                     logger.info(f"Stored Fannie Mae 3.4 document for lead {lead_id}")
@@ -1586,7 +1581,9 @@ async def submit_application(
                 logger.info(f"Stored {len(documents_stored)} documents for lead {lead_id}: {documents_stored}")
 
             except Exception as doc_error:
-                logger.warning(f"Document storage failed (non-critical): {doc_error}")
+                logger.error(f"Document storage failed: {doc_error}")
+                import traceback
+                logger.error(traceback.format_exc())
 
         return {
             "success": True,

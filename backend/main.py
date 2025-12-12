@@ -35857,6 +35857,67 @@ async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: Us
         "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
     }
 
+
+@app.get("/api/v1/leads/{lead_id}/documents")
+async def get_lead_documents(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get all documents associated with a lead"""
+    # Check lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Fetch documents for this lead
+    documents = db.query(Document).filter(Document.borrower_id == lead_id, Document.status == "active").all()
+
+    # Organize documents by category
+    categorized = {
+        "income_verification": [],
+        "credit_reports": [],
+        "property_documents": [],
+        "disclosures_forms": [],
+        "bank_statements": [],
+        "other": [],
+    }
+
+    category_mapping = {
+        "Income": "income_verification",
+        "Credit": "credit_reports",
+        "Property": "property_documents",
+        "Disclosures": "disclosures_forms",
+        "Assets": "bank_statements",
+        "Miscellaneous": "other",
+    }
+
+    for doc in documents:
+        doc_data = {
+            "id": doc.id,
+            "filename": doc.filename,
+            "original_filename": doc.original_filename,
+            "doc_type": doc.doc_type.value if hasattr(doc.doc_type, 'value') else str(doc.doc_type),
+            "doc_category": doc.doc_category.value if doc.doc_category and hasattr(doc.doc_category, 'value') else str(doc.doc_category) if doc.doc_category else None,
+            "file_size": doc.file_size,
+            "mime_type": doc.mime_type,
+            "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+            "source": doc.source,
+        }
+
+        # Determine category
+        cat_key = "other"
+        if doc.doc_category:
+            cat_value = doc.doc_category.value if hasattr(doc.doc_category, 'value') else str(doc.doc_category)
+            cat_key = category_mapping.get(cat_value, "other")
+
+        categorized[cat_key].append(doc_data)
+
+    return {
+        "lead_id": lead_id,
+        "total_documents": len(documents),
+        "documents": categorized,
+    }
+
+
 @app.patch("/api/v1/leads/{lead_id}")
 async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
