@@ -124,21 +124,23 @@ class WorkflowScheduler:
         results = {"processed": 0, "enrolled": 0, "errors": []}
 
         # Status to workflow mapping
+        # Values match LeadStage enum values (as strings after cast)
         status_workflow_map = {
-            'NEW': 'prospect',
-            'ATTEMPTED_CONTACT': 'prospect',
-            'PROSPECT': 'prospect',
-            'APPLICATION': 'prequal',
-            'PRE_QUALIFIED': 'prequal',
-            'PRE_APPROVED': 'pre_approved',
-            'DOES_NOT_QUALIFY': 'credit_repair',
-            'LONG_TERM_NURTURE': 'nurture',
+            'New': 'prospect',
+            'Attempted Contact': 'prospect',
+            'Prospect': 'prospect',
+            'Application': 'prequal',
+            'Pre-Qualified': 'prequal',
+            'Pre-Approved': 'pre_approved',
+            'Does Not Qualify': 'credit_repair',
+            'Long-Term Nurture': 'nurture',
         }
 
         # Find leads that changed status recently and don't have an active workflow
         # We use stage_changed_at if available, otherwise fall back to updated_at
+        # Note: stage is an enum, source is the lead source string
         leads = self.db.execute(text("""
-            SELECT l.id, l.stage, l.source_category
+            SELECT l.id, l.stage::text, l.source
             FROM leads l
             LEFT JOIN workflow_instances wi ON wi.lead_id = l.id AND wi.status = 'active'
             WHERE wi.id IS NULL
@@ -150,14 +152,15 @@ class WorkflowScheduler:
             LIMIT 100
         """)).fetchall()
 
-        for lead_id, stage, source_category in leads:
+        for lead_id, stage, source in leads:
             results["processed"] += 1
 
             # Determine workflow
             workflow_key = status_workflow_map.get(stage)
 
             # Special case: purchased leads use lead_purchase workflow
-            if source_category == 'purchased' and stage in ['NEW', 'ATTEMPTED_CONTACT', 'PROSPECT']:
+            # source contains lead source info like "purchased", "organic", etc.
+            if source and 'purchased' in source.lower() and stage in ['New', 'Attempted Contact', 'Prospect']:
                 workflow_key = 'lead_purchase'
 
             if not workflow_key:
@@ -331,12 +334,13 @@ class WorkflowScheduler:
 
             # Check for leads/loans that have moved to terminal status
             # This auto-cancels their workflows
+            # Use actual LeadStage enum values
             terminal_leads = self.db.execute(text("""
                 SELECT wi.id
                 FROM workflow_instances wi
                 JOIN leads l ON l.id = wi.lead_id
                 WHERE wi.status = 'active'
-                AND l.stage IN ('CLOSED', 'CANCELLED', 'CONVERTED')
+                AND l.stage::text IN ('Closed', 'Withdrawn', 'Disclosed')
             """)).fetchall()
 
             for (instance_id,) in terminal_leads:
