@@ -19748,6 +19748,192 @@ async def debug_tools_registry_status():
         "error": tools_router_error
     }
 
+# PURL System Migration Endpoint
+@app.post("/api/v1/migrations/add-purl-system")
+async def add_purl_system_migration(db: Session = Depends(get_db)):
+    """Run migration to add PURL (Persistent URL) borrower portal tables"""
+    try:
+        from sqlalchemy import text as sql_text
+
+        sql_commands = [
+            "CREATE EXTENSION IF NOT EXISTS pgcrypto",
+            "CREATE EXTENSION IF NOT EXISTS citext",
+            """CREATE TABLE IF NOT EXISTS purl_workspaces (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+                slug VARCHAR(255) NOT NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'lead',
+                display_name VARCHAR(500) NOT NULL,
+                source VARCHAR(255),
+                owner_user_id INTEGER REFERENCES users(id),
+                lead_at TIMESTAMP WITH TIME ZONE,
+                application_at TIMESTAMP WITH TIME ZONE,
+                active_loan_at TIMESTAMP WITH TIME ZONE,
+                closing_at TIMESTAMP WITH TIME ZONE,
+                post_close_at TIMESTAMP WITH TIME ZONE,
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(organization_id, slug)
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_purl_workspaces_org_status ON purl_workspaces(organization_id, status)",
+            "CREATE INDEX IF NOT EXISTS idx_purl_workspaces_slug ON purl_workspaces(slug)",
+            """CREATE TABLE IF NOT EXISTS purl_contacts (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER NOT NULL REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                contact_type VARCHAR(50) NOT NULL,
+                first_name VARCHAR(255) NOT NULL,
+                last_name VARCHAR(255) NOT NULL,
+                email VARCHAR(255),
+                phone VARCHAR(50),
+                auth_user_id INTEGER REFERENCES users(id),
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_purl_contacts_workspace ON purl_contacts(workspace_id)",
+            """CREATE TABLE IF NOT EXISTS purl_access_tokens (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER NOT NULL REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                contact_id INTEGER REFERENCES purl_contacts(id) ON DELETE CASCADE,
+                token_hash VARCHAR(64) NOT NULL UNIQUE,
+                scope VARCHAR(20) NOT NULL DEFAULT 'read',
+                expires_at TIMESTAMP WITH TIME ZONE,
+                last_used_at TIMESTAMP WITH TIME ZONE,
+                revoked_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_purl_tokens_hash ON purl_access_tokens(token_hash)",
+            """CREATE TABLE IF NOT EXISTS purl_applications (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER NOT NULL REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                application_type VARCHAR(20) NOT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'in_progress',
+                version INTEGER NOT NULL DEFAULT 1,
+                data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                completeness_pct INTEGER DEFAULT 0,
+                started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                submitted_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(workspace_id, application_type, version)
+            )""",
+            """CREATE TABLE IF NOT EXISTS purl_loans (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER NOT NULL REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                application_id INTEGER REFERENCES purl_applications(id),
+                main_loan_id INTEGER,
+                loan_number VARCHAR(100),
+                status VARCHAR(30) NOT NULL DEFAULT 'active',
+                loan_purpose VARCHAR(50),
+                loan_amount DECIMAL(15, 2),
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS purl_documents (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER NOT NULL REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                loan_id INTEGER REFERENCES purl_loans(id) ON DELETE CASCADE,
+                doc_type VARCHAR(100) NOT NULL,
+                doc_category VARCHAR(50) NOT NULL,
+                status VARCHAR(30) NOT NULL DEFAULT 'uploaded',
+                file_name VARCHAR(500) NOT NULL,
+                storage_key VARCHAR(1000) NOT NULL UNIQUE,
+                size_bytes BIGINT NOT NULL,
+                mime_type VARCHAR(255) NOT NULL,
+                uploaded_by_contact_id INTEGER REFERENCES purl_contacts(id),
+                uploaded_by_user_id INTEGER REFERENCES users(id),
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS purl_tasks (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                title VARCHAR(500) NOT NULL,
+                description TEXT,
+                task_type VARCHAR(50) DEFAULT 'general',
+                status VARCHAR(30) NOT NULL DEFAULT 'open',
+                priority VARCHAR(20) NOT NULL DEFAULT 'medium',
+                assigned_to_user_id INTEGER REFERENCES users(id),
+                assigned_to_contact_id INTEGER REFERENCES purl_contacts(id),
+                due_at TIMESTAMP WITH TIME ZONE,
+                completed_at TIMESTAMP WITH TIME ZONE,
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS purl_messages (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                workspace_id INTEGER NOT NULL REFERENCES purl_workspaces(id) ON DELETE CASCADE,
+                message_type VARCHAR(30) NOT NULL DEFAULT 'text',
+                content TEXT NOT NULL,
+                sender_type VARCHAR(20) NOT NULL,
+                sender_user_id INTEGER REFERENCES users(id),
+                sender_contact_id INTEGER REFERENCES purl_contacts(id),
+                related_document_id INTEGER REFERENCES purl_documents(id),
+                related_task_id INTEGER REFERENCES purl_tasks(id),
+                is_read_by_borrower BOOLEAN DEFAULT FALSE,
+                read_at TIMESTAMP WITH TIME ZONE,
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_purl_messages_workspace ON purl_messages(workspace_id, created_at DESC)",
+            """CREATE TABLE IF NOT EXISTS purl_audit_log (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                actor_type VARCHAR(20) NOT NULL,
+                actor_id INTEGER,
+                workspace_id INTEGER REFERENCES purl_workspaces(id),
+                action VARCHAR(100) NOT NULL,
+                resource_type VARCHAR(100) NOT NULL,
+                resource_id INTEGER,
+                changes JSONB,
+                meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                ip_address VARCHAR(45),
+                request_id VARCHAR(100),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_purl_audit_workspace ON purl_audit_log(workspace_id, created_at DESC)"
+        ]
+
+        success_count = 0
+        errors = []
+        for i, sql in enumerate(sql_commands):
+            try:
+                db.execute(sql_text(sql))
+                db.commit()
+                success_count += 1
+            except Exception as e:
+                db.rollback()
+                error_msg = str(e)
+                if 'already exists' in error_msg.lower() or 'duplicate' in error_msg.lower():
+                    success_count += 1
+                    continue
+                errors.append(f"Statement {i+1}: {error_msg[:200]}")
+
+        return {
+            "success": len(errors) == 0,
+            "message": f"PURL migration: {success_count}/{len(sql_commands)} statements succeeded",
+            "tables_created": [
+                "purl_workspaces", "purl_contacts", "purl_access_tokens",
+                "purl_applications", "purl_loans", "purl_documents",
+                "purl_tasks", "purl_messages", "purl_audit_log"
+            ],
+            "errors": errors if errors else None
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):

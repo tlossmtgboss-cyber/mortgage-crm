@@ -66,7 +66,7 @@ def run_migration():
             post_close_at TIMESTAMP WITH TIME ZONE,
 
             -- Metadata
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -111,7 +111,7 @@ def run_migration():
             auth_provider VARCHAR(50),
 
             -- Additional data
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -279,7 +279,7 @@ def run_migration():
             -- External integration
             los_loan_id VARCHAR(100),
 
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -341,7 +341,7 @@ def run_migration():
             expires_at TIMESTAMP WITH TIME ZONE,
             delete_after TIMESTAMP WITH TIME ZONE,
 
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -515,7 +515,7 @@ def run_migration():
             completed_by_contact_id INTEGER REFERENCES purl_contacts(id),
 
             -- Metadata
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -570,7 +570,7 @@ def run_migration():
             is_read_by_borrower BOOLEAN DEFAULT FALSE,
             read_at TIMESTAMP WITH TIME ZONE,
 
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
@@ -648,7 +648,7 @@ def run_migration():
 
             -- Details
             changes JSONB,
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             -- Request tracking
             ip_address VARCHAR(45),
@@ -709,7 +709,7 @@ def run_migration():
             received_document_id INTEGER REFERENCES purl_documents(id),
             received_at TIMESTAMP WITH TIME ZONE,
 
-            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            meta_data JSONB NOT NULL DEFAULT '{}'::jsonb,
 
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
