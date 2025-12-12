@@ -49862,6 +49862,24 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Email Response Training tables creation skipped: {e}")
 
+            # Create SLA Workflow System tables (AI-driven task generation)
+            try:
+                from migrations.add_workflow_sla_system import run_migration as run_workflow_sla_migration
+                workflow_result = run_workflow_sla_migration()
+                if workflow_result.get('success'):
+                    logger.info("✅ SLA Workflow System tables initialized")
+                else:
+                    logger.warning(f"⚠️ SLA Workflow System migration had issues: {workflow_result.get('errors')}")
+            except Exception as e:
+                logger.warning(f"⚠️ SLA Workflow System tables creation skipped: {e}")
+
+            # Seed default SLA Workflow configurations
+            try:
+                seed_workflow_configurations()
+                logger.info("✅ SLA Workflow configurations seeded")
+            except Exception as e:
+                logger.warning(f"⚠️ SLA Workflow configuration seeding skipped: {e}")
+
             # Create sample data and seed permission system
             db = SessionLocal()
             try:
@@ -54679,6 +54697,185 @@ async def update_workflow_stage(
         db.rollback()
         logger.error(f"Error saving workflow: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# SLA WORKFLOW CONFIGURATION SEED DATA
+# ============================================================================
+
+def seed_workflow_configurations():
+    """Seed default SLA workflow configurations for all workflow types."""
+    db = SessionLocal()
+    try:
+        from workflow_config_models import create_workflow_config_models
+
+        # Create workflow config models
+        workflow_models = create_workflow_config_models(Base)
+        WorkflowConfiguration = workflow_models['WorkflowConfiguration']
+        WorkflowDayConfig = workflow_models['WorkflowDayConfig']
+
+        # Check if already seeded
+        existing = db.query(WorkflowConfiguration).count()
+        if existing > 0:
+            logger.info(f"Workflow configurations already exist ({existing}), skipping seed...")
+            return
+
+        logger.info("Seeding default workflow configurations...")
+
+        # Define default workflows with their day configurations
+        workflows = [
+            {
+                "workflow_key": "prospect",
+                "workflow_name": "Prospect Workflow",
+                "description": "Initial contact and nurture sequence for new prospects",
+                "objective": "Convert prospects to qualified leads through consistent follow-up",
+                "statuses_impacted": ["NEW", "CONTACTED"],
+                "color": "#4CAF50",
+                "days": [
+                    {"day_label": "Day 1", "day_order": 1, "day_value": 1, "phone_enabled": True, "text_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 2", "day_order": 2, "day_value": 2, "phone_enabled": True, "text_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 3", "day_order": 3, "day_value": 3, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Day 5", "day_order": 4, "day_value": 5, "phone_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 7", "day_order": 5, "day_value": 7, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Day 14", "day_order": 6, "day_value": 14, "phone_enabled": True, "text_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 21", "day_order": 7, "day_value": 21, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Day 30", "day_order": 8, "day_value": 30, "phone_enabled": True, "lo_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "prequal",
+                "workflow_name": "Pre-Qualification Workflow",
+                "description": "Follow-up sequence for pre-qualified leads",
+                "objective": "Move pre-qualified leads to application submission",
+                "statuses_impacted": ["PREQUAL", "PRE_QUALIFIED"],
+                "color": "#2196F3",
+                "days": [
+                    {"day_label": "Day 1", "day_order": 1, "day_value": 1, "phone_enabled": True, "text_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 3", "day_order": 2, "day_value": 3, "phone_enabled": True, "text_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 5", "day_order": 3, "day_value": 5, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Day 7", "day_order": 4, "day_value": 7, "phone_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 14", "day_order": 5, "day_value": 14, "phone_enabled": True, "text_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 21", "day_order": 6, "day_value": 21, "email_enabled": True, "ai_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "lead_purchase",
+                "workflow_name": "Lead Purchase Workflow",
+                "description": "Aggressive follow-up for purchased leads with AM/PM cadence",
+                "objective": "Maximize conversion on purchased leads with intensive outreach",
+                "statuses_impacted": ["PURCHASED", "LEAD_PURCHASE"],
+                "color": "#FF9800",
+                "days": [
+                    {"day_label": "First 24 Hours", "day_order": 1, "day_value": 1, "phone_am_enabled": True, "phone_pm_enabled": True, "text_am_enabled": True, "text_pm_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 2", "day_order": 2, "day_value": 2, "phone_am_enabled": True, "phone_pm_enabled": True, "text_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 3", "day_order": 3, "day_value": 3, "phone_enabled": True, "text_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 4", "day_order": 4, "day_value": 4, "phone_enabled": True, "text_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 5", "day_order": 5, "day_value": 5, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 6", "day_order": 6, "day_value": 6, "text_enabled": True, "ai_responsible": True},
+                    {"day_label": "Day 7", "day_order": 7, "day_value": 7, "phone_enabled": True, "text_enabled": True, "lo_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "pre_approved",
+                "workflow_name": "Pre-Approved Workflow",
+                "description": "Nurture sequence for pre-approved borrowers waiting to find a home",
+                "objective": "Keep pre-approved borrowers engaged until they go under contract",
+                "statuses_impacted": ["PRE_APPROVED", "APPROVED"],
+                "color": "#9C27B0",
+                "days": [
+                    {"day_label": "Week 1", "day_order": 1, "day_value": 7, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Week 2", "day_order": 2, "day_value": 14, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Week 3", "day_order": 3, "day_value": 21, "phone_enabled": True, "lo_responsible": True},
+                    {"day_label": "Month 1", "day_order": 4, "day_value": 30, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Month 2", "day_order": 5, "day_value": 60, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 3", "day_order": 6, "day_value": 90, "phone_enabled": True, "lo_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "under_contract",
+                "workflow_name": "Under Contract Workflow",
+                "description": "Active loan processing workflow with milestone touchpoints",
+                "objective": "Guide loan from contract to closing with proactive communication",
+                "statuses_impacted": ["PROCESSING", "SUBMITTED", "UNDERWRITING"],
+                "color": "#00BCD4",
+                "days": [
+                    {"day_label": "Day 1 - Welcome", "day_order": 1, "day_value": 1, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 3 - Doc Check", "day_order": 2, "day_value": 3, "phone_enabled": True, "text_enabled": True, "processor_responsible": True},
+                    {"day_label": "Day 7 - Status Update", "day_order": 3, "day_value": 7, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Day 14 - Progress Check", "day_order": 4, "day_value": 14, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Day 21 - Final Push", "day_order": 5, "day_value": 21, "phone_enabled": True, "lo_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "nurture",
+                "workflow_name": "Long-Term Nurture Workflow",
+                "description": "Extended nurture for leads not ready to transact",
+                "objective": "Stay top of mind until lead is ready to move forward",
+                "statuses_impacted": ["NURTURE", "LONG_TERM"],
+                "color": "#607D8B",
+                "days": [
+                    {"day_label": "Month 1", "day_order": 1, "day_value": 30, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 2", "day_order": 2, "day_value": 60, "text_enabled": True, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 3", "day_order": 3, "day_value": 90, "phone_enabled": True, "lo_responsible": True},
+                    {"day_label": "Month 4", "day_order": 4, "day_value": 120, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 5", "day_order": 5, "day_value": 150, "text_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 6", "day_order": 6, "day_value": 180, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "credit_repair",
+                "workflow_name": "Credit Repair Workflow",
+                "description": "Follow-up for leads working on credit improvement",
+                "objective": "Support leads through credit repair journey and re-engage when ready",
+                "statuses_impacted": ["CREDIT_REPAIR", "NOT_QUALIFIED"],
+                "color": "#F44336",
+                "days": [
+                    {"day_label": "Week 1", "day_order": 1, "day_value": 7, "phone_enabled": True, "email_enabled": True, "lo_responsible": True, "referral_partner_enabled": True},
+                    {"day_label": "Week 2", "day_order": 2, "day_value": 14, "text_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 1", "day_order": 3, "day_value": 30, "phone_enabled": True, "lo_responsible": True},
+                    {"day_label": "Month 2", "day_order": 4, "day_value": 60, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 3", "day_order": 5, "day_value": 90, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                ]
+            },
+            {
+                "workflow_key": "post_close",
+                "workflow_name": "Post-Close Workflow",
+                "description": "Post-closing follow-up for referrals and reviews",
+                "objective": "Generate referrals and reviews from satisfied customers",
+                "statuses_impacted": ["FUNDED", "CLOSED"],
+                "color": "#8BC34A",
+                "days": [
+                    {"day_label": "Day 1 - Congrats", "day_order": 1, "day_value": 1, "phone_enabled": True, "text_enabled": True, "email_enabled": True, "lo_responsible": True},
+                    {"day_label": "Week 1 - Check In", "day_order": 2, "day_value": 7, "text_enabled": True, "ai_responsible": True},
+                    {"day_label": "Week 2 - Review Request", "day_order": 3, "day_value": 14, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 1 - Referral Ask", "day_order": 4, "day_value": 30, "phone_enabled": True, "lo_responsible": True},
+                    {"day_label": "Month 3", "day_order": 5, "day_value": 90, "email_enabled": True, "ai_responsible": True},
+                    {"day_label": "Month 6", "day_order": 6, "day_value": 180, "text_enabled": True, "ai_responsible": True},
+                    {"day_label": "Year 1 - Anniversary", "day_order": 7, "day_value": 365, "phone_enabled": True, "email_enabled": True, "lo_responsible": True},
+                ]
+            },
+        ]
+
+        # Create workflows and their day configs
+        for wf_data in workflows:
+            days_data = wf_data.pop("days")
+            workflow = WorkflowConfiguration(**wf_data, is_active=True)
+            db.add(workflow)
+            db.flush()  # Get the workflow ID
+
+            for day_data in days_data:
+                day_config = WorkflowDayConfig(workflow_id=workflow.id, **day_data)
+                db.add(day_config)
+
+        db.commit()
+        logger.info(f"✅ Created {len(workflows)} workflow configurations with day configs")
+
+    except Exception as e:
+        logger.error(f"Error seeding workflow configurations: {e}")
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 # ============================================================================
