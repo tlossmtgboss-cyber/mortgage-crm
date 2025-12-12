@@ -69,18 +69,24 @@ def create_workflow_config_models(Base):
         """
         Master workflow configuration for each stage.
         One record per workflow (Prospect, PreQual, etc.)
+        Supports multi-tenancy with organization_id for org-specific configs.
         """
         __tablename__ = "workflow_configurations"
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
-        workflow_key = Column(String(50), unique=True, nullable=False, index=True)  # e.g., 'prospect', 'prequal'
+        workflow_key = Column(String(50), nullable=False, index=True)  # e.g., 'prospect', 'prequal'
         workflow_name = Column(String(100), nullable=False)  # Display name
         description = Column(Text)
         objective = Column(Text)
         statuses_impacted = Column(JSON)  # List of statuses this workflow applies to
         color = Column(String(20))
         is_active = Column(Boolean, default=True)
+
+        # Multi-tenancy support
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+        is_system_template = Column(Boolean, default=False)  # True for system-wide templates
+
         created_at = Column(DateTime, default=datetime.utcnow)
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
