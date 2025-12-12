@@ -116,6 +116,55 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # WORKFLOW SLA SYSTEM JOBS
+        # =================================================================
+
+        # Workflow task generation - runs every 5 minutes
+        self.scheduler.add_job(
+            func=self.run_workflow_task_generation,
+            trigger=IntervalTrigger(minutes=5),
+            id="workflow_task_generation",
+            name="Generate Workflow Tasks",
+            replace_existing=True,
+        )
+
+        # Workflow status processing - runs every 10 minutes
+        self.scheduler.add_job(
+            func=self.run_workflow_status_processing,
+            trigger=IntervalTrigger(minutes=10),
+            id="workflow_status_processing",
+            name="Process Workflow Status Changes",
+            replace_existing=True,
+        )
+
+        # Workflow escalation check - runs every hour
+        self.scheduler.add_job(
+            func=self.run_workflow_escalation,
+            trigger=IntervalTrigger(hours=1),
+            id="workflow_escalation",
+            name="Escalate Overdue Workflow Tasks",
+            replace_existing=True,
+        )
+
+        # Workflow completion check - runs every 30 minutes
+        self.scheduler.add_job(
+            func=self.run_workflow_completion_check,
+            trigger=IntervalTrigger(minutes=30),
+            id="workflow_completion_check",
+            name="Check Workflow Completions",
+            replace_existing=True,
+        )
+
+        # AI autonomous execution - runs every 15 minutes
+        self.scheduler.add_job(
+            func=self.run_ai_autonomous_execution,
+            trigger=IntervalTrigger(minutes=15),
+            id="ai_autonomous_execution",
+            name="Run AI Autonomous Task Execution",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -398,6 +447,123 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Stale application cleanup failed: {e}")
             session.rollback()
+        finally:
+            session.close()
+
+    # =========================================================================
+    # WORKFLOW SLA SYSTEM METHODS
+    # =========================================================================
+
+    def run_workflow_task_generation(self):
+        """Generate tasks for active workflows."""
+        logger.info("Running workflow task generation job")
+
+        session = get_db_session()
+
+        try:
+            from services.workflow_scheduler import WorkflowScheduler
+
+            scheduler = WorkflowScheduler(session)
+            result = scheduler.generate_due_tasks()
+
+            if result.get("success"):
+                logger.info(f"Workflow task generation complete: {result}")
+            else:
+                logger.error(f"Workflow task generation failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Workflow task generation job failed: {e}")
+        finally:
+            session.close()
+
+    def run_workflow_status_processing(self):
+        """Process status changes and auto-enroll in workflows."""
+        logger.info("Running workflow status processing job")
+
+        session = get_db_session()
+
+        try:
+            from services.workflow_scheduler import WorkflowScheduler
+
+            scheduler = WorkflowScheduler(session)
+            result = scheduler.process_status_changes()
+
+            if result.get("success"):
+                enrolled = result.get("workflows_enrolled", 0)
+                logger.info(f"Workflow status processing complete: {enrolled} workflows enrolled")
+            else:
+                logger.error(f"Workflow status processing failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Workflow status processing job failed: {e}")
+        finally:
+            session.close()
+
+    def run_workflow_escalation(self):
+        """Escalate overdue workflow tasks."""
+        logger.info("Running workflow escalation job")
+
+        session = get_db_session()
+
+        try:
+            from services.workflow_scheduler import WorkflowScheduler
+
+            scheduler = WorkflowScheduler(session)
+            result = scheduler.escalate_overdue_tasks()
+
+            if result.get("success"):
+                escalated = result.get("escalated_count", 0)
+                logger.info(f"Workflow escalation complete: {escalated} tasks escalated")
+            else:
+                logger.error(f"Workflow escalation failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Workflow escalation job failed: {e}")
+        finally:
+            session.close()
+
+    def run_workflow_completion_check(self):
+        """Check for workflows that should be completed."""
+        logger.info("Running workflow completion check job")
+
+        session = get_db_session()
+
+        try:
+            from services.workflow_scheduler import WorkflowScheduler
+
+            scheduler = WorkflowScheduler(session)
+            result = scheduler.check_workflow_completions()
+
+            if result.get("success"):
+                completed = result.get("workflows_completed", 0)
+                logger.info(f"Workflow completion check complete: {completed} workflows completed")
+            else:
+                logger.error(f"Workflow completion check failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Workflow completion check job failed: {e}")
+        finally:
+            session.close()
+
+    def run_ai_autonomous_execution(self):
+        """Run autonomous AI task execution for high-confidence tasks."""
+        logger.info("Running AI autonomous execution job")
+
+        session = get_db_session()
+
+        try:
+            from services.workflow_ai_executor import run_autonomous_ai_tasks
+
+            result = run_autonomous_ai_tasks(session, max_tasks=20)
+
+            if result.get("success"):
+                executed = result.get("executed_count", 0)
+                logger.info(f"AI autonomous execution complete: {executed} tasks executed")
+            else:
+                logger.error(f"AI autonomous execution failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"AI autonomous execution job failed: {e}")
         finally:
             session.close()
 

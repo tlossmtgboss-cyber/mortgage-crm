@@ -19353,6 +19353,18 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Workflow Configuration routes: {e}")
 
+# Include SLA Workflow System routes
+try:
+    from routes.workflow_sla_routes import router as workflow_sla_router, set_dependencies as set_workflow_sla_deps
+
+    # Set dependencies for workflow SLA routes to avoid circular imports
+    set_workflow_sla_deps(get_db, get_current_user, User)
+
+    app.include_router(workflow_sla_router, tags=["Workflow SLA"])
+    logger.info("✅ Workflow SLA routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Workflow SLA routes: {e}")
+
 # Include Smart Scheduler routes (AI-native appointment scheduling)
 try:
     from smart_scheduler_models import create_smart_scheduler_models
@@ -29841,6 +29853,69 @@ async def seed_workflow_rules_migration(
         logger.error(f"Workflow rules seeding failed: {e}")
         db.rollback()
         return {"success": False, "error": str(e)}
+
+
+@app.post("/api/v1/migrations/add-workflow-sla-system")
+async def add_workflow_sla_system_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add SLA Workflow Task Generation System
+
+    Creates the complete database schema for SLA-driven workflow task generation:
+    - New enum types (workflow_instance_status, workflow_task_status, etc.)
+    - workflow_instances table for tracking workflow lifecycles
+    - Extended workflow_task_instances with AI confidence and routing
+    - workflow_ai_confidence table for AI decision tracking
+    - lead_workflow_role_assignments and loan_workflow_role_assignments tables
+    - Column additions to tasks, roles, leads, and workflow_configurations
+    - Performance indexes and RLS policies
+
+    This is Phase 1 of the SLA Workflow System implementation.
+    """
+    try:
+        logger.info("Running migration: add SLA workflow system tables")
+
+        from migrations.add_workflow_sla_system import run_migration, check_migration_status
+
+        # Check if migration is already applied
+        status = check_migration_status(db)
+        if status['fully_applied']:
+            return {
+                "success": True,
+                "message": "SLA Workflow System migration already applied",
+                "status": status
+            }
+
+        # Run the migration
+        results = run_migration(db)
+
+        if results['success']:
+            return {
+                "success": True,
+                "message": "SLA Workflow System migration completed successfully",
+                "enums_created": results.get('enums_created', []),
+                "tables_created": results.get('tables_created', []),
+                "columns_added": results.get('columns_added', []),
+                "indexes_created": results.get('indexes_created', []),
+                "warnings": results.get('warnings', [])
+            }
+        else:
+            return {
+                "success": False,
+                "message": "SLA Workflow System migration failed",
+                "errors": results.get('errors', []),
+                "warnings": results.get('warnings', [])
+            }
+
+    except Exception as e:
+        logger.error(f"SLA Workflow System migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
 
 
 @app.post("/api/v1/migrations/add-ab-testing-tables")

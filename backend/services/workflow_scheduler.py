@@ -1,0 +1,474 @@
+"""
+Workflow Scheduler Service
+
+Handles scheduled workflow operations:
+- Periodic task generation for active workflows
+- Status change detection and workflow enrollment
+- Overdue task escalation
+- Workflow completion checks
+
+Can be run as a background task or triggered via API/cron.
+"""
+
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List, Dict, Any
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+import asyncio
+
+logger = logging.getLogger(__name__)
+
+
+class WorkflowScheduler:
+    """
+    Scheduler for workflow operations.
+
+    Handles periodic processing of workflow tasks and status monitoring.
+    """
+
+    # Default intervals (in seconds)
+    TASK_GENERATION_INTERVAL = 300  # 5 minutes
+    STATUS_CHECK_INTERVAL = 60  # 1 minute
+    ESCALATION_INTERVAL = 3600  # 1 hour
+
+    def __init__(self, db: Session):
+        self.db = db
+        self._running = False
+        self._task_generator = None
+        self._workflow_service = None
+
+    def _get_task_generator(self):
+        """Lazy load task generator."""
+        if not self._task_generator:
+            from services.workflow_task_generator import TaskGeneratorService
+            self._task_generator = TaskGeneratorService(self.db)
+        return self._task_generator
+
+    def _get_workflow_service(self):
+        """Lazy load workflow service."""
+        if not self._workflow_service:
+            from services.workflow_sla_service import WorkflowSLAService
+            self._workflow_service = WorkflowSLAService(self.db)
+        return self._workflow_service
+
+    # =========================================================================
+    # TASK GENERATION
+    # =========================================================================
+
+    def generate_due_tasks(self) -> Dict[str, Any]:
+        """
+        Generate tasks for all active workflows that have due tasks.
+
+        This is the main scheduled operation that should run periodically.
+        """
+        try:
+            generator = self._get_task_generator()
+            return generator.generate_scheduled_tasks()
+
+        except Exception as e:
+            logger.error(f"Task generation failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def generate_tasks_for_workflow(self, instance_id: int) -> Dict[str, Any]:
+        """Generate tasks for a specific workflow instance."""
+        try:
+            generator = self._get_task_generator()
+            return generator.generate_tasks_for_instance(instance_id)
+
+        except Exception as e:
+            logger.error(f"Task generation for instance {instance_id} failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
+    # STATUS CHANGE DETECTION
+    # =========================================================================
+
+    def process_status_changes(self) -> Dict[str, Any]:
+        """
+        Detect and process status/stage changes that should trigger workflow enrollment.
+
+        Checks leads and loans for status changes and enrolls them in appropriate workflows.
+        """
+        try:
+            workflow_service = self._get_workflow_service()
+            results = {
+                "leads_processed": 0,
+                "loans_processed": 0,
+                "workflows_enrolled": 0,
+                "errors": []
+            }
+
+            # Process lead status changes
+            lead_results = self._process_lead_status_changes(workflow_service)
+            results["leads_processed"] = lead_results.get("processed", 0)
+            results["workflows_enrolled"] += lead_results.get("enrolled", 0)
+            results["errors"].extend(lead_results.get("errors", []))
+
+            # Process loan status changes
+            loan_results = self._process_loan_status_changes(workflow_service)
+            results["loans_processed"] = loan_results.get("processed", 0)
+            results["workflows_enrolled"] += loan_results.get("enrolled", 0)
+            results["errors"].extend(loan_results.get("errors", []))
+
+            logger.info(f"Status change processing: {results['workflows_enrolled']} workflows enrolled")
+
+            return {"success": True, **results}
+
+        except Exception as e:
+            logger.error(f"Status change processing failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _process_lead_status_changes(self, workflow_service) -> Dict[str, Any]:
+        """Process lead status changes for workflow enrollment."""
+        results = {"processed": 0, "enrolled": 0, "errors": []}
+
+        # Status to workflow mapping
+        status_workflow_map = {
+            'NEW': 'prospect',
+            'ATTEMPTED_CONTACT': 'prospect',
+            'PROSPECT': 'prospect',
+            'APPLICATION': 'prequal',
+            'PRE_QUALIFIED': 'prequal',
+            'PRE_APPROVED': 'pre_approved',
+            'DOES_NOT_QUALIFY': 'credit_repair',
+            'LONG_TERM_NURTURE': 'nurture',
+        }
+
+        # Find leads that changed status recently and don't have an active workflow
+        # We use stage_changed_at if available, otherwise fall back to updated_at
+        leads = self.db.execute(text("""
+            SELECT l.id, l.stage, l.source_category
+            FROM leads l
+            LEFT JOIN workflow_instances wi ON wi.lead_id = l.id AND wi.status = 'active'
+            WHERE wi.id IS NULL
+            AND l.stage IS NOT NULL
+            AND (
+                l.stage_changed_at >= NOW() - INTERVAL '1 hour'
+                OR (l.stage_changed_at IS NULL AND l.updated_at >= NOW() - INTERVAL '1 hour')
+            )
+            LIMIT 100
+        """)).fetchall()
+
+        for lead_id, stage, source_category in leads:
+            results["processed"] += 1
+
+            # Determine workflow
+            workflow_key = status_workflow_map.get(stage)
+
+            # Special case: purchased leads use lead_purchase workflow
+            if source_category == 'purchased' and stage in ['NEW', 'ATTEMPTED_CONTACT', 'PROSPECT']:
+                workflow_key = 'lead_purchase'
+
+            if not workflow_key:
+                continue
+
+            # Enroll in workflow
+            enroll_result = workflow_service.enroll_lead(
+                lead_id=lead_id,
+                workflow_key=workflow_key,
+                trigger_status=stage
+            )
+
+            if enroll_result.get("success"):
+                results["enrolled"] += 1
+            else:
+                error = enroll_result.get("error", "Unknown error")
+                if "already enrolled" not in error.lower():
+                    results["errors"].append({"lead_id": lead_id, "error": error})
+
+        return results
+
+    def _process_loan_status_changes(self, workflow_service) -> Dict[str, Any]:
+        """Process loan status changes for workflow enrollment."""
+        results = {"processed": 0, "enrolled": 0, "errors": []}
+
+        # Status to workflow mapping
+        status_workflow_map = {
+            'under_contract': 'under_contract',
+            'processing': 'under_contract',
+            'submitted': 'under_contract',
+            'underwriting': 'under_contract',
+            'approved': 'under_contract',
+            'clear_to_close': 'last_mile',
+            'docs_out': 'last_mile',
+            'docs_back': 'last_mile',
+            'funded': 'post_close',
+        }
+
+        # Find loans that changed status recently
+        loans = self.db.execute(text("""
+            SELECT l.id, l.status
+            FROM loans l
+            LEFT JOIN workflow_instances wi ON wi.loan_id = l.id AND wi.status = 'active'
+            WHERE wi.id IS NULL
+            AND l.status IS NOT NULL
+            AND l.status_changed_at >= NOW() - INTERVAL '1 hour'
+            LIMIT 100
+        """)).fetchall()
+
+        for loan_id, status in loans:
+            results["processed"] += 1
+
+            workflow_key = status_workflow_map.get(status)
+            if not workflow_key:
+                continue
+
+            # Enroll in workflow
+            enroll_result = workflow_service.enroll_loan(
+                loan_id=loan_id,
+                workflow_key=workflow_key,
+                trigger_status=status
+            )
+
+            if enroll_result.get("success"):
+                results["enrolled"] += 1
+            else:
+                error = enroll_result.get("error", "Unknown error")
+                if "already enrolled" not in error.lower():
+                    results["errors"].append({"loan_id": loan_id, "error": error})
+
+        return results
+
+    # =========================================================================
+    # OVERDUE TASK ESCALATION
+    # =========================================================================
+
+    def escalate_overdue_tasks(self) -> Dict[str, Any]:
+        """
+        Find and escalate overdue workflow tasks.
+
+        Creates alerts for tasks that are past due.
+        """
+        try:
+            # Find overdue tasks
+            overdue = self.db.execute(text("""
+                SELECT
+                    wti.id,
+                    wti.task_name,
+                    wti.due_date,
+                    wti.assigned_user_id,
+                    wti.lead_id,
+                    wti.loan_id,
+                    wi.organization_id
+                FROM workflow_task_instances wti
+                JOIN workflow_instances wi ON wi.id = wti.workflow_instance_id
+                WHERE wti.status IN ('scheduled', 'pending')
+                AND wti.due_date < NOW() - INTERVAL '24 hours'
+                AND wi.status = 'active'
+                LIMIT 100
+            """)).fetchall()
+
+            escalated = 0
+            for task in overdue:
+                task_id, task_name, due_date, user_id, lead_id, loan_id, org_id = task
+
+                # Mark task as escalated (could create an alert, send notification, etc.)
+                self.db.execute(text("""
+                    UPDATE workflow_task_instances
+                    SET health_status = 'broken',
+                        error_message = 'Task overdue - escalated',
+                        updated_at = NOW()
+                    WHERE id = :id
+                """), {"id": task_id})
+
+                # TODO: Create BrokenTaskAlert record
+                # TODO: Send notification to manager
+
+                escalated += 1
+
+            self.db.commit()
+
+            logger.info(f"Escalated {escalated} overdue tasks")
+
+            return {
+                "success": True,
+                "escalated_count": escalated
+            }
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Task escalation failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
+    # WORKFLOW COMPLETION CHECKS
+    # =========================================================================
+
+    def check_workflow_completions(self) -> Dict[str, Any]:
+        """
+        Check for workflows that should be marked as completed.
+
+        Workflows are completed when:
+        - All tasks are completed/skipped/cancelled
+        - The entity has moved to a terminal status (funded, closed, etc.)
+        """
+        try:
+            completed = 0
+
+            # Check for workflows where all tasks are done
+            ready_to_complete = self.db.execute(text("""
+                SELECT wi.id
+                FROM workflow_instances wi
+                WHERE wi.status = 'active'
+                AND NOT EXISTS (
+                    SELECT 1 FROM workflow_task_instances wti
+                    WHERE wti.workflow_instance_id = wi.id
+                    AND wti.status IN ('scheduled', 'pending', 'in_progress')
+                )
+                AND EXISTS (
+                    SELECT 1 FROM workflow_task_instances wti2
+                    WHERE wti2.workflow_instance_id = wi.id
+                )
+            """)).fetchall()
+
+            workflow_service = self._get_workflow_service()
+
+            for (instance_id,) in ready_to_complete:
+                result = workflow_service.complete_workflow(instance_id)
+                if result.get("success"):
+                    completed += 1
+
+            # Check for leads/loans that have moved to terminal status
+            # This auto-cancels their workflows
+            terminal_leads = self.db.execute(text("""
+                SELECT wi.id
+                FROM workflow_instances wi
+                JOIN leads l ON l.id = wi.lead_id
+                WHERE wi.status = 'active'
+                AND l.stage IN ('CLOSED', 'CANCELLED', 'CONVERTED')
+            """)).fetchall()
+
+            for (instance_id,) in terminal_leads:
+                workflow_service.cancel_workflow(
+                    instance_id=instance_id,
+                    reason="Lead reached terminal status",
+                    user_id=1  # System user
+                )
+                completed += 1
+
+            terminal_loans = self.db.execute(text("""
+                SELECT wi.id
+                FROM workflow_instances wi
+                JOIN loans l ON l.id = wi.loan_id
+                WHERE wi.status = 'active'
+                AND l.status IN ('funded', 'cancelled', 'denied')
+            """)).fetchall()
+
+            for (instance_id,) in terminal_loans:
+                workflow_service.cancel_workflow(
+                    instance_id=instance_id,
+                    reason="Loan reached terminal status",
+                    user_id=1  # System user
+                )
+                completed += 1
+
+            logger.info(f"Completed/cancelled {completed} workflows")
+
+            return {
+                "success": True,
+                "workflows_completed": completed
+            }
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Workflow completion check failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
+    # SCHEDULED RUN
+    # =========================================================================
+
+    def run_all_scheduled_tasks(self) -> Dict[str, Any]:
+        """
+        Run all scheduled workflow tasks.
+
+        This is the main entry point for scheduled/cron execution.
+        """
+        start_time = datetime.now(timezone.utc)
+        results = {
+            "success": True,
+            "started_at": start_time.isoformat(),
+            "operations": {}
+        }
+
+        try:
+            # 1. Process status changes for auto-enrollment
+            status_result = self.process_status_changes()
+            results["operations"]["status_changes"] = status_result
+
+            # 2. Generate due tasks
+            task_result = self.generate_due_tasks()
+            results["operations"]["task_generation"] = task_result
+
+            # 3. Escalate overdue tasks
+            escalation_result = self.escalate_overdue_tasks()
+            results["operations"]["escalation"] = escalation_result
+
+            # 4. Check workflow completions
+            completion_result = self.check_workflow_completions()
+            results["operations"]["completions"] = completion_result
+
+            end_time = datetime.now(timezone.utc)
+            results["completed_at"] = end_time.isoformat()
+            results["duration_seconds"] = (end_time - start_time).total_seconds()
+
+            logger.info(f"Scheduled workflow run completed in {results['duration_seconds']:.2f}s")
+
+            return results
+
+        except Exception as e:
+            results["success"] = False
+            results["error"] = str(e)
+            logger.error(f"Scheduled workflow run failed: {e}")
+            return results
+
+    # =========================================================================
+    # ASYNC BACKGROUND RUNNER
+    # =========================================================================
+
+    async def start_background_loop(self):
+        """
+        Start the background scheduler loop.
+
+        Runs continuously, processing workflows at configured intervals.
+        """
+        self._running = True
+        logger.info("Workflow scheduler background loop started")
+
+        while self._running:
+            try:
+                # Run scheduled tasks
+                self.run_all_scheduled_tasks()
+
+                # Wait for next interval
+                await asyncio.sleep(self.TASK_GENERATION_INTERVAL)
+
+            except Exception as e:
+                logger.error(f"Background loop error: {e}")
+                await asyncio.sleep(60)  # Wait a bit before retrying
+
+        logger.info("Workflow scheduler background loop stopped")
+
+    def stop_background_loop(self):
+        """Stop the background scheduler loop."""
+        self._running = False
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+def get_workflow_scheduler(db: Session) -> WorkflowScheduler:
+    """Factory function to get a WorkflowScheduler instance."""
+    return WorkflowScheduler(db)
+
+
+def run_scheduled_workflow_tasks(db: Session) -> Dict[str, Any]:
+    """
+    Convenience function to run all scheduled workflow tasks.
+
+    Can be called from a cron job or API endpoint.
+    """
+    scheduler = WorkflowScheduler(db)
+    return scheduler.run_all_scheduled_tasks()
