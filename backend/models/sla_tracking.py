@@ -190,12 +190,12 @@ class LoanMilestoneHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, index=True, nullable=False, default=1)
 
-    # Loan reference
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True, index=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True, index=True)
+    # Loan/Lead reference - no FK constraints to avoid import order issues
+    loan_id = Column(Integer, nullable=True, index=True)
+    lead_id = Column(Integer, nullable=True, index=True)
     loan_number = Column(String(50), index=True)
 
-    # Milestone tracking
+    # Milestone tracking - FK to sla_measures is safe since it's in the same module
     sla_measure_id = Column(Integer, ForeignKey("sla_measures.id"), nullable=False)
     milestone_type = Column(SQLEnum(MilestoneType), nullable=False, index=True)
 
@@ -288,10 +288,11 @@ class SLAAlert(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, index=True, nullable=False, default=1)
 
-    # Related records
+    # Related records - FK to loan_milestone_history is safe since it's in same module
     milestone_history_id = Column(Integer, ForeignKey("loan_milestone_history.id"), nullable=False)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    # No FK constraints for loan_id/lead_id to avoid import order issues
+    loan_id = Column(Integer, nullable=True, index=True)
+    lead_id = Column(Integer, nullable=True, index=True)
 
     # Alert details
     alert_type = Column(String(50), nullable=False)  # "warning", "critical", "escalation"
