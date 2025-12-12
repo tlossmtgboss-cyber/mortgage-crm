@@ -97,6 +97,11 @@ function LeadDetail() {
   const [stageHistory, setStageHistory] = useState([]);
   const [stageHistoryLoading, setStageHistoryLoading] = useState(false);
 
+  // SLA Tracking state
+  const [slaMeasures, setSlaMeasures] = useState([]);
+  const [slaMilestones, setSlaMilestones] = useState([]);
+  const [slaLoading, setSlaLoading] = useState(false);
+
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
   const [emailArchive, setEmailArchive] = useState([]);
@@ -624,8 +629,57 @@ function LeadDetail() {
   useEffect(() => {
     if (activeTab === 'important-dates' && id) {
       loadStageHistory();
+      loadSlaData();
     }
   }, [activeTab, id]);
+
+  // Load SLA measures and milestones for Important Dates tab
+  const loadSlaData = async () => {
+    if (!id) return;
+    setSlaLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      // Fetch SLA measures (configuration)
+      const measuresResponse = await fetch(`${API_BASE}/api/v1/sla/measures?active_only=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Fetch milestone history for this lead
+      const milestonesResponse = await fetch(`${API_BASE}/api/v1/sla/milestones/lead/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (measuresResponse.ok) {
+        const measuresData = await measuresResponse.json();
+        // Filter for lead-stage measures only (those that apply during lead phase)
+        const leadMeasures = measuresData.filter(m =>
+          m.stage_type === 'lead' ||
+          ['lead_response', 'pre_qualified', 'preapproval', 'documents_requested', 'documents_received', 'application_complete'].includes(m.milestone_type?.toLowerCase())
+        );
+        setSlaMeasures(leadMeasures);
+      }
+
+      if (milestonesResponse.ok) {
+        const milestonesData = await milestonesResponse.json();
+        setSlaMilestones(milestonesData || []);
+      }
+    } catch (error) {
+      console.error('Failed to load SLA data:', error);
+    } finally {
+      setSlaLoading(false);
+    }
+  };
 
   // Search contacts for CC autocomplete
   const searchCcContacts = async (query) => {
@@ -2900,91 +2954,209 @@ function LeadDetail() {
           {/* Important Dates Tab */}
           {activeTab === 'important-dates' && (
           <div className="tab-content">
-            {/* SLA Metrics Dashboard */}
+            {/* SLA Metrics Dashboard - Dynamic from Configuration */}
             <div className="info-section sla-metrics-section">
               <h2>SLA Performance Metrics</h2>
-              <p className="section-subtitle">Track response times and performance against SLA targets</p>
+              <p className="section-subtitle">Track response times and performance against SLA targets (dynamically loaded from SLA Configuration)</p>
 
-              <div className="sla-cards-grid">
-                <div className={`sla-card ${
-                  formData.lead_received_date && formData.first_contact_attempt_date
-                    ? (Math.floor((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60)) <= 1 ? 'sla-met' : 'sla-missed')
-                    : 'sla-pending'
-                }`}>
-                  <div className="sla-card-header">
-                    <span className="sla-icon">⏱️</span>
-                    <span className="sla-title">Speed to Lead</span>
-                  </div>
-                  <div className="sla-value">
-                    {formData.lead_received_date && formData.first_contact_attempt_date
-                      ? (() => {
-                          const hours = Math.floor((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60));
-                          const minutes = Math.floor(((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) % (1000 * 60 * 60)) / (1000 * 60));
-                          return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-                        })()
-                      : '—'
-                    }
-                  </div>
-                  <div className="sla-target">Target: &lt; 1 hour</div>
-                </div>
+              {slaLoading ? (
+                <div className="loading-state">Loading SLA metrics...</div>
+              ) : (
+                <div className="sla-cards-grid">
+                  {/* Render dynamic SLA cards from configuration */}
+                  {slaMeasures.length > 0 ? (
+                    slaMeasures.map((measure, index) => {
+                      // Find matching milestone for this measure
+                      const milestone = slaMilestones.find(m =>
+                        m.milestone_type === measure.milestone_type ||
+                        m.milestone_type?.toLowerCase() === measure.milestone_type?.toLowerCase()
+                      );
 
-                <div className={`sla-card ${
-                  formData.first_contact_attempt_date && formData.first_contact_successful_date
-                    ? (Math.floor((new Date(formData.first_contact_successful_date) - new Date(formData.first_contact_attempt_date)) / (1000 * 60 * 60 * 24)) <= 2 ? 'sla-met' : 'sla-missed')
-                    : 'sla-pending'
-                }`}>
-                  <div className="sla-card-header">
-                    <span className="sla-icon">📞</span>
-                    <span className="sla-title">Time to Connect</span>
-                  </div>
-                  <div className="sla-value">
-                    {formData.first_contact_attempt_date && formData.first_contact_successful_date
-                      ? (() => {
-                          const days = Math.floor((new Date(formData.first_contact_successful_date) - new Date(formData.first_contact_attempt_date)) / (1000 * 60 * 60 * 24));
-                          return days === 0 ? 'Same day' : `${days} day${days !== 1 ? 's' : ''}`;
-                        })()
-                      : '—'
-                    }
-                  </div>
-                  <div className="sla-target">Target: &lt; 2 days</div>
-                </div>
+                      // Determine card status
+                      let cardClass = 'sla-pending';
+                      let displayValue = '—';
+                      let statusLabel = 'Pending';
 
-                <div className={`sla-card ${
-                  formData.lead_received_date && formData.application_started_date
-                    ? (Math.floor((new Date(formData.application_started_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60 * 24)) <= 7 ? 'sla-met' : 'sla-missed')
-                    : 'sla-pending'
-                }`}>
-                  <div className="sla-card-header">
-                    <span className="sla-icon">📝</span>
-                    <span className="sla-title">Lead to Application</span>
-                  </div>
-                  <div className="sla-value">
-                    {formData.lead_received_date && formData.application_started_date
-                      ? `${Math.floor((new Date(formData.application_started_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60 * 24))} days`
-                      : '—'
-                    }
-                  </div>
-                  <div className="sla-target">Target: &lt; 7 days</div>
-                </div>
+                      if (milestone) {
+                        if (milestone.status === 'completed') {
+                          // Check if completed on time
+                          const varianceHours = milestone.variance_hours || 0;
+                          cardClass = varianceHours <= 0 ? 'sla-met' : 'sla-missed';
+                          statusLabel = varianceHours <= 0 ? 'On Time' : 'Late';
 
-                <div className={`sla-card ${
-                  formData.application_started_date && formData.preapproval_issued_date
-                    ? (Math.floor((new Date(formData.preapproval_issued_date) - new Date(formData.application_started_date)) / (1000 * 60 * 60 * 24)) <= 3 ? 'sla-met' : 'sla-missed')
-                    : 'sla-pending'
-                }`}>
-                  <div className="sla-card-header">
-                    <span className="sla-icon">✅</span>
-                    <span className="sla-title">App to Pre-Approval</span>
-                  </div>
-                  <div className="sla-value">
-                    {formData.application_started_date && formData.preapproval_issued_date
-                      ? `${Math.floor((new Date(formData.preapproval_issued_date) - new Date(formData.application_started_date)) / (1000 * 60 * 60 * 24))} days`
-                      : '—'
-                    }
-                  </div>
-                  <div className="sla-target">Target: &lt; 3 days</div>
+                          // Format actual time
+                          const actualHours = milestone.actual_hours || 0;
+                          if (actualHours < 24) {
+                            displayValue = `${Math.round(actualHours)}h`;
+                          } else {
+                            displayValue = `${Math.round(actualHours / 24)} days`;
+                          }
+                        } else if (milestone.status === 'overdue') {
+                          cardClass = 'sla-missed';
+                          statusLabel = 'Overdue';
+                          // Calculate elapsed time
+                          if (milestone.started_at) {
+                            const elapsed = (new Date() - new Date(milestone.started_at)) / (1000 * 60 * 60);
+                            displayValue = elapsed < 24 ? `${Math.round(elapsed)}h elapsed` : `${Math.round(elapsed / 24)}d elapsed`;
+                          }
+                        } else if (milestone.status === 'at_risk') {
+                          cardClass = 'sla-at-risk';
+                          statusLabel = 'At Risk';
+                          if (milestone.started_at) {
+                            const elapsed = (new Date() - new Date(milestone.started_at)) / (1000 * 60 * 60);
+                            displayValue = elapsed < 24 ? `${Math.round(elapsed)}h elapsed` : `${Math.round(elapsed / 24)}d elapsed`;
+                          }
+                        } else if (['in_progress', 'on_track'].includes(milestone.status)) {
+                          cardClass = 'sla-in-progress';
+                          statusLabel = 'In Progress';
+                          if (milestone.started_at) {
+                            const elapsed = (new Date() - new Date(milestone.started_at)) / (1000 * 60 * 60);
+                            displayValue = elapsed < 24 ? `${Math.round(elapsed)}h elapsed` : `${Math.round(elapsed / 24)}d elapsed`;
+                          }
+                        }
+                      }
+
+                      // Get icon based on milestone type
+                      const iconMap = {
+                        'lead_response': '⏱️',
+                        'pre_qualified': '📋',
+                        'preapproval': '✅',
+                        'documents_requested': '📄',
+                        'documents_received': '📥',
+                        'application_complete': '📝',
+                        'application_submitted': '📤',
+                        'le_pending': '📑',
+                        'le_disclosed': '📜',
+                        'processing_start': '⚙️',
+                        'submitted_to_uw': '🔍',
+                        'uw_decision': '⚖️',
+                        'conditions_issued': '📋',
+                        'conditions_cleared': '✓',
+                        'clear_to_close': '🏁',
+                        'closing_scheduled': '📅',
+                        'closing_docs_out': '📤',
+                        'closed': '🔐',
+                        'funded': '💰'
+                      };
+                      const icon = iconMap[measure.milestone_type?.toLowerCase()] || '📊';
+
+                      // Format target display
+                      const targetValue = measure.target_value || 0;
+                      const targetUnit = measure.target_unit || 'hours';
+                      const targetDisplay = targetUnit === 'hours' ?
+                        (targetValue < 24 ? `${targetValue}h` : `${Math.round(targetValue / 24)} days`) :
+                        `${targetValue} ${targetUnit}`;
+
+                      return (
+                        <div key={measure.id || index} className={`sla-card ${cardClass}`}>
+                          <div className="sla-card-header">
+                            <span className="sla-icon">{icon}</span>
+                            <span className="sla-title">{measure.name}</span>
+                          </div>
+                          <div className="sla-value">{displayValue}</div>
+                          <div className="sla-target">Target: &lt; {targetDisplay}</div>
+                          <div className="sla-status-badge" style={{
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            marginTop: '4px',
+                            background: cardClass === 'sla-met' ? '#dcfce7' :
+                                       cardClass === 'sla-missed' ? '#fee2e2' :
+                                       cardClass === 'sla-at-risk' ? '#fef3c7' :
+                                       cardClass === 'sla-in-progress' ? '#dbeafe' : '#f3f4f6',
+                            color: cardClass === 'sla-met' ? '#166534' :
+                                   cardClass === 'sla-missed' ? '#991b1b' :
+                                   cardClass === 'sla-at-risk' ? '#92400e' :
+                                   cardClass === 'sla-in-progress' ? '#1e40af' : '#6b7280'
+                          }}>{statusLabel}</div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <>
+                      {/* Fallback to hardcoded cards if no SLA measures configured */}
+                      <div className={`sla-card ${
+                        formData.lead_received_date && formData.first_contact_attempt_date
+                          ? (Math.floor((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60)) <= 1 ? 'sla-met' : 'sla-missed')
+                          : 'sla-pending'
+                      }`}>
+                        <div className="sla-card-header">
+                          <span className="sla-icon">⏱️</span>
+                          <span className="sla-title">Speed to Lead</span>
+                        </div>
+                        <div className="sla-value">
+                          {formData.lead_received_date && formData.first_contact_attempt_date
+                            ? (() => {
+                                const hours = Math.floor((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60));
+                                const minutes = Math.floor(((new Date(formData.first_contact_attempt_date) - new Date(formData.lead_received_date)) % (1000 * 60 * 60)) / (1000 * 60));
+                                return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                              })()
+                            : '—'
+                          }
+                        </div>
+                        <div className="sla-target">Target: &lt; 1 hour</div>
+                      </div>
+
+                      <div className={`sla-card ${
+                        formData.first_contact_attempt_date && formData.first_contact_successful_date
+                          ? (Math.floor((new Date(formData.first_contact_successful_date) - new Date(formData.first_contact_attempt_date)) / (1000 * 60 * 60 * 24)) <= 2 ? 'sla-met' : 'sla-missed')
+                          : 'sla-pending'
+                      }`}>
+                        <div className="sla-card-header">
+                          <span className="sla-icon">📞</span>
+                          <span className="sla-title">Time to Connect</span>
+                        </div>
+                        <div className="sla-value">
+                          {formData.first_contact_attempt_date && formData.first_contact_successful_date
+                            ? (() => {
+                                const days = Math.floor((new Date(formData.first_contact_successful_date) - new Date(formData.first_contact_attempt_date)) / (1000 * 60 * 60 * 24));
+                                return days === 0 ? 'Same day' : `${days} day${days !== 1 ? 's' : ''}`;
+                              })()
+                            : '—'
+                          }
+                        </div>
+                        <div className="sla-target">Target: &lt; 2 days</div>
+                      </div>
+
+                      <div className={`sla-card ${
+                        formData.lead_received_date && formData.application_started_date
+                          ? (Math.floor((new Date(formData.application_started_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60 * 24)) <= 7 ? 'sla-met' : 'sla-missed')
+                          : 'sla-pending'
+                      }`}>
+                        <div className="sla-card-header">
+                          <span className="sla-icon">📝</span>
+                          <span className="sla-title">Lead to Application</span>
+                        </div>
+                        <div className="sla-value">
+                          {formData.lead_received_date && formData.application_started_date
+                            ? `${Math.floor((new Date(formData.application_started_date) - new Date(formData.lead_received_date)) / (1000 * 60 * 60 * 24))} days`
+                            : '—'
+                          }
+                        </div>
+                        <div className="sla-target">Target: &lt; 7 days</div>
+                      </div>
+
+                      <div className={`sla-card ${
+                        formData.application_started_date && formData.preapproval_issued_date
+                          ? (Math.floor((new Date(formData.preapproval_issued_date) - new Date(formData.application_started_date)) / (1000 * 60 * 60 * 24)) <= 3 ? 'sla-met' : 'sla-missed')
+                          : 'sla-pending'
+                      }`}>
+                        <div className="sla-card-header">
+                          <span className="sla-icon">✅</span>
+                          <span className="sla-title">App to Pre-Approval</span>
+                        </div>
+                        <div className="sla-value">
+                          {formData.application_started_date && formData.preapproval_issued_date
+                            ? `${Math.floor((new Date(formData.preapproval_issued_date) - new Date(formData.application_started_date)) / (1000 * 60 * 60 * 24))} days`
+                            : '—'
+                          }
+                        </div>
+                        <div className="sla-target">Target: &lt; 3 days</div>
+                      </div>
+                    </>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="info-section">

@@ -14,6 +14,13 @@
   background: var(--color-bg-base);
   transition: margin-right 250ms ease;
   /* Content should scroll naturally - don't restrict overflow */
+  display: flex;
+  justify-content: center;
+}
+
+.app-main > * {
+  width: 100%;
+  max-width: 1800px;
 }
 
 .app-main.with-assistant {

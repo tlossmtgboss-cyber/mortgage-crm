@@ -1577,6 +1577,24 @@ button.borrower-btn.add-borrower-btn:hover {
   background: white;
 }
 
+.sla-card.sla-at-risk {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.sla-card.sla-in-progress {
+  border-left-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+}
+
+.sla-card.sla-at-risk .sla-value {
+  color: #d97706;
+}
+
+.sla-card.sla-in-progress .sla-value {
+  color: #2563eb;
+}
+
 .sla-card-header {
   display: flex;
   align-items: center;

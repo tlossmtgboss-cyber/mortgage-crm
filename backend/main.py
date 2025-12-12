@@ -74,6 +74,9 @@ from crud import onboarding as onboarding_crud
 from workflows.lead_workflow_engine import LeadWorkflowEngine, TimeBasedWorkflowEngine, LeadStatusChange
 from workflows.workflow_actions import WorkflowActionExecutor
 
+# Import SLA tracking service for automatic milestone tracking
+from services.sla_tracking_service import track_lead_created, track_lead_stage_change, track_loan_created, track_loan_stage_change
+
 # Import profitability models for AI financial context
 from models.profitability import ProfitabilitySnapshot, ProfitabilityLoan, Expense, EmployeeCost
 
@@ -35074,6 +35077,14 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     db.commit()
     db.refresh(db_lead)
 
+    # Start SLA tracking for LEAD_RESPONSE milestone
+    # This triggers the SLA timer for responding to new leads
+    try:
+        track_lead_created(db, db_lead.id)
+        logger.info(f"SLA milestone LEAD_RESPONSE started for lead {db_lead.id}")
+    except Exception as e:
+        logger.warning(f"Failed to start SLA tracking for lead {db_lead.id}: {e}")
+
     logger.info(f"Lead created: {db_lead.name} (Score: {db_lead.ai_score})")
     return db_lead
 
@@ -36016,6 +36027,13 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
         except Exception as e:
             logger.error(f"⚠️ Workflow error for lead {lead.id}: {e}")
             # Don't fail the update if workflow fails
+
+        # Track SLA milestone for stage change
+        try:
+            track_lead_stage_change(db, lead.id, old_status, new_status, current_user.id)
+            logger.info(f"SLA milestone tracked for lead {lead.id} stage change: {old_status} → {new_status}")
+        except Exception as e:
+            logger.warning(f"Failed to track SLA milestone for lead {lead.id}: {e}")
 
     # Handle stage value - it might be an enum or a string depending on DB content
     stage_value = None
