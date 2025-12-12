@@ -37,7 +37,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "")
 ALGORITHM = "HS256"
 
 
-def extract_user_id_from_token(token: str, db: Session) -> int:
+def extract_user_id_from_token(token: str, db: Session) -> str:
     """
     Extract user_id from JWT token.
 
@@ -46,7 +46,7 @@ def extract_user_id_from_token(token: str, db: Session) -> int:
         db: Database session
 
     Returns:
-        User ID as integer
+        User ID as string (for compatibility with user_integrations table)
 
     Raises:
         HTTPException if token is invalid or user not found
@@ -70,7 +70,8 @@ def extract_user_id_from_token(token: str, db: Session) -> int:
     if not result:
         raise HTTPException(status_code=401, detail="User not found")
 
-    return result[0]
+    # Return as string for compatibility with user_integrations VARCHAR column
+    return str(result[0])
 
 
 # =============================================================================
