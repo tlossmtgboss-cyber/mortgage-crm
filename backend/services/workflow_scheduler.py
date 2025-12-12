@@ -186,34 +186,34 @@ class WorkflowScheduler:
         """Process loan status changes for workflow enrollment."""
         results = {"processed": 0, "enrolled": 0, "errors": []}
 
-        # Status to workflow mapping
-        status_workflow_map = {
-            'under_contract': 'under_contract',
-            'processing': 'under_contract',
-            'submitted': 'under_contract',
-            'underwriting': 'under_contract',
-            'approved': 'under_contract',
-            'clear_to_close': 'last_mile',
-            'docs_out': 'last_mile',
-            'docs_back': 'last_mile',
-            'funded': 'post_close',
+        # Stage to workflow mapping
+        # Values match LoanStage enum values (as strings after cast)
+        stage_workflow_map = {
+            'Disclosed': 'under_contract',
+            'Processing': 'under_contract',
+            'Submitted': 'under_contract',
+            'UW Received': 'under_contract',
+            'Approved': 'under_contract',
+            'CTC': 'last_mile',
+            'Docs Out': 'last_mile',
+            'Funded': 'post_close',
         }
 
-        # Find loans that changed status recently
+        # Find loans that changed stage recently
         loans = self.db.execute(text("""
-            SELECT l.id, l.status
+            SELECT l.id, l.stage::text
             FROM loans l
             LEFT JOIN workflow_instances wi ON wi.loan_id = l.id AND wi.status = 'active'
             WHERE wi.id IS NULL
-            AND l.status IS NOT NULL
-            AND l.status_changed_at >= NOW() - INTERVAL '1 hour'
+            AND l.stage IS NOT NULL
+            AND l.stage_changed_at >= NOW() - INTERVAL '1 hour'
             LIMIT 100
         """)).fetchall()
 
-        for loan_id, status in loans:
+        for loan_id, stage in loans:
             results["processed"] += 1
 
-            workflow_key = status_workflow_map.get(status)
+            workflow_key = stage_workflow_map.get(stage)
             if not workflow_key:
                 continue
 
@@ -221,7 +221,7 @@ class WorkflowScheduler:
             enroll_result = workflow_service.enroll_loan(
                 loan_id=loan_id,
                 workflow_key=workflow_key,
-                trigger_status=status
+                trigger_status=stage
             )
 
             if enroll_result.get("success"):
@@ -356,7 +356,7 @@ class WorkflowScheduler:
                 FROM workflow_instances wi
                 JOIN loans l ON l.id = wi.loan_id
                 WHERE wi.status = 'active'
-                AND l.status IN ('funded', 'cancelled', 'denied')
+                AND l.stage::text = 'Funded'
             """)).fetchall()
 
             for (instance_id,) in terminal_loans:
