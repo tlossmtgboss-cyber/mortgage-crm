@@ -1091,6 +1091,8 @@ async def repair_workflow_tables(
     from sqlalchemy import text
 
     results = {
+        "leads": [],
+        "loans": [],
         "workflow_configurations": [],
         "workflow_instances": [],
         "workflow_task_instances": [],
@@ -1100,6 +1102,12 @@ async def repair_workflow_tables(
 
     # Define expected columns for each table
     table_columns = {
+        "leads": [
+            ("current_workflow_instance_id", "INTEGER"),  # Links to active workflow instance
+        ],
+        "loans": [
+            ("current_workflow_instance_id", "INTEGER"),  # Links to active workflow instance
+        ],
         "workflow_configurations": [
             ("organization_id", "INTEGER"),  # For multi-tenancy
             ("is_system_template", "BOOLEAN DEFAULT FALSE"),  # True for system-wide templates
