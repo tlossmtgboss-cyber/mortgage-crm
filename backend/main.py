@@ -52719,6 +52719,7 @@ async def add_leadstage_values_migration(
             "Referral Source",
             "Withdrawn",
             "Does Not Qualify",
+            "Disclosed",  # Lead converted to Active Loan - CRITICAL for workflow!
             # Enum names (SQLAlchemy sends these)
             "NEW",
             "ATTEMPTED_CONTACT",
@@ -52734,6 +52735,7 @@ async def add_leadstage_values_migration(
             "REFERRAL_SOURCE",
             "WITHDRAWN",
             "DOES_NOT_QUALIFY",
+            "DISCLOSED",  # Lead converted to Active Loan - CRITICAL for workflow!
         ]
 
         # Get the raw connection and execute outside transaction
