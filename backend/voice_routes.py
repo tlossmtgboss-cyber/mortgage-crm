@@ -195,16 +195,25 @@ async def voice_stream_websocket(websocket: WebSocket):
             try:
                 async for message in openai_ws:
                     data = json.loads(message)
+                    event_type = data.get('type', 'unknown')
 
-                    if data['type'] == 'response.audio.delta':
+                    # Log all events for debugging
+                    if event_type not in ['response.audio.delta', 'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped']:
+                        logger.info(f"🎙️ OpenAI event: {event_type}")
+
+                    if event_type == 'response.audio.delta':
                         # Forward AI audio to Twilio
-                        await websocket.send_json({
-                            "event": "media",
-                            "streamSid": call_context.get('stream_sid'),
-                            "media": {
-                                "payload": data['delta']
-                            }
-                        })
+                        audio_payload = data.get('delta', '')
+                        if audio_payload and call_context.get('stream_sid'):
+                            await websocket.send_json({
+                                "event": "media",
+                                "streamSid": call_context['stream_sid'],
+                                "media": {
+                                    "payload": audio_payload
+                                }
+                            })
+                        else:
+                            logger.warning(f"⚠️ Missing audio payload or stream_sid")
 
                     elif data['type'] == 'response.text.done':
                         # Log conversation

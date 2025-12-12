@@ -51,18 +51,12 @@ class TwilioVoiceClient:
     def create_greeting_response(self, business_name: str = "our office") -> VoiceResponse:
         """
         Create initial greeting TwiML response
-        This connects directly to Sam (OpenAI Realtime API) - no robot voice
+        Connects directly to Sam (OpenAI Realtime API) - Sam will greet the caller
         """
         response = VoiceResponse()
 
-        # First, say a greeting to confirm the call is working
-        response.say(
-            f"Hello, thank you for calling {business_name}. Please hold while I connect you to our AI assistant.",
-            voice='Polly.Joanna'
-        )
-
-        # Connect to Sam via OpenAI Realtime API
-        # Use PRODUCTION_DOMAIN if available, fallback to RAILWAY_PUBLIC_DOMAIN
+        # Connect directly to Sam via OpenAI Realtime API
+        # Sam will greet the caller with his AI voice
         domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')
         logger.info(f"Connecting to WebSocket at: wss://{domain}/api/v1/voice/ws/voice-stream")
 
