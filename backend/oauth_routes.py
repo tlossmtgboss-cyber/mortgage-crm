@@ -1,6 +1,10 @@
 """
 OAuth callback endpoints for Microsoft (and future Google) integration.
 Handles the OAuth flow and stores tokens in user_integrations table.
+
+Token refresh is handled automatically by MicrosoftGraphUserService when
+making API calls. The refresh_token is stored during initial OAuth and used
+to obtain new access_tokens when they expire.
 """
 
 from fastapi import APIRouter, Request, HTTPException, Depends, Query
@@ -12,6 +16,7 @@ import uuid
 import logging
 from urllib.parse import urlencode
 import os
+from jose import jwt, JWTError
 
 from database import get_db
 
@@ -28,13 +33,44 @@ MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET", "")
 MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+ALGORITHM = "HS256"
 
 
-def get_current_user_from_token(db: Session, token: str):
-    """Helper to get user from JWT token - implement based on your auth system."""
-    # This should match your existing auth implementation
-    from auth import get_current_user as auth_get_current_user
-    return auth_get_current_user
+def extract_user_id_from_token(token: str, db: Session) -> int:
+    """
+    Extract user_id from JWT token.
+
+    Args:
+        token: JWT Bearer token
+        db: Database session
+
+    Returns:
+        User ID as integer
+
+    Raises:
+        HTTPException if token is invalid or user not found
+    """
+    from sqlalchemy import text
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token: no subject")
+    except JWTError as e:
+        logger.error(f"JWT decode error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # Get user ID from email
+    result = db.execute(text(
+        "SELECT id FROM users WHERE email = :email"
+    ), {"email": email}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return result[0]
 
 
 # =============================================================================
@@ -58,12 +94,13 @@ async def microsoft_connect(
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Extract user_id from token (simplified - adjust to your auth system)
+    # Extract actual user_id from JWT token
     token = auth_header.replace("Bearer ", "")
+    user_id = extract_user_id_from_token(token, db)
 
     # Store state for CSRF protection and to identify user in callback
-    # In production, you'd want to decode the JWT to get user_id
-    state = f"user:{redirect_uri or 'web'}"
+    # Format: user_id:redirect_type (e.g., "123:web" or "123:mobile")
+    state = f"{user_id}:{redirect_uri or 'web'}"
 
     if not MICROSOFT_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Microsoft OAuth not configured")
@@ -235,13 +272,14 @@ async def microsoft_disconnect(
     """Disconnect Microsoft account."""
     from sqlalchemy import text
 
-    # Get user from auth header (simplified)
+    # Get user from auth header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # In production, decode JWT to get user_id
-    user_id = "current_user"  # Replace with actual user ID extraction
+    # Extract actual user_id from JWT token
+    token = auth_header.replace("Bearer ", "")
+    user_id = extract_user_id_from_token(token, db)
 
     result = db.execute(text("""
         DELETE FROM user_integrations
@@ -264,13 +302,14 @@ async def microsoft_status(
     """Check if Microsoft account is connected."""
     from sqlalchemy import text
 
-    # Get user from auth header (simplified)
+    # Get user from auth header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # In production, decode JWT to get user_id
-    user_id = "current_user"  # Replace with actual user ID extraction
+    # Extract actual user_id from JWT token
+    token = auth_header.replace("Bearer ", "")
+    user_id = extract_user_id_from_token(token, db)
 
     result = db.execute(text("""
         SELECT expires_at, scopes FROM user_integrations
@@ -300,13 +339,14 @@ async def all_integrations_status(
     """Get status of all connected integrations."""
     from sqlalchemy import text
 
-    # Get user from auth header (simplified)
+    # Get user from auth header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # In production, decode JWT to get user_id
-    user_id = "current_user"  # Replace with actual user ID extraction
+    # Extract actual user_id from JWT token
+    token = auth_header.replace("Bearer ", "")
+    user_id = extract_user_id_from_token(token, db)
 
     integrations = db.execute(text("""
         SELECT provider, expires_at, scopes FROM user_integrations
