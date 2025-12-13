@@ -1722,6 +1722,63 @@ async def diagnose_phone_numbers():
         return {"error": str(e)}
 
 
+@router.get("/diagnostic/recent-calls")
+async def get_recent_vapi_calls(limit: int = 10):
+    """
+    Fetch recent calls directly from VAPI API.
+    Shows call status, duration, and any errors.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.vapi.ai/call?limit={limit}",
+                headers=headers,
+                timeout=15
+            )
+
+            if response.status_code != 200:
+                return {"error": f"Failed to fetch: {response.status_code}", "response": response.text}
+
+            calls = response.json()
+
+            return {
+                "calls": [
+                    {
+                        "id": c.get("id"),
+                        "status": c.get("status"),
+                        "type": c.get("type"),
+                        "ended_reason": c.get("endedReason"),
+                        "duration_seconds": c.get("duration"),
+                        "created_at": c.get("createdAt"),
+                        "phone_number": c.get("phoneNumber", {}).get("number") if isinstance(c.get("phoneNumber"), dict) else c.get("phoneNumber"),
+                        "customer_number": c.get("customer", {}).get("number") if c.get("customer") else None,
+                        "assistant_id": c.get("assistantId"),
+                        "transcript_preview": (c.get("transcript") or "")[:200] if c.get("transcript") else None,
+                        "error_message": c.get("messages", [{}])[-1].get("content") if c.get("messages") else None
+                    }
+                    for c in calls
+                ],
+                "count": len(calls)
+            }
+
+    except Exception as e:
+        logger.error(f"Recent calls error: {str(e)}")
+        return {"error": str(e)}
+
+
 @router.post("/migrate")
 async def run_vapi_migration(
     db: Session = Depends(get_db),
