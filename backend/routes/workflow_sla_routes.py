@@ -1671,6 +1671,166 @@ async def fix_workflow_day_semantics(
     return results
 
 
+@router.post("/init/generate-tasks")
+async def generate_tasks_public(
+    instance_id: Optional[int] = Query(None, description="Specific instance ID to generate tasks for"),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate tasks for workflow instances - PUBLIC endpoint for debugging.
+    If instance_id provided, generates for that instance only.
+    Otherwise generates for all active instances.
+
+    NO AUTHENTICATION required for debugging/deployment.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+
+    results = {
+        "success": True,
+        "instances_processed": 0,
+        "tasks_generated": 0,
+        "details": [],
+        "errors": []
+    }
+
+    try:
+        # Get instances to process
+        if instance_id:
+            instances = db.execute(text("""
+                SELECT
+                    wi.id, wi.workflow_configuration_id, wi.lead_id, wi.loan_id,
+                    wi.trigger_milestone_entered_at, wi.last_task_generated_day,
+                    wi.organization_id
+                FROM workflow_instances wi
+                WHERE wi.id = :id AND wi.status = 'active'
+            """), {"id": instance_id}).fetchall()
+        else:
+            instances = db.execute(text("""
+                SELECT
+                    wi.id, wi.workflow_configuration_id, wi.lead_id, wi.loan_id,
+                    wi.trigger_milestone_entered_at, wi.last_task_generated_day,
+                    wi.organization_id
+                FROM workflow_instances wi
+                WHERE wi.status = 'active'
+            """)).fetchall()
+
+        for inst in instances:
+            inst_id = inst[0]
+            config_id = inst[1]
+            lead_id = inst[2]
+            loan_id = inst[3]
+            trigger_time = inst[4]
+            last_generated = inst[5] or -1
+            org_id = inst[6]
+
+            if not config_id:
+                results["errors"].append(f"Instance {inst_id}: No workflow_configuration_id")
+                continue
+
+            # Calculate days elapsed
+            if trigger_time:
+                now = datetime.now(timezone.utc)
+                if trigger_time.tzinfo is None:
+                    trigger_time = trigger_time.replace(tzinfo=timezone.utc)
+                days_elapsed = (now - trigger_time).days
+            else:
+                days_elapsed = 0
+
+            # Get eligible day configs
+            day_configs = db.execute(text("""
+                SELECT id, day_value, day_label,
+                       phone_enabled, email_enabled, text_enabled,
+                       task_description
+                FROM workflow_day_configs
+                WHERE workflow_id = :config_id
+                  AND is_active = true
+                  AND day_value <= :days_elapsed
+                  AND day_value > :last_generated
+                ORDER BY day_value
+            """), {
+                "config_id": config_id,
+                "days_elapsed": days_elapsed,
+                "last_generated": last_generated
+            }).fetchall()
+
+            instance_tasks = 0
+            max_day_generated = last_generated
+
+            for dc in day_configs:
+                dc_id = dc[0]
+                day_value = dc[1]
+                day_label = dc[2]
+                phone = dc[3]
+                email = dc[4]
+                text_enabled = dc[5]
+                description = dc[6] or day_label
+
+                task_types = []
+                if phone: task_types.append("phone")
+                if email: task_types.append("email")
+                if text_enabled: task_types.append("text")
+
+                for task_type in task_types:
+                    # Create task instance
+                    db.execute(text("""
+                        INSERT INTO workflow_task_instances (
+                            workflow_instance_id, workflow_id, day_config_id,
+                            organization_id, task_type, task_name, task_description,
+                            day_number, status, lead_id, loan_id,
+                            scheduled_date, due_date, created_at, updated_at
+                        ) VALUES (
+                            :instance_id, :workflow_id, :day_config_id,
+                            :org_id, :task_type, :task_name, :task_description,
+                            :day_number, 'pending', :lead_id, :loan_id,
+                            NOW(), NOW() + INTERVAL '1 day', NOW(), NOW()
+                        )
+                    """), {
+                        "instance_id": inst_id,
+                        "workflow_id": config_id,
+                        "day_config_id": dc_id,
+                        "org_id": org_id,
+                        "task_type": task_type,
+                        "task_name": f"{day_label} - {task_type.title()}",
+                        "task_description": description,
+                        "day_number": day_value,
+                        "lead_id": lead_id,
+                        "loan_id": loan_id
+                    })
+                    instance_tasks += 1
+
+                if day_value > max_day_generated:
+                    max_day_generated = day_value
+
+            # Update last_task_generated_day
+            if max_day_generated > last_generated:
+                db.execute(text("""
+                    UPDATE workflow_instances
+                    SET last_task_generated_day = :day, updated_at = NOW()
+                    WHERE id = :id
+                """), {"day": max_day_generated, "id": inst_id})
+
+            db.commit()
+
+            results["instances_processed"] += 1
+            results["tasks_generated"] += instance_tasks
+            results["details"].append({
+                "instance_id": inst_id,
+                "days_elapsed": days_elapsed,
+                "tasks_created": instance_tasks,
+                "max_day_generated": max_day_generated
+            })
+
+    except Exception as e:
+        import traceback
+        results["success"] = False
+        results["errors"].append(str(e))
+        results["traceback"] = traceback.format_exc()
+        db.rollback()
+
+    return results
+
+
 @router.get("/init/verify-day-semantics")
 async def verify_day_semantics(
     db: Session = Depends(get_db)
