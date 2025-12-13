@@ -33624,10 +33624,9 @@ async def setup_admin_user(db: Session = Depends(get_db)):
     admin_password = "Admin123!"
 
     try:
-        # Pre-computed bcrypt hash for "Admin123!" using bcrypt with 12 rounds
-        # This bypasses any runtime hashing issues with bcrypt 5.0.0 + passlib
-        # Generated and verified using bcrypt.hashpw(b'Admin123!', bcrypt.gensalt(rounds=12))
-        new_hash = "$2b$12$cjRdbtvVZ0yduFjGyhQtAuxRT8.yCp1tVLjgnsiUTAqVKH3FQtLnC"
+        # Pre-computed bcrypt hash for "Admin123!" using passlib with bcrypt 4.1.3
+        # Generated and verified using: pwd_context.hash("Admin123!")
+        new_hash = "$2b$12$Np5mczq3ThkKa3Wm3Ex9yeHm9sIVv12KXSO8z2wJteNRiTrZjAK8C"
 
         logger.info(f"Using pre-computed hash for admin: {new_hash[:30]}...")
 
