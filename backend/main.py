@@ -19889,9 +19889,9 @@ async def debug_create_test_workspace(
         # Create workspace
         workspace = db.execute(text("""
             INSERT INTO purl_workspaces (
-                organization_id, slug, display_name, status, settings, created_at, updated_at
+                organization_id, slug, display_name, status, created_at, updated_at
             ) VALUES (
-                1, :slug, :display_name, 'lead', '{}', NOW(), NOW()
+                1, :slug, :display_name, 'lead', NOW(), NOW()
             )
             RETURNING id, slug
         """), {"slug": slug, "display_name": test_name}).fetchone()
@@ -29522,6 +29522,56 @@ async def add_lead_milestone_columns(
 
     except Exception as e:
         logger.error(f"Lead milestone columns migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/backfill-lead-received-date")
+async def backfill_lead_received_date(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Backfill lead_received_date from created_at for existing leads.
+    This ensures all leads have proper SLA tracking timestamps.
+    """
+    try:
+        logger.info("Running migration: backfill lead_received_date")
+
+        # Count leads without lead_received_date
+        count_result = db.execute(text("""
+            SELECT COUNT(*) as count FROM leads WHERE lead_received_date IS NULL
+        """)).fetchone()
+        leads_to_update = count_result[0] if count_result else 0
+
+        if leads_to_update == 0:
+            return {
+                "success": True,
+                "leads_updated": 0,
+                "message": "All leads already have lead_received_date set"
+            }
+
+        # Update leads without lead_received_date
+        db.execute(text("""
+            UPDATE leads
+            SET lead_received_date = created_at
+            WHERE lead_received_date IS NULL
+        """))
+        db.commit()
+
+        logger.info(f"Backfilled lead_received_date for {leads_to_update} leads")
+
+        return {
+            "success": True,
+            "leads_updated": leads_to_update,
+            "message": f"Backfilled lead_received_date for {leads_to_update} leads from created_at"
+        }
+
+    except Exception as e:
+        logger.error(f"Lead received date backfill failed: {e}")
         db.rollback()
         return {
             "success": False,
@@ -39847,6 +39897,8 @@ async def approve_unified_task(
         source = approval.get("source")
         approved_response = approval.get("approved_response")
         feedback = approval.get("feedback")
+        communication_method = approval.get("communication_method")  # email, text, phone, voicemail
+        contact_successful = approval.get("contact_successful", False)  # True if contact was made
 
         if source == "task":
             # Mark AI task as completed
@@ -39886,6 +39938,36 @@ async def approve_unified_task(
 
             task.status = "completed"
             task.completed_at = datetime.now(timezone.utc)
+
+            # Update lead milestone dates when workflow task is completed
+            if task.lead_id:
+                lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+                if lead:
+                    now = datetime.now(timezone.utc)
+
+                    # If a communication method was used, this was a contact attempt
+                    if communication_method or "Day" in (task.title or ""):
+                        # Set first_contact_attempt_date if not already set
+                        if not lead.first_contact_attempt_date:
+                            lead.first_contact_attempt_date = now
+                            logger.info(f"Set first_contact_attempt_date for lead {lead.id} from completed task {task_id}")
+
+                        # If contact was successful, set first_contact_successful_date
+                        if contact_successful and not lead.first_contact_successful_date:
+                            lead.first_contact_successful_date = now
+                            logger.info(f"Set first_contact_successful_date for lead {lead.id} from completed task {task_id}")
+
+                    # If task title indicates specific milestone, update that date
+                    task_title_lower = (task.title or "").lower()
+                    if "application" in task_title_lower and "link" in task_title_lower and not lead.application_link_sent_date:
+                        lead.application_link_sent_date = now
+                        logger.info(f"Set application_link_sent_date for lead {lead.id}")
+                    elif "credit" in task_title_lower and "pull" in task_title_lower and not lead.credit_pulled_date:
+                        lead.credit_pulled_date = now
+                        logger.info(f"Set credit_pulled_date for lead {lead.id}")
+                    elif "qualif" in task_title_lower and not lead.lead_qualification_date:
+                        lead.lead_qualification_date = now
+                        logger.info(f"Set lead_qualification_date for lead {lead.id}")
 
             # Store training data
             if feedback:
