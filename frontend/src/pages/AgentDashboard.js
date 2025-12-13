@@ -478,63 +478,77 @@ function AgentDashboard() {
             </div>
           </div>
 
-          {/* Agents Grid */}
-          <div className="agents-grid">
-            {filteredAgents.map(agent => (
-              <div
-                key={agent.id}
-                className={`agent-card ${agent.health_status}`}
-                onClick={() => navigate(`/agent/${agent.id}`)}
-              >
-                <div className="agent-card-header">
-                  <div className="agent-icon-large">
-                    <i className={getCategoryIcon(agent.category)}></i>
-                  </div>
-                  <span className={getHealthBadgeClass(agent.health_status)}>
-                    {agent.health_status}
-                  </span>
-                </div>
-                <div className="agent-card-body">
-                  <h4>{agent.display_name}</h4>
-                  <span className="agent-category">{agent.category}</span>
-                  <div className="agent-metrics">
-                    <div className="metric">
-                      <span className="metric-value">{agent.total_executions?.toLocaleString()}</span>
-                      <span className="metric-label">Executions</span>
-                    </div>
-                    <div className="metric">
-                      <span className="metric-value">{agent.success_rate?.toFixed(1)}%</span>
-                      <span className="metric-label">Success</span>
-                    </div>
-                    <div className="metric">
-                      <span className="metric-value">{agent.avg_response_time_ms}ms</span>
-                      <span className="metric-label">Avg Time</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="agent-card-footer">
-                  <span className="last-activity">
-                    <i className="fas fa-clock"></i> {formatTimestamp(agent.last_execution_at)}
-                  </span>
-                  <div className="card-actions">
-                    <button
-                      className="card-action-btn"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/agent-chat?agent=${agent.agent_name}`); }}
-                      title="Chat with agent"
-                    >
-                      <i className="fas fa-comments"></i>
-                    </button>
-                    <button
-                      className="card-action-btn"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/agent-gym?agent=${agent.id}`); }}
-                      title="Train agent"
-                    >
-                      <i className="fas fa-dumbbell"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Agents List */}
+          <div className="agents-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Category</th>
+                  <th>Status</th>
+                  <th>Executions</th>
+                  <th>Success Rate</th>
+                  <th>Avg Response</th>
+                  <th>Last Activity</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAgents.map(agent => (
+                  <tr
+                    key={agent.id}
+                    className={`agent-row ${agent.health_status}`}
+                    onClick={() => navigate(`/agent/${agent.id}`)}
+                  >
+                    <td className="agent-name-cell">
+                      <div className="agent-icon">
+                        <i className={getCategoryIcon(agent.category)}></i>
+                      </div>
+                      <span className="agent-display-name">{agent.display_name}</span>
+                    </td>
+                    <td>
+                      <span className="category-badge">{agent.category}</span>
+                    </td>
+                    <td>
+                      <span className={getHealthBadgeClass(agent.health_status)}>
+                        {agent.health_status}
+                      </span>
+                    </td>
+                    <td className="metric-cell">{agent.total_executions?.toLocaleString()}</td>
+                    <td className="metric-cell">
+                      <span className={`success-rate ${agent.success_rate >= 95 ? 'high' : agent.success_rate >= 90 ? 'medium' : 'low'}`}>
+                        {agent.success_rate?.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="metric-cell">{agent.avg_response_time_ms}ms</td>
+                    <td className="timestamp-cell">{formatTimestamp(agent.last_execution_at)}</td>
+                    <td className="actions-cell">
+                      <button
+                        className="table-action-btn"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/agent-chat?agent=${agent.agent_name}`); }}
+                        title="Chat with agent"
+                      >
+                        <i className="fas fa-comments"></i>
+                      </button>
+                      <button
+                        className="table-action-btn"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/agent-gym?agent=${agent.id}`); }}
+                        title="Train agent"
+                      >
+                        <i className="fas fa-dumbbell"></i>
+                      </button>
+                      <button
+                        className="table-action-btn"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/agent/${agent.id}`); }}
+                        title="View details"
+                      >
+                        <i className="fas fa-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {filteredAgents.length === 0 && (

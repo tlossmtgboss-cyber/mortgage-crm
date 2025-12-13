@@ -746,6 +746,135 @@
   color: white;
 }
 
+/* Agents Table/List View */
+.agents-table {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.agents-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.agents-table th,
+.agents-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.agents-table th {
+  font-weight: 600;
+  color: #6c757d;
+  font-size: 12px;
+  text-transform: uppercase;
+  background: #f8f9fa;
+  white-space: nowrap;
+}
+
+.agents-table td {
+  font-size: 14px;
+  color: #1a1a2e;
+}
+
+.agents-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.agents-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.agents-table tbody tr.healthy {
+  border-left: 3px solid #28a745;
+}
+
+.agents-table tbody tr.warning {
+  border-left: 3px solid #ffc107;
+}
+
+.agents-table tbody tr.critical {
+  border-left: 3px solid #dc3545;
+  background: #fff5f5;
+}
+
+.agent-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-name-cell .agent-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #e8eef8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4a69bd;
+  flex-shrink: 0;
+}
+
+.agent-display-name {
+  font-weight: 500;
+  color: #1a1a2e;
+}
+
+.category-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  background: #e8eef8;
+  color: #4a69bd;
+}
+
+.metric-cell {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.success-rate {
+  font-weight: 600;
+}
+
+.success-rate.high {
+  color: #28a745;
+}
+
+.success-rate.medium {
+  color: #ffc107;
+}
+
+.success-rate.low {
+  color: #dc3545;
+}
+
+.timestamp-cell {
+  color: #6c757d;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.actions-cell {
+  white-space: nowrap;
+}
+
+.actions-cell .table-action-btn {
+  margin-right: 6px;
+}
+
+.actions-cell .table-action-btn:last-child {
+  margin-right: 0;
+}
+
 /* Alerts Content Full */
 .alerts-content-full {
   background: white;
@@ -1049,5 +1178,21 @@
 
   .search-box {
     width: 100%;
+  }
+
+  /* Agents table responsive */
+  .agents-table {
+    overflow-x: auto;
+  }
+
+  .agents-table table {
+    min-width: 800px;
+  }
+
+  .agents-table th:nth-child(6),
+  .agents-table td:nth-child(6),
+  .agents-table th:nth-child(7),
+  .agents-table td:nth-child(7) {
+    display: none;
   }
 }
