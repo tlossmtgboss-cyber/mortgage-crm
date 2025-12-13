@@ -1195,11 +1195,11 @@ REQUIRED_AGENTS = [
 @router.post("/governance/setup-tables")
 async def setup_agent_tables(db: Session = Depends(get_db)):
     """
-    Create agent governance tables if they don't exist.
-    Safe to call multiple times - uses CREATE TABLE IF NOT EXISTS.
+    Create/update agent governance tables.
+    Safe to call multiple times - uses CREATE TABLE IF NOT EXISTS and ALTER TABLE.
     """
     try:
-        # Create agent_profiles table
+        # Create agent_profiles table with all columns
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS agent_profiles (
                 id SERIAL PRIMARY KEY,
@@ -1213,19 +1213,36 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
                 tool_count INTEGER DEFAULT 0,
                 config JSONB DEFAULT '{}',
                 risk_tier VARCHAR(10) DEFAULT '2',
+                elite_status BOOLEAN DEFAULT FALSE,
+                requires_approval BOOLEAN DEFAULT FALSE,
+                approval_threshold FLOAT DEFAULT 0.95,
                 total_executions INTEGER DEFAULT 0,
                 successful_executions INTEGER DEFAULT 0,
                 failed_executions INTEGER DEFAULT 0,
-                success_rate DECIMAL(5,2) DEFAULT 0,
-                avg_response_time_ms INTEGER DEFAULT 0,
-                total_cost DECIMAL(10,4) DEFAULT 0,
-                cost_this_month DECIMAL(10,4) DEFAULT 0,
+                success_rate FLOAT DEFAULT 0,
+                avg_response_time_ms FLOAT DEFAULT 0,
+                total_cost DECIMAL(12,4) DEFAULT 0,
+                cost_this_month DECIMAL(12,4) DEFAULT 0,
                 last_execution_at TIMESTAMP WITH TIME ZONE,
                 last_health_check TIMESTAMP WITH TIME ZONE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """))
+
+        # Add missing columns if table already exists (idempotent)
+        add_column_sqls = [
+            "ALTER TABLE agent_profiles ADD COLUMN IF NOT EXISTS elite_status BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE agent_profiles ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE agent_profiles ADD COLUMN IF NOT EXISTS approval_threshold FLOAT DEFAULT 0.95",
+        ]
+
+        for sql in add_column_sqls:
+            try:
+                db.execute(text(sql))
+            except Exception:
+                pass  # Column might already exist
+
         db.commit()
 
         logger.info("Agent governance tables created/verified")
