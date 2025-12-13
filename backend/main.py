@@ -50446,6 +50446,70 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ Notification scheduler not started: {e}")
 
+    # Add Agent Monitoring scheduled jobs
+    try:
+        from tasks.agent_tasks import (
+            run_agent_health_checks,
+            aggregate_agent_metrics,
+            cleanup_old_alerts,
+            cleanup_stale_executions,
+            cleanup_inactive_sessions,
+            create_daily_performance_snapshot
+        )
+
+        # Health checks every 5 minutes - monitors all agent health status
+        scheduler.add_job(
+            run_agent_health_checks,
+            trigger=IntervalTrigger(minutes=5),
+            id='agent_health_checks',
+            replace_existing=True
+        )
+
+        # Metrics aggregation every hour - rolls up execution data into time series
+        scheduler.add_job(
+            aggregate_agent_metrics,
+            trigger=IntervalTrigger(hours=1),
+            id='agent_metrics_aggregation',
+            replace_existing=True
+        )
+
+        # Alert cleanup daily - removes resolved alerts older than 30 days
+        scheduler.add_job(
+            cleanup_old_alerts,
+            trigger=IntervalTrigger(days=1),
+            id='agent_alert_cleanup',
+            replace_existing=True
+        )
+
+        # Stale execution cleanup hourly - marks stuck executions as failed
+        scheduler.add_job(
+            cleanup_stale_executions,
+            trigger=IntervalTrigger(hours=1),
+            id='stale_execution_cleanup',
+            replace_existing=True
+        )
+
+        # Session cleanup daily - removes inactive chat sessions older than 7 days
+        scheduler.add_job(
+            cleanup_inactive_sessions,
+            trigger=IntervalTrigger(days=1),
+            id='inactive_session_cleanup',
+            replace_existing=True
+        )
+
+        # Daily performance snapshot at startup (cron job for midnight handled separately)
+        # This ensures metrics are captured on server restarts
+        scheduler.add_job(
+            create_daily_performance_snapshot,
+            trigger=IntervalTrigger(hours=24),
+            id='daily_performance_snapshot',
+            replace_existing=True
+        )
+
+        logger.info("✅ Agent monitoring scheduler jobs added (health checks every 5min, metrics hourly, daily cleanup)")
+    except Exception as e:
+        logger.warning(f"⚠️ Agent monitoring scheduler not loaded: {e}")
+
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Admin Login: admin@perenniaai.com")
