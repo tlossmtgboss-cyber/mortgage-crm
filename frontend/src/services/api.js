@@ -2008,55 +2008,55 @@ export const agentChatAPI = {
 export const purlAPI = {
   // Get workspace by lead ID (check if portal exists for this lead)
   getWorkspaceByLead: async (leadId) => {
-    const response = await api.get(`/api/v1/purl/admin/workspaces/by-lead/${leadId}`);
+    const response = await api.get(`/api/v1/purl-admin/workspaces/by-lead/${leadId}`);
     return response.data;
   },
 
   // Get workspace by loan ID
   getWorkspaceByLoan: async (loanId) => {
-    const response = await api.get(`/api/v1/purl/admin/workspaces/by-loan/${loanId}`);
+    const response = await api.get(`/api/v1/purl-admin/workspaces/by-loan/${loanId}`);
     return response.data;
   },
 
   // Create new workspace (portal) for a lead/loan
   createWorkspace: async (data) => {
-    const response = await api.post('/api/v1/purl/admin/workspaces', data);
+    const response = await api.post('/api/v1/purl-admin/workspaces', data);
     return response.data;
   },
 
   // Get workspace details
   getWorkspace: async (workspaceId) => {
-    const response = await api.get(`/api/v1/purl/admin/workspaces/${workspaceId}`);
+    const response = await api.get(`/api/v1/purl-admin/workspaces/${workspaceId}`);
     return response.data;
   },
 
   // Get full PURL URL with active token
   getPurlUrl: async (workspaceId) => {
-    const response = await api.get(`/api/v1/purl/admin/workspaces/${workspaceId}/purl-url`);
+    const response = await api.get(`/api/v1/purl-admin/workspaces/${workspaceId}/purl-url`);
     return response.data;
   },
 
   // Create access token for workspace
   createToken: async (workspaceId, data = {}) => {
-    const response = await api.post(`/api/v1/purl/admin/workspaces/${workspaceId}/tokens`, data);
+    const response = await api.post(`/api/v1/purl-admin/workspaces/${workspaceId}/tokens`, data);
     return response.data;
   },
 
   // Resend portal invitation
   resendInvite: async (workspaceId) => {
-    const response = await api.post(`/api/v1/purl/admin/workspaces/${workspaceId}/resend-invite`);
+    const response = await api.post(`/api/v1/purl-admin/workspaces/${workspaceId}/resend-invite`);
     return response.data;
   },
 
   // List all workspaces (for admin dashboard)
   listWorkspaces: async (params = {}) => {
-    const response = await api.get('/api/v1/purl/admin/workspaces', { params });
+    const response = await api.get('/api/v1/purl-admin/workspaces', { params });
     return response.data;
   },
 
   // Get PURL metrics
   getMetrics: async () => {
-    const response = await api.get('/api/v1/purl/admin/metrics');
+    const response = await api.get('/api/v1/purl-admin/metrics');
     return response.data;
   }
 };

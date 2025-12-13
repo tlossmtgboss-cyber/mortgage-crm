@@ -3,14 +3,30 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { agentAPI, agentGymAPI } from '../services/api';
 import './AgentGym.css';
 
-// Mock data generators
+// Mock data generators - All 20 Perennia AI Agents
 const generateMockAgents = () => [
-  { id: 1, agent_name: 'pipeline_analyst', display_name: 'Pipeline Analyst', category: 'crm' },
+  // Core CRM Agents (8)
+  { id: 1, agent_name: 'pipeline_analyst', display_name: 'Pipeline Analyst', category: 'analytics' },
   { id: 2, agent_name: 'compliance_checker', display_name: 'Compliance Checker', category: 'compliance' },
   { id: 3, agent_name: 'lead_nurturer', display_name: 'Lead Nurturer', category: 'sales' },
   { id: 4, agent_name: 'document_tracker', display_name: 'Document Tracker', category: 'operations' },
   { id: 5, agent_name: 'rate_advisor', display_name: 'Rate Advisor', category: 'advisory' },
-  { id: 6, agent_name: 'scheduler', display_name: 'Scheduler', category: 'operations' }
+  { id: 6, agent_name: 'scheduler', display_name: 'Smart Scheduler', category: 'operations' },
+  { id: 7, agent_name: 'receptionist', display_name: 'AI Receptionist', category: 'communication' },
+  { id: 8, agent_name: 'sla_monitor', display_name: 'SLA Tracker', category: 'monitoring' },
+  // Extended Agents (12)
+  { id: 9, agent_name: 'task_automation', display_name: 'Task Automation', category: 'operations' },
+  { id: 10, agent_name: 'profitability_analyst', display_name: 'Profitability Analyst', category: 'analytics' },
+  { id: 11, agent_name: 'subscription_manager', display_name: 'Subscription Manager', category: 'operations' },
+  { id: 12, agent_name: 'onboarding_assistant', display_name: 'Onboarding Assistant', category: 'operations' },
+  { id: 13, agent_name: 'voice_agent', display_name: 'Voice OS', category: 'communication' },
+  { id: 14, agent_name: 'team_coach', display_name: 'Team Coach', category: 'analytics' },
+  { id: 15, agent_name: 'email_intel_agent', display_name: 'Email Intelligence', category: 'automation' },
+  { id: 16, agent_name: 'notification_center', display_name: 'Notification Center', category: 'automation' },
+  { id: 17, agent_name: 'customer_intelligence', display_name: 'Customer Intelligence', category: 'analytics' },
+  { id: 18, agent_name: 'video_agent', display_name: 'UVIP', category: 'analytics' },
+  { id: 19, agent_name: 'integrations_agent', display_name: 'Integrations', category: 'operations' },
+  { id: 20, agent_name: 'reporting_engine', display_name: 'Reporting Engine', category: 'analytics' }
 ];
 
 const generateMockScenarios = () => [
