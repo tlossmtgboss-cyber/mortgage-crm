@@ -1314,7 +1314,7 @@ async def get_purl_url(
         }
 
     # Build URL
-    base_domain = os.getenv("PURL_BASE_DOMAIN", "client.perennia.ai")
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
     portal_url = f"https://{base_domain}/portal/{workspace.slug}"
 
     return {

@@ -45,7 +45,7 @@ class PURLEmailService:
         self.from_email = os.getenv("EMAIL_FROM", "noreply@perennia.ai")
         self.from_name = os.getenv("EMAIL_FROM_NAME", "Perennia AI")
         self.company_name = os.getenv("COMPANY_NAME", "Perennia AI")
-        self.purl_domain = os.getenv("PURL_BASE_DOMAIN", "client.perennia.ai")
+        self.purl_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
 
     # =========================================================================
     # TEMPLATE RENDERING
