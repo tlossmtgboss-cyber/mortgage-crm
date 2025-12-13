@@ -307,9 +307,11 @@ async def get_workspace_document_status(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
+    import json
     loan_id = workspace[2]
-    meta_data = workspace[1] or {}
-    lead_id = meta_data.get("lead_id")
+    raw_meta = workspace[1] or "{}"
+    meta_data = json.loads(raw_meta) if isinstance(raw_meta, str) else (raw_meta or {})
+    lead_id = meta_data.get("lead_id") if isinstance(meta_data, dict) else None
 
     # Build filter for document requests
     if loan_id:
