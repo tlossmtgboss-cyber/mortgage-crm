@@ -33624,28 +33624,33 @@ async def setup_admin_user(db: Session = Depends(get_db)):
     admin_password = "Admin123!"
 
     try:
-        user = db.query(User).filter(User.email == admin_email).first()
+        # Delete existing user first to avoid password hash issues
+        existing_user = db.query(User).filter(User.email == admin_email).first()
+        if existing_user:
+            db.delete(existing_user)
+            db.commit()
 
-        if user:
-            # Update existing user's password
-            user.hashed_password = get_password_hash(admin_password)
-            user.is_active = True
-            db.commit()
-            return {"message": f"Password reset for {admin_email}", "status": "updated"}
-        else:
-            # Create new admin user
-            new_user = User(
-                email=admin_email,
-                hashed_password=get_password_hash(admin_password),
-                full_name="Admin User",
-                role="admin",
-                is_active=True,
-                email_verified=True
-            )
-            db.add(new_user)
-            db.commit()
-            return {"message": f"Admin user created: {admin_email}", "status": "created"}
+        # Create fresh admin user
+        new_user = User(
+            email=admin_email,
+            hashed_password=get_password_hash(admin_password),
+            full_name="Admin User",
+            role="admin",
+            is_active=True,
+            email_verified=True,
+            onboarding_completed=True
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        return {
+            "message": f"Admin user setup complete: {admin_email}",
+            "status": "created",
+            "user_id": new_user.id
+        }
     except Exception as e:
+        db.rollback()
         logger.error(f"Setup admin error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
