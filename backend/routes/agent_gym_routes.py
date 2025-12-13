@@ -111,11 +111,11 @@ class SessionResponse(BaseModel):
 # Training Scenario Routes
 # ============================================================================
 
-@router.get("/scenarios", response_model=List[ScenarioResponse])
+@router.get("/scenarios")
 async def list_scenarios(
-    agent_type: Optional[str] = Query(None, description="Filter by agent type"),
+    agent_type: Optional[str] = Query(None, description="Filter by target agent type"),
     difficulty: Optional[str] = Query(None, description="Filter by difficulty"),
-    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
+    category: Optional[str] = Query(None, description="Filter by category"),
     is_active: bool = Query(True),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
@@ -124,16 +124,37 @@ async def list_scenarios(
     """List training scenarios with optional filtering."""
     try:
         service = AgentGymService(db)
-        tag_list = tags.split(",") if tags else None
         result = service.list_scenarios(
             agent_type=agent_type,
             difficulty=difficulty,
-            tags=tag_list,
             is_active=is_active,
             limit=limit,
             offset=offset
         )
-        return result["scenarios"]
+        # Transform scenarios to match expected response format
+        scenarios = []
+        for scenario in result["scenarios"]:
+            scenarios.append({
+                "id": str(scenario.id),
+                "name": scenario.name,
+                "description": scenario.description or "",
+                "category": scenario.category or "",
+                "agent_type": scenario.target_agent_type or "",
+                "target_agent_type": scenario.target_agent_type or "",
+                "difficulty": scenario.difficulty or "medium",
+                "scenario_data": scenario.input_data or {},
+                "input_data": scenario.input_data or {},
+                "expected_outcomes": scenario.expected_output or {},
+                "expected_output": scenario.expected_output or {},
+                "time_limit_seconds": scenario.time_limit_seconds,
+                "max_score": scenario.max_score or 100,
+                "is_active": scenario.is_active,
+                "times_run": scenario.times_run or 0,
+                "avg_score": scenario.avg_score,
+                "created_at": scenario.created_at.isoformat() if scenario.created_at else None,
+                "updated_at": scenario.updated_at.isoformat() if scenario.updated_at else None,
+            })
+        return scenarios
     except Exception as e:
         logger.error(f"Error listing scenarios: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -456,6 +477,7 @@ async def seed_default_scenarios(
             "name": "Pipeline Health Check",
             "description": "Analyze pipeline metrics and identify at-risk loans",
             "agent_type": "pipeline_analyst",
+            "category": "benchmark",
             "difficulty": "beginner",
             "scenario_data": {
                 "input": {"task": "Analyze current pipeline health"},
@@ -464,13 +486,13 @@ async def seed_default_scenarios(
             "expected_outcomes": {
                 "success": True,
                 "expected_tools": ["get_pipeline_metrics", "get_bottleneck_analysis"]
-            },
-            "tags": ["benchmark", "pipeline"]
+            }
         },
         {
             "name": "TRID Compliance Check",
             "description": "Check loan for TRID compliance violations",
             "agent_type": "compliance_checker",
+            "category": "benchmark",
             "difficulty": "intermediate",
             "scenario_data": {
                 "input": {"loan_id": "test-loan-1", "task": "Check TRID compliance"},
@@ -479,13 +501,13 @@ async def seed_default_scenarios(
             "expected_outcomes": {
                 "success": True,
                 "expected_tools": ["check_trid_compliance", "get_disclosure_timeline"]
-            },
-            "tags": ["benchmark", "compliance"]
+            }
         },
         {
             "name": "Lead Scoring Assessment",
             "description": "Score and prioritize a new lead",
             "agent_type": "lead_nurturer",
+            "category": "benchmark",
             "difficulty": "beginner",
             "scenario_data": {
                 "input": {"lead_id": "test-lead-1", "task": "Score lead and suggest followup"},
@@ -494,13 +516,13 @@ async def seed_default_scenarios(
             "expected_outcomes": {
                 "success": True,
                 "expected_tools": ["score_lead", "suggest_followup"]
-            },
-            "tags": ["benchmark", "leads"]
+            }
         },
         {
             "name": "Document Collection Strategy",
             "description": "Identify missing documents and create collection plan",
             "agent_type": "document_tracker",
+            "category": "benchmark",
             "difficulty": "intermediate",
             "scenario_data": {
                 "input": {"loan_id": "test-loan-2", "task": "Get missing documents and plan collection"},
@@ -509,13 +531,13 @@ async def seed_default_scenarios(
             "expected_outcomes": {
                 "success": True,
                 "expected_tools": ["get_missing_documents", "get_loan_conditions"]
-            },
-            "tags": ["benchmark", "documents"]
+            }
         },
         {
             "name": "Complex Pipeline Analysis",
             "description": "Perform deep analysis of pipeline bottlenecks with recommendations",
             "agent_type": "pipeline_analyst",
+            "category": "advanced",
             "difficulty": "advanced",
             "scenario_data": {
                 "input": {"task": "Identify bottlenecks and provide recommendations"},
@@ -524,8 +546,7 @@ async def seed_default_scenarios(
             "expected_outcomes": {
                 "success": True,
                 "expected_tools": ["get_pipeline_metrics", "get_bottleneck_analysis", "compare_to_benchmark"]
-            },
-            "tags": ["benchmark", "pipeline", "advanced"]
+            }
         }
     ]
 
@@ -548,7 +569,7 @@ async def seed_default_scenarios(
             difficulty=scenario_data["difficulty"],
             scenario_data=scenario_data["scenario_data"],
             expected_outcomes=scenario_data["expected_outcomes"],
-            tags=scenario_data["tags"]
+            category=scenario_data.get("category", "benchmark")
         )
         created.append(scenario.id)
 

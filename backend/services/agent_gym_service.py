@@ -39,23 +39,21 @@ class AgentGymService:
         difficulty: str,
         scenario_data: Dict[str, Any],
         expected_outcomes: Dict[str, Any],
+        category: str = "general",
         time_limit_seconds: Optional[int] = None,
-        tags: Optional[List[str]] = None,
-        created_by: Optional[str] = None
+        max_score: int = 100
     ) -> TrainingScenario:
         """Create a new training scenario."""
         scenario = TrainingScenario(
-            id=str(uuid.uuid4()),
             name=name,
             description=description,
-            agent_type=agent_type,
+            category=category,
+            target_agent_type=agent_type,
             difficulty=difficulty,
-            scenario_data=scenario_data,
-            expected_outcomes=expected_outcomes,
+            input_data=scenario_data,
+            expected_output=expected_outcomes,
             time_limit_seconds=time_limit_seconds,
-            tags=tags or [],
-            created_by=created_by,
-            created_at=datetime.utcnow(),
+            max_score=max_score,
             is_active=True
         )
 
@@ -65,17 +63,21 @@ class AgentGymService:
 
         return scenario
 
-    def get_scenario(self, scenario_id: str) -> Optional[TrainingScenario]:
+    def get_scenario(self, scenario_id) -> Optional[TrainingScenario]:
         """Get a training scenario by ID."""
+        try:
+            scenario_id_int = int(scenario_id) if isinstance(scenario_id, str) else scenario_id
+        except (ValueError, TypeError):
+            return None
         return self.db.query(TrainingScenario).filter(
-            TrainingScenario.id == scenario_id
+            TrainingScenario.id == scenario_id_int
         ).first()
 
     def list_scenarios(
         self,
         agent_type: Optional[str] = None,
         difficulty: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
         is_active: bool = True,
         limit: int = 50,
         offset: int = 0
@@ -87,15 +89,13 @@ class AgentGymService:
             query = query.filter(TrainingScenario.is_active == is_active)
 
         if agent_type:
-            query = query.filter(TrainingScenario.agent_type == agent_type)
+            query = query.filter(TrainingScenario.target_agent_type == agent_type)
 
         if difficulty:
             query = query.filter(TrainingScenario.difficulty == difficulty)
 
-        if tags:
-            # Filter scenarios that have any of the specified tags
-            for tag in tags:
-                query = query.filter(TrainingScenario.tags.contains([tag]))
+        if category:
+            query = query.filter(TrainingScenario.category == category)
 
         total = query.count()
         scenarios = query.order_by(TrainingScenario.created_at.desc()).offset(offset).limit(limit).all()
@@ -109,7 +109,7 @@ class AgentGymService:
 
     def update_scenario(
         self,
-        scenario_id: str,
+        scenario_id,
         updates: Dict[str, Any]
     ) -> Optional[TrainingScenario]:
         """Update a training scenario."""
@@ -117,16 +117,24 @@ class AgentGymService:
         if not scenario:
             return None
 
+        # Map API field names to model field names
+        field_mapping = {
+            'scenario_data': 'input_data',
+            'expected_outcomes': 'expected_output',
+            'agent_type': 'target_agent_type',
+        }
+
         allowed_fields = [
-            'name', 'description', 'difficulty', 'scenario_data',
-            'expected_outcomes', 'time_limit_seconds', 'tags', 'is_active'
+            'name', 'description', 'difficulty', 'category', 'target_agent_type',
+            'input_data', 'expected_output', 'time_limit_seconds', 'max_score', 'is_active'
         ]
 
         for field, value in updates.items():
-            if field in allowed_fields:
-                setattr(scenario, field, value)
+            # Map field name if needed
+            mapped_field = field_mapping.get(field, field)
+            if mapped_field in allowed_fields:
+                setattr(scenario, mapped_field, value)
 
-        scenario.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(scenario)
 
@@ -197,7 +205,7 @@ class AgentGymService:
             agent = self.db.query(AgentProfile).filter(AgentProfile.id == r.agent_id).first()
             stats.append({
                 "agent_id": r.agent_id,
-                "agent_name": agent.name if agent else "Unknown",
+                "agent_name": (agent.display_name or agent.agent_name) if agent else "Unknown",
                 "attempts": r.attempts,
                 "average_score": float(r.avg_score) if r.avg_score else None,
                 "passes": r.passes or 0,
@@ -413,7 +421,7 @@ class AgentGymService:
 
         return {
             "agent_id": agent_id,
-            "agent_name": agent.name,
+            "agent_name": agent.display_name or agent.agent_name,
             "overall_skill_score": overall_score,
             "skill_level": self._score_to_level(overall_score),
             "difficulty_scores": difficulty_scores,
@@ -593,16 +601,17 @@ class AgentGymService:
 
         # Get scenarios to benchmark
         if scenario_ids:
+            # Convert string IDs to integers
+            int_ids = [int(sid) if isinstance(sid, str) else sid for sid in scenario_ids]
             scenarios = self.db.query(TrainingScenario).filter(
-                TrainingScenario.id.in_(scenario_ids),
+                TrainingScenario.id.in_(int_ids),
                 TrainingScenario.is_active == True
             ).all()
         else:
-            # Get standard benchmark scenarios
+            # Get standard benchmark scenarios for agent's category
             scenarios = self.db.query(TrainingScenario).filter(
-                TrainingScenario.agent_type == agent.agent_type,
-                TrainingScenario.is_active == True,
-                TrainingScenario.tags.contains(['benchmark'])
+                TrainingScenario.target_agent_type == agent.category,
+                TrainingScenario.is_active == True
             ).all()
 
         if not scenarios:
@@ -647,7 +656,7 @@ class AgentGymService:
         return {
             "benchmark_id": benchmark_id,
             "agent_id": agent_id,
-            "agent_name": agent.name,
+            "agent_name": agent.display_name or agent.agent_name,
             "overall_score": overall_score,
             "scenarios_tested": len(scenarios),
             "scenarios_completed": len(agent_scores),
@@ -716,15 +725,15 @@ class AgentGymService:
         for rank, r in enumerate(results, 1):
             agent = self.db.query(AgentProfile).filter(AgentProfile.id == r.agent_id).first()
 
-            # Filter by agent type if specified
-            if agent_type and agent and agent.agent_type != agent_type:
+            # Filter by agent type/category if specified
+            if agent_type and agent and agent.category != agent_type:
                 continue
 
             leaderboard.append({
                 "rank": rank,
                 "agent_id": r.agent_id,
-                "agent_name": agent.name if agent else "Unknown",
-                "agent_type": agent.agent_type if agent else None,
+                "agent_name": (agent.display_name or agent.agent_name) if agent else "Unknown",
+                "agent_type": agent.category if agent else None,
                 "average_score": float(r.avg_score) if r.avg_score else 0,
                 "sessions": r.sessions,
                 "passed": r.passed or 0,
@@ -772,11 +781,11 @@ class AgentGymService:
         scenario = self.create_training_scenario(
             name=f"Generated: {execution.action_type or 'Task'} Scenario",
             description=f"Auto-generated scenario from execution {execution_id}",
-            agent_type=agent.agent_type if agent else "general",
+            agent_type=agent.category if agent else "general",
             difficulty=difficulty,
             scenario_data=scenario_data,
             expected_outcomes=expected_outcomes,
-            tags=["auto-generated", "from-execution"]
+            category="auto-generated"
         )
 
         return scenario
@@ -800,7 +809,7 @@ class AgentGymService:
 
         # Get scenarios agent hasn't passed
         query = self.db.query(TrainingScenario).filter(
-            TrainingScenario.agent_type == agent.agent_type,
+            TrainingScenario.target_agent_type == agent.category,
             TrainingScenario.is_active == True,
             ~TrainingScenario.id.in_(completed_ids)
         )
