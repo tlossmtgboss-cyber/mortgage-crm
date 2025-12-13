@@ -33569,12 +33569,10 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     try:
-        logger.info(f"Login attempt for: {form_data.username}")
         user = db.query(User).filter(User.email == form_data.username).first()
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
-            logger.warning(f"User not found: {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -33589,12 +33587,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Debug: log hash info
-        logger.info(f"User found, hash length: {len(user.hashed_password)}, hash prefix: {user.hashed_password[:30]}...")
-        logger.info(f"Password length: {len(form_data.password)}")
-
         if not verify_password(form_data.password, user.hashed_password):
-            logger.warning(f"Password verification failed for {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -33670,99 +33663,6 @@ async def setup_admin_user(db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"Setup admin error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/v1/debug-auth")
-async def debug_auth(db: Session = Depends(get_db)):
-    """Debug authentication - REMOVE IN PRODUCTION"""
-    import bcrypt as bcrypt_lib
-    admin_email = "admin@perenniaai.com"
-    test_password = "Admin123!"
-
-    try:
-        # Get bcrypt version
-        bcrypt_version = getattr(bcrypt_lib, '__version__', 'unknown')
-
-        # Get the stored hash from database using raw SQL
-        result = db.execute(
-            text("SELECT hashed_password FROM users WHERE email = :email"),
-            {"email": admin_email}
-        )
-        row = result.fetchone()
-        stored_hash_sql = row[0] if row else None
-
-        # Get the stored hash using ORM (same as login endpoint)
-        user = db.query(User).filter(User.email == admin_email).first()
-        stored_hash_orm = user.hashed_password if user else None
-
-        # Check if they match
-        hashes_match = stored_hash_sql == stored_hash_orm
-
-        # Test verification with pwd_context using ORM hash
-        try:
-            verified_passlib = pwd_context.verify(test_password, stored_hash_orm) if stored_hash_orm else "No hash"
-        except Exception as e:
-            verified_passlib = f"Error: {str(e)}"
-
-        # Test verification with raw bcrypt
-        try:
-            verified_bcrypt = bcrypt_lib.checkpw(test_password.encode('utf-8'), stored_hash_orm.encode('utf-8')) if stored_hash_orm else "No hash"
-        except Exception as e:
-            verified_bcrypt = f"Error: {str(e)}"
-
-        return {
-            "bcrypt_version": bcrypt_version,
-            "sql_hash": stored_hash_sql[:30] + "..." if stored_hash_sql else None,
-            "orm_hash": stored_hash_orm[:30] + "..." if stored_hash_orm else None,
-            "hashes_match": hashes_match,
-            "hash_length": len(stored_hash_orm) if stored_hash_orm else 0,
-            "verified_passlib": verified_passlib,
-            "verified_bcrypt": verified_bcrypt,
-            "test_password": test_password
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.post("/api/v1/debug-login")
-async def debug_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Debug login - shows what happens with form data - REMOVE IN PRODUCTION"""
-    import bcrypt as bcrypt_lib
-
-    try:
-        # Get the stored hash using ORM (same as login endpoint)
-        user = db.query(User).filter(User.email == form_data.username).first()
-
-        if not user:
-            return {"error": "User not found", "username": form_data.username}
-
-        stored_hash = user.hashed_password
-
-        # Debug the form data
-        form_password = form_data.password
-        form_password_repr = repr(form_password)
-        form_password_bytes = form_password.encode('utf-8')
-
-        # Test verification
-        try:
-            verified = pwd_context.verify(form_password, stored_hash)
-        except Exception as e:
-            verified = f"Error: {str(e)}"
-
-        try:
-            verified_bcrypt = bcrypt_lib.checkpw(form_password_bytes, stored_hash.encode('utf-8'))
-        except Exception as e:
-            verified_bcrypt = f"Error: {str(e)}"
-
-        return {
-            "username_from_form": form_data.username,
-            "password_from_form_repr": form_password_repr,
-            "password_length": len(form_password),
-            "password_bytes_length": len(form_password_bytes),
-            "stored_hash": stored_hash[:30] + "...",
-            "verified_passlib": verified,
-            "verified_bcrypt": verified_bcrypt,
-        }
-    except Exception as e:
-        return {"error": str(e)}
 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -50382,19 +50282,20 @@ async def startup_event():
             except Exception as ls_e:
                 logger.warning(f"⚠️ Leadstage enum migration skipped: {ls_e}")
 
-            # Reset admin password (always runs)
+            # Reset admin password (always runs) - uses pre-computed hash to avoid bcrypt/passlib issues
             try:
                 db_temp = SessionLocal()
                 admin_check = db_temp.execute(text(
                     "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
                 ))
                 if admin_check.fetchone():
-                    new_hash = get_password_hash("demo123")
+                    # Pre-computed bcrypt hash for "Admin123!" using passlib with bcrypt 4.1.3
+                    admin_hash = "$2b$12$Np5mczq3ThkKa3Wm3Ex9yeHm9sIVv12KXSO8z2wJteNRiTrZjAK8C"
                     db_temp.execute(text(
                         "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
-                    ), {"pwd": new_hash})
+                    ), {"pwd": admin_hash})
                     db_temp.commit()
-                    logger.info("✅ Admin password reset")
+                    logger.info("✅ Admin password reset to Admin123!")
                 db_temp.close()
             except Exception as pwd_e:
                 logger.warning(f"⚠️ Admin password reset skipped: {pwd_e}")
