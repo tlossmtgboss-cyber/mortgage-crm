@@ -33664,6 +33664,52 @@ async def setup_admin_user(db: Session = Depends(get_db)):
         logger.error(f"Setup admin error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/debug-auth")
+async def debug_auth(db: Session = Depends(get_db)):
+    """Debug authentication - REMOVE IN PRODUCTION"""
+    import bcrypt as bcrypt_lib
+    admin_email = "admin@perenniaai.com"
+    test_password = "Admin123!"
+
+    try:
+        # Get bcrypt version
+        bcrypt_version = getattr(bcrypt_lib, '__version__', 'unknown')
+
+        # Get the stored hash from database
+        result = db.execute(
+            text("SELECT hashed_password FROM users WHERE email = :email"),
+            {"email": admin_email}
+        )
+        row = result.fetchone()
+
+        if not row:
+            return {"error": "User not found"}
+
+        stored_hash = row[0]
+
+        # Test verification with pwd_context
+        try:
+            verified_passlib = pwd_context.verify(test_password, stored_hash)
+        except Exception as e:
+            verified_passlib = f"Error: {str(e)}"
+
+        # Test verification with raw bcrypt
+        try:
+            verified_bcrypt = bcrypt_lib.checkpw(test_password.encode('utf-8'), stored_hash.encode('utf-8'))
+        except Exception as e:
+            verified_bcrypt = f"Error: {str(e)}"
+
+        return {
+            "bcrypt_version": bcrypt_version,
+            "stored_hash": stored_hash[:30] + "...",
+            "hash_length": len(stored_hash),
+            "verified_passlib": verified_passlib,
+            "verified_bcrypt": verified_bcrypt,
+            "test_password": test_password
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
