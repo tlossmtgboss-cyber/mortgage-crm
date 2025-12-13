@@ -1718,6 +1718,89 @@ async def fix_vapi_greeting(
         return {"success": False, "error": str(e)}
 
 
+@router.post("/diagnostic/change-voice")
+async def change_voice_provider(
+    provider: str = "deepgram",
+    voice_id: str = "asteria"
+):
+    """
+    Change the VAPI assistant's voice provider.
+
+    Deepgram voices: asteria, luna, stella, athena, hera, orion, arcas, perseus, angus, orpheus, helios, zeus
+    PlayHT voices: jennifer, matt, etc.
+    ElevenLabs voices: rachel, domi, bella, etc.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    assistant_id = os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    # Build voice config based on provider
+    if provider == "deepgram":
+        voice_config = {
+            "provider": "deepgram",
+            "voiceId": voice_id  # asteria, luna, stella, athena, hera, orion, arcas, perseus, angus, orpheus, helios, zeus
+        }
+    elif provider == "playht":
+        voice_config = {
+            "provider": "playht",
+            "voiceId": voice_id,
+            "speed": 1.1,
+            "emotion": "female_happy"
+        }
+    elif provider == "elevenlabs":
+        voice_config = {
+            "provider": "11labs",
+            "voiceId": voice_id,
+            "stability": 0.5,
+            "similarityBoost": 0.75
+        }
+    else:
+        return {"error": f"Unknown provider: {provider}. Use 'deepgram', 'playht', or 'elevenlabs'"}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(
+                f"https://api.vapi.ai/assistant/{assistant_id}",
+                headers=headers,
+                json={"voice": voice_config},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                updated = response.json()
+                new_voice = updated.get("voice", {})
+                return {
+                    "success": True,
+                    "message": f"Voice changed to {provider} - {voice_id}",
+                    "assistant_id": assistant_id,
+                    "new_voice": {
+                        "provider": new_voice.get("provider"),
+                        "voice_id": new_voice.get("voiceId")
+                    },
+                    "test_instructions": "Trigger a test call to hear the new voice"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to update: {response.status_code}",
+                    "response": response.text
+                }
+
+    except Exception as e:
+        logger.error(f"Change voice error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/diagnostic/phone-numbers")
 async def diagnose_phone_numbers():
     """
