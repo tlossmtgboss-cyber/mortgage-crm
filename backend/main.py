@@ -33624,8 +33624,13 @@ async def setup_admin_user(db: Session = Depends(get_db)):
     admin_password = "Admin123!"
 
     try:
-        # Generate the password hash first
-        new_hash = get_password_hash(admin_password)
+        # Generate the password hash using bcrypt directly
+        import bcrypt
+        password_bytes = admin_password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        new_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+
+        logger.info(f"Generated hash for admin: {new_hash[:20]}...")
 
         # Use raw SQL to update password directly to avoid ORM issues
         result = db.execute(
