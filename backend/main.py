@@ -33568,25 +33568,51 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
 
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
-    # Check user exists and has a valid hashed_password before verification
-    if not user or not user.hashed_password or not verify_password(form_data.password, user.hashed_password):
+    try:
+        user = db.query(User).filter(User.email == form_data.username).first()
+
+        # Check user exists and has a valid hashed_password before verification
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not user.hashed_password:
+            logger.warning(f"User {form_data.username} has no password set")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not verify_password(form_data.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        access_token = create_access_token(data={"sub": user.email})
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error for {form_data.username}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    access_token = create_access_token(data={"sub": user.email})
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role
-        }
-    }
 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
