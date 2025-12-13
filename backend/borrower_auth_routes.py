@@ -1279,6 +1279,7 @@ async def submit_application(
         # Create borrower record if doesn't exist
         borrower_email = submission.profileData.get("email", "")
         borrower_name = f"{submission.profileData.get('firstName', '')} {submission.profileData.get('lastName', '')}"
+        safe_borrower_name = borrower_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
 
         # Check for existing borrower
         existing = db.execute(text("""
@@ -1600,10 +1601,9 @@ async def submit_application(
 
         if lead_id:
             try:
-                from services.purl_workspace_service import PURLWorkspaceService
-                from models.purl import WorkspaceCreate
-
-                workspace_service = PURLWorkspaceService(db)
+                import re
+                import random
+                import string
 
                 # Get organization ID (default to 1 or from LO)
                 org_id = 1
@@ -1613,56 +1613,75 @@ async def submit_application(
                     if lo_result and lo_result[0]:
                         org_id = lo_result[0]
 
-                # Create workspace for this borrower
-                workspace_data = WorkspaceCreate(
-                    display_name=borrower_name,
-                    slug=None,  # Auto-generate from name
-                    source="online_application",
-                    owner_user_id=submission.loId,
-                    metadata={
+                # Generate a unique slug from borrower name
+                base_slug = re.sub(r'[^a-z0-9]+', '-', borrower_name.lower()).strip('-')
+                random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+                workspace_slug = f"{base_slug}-{random_suffix}"
+
+                # Create workspace with direct SQL (avoids ORM relationship issues)
+                workspace_result = db.execute(text("""
+                    INSERT INTO purl_workspaces (
+                        organization_id, slug, display_name, status, source,
+                        owner_user_id, lead_at, meta_data, created_at, updated_at
+                    )
+                    VALUES (
+                        :org_id, :slug, :display_name, 'lead', 'online_application',
+                        :owner_user_id, :lead_at, :meta_data, :created_at, :updated_at
+                    )
+                    RETURNING id
+                """), {
+                    "org_id": org_id,
+                    "slug": workspace_slug,
+                    "display_name": borrower_name,
+                    "owner_user_id": submission.loId if submission.loId else None,
+                    "lead_at": submission_date,
+                    "meta_data": json.dumps({
                         "lead_id": lead_id,
                         "email": borrower_email,
                         "phone": submission.profileData.get("phone", ""),
                         "loan_amount": loan_amount,
                         "property_value": purchase_price,
-                    }
-                )
+                    }),
+                    "created_at": submission_date,
+                    "updated_at": submission_date,
+                })
 
-                workspace_result = workspace_service.create_workspace(
-                    organization_id=org_id,
-                    data=workspace_data,
-                    owner_user_id=submission.loId
-                )
+                workspace_row = workspace_result.fetchone()
+                if workspace_row:
+                    workspace_id = workspace_row[0]
 
-                workspace_id = workspace_result.get("id")
-                workspace_slug = workspace_result.get("slug")
-
-                # Add borrower as a contact in the workspace
-                if workspace_id:
-                    try:
-                        from models.purl import PURLContact
-
-                        contact = PURLContact(
-                            organization_id=org_id,
-                            workspace_id=workspace_id,
-                            first_name=submission.profileData.get("firstName", ""),
-                            last_name=submission.profileData.get("lastName", ""),
-                            email=borrower_email,
-                            phone=submission.profileData.get("phone", ""),
-                            contact_type="borrower",
-                            meta_data={"is_primary": True}
+                    # Add borrower as a contact in the workspace
+                    db.execute(text("""
+                        INSERT INTO purl_contacts (
+                            organization_id, workspace_id, contact_type,
+                            first_name, last_name, email, phone, meta_data, created_at, updated_at
                         )
-                        db.add(contact)
-                        db.commit()
-                        logger.info(f"Added borrower contact to workspace {workspace_id}")
-                    except Exception as contact_error:
-                        logger.warning(f"Failed to add borrower contact: {contact_error}")
+                        VALUES (
+                            :org_id, :workspace_id, 'borrower',
+                            :first_name, :last_name, :email, :phone, :meta_data, :created_at, :updated_at
+                        )
+                    """), {
+                        "org_id": org_id,
+                        "workspace_id": workspace_id,
+                        "first_name": submission.profileData.get("firstName", ""),
+                        "last_name": submission.profileData.get("lastName", ""),
+                        "email": borrower_email,
+                        "phone": submission.profileData.get("phone", ""),
+                        "meta_data": json.dumps({"is_primary": True}),
+                        "created_at": submission_date,
+                        "updated_at": submission_date,
+                    })
 
-                logger.info(f"Created workspace {workspace_id} with slug {workspace_slug} for lead {lead_id}")
+                    db.commit()
+                    logger.info(f"Created workspace {workspace_id} with slug {workspace_slug} for lead {lead_id}")
 
             except Exception as ws_error:
                 logger.warning(f"Workspace creation failed (non-critical): {ws_error}")
+                import traceback
+                logger.warning(traceback.format_exc())
                 workspace_error = str(ws_error)
+                workspace_slug = None
+                workspace_id = None
 
         return {
             "success": True,
