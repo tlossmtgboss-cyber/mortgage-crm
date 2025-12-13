@@ -1,7 +1,7 @@
 .tasks-page {
   padding: var(--space-md) var(--space-xl);
   padding-bottom: var(--space-3xl);
-  max-width: 1600px;
+  max-width: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -918,10 +918,10 @@
 /* Email-Style Layout */
 .email-layout {
   display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: 400px minmax(0, 1fr);
   gap: 0;
   flex: 1 1 auto;
-  min-height: 500px;
+  min-height: 700px;
   /* Let content flow naturally - use min-height instead of fixed height */
   background: white;
   border: 1px solid #e5e7eb;
@@ -930,6 +930,15 @@
   max-width: 100%;
   box-sizing: border-box;
   margin-bottom: 50px;
+}
+
+/* Full-width mode for task detail - hides the inbox list */
+.email-layout.full-width-detail {
+  grid-template-columns: 1fr;
+}
+
+.email-layout.full-width-detail .task-inbox {
+  display: none;
 }
 
 /* Ensure grid children take full height and handle overflow properly */
@@ -1200,11 +1209,12 @@
   display: flex;
   flex-direction: column;
   background: white;
-  min-height: 500px;
+  min-height: 700px;
   overflow-y: auto;
   min-width: 0;
   max-width: 100%;
   padding-bottom: 50px;
+  flex: 1;
 }
 
 .detail-header {
@@ -1251,6 +1261,8 @@
   padding: 32px;
   overflow-y: auto;
   min-height: 0; /* Important for flexbox scrolling */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .detail-info-grid {
