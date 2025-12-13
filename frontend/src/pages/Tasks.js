@@ -6,6 +6,7 @@ import { useLayoutFix } from '../hooks/useLayoutFix';
 import TaskDetailPanel from '../components/shared/TaskDetailPanel';
 import ReconciliationDetailPanel from '../components/shared/ReconciliationDetailPanel';
 import CallDetailPanel from '../components/shared/CallDetailPanel';
+import TasksSkeleton from '../components/shared/TasksSkeleton';
 import './Tasks.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -1749,7 +1750,8 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
     setCommModal(detailedContent);
   };
 
-  if (loading) return <div className="loading">Loading tasks...</div>;
+  // Use skeleton loader that matches the exact layout structure
+  if (loading) return <TasksSkeleton />;
 
   const allTasks = getAggregatedTasks();
   const tabTasks = getTasksForTab();

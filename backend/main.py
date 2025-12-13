@@ -19790,6 +19790,86 @@ async def debug_purl_tables_status(db: Session = Depends(get_db)):
         "all_table_count": len(all_tables)
     }
 
+@app.get("/api/v1/debug/purl-token-verify")
+async def debug_purl_token_verify(
+    token: str,
+    workspace_slug: str,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to test PURL token verification"""
+    import hashlib
+
+    # Token format validation
+    token_prefix = "purl_live_"
+    is_valid_format = token.startswith(token_prefix) and len(token) == len(token_prefix) + 64
+
+    # Compute hash
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    # Check workspace
+    workspace = db.execute(text("""
+        SELECT id, slug, organization_id, status
+        FROM purl_workspaces
+        WHERE slug = :slug
+    """), {"slug": workspace_slug}).fetchone()
+
+    workspace_info = None
+    if workspace:
+        workspace_info = {
+            "id": workspace[0],
+            "slug": workspace[1],
+            "organization_id": workspace[2],
+            "status": workspace[3]
+        }
+
+    # Check tokens for workspace
+    tokens_info = []
+    if workspace:
+        tokens = db.execute(text("""
+            SELECT id, token_hash, token_prefix, scope, status, expires_at, created_at
+            FROM purl_access_tokens
+            WHERE workspace_id = :workspace_id
+        """), {"workspace_id": workspace[0]}).fetchall()
+
+        for t in tokens:
+            tokens_info.append({
+                "id": t[0],
+                "stored_hash": t[1],
+                "hash_matches": t[1] == token_hash,
+                "prefix": t[2],
+                "scope": t[3],
+                "status": t[4],
+                "expires_at": str(t[5]) if t[5] else None,
+                "created_at": str(t[6]) if t[6] else None
+            })
+
+    # Direct hash lookup
+    token_by_hash = db.execute(text("""
+        SELECT id, workspace_id, scope, status
+        FROM purl_access_tokens
+        WHERE token_hash = :hash
+    """), {"hash": token_hash}).fetchone()
+
+    hash_lookup = None
+    if token_by_hash:
+        hash_lookup = {
+            "id": token_by_hash[0],
+            "workspace_id": token_by_hash[1],
+            "scope": token_by_hash[2],
+            "status": token_by_hash[3]
+        }
+
+    return {
+        "token_length": len(token),
+        "expected_length": 74,
+        "is_valid_format": is_valid_format,
+        "computed_hash": token_hash,
+        "workspace": workspace_info,
+        "tokens_for_workspace": tokens_info,
+        "token_found_by_hash": hash_lookup is not None,
+        "hash_lookup_result": hash_lookup
+    }
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
@@ -20524,45 +20604,12 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     logger.info(f"Matching with: name='{borrower_name}', email='{extracted_email}', phone='{extracted_phone}'")
 
     # Try to match by loan number first (highest confidence)
+    # IMPORTANT: Check ALL tables and collect candidates, then pick the best match
     if "loan_number" in fields and fields["loan_number"].get("value"):
         loan_num = str(fields["loan_number"]["value"]).strip()
+        loan_num_upper = loan_num.upper()  # For case-insensitive comparison
         logger.info(f"Attempting to match loan number: '{loan_num}'")
 
-        # ========== ACTIVE LOAN PROFILE MATCHING ==========
-        # Check ActiveLoanProfile table first (separate detailed loan profile table)
-        try:
-            from models.active_loan_profile import ActiveLoanProfile
-
-            # Exact match on ActiveLoanProfile
-            active_loan = db.query(ActiveLoanProfile).filter(
-                ActiveLoanProfile.loan_number == loan_num,
-                ActiveLoanProfile.is_deleted == False
-            ).first()
-
-            if active_loan:
-                logger.info(f"Found match in ActiveLoanProfile: {active_loan.id}")
-                match_results["entity_type"] = "active_loan"
-                match_results["entity_id"] = str(active_loan.id)
-                match_results["confidence"] = 0.99
-                return match_results
-
-            # Try partial match on ActiveLoanProfile
-            active_loans = db.query(ActiveLoanProfile).filter(
-                ActiveLoanProfile.loan_number.ilike(f"%{loan_num}%"),
-                ActiveLoanProfile.is_deleted == False
-            ).all()
-
-            if active_loans:
-                logger.info(f"Found {len(active_loans)} partial matches in ActiveLoanProfile")
-                match_results["entity_type"] = "active_loan"
-                match_results["entity_id"] = str(active_loans[0].id)
-                match_results["confidence"] = 0.90
-                return match_results
-
-        except Exception as e:
-            logger.debug(f"ActiveLoanProfile check skipped: {e}")
-
-        # ========== REGULAR LOAN TABLE MATCHING ==========
         # Helper to determine entity type based on loan stage
         def get_loan_entity_type(loan_obj):
             """Return 'portfolio' for funded loans, 'loan' for active loans"""
@@ -20570,50 +20617,148 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                 return "portfolio"
             return "loan"
 
-        # First try exact match with user's loans (highest confidence)
-        loan = db.query(Loan).filter(
-            Loan.loan_number == loan_num,
-            Loan.loan_officer_id == user_id
-        ).first()
+        # ========== CHECK MUM CLIENTS FIRST (Portfolio) ==========
+        # MUM clients are portfolio/past clients - check these BEFORE loans
+        try:
+            # Exact match (case-insensitive)
+            mum_client = db.query(MUMClient).filter(
+                func.upper(MUMClient.loan_number) == loan_num_upper
+            ).first()
 
-        if loan:
-            entity_type = get_loan_entity_type(loan)
-            logger.info(f"Found exact match with user's loan: {loan.id} (type: {entity_type})")
-            match_results["entity_type"] = entity_type
-            match_results["entity_id"] = loan.id
-            match_results["confidence"] = 0.98  # Very high - exact match + user owns it
-            return match_results
+            if mum_client:
+                logger.info(f"Found exact MUM client match by loan number: {mum_client.name} (id={mum_client.id})")
+                match_results["candidates"].append({
+                    "type": "portfolio",
+                    "id": mum_client.id,
+                    "name": mum_client.name,
+                    "loan_number": mum_client.loan_number,
+                    "confidence": 0.98,  # Very high - exact loan number match
+                    "match_type": "mum_loan_number_exact"
+                })
+            else:
+                # Try partial match (case-insensitive)
+                mum_clients = db.query(MUMClient).filter(
+                    MUMClient.loan_number.ilike(f"%{loan_num}%")
+                ).all()
+                for client in mum_clients:
+                    logger.info(f"Found partial MUM client match by loan number: {client.name}")
+                    match_results["candidates"].append({
+                        "type": "portfolio",
+                        "id": client.id,
+                        "name": client.name,
+                        "loan_number": client.loan_number,
+                        "confidence": 0.92,
+                        "match_type": "mum_loan_number_partial"
+                    })
+        except Exception as e:
+            logger.warning(f"MUM client loan number matching error: {e}")
 
-        # Try exact loan number match without user filter (still high confidence)
-        loan = db.query(Loan).filter(Loan.loan_number == loan_num).first()
-        if loan:
-            entity_type = get_loan_entity_type(loan)
-            logger.info(f"Found exact match (any user): {loan.id} (type: {entity_type})")
-            match_results["entity_type"] = entity_type
-            match_results["entity_id"] = loan.id
-            match_results["confidence"] = 0.95  # High - exact loan number match
-            return match_results
+        # ========== ACTIVE LOAN PROFILE MATCHING ==========
+        # Check ActiveLoanProfile table (separate detailed loan profile table)
+        try:
+            from models.active_loan_profile import ActiveLoanProfile
 
-        # Try partial loan number match (loan numbers may have prefixes/suffixes)
-        logger.info(f"Trying partial match for: {loan_num}")
-        loans = db.query(Loan).filter(
-            Loan.loan_number.ilike(f"%{loan_num}%")
-        ).all()
-        logger.info(f"Found {len(loans)} partial matches")
-        if loans:
-            # Prefer user's loan if multiple matches
-            user_loan = next((l for l in loans if l.loan_officer_id == user_id), None)
-            if user_loan:
-                entity_type = get_loan_entity_type(user_loan)
-                match_results["entity_type"] = entity_type
-                match_results["entity_id"] = user_loan.id
-                match_results["confidence"] = 0.90
-                return match_results
-            # Otherwise use first match
-            entity_type = get_loan_entity_type(loans[0])
-            match_results["entity_type"] = entity_type
-            match_results["entity_id"] = loans[0].id
-            match_results["confidence"] = 0.85
+            # Exact match on ActiveLoanProfile (case-insensitive)
+            active_loan = db.query(ActiveLoanProfile).filter(
+                func.upper(ActiveLoanProfile.loan_number) == loan_num_upper,
+                ActiveLoanProfile.is_deleted == False
+            ).first()
+
+            if active_loan:
+                logger.info(f"Found match in ActiveLoanProfile: {active_loan.id}")
+                match_results["candidates"].append({
+                    "type": "active_loan",
+                    "id": str(active_loan.id),
+                    "name": f"Active Loan {active_loan.loan_number}",
+                    "loan_number": active_loan.loan_number,
+                    "confidence": 0.99,
+                    "match_type": "active_loan_exact"
+                })
+            else:
+                # Try partial match on ActiveLoanProfile
+                active_loans = db.query(ActiveLoanProfile).filter(
+                    ActiveLoanProfile.loan_number.ilike(f"%{loan_num}%"),
+                    ActiveLoanProfile.is_deleted == False
+                ).all()
+
+                for al in active_loans:
+                    logger.info(f"Found partial match in ActiveLoanProfile: {al.id}")
+                    match_results["candidates"].append({
+                        "type": "active_loan",
+                        "id": str(al.id),
+                        "name": f"Active Loan {al.loan_number}",
+                        "loan_number": al.loan_number,
+                        "confidence": 0.90,
+                        "match_type": "active_loan_partial"
+                    })
+
+        except Exception as e:
+            logger.debug(f"ActiveLoanProfile check skipped: {e}")
+
+        # ========== REGULAR LOAN TABLE MATCHING ==========
+        # Exact match with user's loans (highest confidence)
+        try:
+            loan = db.query(Loan).filter(
+                func.upper(Loan.loan_number) == loan_num_upper,
+                Loan.loan_officer_id == user_id
+            ).first()
+
+            if loan:
+                entity_type = get_loan_entity_type(loan)
+                logger.info(f"Found exact match with user's loan: {loan.id} (type: {entity_type})")
+                match_results["candidates"].append({
+                    "type": entity_type,
+                    "id": loan.id,
+                    "name": loan.borrower_name,
+                    "loan_number": loan.loan_number,
+                    "confidence": 0.98,
+                    "match_type": "loan_user_owned_exact"
+                })
+            else:
+                # Try exact loan number match without user filter
+                loan = db.query(Loan).filter(
+                    func.upper(Loan.loan_number) == loan_num_upper
+                ).first()
+                if loan:
+                    entity_type = get_loan_entity_type(loan)
+                    logger.info(f"Found exact match (any user): {loan.id} (type: {entity_type})")
+                    match_results["candidates"].append({
+                        "type": entity_type,
+                        "id": loan.id,
+                        "name": loan.borrower_name,
+                        "loan_number": loan.loan_number,
+                        "confidence": 0.95,
+                        "match_type": "loan_exact"
+                    })
+                else:
+                    # Try partial loan number match (loan numbers may have prefixes/suffixes)
+                    logger.info(f"Trying partial match for: {loan_num}")
+                    loans = db.query(Loan).filter(
+                        Loan.loan_number.ilike(f"%{loan_num}%")
+                    ).all()
+                    logger.info(f"Found {len(loans)} partial matches")
+                    for l in loans:
+                        entity_type = get_loan_entity_type(l)
+                        conf = 0.90 if l.loan_officer_id == user_id else 0.85
+                        match_results["candidates"].append({
+                            "type": entity_type,
+                            "id": l.id,
+                            "name": l.borrower_name,
+                            "loan_number": l.loan_number,
+                            "confidence": conf,
+                            "match_type": "loan_partial"
+                        })
+        except Exception as e:
+            logger.warning(f"Loan table matching error: {e}")
+
+        # If we have loan number candidates, pick the best one and return early
+        # (loan number matches are most reliable)
+        if match_results["candidates"]:
+            best = max(match_results["candidates"], key=lambda x: x["confidence"])
+            logger.info(f"Best loan number match: {best['type']} id={best['id']} conf={best['confidence']:.2f}")
+            match_results["entity_type"] = best["type"]
+            match_results["entity_id"] = best["id"]
+            match_results["confidence"] = best["confidence"]
             return match_results
 
     # ========== LEAD MATCHING (Email, Phone, Name) ==========
@@ -20950,49 +21095,12 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                 })
                 logger.info(f"Partner match found: {partner.name} ({partner_conf:.2f}) via {'+'.join(match_reasons)}")
 
-    # ========== PORTFOLIO/MUM CLIENT MATCHING ==========
+    # ========== PORTFOLIO/MUM CLIENT MATCHING (by name, email, phone) ==========
     # Match against past clients (portfolio) for retention/referral opportunities
-    # Also check loan number matches against MUM clients
+    # Note: Loan number matching for MUM clients is handled earlier in the code
+    #       with case-insensitive matching and returns early if found
 
-    # First check if loan_number field matches any MUM client (highest confidence for portfolio)
-    if "loan_number" in fields and fields["loan_number"].get("value"):
-        loan_num = str(fields["loan_number"]["value"]).strip()
-        logger.info(f"Trying MUM client match by loan number: '{loan_num}'")
-        try:
-            # Try exact match first
-            mum_client = db.query(MUMClient).filter(
-                MUMClient.loan_number == loan_num
-            ).first()
-
-            if mum_client:
-                logger.info(f"Found exact MUM client match by loan number: {mum_client.name}")
-                match_results["candidates"].append({
-                    "type": "portfolio",
-                    "id": mum_client.id,
-                    "name": mum_client.name,
-                    "loan_number": mum_client.loan_number,
-                    "confidence": 0.97,  # Very high - exact loan number match
-                    "match_type": "loan_number_exact"
-                })
-            else:
-                # Try partial match
-                mum_clients = db.query(MUMClient).filter(
-                    MUMClient.loan_number.ilike(f"%{loan_num}%")
-                ).all()
-                for client in mum_clients:
-                    logger.info(f"Found partial MUM client match by loan number: {client.name}")
-                    match_results["candidates"].append({
-                        "type": "portfolio",
-                        "id": client.id,
-                        "name": client.name,
-                        "loan_number": client.loan_number,
-                        "confidence": 0.92,
-                        "match_type": "loan_number_partial"
-                    })
-        except Exception as e:
-            logger.warning(f"MUM client loan number matching failed: {e}")
-
-    # Also check by name, email, phone
+    # Check by name, email, phone
     if borrower_name or extracted_email or extracted_phone:
         logger.info("Trying portfolio/MUM client match by name/email/phone...")
         try:

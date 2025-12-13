@@ -982,21 +982,24 @@ async def create_token(
 
     service = PURLTokenService(db)
 
-    result = service.create_token(
+    # Service returns Tuple[token_id, full_token]
+    token_id, full_token = service.create_token(
         organization_id=current_user.organization_id,
         workspace_id=workspace_id,
-        scope=token_data.scope if token_data else TokenScope.READ,
-        name=token_data.name if token_data else "Access Token",
+        scope=token_data.scope if token_data else TokenScope.WRITE,
         contact_id=token_data.contact_id if token_data else None,
         expires_in_days=token_data.expires_in_days if token_data else 365,
-        created_by_user_id=current_user.id
+        created_by=current_user.id
     )
+
+    # Get the expiry from the token record
+    token_record = db.query(PURLAccessToken).filter(PURLAccessToken.id == token_id).first()
 
     return {
         "success": True,
-        "token": result["token"],  # Only returned once!
-        "token_id": result["token_id"],
-        "expires_at": result["expires_at"]
+        "token": full_token,  # Only returned once!
+        "token_id": token_id,
+        "expires_at": token_record.expires_at.isoformat() if token_record and token_record.expires_at else None
     }
 
 

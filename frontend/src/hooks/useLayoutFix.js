@@ -1,15 +1,23 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 /**
  * Hook to fix layout calculation issues that occur when content loads asynchronously.
  * Forces browser to recalculate layout after content arrives.
  *
  * @param {Array} dependencies - Array of values that, when changed, trigger recalculation
- * @returns {{ containerRef: React.RefObject, triggerRecalculation: Function }}
+ * @returns {{ containerRef: React.RefObject, triggerRecalculation: Function, isLayoutReady: boolean }}
  */
 export const useLayoutFix = (dependencies = []) => {
   const containerRef = useRef(null);
   const resizeObserverRef = useRef(null);
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
+
+  const forceRepaint = useCallback(() => {
+    if (containerRef.current) {
+      // Force synchronous reflow by reading layout property
+      void containerRef.current.offsetHeight;
+    }
+  }, []);
 
   const recalculateLayout = useCallback(() => {
     if (containerRef.current) {
@@ -20,6 +28,9 @@ export const useLayoutFix = (dependencies = []) => {
       if (height > 0) {
         containerRef.current.style.minHeight = `${height}px`;
       }
+
+      // Force synchronous reflow
+      forceRepaint();
 
       // Force browser repaint
       window.dispatchEvent(new Event('resize'));
@@ -34,12 +45,20 @@ export const useLayoutFix = (dependencies = []) => {
         }
       });
     }
-  }, []);
+  }, [forceRepaint]);
 
   useEffect(() => {
+    // Reset layout ready state when dependencies change
+    setIsLayoutReady(false);
+
     // Run recalculation at multiple intervals to catch async content
-    const timer = setTimeout(recalculateLayout, 100);
-    const timer2 = setTimeout(recalculateLayout, 500);
+    const timer = setTimeout(recalculateLayout, 50);
+    const timer2 = setTimeout(recalculateLayout, 100);
+    const timer3 = setTimeout(recalculateLayout, 250);
+    const timer4 = setTimeout(() => {
+      recalculateLayout();
+      setIsLayoutReady(true);
+    }, 500);
 
     // Set up ResizeObserver to detect content size changes
     if (containerRef.current && 'ResizeObserver' in window) {
@@ -55,6 +74,8 @@ export const useLayoutFix = (dependencies = []) => {
     return () => {
       clearTimeout(timer);
       clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
       window.removeEventListener('resize', recalculateLayout);
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
@@ -64,11 +85,17 @@ export const useLayoutFix = (dependencies = []) => {
   }, dependencies);
 
   const triggerRecalculation = useCallback(() => {
+    // Use double RAF for maximum browser compatibility
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        recalculateLayout();
+      });
+    });
     setTimeout(recalculateLayout, 0);
     setTimeout(recalculateLayout, 100);
   }, [recalculateLayout]);
 
-  return { containerRef, triggerRecalculation };
+  return { containerRef, triggerRecalculation, isLayoutReady };
 };
 
 /**

@@ -1439,7 +1439,7 @@
   padding: 16px;
   background: #f9fafb;
   border-top: 1px solid #e5e7eb;
-  margin-top: auto;
+  /* Removed margin-top: auto so buttons stay directly under content */
 }
 
 .task-detail-panel.compact .detail-footer {

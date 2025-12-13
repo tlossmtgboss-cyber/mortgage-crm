@@ -73,6 +73,7 @@ function LoanDetail() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
@@ -2482,6 +2483,7 @@ function LoanDetail() {
         <ScheduleAppointmentModal
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
+          onSuccess={() => setCalendarRefreshKey(prev => prev + 1)}
           borrower={{ id: loan.id, name: loan.borrower_name || loan.borrower, phone: loan.borrower_phone, email: loan.borrower_email }}
         />
       )}
@@ -2665,7 +2667,7 @@ function LoanDetail() {
         }}
       />
       </div>
-      <CalendarSidebar loanId={id} />
+      <CalendarSidebar loanId={id} key={calendarRefreshKey} />
     </div>
   );
 }

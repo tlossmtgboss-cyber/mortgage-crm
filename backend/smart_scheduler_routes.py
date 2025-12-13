@@ -224,6 +224,119 @@ def send_appointment_confirmation_sms(
         return False
 
 
+def send_team_member_notification_email(
+    team_member_email: str,
+    team_member_name: str,
+    attendee_name: str,
+    attendee_email: str,
+    attendee_phone: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    duration: str,
+    meeting_mode: str = "Phone Call",
+    video_link: str = None
+):
+    """Send notification email to the assigned team member about a new appointment"""
+    try:
+        # Add video call button if video link is provided
+        video_button_section = ""
+        if video_link:
+            video_button_section = f"""
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                            Join Video Call
+                        </a>
+                    </div>
+                    <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
+                        Video link: <a href="{video_link}" style="color: #217F8D;">{video_link}</a>
+                    </p>
+            """
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">New Appointment Scheduled</h1>
+                    </div>
+
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi {team_member_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">A new appointment has been scheduled for you:</p>
+
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #111827;"><strong>Client:</strong> {attendee_name}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Email:</strong> <a href="mailto:{attendee_email}" style="color: #217F8D;">{attendee_email}</a></p>
+                            {f'<p style="margin: 8px 0; color: #111827;"><strong>Phone:</strong> <a href="tel:{attendee_phone}" style="color: #217F8D;">{attendee_phone}</a></p>' if attendee_phone else ''}
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                        </div>
+                        {video_button_section}
+                        <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+                            This appointment has been added to your calendar.
+                        </p>
+                    </div>
+                </div>
+
+                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+                    Sent from Perennia AI - Pipeline 360
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        video_link_text = f"\nVideo Call Link: {video_link}" if video_link else ""
+        text_content = f"""
+New Appointment Scheduled
+
+Hi {team_member_name},
+
+A new appointment has been scheduled for you:
+
+Client: {attendee_name}
+Email: {attendee_email}
+{f'Phone: {attendee_phone}' if attendee_phone else ''}
+Date: {appointment_date}
+Time: {appointment_time}
+Duration: {duration}
+Meeting Type: {meeting_mode}{video_link_text}
+
+This appointment has been added to your calendar.
+
+- Perennia AI Team
+        """
+
+        # Use SendGrid via NotificationService
+        result = notification_service.send_email(
+            to_email=team_member_email,
+            subject=f"New Appointment: {appointment_title}",
+            html_content=html_content,
+            plain_content=text_content
+        )
+
+        if result.get("success"):
+            logger.info(f"Team member notification email sent to {team_member_email}")
+            return True
+        else:
+            logger.warning(f"Failed to send team member notification: {result.get('error', 'Unknown error')}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to send team member notification email: {e}")
+        return False
+
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -1152,20 +1265,24 @@ async def create_appointment(
                 }
                 meeting_mode_str = mode_display.get(appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode), "Phone Call")
 
-            # Get team member name
+            # Get team member info
             team_member_name = None
-            if appointment.assigned_user_id:
+            team_member_email = None
+            User = _models.get('User')
+            if appointment.assigned_user_id and User:
                 assigned_user = db.query(User).filter(User.id == appointment.assigned_user_id).first()
                 if assigned_user:
                     team_member_name = assigned_user.first_name
                     if assigned_user.last_name:
                         team_member_name += f" {assigned_user.last_name}"
+                    team_member_email = assigned_user.email
 
             # Get video link if this is a video call
             video_link = None
             if appointment.video_link:
                 video_link = appointment.video_link
 
+            # Send confirmation email to attendee (borrower)
             email_sent = send_appointment_confirmation_email(
                 attendee_email=appt_data.attendee_email,
                 attendee_name=appt_data.attendee_name or "there",
@@ -1177,6 +1294,26 @@ async def create_appointment(
                 team_member_name=team_member_name,
                 video_link=video_link
             )
+
+            # Send notification email to team member (loan officer)
+            if team_member_email:
+                try:
+                    send_team_member_notification_email(
+                        team_member_email=team_member_email,
+                        team_member_name=team_member_name or "Team Member",
+                        attendee_name=appt_data.attendee_name or "Client",
+                        attendee_email=appt_data.attendee_email or "",
+                        attendee_phone=appt_data.attendee_phone or "",
+                        appointment_title=appointment.title,
+                        appointment_date=appointment_date,
+                        appointment_time=appointment_time,
+                        duration=duration_str,
+                        meeting_mode=meeting_mode_str,
+                        video_link=video_link
+                    )
+                    logger.info(f"Team member notification sent to {team_member_email}")
+                except Exception as team_email_error:
+                    logger.error(f"Error sending team member notification: {team_email_error}")
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
 

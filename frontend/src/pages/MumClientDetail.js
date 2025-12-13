@@ -74,6 +74,7 @@ function MumClientDetail() {
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -1877,6 +1878,7 @@ function MumClientDetail() {
         <ScheduleAppointmentModal
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
+          onSuccess={() => setCalendarRefreshKey(prev => prev + 1)}
           borrower={client}
         />
       )}
@@ -1906,7 +1908,7 @@ function MumClientDetail() {
         entityData={client}
       />
       </div>
-      <CalendarSidebar />
+      <CalendarSidebar key={calendarRefreshKey} />
     </div>
   );
 }

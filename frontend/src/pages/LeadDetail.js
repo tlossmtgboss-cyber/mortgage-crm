@@ -68,6 +68,7 @@ function LeadDetail() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
@@ -3763,6 +3764,7 @@ function LeadDetail() {
         <ScheduleAppointmentModal
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
+          onSuccess={() => setCalendarRefreshKey(prev => prev + 1)}
           borrower={lead}
         />
       )}
@@ -4057,7 +4059,7 @@ function LeadDetail() {
         </div>
       )}
       </div>
-      <CalendarSidebar leadId={id} />
+      <CalendarSidebar leadId={id} key={calendarRefreshKey} />
     </div>
   );
 }

@@ -1,0 +1,381 @@
+/* TasksSkeleton.css - Skeleton loader styles that match the Tasks page layout */
+
+/*
+ * Fallback layout styles (in case main Tasks.css hasn't loaded yet)
+ * These match the actual layout structure to prevent layout shifts
+ */
+.tasks-skeleton.tasks-page {
+  padding: var(--space-md, 16px) var(--space-xl, 24px);
+  padding-bottom: var(--space-3xl, 48px);
+  max-width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 60px);
+  box-sizing: border-box;
+  width: 100%;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+.tasks-skeleton .page-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-md, 16px);
+}
+
+.tasks-skeleton .task-tabs {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  margin-bottom: var(--space-lg, 16px);
+  border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+  padding-bottom: var(--space-sm, 8px);
+}
+
+.tasks-skeleton .tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-skeleton {
+  /* Ensure same layout structure as actual content */
+  opacity: 1;
+}
+
+/* Skeleton animation */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton-text,
+.skeleton-checkbox,
+.skeleton-icon,
+.skeleton-dot,
+.skeleton-badge,
+.skeleton-tab,
+.skeleton-button,
+.skeleton-textarea,
+.skeleton-action-button,
+.skeleton-label-value {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-muted, #f0f0f0) 0px,
+    var(--color-bg-surface, #f8f8f8) 40px,
+    var(--color-bg-muted, #f0f0f0) 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm, 4px);
+}
+
+/* Page Header */
+.tasks-skeleton .skeleton-title {
+  width: 80px;
+  height: 32px;
+  margin-bottom: 8px;
+}
+
+.tasks-skeleton .skeleton-subtitle {
+  width: 120px;
+  height: 16px;
+}
+
+/* Tab Navigation */
+.tasks-skeleton .task-tabs {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  margin-bottom: var(--space-lg, 16px);
+}
+
+.skeleton-tab {
+  width: 150px;
+  height: 40px;
+  border-radius: var(--radius-base, 6px);
+}
+
+.skeleton-tab.active {
+  background: var(--color-primary-light, #e0f2fe);
+}
+
+/* Email Layout */
+.tasks-skeleton .email-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: var(--space-lg, 16px);
+  min-height: 600px;
+}
+
+/* Task Inbox (Left Panel) */
+.tasks-skeleton .task-inbox {
+  background: var(--color-bg-surface, #fff);
+  border: 1px solid var(--color-border-light, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.tasks-skeleton .inbox-header {
+  padding: var(--space-md, 12px);
+  border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.skeleton-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm, 4px);
+  flex-shrink: 0;
+}
+
+.skeleton-header-text {
+  width: 60px;
+  height: 18px;
+}
+
+.skeleton-badge {
+  width: 24px;
+  height: 20px;
+  border-radius: var(--radius-full, 9999px);
+}
+
+.tasks-skeleton .inbox-list {
+  padding: var(--space-sm, 8px);
+}
+
+/* Skeleton Task Items */
+.skeleton-item {
+  padding: var(--space-md, 12px);
+  border-radius: var(--radius-base, 6px);
+  margin-bottom: var(--space-sm, 8px);
+  background: var(--color-bg-base, #fff);
+  border: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.skeleton-item.selected {
+  border-color: var(--color-primary, #3b82f6);
+  background: var(--color-primary-light, #eff6ff);
+}
+
+.skeleton-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full, 9999px);
+  flex-shrink: 0;
+}
+
+.skeleton-task-title {
+  width: 70%;
+  height: 14px;
+}
+
+.skeleton-client-name {
+  width: 100px;
+  height: 12px;
+}
+
+.skeleton-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full, 9999px);
+}
+
+.skeleton-preview {
+  width: 60%;
+  height: 12px;
+  margin-top: var(--space-xs, 4px);
+}
+
+/* Task Detail Panel (Right Side) */
+.skeleton-detail-panel {
+  background: var(--color-bg-surface, #fff);
+  border: 1px solid var(--color-border-light, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+}
+
+.tasks-skeleton .task-detail-main {
+  flex: 1;
+  padding: var(--space-lg, 16px);
+  overflow-y: auto;
+}
+
+/* Detail Header */
+.skeleton-header {
+  margin-bottom: var(--space-lg, 16px);
+  padding-bottom: var(--space-md, 12px);
+  border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+}
+
+.skeleton-detail-title {
+  width: 200px;
+  height: 24px;
+  margin-bottom: var(--space-md, 12px);
+}
+
+.skeleton-row {
+  display: flex;
+  gap: var(--space-xl, 24px);
+  margin-bottom: var(--space-sm, 8px);
+}
+
+.skeleton-label-value {
+  width: 120px;
+  height: 16px;
+}
+
+/* Send Via Section */
+.skeleton-section {
+  margin-bottom: var(--space-lg, 16px);
+}
+
+.skeleton-section-label {
+  width: 60px;
+  height: 12px;
+  margin-bottom: var(--space-sm, 8px);
+}
+
+.skeleton-button-group {
+  display: flex;
+  gap: var(--space-sm, 8px);
+}
+
+.skeleton-button {
+  width: 80px;
+  height: 36px;
+  border-radius: var(--radius-base, 6px);
+}
+
+.skeleton-button.active {
+  background: var(--color-primary-light, #dbeafe);
+}
+
+/* Cards */
+.skeleton-card {
+  background: var(--color-bg-muted, #f9fafb);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-md, 12px);
+  margin-bottom: var(--space-md, 12px);
+}
+
+.skeleton-card.highlight {
+  background: #fef3c7;
+}
+
+.skeleton-card.message {
+  background: #fef9c3;
+}
+
+.skeleton-card-title {
+  width: 150px;
+  height: 16px;
+  margin-bottom: var(--space-md, 12px);
+}
+
+.skeleton-card-content {
+  width: 90%;
+  height: 14px;
+  margin-bottom: var(--space-sm, 8px);
+}
+
+.skeleton-card-content.short {
+  width: 50%;
+}
+
+.skeleton-textarea {
+  width: 100%;
+  height: 80px;
+  border-radius: var(--radius-base, 6px);
+}
+
+/* Message Lines */
+.skeleton-message-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+}
+
+.skeleton-line {
+  height: 14px;
+  width: 100%;
+}
+
+.skeleton-line.short {
+  width: 40%;
+}
+
+.skeleton-line.medium {
+  width: 70%;
+}
+
+/* Action Bar */
+.skeleton-actions {
+  display: flex;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 12px);
+  border-top: 1px solid var(--color-border-light, #e5e7eb);
+  background: var(--color-bg-surface, #fff);
+  flex-wrap: wrap;
+}
+
+.skeleton-action-button {
+  height: 36px;
+  border-radius: var(--radius-base, 6px);
+  flex: 0 0 auto;
+}
+
+.skeleton-action-button.primary {
+  width: 100px;
+  background: linear-gradient(
+    90deg,
+    #93c5fd 0px,
+    #bfdbfe 40px,
+    #93c5fd 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-action-button.success {
+  width: 120px;
+  background: linear-gradient(
+    90deg,
+    #86efac 0px,
+    #bbf7d0 40px,
+    #86efac 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-action-button.danger {
+  width: 80px;
+  background: linear-gradient(
+    90deg,
+    #fca5a5 0px,
+    #fecaca 40px,
+    #fca5a5 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-action-button:not(.primary):not(.success):not(.danger) {
+  width: 90px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .tasks-skeleton .email-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .skeleton-detail-panel {
+    min-height: 400px;
+  }
+}

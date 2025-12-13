@@ -5,7 +5,7 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
+const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   const [weekStart, setWeekStart] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
@@ -343,6 +343,11 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
       }
 
       setSuccess(true);
+
+      // Call onSuccess callback if provided (to refresh calendar/data)
+      if (onSuccess) {
+        onSuccess();
+      }
 
       // Close modal after 2 seconds
       setTimeout(() => {
