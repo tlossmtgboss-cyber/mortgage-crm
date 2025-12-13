@@ -33624,30 +33624,37 @@ async def setup_admin_user(db: Session = Depends(get_db)):
     admin_password = "Admin123!"
 
     try:
-        # Delete existing user first to avoid password hash issues
-        existing_user = db.query(User).filter(User.email == admin_email).first()
-        if existing_user:
-            db.delete(existing_user)
-            db.commit()
+        # Generate the password hash first
+        new_hash = get_password_hash(admin_password)
 
-        # Create fresh admin user
-        new_user = User(
-            email=admin_email,
-            hashed_password=get_password_hash(admin_password),
-            full_name="Admin User",
-            role="admin",
-            is_active=True,
-            email_verified=True,
-            onboarding_completed=True
+        # Use raw SQL to update password directly to avoid ORM issues
+        result = db.execute(
+            text("UPDATE users SET hashed_password = :hash, is_active = true WHERE email = :email"),
+            {"hash": new_hash, "email": admin_email}
         )
-        db.add(new_user)
         db.commit()
-        db.refresh(new_user)
+
+        if result.rowcount > 0:
+            return {
+                "message": f"Password reset for {admin_email}",
+                "status": "updated",
+                "password": admin_password
+            }
+
+        # User doesn't exist, create new one
+        db.execute(
+            text("""
+                INSERT INTO users (email, hashed_password, full_name, role, is_active, email_verified, onboarding_completed, created_at)
+                VALUES (:email, :hash, 'Admin User', 'admin', true, true, true, NOW())
+            """),
+            {"email": admin_email, "hash": new_hash}
+        )
+        db.commit()
 
         return {
-            "message": f"Admin user setup complete: {admin_email}",
+            "message": f"Admin user created: {admin_email}",
             "status": "created",
-            "user_id": new_user.id
+            "password": admin_password
         }
     except Exception as e:
         db.rollback()
