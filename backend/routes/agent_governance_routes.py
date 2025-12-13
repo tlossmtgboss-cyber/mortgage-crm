@@ -183,8 +183,8 @@ def ensure_agent_tables_exist():
                 logger.info("Creating/updating agent governance tables...")
 
                 # Run the migration script
-                from migrations.add_agent_governance_system import upgrade
-                upgrade()
+                from migrations.add_agent_governance_system import run_migration
+                run_migration()
 
                 logger.info("Agent governance tables created successfully")
             else:
