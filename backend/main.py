@@ -33624,11 +33624,8 @@ async def setup_admin_user(db: Session = Depends(get_db)):
     admin_password = "Admin123!"
 
     try:
-        # Generate the password hash using bcrypt directly
-        import bcrypt
-        password_bytes = admin_password.encode('utf-8')
-        salt = bcrypt.gensalt()
-        new_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+        # Generate the password hash using passlib (same as verify_password uses)
+        new_hash = pwd_context.hash(admin_password)
 
         logger.info(f"Generated hash for admin: {new_hash[:20]}...")
 
