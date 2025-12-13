@@ -19755,6 +19755,41 @@ async def debug_purl_routes_status():
         "error": purl_routes_error
     }
 
+@app.get("/api/v1/debug/purl-tables-status")
+async def debug_purl_tables_status(db: Session = Depends(get_db)):
+    """Debug endpoint to check if PURL tables exist in database"""
+    from sqlalchemy import inspect
+    inspector = inspect(db.bind)
+    all_tables = inspector.get_table_names()
+
+    purl_tables_expected = [
+        'purl_workspaces',
+        'purl_contacts',
+        'purl_workspace_members',
+        'purl_access_tokens',
+        'purl_applications',
+        'purl_loans',
+        'purl_documents',
+        'purl_portal_modules',
+        'purl_milestone_definitions',
+        'purl_loan_milestones',
+        'purl_tasks',
+        'purl_messages',
+        'purl_events_outbox',
+        'purl_audit_log',
+        'purl_document_requests'
+    ]
+
+    existing_purl_tables = [t for t in all_tables if t.startswith('purl_')]
+    missing_purl_tables = [t for t in purl_tables_expected if t not in all_tables]
+
+    return {
+        "purl_tables_exist": len(missing_purl_tables) == 0,
+        "existing_purl_tables": existing_purl_tables,
+        "missing_purl_tables": missing_purl_tables,
+        "all_table_count": len(all_tables)
+    }
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
