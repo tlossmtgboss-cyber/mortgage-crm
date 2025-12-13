@@ -939,12 +939,10 @@ async def list_tokens(
         "tokens": [
             {
                 "id": t.id,
-                "name": t.name,
-                "scope": t.scope,
+                "scope": t.scope.value if hasattr(t.scope, 'value') else t.scope,
                 "token_prefix": t.token_prefix,
                 "expires_at": t.expires_at.isoformat() if t.expires_at else None,
                 "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None,
-                "use_count": t.use_count,
                 "revoked_at": t.revoked_at.isoformat() if t.revoked_at else None,
                 "created_at": t.created_at.isoformat() if t.created_at else None
             }
@@ -1054,7 +1052,7 @@ async def list_contacts(
                 "email": c.email,
                 "phone": c.phone,
                 "contact_type": c.contact_type,
-                "is_primary": c.is_primary
+                "is_primary": c.contact_type == "borrower"
             }
             for c in contacts
         ]
@@ -1151,9 +1149,10 @@ async def get_analytics_summary(
         PURLDocument.created_at >= since
     ).scalar() or 0
 
-    # Token usage
-    token_uses = db.query(func.sum(PURLAccessToken.use_count)).filter(
-        PURLAccessToken.organization_id == org_id
+    # Token count (active tokens)
+    active_tokens = db.query(func.count(PURLAccessToken.id)).filter(
+        PURLAccessToken.organization_id == org_id,
+        PURLAccessToken.revoked_at.is_(None)
     ).scalar() or 0
 
     return {
@@ -1171,7 +1170,7 @@ async def get_analytics_summary(
             "uploaded": documents_uploaded
         },
         "tokens": {
-            "total_uses": token_uses
+            "active_count": active_tokens
         }
     }
 
@@ -1389,8 +1388,7 @@ async def get_workspace_by_lead(
         "tokens": [
             {
                 "id": token.id,
-                "token": token.token_value,
-                "token_prefix": token.token_value[:16] if token.token_value else "purl_",
+                "token_prefix": token.token_prefix or "purl_",
                 "status": "active" if not token.revoked_at else "revoked",
                 "scope": token.scope.value if token.scope else "read",
                 "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,
@@ -1508,10 +1506,10 @@ async def resend_invite(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    # Get primary contact
+    # Get primary contact (borrower)
     contact = db.query(PURLContact).filter(
         PURLContact.workspace_id == workspace_id,
-        PURLContact.is_primary == True
+        PURLContact.contact_type == "borrower"
     ).first()
 
     if not contact or not contact.email:
