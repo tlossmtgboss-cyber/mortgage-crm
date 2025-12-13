@@ -1538,6 +1538,201 @@ async def workflow_instance_diagnostic(
         }
 
 
+@router.post("/init/fix-day-semantics")
+async def fix_workflow_day_semantics(
+    backdate_instance_id: Optional[int] = Query(None, description="Instance ID to backdate for testing"),
+    db: Session = Depends(get_db)
+):
+    """
+    Fix workflow day semantics - changes 'First 24 Hours' from day_value=1 to day_value=0.
+
+    This fixes a semantic design flaw where "First 24 Hours" was firing AFTER 24 hours
+    instead of immediately upon enrollment.
+
+    Optionally backdates a test instance for immediate task generation.
+
+    NO AUTHENTICATION required for debugging/deployment.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+
+    results = {
+        "success": True,
+        "before_state": [],
+        "after_state": [],
+        "rows_updated": 0,
+        "instance_backdated": False,
+        "errors": []
+    }
+
+    try:
+        # Step 1: Capture before state
+        before_query = db.execute(text("""
+            SELECT
+                wc.name as workflow_name,
+                wdc.id as config_id,
+                wdc.day_value,
+                wdc.day_label
+            FROM workflow_day_configs wdc
+            JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
+            WHERE wdc.day_label ILIKE '%24 Hour%'
+               OR wdc.day_label ILIKE '%First%'
+               OR wdc.day_value IN (0, 1)
+            ORDER BY wc.name, wdc.day_value
+        """))
+
+        results["before_state"] = [
+            {"workflow": row[0], "config_id": row[1], "day_value": row[2], "day_label": row[3]}
+            for row in before_query
+        ]
+
+        # Step 2: Fix "First 24 Hours" to day_value=0
+        fix_result = db.execute(text("""
+            UPDATE workflow_day_configs
+            SET day_value = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE day_label ILIKE '%First 24 Hour%'
+               OR day_label ILIKE '%First%24%Hour%'
+        """))
+        db.commit()
+
+        results["rows_updated"] = fix_result.rowcount
+
+        # Step 3: Backdate instance if requested
+        if backdate_instance_id:
+            backdate_result = db.execute(text("""
+                UPDATE workflow_instances
+                SET trigger_milestone_entered_at = NOW() - INTERVAL '2 days',
+                    last_task_generated_day = -1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                  AND status = 'active'
+            """), {"id": backdate_instance_id})
+            db.commit()
+
+            results["instance_backdated"] = backdate_result.rowcount > 0
+            results["backdated_instance_id"] = backdate_instance_id
+
+        # Step 4: Capture after state
+        after_query = db.execute(text("""
+            SELECT
+                wc.name as workflow_name,
+                wdc.id as config_id,
+                wdc.day_value,
+                wdc.day_label
+            FROM workflow_day_configs wdc
+            JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
+            WHERE wdc.day_label ILIKE '%24 Hour%'
+               OR wdc.day_label ILIKE '%First%'
+               OR wdc.day_value IN (0, 1)
+            ORDER BY wc.name, wdc.day_value
+        """))
+
+        results["after_state"] = [
+            {"workflow": row[0], "config_id": row[1], "day_value": row[2], "day_label": row[3]}
+            for row in after_query
+        ]
+
+        # Step 5: Verification query
+        if backdate_instance_id:
+            instance_check = db.execute(text("""
+                SELECT
+                    id,
+                    trigger_milestone_entered_at,
+                    last_task_generated_day,
+                    status,
+                    NOW() - trigger_milestone_entered_at as time_elapsed
+                FROM workflow_instances
+                WHERE id = :id
+            """), {"id": backdate_instance_id}).fetchone()
+
+            if instance_check:
+                results["instance_details"] = {
+                    "id": instance_check[0],
+                    "trigger_milestone_entered_at": str(instance_check[1]),
+                    "last_task_generated_day": instance_check[2],
+                    "status": instance_check[3],
+                    "time_elapsed": str(instance_check[4])
+                }
+
+        results["next_steps"] = [
+            "1. Wait 5 min for scheduler OR call: POST /api/v1/workflow-sla/scheduler/generate-tasks",
+            "2. Check diagnostic: GET /api/v1/workflow-sla/diagnostic/instance/" + str(backdate_instance_id or "{instance_id}"),
+            "3. Verify tasks: SELECT * FROM workflow_task_instances WHERE workflow_instance_id = " + str(backdate_instance_id or "{instance_id}")
+        ]
+
+    except Exception as e:
+        import traceback
+        results["success"] = False
+        results["errors"].append(str(e))
+        results["traceback"] = traceback.format_exc()
+        db.rollback()
+
+    return results
+
+
+@router.get("/init/verify-day-semantics")
+async def verify_day_semantics(
+    db: Session = Depends(get_db)
+):
+    """
+    Verify the day semantics fix was applied correctly.
+    Shows all day configs and their current values.
+
+    NO AUTHENTICATION required for debugging.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Get all day configs
+        configs = db.execute(text("""
+            SELECT
+                wc.name as workflow_name,
+                wdc.day_value,
+                wdc.day_label,
+                wdc.phone_enabled,
+                wdc.email_enabled,
+                wdc.text_enabled
+            FROM workflow_day_configs wdc
+            JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
+            ORDER BY wc.name, wdc.day_value
+        """))
+
+        by_workflow = {}
+        for row in configs:
+            wf_name = row[0]
+            if wf_name not in by_workflow:
+                by_workflow[wf_name] = []
+
+            channels = []
+            if row[3]: channels.append("phone")
+            if row[4]: channels.append("email")
+            if row[5]: channels.append("text")
+
+            by_workflow[wf_name].append({
+                "day_value": row[1],
+                "day_label": row[2],
+                "channels": channels
+            })
+
+        # Check for issues
+        issues = []
+        for wf_name, days in by_workflow.items():
+            for day in days:
+                if "First 24" in day["day_label"] and day["day_value"] != 0:
+                    issues.append(f"{wf_name}: '{day['day_label']}' should be day_value=0, but is {day['day_value']}")
+
+        return {
+            "workflows": by_workflow,
+            "issues": issues,
+            "is_correct": len(issues) == 0
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
 @router.get("/diagnostic/summary")
 async def workflow_diagnostic_summary(
     db: Session = Depends(get_db)
