@@ -217,7 +217,7 @@ async def run_agent_migration(db: Session = Depends(get_db)):
 # Agent Profile Routes
 # ============================================================================
 
-@router.get("/profiles", response_model=List[AgentProfileResponse])
+@router.get("/profiles")
 async def list_agent_profiles(
     agent_type: Optional[str] = Query(None, description="Filter by agent type"),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -236,7 +236,30 @@ async def list_agent_profiles(
             limit=limit,
             offset=offset
         )
-        return result["agents"]
+        # Transform to match frontend expectations
+        profiles = []
+        for agent in result["agents"]:
+            profiles.append({
+                "id": str(agent.get("id", "")),
+                "name": agent.get("display_name") or agent.get("agent_name", ""),
+                "agent_name": agent.get("agent_name", ""),
+                "display_name": agent.get("display_name", ""),
+                "agent_type": agent.get("category", ""),
+                "category": agent.get("category", ""),
+                "description": agent.get("description", ""),
+                "status": agent.get("status", "active"),
+                "health_status": agent.get("health_status", "healthy"),
+                "version": agent.get("version", "1.0.0"),
+                "is_active": agent.get("status") == "active",
+                "tool_count": agent.get("tool_count", 0),
+                "total_executions": agent.get("total_executions", 0),
+                "success_rate": agent.get("success_rate", 0),
+                "avg_response_time_ms": agent.get("avg_response_time_ms", 0),
+                "last_execution_at": agent.get("last_execution_at"),
+                "elite_status": agent.get("elite_status", False),
+                "risk_tier": agent.get("risk_tier", "low")
+            })
+        return profiles
     except Exception as e:
         logger.error(f"Error listing agent profiles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
