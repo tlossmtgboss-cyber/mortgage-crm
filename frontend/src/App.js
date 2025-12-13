@@ -108,6 +108,7 @@ const AgentGym = lazy(() => import('./pages/AgentGym'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLPortal = lazy(() => import('./pages/PURLPortal'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
+const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -1597,6 +1598,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><EmployeeOnboardingAdmin /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/documents"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AdminDocumentReviewQueue /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

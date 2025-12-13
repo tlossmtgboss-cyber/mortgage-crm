@@ -38,11 +38,22 @@ const FORM_STEPS = [
     fields: ['property_type', 'property_address', 'property_city', 'property_state', 'property_zip']
   },
   {
+    id: 'credit_auth',
+    title: 'Credit Authorization',
+    fields: [],
+    isCustomStep: true
+  },
+  {
     id: 'review',
     title: 'Review & Submit',
     fields: []
   }
 ];
+
+// Credit Authorization consent text
+const CREDIT_AUTH_TEXT = `I hereby authorize the Lender and/or its agents to verify any and all information contained in my loan application by whatever means deemed appropriate, including but not limited to: verification of my employment, income, assets, credit history, and any other information relevant to the loan decision. I understand that this authorization allows the Lender to obtain a consumer credit report and/or other reports or investigations in connection with my application for credit.`;
+
+const ECONSENT_TEXT = `By providing my electronic signature below, I agree to receive disclosures and communications electronically. I understand that I may withdraw this consent at any time by contacting the lender. I confirm that I have access to a computer and the internet to receive electronic documents.`;
 
 // Field configurations
 const FIELD_CONFIG = {
@@ -226,6 +237,79 @@ const ProgressIndicator = ({ steps, currentStep, completeness }) => (
   </div>
 );
 
+// Credit Authorization Step component
+const CreditAuthStep = ({ formData, onChange, errors }) => {
+  const creditAuthAgreed = formData.credit_auth_agreed || false;
+  const eConsentAgreed = formData.econsent_agreed || false;
+  const ssnVerify = formData.ssn_verify || '';
+
+  return (
+    <div className="credit-auth-step">
+      <p className="step-description">
+        Please review and authorize us to check your credit and agree to receive electronic disclosures.
+      </p>
+
+      {/* Credit Authorization */}
+      <div className="consent-box">
+        <h4>Credit Authorization Agreement</h4>
+        <p className="consent-text">{CREDIT_AUTH_TEXT}</p>
+      </div>
+
+      <div className="form-field">
+        <label htmlFor="ssn_verify">
+          Last 4 digits of SSN (for verification) <span className="required">*</span>
+        </label>
+        <input
+          type="text"
+          id="ssn_verify"
+          value={ssnVerify}
+          onChange={(e) => onChange('ssn_verify', e.target.value.replace(/\D/g, '').slice(0, 4))}
+          placeholder="XXXX"
+          maxLength="4"
+          className={errors.ssn_verify ? 'has-error' : ''}
+        />
+        {errors.ssn_verify && <span className="field-error">{errors.ssn_verify}</span>}
+      </div>
+
+      <div className="declaration-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={creditAuthAgreed}
+            onChange={(e) => onChange('credit_auth_agreed', e.target.checked)}
+          />
+          <span>I have read and agree to the Credit Authorization Agreement above <span className="required">*</span></span>
+        </label>
+        {errors.credit_auth_agreed && <span className="field-error">{errors.credit_auth_agreed}</span>}
+      </div>
+
+      {/* E-Consent */}
+      <div className="consent-box econsent-box">
+        <h4>Electronic Consent (E-Sign)</h4>
+        <p className="consent-text">{ECONSENT_TEXT}</p>
+      </div>
+
+      <div className="declaration-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={eConsentAgreed}
+            onChange={(e) => onChange('econsent_agreed', e.target.checked)}
+          />
+          <span>I agree to receive disclosures and communications electronically <span className="required">*</span></span>
+        </label>
+        {errors.econsent_agreed && <span className="field-error">{errors.econsent_agreed}</span>}
+      </div>
+
+      <div className="auth-timestamp">
+        <small>
+          Your authorization will be recorded with timestamp: {new Date().toLocaleString()}
+        </small>
+      </div>
+    </div>
+  );
+};
+
 // Review section component
 const ReviewSection = ({ title, fields, data }) => (
   <div className="review-section">
@@ -394,6 +478,21 @@ export default function PURLApplication() {
     const step = FORM_STEPS[currentStep];
     const newErrors = {};
 
+    // Special validation for credit_auth step
+    if (step.id === 'credit_auth') {
+      if (!formData.ssn_verify || formData.ssn_verify.length !== 4) {
+        newErrors.ssn_verify = 'Please enter the last 4 digits of your SSN';
+      }
+      if (!formData.credit_auth_agreed) {
+        newErrors.credit_auth_agreed = 'You must agree to the credit authorization';
+      }
+      if (!formData.econsent_agreed) {
+        newErrors.econsent_agreed = 'You must agree to receive electronic disclosures';
+      }
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    }
+
     step.fields.forEach(field => {
       const config = FIELD_CONFIG[field];
       if (config?.required && !formData[field]) {
@@ -456,8 +555,8 @@ export default function PURLApplication() {
         method: 'POST'
       });
 
-      // Navigate to portal with success message
-      navigate(`/portal/${slug}?submitted=true`, { replace: true });
+      // Navigate to portal with success message (include token to maintain auth)
+      navigate(`/portal/${slug}?token=${token}&submitted=true`, { replace: true });
 
     } catch (err) {
       console.error('Submit failed:', err);
@@ -499,7 +598,7 @@ export default function PURLApplication() {
       {/* Header */}
       <header className="app-header">
         <div className="header-content">
-          <button className="back-to-portal" onClick={() => navigate(`/portal/${slug}`)}>
+          <button className="back-to-portal" onClick={() => navigate(`/portal/${slug}?token=${token}`)}>
             ← Back to Portal
           </button>
           <h1>Loan Application</h1>
@@ -534,7 +633,15 @@ export default function PURLApplication() {
             </div>
           )}
 
-          {!isLastStep ? (
+          {currentStepConfig.id === 'credit_auth' ? (
+            /* Credit Authorization Step */
+            <CreditAuthStep
+              formData={formData}
+              onChange={handleFieldChange}
+              errors={errors}
+            />
+          ) : !isLastStep ? (
+            /* Regular form fields */
             <div className="form-fields">
               {currentStepConfig.fields.map(field => (
                 <FormField
@@ -547,12 +654,13 @@ export default function PURLApplication() {
               ))}
             </div>
           ) : (
+            /* Review step */
             <div className="review-content">
               <p className="review-intro">
                 Please review your information below. Click "Submit Application" when you're ready to proceed.
               </p>
 
-              {FORM_STEPS.slice(0, -1).map(step => (
+              {FORM_STEPS.filter(step => step.fields && step.fields.length > 0).map(step => (
                 <ReviewSection
                   key={step.id}
                   title={step.title}
@@ -561,12 +669,26 @@ export default function PURLApplication() {
                 />
               ))}
 
+              {/* Credit Authorization Summary */}
+              <div className="review-section">
+                <h4>Credit Authorization & E-Consent</h4>
+                <div className="review-grid">
+                  <div className="review-item">
+                    <span className="review-label">Credit Authorization</span>
+                    <span className="review-value">{formData.credit_auth_agreed ? '✓ Authorized' : 'Not authorized'}</span>
+                  </div>
+                  <div className="review-item">
+                    <span className="review-label">E-Consent</span>
+                    <span className="review-value">{formData.econsent_agreed ? '✓ Agreed' : 'Not agreed'}</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="consent-section">
                 <label className="consent-label">
                   <input type="checkbox" required />
                   <span>
                     I certify that the information provided is true and accurate to the best of my knowledge.
-                    I authorize the lender to verify this information.
                   </span>
                 </label>
               </div>

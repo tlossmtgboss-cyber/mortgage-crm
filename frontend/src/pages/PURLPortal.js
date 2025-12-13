@@ -229,6 +229,11 @@ export default function PURLPortal() {
   const [token] = useState(getToken);
   const [activeTab, setActiveTab] = useState('overview');
 
+  // Check for submission success message
+  const urlParams = new URLSearchParams(location.search);
+  const justSubmitted = urlParams.get('submitted') === 'true';
+  const [showSubmitSuccess, setShowSubmitSuccess] = useState(justSubmitted);
+
   // Use workspace data hook
   const {
     data: workspaceData,
@@ -439,6 +444,20 @@ export default function PURLPortal() {
           )}
         </div>
       </header>
+
+      {/* Success Message Banner */}
+      {showSubmitSuccess && (
+        <div className="submit-success-banner">
+          <div className="banner-content">
+            <span className="banner-icon">✓</span>
+            <div className="banner-text">
+              <strong>Application Submitted Successfully!</strong>
+              <p>Your loan officer will review your application and be in touch soon.</p>
+            </div>
+            <button className="banner-close" onClick={() => setShowSubmitSuccess(false)}>×</button>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <nav className="portal-nav">

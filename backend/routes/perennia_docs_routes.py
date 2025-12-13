@@ -734,6 +734,139 @@ async def list_documents(
     }
 
 
+@router.get("/review-queue")
+async def get_review_queue(
+    status: Optional[str] = Query("pending", description="Filter by status"),
+    document_type: Optional[str] = Query(None, description="Filter by document type"),
+    search: Optional[str] = Query(None, description="Search borrower name or loan number"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, le=100),
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get documents for admin review queue with borrower/loan info."""
+    offset = (page - 1) * limit
+    filters = []
+    params = {"limit": limit, "offset": offset}
+
+    if status:
+        filters.append("d.status = :status")
+        params["status"] = status
+    if document_type:
+        filters.append("d.doc_type = :doc_type")
+        params["doc_type"] = document_type
+    if search:
+        filters.append("(c.first_name ILIKE :search OR c.last_name ILIKE :search OR l.loan_number ILIKE :search)")
+        params["search"] = f"%{search}%"
+
+    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+
+    # Query with JOINs to get borrower and loan info
+    result = db.execute(text(f"""
+        SELECT
+            d.id, d.file_name, d.doc_type as document_type, d.status,
+            d.file_size, d.mime_type as file_type, d.rejection_reason,
+            d.created_at as uploaded_at,
+            COALESCE(c.first_name || ' ' || c.last_name, 'Unknown') as borrower_name,
+            COALESCE(c.email, '') as borrower_email,
+            COALESCE(l.loan_number, 'N/A') as loan_number,
+            d.loan_id, d.lead_id
+        FROM perennia_documents d
+        LEFT JOIN loans l ON d.loan_id = l.id
+        LEFT JOIN contacts c ON l.borrower_id = c.id OR d.lead_id = c.lead_id
+        {where_clause}
+        ORDER BY d.created_at DESC
+        LIMIT :limit OFFSET :offset
+    """), params)
+
+    documents = [dict(row._mapping) for row in result]
+
+    # Get total count
+    count_result = db.execute(text(f"""
+        SELECT COUNT(*) as total
+        FROM perennia_documents d
+        LEFT JOIN loans l ON d.loan_id = l.id
+        LEFT JOIN contacts c ON l.borrower_id = c.id OR d.lead_id = c.lead_id
+        {where_clause}
+    """), {k: v for k, v in params.items() if k not in ['limit', 'offset']})
+    total = count_result.fetchone()[0]
+
+    return {
+        "documents": documents,
+        "total": total,
+        "page": page,
+        "limit": limit
+    }
+
+
+@router.post("/review/approve")
+async def bulk_approve_documents(
+    payload: dict,
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk approve documents."""
+    document_ids = payload.get("document_ids", [])
+    if not document_ids:
+        raise HTTPException(status_code=400, detail="No document IDs provided")
+
+    try:
+        result = db.execute(text("""
+            UPDATE perennia_documents
+            SET status = 'approved', updated_at = NOW()
+            WHERE id = ANY(:ids) AND status = 'pending'
+            RETURNING id
+        """), {"ids": document_ids})
+
+        approved_ids = [row[0] for row in result.fetchall()]
+        db.commit()
+
+        return {
+            "success": True,
+            "approved_count": len(approved_ids),
+            "approved_ids": approved_ids
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/review/reject")
+async def bulk_reject_documents(
+    payload: dict,
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk reject documents with reason."""
+    document_ids = payload.get("document_ids", [])
+    reason = payload.get("reason", "")
+
+    if not document_ids:
+        raise HTTPException(status_code=400, detail="No document IDs provided")
+
+    try:
+        result = db.execute(text("""
+            UPDATE perennia_documents
+            SET status = 'rejected',
+                rejection_reason = :reason,
+                updated_at = NOW()
+            WHERE id = ANY(:ids) AND status = 'pending'
+            RETURNING id
+        """), {"ids": document_ids, "reason": reason})
+
+        rejected_ids = [row[0] for row in result.fetchall()]
+        db.commit()
+
+        return {
+            "success": True,
+            "rejected_count": len(rejected_ids),
+            "rejected_ids": rejected_ids
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/documents/{document_id}")
 async def get_document(
     document_id: int,

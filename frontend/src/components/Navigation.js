@@ -59,6 +59,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Tasks {taskCounts.urgentTasks > 0 && <span className="nav-badge urgent">({taskCounts.urgentTasks})</span>}
           </Link>
           <Link
+            to="/admin/documents"
+            className={`nav-link ${isActive('/admin/documents') ? 'active' : ''}`}
+          >
+            Documents {renderBadge(taskCounts.pendingDocs)}
+          </Link>
+          <Link
             to="/reconciliation"
             className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
           >
