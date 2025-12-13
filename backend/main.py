@@ -19731,13 +19731,25 @@ except Exception as e:
     logger.warning(f"⚠️ Agent WebSocket routes not loaded: {e}")
 
 # PURL (Persistent URL) Borrower Portal routes
+purl_routes_error = None
 try:
     from routes.purl_routes import purl_router, purl_admin_router
     app.include_router(purl_router, tags=["PURL Portal"])
     app.include_router(purl_admin_router, tags=["PURL Administration"])
     logger.info("✅ PURL Portal routes loaded")
 except Exception as e:
+    purl_routes_error = str(e)
+    import traceback
+    purl_routes_error = traceback.format_exc()
     logger.warning(f"⚠️ PURL Portal routes not loaded: {e}")
+
+@app.get("/api/v1/debug/purl-routes-status")
+async def debug_purl_routes_status():
+    """Debug endpoint to check PURL routes loading status"""
+    return {
+        "purl_routes_loaded": purl_routes_error is None,
+        "error": purl_routes_error
+    }
 
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")
