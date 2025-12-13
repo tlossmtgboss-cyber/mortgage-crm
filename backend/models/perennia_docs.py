@@ -248,7 +248,7 @@ def create_perennia_docs_models(Base):
             }
 
 
-    class Document(Base):
+    class PerenniaDocument(Base):
         """
         Uploaded document with AI classification and quality checks.
         Tracks the full lifecycle from upload through approval.
@@ -608,7 +608,8 @@ def create_perennia_docs_models(Base):
     # Return all models
     return {
         'DocumentRequest': DocumentRequest,
-        'Document': Document,
+        'PerenniaDocument': PerenniaDocument,
+        'Document': PerenniaDocument,  # Alias for backwards compatibility
         'TemplatePack': TemplatePack,
         'DocumentRule': DocumentRule,
         'DocumentEvent': DocumentEvent,
