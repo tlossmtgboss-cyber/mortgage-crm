@@ -9404,7 +9404,8 @@ The Team menu item appears for managers and management roles.
                 loan_amount=loan_amount,
                 notes=notes,
                 owner_id=current_user.id,
-                stage="NEW"
+                stage="NEW",
+                lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
             )
             db.add(lead)
             db.commit()
@@ -14353,7 +14354,8 @@ async def orchestrator_chat_stream(
             phone=phone,
             source=source,
             notes=notes,
-            owner_id=current_user.id
+            owner_id=current_user.id,
+            lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
         )
         db.add(new_lead)
         db.commit()
@@ -19870,6 +19872,81 @@ async def debug_purl_token_verify(
         "hash_lookup_result": hash_lookup
     }
 
+@app.post("/api/v1/debug/purl-create-test-workspace")
+async def debug_create_test_workspace(
+    test_name: str = "debug-test",
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to create a test PURL workspace with token"""
+    import hashlib
+    import secrets
+
+    try:
+        # Generate slug
+        random_suffix = secrets.token_hex(4)
+        slug = f"{test_name.lower().replace(' ', '-')}-{random_suffix}"
+
+        # Create workspace
+        workspace = db.execute(text("""
+            INSERT INTO purl_workspaces (
+                organization_id, slug, display_name, status, settings, created_at, updated_at
+            ) VALUES (
+                1, :slug, :display_name, 'lead', '{}', NOW(), NOW()
+            )
+            RETURNING id, slug
+        """), {"slug": slug, "display_name": test_name}).fetchone()
+        db.commit()
+
+        workspace_id = workspace[0]
+        workspace_slug = workspace[1]
+
+        # Generate token
+        token_bytes = secrets.token_bytes(32)
+        token_hex = token_bytes.hex()
+        full_token = f"purl_live_{token_hex}"
+        token_hash = hashlib.sha256(full_token.encode()).hexdigest()
+        token_prefix = full_token[:16]
+
+        # Create token
+        from datetime import timezone, timedelta
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+
+        token = db.execute(text("""
+            INSERT INTO purl_access_tokens (
+                organization_id, workspace_id, token_hash, token_prefix,
+                scope, status, expires_at, created_at, updated_at
+            ) VALUES (
+                1, :workspace_id, :token_hash, :token_prefix,
+                'full', 'active', :expires_at, NOW(), NOW()
+            )
+            RETURNING id
+        """), {
+            "workspace_id": workspace_id,
+            "token_hash": token_hash,
+            "token_prefix": token_prefix,
+            "expires_at": expires_at
+        }).fetchone()
+        db.commit()
+
+        return {
+            "success": True,
+            "workspace_id": workspace_id,
+            "workspace_slug": workspace_slug,
+            "token": full_token,
+            "token_id": token[0],
+            "expires_at": expires_at.isoformat(),
+            "portal_url": f"https://mortgage-crm-nine.vercel.app/portal/{workspace_slug}",
+            "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://mortgage-crm-production-7a9a.up.railway.app/api/purl/workspace/{workspace_slug}"'
+        }
+    except Exception as e:
+        db.rollback()
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
@@ -25352,7 +25429,8 @@ async def approve_reconciliation(
                         email=borrower_email,
                         phone=borrower_phone,
                         source="reconciliation",
-                        owner_id=current_user.id
+                        owner_id=current_user.id,
+                        lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
                     )
                     db.add(new_lead)
                     db.flush()
@@ -26155,7 +26233,8 @@ async def create_lead_from_extracted(
             source="Email Import",
             referral_partner_id=request.referral_partner_id,
             owner_id=current_user.id,
-            notes=f"Created from email extraction on {datetime.now().strftime('%Y-%m-%d')}"
+            notes=f"Created from email extraction on {datetime.now().strftime('%Y-%m-%d')}",
+            lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
         )
 
         # Apply extracted fields to lead
@@ -35744,6 +35823,7 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     db_lead = Lead(
         **lead.model_dump(),
         owner_id=current_user.id,
+        lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
     )
 
     # Calculate AI score
@@ -43869,7 +43949,8 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
                         "calendly_booked": True,
                         "calendly_booked_at": scheduled_at,
                         "calendly_event_uri": event_uri
-                    }
+                    },
+                    lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
                 )
                 db.add(new_lead)
                 db.commit()
