@@ -1680,6 +1680,51 @@ async def submit_application(
                     db.commit()
                     logger.info(f"Created workspace {workspace_id} with slug {workspace_slug} for lead {lead_id}")
 
+                    # Generate access token for immediate portal access
+                    try:
+                        import hashlib
+
+                        # Generate a secure token
+                        token_raw = secrets.token_hex(32)
+                        portal_token = f"purl_live_{token_raw}"
+                        token_hash = hashlib.sha256(portal_token.encode()).hexdigest()
+                        token_prefix = portal_token[:16]
+
+                        # Get the contact_id we just created
+                        contact_result = db.execute(text("""
+                            SELECT id FROM purl_contacts
+                            WHERE workspace_id = :workspace_id AND email = :email
+                            LIMIT 1
+                        """), {"workspace_id": workspace_id, "email": borrower_email}).fetchone()
+
+                        contact_id = contact_result[0] if contact_result else None
+
+                        # Create access token (valid for 30 days)
+                        token_expiry = submission_date + timedelta(days=30)
+                        db.execute(text("""
+                            INSERT INTO purl_access_tokens (
+                                organization_id, workspace_id, token_hash, token_prefix,
+                                scope, status, contact_id, expires_at, created_at
+                            )
+                            VALUES (
+                                :org_id, :workspace_id, :token_hash, :token_prefix,
+                                'full', 'active', :contact_id, :expires_at, :created_at
+                            )
+                        """), {
+                            "org_id": org_id,
+                            "workspace_id": workspace_id,
+                            "token_hash": token_hash,
+                            "token_prefix": token_prefix,
+                            "contact_id": contact_id,
+                            "expires_at": token_expiry,
+                            "created_at": submission_date,
+                        })
+                        db.commit()
+                        logger.info(f"Generated portal access token for workspace {workspace_id}")
+                    except Exception as token_error:
+                        logger.warning(f"Failed to generate portal token: {token_error}")
+                        portal_token = None
+
             except Exception as ws_error:
                 logger.warning(f"Workspace creation failed (non-critical): {ws_error}")
                 import traceback
@@ -1687,6 +1732,16 @@ async def submit_application(
                 workspace_error = str(ws_error)
                 workspace_slug = None
                 workspace_id = None
+                portal_token = None
+
+        # Build portal URL with token if available
+        portal_url = None
+        if workspace_slug:
+            portal_url = f"/portal/{workspace_slug}"
+            if 'portal_token' in dir() and portal_token:
+                portal_url += f"?token={portal_token}&submitted=true"
+            else:
+                portal_url += "?submitted=true"
 
         return {
             "success": True,
@@ -1696,7 +1751,7 @@ async def submit_application(
                 "lead_id": lead_id,
                 "workspace_id": workspace_id,
                 "workspace_slug": workspace_slug,
-                "portal_url": f"/portal/{workspace_slug}" if workspace_slug else None,
+                "portal_url": portal_url,
                 "submission_date": submission_date.isoformat(),
                 "pdfs_generated": econsent_pdf is not None and credit_auth_pdf is not None,
                 "fannie_mae_generated": fannie_mae_xml is not None,

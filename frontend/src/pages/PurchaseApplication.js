@@ -1237,11 +1237,11 @@ export default function PurchaseApplication() {
       // Success - show animation
       showMicroWinAnimation('Application Submitted!');
 
-      // Redirect to client portal with the workspace slug
-      if (result.data?.workspace_slug) {
+      // Redirect to client portal with the full portal URL (includes auth token)
+      if (result.data?.portal_url) {
         // Small delay to show success animation before redirect
         setTimeout(() => {
-          window.location.href = `/portal/${result.data.workspace_slug}?submitted=true`;
+          window.location.href = result.data.portal_url;
         }, 1500);
       } else {
         // Fallback to confirmation page if no workspace was created
