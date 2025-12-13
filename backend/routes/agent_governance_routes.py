@@ -170,11 +170,20 @@ def ensure_agent_tables_exist():
             """))
             exists = result.scalar()
 
-            if not exists:
-                logger.info("Creating agent governance tables...")
+            # Also check for training_scenarios table
+            result2 = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'training_scenarios'
+                )
+            """))
+            training_exists = result2.scalar()
+
+            if not exists or not training_exists:
+                logger.info("Creating/updating agent governance tables...")
 
                 # Run the migration script
-                from backend.migrations.add_agent_governance_system import upgrade
+                from migrations.add_agent_governance_system import upgrade
                 upgrade()
 
                 logger.info("Agent governance tables created successfully")
