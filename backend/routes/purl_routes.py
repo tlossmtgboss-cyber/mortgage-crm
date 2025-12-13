@@ -1269,7 +1269,7 @@ async def get_workspace_activity(
                 "resource_type": a.resource_type,
                 "resource_id": a.resource_id,
                 "actor_name": "Borrower" if a.actor_type == "contact" else "System",
-                "metadata": a.metadata,
+                "metadata": a.meta_data,
                 "created_at": a.created_at.isoformat() if a.created_at else None
             }
             for a in activities

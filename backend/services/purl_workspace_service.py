@@ -149,7 +149,7 @@ class PURLWorkspaceService:
             status=WorkspaceStatus.LEAD.value,
             source=data.source,
             owner_user_id=owner_user_id or data.owner_user_id,
-            metadata=data.metadata or {},
+            meta_data=data.metadata or {},
             lead_at=datetime.now(timezone.utc)
         )
 
@@ -390,7 +390,7 @@ class PURLWorkspaceService:
             last_name=data.last_name,
             email=data.email,
             phone=data.phone,
-            metadata=data.metadata or {}
+            meta_data=data.metadata or {}
         )
 
         self.db.add(contact)
@@ -635,7 +635,7 @@ class PURLWorkspaceService:
             "active_loan_at": workspace.active_loan_at.isoformat() if workspace.active_loan_at else None,
             "closing_at": workspace.closing_at.isoformat() if workspace.closing_at else None,
             "post_close_at": workspace.post_close_at.isoformat() if workspace.post_close_at else None,
-            "metadata": workspace.metadata,
+            "metadata": workspace.meta_data,
             "created_at": workspace.created_at.isoformat() if workspace.created_at else None,
             "updated_at": workspace.updated_at.isoformat() if workspace.updated_at else None
         }
@@ -653,7 +653,7 @@ class PURLWorkspaceService:
             "phone": contact.phone,
             "auth_user_id": contact.auth_user_id,
             "auth_provider": contact.auth_provider,
-            "metadata": contact.metadata,
+            "metadata": contact.meta_data,
             "created_at": contact.created_at.isoformat() if contact.created_at else None,
             "updated_at": contact.updated_at.isoformat() if contact.updated_at else None
         }
@@ -676,7 +676,7 @@ class PURLWorkspaceService:
             "target_close_date": loan.target_close_date.isoformat() if loan.target_close_date else None,
             "actual_close_date": loan.actual_close_date.isoformat() if loan.actual_close_date else None,
             "los_loan_id": loan.los_loan_id,
-            "metadata": loan.metadata,
+            "metadata": loan.meta_data,
             "created_at": loan.created_at.isoformat() if loan.created_at else None,
             "updated_at": loan.updated_at.isoformat() if loan.updated_at else None
         }
@@ -709,7 +709,7 @@ class PURLWorkspaceService:
             "assigned_to_contact_id": task.assigned_to_contact_id,
             "due_at": task.due_at.isoformat() if task.due_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "metadata": task.metadata,
+            "metadata": task.meta_data,
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "updated_at": task.updated_at.isoformat() if task.updated_at else None
         }
