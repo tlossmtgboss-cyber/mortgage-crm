@@ -10,7 +10,7 @@ Provides business logic for agent training and simulation:
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, Integer
 import json
 import uuid
 import random
@@ -832,7 +832,3 @@ class AgentGymService:
             scenarios.extend(additional)
 
         return scenarios
-
-
-# Import Integer for SQLAlchemy cast
-from sqlalchemy import Integer
