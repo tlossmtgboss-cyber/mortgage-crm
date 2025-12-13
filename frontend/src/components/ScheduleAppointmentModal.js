@@ -315,20 +315,25 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, borrower }) => {
       'Team Member';
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/public/book/demo/confirm`, {
+      // Use authenticated endpoint to ensure appointment is linked to current user
+      const attendeeName = borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim();
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
-          appointment_type_id: 1,
-          start_time: selectedTime,
+          title: `${meetingMode === 'video' ? 'Video Call' : 'Phone Call'} with ${attendeeName}`,
+          description: `Appointment with: ${teamMemberName}`,
+          scheduled_start: selectedTime,
           duration_minutes: 30,
-          attendee_name: borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim(),
+          meeting_mode: meetingMode,
+          attendee_name: attendeeName,
           attendee_email: borrower.email || borrower.borrower_email,
           attendee_phone: borrower.phone || borrower.borrower_phone || '',
-          notes: `Meeting mode: ${meetingMode === 'video' ? 'Video Call' : 'Phone Call'}\nAppointment with: ${teamMemberName}`,
-          meeting_mode: meetingMode,
-          team_member_id: selectedTeamMember,
-          team_member_name: teamMemberName
+          lead_id: borrower.id || null,
+          assigned_user_id: parseInt(selectedTeamMember) || null
         })
       });
 
