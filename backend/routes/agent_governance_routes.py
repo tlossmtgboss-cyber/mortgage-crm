@@ -1192,6 +1192,55 @@ REQUIRED_AGENTS = [
 ]
 
 
+@router.post("/governance/setup-tables")
+async def setup_agent_tables(db: Session = Depends(get_db)):
+    """
+    Create agent governance tables if they don't exist.
+    Safe to call multiple times - uses CREATE TABLE IF NOT EXISTS.
+    """
+    try:
+        # Create agent_profiles table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_profiles (
+                id SERIAL PRIMARY KEY,
+                agent_name VARCHAR(100) UNIQUE NOT NULL,
+                display_name VARCHAR(200),
+                description TEXT,
+                category VARCHAR(50),
+                status VARCHAR(20) DEFAULT 'active',
+                health_status VARCHAR(20) DEFAULT 'healthy',
+                version VARCHAR(20) DEFAULT '1.0.0',
+                tool_count INTEGER DEFAULT 0,
+                config JSONB DEFAULT '{}',
+                risk_tier VARCHAR(10) DEFAULT '2',
+                total_executions INTEGER DEFAULT 0,
+                successful_executions INTEGER DEFAULT 0,
+                failed_executions INTEGER DEFAULT 0,
+                success_rate DECIMAL(5,2) DEFAULT 0,
+                avg_response_time_ms INTEGER DEFAULT 0,
+                total_cost DECIMAL(10,4) DEFAULT 0,
+                cost_this_month DECIMAL(10,4) DEFAULT 0,
+                last_execution_at TIMESTAMP WITH TIME ZONE,
+                last_health_check TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.commit()
+
+        logger.info("Agent governance tables created/verified")
+
+        return {
+            "status": "success",
+            "message": "Agent governance tables created/verified"
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating tables: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating tables: {str(e)}")
+
+
 @router.post("/governance/seed-missing-agents")
 async def seed_missing_agents(db: Session = Depends(get_db)):
     """
