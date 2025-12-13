@@ -33614,6 +33614,41 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+@app.post("/api/v1/setup-admin")
+async def setup_admin_user(db: Session = Depends(get_db)):
+    """
+    One-time setup: Create or reset admin user password.
+    This should be disabled after initial setup.
+    """
+    admin_email = "admin@perenniaai.com"
+    admin_password = "Admin123!"
+
+    try:
+        user = db.query(User).filter(User.email == admin_email).first()
+
+        if user:
+            # Update existing user's password
+            user.hashed_password = get_password_hash(admin_password)
+            user.is_active = True
+            db.commit()
+            return {"message": f"Password reset for {admin_email}", "status": "updated"}
+        else:
+            # Create new admin user
+            new_user = User(
+                email=admin_email,
+                hashed_password=get_password_hash(admin_password),
+                full_name="Admin User",
+                role="admin",
+                is_active=True,
+                email_verified=True
+            )
+            db.add(new_user)
+            db.commit()
+            return {"message": f"Admin user created: {admin_email}", "status": "created"}
+    except Exception as e:
+        logger.error(f"Setup admin error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
