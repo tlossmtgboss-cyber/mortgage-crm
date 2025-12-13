@@ -19947,6 +19947,122 @@ async def debug_create_test_workspace(
             "traceback": traceback.format_exc()
         }
 
+@app.get("/api/v1/debug/purl-auth-flow")
+async def debug_purl_auth_flow(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to test the full PURL auth flow"""
+    import traceback
+
+    result = {
+        "token_received": token[:20] + "...",
+        "token_length": len(token),
+        "steps": {}
+    }
+
+    try:
+        # Step 1: Format validation
+        from models.purl import PURLTokenGenerator, TokenScope, TokenStatus
+        is_valid = PURLTokenGenerator.is_valid_format(token)
+        result["steps"]["1_format_valid"] = is_valid
+
+        if not is_valid:
+            result["error"] = "Token format invalid"
+            return result
+
+        # Step 2: Hash token
+        token_hash = PURLTokenGenerator.hash_token(token)
+        result["steps"]["2_token_hash"] = token_hash[:20] + "..."
+
+        # Step 3: Query token
+        from models.purl import PURLAccessToken
+        token_record = db.query(PURLAccessToken).filter(
+            PURLAccessToken.token_hash == token_hash
+        ).first()
+
+        result["steps"]["3_token_found"] = token_record is not None
+
+        if not token_record:
+            result["error"] = "Token not found in database"
+            return result
+
+        result["steps"]["3_token_id"] = token_record.id
+        result["steps"]["3_token_status"] = token_record.status
+        result["steps"]["3_token_scope"] = token_record.scope
+
+        # Step 4: Check status
+        result["steps"]["4_status_check"] = token_record.status == TokenStatus.ACTIVE.value
+
+        if token_record.status != TokenStatus.ACTIVE.value:
+            result["error"] = f"Token status is {token_record.status}, not active"
+            return result
+
+        # Step 5: Check expiration
+        from datetime import datetime, timezone
+        if token_record.expires_at:
+            is_expired = token_record.expires_at < datetime.now(timezone.utc)
+            result["steps"]["5_expiration_check"] = not is_expired
+            result["steps"]["5_expires_at"] = str(token_record.expires_at)
+
+            if is_expired:
+                result["error"] = "Token is expired"
+                return result
+        else:
+            result["steps"]["5_expiration_check"] = "No expiration"
+
+        # Step 6: Get workspace
+        from models.purl import PURLWorkspace
+        workspace = db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == token_record.workspace_id
+        ).first()
+
+        result["steps"]["6_workspace_found"] = workspace is not None
+
+        if not workspace:
+            result["error"] = "Workspace not found"
+            return result
+
+        result["steps"]["6_workspace_id"] = workspace.id
+        result["steps"]["6_workspace_slug"] = workspace.slug
+        result["steps"]["6_workspace_status"] = workspace.status
+
+        # Step 7: Try creating TokenScope enum
+        try:
+            scope = TokenScope(token_record.scope)
+            result["steps"]["7_scope_enum_created"] = True
+            result["steps"]["7_scope_value"] = scope.value
+        except Exception as e:
+            result["steps"]["7_scope_enum_created"] = False
+            result["steps"]["7_scope_error"] = str(e)
+            result["error"] = f"Failed to create TokenScope enum: {e}"
+            return result
+
+        # Step 8: Try full service verification
+        try:
+            from services.purl_token_service import PURLTokenService
+            service = PURLTokenService(db)
+            context_data = service.verify_token(token)
+            result["steps"]["8_service_verify"] = context_data is not None
+            if context_data:
+                result["steps"]["8_context_keys"] = list(context_data.keys())
+            else:
+                result["error"] = "Service verification returned None"
+        except Exception as e:
+            result["steps"]["8_service_verify"] = False
+            result["steps"]["8_service_error"] = str(e)
+            result["steps"]["8_service_traceback"] = traceback.format_exc()
+            result["error"] = f"Service verification failed: {e}"
+            return result
+
+        result["success"] = True
+        return result
+
+    except Exception as e:
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
+        return result
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
