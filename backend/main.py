@@ -33722,6 +33722,48 @@ async def debug_auth(db: Session = Depends(get_db)):
     except Exception as e:
         return {"error": str(e)}
 
+@app.post("/api/v1/debug-login")
+async def debug_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Debug login - shows what happens with form data - REMOVE IN PRODUCTION"""
+    import bcrypt as bcrypt_lib
+
+    try:
+        # Get the stored hash using ORM (same as login endpoint)
+        user = db.query(User).filter(User.email == form_data.username).first()
+
+        if not user:
+            return {"error": "User not found", "username": form_data.username}
+
+        stored_hash = user.hashed_password
+
+        # Debug the form data
+        form_password = form_data.password
+        form_password_repr = repr(form_password)
+        form_password_bytes = form_password.encode('utf-8')
+
+        # Test verification
+        try:
+            verified = pwd_context.verify(form_password, stored_hash)
+        except Exception as e:
+            verified = f"Error: {str(e)}"
+
+        try:
+            verified_bcrypt = bcrypt_lib.checkpw(form_password_bytes, stored_hash.encode('utf-8'))
+        except Exception as e:
+            verified_bcrypt = f"Error: {str(e)}"
+
+        return {
+            "username_from_form": form_data.username,
+            "password_from_form_repr": form_password_repr,
+            "password_length": len(form_password),
+            "password_bytes_length": len(form_password_bytes),
+            "stored_hash": stored_hash[:30] + "...",
+            "verified_passlib": verified,
+            "verified_bcrypt": verified_bcrypt,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
