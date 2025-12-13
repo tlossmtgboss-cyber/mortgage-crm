@@ -162,9 +162,17 @@ class PURLTokenService:
             logger.error(f"Workspace {token_record.workspace_id} not found for token")
             return None
 
-        # Update last_used_at
-        token_record.last_used_at = datetime.now(timezone.utc)
-        self.db.commit()
+        # Update last_used_at using raw SQL to avoid foreign key resolution issues
+        try:
+            from sqlalchemy import text
+            self.db.execute(
+                text("UPDATE purl_access_tokens SET last_used_at = :now WHERE id = :id"),
+                {"now": datetime.now(timezone.utc), "id": token_record.id}
+            )
+            self.db.commit()
+        except Exception as e:
+            # Don't fail verification if we can't update last_used_at
+            logger.warning(f"Failed to update last_used_at for token {token_record.id}: {e}")
 
         return {
             "token_id": token_record.id,
