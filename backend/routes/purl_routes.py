@@ -70,7 +70,7 @@ from middleware.purl_auth import (
 )
 
 # Internal auth (existing system)
-from auth import get_current_user, User
+from main import get_current_user, User
 
 
 logger = logging.getLogger(__name__)

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
 from database import SessionLocal
-from backend.models.agent_governance import (
+from models.agent_governance import (
     AgentProfile, AgentExecution, AgentAlert, AgentMetricsTimeseries,
     AgentChatSession, HealthStatus, AlertSeverity, AlertStatus
 )
