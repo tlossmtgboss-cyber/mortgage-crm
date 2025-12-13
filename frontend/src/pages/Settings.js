@@ -12,6 +12,7 @@ import SmartScheduler from '../components/SmartScheduler';
 import VideoMeetings from '../components/VideoMeetings';
 import AIFeedbackLog from '../components/AIFeedbackLog';
 import ITHelpdeskAdmin from '../components/ITHelpdeskAdmin';
+import PURLManager from '../components/admin/PURLManager';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -357,6 +358,7 @@ function Settings() {
     { id: 'video-meetings', label: 'Video Meetings', type: 'standalone', section: 'video-meetings' },
     { id: 'notifications', label: 'Notifications', type: 'standalone', section: 'notifications' },
     { id: 'power-dialer', label: 'Power Dialer', type: 'standalone', section: 'dialer-settings' },
+    { id: 'client-portals', label: 'Client Portals', type: 'standalone', section: 'client-portals' },
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
     { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' }
   ];
@@ -4564,6 +4566,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'dialer-settings' && (
             <DialerSettingsSection />
+          )}
+
+          {activeSection === 'client-portals' && (
+            <PURLManager />
           )}
 
           {/* User Profile Sections */}

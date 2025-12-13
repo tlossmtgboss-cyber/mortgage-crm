@@ -12,13 +12,24 @@ import './PURLManager.css';
 // API CLIENT
 // =============================================================================
 
+// Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+const getAuthHeaders = () => ({
+  'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  'Content-Type': 'application/json'
+});
+
 const purlAdminApi = {
-  baseUrl: '/api/v1/purl-admin',
+  baseUrl: `${API_BASE}/api/v1/purl-admin`,
 
   async createWorkspace(data) {
     const response = await fetch(`${this.baseUrl}/workspaces`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create workspace');
@@ -27,13 +38,17 @@ const purlAdminApi = {
 
   async getWorkspaces(params = {}) {
     const query = new URLSearchParams(params).toString();
-    const response = await fetch(`${this.baseUrl}/workspaces?${query}`);
+    const response = await fetch(`${this.baseUrl}/workspaces?${query}`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to fetch workspaces');
     return response.json();
   },
 
   async getWorkspace(id) {
-    const response = await fetch(`${this.baseUrl}/workspaces/${id}`);
+    const response = await fetch(`${this.baseUrl}/workspaces/${id}`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to fetch workspace');
     return response.json();
   },
@@ -41,7 +56,7 @@ const purlAdminApi = {
   async createToken(workspaceId, data) {
     const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/tokens`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create token');
@@ -49,7 +64,9 @@ const purlAdminApi = {
   },
 
   async getTokens(workspaceId) {
-    const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/tokens`);
+    const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/tokens`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to fetch tokens');
     return response.json();
   },
@@ -57,7 +74,7 @@ const purlAdminApi = {
   async revokeToken(tokenId, reason) {
     const response = await fetch(`${this.baseUrl}/tokens/${tokenId}/revoke`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ reason }),
     });
     if (!response.ok) throw new Error('Failed to revoke token');
@@ -65,14 +82,26 @@ const purlAdminApi = {
   },
 
   async getWorkspaceActivity(workspaceId, limit = 50) {
-    const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/activity?limit=${limit}`);
+    const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/activity?limit=${limit}`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to fetch activity');
     return response.json();
   },
 
   async getPurlUrl(workspaceId) {
-    const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/purl-url`);
+    const response = await fetch(`${this.baseUrl}/workspaces/${workspaceId}/purl-url`, {
+      headers: getAuthHeaders()
+    });
     if (!response.ok) throw new Error('Failed to get PURL URL');
+    return response.json();
+  },
+
+  async getMetrics() {
+    const response = await fetch(`${this.baseUrl}/metrics`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch metrics');
     return response.json();
   },
 };
