@@ -22,8 +22,8 @@ import asyncio
 
 from database import get_db
 
-from backend.services.agent_governance_service import AgentGovernanceService
-from backend.models.agent_governance import AgentProfile, AgentExecution, AgentChatSession, AgentChatMessage
+from services.agent_governance_service import AgentGovernanceService
+from models.agent_governance import AgentProfile, AgentExecution, AgentChatSession, AgentChatMessage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents/chat", tags=["agent-chat"])

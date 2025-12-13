@@ -15,7 +15,7 @@ import json
 import uuid
 import random
 
-from backend.models.agent_governance import (
+from models.agent_governance import (
     AgentProfile, AgentExecution, AgentMetric, AgentAlert,
     TrainingScenario, TrainingSession
 )
