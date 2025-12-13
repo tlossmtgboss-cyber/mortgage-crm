@@ -211,7 +211,8 @@ async def get_application(
     verify_workspace_access(context, slug)
 
     service = PURLApplicationService(db)
-    application = service.get_workspace_application(context.workspace_id)
+    # Include submitted applications so users can view their submitted application
+    application = service.get_workspace_application(context.workspace_id, include_submitted=True)
 
     if not application:
         return {"application": None, "message": "No application started"}

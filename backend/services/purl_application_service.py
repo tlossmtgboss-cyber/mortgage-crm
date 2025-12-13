@@ -158,14 +158,16 @@ class PURLApplicationService:
     def get_workspace_application(
         self,
         workspace_id: int,
-        status: Optional[ApplicationStatus] = None
+        status: Optional[ApplicationStatus] = None,
+        include_submitted: bool = False
     ) -> Optional[PURLApplication]:
         """
         Get the current application for a workspace.
 
         Args:
             workspace_id: Workspace ID
-            status: Filter by status (default: in_progress)
+            status: Filter by specific status (optional)
+            include_submitted: If True and no status specified, include submitted apps
 
         Returns:
             Application or None
@@ -176,8 +178,16 @@ class PURLApplicationService:
 
         if status:
             query = query.filter(PURLApplication.status == status.value)
+        elif include_submitted:
+            # Return in-progress or submitted applications (for portal viewing)
+            query = query.filter(
+                PURLApplication.status.in_([
+                    ApplicationStatus.IN_PROGRESS.value,
+                    ApplicationStatus.SUBMITTED.value
+                ])
+            )
         else:
-            # Default to in-progress
+            # Default to in-progress only (for save/submit operations)
             query = query.filter(
                 PURLApplication.status == ApplicationStatus.IN_PROGRESS.value
             )

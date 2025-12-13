@@ -26,12 +26,16 @@ from models.purl import (
     PURLTask,
     PURLMessage,
     PURLEventsOutbox,
+    PURLApplication,
+    PURLLoanMilestone,
+    PURLAuditLog,
     WorkspaceStatus,
     ContactType,
     MemberRole,
     PortalModule,
     TaskStatus,
     EventStatus,
+    ApplicationStatus,
     SlugGenerator,
     WorkspaceCreate,
     WorkspaceResponse,
@@ -322,6 +326,15 @@ class PURLWorkspaceService:
             PURLContact.workspace_id == workspace_id
         ).all()
 
+        # Get application (in-progress or submitted)
+        application = self.db.query(PURLApplication).filter(
+            PURLApplication.workspace_id == workspace_id,
+            PURLApplication.status.in_([
+                ApplicationStatus.IN_PROGRESS.value,
+                ApplicationStatus.SUBMITTED.value
+            ])
+        ).order_by(PURLApplication.version.desc()).first()
+
         # Get loans
         loans = self.db.query(PURLLoan).filter(
             PURLLoan.workspace_id == workspace_id
@@ -338,16 +351,41 @@ class PURLWorkspaceService:
             PURLPortalModule.workspace_id == workspace_id
         ).order_by(PURLPortalModule.order_index).all()
 
-        # Get pending tasks
-        pending_tasks = self.db.query(PURLTask).filter(
-            PURLTask.workspace_id == workspace_id,
-            PURLTask.status.in_([TaskStatus.OPEN.value, TaskStatus.IN_PROGRESS.value])
+        # Get tasks (all, not just pending)
+        tasks = self.db.query(PURLTask).filter(
+            PURLTask.workspace_id == workspace_id
         ).order_by(PURLTask.due_at.asc().nullslast()).all()
 
-        # Get recent documents
-        recent_docs = self.db.query(PURLDocument).filter(
+        # Get documents
+        documents = self.db.query(PURLDocument).filter(
             PURLDocument.workspace_id == workspace_id
-        ).order_by(PURLDocument.created_at.desc()).limit(10).all()
+        ).order_by(PURLDocument.created_at.desc()).all()
+
+        # Get milestones if loan exists
+        milestones = []
+        if current_loan:
+            milestone_records = self.db.query(PURLLoanMilestone).filter(
+                PURLLoanMilestone.loan_id == current_loan.id
+            ).order_by(PURLLoanMilestone.id).all()
+            milestones = [self._milestone_to_dict(m) for m in milestone_records]
+
+        # Get timeline (audit log entries)
+        timeline_records = self.db.query(PURLAuditLog).filter(
+            PURLAuditLog.workspace_id == workspace_id
+        ).order_by(PURLAuditLog.created_at.desc()).limit(20).all()
+
+        timeline = [
+            {
+                "id": t.id,
+                "action": t.action,
+                "actor_type": t.actor_type,
+                "resource_type": t.resource_type,
+                "resource_id": t.resource_id,
+                "metadata": t.meta_data,
+                "created_at": t.created_at.isoformat() if t.created_at else None
+            }
+            for t in timeline_records
+        ]
 
         # Get unread message count
         unread_count = self.db.query(func.count(PURLMessage.id)).filter(
@@ -358,11 +396,14 @@ class PURLWorkspaceService:
         return {
             "workspace": self._workspace_to_dict(workspace),
             "contacts": [self._contact_to_dict(c) for c in contacts],
-            "current_loan": self._loan_to_dict(current_loan) if current_loan else None,
-            "all_loans": [self._loan_to_dict(l) for l in loans],
+            "application": self._application_to_dict(application) if application else None,
+            "loan": self._loan_to_dict(current_loan) if current_loan else None,
+            "documents": [self._document_to_dict(d) for d in documents],
+            "tasks": [self._task_to_dict(t) for t in tasks],
+            "milestones": milestones,
+            "timeline": timeline,
             "modules": [self._module_to_dict(m) for m in modules],
-            "pending_tasks": [self._task_to_dict(t) for t in pending_tasks],
-            "recent_documents": [self._document_to_dict(d) for d in recent_docs],
+            # Extra fields for backwards compatibility
             "unread_messages_count": unread_count
         }
 
@@ -735,6 +776,40 @@ class PURLWorkspaceService:
             "expires_at": doc.expires_at.isoformat() if doc.expires_at else None,
             "created_at": doc.created_at.isoformat() if doc.created_at else None,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None
+        }
+
+    def _application_to_dict(self, application: PURLApplication) -> Dict[str, Any]:
+        """Convert application to dict."""
+        return {
+            "id": application.id,
+            "organization_id": application.organization_id,
+            "workspace_id": application.workspace_id,
+            "application_type": application.application_type,
+            "status": application.status,
+            "version": application.version,
+            "data": application.data,
+            "derived": application.derived,
+            "validation_errors": application.validation_errors,
+            "completeness_pct": application.completeness_pct,
+            "started_at": application.started_at.isoformat() if application.started_at else None,
+            "submitted_at": application.submitted_at.isoformat() if application.submitted_at else None,
+            "created_at": application.created_at.isoformat() if application.created_at else None,
+            "updated_at": application.updated_at.isoformat() if application.updated_at else None
+        }
+
+    def _milestone_to_dict(self, milestone: PURLLoanMilestone) -> Dict[str, Any]:
+        """Convert milestone to dict."""
+        return {
+            "id": milestone.id,
+            "organization_id": milestone.organization_id,
+            "loan_id": milestone.loan_id,
+            "milestone_definition_id": milestone.milestone_definition_id,
+            "status": milestone.status,
+            "started_at": milestone.started_at.isoformat() if milestone.started_at else None,
+            "completed_at": milestone.completed_at.isoformat() if milestone.completed_at else None,
+            "due_at": milestone.due_at.isoformat() if milestone.due_at else None,
+            "metadata": milestone.meta_data if hasattr(milestone, 'meta_data') else {},
+            "created_at": milestone.created_at.isoformat() if milestone.created_at else None
         }
 
     def _emit_event(
