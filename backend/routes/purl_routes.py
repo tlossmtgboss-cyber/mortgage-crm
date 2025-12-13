@@ -749,7 +749,7 @@ async def create_workspace(
     try:
         result = service.create_workspace(
             organization_id=current_user.organization_id,
-            data=workspace.dict()
+            data=workspace
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1010,8 +1010,9 @@ async def add_contact(
 
     try:
         result = service.add_contact(
+            organization_id=current_user.organization_id,
             workspace_id=workspace_id,
-            contact_data=contact.dict()
+            data=contact
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
