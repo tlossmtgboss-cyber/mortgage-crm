@@ -805,6 +805,101 @@ async def list_workspaces(
     }
 
 
+# =============================================================================
+# PROFILE INTEGRATION ENDPOINTS (must be before {workspace_id} to avoid route conflicts)
+# =============================================================================
+
+@purl_admin_router.get(
+    "/workspaces/by-lead/{lead_id}",
+    summary="Get workspace by lead ID",
+    description="Get workspace and tokens for a specific lead (used by profile widget)"
+)
+async def get_workspace_by_lead(
+    lead_id: str = Path(..., description="Lead ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get workspace for a specific lead - used by PURLWidget in profile pages."""
+    from sqlalchemy import or_, cast, String
+
+    # Try to find workspace by lead_id in metadata
+    workspace = db.query(PURLWorkspace).filter(
+        PURLWorkspace.organization_id == current_user.organization_id,
+        or_(
+            PURLWorkspace.meta_data['lead_id'].astext == lead_id,
+            PURLWorkspace.meta_data['loan_id'].astext == lead_id
+        )
+    ).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found for this lead")
+
+    # Get workspace stats
+    document_count = db.query(PURLDocument).filter(
+        PURLDocument.workspace_id == workspace.id
+    ).count()
+
+    application = db.query(PURLApplication).filter(
+        PURLApplication.workspace_id == workspace.id
+    ).order_by(PURLApplication.created_at.desc()).first()
+
+    # Get active tokens
+    tokens = db.query(PURLAccessToken).filter(
+        PURLAccessToken.workspace_id == workspace.id,
+        PURLAccessToken.revoked_at.is_(None)
+    ).order_by(PURLAccessToken.created_at.desc()).all()
+
+    # Get last activity
+    last_activity = db.query(PURLAuditLog).filter(
+        PURLAuditLog.workspace_id == workspace.id
+    ).order_by(PURLAuditLog.created_at.desc()).first()
+
+    return {
+        "workspace": {
+            "workspace_id": workspace.id,
+            "workspace_slug": workspace.slug,
+            "slug": workspace.slug,
+            "display_name": workspace.display_name,
+            "status": workspace.status.value if workspace.status else "lead",
+            "document_count": document_count,
+            "application_status": application.status.value if application else None,
+            "last_activity": last_activity.created_at.isoformat() if last_activity else None,
+            "created_at": workspace.created_at.isoformat() if workspace.created_at else None
+        },
+        "tokens": [
+            {
+                "id": token.id,
+                "token_prefix": token.token_prefix or "purl_",
+                "status": "active" if not token.revoked_at else "revoked",
+                "scope": token.scope.value if token.scope else "read",
+                "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,
+                "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+                "created_at": token.created_at.isoformat() if token.created_at else None
+            }
+            for token in tokens
+        ]
+    }
+
+
+@purl_admin_router.get(
+    "/workspaces/by-loan/{loan_id}",
+    summary="Get workspace by loan ID",
+    description="Get workspace and tokens for a specific loan (used by profile widget)"
+)
+async def get_workspace_by_loan(
+    loan_id: str = Path(..., description="Loan ID"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get workspace for a specific loan - used by PURLWidget in loan profile pages."""
+    # Reuse the lead lookup logic
+    return await get_workspace_by_lead(loan_id, current_user, db)
+
+
+# =============================================================================
+# WORKSPACE DETAIL ENDPOINTS
+# =============================================================================
+
 @purl_admin_router.get(
     "/workspaces/{workspace_id}",
     summary="Get workspace",
@@ -1323,97 +1418,6 @@ async def get_purl_url(
         "workspace_slug": workspace.slug,
         "token_expires_at": token.expires_at.isoformat() if token.expires_at else None
     }
-
-
-# =============================================================================
-# PROFILE INTEGRATION ENDPOINTS
-# =============================================================================
-
-@purl_admin_router.get(
-    "/workspaces/by-lead/{lead_id}",
-    summary="Get workspace by lead ID",
-    description="Get workspace and tokens for a specific lead (used by profile widget)"
-)
-async def get_workspace_by_lead(
-    lead_id: str = Path(..., description="Lead ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get workspace for a specific lead - used by PURLWidget in profile pages."""
-    from sqlalchemy import or_, cast, String
-
-    # Try to find workspace by lead_id in metadata
-    workspace = db.query(PURLWorkspace).filter(
-        PURLWorkspace.organization_id == current_user.organization_id,
-        or_(
-            PURLWorkspace.meta_data['lead_id'].astext == lead_id,
-            PURLWorkspace.meta_data['loan_id'].astext == lead_id
-        )
-    ).first()
-
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found for this lead")
-
-    # Get workspace stats
-    document_count = db.query(PURLDocument).filter(
-        PURLDocument.workspace_id == workspace.id
-    ).count()
-
-    application = db.query(PURLApplication).filter(
-        PURLApplication.workspace_id == workspace.id
-    ).order_by(PURLApplication.created_at.desc()).first()
-
-    # Get active tokens
-    tokens = db.query(PURLAccessToken).filter(
-        PURLAccessToken.workspace_id == workspace.id,
-        PURLAccessToken.revoked_at.is_(None)
-    ).order_by(PURLAccessToken.created_at.desc()).all()
-
-    # Get last activity
-    last_activity = db.query(PURLAuditLog).filter(
-        PURLAuditLog.workspace_id == workspace.id
-    ).order_by(PURLAuditLog.created_at.desc()).first()
-
-    return {
-        "workspace": {
-            "workspace_id": workspace.id,
-            "workspace_slug": workspace.slug,
-            "slug": workspace.slug,
-            "display_name": workspace.display_name,
-            "status": workspace.status.value if workspace.status else "lead",
-            "document_count": document_count,
-            "application_status": application.status.value if application else None,
-            "last_activity": last_activity.created_at.isoformat() if last_activity else None,
-            "created_at": workspace.created_at.isoformat() if workspace.created_at else None
-        },
-        "tokens": [
-            {
-                "id": token.id,
-                "token_prefix": token.token_prefix or "purl_",
-                "status": "active" if not token.revoked_at else "revoked",
-                "scope": token.scope.value if token.scope else "read",
-                "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,
-                "expires_at": token.expires_at.isoformat() if token.expires_at else None,
-                "created_at": token.created_at.isoformat() if token.created_at else None
-            }
-            for token in tokens
-        ]
-    }
-
-
-@purl_admin_router.get(
-    "/workspaces/by-loan/{loan_id}",
-    summary="Get workspace by loan ID",
-    description="Get workspace and tokens for a specific loan (used by profile widget)"
-)
-async def get_workspace_by_loan(
-    loan_id: str = Path(..., description="Loan ID"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get workspace for a specific loan - used by PURLWidget in loan profile pages."""
-    # Reuse the lead lookup logic
-    return await get_workspace_by_lead(loan_id, current_user, db)
 
 
 @purl_admin_router.get(
