@@ -1038,6 +1038,25 @@ button.borrower-btn.add-borrower-btn:hover {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
+/* Client Portal button - teal/cyan theme */
+.action-btn.portal {
+  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+  border-color: #0891b2;
+  color: white;
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+}
+
+.action-btn.portal:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0e7490 0%, #155e75 100%);
+  border-color: #0e7490;
+  box-shadow: 0 8px 24px rgba(8, 145, 178, 0.4);
+}
+
+.action-btn.portal .icon {
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
 /* Listening state animation */
 .action-btn.voice.listening {
   animation: pulse 1.5s ease-in-out infinite;

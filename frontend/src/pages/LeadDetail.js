@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -76,6 +76,11 @@ function LeadDetail() {
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applicationLink, setApplicationLink] = useState(null);
   const [applicationLoading, setApplicationLoading] = useState(false);
+
+  // Client Portal (PURL) state
+  const [showClientPortalModal, setShowClientPortalModal] = useState(false);
+  const [clientPortalData, setClientPortalData] = useState(null);
+  const [clientPortalLoading, setClientPortalLoading] = useState(false);
 
   // Email drafts state
   const [emailDrafts, setEmailDrafts] = useState([]);
@@ -1347,6 +1352,87 @@ function LeadDetail() {
     }
   };
 
+  // Handle opening/creating client portal
+  const handleClientPortal = async () => {
+    if (!lead) return;
+
+    try {
+      setClientPortalLoading(true);
+
+      // First check if a portal already exists for this lead
+      try {
+        const existingWorkspace = await purlAPI.getWorkspaceByLead(lead.id);
+        if (existingWorkspace && existingWorkspace.workspace) {
+          // Portal exists - get the URL
+          const purlUrl = existingWorkspace.purl_url || existingWorkspace.url;
+          setClientPortalData({
+            workspace_id: existingWorkspace.workspace.id,
+            url: purlUrl,
+            borrower_name: existingWorkspace.workspace.borrower_name,
+            status: existingWorkspace.workspace.status,
+            exists: true
+          });
+          setShowClientPortalModal(true);
+          return;
+        }
+      } catch (err) {
+        // 404 means no workspace exists - we'll create one
+        if (err.response?.status !== 404) {
+          throw err;
+        }
+      }
+
+      // Create new portal for this lead
+      const createData = {
+        borrower_name: lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
+        borrower_email: lead.email,
+        borrower_phone: lead.phone,
+        lead_id: lead.id,
+        status: 'active'
+      };
+
+      const newWorkspace = await purlAPI.createWorkspace(createData);
+
+      // Get the PURL URL
+      const purlUrlData = await purlAPI.getPurlUrl(newWorkspace.id);
+
+      setClientPortalData({
+        workspace_id: newWorkspace.id,
+        url: purlUrlData.purl_url || purlUrlData.url,
+        borrower_name: newWorkspace.borrower_name,
+        status: newWorkspace.status,
+        exists: false,
+        justCreated: true
+      });
+      setShowClientPortalModal(true);
+    } catch (err) {
+      console.error('Error with client portal:', err);
+      alert(`Failed to access/create client portal: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setClientPortalLoading(false);
+    }
+  };
+
+  // Copy client portal link to clipboard
+  const copyClientPortalLink = async () => {
+    if (!clientPortalData?.url) return;
+
+    try {
+      await navigator.clipboard.writeText(clientPortalData.url);
+      alert('Client portal link copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = clientPortalData.url;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Client portal link copied to clipboard!');
+    }
+  };
+
   const handleAction = async (action) => {
     switch(action) {
       case 'call':
@@ -1413,6 +1499,9 @@ function LeadDetail() {
         break;
       case 'send_application':
         handleSendApplication();
+        break;
+      case 'client_portal':
+        handleClientPortal();
         break;
       default:
         break;
@@ -3437,6 +3526,15 @@ function LeadDetail() {
                 <span>{applicationLoading ? 'Creating...' : 'Send Application'}</span>
               </button>
               <button
+                className="action-btn portal"
+                onClick={() => handleAction('client_portal')}
+                title="Open or create client portal"
+                disabled={clientPortalLoading}
+              >
+                <span className="icon">🌐</span>
+                <span>{clientPortalLoading ? 'Loading...' : 'Client Portal'}</span>
+              </button>
+              <button
                 className="action-btn escalation"
                 onClick={() => handleAction('escalation')}
                 title="Escalate issue to team member"
@@ -3448,6 +3546,72 @@ function LeadDetail() {
           </div>
         </div>
       </div>
+
+      {/* Client Portal Modal */}
+      {showClientPortalModal && clientPortalData && (
+        <div className="modal-overlay" onClick={() => setShowClientPortalModal(false)}>
+          <div className="modal-content application-link-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{clientPortalData.justCreated ? 'Client Portal Created' : 'Client Portal'}</h2>
+              <button className="close-btn" onClick={() => setShowClientPortalModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {clientPortalData.justCreated ? (
+                <p>A new client portal has been created for <strong>{clientPortalData.borrower_name || lead?.name}</strong>.</p>
+              ) : (
+                <p>Client portal for <strong>{clientPortalData.borrower_name || lead?.name}</strong> is ready.</p>
+              )}
+
+              <div className="application-link-container">
+                <input
+                  type="text"
+                  value={clientPortalData.url || 'Loading...'}
+                  readOnly
+                  className="link-input"
+                />
+                <button className="copy-btn" onClick={copyClientPortalLink}>
+                  Copy Link
+                </button>
+              </div>
+
+              <div className="link-actions" style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <a
+                  href={clientPortalData.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', backgroundColor: '#3b82f6', color: 'white', borderRadius: '6px', textDecoration: 'none' }}
+                >
+                  Open Portal
+                </a>
+                <button
+                  onClick={async () => {
+                    try {
+                      await purlAPI.resendInvite(clientPortalData.workspace_id);
+                      alert('Invitation email sent to borrower!');
+                    } catch (err) {
+                      alert('Failed to send invitation: ' + (err.response?.data?.detail || err.message));
+                    }
+                  }}
+                  className="btn btn-secondary"
+                  style={{ padding: '8px 16px', backgroundColor: '#6b7280', color: 'white', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
+                >
+                  Send Invite Email
+                </button>
+              </div>
+
+              <p style={{ marginTop: '16px', fontSize: '14px', color: '#6b7280' }}>
+                The borrower can use this portal to securely upload documents, track their application progress, and communicate with your team.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowClientPortalModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Send Application Modal */}
       {showApplicationModal && applicationLink && (
