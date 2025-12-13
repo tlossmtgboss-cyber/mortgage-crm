@@ -1649,8 +1649,8 @@ async def submit_application(
                             last_name=submission.profileData.get("lastName", ""),
                             email=borrower_email,
                             phone=submission.profileData.get("phone", ""),
-                            is_primary=True,
-                            contact_type="borrower"
+                            contact_type="borrower",
+                            meta_data={"is_primary": True}
                         )
                         db.add(contact)
                         db.commit()
