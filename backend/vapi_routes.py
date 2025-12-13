@@ -1542,10 +1542,11 @@ async def get_vapi_config(
 # ============================================================================
 
 @router.get("/diagnostic/assistant")
-async def diagnose_vapi_assistant():
+async def diagnose_vapi_assistant(full: bool = False):
     """
     Diagnose VAPI assistant configuration.
     Checks if firstMessage is configured and returns full assistant config.
+    Use ?full=true to get complete VAPI response.
     """
     import httpx
     import os
@@ -1579,12 +1580,21 @@ async def diagnose_vapi_assistant():
 
             assistant = response.json()
 
+            # Return full config if requested
+            if full:
+                return {
+                    "assistant_id": assistant_id,
+                    "full_config": assistant
+                }
+
             # Check for firstMessage
             first_message = assistant.get("firstMessage")
             voice_config = assistant.get("voice", {})
             model_config = assistant.get("model", {})
+            transcriber_config = assistant.get("transcriber", {})
 
             issues = []
+            warnings = []
 
             if not first_message:
                 issues.append("NO_FIRST_MESSAGE: Assistant has no greeting configured")
@@ -1593,23 +1603,61 @@ async def diagnose_vapi_assistant():
 
             if not voice_config:
                 issues.append("NO_VOICE_CONFIG: No voice provider configured")
+            else:
+                # Check voice config in detail
+                if not voice_config.get("voiceId"):
+                    issues.append("NO_VOICE_ID: Voice ID not set")
+                if voice_config.get("provider") == "playht":
+                    # PlayHT specific checks
+                    if not voice_config.get("emotion"):
+                        warnings.append("No emotion set for PlayHT voice")
+
+            if not model_config:
+                issues.append("NO_MODEL_CONFIG: No AI model configured")
+
+            # Check for silenceTimeoutSeconds - if too short, might disconnect early
+            silence_timeout = assistant.get("silenceTimeoutSeconds")
+            if silence_timeout and silence_timeout < 10:
+                warnings.append(f"Silence timeout is only {silence_timeout}s - might disconnect too early")
+
+            # Check responseDelaySeconds - if too high, causes perceived silence
+            response_delay = assistant.get("responseDelaySeconds")
+            if response_delay and response_delay > 1:
+                warnings.append(f"Response delay is {response_delay}s - might cause initial silence")
+
+            # Check firstMessageMode
+            first_message_mode = assistant.get("firstMessageMode")
 
             return {
                 "status": "healthy" if not issues else "issues_found",
                 "assistant_id": assistant_id,
                 "name": assistant.get("name"),
                 "first_message": first_message,
+                "first_message_mode": first_message_mode,
                 "has_first_message": bool(first_message and first_message.strip()),
                 "voice": {
                     "provider": voice_config.get("provider"),
-                    "voice_id": voice_config.get("voiceId")
+                    "voice_id": voice_config.get("voiceId"),
+                    "stability": voice_config.get("stability"),
+                    "speed": voice_config.get("speed")
                 },
                 "model": {
                     "provider": model_config.get("provider"),
                     "model": model_config.get("model")
                 },
+                "transcriber": {
+                    "provider": transcriber_config.get("provider"),
+                    "model": transcriber_config.get("model")
+                },
+                "timing": {
+                    "silence_timeout_seconds": silence_timeout,
+                    "response_delay_seconds": response_delay,
+                    "llm_request_delay_seconds": assistant.get("llmRequestDelaySeconds"),
+                    "num_words_to_interrupt_assistant": assistant.get("numWordsToInterruptAssistant")
+                },
                 "issues": issues,
-                "fix_url": "/api/vapi/diagnostic/fix-greeting" if issues else None
+                "warnings": warnings,
+                "fix_url": "/api/vapi/diagnostic/fix-greeting" if "NO_FIRST_MESSAGE" in str(issues) else None
             }
 
     except Exception as e:
