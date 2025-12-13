@@ -1770,6 +1770,122 @@ async def diagnose_phone_numbers():
         return {"error": str(e)}
 
 
+@router.get("/diagnostic/account")
+async def diagnose_vapi_account():
+    """
+    Check VAPI account status including credits and usage.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get account/organization info
+            org_response = await client.get(
+                "https://api.vapi.ai/org",
+                headers=headers,
+                timeout=10
+            )
+
+            org_data = org_response.json() if org_response.status_code == 200 else {"error": org_response.text}
+
+            # Try to get usage/billing info
+            usage_response = await client.get(
+                "https://api.vapi.ai/usage",
+                headers=headers,
+                timeout=10
+            )
+
+            usage_data = usage_response.json() if usage_response.status_code == 200 else None
+
+            return {
+                "account": {
+                    "org_id": org_data.get("id"),
+                    "name": org_data.get("name"),
+                    "billing_status": org_data.get("billingStatus"),
+                    "plan": org_data.get("plan"),
+                    "hipaa_enabled": org_data.get("hipaaEnabled"),
+                    "credits_remaining": org_data.get("creditsRemaining"),
+                    "error": org_data.get("error")
+                },
+                "usage": usage_data,
+                "api_key_valid": org_response.status_code == 200,
+                "potential_issues": []
+            }
+
+    except Exception as e:
+        logger.error(f"Account diagnostic error: {str(e)}")
+        return {"error": str(e)}
+
+
+@router.post("/diagnostic/test-call")
+async def test_vapi_call(
+    phone_number: str = "+18326482297"
+):
+    """
+    Make a test outbound call to verify VAPI is working.
+    This will call the specified number using the configured assistant.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    assistant_id = os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Create outbound call
+            response = await client.post(
+                "https://api.vapi.ai/call/phone",
+                headers=headers,
+                json={
+                    "assistantId": assistant_id,
+                    "customer": {
+                        "number": phone_number
+                    }
+                },
+                timeout=15
+            )
+
+            if response.status_code == 201:
+                call_data = response.json()
+                return {
+                    "success": True,
+                    "message": f"Test call initiated to {phone_number}",
+                    "call_id": call_data.get("id"),
+                    "status": call_data.get("status")
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to create call: {response.status_code}",
+                    "response": response.text,
+                    "hint": "This might indicate account/billing issues or missing phone number configuration"
+                }
+
+    except Exception as e:
+        logger.error(f"Test call error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/diagnostic/recent-calls")
 async def get_recent_vapi_calls(limit: int = 10):
     """
