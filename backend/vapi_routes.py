@@ -1753,12 +1753,15 @@ async def diagnose_phone_numbers():
             return {
                 "phone_numbers": [
                     {
+                        "id": p.get("id"),
                         "number": p.get("number"),
                         "assistant_id": p.get("assistantId"),
                         "squad_id": p.get("squadId"),
                         "server_url": p.get("serverUrl"),
                         "has_assistant": bool(p.get("assistantId")),
-                        "uses_webhook": bool(p.get("serverUrl") and not p.get("assistantId"))
+                        "uses_webhook": bool(p.get("serverUrl") and not p.get("assistantId")),
+                        "provider": p.get("provider"),
+                        "status": p.get("status")
                     }
                     for p in phones
                 ],
@@ -1830,11 +1833,13 @@ async def diagnose_vapi_account():
 
 @router.post("/diagnostic/test-call")
 async def test_vapi_call(
-    phone_number: str = "+18326482297"
+    to_number: str = None,
+    use_your_number: bool = True
 ):
     """
     Make a test outbound call to verify VAPI is working.
-    This will call the specified number using the configured assistant.
+    If use_your_number is True (default), it will call your VAPI phone number.
+    Otherwise, specify to_number (must be E.164 format like +15551234567).
     """
     import httpx
     import os
@@ -1852,14 +1857,37 @@ async def test_vapi_call(
 
     try:
         async with httpx.AsyncClient() as client:
+            # First get our phone number ID
+            phone_response = await client.get(
+                "https://api.vapi.ai/phone-number",
+                headers=headers,
+                timeout=10
+            )
+
+            if phone_response.status_code != 200:
+                return {"error": "Failed to get phone numbers"}
+
+            phones = phone_response.json()
+            if not phones:
+                return {"error": "No phone numbers configured in VAPI"}
+
+            phone_number_id = phones[0].get("id")
+            our_number = phones[0].get("number")
+
+            if use_your_number:
+                to_number = our_number
+            elif not to_number:
+                return {"error": "Please provide to_number or set use_your_number=true"}
+
             # Create outbound call
             response = await client.post(
                 "https://api.vapi.ai/call/phone",
                 headers=headers,
                 json={
                     "assistantId": assistant_id,
+                    "phoneNumberId": phone_number_id,
                     "customer": {
-                        "number": phone_number
+                        "number": to_number
                     }
                 },
                 timeout=15
@@ -1869,9 +1897,10 @@ async def test_vapi_call(
                 call_data = response.json()
                 return {
                     "success": True,
-                    "message": f"Test call initiated to {phone_number}",
+                    "message": f"Test call initiated from {our_number} to {to_number}",
                     "call_id": call_data.get("id"),
-                    "status": call_data.get("status")
+                    "status": call_data.get("status"),
+                    "note": "You should receive a call now. Answer it to test the greeting."
                 }
             else:
                 return {
