@@ -1316,6 +1316,11 @@ async def submit_application(
             if lo_result:
                 lo_email = lo_result[0]
 
+        # Fallback to default application email if no LO assigned
+        if not lo_email:
+            lo_email = os.getenv("DEFAULT_APPLICATION_EMAIL", "tloss@perennia.ai")
+            logger.info(f"No LO assigned, using default email: {lo_email}")
+
         # Send email to loan officer with all application documents (non-critical)
         email_sent = False
         if lo_email and econsent_pdf and credit_auth_pdf and fannie_mae_bytes:
