@@ -5,117 +5,43 @@ import './AgentDashboard.css';
 
 // Mock data generators for development/fallback
 const generateMockDashboardSummary = () => ({
-  total_agents: 16,
-  active_agents: 14,
+  total_agents: 20,
+  active_agents: 18,
   health_summary: {
-    healthy: 11,
-    warning: 2,
+    healthy: 15,
+    warning: 3,
     critical: 1,
-    unknown: 2
+    unknown: 1
   },
-  executions_24h: 1247,
+  executions_24h: 2847,
   success_rate_24h: 94.2,
   active_alerts: 3,
   avg_response_time_ms: 1250
 });
 
 const generateMockAgents = () => [
-  {
-    id: 1,
-    agent_name: 'pipeline_analyst',
-    display_name: 'Pipeline Analyst',
-    category: 'crm',
-    status: 'active',
-    health_status: 'healthy',
-    total_executions: 4521,
-    success_rate: 96.2,
-    avg_response_time_ms: 890,
-    last_execution_at: new Date(Date.now() - 5 * 60000).toISOString()
-  },
-  {
-    id: 2,
-    agent_name: 'compliance_checker',
-    display_name: 'Compliance Checker',
-    category: 'compliance',
-    status: 'active',
-    health_status: 'healthy',
-    total_executions: 2134,
-    success_rate: 98.1,
-    avg_response_time_ms: 1120,
-    last_execution_at: new Date(Date.now() - 15 * 60000).toISOString()
-  },
-  {
-    id: 3,
-    agent_name: 'lead_nurturer',
-    display_name: 'Lead Nurturer',
-    category: 'sales',
-    status: 'active',
-    health_status: 'warning',
-    total_executions: 3876,
-    success_rate: 82.5,
-    avg_response_time_ms: 2340,
-    last_execution_at: new Date(Date.now() - 2 * 60000).toISOString()
-  },
-  {
-    id: 4,
-    agent_name: 'document_tracker',
-    display_name: 'Document Tracker',
-    category: 'operations',
-    status: 'active',
-    health_status: 'healthy',
-    total_executions: 5621,
-    success_rate: 95.8,
-    avg_response_time_ms: 750,
-    last_execution_at: new Date(Date.now() - 8 * 60000).toISOString()
-  },
-  {
-    id: 5,
-    agent_name: 'rate_advisor',
-    display_name: 'Rate Advisor',
-    category: 'advisory',
-    status: 'active',
-    health_status: 'critical',
-    total_executions: 1892,
-    success_rate: 68.4,
-    avg_response_time_ms: 4500,
-    last_execution_at: new Date(Date.now() - 45 * 60000).toISOString()
-  },
-  {
-    id: 6,
-    agent_name: 'scheduler',
-    display_name: 'Scheduler',
-    category: 'operations',
-    status: 'active',
-    health_status: 'healthy',
-    total_executions: 2945,
-    success_rate: 97.3,
-    avg_response_time_ms: 680,
-    last_execution_at: new Date(Date.now() - 3 * 60000).toISOString()
-  },
-  {
-    id: 7,
-    agent_name: 'receptionist',
-    display_name: 'AI Receptionist',
-    category: 'communication',
-    status: 'active',
-    health_status: 'healthy',
-    total_executions: 8934,
-    success_rate: 94.5,
-    avg_response_time_ms: 1100,
-    last_execution_at: new Date(Date.now() - 1 * 60000).toISOString()
-  },
-  {
-    id: 8,
-    agent_name: 'sla_monitor',
-    display_name: 'SLA Monitor',
-    category: 'monitoring',
-    status: 'active',
-    health_status: 'warning',
-    total_executions: 1567,
-    success_rate: 85.2,
-    avg_response_time_ms: 1890,
-    last_execution_at: new Date(Date.now() - 10 * 60000).toISOString()
-  }
+  // Core CRM Agents (8)
+  { id: 1, agent_name: 'pipeline_analyst', display_name: 'Pipeline Analyst', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 4521, success_rate: 96.2, avg_response_time_ms: 890, last_execution_at: new Date(Date.now() - 5 * 60000).toISOString() },
+  { id: 2, agent_name: 'compliance_checker', display_name: 'Compliance Checker', category: 'compliance', status: 'active', health_status: 'healthy', total_executions: 2134, success_rate: 98.1, avg_response_time_ms: 1120, last_execution_at: new Date(Date.now() - 15 * 60000).toISOString() },
+  { id: 3, agent_name: 'lead_nurturer', display_name: 'Lead Nurturer', category: 'sales', status: 'active', health_status: 'warning', total_executions: 3876, success_rate: 82.5, avg_response_time_ms: 2340, last_execution_at: new Date(Date.now() - 2 * 60000).toISOString() },
+  { id: 4, agent_name: 'document_tracker', display_name: 'Document Tracker', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 5621, success_rate: 95.8, avg_response_time_ms: 750, last_execution_at: new Date(Date.now() - 8 * 60000).toISOString() },
+  { id: 5, agent_name: 'rate_advisor', display_name: 'Rate Advisor', category: 'advisory', status: 'active', health_status: 'critical', total_executions: 1892, success_rate: 68.4, avg_response_time_ms: 4500, last_execution_at: new Date(Date.now() - 45 * 60000).toISOString() },
+  { id: 6, agent_name: 'scheduler', display_name: 'Smart Scheduler', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 2945, success_rate: 97.3, avg_response_time_ms: 680, last_execution_at: new Date(Date.now() - 3 * 60000).toISOString() },
+  { id: 7, agent_name: 'receptionist', display_name: 'AI Receptionist', category: 'communication', status: 'active', health_status: 'healthy', total_executions: 8934, success_rate: 94.5, avg_response_time_ms: 1100, last_execution_at: new Date(Date.now() - 1 * 60000).toISOString() },
+  { id: 8, agent_name: 'sla_monitor', display_name: 'SLA Tracker', category: 'monitoring', status: 'active', health_status: 'warning', total_executions: 1567, success_rate: 85.2, avg_response_time_ms: 1890, last_execution_at: new Date(Date.now() - 10 * 60000).toISOString() },
+  // Extended Agents (12)
+  { id: 9, agent_name: 'task_automation', display_name: 'Task Automation', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 6234, success_rate: 95.7, avg_response_time_ms: 720, last_execution_at: new Date(Date.now() - 4 * 60000).toISOString() },
+  { id: 10, agent_name: 'profitability_analyst', display_name: 'Profitability Analyst', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 1823, success_rate: 97.2, avg_response_time_ms: 1340, last_execution_at: new Date(Date.now() - 12 * 60000).toISOString() },
+  { id: 11, agent_name: 'subscription_manager', display_name: 'Subscription Manager', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 987, success_rate: 99.1, avg_response_time_ms: 560, last_execution_at: new Date(Date.now() - 30 * 60000).toISOString() },
+  { id: 12, agent_name: 'onboarding_assistant', display_name: 'Onboarding Assistant', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 2456, success_rate: 94.8, avg_response_time_ms: 1200, last_execution_at: new Date(Date.now() - 20 * 60000).toISOString() },
+  { id: 13, agent_name: 'voice_agent', display_name: 'Voice OS', category: 'communication', status: 'active', health_status: 'warning', total_executions: 3421, success_rate: 88.3, avg_response_time_ms: 2100, last_execution_at: new Date(Date.now() - 6 * 60000).toISOString() },
+  { id: 14, agent_name: 'team_coach', display_name: 'Team Coach', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 1245, success_rate: 96.5, avg_response_time_ms: 980, last_execution_at: new Date(Date.now() - 25 * 60000).toISOString() },
+  { id: 15, agent_name: 'email_intel_agent', display_name: 'Email Intelligence', category: 'automation', status: 'active', health_status: 'healthy', total_executions: 7823, success_rate: 95.4, avg_response_time_ms: 650, last_execution_at: new Date(Date.now() - 2 * 60000).toISOString() },
+  { id: 16, agent_name: 'notification_center', display_name: 'Notification Center', category: 'automation', status: 'active', health_status: 'healthy', total_executions: 12456, success_rate: 99.2, avg_response_time_ms: 320, last_execution_at: new Date(Date.now() - 1 * 60000).toISOString() },
+  { id: 17, agent_name: 'customer_intelligence', display_name: 'Customer Intelligence', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 2134, success_rate: 94.1, avg_response_time_ms: 1450, last_execution_at: new Date(Date.now() - 18 * 60000).toISOString() },
+  { id: 18, agent_name: 'video_agent', display_name: 'UVIP', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 567, success_rate: 97.8, avg_response_time_ms: 2800, last_execution_at: new Date(Date.now() - 45 * 60000).toISOString() },
+  { id: 19, agent_name: 'integrations_agent', display_name: 'Integrations', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 3421, success_rate: 96.7, avg_response_time_ms: 890, last_execution_at: new Date(Date.now() - 8 * 60000).toISOString() },
+  { id: 20, agent_name: 'reporting_engine', display_name: 'Reporting Engine', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 4567, success_rate: 98.3, avg_response_time_ms: 1100, last_execution_at: new Date(Date.now() - 15 * 60000).toISOString() }
 ];
 
 const generateMockAlerts = () => [

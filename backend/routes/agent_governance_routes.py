@@ -21,7 +21,7 @@ import uuid
 
 from database import get_db, engine
 
-from backend.services.agent_governance_service import AgentGovernanceService
+from services.agent_governance_service import AgentGovernanceService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents", tags=["agent-governance"])
