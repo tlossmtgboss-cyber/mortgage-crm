@@ -19,7 +19,7 @@ import logging
 
 from database import get_db
 
-from backend.services.agent_gym_service import AgentGymService
+from services.agent_gym_service import AgentGymService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents/gym", tags=["agent-gym"])

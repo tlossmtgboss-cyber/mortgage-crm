@@ -75,6 +75,37 @@ class AgentGovernanceService:
 
         return result
 
+    def list_agents(
+        self,
+        agent_type: Optional[str] = None,
+        status: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        List agent profiles with filtering and pagination.
+        Used by the agent profiles API endpoint.
+        """
+        query = self.db.query(AgentProfile)
+
+        if agent_type:
+            query = query.filter(AgentProfile.agent_type == agent_type)
+        if status:
+            query = query.filter(AgentProfile.status == status)
+        if is_active is not None:
+            query = query.filter(AgentProfile.is_active == is_active)
+
+        total = query.count()
+        agents = query.order_by(AgentProfile.category, AgentProfile.agent_name).offset(offset).limit(limit).all()
+
+        return {
+            "agents": [agent.to_dict() for agent in agents],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+
     def get_agent_by_name(self, agent_name: str) -> Optional[AgentProfile]:
         """Get agent profile by name."""
         return self.db.query(AgentProfile).filter(
