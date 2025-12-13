@@ -3825,3 +3825,283 @@ textarea.text-input {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ===========================================
+   Agent Governance Settings Styles
+   =========================================== */
+
+.agent-governance-section {
+  animation: fadeIn 0.3s ease;
+}
+
+.agent-governance-section .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.agent-governance-section .page-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+.agent-governance-section .page-header .section-description {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.agent-governance-section .header-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.agent-governance-section .settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+}
+
+.agent-governance-section .settings-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.agent-governance-section .settings-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.agent-governance-section .card-description {
+  font-size: 14px;
+  color: #6b7280;
+  margin: -8px 0 20px 0;
+}
+
+.agent-governance-section .setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #f3f4f6;
+  gap: 16px;
+}
+
+.agent-governance-section .setting-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.agent-governance-section .setting-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-governance-section .setting-label {
+  font-weight: 500;
+  color: #374151;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.agent-governance-section .setting-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Toggle Switch Styles */
+.agent-governance-section .toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.agent-governance-section .toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.agent-governance-section .toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.agent-governance-section .toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.agent-governance-section .toggle-switch input:checked + .toggle-slider {
+  background-color: #218D8D;
+}
+
+.agent-governance-section .toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+/* Input Wrapper Styles */
+.agent-governance-section .setting-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.agent-governance-section .setting-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 120px;
+  text-align: right;
+}
+
+.agent-governance-section .setting-input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.agent-governance-section .setting-input.wide {
+  width: 300px;
+  text-align: left;
+}
+
+.agent-governance-section .input-prefix,
+.agent-governance-section .input-suffix {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Select Styles */
+.agent-governance-section .setting-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 150px;
+  background: white;
+  cursor: pointer;
+}
+
+.agent-governance-section .setting-select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+/* Quick Actions Grid */
+.agent-governance-section .settings-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.agent-governance-section .settings-action-grid button {
+  padding: 12px 16px;
+  font-size: 13px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Message Banner */
+.agent-governance-section .message-banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-governance-section .message-banner.success {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.agent-governance-section .message-banner.error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* Loading State */
+.agent-governance-section .loading-state {
+  text-align: center;
+  padding: 48px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .agent-governance-section .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-governance-section .setting-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .agent-governance-section .setting-input.wide {
+    width: 100%;
+  }
+
+  .agent-governance-section .settings-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-governance-section .page-header {
+    flex-direction: column;
+  }
+
+  .agent-governance-section .header-actions {
+    width: 100%;
+  }
+
+  .agent-governance-section .header-actions button {
+    flex: 1;
+  }
+}

@@ -324,8 +324,9 @@ class AgentRegistry:
         context: AgentContext
     ) -> Optional[SpecializedAgent]:
         """Get the most appropriate agent for a given intent"""
-        # Intent to agent mapping
+        # Intent to agent mapping for all 20 agents
         intent_mapping = {
+            # Core CRM Agents
             "lead": "LeadManagementAgent",
             "leads": "LeadManagementAgent",
             "prospect": "LeadManagementAgent",
@@ -343,6 +344,7 @@ class AgentRegistry:
             "document": "DocumentAgent",
             "file": "DocumentAgent",
             "upload": "DocumentAgent",
+            "condition": "DocumentAgent",
             "report": "AnalyticsAgent",
             "analytics": "AnalyticsAgent",
             "metrics": "AnalyticsAgent",
@@ -353,6 +355,56 @@ class AgentRegistry:
             "compliance": "ComplianceAgent",
             "regulation": "ComplianceAgent",
             "audit": "ComplianceAgent",
+            "trid": "ComplianceAgent",
+            "respa": "ComplianceAgent",
+
+            # Extended Agents
+            "call": "ReceptionistAgent",
+            "caller": "ReceptionistAgent",
+            "receptionist": "ReceptionistAgent",
+            "inbound": "ReceptionistAgent",
+            "profit": "ProfitabilityAgent",
+            "margin": "ProfitabilityAgent",
+            "revenue": "ProfitabilityAgent",
+            "cost": "ProfitabilityAgent",
+            "subscription": "SubscriptionAgent",
+            "billing": "SubscriptionAgent",
+            "plan": "SubscriptionAgent",
+            "payment": "SubscriptionAgent",
+            "onboard": "OnboardingAgent",
+            "training": "OnboardingAgent",
+            "welcome": "OnboardingAgent",
+            "new user": "OnboardingAgent",
+            "voice": "VoiceAgent",
+            "speech": "VoiceAgent",
+            "transcribe": "VoiceAgent",
+            "coaching": "CoachingAgent",
+            "coach": "CoachingAgent",
+            "performance": "CoachingAgent",
+            "benchmark": "CoachingAgent",
+            "sla": "SLAAgent",
+            "milestone": "SLAAgent",
+            "deadline": "SLAAgent",
+            "overdue": "SLAAgent",
+            "parse": "EmailIntelAgent",
+            "email intelligence": "EmailIntelAgent",
+            "draft": "EmailIntelAgent",
+            "response": "EmailIntelAgent",
+            "meeting": "SchedulerAgent",
+            "availability": "SchedulerAgent",
+            "book": "SchedulerAgent",
+            "video": "VideoAgent",
+            "recording": "VideoAgent",
+            "zoom": "VideoAgent",
+            "integration": "IntegrationsAgent",
+            "connect": "IntegrationsAgent",
+            "sync": "IntegrationsAgent",
+            "api": "IntegrationsAgent",
+            "rate": "RateAdvisorAgent",
+            "lock": "RateAdvisorAgent",
+            "pricing": "RateAdvisorAgent",
+            "float": "RateAdvisorAgent",
+            "quote": "RateAdvisorAgent",
         }
 
         intent_lower = intent.lower()

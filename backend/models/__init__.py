@@ -22,6 +22,27 @@ from .sla_tracking import (
     MilestoneType,
     AlertStatus
 )
+from .agent_governance import (
+    AgentProfile,
+    AgentTool,
+    AgentExecution,
+    GymTestScenario,
+    GymTestRun,
+    GymTestResult,
+    AgentAlert as AgentGovernanceAlert,
+    AgentMetricsTimeseries,
+    AgentChatSession,
+    AgentChatMessage,
+    # Enums
+    AgentStatus,
+    HealthStatus,
+    RiskTier,
+    ExecutionStatus,
+    AlertSeverity,
+    TestStatus,
+    ToolCategory,
+    ToolRiskLevel
+)
 
 __all__ = [
     'LeadProfile',
@@ -41,5 +62,24 @@ __all__ = [
     'TimeUnit',
     'SLAStatus',
     'MilestoneType',
-    'AlertStatus'
+    'AlertStatus',
+    # Agent Governance
+    'AgentProfile',
+    'AgentTool',
+    'AgentExecution',
+    'GymTestScenario',
+    'GymTestRun',
+    'GymTestResult',
+    'AgentGovernanceAlert',
+    'AgentMetricsTimeseries',
+    'AgentChatSession',
+    'AgentChatMessage',
+    'AgentStatus',
+    'HealthStatus',
+    'RiskTier',
+    'ExecutionStatus',
+    'AlertSeverity',
+    'TestStatus',
+    'ToolCategory',
+    'ToolRiskLevel'
 ]

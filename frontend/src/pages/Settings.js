@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI } from '../services/api';
+import { teamAPI, agentAPI } from '../services/api';
 import CommandCenter from './CommandCenter';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
@@ -332,7 +332,8 @@ function Settings() {
     scheduling: false,
     onboarding: false,
     masterAdmin: false,
-    landingPages: false
+    landingPages: false,
+    agentGovernance: false
   });
 
   // Default sidebar items order
@@ -344,6 +345,7 @@ function Settings() {
     { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
     { id: 'mission-control', label: 'Mission Control', type: 'standalone', section: 'mission-control' },
     { id: 'ai-receptionist', label: 'AI Receptionist', type: 'standalone', section: 'ai-receptionist' },
+    { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance' },
     { id: 'voice-os', label: 'Voice OS', type: 'standalone', section: 'voice-os', navigate: '/voice-os-dashboard' },
     { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
     { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
@@ -555,6 +557,96 @@ function Settings() {
   const [submittingTicket, setSubmittingTicket] = useState(false);
   const [resolutionNotes, setResolutionNotes] = useState('');
 
+  // Agent Governance Settings state
+  const [agentGovernanceSettings, setAgentGovernanceSettings] = useState({
+    // System Settings
+    agentGovernanceEnabled: true,
+    autoHealthChecks: true,
+    costTrackingEnabled: true,
+
+    // Performance Thresholds
+    defaultSuccessRate: 90,
+    defaultResponseTime: 15000,
+    defaultMaxCost: 0.015,
+
+    // Cost Budgets
+    defaultDailyBudget: 50,
+    systemMonthlyBudget: 30000,
+    costAlertThreshold: 80,
+
+    // Alerts
+    alertChannel: 'Slack',
+    slackWebhook: '',
+    dailyDigest: true,
+    digestTime: '8:00 AM',
+
+    // Access Control
+    requireApproval: false,
+    viewPermissions: ['All Users'],
+    modifyPermissions: ['Admins Only'],
+    auditLogging: true,
+
+    // Compliance
+    enforceEliteForTier3: true,
+    fairLendingMonitoring: true,
+    auditRetentionDays: 2555,
+
+    // Integrations
+    anthropicApiKey: '',
+    webhookUrl: '',
+    websocketEnabled: true,
+
+    // Gym
+    autoDailyTesting: true,
+    minPassRate: 95,
+    blockOnFailedTests: false
+  });
+  const [loadingAgentSettings, setLoadingAgentSettings] = useState(false);
+  const [savingAgentSettings, setSavingAgentSettings] = useState(false);
+  const [agentSettingsMessage, setAgentSettingsMessage] = useState({ type: '', text: '' });
+
+  // Load agent governance settings
+  const loadAgentGovernanceSettings = async () => {
+    setLoadingAgentSettings(true);
+    try {
+      const response = await agentAPI.getSettings();
+      if (response) {
+        setAgentGovernanceSettings(prev => ({ ...prev, ...response }));
+      }
+    } catch (error) {
+      console.error('Failed to load agent governance settings:', error);
+      // Keep defaults on error
+    } finally {
+      setLoadingAgentSettings(false);
+    }
+  };
+
+  // Save agent governance settings
+  const saveAgentGovernanceSettings = async () => {
+    setSavingAgentSettings(true);
+    setAgentSettingsMessage({ type: '', text: '' });
+    try {
+      await agentAPI.updateSettings(agentGovernanceSettings);
+      setAgentSettingsMessage({ type: 'success', text: 'Agent governance settings saved successfully!' });
+      setTimeout(() => setAgentSettingsMessage({ type: '', text: '' }), 3000);
+    } catch (error) {
+      console.error('Failed to save agent governance settings:', error);
+      setAgentSettingsMessage({ type: 'error', text: 'Failed to save settings. Please try again.' });
+    } finally {
+      setSavingAgentSettings(false);
+    }
+  };
+
+  // Toggle handler for agent governance settings
+  const handleAgentSettingToggle = (key) => {
+    setAgentGovernanceSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Input change handler for agent governance settings
+  const handleAgentSettingChange = (key, value) => {
+    setAgentGovernanceSettings(prev => ({ ...prev, [key]: value }));
+  };
+
   // Debug: Log when component mounts
   useEffect(() => {
     console.log('Settings component mounted');
@@ -681,6 +773,15 @@ function Settings() {
   useEffect(() => {
     if (activeSection === 'profile-info' || activeSection === 'account-settings' || activeSection === 'security' || activeSection === 'work-hours') {
       loadUserProfile();
+    }
+  }, [activeSection]);
+
+  // Load agent governance settings when section is active
+  useEffect(() => {
+    if (activeSection === 'agent-governance-system' || activeSection === 'agent-governance-thresholds' ||
+        activeSection === 'agent-governance-costs' || activeSection === 'agent-governance-alerts' ||
+        activeSection === 'agent-governance-compliance' || activeSection === 'agent-governance-gym') {
+      loadAgentGovernanceSettings();
     }
   }, [activeSection]);
 
@@ -2311,6 +2412,37 @@ const API_BASE_URL = isProduction
                     >
                       <span>{item.label}</span>
                     </button>
+                  )}
+                </div>
+              );
+            }
+
+            // Render Agent Governance parent with children
+            if (item.id === 'agent-governance') {
+              return (
+                <div key={item.id}>
+                  <button
+                    className={`sidebar-btn parent ${expandedSections.agentGovernance ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                    onClick={() => toggleSection('agentGovernance')}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, item)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, item)}
+                  >
+                    <span>{item.label}</span>
+                    <span className="expand-icon">{expandedSections.agentGovernance ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedSections.agentGovernance && (
+                    <div className="sidebar-children">
+                      <button className={`sidebar-btn child ${activeSection === 'agent-governance-system' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-system')}><span>System Settings</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'agent-governance-thresholds' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-thresholds')}><span>Performance Thresholds</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'agent-governance-costs' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-costs')}><span>Cost Budgets</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'agent-governance-alerts' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-alerts')}><span>Alerts & Notifications</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'agent-governance-compliance' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-compliance')}><span>Compliance</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'agent-governance-gym' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-gym')}><span>Agent Gym Settings</span></button>
+                    </div>
                   )}
                 </div>
               );
@@ -5280,6 +5412,514 @@ const API_BASE_URL = isProduction
                 >
                   Clear All Dummy Data
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Agent Governance - System Settings */}
+          {activeSection === 'agent-governance-system' && (
+            <div className="agent-governance-section">
+              <div className="page-header">
+                <div>
+                  <h2>Agent Governance - System Settings</h2>
+                  <p className="section-description">Control system-wide agent features and monitoring</p>
+                </div>
+                <div className="header-actions">
+                  <button className="btn-secondary" onClick={() => navigate('/agents')}>
+                    View Agent Dashboard
+                  </button>
+                  <button className="btn-primary" onClick={saveAgentGovernanceSettings} disabled={savingAgentSettings}>
+                    {savingAgentSettings ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+
+              {agentSettingsMessage.text && (
+                <div className={`message-banner ${agentSettingsMessage.type}`}>
+                  {agentSettingsMessage.text}
+                </div>
+              )}
+
+              {loadingAgentSettings ? (
+                <div className="loading-state">Loading agent settings...</div>
+              ) : (
+                <div className="settings-grid">
+                  <div className="settings-card">
+                    <h3>Core Features</h3>
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <label className="setting-label">Enable Agent Governance System</label>
+                        <p className="setting-description">Turn on monitoring, testing, and compliance tracking for all agents</p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={agentGovernanceSettings.agentGovernanceEnabled} onChange={() => handleAgentSettingToggle('agentGovernanceEnabled')} />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <label className="setting-label">Automatic Health Checks</label>
+                        <p className="setting-description">Run health checks every hour and send alerts for issues</p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={agentGovernanceSettings.autoHealthChecks} onChange={() => handleAgentSettingToggle('autoHealthChecks')} />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <label className="setting-label">Cost Tracking</label>
+                        <p className="setting-description">Track and enforce cost budgets for agent operations</p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={agentGovernanceSettings.costTrackingEnabled} onChange={() => handleAgentSettingToggle('costTrackingEnabled')} />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <label className="setting-label">Enable WebSocket Real-time Updates</label>
+                        <p className="setting-description">Push live metrics to connected clients every 5 seconds</p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={agentGovernanceSettings.websocketEnabled} onChange={() => handleAgentSettingToggle('websocketEnabled')} />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <label className="setting-label">Audit Log All Changes</label>
+                        <p className="setting-description">Log all agent configuration changes with user attribution</p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input type="checkbox" checked={agentGovernanceSettings.auditLogging} onChange={() => handleAgentSettingToggle('auditLogging')} />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="settings-card">
+                    <h3>Quick Actions</h3>
+                    <div className="settings-action-grid">
+                      <button className="btn-secondary" onClick={() => navigate('/agents')}>
+                        View Agent Dashboard
+                      </button>
+                      <button className="btn-secondary" onClick={() => navigate('/agent-gym')}>
+                        Open Agent Gym
+                      </button>
+                      <button className="btn-secondary" onClick={async () => {
+                        try {
+                          const health = await agentAPI.getSystemHealth();
+                          alert(JSON.stringify(health, null, 2));
+                        } catch (e) {
+                          alert('Failed to fetch system health: ' + e.message);
+                        }
+                      }}>
+                        Run Health Check
+                      </button>
+                      <button className="btn-secondary" onClick={() => {
+                        const config = JSON.stringify(agentGovernanceSettings, null, 2);
+                        const blob = new Blob([config], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'agent-governance-config.json';
+                        a.click();
+                      }}>
+                        Export Configuration
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Agent Governance - Performance Thresholds */}
+          {activeSection === 'agent-governance-thresholds' && (
+            <div className="agent-governance-section">
+              <div className="page-header">
+                <div>
+                  <h2>Agent Governance - Performance Thresholds</h2>
+                  <p className="section-description">Set default performance standards for all agents</p>
+                </div>
+                <button className="btn-primary" onClick={saveAgentGovernanceSettings} disabled={savingAgentSettings}>
+                  {savingAgentSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+
+              {agentSettingsMessage.text && (
+                <div className={`message-banner ${agentSettingsMessage.type}`}>
+                  {agentSettingsMessage.text}
+                </div>
+              )}
+
+              <div className="settings-card">
+                <h3>Default Thresholds</h3>
+                <p className="card-description">These defaults apply to all agents unless overridden individually.</p>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Minimum Success Rate</label>
+                    <p className="setting-description">Agents below this rate will be flagged for review</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.defaultSuccessRate}
+                      onChange={(e) => handleAgentSettingChange('defaultSuccessRate', Number(e.target.value))}
+                      min="80"
+                      max="100"
+                    />
+                    <span className="input-suffix">%</span>
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Maximum Response Time (P95)</label>
+                    <p className="setting-description">95th percentile response time threshold</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.defaultResponseTime}
+                      onChange={(e) => handleAgentSettingChange('defaultResponseTime', Number(e.target.value))}
+                      min="1000"
+                      max="60000"
+                    />
+                    <span className="input-suffix">ms</span>
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Maximum Cost Per Success</label>
+                    <p className="setting-description">Cost efficiency threshold per successful execution</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <span className="input-prefix">$</span>
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.defaultMaxCost}
+                      onChange={(e) => handleAgentSettingChange('defaultMaxCost', Number(e.target.value))}
+                      step="0.001"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Agent Governance - Cost Budgets */}
+          {activeSection === 'agent-governance-costs' && (
+            <div className="agent-governance-section">
+              <div className="page-header">
+                <div>
+                  <h2>Agent Governance - Cost Budgets</h2>
+                  <p className="section-description">Set cost limits and budgets for agent operations</p>
+                </div>
+                <button className="btn-primary" onClick={saveAgentGovernanceSettings} disabled={savingAgentSettings}>
+                  {savingAgentSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+
+              {agentSettingsMessage.text && (
+                <div className={`message-banner ${agentSettingsMessage.type}`}>
+                  {agentSettingsMessage.text}
+                </div>
+              )}
+
+              <div className="settings-card">
+                <h3>Budget Settings</h3>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Daily Budget (per agent)</label>
+                    <p className="setting-description">Maximum daily spend per individual agent</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <span className="input-prefix">$</span>
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.defaultDailyBudget}
+                      onChange={(e) => handleAgentSettingChange('defaultDailyBudget', Number(e.target.value))}
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Monthly Budget (system-wide)</label>
+                    <p className="setting-description">Total monthly budget across all agents</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <span className="input-prefix">$</span>
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.systemMonthlyBudget}
+                      onChange={(e) => handleAgentSettingChange('systemMonthlyBudget', Number(e.target.value))}
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Cost Alert Threshold</label>
+                    <p className="setting-description">Trigger alerts when spending reaches this percentage of budget</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.costAlertThreshold}
+                      onChange={(e) => handleAgentSettingChange('costAlertThreshold', Number(e.target.value))}
+                      min="50"
+                      max="100"
+                    />
+                    <span className="input-suffix">%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Agent Governance - Alerts & Notifications */}
+          {activeSection === 'agent-governance-alerts' && (
+            <div className="agent-governance-section">
+              <div className="page-header">
+                <div>
+                  <h2>Agent Governance - Alerts & Notifications</h2>
+                  <p className="section-description">Configure how you receive agent alerts and notifications</p>
+                </div>
+                <button className="btn-primary" onClick={saveAgentGovernanceSettings} disabled={savingAgentSettings}>
+                  {savingAgentSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+
+              {agentSettingsMessage.text && (
+                <div className={`message-banner ${agentSettingsMessage.type}`}>
+                  {agentSettingsMessage.text}
+                </div>
+              )}
+
+              <div className="settings-card">
+                <h3>Alert Configuration</h3>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Alert Routing</label>
+                    <p className="setting-description">Where to send agent alerts</p>
+                  </div>
+                  <select
+                    className="setting-select"
+                    value={agentGovernanceSettings.alertChannel}
+                    onChange={(e) => handleAgentSettingChange('alertChannel', e.target.value)}
+                  >
+                    <option value="Email">Email</option>
+                    <option value="Slack">Slack</option>
+                    <option value="Discord">Discord</option>
+                    <option value="SMS">SMS</option>
+                  </select>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Slack Webhook URL</label>
+                    <p className="setting-description">Webhook for Slack notifications</p>
+                  </div>
+                  <input
+                    type="url"
+                    className="setting-input wide"
+                    value={agentGovernanceSettings.slackWebhook}
+                    onChange={(e) => handleAgentSettingChange('slackWebhook', e.target.value)}
+                    placeholder="https://hooks.slack.com/services/..."
+                  />
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Daily Digest Notifications</label>
+                    <p className="setting-description">Receive daily digest of agent performance and issues</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={agentGovernanceSettings.dailyDigest} onChange={() => handleAgentSettingToggle('dailyDigest')} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Digest Time</label>
+                    <p className="setting-description">When to send the daily digest</p>
+                  </div>
+                  <select
+                    className="setting-select"
+                    value={agentGovernanceSettings.digestTime}
+                    onChange={(e) => handleAgentSettingChange('digestTime', e.target.value)}
+                  >
+                    <option value="8:00 AM">8:00 AM</option>
+                    <option value="12:00 PM">12:00 PM</option>
+                    <option value="6:00 PM">6:00 PM</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Agent Governance - Compliance */}
+          {activeSection === 'agent-governance-compliance' && (
+            <div className="agent-governance-section">
+              <div className="page-header">
+                <div>
+                  <h2>Agent Governance - Compliance</h2>
+                  <p className="section-description">Configure compliance and governance rules for agents</p>
+                </div>
+                <button className="btn-primary" onClick={saveAgentGovernanceSettings} disabled={savingAgentSettings}>
+                  {savingAgentSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+
+              {agentSettingsMessage.text && (
+                <div className={`message-banner ${agentSettingsMessage.type}`}>
+                  {agentSettingsMessage.text}
+                </div>
+              )}
+
+              <div className="settings-card">
+                <h3>Compliance Settings</h3>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Enforce Elite Status for Tier 3 Agents</label>
+                    <p className="setting-description">Tier 3 agents must maintain Elite performance standards</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={agentGovernanceSettings.enforceEliteForTier3} onChange={() => handleAgentSettingToggle('enforceEliteForTier3')} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Fair Lending Monitoring</label>
+                    <p className="setting-description">Track disparate impact across protected classes for compliance agents</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={agentGovernanceSettings.fairLendingMonitoring} onChange={() => handleAgentSettingToggle('fairLendingMonitoring')} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Require Approval for Agent Changes</label>
+                    <p className="setting-description">All agent configuration changes require admin approval</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={agentGovernanceSettings.requireApproval} onChange={() => handleAgentSettingToggle('requireApproval')} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Audit Log Retention</label>
+                    <p className="setting-description">Required: 7 years (2555 days) for Tier 3 agents</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.auditRetentionDays}
+                      onChange={(e) => handleAgentSettingChange('auditRetentionDays', Number(e.target.value))}
+                      min="365"
+                    />
+                    <span className="input-suffix">days</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Agent Governance - Agent Gym Settings */}
+          {activeSection === 'agent-governance-gym' && (
+            <div className="agent-governance-section">
+              <div className="page-header">
+                <div>
+                  <h2>Agent Governance - Agent Gym Settings</h2>
+                  <p className="section-description">Configure agent training and testing settings</p>
+                </div>
+                <div className="header-actions">
+                  <button className="btn-secondary" onClick={() => navigate('/agent-gym')}>
+                    Open Agent Gym
+                  </button>
+                  <button className="btn-primary" onClick={saveAgentGovernanceSettings} disabled={savingAgentSettings}>
+                    {savingAgentSettings ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+
+              {agentSettingsMessage.text && (
+                <div className={`message-banner ${agentSettingsMessage.type}`}>
+                  {agentSettingsMessage.text}
+                </div>
+              )}
+
+              <div className="settings-card">
+                <h3>Training & Testing Configuration</h3>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Automatic Daily Testing</label>
+                    <p className="setting-description">Run gym scenarios for all agents at 2 AM daily</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={agentGovernanceSettings.autoDailyTesting} onChange={() => handleAgentSettingToggle('autoDailyTesting')} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Minimum Pass Rate for Production</label>
+                    <p className="setting-description">Agents below this pass rate are flagged for review</p>
+                  </div>
+                  <div className="setting-input-wrapper">
+                    <input
+                      type="number"
+                      className="setting-input"
+                      value={agentGovernanceSettings.minPassRate}
+                      onChange={(e) => handleAgentSettingChange('minPassRate', Number(e.target.value))}
+                      min="50"
+                      max="100"
+                    />
+                    <span className="input-suffix">%</span>
+                  </div>
+                </div>
+
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <label className="setting-label">Block Deployment on Failed Tests</label>
+                    <p className="setting-description">Prevent agent deployments if gym tests fail</p>
+                  </div>
+                  <label className="toggle-switch">
+                    <input type="checkbox" checked={agentGovernanceSettings.blockOnFailedTests} onChange={() => handleAgentSettingToggle('blockOnFailedTests')} />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
               </div>
             </div>
           )}

@@ -9,7 +9,15 @@ from sqlalchemy import text
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date
 from pydantic import BaseModel
-from main import get_db
+# Lazy import for get_db to avoid circular dependency with main.py
+def get_db():
+    """Wrapper for get_db to avoid circular import with main.py."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 router = APIRouter(prefix="/api/mission-control", tags=["Mission Control"])
 

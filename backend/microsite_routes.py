@@ -14,7 +14,15 @@ from datetime import datetime
 import logging
 import os
 
-from main import get_db
+# Lazy import for get_db to avoid circular dependency with main.py
+def get_db():
+    """Wrapper for get_db to avoid circular import with main.py."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 logger = logging.getLogger(__name__)
 

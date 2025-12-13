@@ -13,10 +13,16 @@ from jose import jwt
 import logging
 import os
 
-from main import (
-    get_db, User, Subscription, OnboardingProgress, EmailVerificationToken,
-    TeamMember, Workflow, get_password_hash
-)
+# Lazy import for get_db to avoid circular dependency with main.py
+# Other model imports (User, Subscription, etc.) are done inside each function that needs them
+def get_db():
+    """Wrapper for get_db to avoid circular import with main.py."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 # from integrations.stripe_service import StripeService  # Disabled for now
 from integrations.email_service import EmailService, VerificationTokenService
 
@@ -127,6 +133,9 @@ async def create_demo_user(db: Session = Depends(get_db)):
     Email: demo@test.com
     Password: demo123
     """
+    # Lazy imports to avoid circular dependency
+    from main import User, Subscription, OnboardingProgress, get_password_hash
+
     demo_email = "demo@test.com"
 
     # Delete existing demo user if exists
@@ -407,6 +416,9 @@ async def verify_email(verification: EmailVerification, db: Session = Depends(ge
     """
     Verify user's email address with token
     """
+    # Lazy import to avoid circular dependency
+    from main import User
+
     user_id = VerificationTokenService.verify_token(db, verification.token)
 
     if not user_id:
@@ -438,6 +450,9 @@ async def resend_verification(email: EmailStr, db: Session = Depends(get_db)):
     """
     Resend verification email
     """
+    # Lazy import to avoid circular dependency
+    from main import User
+
     user = db.query(User).filter(User.email == email).first()
 
     if not user:
@@ -532,6 +547,9 @@ async def get_onboarding_progress(user_id: int, db: Session = Depends(get_db)):
     """
     Get onboarding progress for a user
     """
+    # Lazy import to avoid circular dependency
+    from main import OnboardingProgress
+
     progress = db.query(OnboardingProgress).filter(
         OnboardingProgress.user_id == user_id
     ).first()
@@ -557,6 +575,9 @@ async def update_onboarding_step(
     """
     Update onboarding step progress
     """
+    # Lazy import to avoid circular dependency
+    from main import OnboardingProgress
+
     progress = db.query(OnboardingProgress).filter(
         OnboardingProgress.user_id == user_id
     ).first()
@@ -598,6 +619,9 @@ async def upload_onboarding_documents(
 
     In production, this would use file upload and storage (S3, etc.)
     """
+    # Lazy import to avoid circular dependency
+    from main import OnboardingProgress
+
     progress = db.query(OnboardingProgress).filter(
         OnboardingProgress.user_id == user_id
     ).first()
@@ -628,6 +652,9 @@ async def add_team_member(
     """
     Add a team member during onboarding
     """
+    # Lazy import to avoid circular dependency
+    from main import TeamMember, OnboardingProgress
+
     db_member = TeamMember(
         user_id=user_id,
         name=team_member.name,
@@ -664,6 +691,9 @@ async def generate_workflows(
     This is a placeholder - actual implementation would use OpenAI to parse
     documents and generate custom workflows
     """
+    # Lazy import to avoid circular dependency
+    from main import TeamMember, OnboardingProgress, Workflow
+
     # Get team members
     team_members = db.query(TeamMember).filter(TeamMember.user_id == user_id).all()
 

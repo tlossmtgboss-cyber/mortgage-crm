@@ -1,4 +1,4 @@
-# Profitability System - Quick Reference
+# Perennia AI Mortgage CRM - Quick Reference
 
 ## API Endpoints Cheat Sheet
 
@@ -152,3 +152,159 @@ curl "https://your-api/api/v1/profitability/ai/recommendations" \
 **Chart not updating:**
 - Check network tab for API errors
 - Verify authentication token
+
+---
+
+## PURL System Endpoints
+
+### Token Management
+```bash
+# Generate new PURL token
+POST /api/purl/generate
+Body: { "lead_id": "uuid", "expiry_days": 30 }
+
+# Validate token
+GET /api/purl/validate/{token}
+
+# Refresh expiring token
+POST /api/purl/refresh/{token}
+
+# Revoke token
+DELETE /api/purl/revoke/{token}
+```
+
+### Borrower Portal
+```bash
+# Get portal data
+GET /api/purl/portal/{token}
+
+# Get workspace
+GET /api/purl/portal/{token}/workspace
+
+# Submit application
+POST /api/purl/portal/{token}/application
+
+# Get timeline
+GET /api/purl/portal/{token}/timeline
+```
+
+### Document Management
+```bash
+# List documents
+GET /api/purl/portal/{token}/documents
+
+# Upload document
+POST /api/purl/portal/{token}/documents
+
+# Delete document
+DELETE /api/purl/portal/{token}/documents/{doc_id}
+```
+
+---
+
+## Agent System Endpoints
+
+### Chat & Interaction
+```bash
+# Chat with agent
+POST /api/agents/chat
+Body: { "message": "...", "agent_type": "pipeline_analyst" }
+
+# WebSocket connection
+WS /api/agents/ws/{session_id}
+```
+
+### Agent Governance
+```bash
+# Get governance rules
+GET /api/agents/governance
+
+# Request approval
+POST /api/agents/governance/approval-request
+
+# Approve/reject action
+POST /api/agents/governance/approval/{request_id}
+```
+
+### Agent Gym
+```bash
+# List scenarios
+GET /api/agents/gym/scenarios
+
+# Run scenario
+POST /api/agents/gym/scenario
+Body: { "scenario_id": "...", "agent_type": "..." }
+
+# Get results
+GET /api/agents/gym/results/{run_id}
+```
+
+---
+
+## Common Commands
+
+### Quick Start
+```bash
+# Backend
+cd backend && source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+
+# Frontend
+cd frontend && npm install && npm start
+```
+
+### Database
+```bash
+# Run all migrations
+python migrations/add_purl_system.py
+python migrations/add_agent_governance_system.py
+
+# Seed data
+python scripts/seed_test_data.py
+python scripts/seed_agent_data.py
+
+# Validate system
+python scripts/validate_workflow_sla_system.py
+```
+
+### Testing
+```bash
+# All tests
+pytest tests/ -v
+
+# PURL tests
+python tests/test_purl_quick.py
+
+# Full workflow test
+python scripts/test_full_workflow.py
+```
+
+---
+
+## Specialized Agents Reference
+
+| Agent | Type Key | Primary Use |
+|-------|----------|-------------|
+| Pipeline Analyst | `pipeline_analyst` | Pipeline metrics & forecasting |
+| Compliance Checker | `compliance_checker` | Regulatory compliance |
+| Lead Nurturer | `lead_nurturer` | Lead engagement |
+| Document Tracker | `document_tracker` | Document collection |
+| Scheduler | `scheduler` | Appointment booking |
+| Coaching | `coaching` | LO performance |
+| Rate Advisor | `rate_advisor` | Rate lock guidance |
+| Email Intel | `email_intel` | Email parsing |
+| Receptionist | `receptionist` | Inbound handling |
+| Voice | `voice` | Phone interactions |
+
+---
+
+## Quick Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| PURL token invalid | Check expiration, verify token format |
+| Agent not responding | Check ANTHROPIC_API_KEY, verify agent type |
+| WebSocket disconnects | Check WS_TIMEOUT setting, network stability |
+| Document upload fails | Check file size (<10MB), verify file type |
+| Database connection error | Verify DATABASE_URL, check PostgreSQL status |

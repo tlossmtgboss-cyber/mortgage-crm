@@ -1723,4 +1723,285 @@ export const prequalifyAPI = {
   }
 };
 
+// Agent Governance API
+export const agentAPI = {
+  // Agent Profiles
+  getAgents: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/profiles', { params });
+    return ensureArray(response.data, 'agents');
+  },
+  getAgent: async (agentId) => {
+    const response = await api.get(`/api/v1/agents/profiles/${agentId}`);
+    return response.data;
+  },
+  createAgent: async (data) => {
+    const response = await api.post('/api/v1/agents/profiles', data);
+    return response.data;
+  },
+  updateAgent: async (agentId, data) => {
+    const response = await api.put(`/api/v1/agents/profiles/${agentId}`, data);
+    return response.data;
+  },
+  deleteAgent: async (agentId) => {
+    const response = await api.delete(`/api/v1/agents/profiles/${agentId}`);
+    return response.data;
+  },
+  updateAgentStatus: async (agentId, status, reason = null) => {
+    const response = await api.post(`/api/v1/agents/profiles/${agentId}/status`, { status, reason });
+    return response.data;
+  },
+  getAgentHealth: async (agentId) => {
+    const response = await api.get(`/api/v1/agents/profiles/${agentId}/health`);
+    return response.data;
+  },
+
+  // Agent Types
+  getAgentTypes: async () => {
+    const response = await api.get('/api/v1/agents/types');
+    return response.data;
+  },
+
+  // Executions
+  getExecutions: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/executions', { params });
+    return response.data;
+  },
+  getAgentExecutions: async (agentId, params = {}) => {
+    const response = await api.get(`/api/v1/agents/profiles/${agentId}/executions`, { params });
+    return ensureArray(response.data, 'executions');
+  },
+  getExecution: async (executionId) => {
+    const response = await api.get(`/api/v1/agents/executions/${executionId}`);
+    return response.data;
+  },
+
+  // Metrics
+  getAgentMetrics: async (agentId, params = {}) => {
+    const response = await api.get(`/api/v1/agents/profiles/${agentId}/metrics`, { params });
+    return response.data;
+  },
+  getAggregatedMetrics: async (agentId, params = {}) => {
+    const response = await api.get(`/api/v1/agents/profiles/${agentId}/metrics/aggregate`, { params });
+    return response.data;
+  },
+
+  // Alerts
+  getAlerts: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/alerts', { params });
+    return ensureArray(response.data, 'alerts');
+  },
+  acknowledgeAlert: async (alertId, userId) => {
+    const response = await api.post(`/api/v1/agents/alerts/${alertId}/acknowledge`, null, {
+      params: { acknowledged_by: userId }
+    });
+    return response.data;
+  },
+  resolveAlert: async (alertId, userId, notes = null) => {
+    const response = await api.post(`/api/v1/agents/alerts/${alertId}/resolve`, null, {
+      params: { resolved_by: userId, resolution_notes: notes }
+    });
+    return response.data;
+  },
+
+  // Dashboard
+  getDashboard: async () => {
+    const response = await api.get('/api/v1/agents/dashboard');
+    return response.data;
+  },
+  getSystemHealth: async () => {
+    const response = await api.get('/api/v1/agents/health');
+    return response.data;
+  },
+  getHealthSummary: async () => {
+    const response = await api.get('/api/v1/agents/health/summary');
+    return response.data;
+  },
+  getStatistics: async (days = 30) => {
+    const response = await api.get('/api/v1/agents/statistics', { params: { days } });
+    return response.data;
+  },
+
+  // Bulk Operations
+  bulkPauseAgents: async (agentIds, reason = null) => {
+    const response = await api.post('/api/v1/agents/bulk/pause', agentIds, { params: { reason } });
+    return response.data;
+  },
+  bulkActivateAgents: async (agentIds) => {
+    const response = await api.post('/api/v1/agents/bulk/activate', agentIds);
+    return response.data;
+  },
+
+  // Seed defaults
+  seedDefaultAgents: async () => {
+    const response = await api.post('/api/v1/agents/seed-defaults');
+    return response.data;
+  },
+
+  // Governance Settings
+  getSettings: async () => {
+    const response = await api.get('/api/v1/agents/governance/settings');
+    return response.data;
+  },
+  updateSettings: async (settings) => {
+    const response = await api.put('/api/v1/agents/governance/settings', settings);
+    return response.data;
+  },
+
+  // Dashboard & Profiles (for AgentDashboard)
+  getDashboardSummary: async () => {
+    const response = await api.get('/api/v1/agents/governance/dashboard');
+    return response.data;
+  },
+  getProfiles: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/profiles', { params });
+    return response.data;
+  }
+};
+
+// Agent Gym API
+export const agentGymAPI = {
+  // Scenarios
+  getScenarios: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/gym/scenarios', { params });
+    return ensureArray(response.data, 'scenarios');
+  },
+  getScenario: async (scenarioId) => {
+    const response = await api.get(`/api/v1/agents/gym/scenarios/${scenarioId}`);
+    return response.data;
+  },
+  createScenario: async (data) => {
+    const response = await api.post('/api/v1/agents/gym/scenarios', data);
+    return response.data;
+  },
+  updateScenario: async (scenarioId, data) => {
+    const response = await api.put(`/api/v1/agents/gym/scenarios/${scenarioId}`, data);
+    return response.data;
+  },
+  deleteScenario: async (scenarioId) => {
+    const response = await api.delete(`/api/v1/agents/gym/scenarios/${scenarioId}`);
+    return response.data;
+  },
+  getScenarioStats: async (scenarioId) => {
+    const response = await api.get(`/api/v1/agents/gym/scenarios/${scenarioId}/stats`);
+    return response.data;
+  },
+
+  // Training Sessions
+  startSession: async (scenarioId, agentId, initiatedBy = null) => {
+    const response = await api.post(`/api/v1/agents/gym/scenarios/${scenarioId}/start`, {
+      agent_id: agentId,
+      initiated_by: initiatedBy
+    });
+    return response.data;
+  },
+  completeSession: async (sessionId, results, score, passed, feedback = null) => {
+    const response = await api.post(`/api/v1/agents/gym/sessions/${sessionId}/complete`, {
+      results,
+      score,
+      passed,
+      feedback
+    });
+    return response.data;
+  },
+  failSession: async (sessionId, error) => {
+    const response = await api.post(`/api/v1/agents/gym/sessions/${sessionId}/fail`, { error });
+    return response.data;
+  },
+  getSessions: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/gym/sessions', { params });
+    return ensureArray(response.data, 'sessions');
+  },
+  getSession: async (sessionId) => {
+    const response = await api.get(`/api/v1/agents/gym/sessions/${sessionId}`);
+    return response.data;
+  },
+
+  // Assessment & Benchmarking
+  assessAgentSkills: async (agentId) => {
+    const response = await api.get(`/api/v1/agents/gym/agents/${agentId}/assessment`);
+    return response.data;
+  },
+  getRecommendedScenarios: async (agentId, limit = 5) => {
+    const response = await api.get(`/api/v1/agents/gym/agents/${agentId}/recommended-scenarios`, {
+      params: { limit }
+    });
+    return response.data;
+  },
+  benchmarkAgent: async (agentId, scenarioIds = null) => {
+    const params = scenarioIds ? { scenario_ids: scenarioIds.join(',') } : {};
+    const response = await api.get(`/api/v1/agents/gym/agents/${agentId}/benchmark`, { params });
+    return response.data;
+  },
+  getLeaderboard: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/gym/leaderboard', { params });
+    return response.data;
+  },
+
+  // Scenario Generation
+  generateScenarioFromExecution: async (executionId, difficulty = 'intermediate') => {
+    const response = await api.post('/api/v1/agents/gym/scenarios/generate-from-execution', null, {
+      params: { execution_id: executionId, difficulty }
+    });
+    return response.data;
+  },
+
+  // Seed defaults
+  seedDefaultScenarios: async () => {
+    const response = await api.post('/api/v1/agents/gym/seed-defaults');
+    return response.data;
+  }
+};
+
+// Agent Chat API
+export const agentChatAPI = {
+  // Sessions
+  createSession: async (agentId, userId = null, context = null) => {
+    const response = await api.post('/api/v1/agents/chat/sessions', {
+      agent_id: agentId,
+      user_id: userId,
+      context
+    });
+    return response.data;
+  },
+  getSessions: async (params = {}) => {
+    const response = await api.get('/api/v1/agents/chat/sessions', { params });
+    return response.data;
+  },
+  getSession: async (sessionId) => {
+    const response = await api.get(`/api/v1/agents/chat/sessions/${sessionId}`);
+    return response.data;
+  },
+  closeSession: async (sessionId) => {
+    const response = await api.delete(`/api/v1/agents/chat/sessions/${sessionId}`);
+    return response.data;
+  },
+
+  // Messages
+  sendMessage: async (sessionId, content, context = null) => {
+    const response = await api.post(`/api/v1/agents/chat/sessions/${sessionId}/messages`, {
+      content,
+      context
+    });
+    return response.data;
+  },
+  getMessages: async (sessionId, params = {}) => {
+    const response = await api.get(`/api/v1/agents/chat/sessions/${sessionId}/messages`, { params });
+    return response.data;
+  },
+
+  // Quick Action (no session)
+  quickAction: async (agentId, content, context = null) => {
+    const response = await api.post(`/api/v1/agents/chat/quick/${agentId}`, {
+      content,
+      context
+    });
+    return response.data;
+  },
+
+  // Streaming (returns EventSource URL)
+  getStreamUrl: (sessionId) => {
+    return `${API_BASE_URL}/api/v1/agents/chat/sessions/${sessionId}/messages/stream`;
+  }
+};
+
 export default api;
