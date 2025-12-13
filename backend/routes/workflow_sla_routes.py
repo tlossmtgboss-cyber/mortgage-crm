@@ -1569,7 +1569,7 @@ async def fix_workflow_day_semantics(
         # Step 1: Capture before state
         before_query = db.execute(text("""
             SELECT
-                wc.name as workflow_name,
+                wc.workflow_name as workflow_name,
                 wdc.id as config_id,
                 wdc.day_value,
                 wdc.day_label
@@ -1578,7 +1578,7 @@ async def fix_workflow_day_semantics(
             WHERE wdc.day_label ILIKE '%24 Hour%'
                OR wdc.day_label ILIKE '%First%'
                OR wdc.day_value IN (0, 1)
-            ORDER BY wc.name, wdc.day_value
+            ORDER BY wc.workflow_name, wdc.day_value
         """))
 
         results["before_state"] = [
@@ -1616,7 +1616,7 @@ async def fix_workflow_day_semantics(
         # Step 4: Capture after state
         after_query = db.execute(text("""
             SELECT
-                wc.name as workflow_name,
+                wc.workflow_name as workflow_name,
                 wdc.id as config_id,
                 wdc.day_value,
                 wdc.day_label
@@ -1625,7 +1625,7 @@ async def fix_workflow_day_semantics(
             WHERE wdc.day_label ILIKE '%24 Hour%'
                OR wdc.day_label ILIKE '%First%'
                OR wdc.day_value IN (0, 1)
-            ORDER BY wc.name, wdc.day_value
+            ORDER BY wc.workflow_name, wdc.day_value
         """))
 
         results["after_state"] = [
@@ -1687,7 +1687,7 @@ async def verify_day_semantics(
         # Get all day configs
         configs = db.execute(text("""
             SELECT
-                wc.name as workflow_name,
+                wc.workflow_name as workflow_name,
                 wdc.day_value,
                 wdc.day_label,
                 wdc.phone_enabled,
@@ -1695,7 +1695,7 @@ async def verify_day_semantics(
                 wdc.text_enabled
             FROM workflow_day_configs wdc
             JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
-            ORDER BY wc.name, wdc.day_value
+            ORDER BY wc.workflow_name, wdc.day_value
         """))
 
         by_workflow = {}
