@@ -1,0 +1,116 @@
+/**
+ * DocumentStatusBadge Styles
+ */
+
+.document-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Size variants */
+.badge-small {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+}
+
+.badge-small .badge-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.badge-medium {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.badge-medium .badge-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.badge-large {
+  padding: 6px 14px;
+  font-size: 0.875rem;
+}
+
+.badge-large .badge-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Icon styling */
+.badge-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Status variants */
+.badge-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.badge-uploaded {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.badge-review {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #a5b4fc;
+}
+
+.badge-approved {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.badge-rejected {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.badge-expired {
+  background-color: #fed7aa;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.badge-quarantined {
+  background-color: #fecaca;
+  color: #7f1d1d;
+  border: 1px solid #f87171;
+}
+
+/* Animation for pending/review states */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.badge-pending,
+.badge-review {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}

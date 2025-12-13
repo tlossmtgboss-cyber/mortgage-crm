@@ -12,9 +12,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import {
+  api,
+  useWorkspaceData,
+  useWorkspaceMilestones,
+  useDocumentUpload,
+  useSendMessage,
+} from '../lib/api';
 import './PURLPortal.css';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Tab components
 const TabButton = ({ label, icon, isActive, onClick, badge }) => (
@@ -210,98 +215,65 @@ export default function PURLPortal() {
     const urlToken = urlParams.get('token');
     if (urlToken) {
       localStorage.setItem(`purl_token_${slug}`, urlToken);
+      // Set auth token on API client
+      api.setAuthToken(urlToken);
       return urlToken;
     }
-    return localStorage.getItem(`purl_token_${slug}`);
+    const storedToken = localStorage.getItem(`purl_token_${slug}`);
+    if (storedToken) {
+      api.setAuthToken(storedToken);
+    }
+    return storedToken;
   };
 
   const [token] = useState(getToken);
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  // Data state
-  const [workspace, setWorkspace] = useState(null);
-  const [application, setApplication] = useState(null);
+  // Use workspace data hook
+  const {
+    data: workspaceData,
+    loading,
+    error,
+    refetch: refetchWorkspace,
+  } = useWorkspaceData(slug);
+
+  // Extract data from workspace response
+  const workspace = workspaceData?.workspace;
+  const application = workspaceData?.application;
   const [documents, setDocuments] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [timeline, setTimeline] = useState([]);
   const [messages, setMessages] = useState([]);
   const [modules, setModules] = useState([]);
+  const [uploading, setUploading] = useState(false);
 
   // Message form state
   const [newMessage, setNewMessage] = useState({ subject: '', body: '' });
-  const [sendingMessage, setSendingMessage] = useState(false);
 
-  // Upload state
-  const [uploading, setUploading] = useState(false);
+  // Use send message hook
+  const { mutate: sendMessageMutation, loading: sendingMessage } = useSendMessage(slug);
 
-  // Fetch helper
-  const fetchAPI = useCallback(async (endpoint, options = {}) => {
-    const response = await fetch(`${API_BASE_URL}/api/purl/workspace/${slug}${endpoint}`, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        setError('Session expired. Please use your portal link again.');
-        throw new Error('Unauthorized');
-      }
-      const data = await response.json();
-      throw new Error(data.detail || 'Request failed');
+  // Sync workspace data when it changes
+  useEffect(() => {
+    if (workspaceData) {
+      setDocuments(workspaceData.documents || []);
+      setTasks(workspaceData.tasks || []);
+      setMilestones(workspaceData.milestones || []);
+      setTimeline(workspaceData.timeline || []);
+      setModules(workspaceData.modules || []);
     }
-
-    return response.json();
-  }, [slug, token]);
-
-  // Load workspace data
-  const loadWorkspaceData = useCallback(async () => {
-    if (!token) {
-      setError('Please use your portal access link to view this page.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const data = await fetchAPI('');
-
-      setWorkspace(data.workspace);
-      setApplication(data.application);
-      setDocuments(data.documents || []);
-      setTasks(data.tasks || []);
-      setMilestones(data.milestones || []);
-      setTimeline(data.timeline || []);
-      setModules(data.modules || []);
-
-      setLoading(false);
-    } catch (err) {
-      console.error('Failed to load workspace:', err);
-      setError(err.message);
-      setLoading(false);
-    }
-  }, [token, fetchAPI]);
+  }, [workspaceData]);
 
   // Load messages
   const loadMessages = useCallback(async () => {
     try {
-      const data = await fetchAPI('/messages');
+      const data = await api.getWorkspaceMessages(slug);
       setMessages(data.messages || []);
     } catch (err) {
       console.error('Failed to load messages:', err);
     }
-  }, [fetchAPI]);
-
-  // Initial load
-  useEffect(() => {
-    loadWorkspaceData();
-  }, [loadWorkspaceData]);
+  }, [slug]);
 
   // Load messages when tab changes to messages
   useEffect(() => {
@@ -313,7 +285,7 @@ export default function PURLPortal() {
   // Handle document download
   const handleDownload = async (documentId) => {
     try {
-      const data = await fetchAPI(`/documents/${documentId}/download-url`);
+      const data = await api.getDocumentDownload(documentId, workspace?.id);
       window.open(data.download_url, '_blank');
     } catch (err) {
       console.error('Download failed:', err);
@@ -327,56 +299,55 @@ export default function PURLPortal() {
     if (!files || files.length === 0) return;
 
     setUploading(true);
+    try {
+      for (const file of files) {
+        try {
+          // Get upload URL
+          const uploadData = await api.getDocumentUploadUrl(slug, {
+            filename: file.name,
+            contentType: file.type,
+          });
 
-    for (const file of files) {
-      try {
-        // Get upload URL
-        const uploadData = await fetchAPI(
-          `/documents/upload-url?filename=${encodeURIComponent(file.name)}&content_type=${encodeURIComponent(file.type)}`,
-          { method: 'POST' }
-        );
+          // Upload to S3
+          await fetch(uploadData.upload_url, {
+            method: 'PUT',
+            body: file,
+            headers: {
+              'Content-Type': file.type,
+            },
+          });
 
-        // Upload to S3
-        await fetch(uploadData.upload_url, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type
-          }
-        });
+          // Complete upload
+          await api.completeDocumentUpload(slug, {
+            documentKey: uploadData.document_key,
+            filename: file.name,
+            fileSize: file.size,
+            contentType: file.type,
+          });
 
-        // Complete upload
-        await fetchAPI(
-          `/documents/upload-complete?document_key=${encodeURIComponent(uploadData.document_key)}&filename=${encodeURIComponent(file.name)}&file_size=${file.size}&content_type=${encodeURIComponent(file.type)}`,
-          { method: 'POST' }
-        );
-
-        // Refresh documents
-        const docsData = await fetchAPI('/documents');
-        setDocuments(docsData.documents || []);
-
-      } catch (err) {
-        console.error('Upload failed:', err);
-        alert(`Failed to upload ${file.name}`);
+          // Refresh documents
+          const docsData = await api.getWorkspaceDocuments(slug);
+          setDocuments(docsData.documents || []);
+        } catch (err) {
+          console.error('Upload failed:', err);
+          alert(`Failed to upload ${file.name}`);
+        }
       }
+    } finally {
+      setUploading(false);
+      event.target.value = '';
     }
-
-    setUploading(false);
-    event.target.value = '';
   };
 
   // Handle task completion
   const handleTaskComplete = async (taskId, complete) => {
     try {
-      await fetchAPI(`/tasks/${taskId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: complete ? 'completed' : 'open'
-        })
+      await api.updateTask(slug, taskId, {
+        status: complete ? 'completed' : 'open',
       });
 
       // Refresh tasks
-      const tasksData = await fetchAPI('/tasks');
+      const tasksData = await api.getWorkspaceTasks(slug);
       setTasks(tasksData.tasks || []);
     } catch (err) {
       console.error('Failed to update task:', err);
@@ -389,21 +360,34 @@ export default function PURLPortal() {
     e.preventDefault();
     if (!newMessage.body.trim()) return;
 
-    setSendingMessage(true);
     try {
-      await fetchAPI('/messages', {
-        method: 'POST',
-        body: JSON.stringify(newMessage)
+      await sendMessageMutation({
+        content: newMessage.body,
+        messageType: 'text',
       });
-
       setNewMessage({ subject: '', body: '' });
       loadMessages();
     } catch (err) {
       console.error('Failed to send message:', err);
       alert('Failed to send message');
     }
-    setSendingMessage(false);
   };
+
+  // No token - show access error
+  if (!token) {
+    return (
+      <div className="purl-portal error">
+        <div className="error-container">
+          <div className="error-icon">🔐</div>
+          <h2>Access Required</h2>
+          <p>Please use your portal access link to view this page.</p>
+          <p className="error-help">
+            Contact your loan officer for a new portal link.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (loading) {
@@ -419,12 +403,13 @@ export default function PURLPortal() {
 
   // Error state
   if (error) {
+    const isAuthError = error?.status === 401;
     return (
       <div className="purl-portal error">
         <div className="error-container">
           <div className="error-icon">⚠️</div>
-          <h2>Access Error</h2>
-          <p>{error}</p>
+          <h2>{isAuthError ? 'Session Expired' : 'Access Error'}</h2>
+          <p>{isAuthError ? 'Your session has expired. Please use your portal link again.' : error?.message || 'An error occurred'}</p>
           <p className="error-help">
             Please contact your loan officer for a new portal link.
           </p>
