@@ -1364,11 +1364,15 @@ function LeadDetail() {
         const existingWorkspace = await purlAPI.getWorkspaceByLead(lead.id);
         if (existingWorkspace && existingWorkspace.workspace) {
           // Portal exists - get the URL
-          const purlUrl = existingWorkspace.purl_url || existingWorkspace.url;
+          const workspaceId = existingWorkspace.workspace.workspace_id || existingWorkspace.workspace.id;
+          const purlUrlData = await purlAPI.getPurlUrl(workspaceId);
+          const portalUrl = purlUrlData.portal_url || purlUrlData.purl_url ||
+            `https://client.perennia.ai/portal/${existingWorkspace.workspace.slug}`;
+
           setClientPortalData({
-            workspace_id: existingWorkspace.workspace.id,
-            url: purlUrl,
-            borrower_name: existingWorkspace.workspace.borrower_name,
+            workspace_id: workspaceId,
+            url: portalUrl,
+            borrower_name: existingWorkspace.workspace.display_name,
             status: existingWorkspace.workspace.status,
             exists: true
           });
@@ -1383,23 +1387,35 @@ function LeadDetail() {
       }
 
       // Create new portal for this lead
+      const borrowerName = lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim();
       const createData = {
-        borrower_name: lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
-        borrower_email: lead.email,
-        borrower_phone: lead.phone,
-        lead_id: lead.id,
-        status: 'active'
+        display_name: borrowerName,
+        source: 'lead_profile',
+        metadata: {
+          lead_id: String(lead.id),
+          borrower_name: borrowerName,
+          borrower_email: lead.email,
+          borrower_phone: lead.phone
+        }
       };
 
-      const newWorkspace = await purlAPI.createWorkspace(createData);
+      const response = await purlAPI.createWorkspace(createData);
+      const newWorkspace = response.workspace || response;
+
+      // Create an access token for the workspace
+      await purlAPI.createToken(newWorkspace.id, {
+        scope: 'full',
+        expires_in_days: 90
+      });
 
       // Get the PURL URL
       const purlUrlData = await purlAPI.getPurlUrl(newWorkspace.id);
+      const portalUrl = purlUrlData.portal_url || purlUrlData.purl_url || purlUrlData.url;
 
       setClientPortalData({
         workspace_id: newWorkspace.id,
-        url: purlUrlData.purl_url || purlUrlData.url,
-        borrower_name: newWorkspace.borrower_name,
+        url: portalUrl,
+        borrower_name: borrowerName,
         status: newWorkspace.status,
         exists: false,
         justCreated: true
