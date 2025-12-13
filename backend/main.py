@@ -33569,10 +33569,12 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     try:
+        logger.info(f"Login attempt for: {form_data.username}")
         user = db.query(User).filter(User.email == form_data.username).first()
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
+            logger.warning(f"User not found: {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -33587,7 +33589,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # Debug: log hash info
+        logger.info(f"User found, hash length: {len(user.hashed_password)}, hash prefix: {user.hashed_password[:30]}...")
+        logger.info(f"Password length: {len(form_data.password)}")
+
         if not verify_password(form_data.password, user.hashed_password):
+            logger.warning(f"Password verification failed for {form_data.username}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -33675,34 +33682,39 @@ async def debug_auth(db: Session = Depends(get_db)):
         # Get bcrypt version
         bcrypt_version = getattr(bcrypt_lib, '__version__', 'unknown')
 
-        # Get the stored hash from database
+        # Get the stored hash from database using raw SQL
         result = db.execute(
             text("SELECT hashed_password FROM users WHERE email = :email"),
             {"email": admin_email}
         )
         row = result.fetchone()
+        stored_hash_sql = row[0] if row else None
 
-        if not row:
-            return {"error": "User not found"}
+        # Get the stored hash using ORM (same as login endpoint)
+        user = db.query(User).filter(User.email == admin_email).first()
+        stored_hash_orm = user.hashed_password if user else None
 
-        stored_hash = row[0]
+        # Check if they match
+        hashes_match = stored_hash_sql == stored_hash_orm
 
-        # Test verification with pwd_context
+        # Test verification with pwd_context using ORM hash
         try:
-            verified_passlib = pwd_context.verify(test_password, stored_hash)
+            verified_passlib = pwd_context.verify(test_password, stored_hash_orm) if stored_hash_orm else "No hash"
         except Exception as e:
             verified_passlib = f"Error: {str(e)}"
 
         # Test verification with raw bcrypt
         try:
-            verified_bcrypt = bcrypt_lib.checkpw(test_password.encode('utf-8'), stored_hash.encode('utf-8'))
+            verified_bcrypt = bcrypt_lib.checkpw(test_password.encode('utf-8'), stored_hash_orm.encode('utf-8')) if stored_hash_orm else "No hash"
         except Exception as e:
             verified_bcrypt = f"Error: {str(e)}"
 
         return {
             "bcrypt_version": bcrypt_version,
-            "stored_hash": stored_hash[:30] + "...",
-            "hash_length": len(stored_hash),
+            "sql_hash": stored_hash_sql[:30] + "..." if stored_hash_sql else None,
+            "orm_hash": stored_hash_orm[:30] + "..." if stored_hash_orm else None,
+            "hashes_match": hashes_match,
+            "hash_length": len(stored_hash_orm) if stored_hash_orm else 0,
             "verified_passlib": verified_passlib,
             "verified_bcrypt": verified_bcrypt,
             "test_password": test_password
