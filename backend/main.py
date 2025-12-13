@@ -19467,6 +19467,10 @@ app.include_router(market_chat_router, tags=["Market Chat"])
 from market_data_routes import router as market_data_router
 app.include_router(market_data_router, tags=["Market Data"])
 
+# Include Rate Lock Intelligence routes (integrated from external microservice)
+from routes.rate_lock_intelligence_routes import router as rate_lock_intelligence_router
+app.include_router(rate_lock_intelligence_router, tags=["Rate Lock Intelligence"])
+
 # Include Gmail Integration routes
 from gmail_routes import router as gmail_router
 app.include_router(gmail_router, tags=["Gmail Integration"])
@@ -19749,6 +19753,130 @@ async def debug_purl_routes_status():
     return {
         "purl_routes_loaded": purl_routes_error is None,
         "error": purl_routes_error
+    }
+
+# Perennia Docs AI Routes
+perennia_docs_error = None
+try:
+    from routes.perennia_docs_routes import router as perennia_docs_router, set_dependencies as set_perennia_docs_deps
+    from models.perennia_docs import create_perennia_docs_models
+
+    # Create Perennia Docs models
+    perennia_docs_models = create_perennia_docs_models(Base)
+
+    # Set dependencies
+    set_perennia_docs_deps(get_db, get_current_user, User, perennia_docs_models)
+
+    app.include_router(perennia_docs_router, tags=["Perennia Docs AI"])
+    logger.info("✅ Perennia Docs AI routes loaded")
+except Exception as e:
+    perennia_docs_error = str(e)
+    import traceback
+    perennia_docs_error = traceback.format_exc()
+    logger.warning(f"⚠️ Perennia Docs AI routes not loaded: {e}")
+
+@app.get("/api/v1/debug/perennia-docs-status")
+async def debug_perennia_docs_status():
+    """Debug endpoint to check Perennia Docs AI routes loading status"""
+    return {
+        "perennia_docs_loaded": perennia_docs_error is None,
+        "error": perennia_docs_error
+    }
+
+# Portal AI Assistant Routes
+portal_ai_assistant_error = None
+try:
+    from routes.portal_ai_assistant_routes import router as portal_ai_assistant_router, set_dependencies as set_portal_ai_deps
+
+    # Set dependencies
+    set_portal_ai_deps(get_db, get_current_user)
+
+    app.include_router(portal_ai_assistant_router, tags=["Portal AI Assistant"])
+    logger.info("✅ Portal AI Assistant routes loaded")
+except Exception as e:
+    portal_ai_assistant_error = str(e)
+    import traceback
+    portal_ai_assistant_error = traceback.format_exc()
+    logger.warning(f"⚠️ Portal AI Assistant routes not loaded: {e}")
+
+# PURL-Perennia Integration Routes
+purl_integration_error = None
+try:
+    from routes.purl_perennia_integration_routes import router as purl_integration_router, set_dependencies as set_purl_integration_deps
+
+    # Set dependencies
+    set_purl_integration_deps(get_db, get_current_user)
+
+    app.include_router(purl_integration_router, tags=["PURL Integration"])
+    logger.info("✅ PURL-Perennia Integration routes loaded")
+except Exception as e:
+    purl_integration_error = str(e)
+    import traceback
+    purl_integration_error = traceback.format_exc()
+    logger.warning(f"⚠️ PURL-Perennia Integration routes not loaded: {e}")
+
+@app.get("/api/v1/debug/portal-integration-status")
+async def debug_portal_integration_status():
+    """Debug endpoint to check Portal AI and PURL Integration routes loading status"""
+    return {
+        "portal_ai_assistant_loaded": portal_ai_assistant_error is None,
+        "portal_ai_assistant_error": portal_ai_assistant_error,
+        "purl_integration_loaded": purl_integration_error is None,
+        "purl_integration_error": purl_integration_error
+    }
+
+# Portal Document Routes (presigned URLs, upload, preview)
+portal_document_error = None
+try:
+    from routes.portal_document_routes import router as portal_document_router, set_dependencies as set_portal_doc_deps
+
+    # Set dependencies
+    set_portal_doc_deps(get_db)
+
+    app.include_router(portal_document_router, tags=["Portal Documents"])
+    logger.info("✅ Portal Document routes loaded")
+except Exception as e:
+    portal_document_error = str(e)
+    import traceback
+    portal_document_error = traceback.format_exc()
+    logger.warning(f"⚠️ Portal Document routes not loaded: {e}")
+
+# Portal Authentication Routes (magic links, sessions)
+portal_auth_error = None
+try:
+    from routes.portal_auth_routes import router as portal_auth_router, set_dependencies as set_portal_auth_deps
+
+    # Set dependencies
+    set_portal_auth_deps(get_db)
+
+    app.include_router(portal_auth_router, tags=["Portal Authentication"])
+    logger.info("✅ Portal Authentication routes loaded")
+except Exception as e:
+    portal_auth_error = str(e)
+    import traceback
+    portal_auth_error = traceback.format_exc()
+    logger.warning(f"⚠️ Portal Authentication routes not loaded: {e}")
+
+@app.get("/api/v1/debug/portal-services-status")
+async def debug_portal_services_status():
+    """Debug endpoint to check all portal-related routes loading status"""
+    return {
+        "portal_ai_assistant": {
+            "loaded": portal_ai_assistant_error is None,
+            "error": portal_ai_assistant_error
+        },
+        "purl_integration": {
+            "loaded": purl_integration_error is None,
+            "error": purl_integration_error
+        },
+        "portal_documents": {
+            "loaded": portal_document_error is None,
+            "error": portal_document_error
+        },
+        "portal_auth": {
+            "loaded": portal_auth_error is None,
+            "error": portal_auth_error
+        }
     }
 
 # Debug endpoint for tools registry loading
