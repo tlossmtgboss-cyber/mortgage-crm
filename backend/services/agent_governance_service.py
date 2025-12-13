@@ -89,12 +89,17 @@ class AgentGovernanceService:
         """
         query = self.db.query(AgentProfile)
 
+        # Filter by category (agent_type maps to category)
         if agent_type:
-            query = query.filter(AgentProfile.agent_type == agent_type)
+            query = query.filter(AgentProfile.category == agent_type)
+        # Filter by status
         if status:
             query = query.filter(AgentProfile.status == status)
-        if is_active is not None:
-            query = query.filter(AgentProfile.is_active == is_active)
+        # is_active maps to status == 'active'
+        if is_active is True:
+            query = query.filter(AgentProfile.status == 'active')
+        elif is_active is False:
+            query = query.filter(AgentProfile.status != 'active')
 
         total = query.count()
         agents = query.order_by(AgentProfile.category, AgentProfile.agent_name).offset(offset).limit(limit).all()
