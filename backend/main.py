@@ -19914,10 +19914,10 @@ async def debug_create_test_workspace(
         token = db.execute(text("""
             INSERT INTO purl_access_tokens (
                 organization_id, workspace_id, token_hash, token_prefix,
-                scope, status, expires_at, created_at, updated_at
+                scope, status, expires_at, created_at
             ) VALUES (
                 1, :workspace_id, :token_hash, :token_prefix,
-                'full', 'active', :expires_at, NOW(), NOW()
+                'full', 'active', :expires_at, NOW()
             )
             RETURNING id
         """), {
