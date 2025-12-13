@@ -3,153 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { agentAPI, agentGymAPI } from '../services/api';
 import './AgentGym.css';
 
-// Mock data generators - All 20 Perennia AI Agents
-const generateMockAgents = () => [
-  // Core CRM Agents (8)
-  { id: 1, agent_name: 'pipeline_analyst', display_name: 'Pipeline Analyst', category: 'analytics' },
-  { id: 2, agent_name: 'compliance_checker', display_name: 'Compliance Checker', category: 'compliance' },
-  { id: 3, agent_name: 'lead_nurturer', display_name: 'Lead Nurturer', category: 'sales' },
-  { id: 4, agent_name: 'document_tracker', display_name: 'Document Tracker', category: 'operations' },
-  { id: 5, agent_name: 'rate_advisor', display_name: 'Rate Advisor', category: 'advisory' },
-  { id: 6, agent_name: 'scheduler', display_name: 'Smart Scheduler', category: 'operations' },
-  { id: 7, agent_name: 'receptionist', display_name: 'AI Receptionist', category: 'communication' },
-  { id: 8, agent_name: 'sla_monitor', display_name: 'SLA Tracker', category: 'monitoring' },
-  // Extended Agents (12)
-  { id: 9, agent_name: 'task_automation', display_name: 'Task Automation', category: 'operations' },
-  { id: 10, agent_name: 'profitability_analyst', display_name: 'Profitability Analyst', category: 'analytics' },
-  { id: 11, agent_name: 'subscription_manager', display_name: 'Subscription Manager', category: 'operations' },
-  { id: 12, agent_name: 'onboarding_assistant', display_name: 'Onboarding Assistant', category: 'operations' },
-  { id: 13, agent_name: 'voice_agent', display_name: 'Voice OS', category: 'communication' },
-  { id: 14, agent_name: 'team_coach', display_name: 'Team Coach', category: 'analytics' },
-  { id: 15, agent_name: 'email_intel_agent', display_name: 'Email Intelligence', category: 'automation' },
-  { id: 16, agent_name: 'notification_center', display_name: 'Notification Center', category: 'automation' },
-  { id: 17, agent_name: 'customer_intelligence', display_name: 'Customer Intelligence', category: 'analytics' },
-  { id: 18, agent_name: 'video_agent', display_name: 'UVIP', category: 'analytics' },
-  { id: 19, agent_name: 'integrations_agent', display_name: 'Integrations', category: 'operations' },
-  { id: 20, agent_name: 'reporting_engine', display_name: 'Reporting Engine', category: 'analytics' }
-];
-
-const generateMockScenarios = () => [
-  {
-    id: 1,
-    name: 'Pipeline Health Check',
-    description: 'Test the agent\'s ability to analyze pipeline metrics and identify issues',
-    category: 'pipeline_analysis',
-    difficulty: 'medium',
-    agent_types: ['pipeline_analyst'],
-    expected_tools: ['get_pipeline_metrics', 'get_bottleneck_analysis'],
-    test_prompt: 'Analyze the current pipeline health for branch 5 and identify any bottlenecks',
-    success_criteria: ['Uses get_pipeline_metrics tool', 'Identifies at least one bottleneck', 'Provides actionable recommendations'],
-    avg_completion_time: 45,
-    pass_rate: 87.5
-  },
-  {
-    id: 2,
-    name: 'TRID Compliance Audit',
-    description: 'Verify compliance checking for TILA-RESPA requirements',
-    category: 'compliance',
-    difficulty: 'hard',
-    agent_types: ['compliance_checker'],
-    expected_tools: ['check_trid_compliance', 'get_disclosure_timeline'],
-    test_prompt: 'Check TRID compliance for loan #12345 and report any violations',
-    success_criteria: ['Checks LE timing', 'Checks CD timing', 'Reports all violations'],
-    avg_completion_time: 60,
-    pass_rate: 92.3
-  },
-  {
-    id: 3,
-    name: 'Lead Qualification',
-    description: 'Test lead scoring and follow-up recommendations',
-    category: 'lead_management',
-    difficulty: 'easy',
-    agent_types: ['lead_nurturer'],
-    expected_tools: ['get_lead_details', 'score_lead', 'suggest_followup'],
-    test_prompt: 'Evaluate lead ID 789 and provide follow-up recommendations',
-    success_criteria: ['Retrieves lead details', 'Calculates lead score', 'Suggests appropriate follow-up'],
-    avg_completion_time: 30,
-    pass_rate: 94.1
-  },
-  {
-    id: 4,
-    name: 'Document Tracking',
-    description: 'Test document status tracking and reminder capabilities',
-    category: 'document_management',
-    difficulty: 'medium',
-    agent_types: ['document_tracker'],
-    expected_tools: ['get_missing_documents', 'track_document_request'],
-    test_prompt: 'What documents are missing for loan #54321 and when were they requested?',
-    success_criteria: ['Lists missing documents', 'Shows request dates', 'Suggests next steps'],
-    avg_completion_time: 35,
-    pass_rate: 89.7
-  },
-  {
-    id: 5,
-    name: 'Rate Comparison',
-    description: 'Test rate analysis and recommendation capabilities',
-    category: 'advisory',
-    difficulty: 'hard',
-    agent_types: ['rate_advisor'],
-    expected_tools: ['get_current_rates', 'compare_loan_options'],
-    test_prompt: 'Compare 30-year fixed vs 15-year fixed for a $400k loan and recommend the best option',
-    success_criteria: ['Fetches current rates', 'Compares options', 'Provides clear recommendation'],
-    avg_completion_time: 50,
-    pass_rate: 85.2
-  }
-];
-
-const generateMockLeaderboard = () => [
-  { agent_id: 2, agent_name: 'compliance_checker', display_name: 'Compliance Checker', total_score: 9450, sessions_completed: 156, avg_score: 60.6, best_score: 98 },
-  { agent_id: 1, agent_name: 'pipeline_analyst', display_name: 'Pipeline Analyst', total_score: 8920, sessions_completed: 178, avg_score: 50.1, best_score: 95 },
-  { agent_id: 4, agent_name: 'document_tracker', display_name: 'Document Tracker', total_score: 8540, sessions_completed: 145, avg_score: 58.9, best_score: 92 },
-  { agent_id: 3, agent_name: 'lead_nurturer', display_name: 'Lead Nurturer', total_score: 7890, sessions_completed: 134, avg_score: 58.9, best_score: 89 },
-  { agent_id: 6, agent_name: 'scheduler', display_name: 'Scheduler', total_score: 6750, sessions_completed: 98, avg_score: 68.9, best_score: 94 }
-];
-
-const generateMockSessions = () => [
-  {
-    id: 1,
-    scenario_id: 1,
-    scenario_name: 'Pipeline Health Check',
-    agent_name: 'pipeline_analyst',
-    status: 'completed',
-    score: 95,
-    passed: true,
-    started_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-    completed_at: new Date(Date.now() - 2 * 3600000 + 45000).toISOString(),
-    duration_seconds: 45
-  },
-  {
-    id: 2,
-    scenario_id: 2,
-    scenario_name: 'TRID Compliance Audit',
-    agent_name: 'compliance_checker',
-    status: 'completed',
-    score: 88,
-    passed: true,
-    started_at: new Date(Date.now() - 5 * 3600000).toISOString(),
-    completed_at: new Date(Date.now() - 5 * 3600000 + 62000).toISOString(),
-    duration_seconds: 62
-  },
-  {
-    id: 3,
-    scenario_id: 3,
-    scenario_name: 'Lead Qualification',
-    agent_name: 'lead_nurturer',
-    status: 'completed',
-    score: 72,
-    passed: false,
-    started_at: new Date(Date.now() - 24 * 3600000).toISOString(),
-    completed_at: new Date(Date.now() - 24 * 3600000 + 38000).toISOString(),
-    duration_seconds: 38
-  }
-];
-
 function AgentGym() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const preselectedAgentId = searchParams.get('agent');
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [agents, setAgents] = useState([]);
   const [scenarios, setScenarios] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -165,6 +25,7 @@ function AgentGym() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setError(null);
         const [agentsData, scenariosData, leaderboardData, sessionsData] = await Promise.all([
           agentAPI.getProfiles({ status: 'active' }),
           agentGymAPI.getScenarios(),
@@ -172,18 +33,14 @@ function AgentGym() {
           agentGymAPI.getSessions({ limit: 20 })
         ]);
 
-        setAgents(agentsData.profiles || agentsData);
-        setScenarios(scenariosData.scenarios || scenariosData);
-        setLeaderboard(leaderboardData.leaderboard || leaderboardData);
-        setSessions(sessionsData.sessions || sessionsData);
+        setAgents(agentsData.profiles || agentsData || []);
+        setScenarios(scenariosData.scenarios || scenariosData || []);
+        setLeaderboard(leaderboardData.leaderboard || leaderboardData || []);
+        setSessions(sessionsData.sessions || sessionsData || []);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching gym data:', error);
-        // Load mock data on error
-        setAgents(generateMockAgents());
-        setScenarios(generateMockScenarios());
-        setLeaderboard(generateMockLeaderboard());
-        setSessions(generateMockSessions());
+        setError('Failed to load training data. Please check your connection and try again.');
         setLoading(false);
       }
     };
@@ -265,48 +122,16 @@ function AgentGym() {
         scenario_id: selectedScenario.id
       });
 
-      // Simulate completion after a delay (in real app, would poll for status)
-      setTimeout(() => {
-        setSessionResult({
-          score: Math.floor(Math.random() * 30) + 70,
-          passed: true,
-          criteria_results: selectedScenario.success_criteria.map((c, idx) => ({
-            criterion: c,
-            passed: Math.random() > 0.2,
-            details: 'Successfully met criterion'
-          })),
-          tool_usage: selectedScenario.expected_tools.map(t => ({
-            tool: t,
-            used: Math.random() > 0.1,
-            success: Math.random() > 0.1
-          })),
-          response_time_ms: Math.floor(Math.random() * 2000) + 500,
-          feedback: 'Good performance overall. Consider improving response structure.'
-        });
-        setRunningSession(prev => ({ ...prev, status: 'completed' }));
-      }, 3000);
+      // Set the result from the API response
+      setSessionResult(result);
+      setRunningSession(prev => ({ ...prev, status: 'completed' }));
     } catch (error) {
       console.error('Error starting session:', error);
-      // Mock result on error
-      setTimeout(() => {
-        setSessionResult({
-          score: 85,
-          passed: true,
-          criteria_results: selectedScenario.success_criteria.map(c => ({
-            criterion: c,
-            passed: true,
-            details: 'Successfully met criterion'
-          })),
-          tool_usage: selectedScenario.expected_tools.map(t => ({
-            tool: t,
-            used: true,
-            success: true
-          })),
-          response_time_ms: 1250,
-          feedback: 'Good performance overall.'
-        });
-        setRunningSession(prev => ({ ...prev, status: 'completed' }));
-      }, 3000);
+      setSessionResult({
+        error: true,
+        message: 'Failed to complete training session. Please try again.'
+      });
+      setRunningSession(prev => ({ ...prev, status: 'failed' }));
     }
   };
 
@@ -316,6 +141,29 @@ function AgentGym() {
         <div className="loading-spinner">
           <i className="fas fa-spinner fa-spin"></i>
           <p>Loading Agent Gym...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="agent-gym">
+        <div className="gym-header">
+          <div className="header-left">
+            <button className="back-btn" onClick={() => navigate('/agents')}>
+              <i className="fas fa-arrow-left"></i> Back to Agents
+            </button>
+            <h1><i className="fas fa-dumbbell"></i> Agent Training Gym</h1>
+          </div>
+        </div>
+        <div className="error-state">
+          <i className="fas fa-exclamation-triangle"></i>
+          <h3>Unable to Load Data</h3>
+          <p>{error}</p>
+          <button className="retry-btn" onClick={() => window.location.reload()}>
+            <i className="fas fa-redo"></i> Retry
+          </button>
         </div>
       </div>
     );
@@ -517,43 +365,56 @@ function AgentGym() {
 
                       {sessionResult && (
                         <div className="result-section">
-                          <div className={`score-display ${getScoreClass(sessionResult.score)}`}>
-                            <span className="score-value">{sessionResult.score}</span>
-                            <span className="score-label">
-                              {sessionResult.passed ? 'PASSED' : 'FAILED'}
-                            </span>
-                          </div>
-
-                          <div className="result-details">
-                            <h4>Criteria Results</h4>
-                            <ul className="results-list">
-                              {sessionResult.criteria_results?.map((result, idx) => (
-                                <li key={idx} className={result.passed ? 'passed' : 'failed'}>
-                                  <i className={result.passed ? 'fas fa-check' : 'fas fa-times'}></i>
-                                  {result.criterion}
-                                </li>
-                              ))}
-                            </ul>
-
-                            <h4>Tool Usage</h4>
-                            <div className="tool-results">
-                              {sessionResult.tool_usage?.map((tool, idx) => (
-                                <span key={idx} className={`tool-result ${tool.success ? 'success' : 'failed'}`}>
-                                  <i className={tool.success ? 'fas fa-check' : 'fas fa-times'}></i>
-                                  {tool.tool}
+                          {sessionResult.error ? (
+                            <div className="error-result">
+                              <i className="fas fa-exclamation-triangle"></i>
+                              <p>{sessionResult.message}</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className={`score-display ${getScoreClass(sessionResult.score)}`}>
+                                <span className="score-value">{sessionResult.score}</span>
+                                <span className="score-label">
+                                  {sessionResult.passed ? 'PASSED' : 'FAILED'}
                                 </span>
-                              ))}
-                            </div>
+                              </div>
 
-                            <div className="result-meta">
-                              <span>Response Time: {sessionResult.response_time_ms}ms</span>
-                            </div>
+                              <div className="result-details">
+                                <h4>Criteria Results</h4>
+                                <ul className="results-list">
+                                  {sessionResult.criteria_results?.map((result, idx) => (
+                                    <li key={idx} className={result.passed ? 'passed' : 'failed'}>
+                                      <i className={result.passed ? 'fas fa-check' : 'fas fa-times'}></i>
+                                      {result.criterion}
+                                    </li>
+                                  ))}
+                                </ul>
 
-                            <div className="feedback-box">
-                              <h4>Feedback</h4>
-                              <p>{sessionResult.feedback}</p>
-                            </div>
-                          </div>
+                                <h4>Tool Usage</h4>
+                                <div className="tool-results">
+                                  {sessionResult.tool_usage?.map((tool, idx) => (
+                                    <span key={idx} className={`tool-result ${tool.success ? 'success' : 'failed'}`}>
+                                      <i className={tool.success ? 'fas fa-check' : 'fas fa-times'}></i>
+                                      {tool.tool}
+                                    </span>
+                                  ))}
+                                </div>
+
+                                {sessionResult.response_time_ms && (
+                                  <div className="result-meta">
+                                    <span>Response Time: {sessionResult.response_time_ms}ms</span>
+                                  </div>
+                                )}
+
+                                {sessionResult.feedback && (
+                                  <div className="feedback-box">
+                                    <h4>Feedback</h4>
+                                    <p>{sessionResult.feedback}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
 
                           <button
                             className="run-again-btn"

@@ -3,107 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { agentAPI } from '../services/api';
 import './AgentDashboard.css';
 
-// Mock data generators for development/fallback
-const generateMockDashboardSummary = () => ({
-  total_agents: 20,
-  active_agents: 18,
-  health_summary: {
-    healthy: 15,
-    warning: 3,
-    critical: 1,
-    unknown: 1
-  },
-  executions_24h: 2847,
-  success_rate_24h: 94.2,
-  active_alerts: 3,
-  avg_response_time_ms: 1250
-});
-
-const generateMockAgents = () => [
-  // Core CRM Agents (8)
-  { id: 1, agent_name: 'pipeline_analyst', display_name: 'Pipeline Analyst', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 4521, success_rate: 96.2, avg_response_time_ms: 890, last_execution_at: new Date(Date.now() - 5 * 60000).toISOString() },
-  { id: 2, agent_name: 'compliance_checker', display_name: 'Compliance Checker', category: 'compliance', status: 'active', health_status: 'healthy', total_executions: 2134, success_rate: 98.1, avg_response_time_ms: 1120, last_execution_at: new Date(Date.now() - 15 * 60000).toISOString() },
-  { id: 3, agent_name: 'lead_nurturer', display_name: 'Lead Nurturer', category: 'sales', status: 'active', health_status: 'warning', total_executions: 3876, success_rate: 82.5, avg_response_time_ms: 2340, last_execution_at: new Date(Date.now() - 2 * 60000).toISOString() },
-  { id: 4, agent_name: 'document_tracker', display_name: 'Document Tracker', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 5621, success_rate: 95.8, avg_response_time_ms: 750, last_execution_at: new Date(Date.now() - 8 * 60000).toISOString() },
-  { id: 5, agent_name: 'rate_advisor', display_name: 'Rate Advisor', category: 'advisory', status: 'active', health_status: 'critical', total_executions: 1892, success_rate: 68.4, avg_response_time_ms: 4500, last_execution_at: new Date(Date.now() - 45 * 60000).toISOString() },
-  { id: 6, agent_name: 'scheduler', display_name: 'Smart Scheduler', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 2945, success_rate: 97.3, avg_response_time_ms: 680, last_execution_at: new Date(Date.now() - 3 * 60000).toISOString() },
-  { id: 7, agent_name: 'receptionist', display_name: 'AI Receptionist', category: 'communication', status: 'active', health_status: 'healthy', total_executions: 8934, success_rate: 94.5, avg_response_time_ms: 1100, last_execution_at: new Date(Date.now() - 1 * 60000).toISOString() },
-  { id: 8, agent_name: 'sla_monitor', display_name: 'SLA Tracker', category: 'monitoring', status: 'active', health_status: 'warning', total_executions: 1567, success_rate: 85.2, avg_response_time_ms: 1890, last_execution_at: new Date(Date.now() - 10 * 60000).toISOString() },
-  // Extended Agents (12)
-  { id: 9, agent_name: 'task_automation', display_name: 'Task Automation', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 6234, success_rate: 95.7, avg_response_time_ms: 720, last_execution_at: new Date(Date.now() - 4 * 60000).toISOString() },
-  { id: 10, agent_name: 'profitability_analyst', display_name: 'Profitability Analyst', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 1823, success_rate: 97.2, avg_response_time_ms: 1340, last_execution_at: new Date(Date.now() - 12 * 60000).toISOString() },
-  { id: 11, agent_name: 'subscription_manager', display_name: 'Subscription Manager', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 987, success_rate: 99.1, avg_response_time_ms: 560, last_execution_at: new Date(Date.now() - 30 * 60000).toISOString() },
-  { id: 12, agent_name: 'onboarding_assistant', display_name: 'Onboarding Assistant', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 2456, success_rate: 94.8, avg_response_time_ms: 1200, last_execution_at: new Date(Date.now() - 20 * 60000).toISOString() },
-  { id: 13, agent_name: 'voice_agent', display_name: 'Voice OS', category: 'communication', status: 'active', health_status: 'warning', total_executions: 3421, success_rate: 88.3, avg_response_time_ms: 2100, last_execution_at: new Date(Date.now() - 6 * 60000).toISOString() },
-  { id: 14, agent_name: 'team_coach', display_name: 'Team Coach', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 1245, success_rate: 96.5, avg_response_time_ms: 980, last_execution_at: new Date(Date.now() - 25 * 60000).toISOString() },
-  { id: 15, agent_name: 'email_intel_agent', display_name: 'Email Intelligence', category: 'automation', status: 'active', health_status: 'healthy', total_executions: 7823, success_rate: 95.4, avg_response_time_ms: 650, last_execution_at: new Date(Date.now() - 2 * 60000).toISOString() },
-  { id: 16, agent_name: 'notification_center', display_name: 'Notification Center', category: 'automation', status: 'active', health_status: 'healthy', total_executions: 12456, success_rate: 99.2, avg_response_time_ms: 320, last_execution_at: new Date(Date.now() - 1 * 60000).toISOString() },
-  { id: 17, agent_name: 'customer_intelligence', display_name: 'Customer Intelligence', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 2134, success_rate: 94.1, avg_response_time_ms: 1450, last_execution_at: new Date(Date.now() - 18 * 60000).toISOString() },
-  { id: 18, agent_name: 'video_agent', display_name: 'UVIP', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 567, success_rate: 97.8, avg_response_time_ms: 2800, last_execution_at: new Date(Date.now() - 45 * 60000).toISOString() },
-  { id: 19, agent_name: 'integrations_agent', display_name: 'Integrations', category: 'operations', status: 'active', health_status: 'healthy', total_executions: 3421, success_rate: 96.7, avg_response_time_ms: 890, last_execution_at: new Date(Date.now() - 8 * 60000).toISOString() },
-  { id: 20, agent_name: 'reporting_engine', display_name: 'Reporting Engine', category: 'analytics', status: 'active', health_status: 'healthy', total_executions: 4567, success_rate: 98.3, avg_response_time_ms: 1100, last_execution_at: new Date(Date.now() - 15 * 60000).toISOString() }
-];
-
-const generateMockAlerts = () => [
-  {
-    id: 1,
-    agent_name: 'rate_advisor',
-    alert_type: 'health',
-    severity: 'critical',
-    title: 'High Error Rate Detected',
-    message: 'Error rate at 31.6% - exceeds threshold of 20%',
-    status: 'active',
-    created_at: new Date(Date.now() - 30 * 60000).toISOString()
-  },
-  {
-    id: 2,
-    agent_name: 'lead_nurturer',
-    alert_type: 'performance',
-    severity: 'warning',
-    title: 'Elevated Response Time',
-    message: 'Average response time 2340ms - above 2000ms threshold',
-    status: 'active',
-    created_at: new Date(Date.now() - 2 * 3600000).toISOString()
-  },
-  {
-    id: 3,
-    agent_name: 'sla_monitor',
-    alert_type: 'health',
-    severity: 'warning',
-    title: 'Success Rate Below Target',
-    message: 'Success rate 85.2% - below 90% target',
-    status: 'active',
-    created_at: new Date(Date.now() - 4 * 3600000).toISOString()
-  }
-];
-
-const generateMockMetrics = () => ({
-  hourly_executions: [
-    { hour: '00:00', count: 45, success_rate: 95.5 },
-    { hour: '01:00', count: 23, success_rate: 96.2 },
-    { hour: '02:00', count: 18, success_rate: 94.1 },
-    { hour: '03:00', count: 12, success_rate: 97.8 },
-    { hour: '04:00', count: 15, success_rate: 93.3 },
-    { hour: '05:00', count: 28, success_rate: 95.0 },
-    { hour: '06:00', count: 67, success_rate: 94.8 },
-    { hour: '07:00', count: 124, success_rate: 92.1 },
-    { hour: '08:00', count: 189, success_rate: 93.5 },
-    { hour: '09:00', count: 234, success_rate: 94.2 },
-    { hour: '10:00', count: 256, success_rate: 95.1 },
-    { hour: '11:00', count: 198, success_rate: 94.8 }
-  ],
-  top_tools: [
-    { name: 'get_pipeline_metrics', count: 342, avg_time_ms: 450 },
-    { name: 'check_trid_compliance', count: 289, avg_time_ms: 890 },
-    { name: 'get_lead_details', count: 256, avg_time_ms: 320 },
-    { name: 'get_missing_documents', count: 234, avg_time_ms: 560 },
-    { name: 'send_document_reminder', count: 189, avg_time_ms: 1200 }
-  ]
-});
-
 function AgentDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
   const [agents, setAgents] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -117,24 +20,22 @@ function AgentDashboard() {
   // Fetch all dashboard data
   const fetchDashboardData = async () => {
     try {
-      const [summaryData, agentsData, alertsData] = await Promise.all([
+      setError(null);
+      const [summaryData, agentsData, alertsData, metricsData] = await Promise.all([
         agentAPI.getDashboardSummary(),
         agentAPI.getProfiles({ status: 'active' }),
-        agentAPI.getAlerts({ status: 'active', limit: 10 })
+        agentAPI.getAlerts({ status: 'active', limit: 10 }),
+        agentAPI.getMetrics ? agentAPI.getMetrics() : Promise.resolve(null)
       ]);
 
       setSummary(summaryData);
-      setAgents(agentsData.profiles || agentsData);
-      setAlerts(alertsData.alerts || alertsData);
-      setMetrics(generateMockMetrics()); // Metrics from backend or mock
+      setAgents(agentsData.profiles || agentsData || []);
+      setAlerts(alertsData.alerts || alertsData || []);
+      setMetrics(metricsData);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      // Load mock data on error
-      setSummary(generateMockDashboardSummary());
-      setAgents(generateMockAgents());
-      setAlerts(generateMockAlerts());
-      setMetrics(generateMockMetrics());
+      setError('Failed to load dashboard data. Please check your connection and try again.');
       setLoading(false);
     }
   };
@@ -218,6 +119,27 @@ function AgentDashboard() {
         <div className="loading-spinner">
           <i className="fas fa-spinner fa-spin"></i>
           <p>Loading Agent Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="agent-dashboard">
+        <div className="dashboard-header">
+          <div className="header-left">
+            <h1><i className="fas fa-robot"></i> Agent Governance</h1>
+            <p className="subtitle">Monitor and manage AI agents</p>
+          </div>
+        </div>
+        <div className="error-state">
+          <i className="fas fa-exclamation-triangle"></i>
+          <h3>Unable to Load Data</h3>
+          <p>{error}</p>
+          <button className="retry-btn" onClick={() => fetchDashboardData()}>
+            <i className="fas fa-redo"></i> Retry
+          </button>
         </div>
       </div>
     );
@@ -639,20 +561,27 @@ function AgentDashboard() {
               <h3><i className="fas fa-chart-line"></i> Hourly Executions</h3>
             </div>
             <div className="panel-content">
-              <div className="simple-bar-chart">
-                {metrics?.hourly_executions?.map((hour, idx) => (
-                  <div key={idx} className="bar-column">
-                    <div
-                      className="bar"
-                      style={{ height: `${(hour.count / 300) * 100}%` }}
-                      title={`${hour.hour}: ${hour.count} executions, ${hour.success_rate}% success`}
-                    >
-                      <span className="bar-value">{hour.count}</span>
+              {metrics?.hourly_executions?.length > 0 ? (
+                <div className="simple-bar-chart">
+                  {metrics.hourly_executions.map((hour, idx) => (
+                    <div key={idx} className="bar-column">
+                      <div
+                        className="bar"
+                        style={{ height: `${(hour.count / 300) * 100}%` }}
+                        title={`${hour.hour}: ${hour.count} executions, ${hour.success_rate}% success`}
+                      >
+                        <span className="bar-value">{hour.count}</span>
+                      </div>
+                      <span className="bar-label">{hour.hour.split(':')[0]}</span>
                     </div>
-                    <span className="bar-label">{hour.hour.split(':')[0]}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <i className="fas fa-chart-bar"></i>
+                  <p>No execution data available</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -662,26 +591,33 @@ function AgentDashboard() {
               <h3><i className="fas fa-tools"></i> Most Used Tools</h3>
             </div>
             <div className="panel-content">
-              <div className="tools-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Tool Name</th>
-                      <th>Executions</th>
-                      <th>Avg Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metrics?.top_tools?.map((tool, idx) => (
-                      <tr key={idx}>
-                        <td><code>{tool.name}</code></td>
-                        <td>{tool.count.toLocaleString()}</td>
-                        <td>{tool.avg_time_ms}ms</td>
+              {metrics?.top_tools?.length > 0 ? (
+                <div className="tools-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Tool Name</th>
+                        <th>Executions</th>
+                        <th>Avg Time</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {metrics.top_tools.map((tool, idx) => (
+                        <tr key={idx}>
+                          <td><code>{tool.name}</code></td>
+                          <td>{tool.count.toLocaleString()}</td>
+                          <td>{tool.avg_time_ms}ms</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <i className="fas fa-tools"></i>
+                  <p>No tool usage data available</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -691,24 +627,31 @@ function AgentDashboard() {
               <h3><i className="fas fa-trophy"></i> Agent Performance Ranking</h3>
             </div>
             <div className="panel-content">
-              <div className="performance-list">
-                {[...agents]
-                  .sort((a, b) => (b.success_rate || 0) - (a.success_rate || 0))
-                  .slice(0, 8)
-                  .map((agent, idx) => (
-                    <div key={agent.id} className="performance-item">
-                      <span className="rank">#{idx + 1}</span>
-                      <span className="agent-name">{agent.display_name}</span>
-                      <div className="progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${agent.success_rate || 0}%` }}
-                        ></div>
+              {agents.length > 0 ? (
+                <div className="performance-list">
+                  {[...agents]
+                    .sort((a, b) => (b.success_rate || 0) - (a.success_rate || 0))
+                    .slice(0, 8)
+                    .map((agent, idx) => (
+                      <div key={agent.id} className="performance-item">
+                        <span className="rank">#{idx + 1}</span>
+                        <span className="agent-name">{agent.display_name}</span>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${agent.success_rate || 0}%` }}
+                          ></div>
+                        </div>
+                        <span className="success-rate">{agent.success_rate?.toFixed(1)}%</span>
                       </div>
-                      <span className="success-rate">{agent.success_rate?.toFixed(1)}%</span>
-                    </div>
-                  ))}
-              </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <i className="fas fa-trophy"></i>
+                  <p>No agent performance data available</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
