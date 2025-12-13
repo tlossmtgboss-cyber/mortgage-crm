@@ -1683,6 +1683,7 @@ async def submit_application(
                     # Generate access token for immediate portal access
                     try:
                         import hashlib
+                        from datetime import timezone as tz
 
                         # Generate a secure token
                         token_raw = secrets.token_hex(32)
@@ -1699,8 +1700,10 @@ async def submit_application(
 
                         contact_id = contact_result[0] if contact_result else None
 
-                        # Create access token (valid for 30 days)
-                        token_expiry = submission_date + timedelta(days=30)
+                        # Create access token (valid for 30 days) - use timezone-aware datetimes
+                        now_utc = datetime.now(tz.utc)
+                        token_expiry = now_utc + timedelta(days=30)
+
                         db.execute(text("""
                             INSERT INTO purl_access_tokens (
                                 organization_id, workspace_id, token_hash, token_prefix,
@@ -1717,10 +1720,21 @@ async def submit_application(
                             "token_prefix": token_prefix,
                             "contact_id": contact_id,
                             "expires_at": token_expiry,
-                            "created_at": submission_date,
+                            "created_at": now_utc,
                         })
                         db.commit()
-                        logger.info(f"Generated portal access token for workspace {workspace_id}")
+
+                        # Verify token was actually inserted
+                        verify_result = db.execute(text("""
+                            SELECT id, token_hash FROM purl_access_tokens
+                            WHERE token_hash = :hash
+                        """), {"hash": token_hash}).fetchone()
+
+                        if verify_result:
+                            logger.info(f"Generated and verified portal access token for workspace {workspace_id} (token_id={verify_result[0]})")
+                        else:
+                            logger.error(f"Token INSERT succeeded but verification SELECT failed! Hash: {token_hash[:16]}...")
+                            portal_token = None
                     except Exception as token_error:
                         logger.warning(f"Failed to generate portal token: {token_error}")
                         portal_token = None
