@@ -1537,6 +1537,191 @@ async def get_vapi_config(
     }
 
 
+# ============================================================================
+# DIAGNOSTIC ENDPOINTS - Check and fix VAPI assistant configuration
+# ============================================================================
+
+@router.get("/diagnostic/assistant")
+async def diagnose_vapi_assistant():
+    """
+    Diagnose VAPI assistant configuration.
+    Checks if firstMessage is configured and returns full assistant config.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    assistant_id = os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured", "fix": "Set VAPI_API_KEY in environment"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get assistant configuration
+            response = await client.get(
+                f"https://api.vapi.ai/assistant/{assistant_id}",
+                headers=headers,
+                timeout=10
+            )
+
+            if response.status_code != 200:
+                return {
+                    "error": f"Failed to fetch assistant: {response.status_code}",
+                    "response": response.text,
+                    "assistant_id": assistant_id
+                }
+
+            assistant = response.json()
+
+            # Check for firstMessage
+            first_message = assistant.get("firstMessage")
+            voice_config = assistant.get("voice", {})
+            model_config = assistant.get("model", {})
+
+            issues = []
+
+            if not first_message:
+                issues.append("NO_FIRST_MESSAGE: Assistant has no greeting configured")
+            elif first_message.strip() == "":
+                issues.append("EMPTY_FIRST_MESSAGE: Greeting is empty string")
+
+            if not voice_config:
+                issues.append("NO_VOICE_CONFIG: No voice provider configured")
+
+            return {
+                "status": "healthy" if not issues else "issues_found",
+                "assistant_id": assistant_id,
+                "name": assistant.get("name"),
+                "first_message": first_message,
+                "has_first_message": bool(first_message and first_message.strip()),
+                "voice": {
+                    "provider": voice_config.get("provider"),
+                    "voice_id": voice_config.get("voiceId")
+                },
+                "model": {
+                    "provider": model_config.get("provider"),
+                    "model": model_config.get("model")
+                },
+                "issues": issues,
+                "fix_url": "/api/vapi/diagnostic/fix-greeting" if issues else None
+            }
+
+    except Exception as e:
+        logger.error(f"Diagnostic error: {str(e)}")
+        return {"error": str(e)}
+
+
+@router.post("/diagnostic/fix-greeting")
+async def fix_vapi_greeting(
+    greeting: str = "Hello! Thank you for calling CMG Home Loans. I'm Sam, your AI assistant. How can I help you today?"
+):
+    """
+    Fix VAPI assistant greeting by setting firstMessage.
+    This updates the assistant configuration in VAPI directly.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    assistant_id = os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Update assistant with new greeting
+            response = await client.patch(
+                f"https://api.vapi.ai/assistant/{assistant_id}",
+                headers=headers,
+                json={"firstMessage": greeting},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                updated = response.json()
+                return {
+                    "success": True,
+                    "message": "Greeting updated successfully",
+                    "assistant_id": assistant_id,
+                    "new_greeting": updated.get("firstMessage"),
+                    "test_instructions": "Call the AI receptionist now to verify the greeting works"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to update: {response.status_code}",
+                    "response": response.text
+                }
+
+    except Exception as e:
+        logger.error(f"Fix greeting error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/diagnostic/phone-numbers")
+async def diagnose_phone_numbers():
+    """
+    Check VAPI phone number configurations.
+    Shows which assistant is linked to each number.
+    """
+    import httpx
+    import os
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {
+        "Authorization": f"Bearer {vapi_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.vapi.ai/phone-number",
+                headers=headers,
+                timeout=10
+            )
+
+            if response.status_code != 200:
+                return {"error": f"Failed to fetch: {response.status_code}"}
+
+            phones = response.json()
+
+            return {
+                "phone_numbers": [
+                    {
+                        "number": p.get("number"),
+                        "assistant_id": p.get("assistantId"),
+                        "squad_id": p.get("squadId"),
+                        "server_url": p.get("serverUrl"),
+                        "has_assistant": bool(p.get("assistantId")),
+                        "uses_webhook": bool(p.get("serverUrl") and not p.get("assistantId"))
+                    }
+                    for p in phones
+                ],
+                "count": len(phones)
+            }
+
+    except Exception as e:
+        logger.error(f"Phone diagnostic error: {str(e)}")
+        return {"error": str(e)}
+
+
 @router.post("/migrate")
 async def run_vapi_migration(
     db: Session = Depends(get_db),
