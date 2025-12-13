@@ -30,6 +30,7 @@ from smart_scheduler_models import (
     ReminderChannel, DayOfWeek, SlotPriority, DEFAULT_APPOINTMENT_TYPES,
     DEFAULT_WORKING_HOURS
 )
+from services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -81,23 +82,9 @@ def send_appointment_confirmation_email(
     team_member_name: str = None,
     video_link: str = None
 ):
-    """Send appointment confirmation email"""
+    """Send appointment confirmation email using SendGrid via NotificationService"""
     try:
-        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_user = os.getenv("SMTP_USER") or os.getenv("GMAIL_USER")
-        smtp_pass = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS") or os.getenv("GMAIL_APP_PASSWORD")
-
-        if not smtp_user or not smtp_pass:
-            logger.warning("SMTP credentials not configured - skipping email confirmation")
-            return False
-
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"Appointment Confirmed: {appointment_title}"
-        msg['From'] = smtp_user
-        msg['To'] = attendee_email
-
-        team_member_section = f"<p><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
 
         # Add video call button if video link is provided
         video_button_section = ""
@@ -105,7 +92,7 @@ def send_appointment_confirmation_email(
             video_button_section = f"""
                     <div style="text-align: center; margin: 25px 0;">
                         <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                            📹 Join Video Call
+                            Join Video Call
                         </a>
                     </div>
                     <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
@@ -114,37 +101,44 @@ def send_appointment_confirmation_email(
             """
 
         html_content = f"""
+        <!DOCTYPE html>
         <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                    <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Confirmed!</h1>
-                </div>
-
-                <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-                    <p style="font-size: 16px;">Hi {attendee_name},</p>
-
-                    <p style="font-size: 16px;">Your appointment has been scheduled. Here are the details:</p>
-
-                    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #e5e7eb;">
-                        <p style="margin: 8px 0;"><strong>Date:</strong> {appointment_date}</p>
-                        <p style="margin: 8px 0;"><strong>Time:</strong> {appointment_time}</p>
-                        <p style="margin: 8px 0;"><strong>Duration:</strong> {duration}</p>
-                        <p style="margin: 8px 0;"><strong>Meeting Type:</strong> {meeting_mode}</p>
-                        {team_member_section}
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Confirmed!</h1>
                     </div>
-                    {video_button_section}
-                    <p style="font-size: 14px; color: #666;">
-                        We'll send you a reminder before your appointment. If you need to reschedule,
-                        please contact us as soon as possible.
-                    </p>
 
-                    <p style="font-size: 14px; color: #666; margin-top: 30px;">
-                        Looking forward to speaking with you!
-                    </p>
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">Your appointment has been scheduled. Here are the details:</p>
+
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            {team_member_section}
+                        </div>
+                        {video_button_section}
+                        <p style="font-size: 14px; color: #6b7280;">
+                            We'll send you a reminder before your appointment. If you need to reschedule,
+                            please contact us as soon as possible.
+                        </p>
+
+                        <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+                            Looking forward to speaking with you!
+                        </p>
+                    </div>
                 </div>
 
-                <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
                     Sent from Perennia AI - Pipeline 360
                 </p>
             </div>
@@ -173,16 +167,20 @@ Looking forward to speaking with you!
 - Perennia AI Team
         """
 
-        msg.attach(MIMEText(text_content, 'plain'))
-        msg.attach(MIMEText(html_content, 'html'))
+        # Use SendGrid via NotificationService
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"Appointment Confirmed: {appointment_title}",
+            html_content=html_content,
+            plain_content=text_content
+        )
 
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-
-        logger.info(f"Appointment confirmation email sent to {attendee_email}")
-        return True
+        if result.get("success"):
+            logger.info(f"Appointment confirmation email sent to {attendee_email}")
+            return True
+        else:
+            logger.warning(f"Failed to send appointment email: {result.get('error', 'Unknown error')}")
+            return False
 
     except Exception as e:
         logger.error(f"Failed to send appointment confirmation email: {e}")
