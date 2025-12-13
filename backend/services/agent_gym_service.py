@@ -16,7 +16,7 @@ import uuid
 import random
 
 from models.agent_governance import (
-    AgentProfile, AgentExecution, AgentMetric, AgentAlert,
+    AgentProfile, AgentExecution,
     TrainingScenario, TrainingSession
 )
 
