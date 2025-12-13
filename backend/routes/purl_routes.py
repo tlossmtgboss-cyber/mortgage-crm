@@ -861,9 +861,9 @@ async def get_workspace_by_lead(
             "workspace_slug": workspace.slug,
             "slug": workspace.slug,
             "display_name": workspace.display_name,
-            "status": workspace.status.value if workspace.status else "lead",
+            "status": workspace.status if workspace.status else "lead",
             "document_count": document_count,
-            "application_status": application.status.value if application else None,
+            "application_status": application.status if application else None,
             "last_activity": last_activity.created_at.isoformat() if last_activity else None,
             "created_at": workspace.created_at.isoformat() if workspace.created_at else None
         },
@@ -872,7 +872,7 @@ async def get_workspace_by_lead(
                 "id": token.id,
                 "token_prefix": token.token_prefix or "purl_",
                 "status": "active" if not token.revoked_at else "revoked",
-                "scope": token.scope.value if token.scope else "read",
+                "scope": token.scope if token.scope else "read",
                 "last_used_at": token.last_used_at.isoformat() if token.last_used_at else None,
                 "expires_at": token.expires_at.isoformat() if token.expires_at else None,
                 "created_at": token.created_at.isoformat() if token.created_at else None
