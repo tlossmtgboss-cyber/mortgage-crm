@@ -614,10 +614,6 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''} ${taskSidebarOpen ? 'with-task-sidebar' : ''}`}>
-                    {/* Show onboarding prompt for users who haven't completed it - persistent until completion */}
-                    {showOnboarding && !checkingOnboarding && (
-                      <OnboardingPrompt />
-                    )}
                     <LazyPage><Dashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
