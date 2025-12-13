@@ -1028,3 +1028,134 @@ CIRCLE OF CASHFLOW STATUS:
             status_code=500,
             detail="Failed to process questionnaire. Please try again."
         )
+
+
+# ============================================================================
+# PUBLIC PARTNER SEARCH (for borrower intake forms)
+# ============================================================================
+
+class PartnerSearchResult(BaseModel):
+    """Public partner info for autocomplete"""
+    id: int
+    name: str
+    company: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    partner_type: Optional[str] = None
+
+
+@router.get("/api/v1/public/partners/search", response_model=List[PartnerSearchResult])
+async def search_partners_public(
+    q: str = "",
+    partner_type: Optional[str] = None,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Public endpoint to search referral partners by name/company for borrower intake forms.
+    This allows applicants to find and select their real estate agent from the CRM database.
+
+    Parameters:
+    - q: Search query (matches name, company, or email)
+    - partner_type: Optional filter by type (e.g., "Realtor", "Builder", "Insurance Agent")
+    - limit: Maximum results to return (default 10)
+    """
+    try:
+        from main import ReferralPartner
+        from sqlalchemy import or_, func
+
+        query = db.query(ReferralPartner).filter(
+            ReferralPartner.status == "active"
+        )
+
+        # Filter by partner type if specified
+        if partner_type:
+            query = query.filter(
+                func.lower(ReferralPartner.type).contains(partner_type.lower())
+            )
+
+        # Search by name, company, or email if query provided
+        if q and len(q) >= 2:
+            search_term = q.lower()
+            query = query.filter(
+                or_(
+                    func.lower(ReferralPartner.name).contains(search_term),
+                    func.lower(ReferralPartner.company).contains(search_term),
+                    func.lower(ReferralPartner.email).contains(search_term),
+                    func.lower(ReferralPartner.contact_name).contains(search_term)
+                )
+            )
+
+        # Order by name and limit results
+        partners = query.order_by(ReferralPartner.name).limit(limit).all()
+
+        # Return sanitized results (only public info)
+        return [
+            PartnerSearchResult(
+                id=p.id,
+                name=p.name or p.contact_name or "Unknown",
+                company=p.company,
+                email=p.email,
+                phone=p.phone,
+                partner_type=p.type
+            )
+            for p in partners
+        ]
+
+    except Exception as e:
+        logger.error(f"Error searching partners: {str(e)}")
+        # Return empty list on error (don't fail the form)
+        return []
+
+
+@router.get("/api/v1/public/partners/realtors", response_model=List[PartnerSearchResult])
+async def get_realtors_public(
+    q: str = "",
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Public endpoint to search specifically for realtors/real estate agents.
+    Convenience wrapper around the general partner search filtered to realtor types.
+    """
+    try:
+        from main import ReferralPartner
+        from sqlalchemy import or_, func
+
+        query = db.query(ReferralPartner).filter(
+            ReferralPartner.status == "active",
+            or_(
+                func.lower(ReferralPartner.type).contains("realtor"),
+                func.lower(ReferralPartner.type).contains("real estate"),
+                func.lower(ReferralPartner.type).contains("agent")
+            )
+        )
+
+        # Search by name, company, or email if query provided
+        if q and len(q) >= 2:
+            search_term = q.lower()
+            query = query.filter(
+                or_(
+                    func.lower(ReferralPartner.name).contains(search_term),
+                    func.lower(ReferralPartner.company).contains(search_term),
+                    func.lower(ReferralPartner.contact_name).contains(search_term)
+                )
+            )
+
+        partners = query.order_by(ReferralPartner.name).limit(limit).all()
+
+        return [
+            PartnerSearchResult(
+                id=p.id,
+                name=p.name or p.contact_name or "Unknown",
+                company=p.company,
+                email=p.email,
+                phone=p.phone,
+                partner_type=p.type
+            )
+            for p in partners
+        ]
+
+    except Exception as e:
+        logger.error(f"Error searching realtors: {str(e)}")
+        return []

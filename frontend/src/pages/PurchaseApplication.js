@@ -812,26 +812,10 @@ const DECLARATION_QUESTIONS = [
     hint: 'We can recommend great agents in your area if needed.',
   },
   {
-    id: 'agent_name',
-    question: 'What is your real estate agent\'s name?',
-    type: 'text',
-    placeholder: 'Agent\'s full name',
-    hint: 'We\'ll coordinate with your agent throughout the process.',
-    showIf: { field: 'working_with_agent', values: ['yes'] },
-  },
-  {
-    id: 'agent_phone',
-    question: 'What is your agent\'s phone number?',
-    type: 'phone',
-    placeholder: '(555) 555-5555',
-    showIf: { field: 'working_with_agent', values: ['yes'] },
-  },
-  {
-    id: 'agent_email',
-    question: 'What is your agent\'s email address?',
-    type: 'email',
-    placeholder: 'agent@example.com',
-    hint: 'We\'ll send them updates on your loan progress.',
+    id: 'agent_info',
+    question: 'Tell us about your real estate agent',
+    type: 'agent_info',
+    hint: 'Start typing to search our partner network, or enter their details manually.',
     showIf: { field: 'working_with_agent', values: ['yes'] },
   },
   {
@@ -969,6 +953,19 @@ export default function PurchaseApplication() {
   const [profileData, setProfileData] = useState({});
   const [incomeData, setIncomeData] = useState({});
   const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
+
+  // Agent autocomplete state
+  const [agentSearch, setAgentSearch] = useState('');
+  const [agentSuggestions, setAgentSuggestions] = useState([]);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [agentInfo, setAgentInfo] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    company: '',
+    partnerId: null
+  });
   const [propertyStep, setPropertyStep] = useState(1); // 1 = type/occupancy, 2 = price/down, 3 = loan program
   const [assetData, setAssetData] = useState({});
   const [propertyData, setPropertyData] = useState({});
@@ -1006,6 +1003,63 @@ export default function PurchaseApplication() {
     ).slice(0, 8);
     setEmployerSuggestions(filtered);
     setShowEmployerDropdown(filtered.length > 0);
+  };
+
+  // Search realtors from CRM partner database
+  const searchRealtors = async (searchTerm) => {
+    if (!searchTerm || searchTerm.length < 2) {
+      setAgentSuggestions([]);
+      setShowAgentDropdown(false);
+      return;
+    }
+
+    setAgentLoading(true);
+    try {
+      const response = await fetch(
+        `${API_URL}/api/v1/public/partners/realtors?q=${encodeURIComponent(searchTerm)}&limit=8`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setAgentSuggestions(data);
+        setShowAgentDropdown(data.length > 0);
+      }
+    } catch (error) {
+      console.error('Error searching realtors:', error);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  // Handle selecting an agent from autocomplete
+  const handleSelectAgent = (agent) => {
+    setAgentInfo({
+      name: agent.name || '',
+      phone: agent.phone || '',
+      email: agent.email || '',
+      company: agent.company || '',
+      partnerId: agent.id || null
+    });
+    setAgentSearch(agent.name || '');
+    setShowAgentDropdown(false);
+    // Also update declarations for form submission
+    setDeclarations(prev => ({
+      ...prev,
+      agent_name: agent.name || '',
+      agent_phone: agent.phone || '',
+      agent_email: agent.email || '',
+      agent_company: agent.company || '',
+      agent_partner_id: agent.id || null
+    }));
+  };
+
+  // Handle manual agent info changes
+  const handleAgentInfoChange = (field, value) => {
+    setAgentInfo(prev => ({ ...prev, [field]: value }));
+    // Also update declarations
+    setDeclarations(prev => ({
+      ...prev,
+      [`agent_${field}`]: value
+    }));
   };
 
   // Calculate progress
@@ -1367,6 +1421,111 @@ export default function PurchaseApplication() {
               className="btn-continue declaration-continue"
               onClick={() => submitInputAnswer(question.id)}
               disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
+      // Agent info - combined form with autocomplete
+      if (question.type === 'agent_info') {
+        const isComplete = agentInfo.name && agentInfo.phone && agentInfo.email;
+        return (
+          <div className="declaration-input-container agent-info-form">
+            {/* Agent Name with Autocomplete */}
+            <div className="form-group agent-search-container">
+              <label>Agent Name</label>
+              <div className="autocomplete-wrapper">
+                <input
+                  type="text"
+                  className="declaration-text-input fun-input"
+                  value={agentSearch || agentInfo.name}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setAgentSearch(value);
+                    handleAgentInfoChange('name', value);
+                    searchRealtors(value);
+                  }}
+                  onFocus={() => {
+                    if (agentSuggestions.length > 0) setShowAgentDropdown(true);
+                  }}
+                  placeholder="Start typing to search our partner network..."
+                />
+                {agentLoading && (
+                  <span className="autocomplete-loading">Searching...</span>
+                )}
+                {showAgentDropdown && agentSuggestions.length > 0 && (
+                  <div className="autocomplete-dropdown">
+                    {agentSuggestions.map((agent) => (
+                      <div
+                        key={agent.id}
+                        className="autocomplete-item"
+                        onClick={() => handleSelectAgent(agent)}
+                      >
+                        <div className="agent-suggestion-name">{agent.name}</div>
+                        {agent.company && (
+                          <div className="agent-suggestion-company">{agent.company}</div>
+                        )}
+                      </div>
+                    ))}
+                    <div
+                      className="autocomplete-item manual-entry"
+                      onClick={() => setShowAgentDropdown(false)}
+                    >
+                      <span>Enter details manually</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Company (auto-filled or manual) */}
+            <div className="form-group">
+              <label>Company / Brokerage</label>
+              <input
+                type="text"
+                className="declaration-text-input fun-input"
+                value={agentInfo.company}
+                onChange={(e) => handleAgentInfoChange('company', e.target.value)}
+                placeholder="Agent's company or brokerage"
+              />
+            </div>
+
+            {/* Agent Phone */}
+            <div className="form-group">
+              <label>Agent Phone</label>
+              <input
+                type="tel"
+                className="declaration-text-input fun-input"
+                value={agentInfo.phone}
+                onChange={(e) => handleAgentInfoChange('phone', e.target.value)}
+                placeholder="(555) 555-5555"
+              />
+            </div>
+
+            {/* Agent Email */}
+            <div className="form-group">
+              <label>Agent Email</label>
+              <input
+                type="email"
+                className="declaration-text-input fun-input"
+                value={agentInfo.email}
+                onChange={(e) => handleAgentInfoChange('email', e.target.value)}
+                placeholder="agent@example.com"
+              />
+            </div>
+
+            {agentInfo.partnerId && (
+              <div className="partner-badge">
+                <Icon name="check" size={16} /> Found in our partner network
+              </div>
+            )}
+
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => handleDeclarationAnswer('agent_info', 'completed')}
+              disabled={!isComplete}
             >
               Continue →
             </button>

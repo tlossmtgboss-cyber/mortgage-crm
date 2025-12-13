@@ -2053,3 +2053,153 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ========================================
+   Agent Info Form with Autocomplete
+   ======================================== */
+
+.agent-info-form {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.agent-info-form .form-group {
+  margin-bottom: 20px;
+}
+
+.agent-info-form label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.agent-search-container {
+  position: relative;
+}
+
+.autocomplete-wrapper {
+  position: relative;
+}
+
+.autocomplete-loading {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #6b7280;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.autocomplete-item {
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:first-child {
+  border-radius: 12px 12px 0 0;
+}
+
+.autocomplete-item:last-child {
+  border-radius: 0 0 12px 12px;
+}
+
+.autocomplete-item:hover {
+  background: #f3f4f6;
+}
+
+.autocomplete-item:active {
+  background: #e5e7eb;
+}
+
+.agent-suggestion-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.agent-suggestion-company {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.autocomplete-item.manual-entry {
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+  font-style: italic;
+}
+
+.autocomplete-item.manual-entry:hover {
+  background: #f3f4f6;
+}
+
+.partner-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(33, 141, 141, 0.1), rgba(33, 141, 141, 0.05));
+  border: 1px solid rgba(33, 141, 141, 0.2);
+  border-radius: 8px;
+  color: #218D8D;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.partner-badge svg {
+  flex-shrink: 0;
+}
+
+/* Agent info form mobile */
+@media (max-width: 768px) {
+  .agent-info-form {
+    max-width: 100%;
+  }
+
+  .autocomplete-dropdown {
+    max-height: 50vh;
+  }
+
+  .autocomplete-item {
+    padding: 16px;
+    min-height: 60px;
+  }
+
+  .agent-suggestion-name {
+    font-size: 16px;
+  }
+
+  .agent-suggestion-company {
+    font-size: 14px;
+  }
+}
