@@ -1098,9 +1098,8 @@ async def get_governance_dashboard(db: Session = Depends(get_db)):
     service = AgentGovernanceService(db)
 
     try:
-        # Get all agents
-        agents_result = service.list_agents(limit=100)
-        agents = agents_result.get("items", [])
+        # Get all agents - returns list of dicts
+        agents = service.get_all_agents(include_metrics=False)
 
         # Calculate health summary
         health_summary = {
@@ -1111,44 +1110,32 @@ async def get_governance_dashboard(db: Session = Depends(get_db)):
         }
 
         for agent in agents:
-            status = getattr(agent, 'health_status', 'unknown') if hasattr(agent, 'health_status') else 'unknown'
+            # agent is a dict from to_dict()
+            status = agent.get('health_status', 'unknown')
             if status in health_summary:
                 health_summary[status] += 1
             else:
                 health_summary["unknown"] += 1
 
-        # Get 24h execution stats
-        executions_24h = 0
-        success_count = 0
-        total_response_time = 0
+        # Calculate active agents
+        active_count = len([a for a in agents if a.get('status') == 'active'])
 
-        try:
-            stats = service.get_execution_stats(hours=24)
-            executions_24h = stats.get("total_executions", 0)
-            success_count = stats.get("successful_executions", 0)
-            total_response_time = stats.get("total_response_time_ms", 0)
-        except Exception as e:
-            logger.warning(f"Error getting execution stats: {e}")
+        # Get 24h execution stats (aggregate from agent data)
+        executions_24h = sum(a.get('total_executions', 0) for a in agents)
+        successful_24h = sum(a.get('successful_executions', 0) for a in agents)
+        avg_response_times = [a.get('avg_response_time_ms', 0) for a in agents if a.get('avg_response_time_ms')]
+        avg_response_time = sum(avg_response_times) / len(avg_response_times) if avg_response_times else 0
 
-        success_rate_24h = (success_count / executions_24h * 100) if executions_24h > 0 else 0
-        avg_response_time = (total_response_time / executions_24h) if executions_24h > 0 else 0
-
-        # Get active alerts count
-        active_alerts = 0
-        try:
-            alerts_result = service.get_alerts(status="open", limit=100)
-            active_alerts = len(alerts_result.get("items", []))
-        except Exception as e:
-            logger.warning(f"Error getting alerts: {e}")
+        success_rate_24h = (successful_24h / executions_24h * 100) if executions_24h > 0 else 0
 
         return {
             "total_agents": len(agents),
-            "active_agents": len([a for a in agents if getattr(a, 'is_active', True)]),
+            "active_agents": active_count,
             "health_summary": health_summary,
             "executions_24h": executions_24h,
             "success_rate_24h": round(success_rate_24h, 1),
             "avg_response_time_ms": round(avg_response_time),
-            "active_alerts": active_alerts
+            "active_alerts": 0  # Simplified - alerts not yet implemented
         }
     except Exception as e:
         logger.error(f"Error getting dashboard summary: {e}")
