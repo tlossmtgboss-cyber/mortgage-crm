@@ -157,7 +157,7 @@ async def get_workspace_data(
     verify_workspace_access(context, slug)
 
     service = PURLWorkspaceService(db)
-    data = service.get_workspace_portal_data(context.workspace_id)
+    data = service.get_complete_workspace_data(context.organization_id, context.workspace_id)
 
     if not data:
         raise HTTPException(status_code=404, detail="Workspace not found")
@@ -920,7 +920,7 @@ async def get_workspace(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     service = PURLWorkspaceService(db)
-    return service.get_workspace_portal_data(workspace_id)
+    return service.get_complete_workspace_data(current_user.organization_id, workspace_id)
 
 
 @purl_admin_router.patch(
