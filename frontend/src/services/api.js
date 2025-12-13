@@ -51,10 +51,28 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log network errors for debugging
+    if (!error.response) {
+      console.error('[API] Network error (no response):', {
+        message: error.message,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL
+        }
+      });
+    }
+
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Don't redirect if already on login page or during logout
+      const isLoginPage = window.location.pathname === '/login';
+      if (!isLoginPage) {
+        console.log('[API] 401 Unauthorized - redirecting to login');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -2007,21 +2025,70 @@ export const agentChatAPI = {
 // PURL (Client Portal) API
 export const purlAPI = {
   // Get workspace by lead ID (check if portal exists for this lead)
-  getWorkspaceByLead: async (leadId) => {
-    const response = await api.get(`/api/v1/purl-admin/workspaces/by-lead/${leadId}`);
-    return response.data;
+  getWorkspaceByLead: async (leadId, retryCount = 0) => {
+    const maxRetries = 2;
+    try {
+      console.log(`[PURL API] Getting workspace for lead ${leadId}, attempt ${retryCount + 1}`);
+      const response = await api.get(`/api/v1/purl-admin/workspaces/by-lead/${leadId}`);
+      console.log('[PURL API] Workspace found:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[PURL API] getWorkspaceByLead error:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        leadId
+      });
+
+      // Retry on Network Error (transient failures)
+      if (error.message === 'Network Error' && retryCount < maxRetries) {
+        console.log(`[PURL API] Network error, retrying (${retryCount + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return purlAPI.getWorkspaceByLead(leadId, retryCount + 1);
+      }
+
+      throw error;
+    }
   },
 
   // Get workspace by loan ID
-  getWorkspaceByLoan: async (loanId) => {
-    const response = await api.get(`/api/v1/purl-admin/workspaces/by-loan/${loanId}`);
-    return response.data;
+  getWorkspaceByLoan: async (loanId, retryCount = 0) => {
+    const maxRetries = 2;
+    try {
+      const response = await api.get(`/api/v1/purl-admin/workspaces/by-loan/${loanId}`);
+      return response.data;
+    } catch (error) {
+      if (error.message === 'Network Error' && retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return purlAPI.getWorkspaceByLoan(loanId, retryCount + 1);
+      }
+      throw error;
+    }
   },
 
   // Create new workspace (portal) for a lead/loan
-  createWorkspace: async (data) => {
-    const response = await api.post('/api/v1/purl-admin/workspaces', data);
-    return response.data;
+  createWorkspace: async (data, retryCount = 0) => {
+    const maxRetries = 2;
+    try {
+      console.log('[PURL API] Creating workspace:', data);
+      const response = await api.post('/api/v1/purl-admin/workspaces', data);
+      console.log('[PURL API] Workspace created:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[PURL API] createWorkspace error:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+
+      if (error.message === 'Network Error' && retryCount < maxRetries) {
+        console.log(`[PURL API] Network error, retrying (${retryCount + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return purlAPI.createWorkspace(data, retryCount + 1);
+      }
+
+      throw error;
+    }
   },
 
   // Get workspace details
