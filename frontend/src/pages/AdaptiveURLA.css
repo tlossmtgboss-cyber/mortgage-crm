@@ -998,6 +998,382 @@
   color: #6b7280;
 }
 
+/* ========================================
+   IMPROVED REVIEW STAGE STYLES
+   ======================================== */
+
+.review-stage {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* Hero Summary Card */
+.review-hero-card {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 50%, #155858 100%);
+  border-radius: 20px;
+  padding: 28px 32px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  box-shadow: 0 10px 40px rgba(33, 141, 141, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.review-hero-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 60%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-icon-wrapper {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  padding: 16px;
+  color: white;
+  flex-shrink: 0;
+}
+
+.hero-content {
+  flex: 1;
+}
+
+.hero-content h3 {
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hero-stat .stat-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.hero-stat .stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.hero-stat .stat-value small {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.hero-stat .stat-value.highlight {
+  color: #A5F3F7;
+}
+
+.hero-stat-divider {
+  width: 1px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+/* Review Grid */
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+/* Review Cards */
+.review-card {
+  background: white;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.review-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.review-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.review-card .card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.review-card .card-icon.profile-icon {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #2563eb;
+}
+
+.review-card .card-icon.income-icon {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  color: #16a34a;
+}
+
+.review-card .card-icon.assets-icon {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #d97706;
+}
+
+.review-card .card-icon.property-icon {
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  color: #4f46e5;
+}
+
+.review-card .card-icon.coborrower-icon {
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  color: #db2777;
+}
+
+.review-card .card-title {
+  flex: 1;
+}
+
+.review-card .card-title h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.review-card .card-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  display: block;
+}
+
+.edit-btn-modern {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-btn-modern:hover {
+  background: #218D8D;
+  color: white;
+  border-color: #218D8D;
+}
+
+.edit-btn-modern svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Card Body */
+.review-card .card-body {
+  padding: 16px 20px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row svg {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.info-label {
+  font-size: 13px;
+  color: #6b7280;
+  min-width: 100px;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  flex: 1;
+  text-align: right;
+}
+
+.info-value.capitalize {
+  text-transform: capitalize;
+}
+
+.info-value.uppercase {
+  text-transform: uppercase;
+}
+
+.info-value.masked {
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  letter-spacing: 1px;
+  color: #6b7280;
+}
+
+.info-row.highlight-row {
+  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+  margin: 6px -20px;
+  padding: 12px 20px;
+  border-radius: 0;
+  border-bottom: none;
+}
+
+.info-row.highlight-row .info-value {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.info-row.total-row {
+  background: linear-gradient(135deg, #fef3c7, #fef9c3);
+  margin: 6px -20px -16px;
+  padding: 14px 20px;
+  border-radius: 0 0 16px 16px;
+  border-bottom: none;
+}
+
+.info-row.total-row .info-label {
+  font-weight: 600;
+  color: #92400e;
+}
+
+.info-row.total-row .info-value {
+  color: #92400e;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* Co-borrower Card - Full Width */
+.coborrower-card {
+  grid-column: 1 / -1;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .review-hero-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 24px 20px;
+  }
+
+  .hero-stats {
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .hero-stat-divider {
+    display: none;
+  }
+
+  .hero-stat {
+    align-items: center;
+  }
+
+  .hero-stat .stat-value {
+    font-size: 18px;
+  }
+
+  .review-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .review-card .card-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .edit-btn-modern {
+    width: 100%;
+    justify-content: center;
+    order: 4;
+    margin-top: 8px;
+  }
+
+  .info-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .info-label {
+    min-width: auto;
+    flex: 1;
+  }
+
+  .info-value {
+    text-align: left;
+    flex: none;
+    width: 100%;
+    padding-left: 28px;
+  }
+
+  .info-row.highlight-row,
+  .info-row.total-row {
+    margin: 6px -20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-content h3 {
+    font-size: 18px;
+  }
+
+  .hero-stat .stat-value {
+    font-size: 16px;
+  }
+
+  .review-card .card-title h4 {
+    font-size: 14px;
+  }
+}
+
 /* Needs List Section */
 .needs-list-section {
   background: white;
@@ -2202,4 +2578,111 @@
   .agent-suggestion-company {
     font-size: 14px;
   }
+}
+
+/* ========================================
+   Professional Contacts Form
+   ======================================== */
+
+.professional-contacts-form {
+  padding: 24px;
+}
+
+.professional-contact-section {
+  margin-bottom: 24px;
+}
+
+.professional-contact-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.professional-contact-section h4 svg {
+  color: #218D8D;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 24px 0;
+}
+
+.intro-selection {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.intro-selection h4 {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* ========================================
+   SSN Input Styling
+   ======================================== */
+
+.ssn-input {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  letter-spacing: 2px;
+  font-size: 16px;
+}
+
+.input-hint {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ========================================
+   Multiple Borrower Styling
+   ======================================== */
+
+.borrower-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+  border: 1px solid #86efac;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.borrower-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #166534;
+  font-size: 14px;
+}
+
+.borrower-badge svg {
+  color: #22c55e;
+}
+
+.borrower-progress {
+  font-size: 13px;
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.15);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.btn-add-coborrower {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+}
+
+.btn-add-coborrower:hover {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
 }

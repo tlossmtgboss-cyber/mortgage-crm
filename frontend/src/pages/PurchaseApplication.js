@@ -983,6 +983,17 @@ export default function PurchaseApplication() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [scheduleStep, setScheduleStep] = useState(1); // 1 = calendar, 2 = video/next steps
   const [planningStep, setPlanningStep] = useState(1); // 1 = payment calculator, 2-6 for each planning question
+  const [professionalSubStep, setProfessionalSubStep] = useState(1); // 1 = select, 2 = involve?, 3 = contact info, 4 = intro request
+  const [wantProfessionalsInvolved, setWantProfessionalsInvolved] = useState(null); // true/false
+  const [professionalContacts, setProfessionalContacts] = useState({}); // { financial_planner: { name, phone, email }, ... }
+  const [wantIntroductions, setWantIntroductions] = useState(null); // true/false
+  const [introductionRequests, setIntroductionRequests] = useState([]); // ['financial_planner', 'accountant', ...]
+  const [ssnRaw, setSsnRaw] = useState(''); // Raw SSN (digits only)
+  const [ssnDisplay, setSsnDisplay] = useState(''); // Masked display (XXX-XX-1234)
+  const [currentBorrower, setCurrentBorrower] = useState(1); // 1 = primary, 2 = co-borrower
+  const [coBorrowerData, setCoBorrowerData] = useState({}); // Second borrower's profile data
+  const [coBorrowerSsnRaw, setCoBorrowerSsnRaw] = useState('');
+  const [coBorrowerSsnDisplay, setCoBorrowerSsnDisplay] = useState('');
   const [paymentEstimate, setPaymentEstimate] = useState(null); // Stores calculated payment data
   const [eConsentAgreed, setEConsentAgreed] = useState(false); // E-consent agreement tracking
   const [creditAuthAgreed, setCreditAuthAgreed] = useState(false); // Credit authorization agreement tracking
@@ -990,6 +1001,46 @@ export default function PurchaseApplication() {
   const [submitError, setSubmitError] = useState(null); // Application submission error state
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
+
+  // Handle SSN input with masking - shows XXX-XX-1234 format
+  const handleSsnChange = (input, isCoBorrower = false) => {
+    // Remove all non-digits
+    const digits = input.replace(/\D/g, '').slice(0, 9);
+
+    // Format display with masking
+    let display = '';
+    if (digits.length === 0) {
+      display = '';
+    } else if (digits.length <= 3) {
+      display = 'X'.repeat(digits.length);
+    } else if (digits.length <= 5) {
+      display = 'XXX-' + 'X'.repeat(digits.length - 3);
+    } else {
+      const last4 = digits.slice(5);
+      display = 'XXX-XX-' + last4;
+    }
+
+    if (isCoBorrower) {
+      setCoBorrowerSsnRaw(digits);
+      setCoBorrowerSsnDisplay(display);
+      setCoBorrowerData(prev => ({ ...prev, ssn: digits }));
+    } else {
+      setSsnRaw(digits);
+      setSsnDisplay(display);
+      setProfileData(prev => ({ ...prev, ssn: digits }));
+    }
+  };
+
+  // Check if multiple borrowers based on declaration
+  const hasMultipleBorrowers = ['2', '3', '4+'].includes(declarations.borrower_count);
+
+  // Get borrower count as number
+  const getBorrowerCount = () => {
+    if (declarations.borrower_count === '2') return 2;
+    if (declarations.borrower_count === '3') return 3;
+    if (declarations.borrower_count === '4+') return 4;
+    return 1;
+  };
 
   // Filter employers
   const filterEmployers = (input) => {
@@ -1183,9 +1234,19 @@ export default function PurchaseApplication() {
         throw new Error(result.detail || 'Submission failed');
       }
 
-      // Success - show animation and move to confirmation page
+      // Success - show animation
       showMicroWinAnimation('Application Submitted!');
-      setScheduleStep(4);
+
+      // Redirect to client portal with the workspace slug
+      if (result.data?.workspace_slug) {
+        // Small delay to show success animation before redirect
+        setTimeout(() => {
+          window.location.href = `/portal/${result.data.workspace_slug}?submitted=true`;
+        }, 1500);
+      } else {
+        // Fallback to confirmation page if no workspace was created
+        setScheduleStep(4);
+      }
     } catch (error) {
       console.error('Application submission error:', error);
       setSubmitError(error.message || 'Failed to submit application. Please try again.');
@@ -1571,22 +1632,36 @@ export default function PurchaseApplication() {
     );
   };
 
-  // Render profile
-  const renderProfileStage = () => (
-    <div className="stage-content">
-      <div className="stage-header">
-        <h2>Let's get to know you</h2>
-        <p>This should take about 2 minutes</p>
-      </div>
+  // Render profile - supports multiple borrowers
+  const renderProfileStage = () => {
+    const isCollectingCoBorrower = currentBorrower === 2;
+    const borrowerData = isCollectingCoBorrower ? coBorrowerData : profileData;
+    const setBorrowerData = isCollectingCoBorrower ? setCoBorrowerData : setProfileData;
+    const currentSsnDisplay = isCollectingCoBorrower ? coBorrowerSsnDisplay : ssnDisplay;
+    const currentSsnRaw = isCollectingCoBorrower ? coBorrowerSsnRaw : ssnRaw;
+
+    // Render borrower form (reusable for both primary and co-borrower)
+    const renderBorrowerForm = () => (
       <div className="form-card">
+        {hasMultipleBorrowers && (
+          <div className="borrower-indicator">
+            <span className="borrower-badge">
+              <Icon name="user" size={16} />
+              {isCollectingCoBorrower ? 'Co-Borrower Information' : 'Primary Borrower Information'}
+            </span>
+            <span className="borrower-progress">
+              Borrower {currentBorrower} of {getBorrowerCount()}
+            </span>
+          </div>
+        )}
         <div className="form-row">
           <div className="form-group">
             <label>First Name</label>
             <input
               type="text"
-              value={profileData.firstName || ''}
-              onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
-              placeholder="Your first name"
+              value={borrowerData.firstName || ''}
+              onChange={(e) => setBorrowerData(prev => ({ ...prev, firstName: e.target.value }))}
+              placeholder={isCollectingCoBorrower ? "Co-borrower's first name" : "Your first name"}
               className="fun-input"
             />
           </div>
@@ -1594,9 +1669,9 @@ export default function PurchaseApplication() {
             <label>Last Name</label>
             <input
               type="text"
-              value={profileData.lastName || ''}
-              onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
-              placeholder="Your last name"
+              value={borrowerData.lastName || ''}
+              onChange={(e) => setBorrowerData(prev => ({ ...prev, lastName: e.target.value }))}
+              placeholder={isCollectingCoBorrower ? "Co-borrower's last name" : "Your last name"}
               className="fun-input"
             />
           </div>
@@ -1606,9 +1681,9 @@ export default function PurchaseApplication() {
             <label>Email</label>
             <input
               type="email"
-              value={profileData.email || ''}
-              onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
-              placeholder="you@example.com"
+              value={borrowerData.email || ''}
+              onChange={(e) => setBorrowerData(prev => ({ ...prev, email: e.target.value }))}
+              placeholder="email@example.com"
               className="fun-input"
             />
           </div>
@@ -1616,33 +1691,59 @@ export default function PurchaseApplication() {
             <label>Phone</label>
             <input
               type="tel"
-              value={profileData.phone || ''}
-              onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+              value={borrowerData.phone || ''}
+              onChange={(e) => setBorrowerData(prev => ({ ...prev, phone: e.target.value }))}
               placeholder="(555) 123-4567"
               className="fun-input"
             />
           </div>
         </div>
-        <div className="form-group">
-          <label>Date of Birth</label>
-          <input
-            type="date"
-            value={profileData.dob || ''}
-            onChange={(e) => setProfileData(prev => ({ ...prev, dob: e.target.value }))}
-            className="fun-input"
-          />
+        <div className="form-row">
+          <div className="form-group">
+            <label>Date of Birth</label>
+            <input
+              type="date"
+              value={borrowerData.dob || ''}
+              onChange={(e) => setBorrowerData(prev => ({ ...prev, dob: e.target.value }))}
+              className="fun-input"
+            />
+          </div>
+          <div className="form-group">
+            <label>Social Security Number</label>
+            <input
+              type="text"
+              value={currentSsnDisplay}
+              onChange={(e) => {
+                const newVal = e.target.value;
+                if (newVal.length < currentSsnDisplay.length) {
+                  const newRaw = currentSsnRaw.slice(0, -1);
+                  handleSsnChange(newRaw, isCollectingCoBorrower);
+                } else {
+                  const lastChar = newVal.slice(-1);
+                  if (/\d/.test(lastChar)) {
+                    handleSsnChange(currentSsnRaw + lastChar, isCollectingCoBorrower);
+                  }
+                }
+              }}
+              placeholder="XXX-XX-1234"
+              className="fun-input ssn-input"
+              maxLength={11}
+              autoComplete="off"
+            />
+            <span className="input-hint">Only the last 4 digits will be visible</span>
+          </div>
         </div>
         <div className="form-group">
           <label>Current Address</label>
           <input
             type="text"
-            value={profileData.address || ''}
-            onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
+            value={borrowerData.address || ''}
+            onChange={(e) => setBorrowerData(prev => ({ ...prev, address: e.target.value }))}
             placeholder="Start typing your address..."
             className="fun-input"
           />
         </div>
-        {declarations.marital_status === 'married' && (
+        {!isCollectingCoBorrower && declarations.marital_status === 'married' && (
           <div className="spouse-section">
             <h3><Icon name="users" size={20} /> Spouse Information</h3>
             <div className="form-row">
@@ -1668,12 +1769,51 @@ export default function PurchaseApplication() {
           </div>
         )}
       </div>
-      <div className="stage-navigation">
-        <button className="btn-back" onClick={goToPrevStage}>← Back</button>
-        <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
+    );
+
+    return (
+      <div className="stage-content">
+        <div className="stage-header">
+          <h2>{isCollectingCoBorrower ? "Co-Borrower's Information" : "Let's get to know you"}</h2>
+          <p>{isCollectingCoBorrower
+            ? `Please enter the co-borrower's information`
+            : "This should take about 2 minutes"}</p>
+        </div>
+        {renderBorrowerForm()}
+        <div className="stage-navigation">
+          <button className="btn-back" onClick={() => {
+            if (isCollectingCoBorrower) {
+              setCurrentBorrower(1);
+            } else {
+              goToPrevStage();
+            }
+          }}>← Back</button>
+
+          {/* Show "Add Co-Borrower" button if primary borrower done and multiple borrowers selected */}
+          {!isCollectingCoBorrower && hasMultipleBorrowers && currentBorrower === 1 ? (
+            <button
+              className="btn-continue btn-add-coborrower"
+              onClick={() => setCurrentBorrower(2)}
+            >
+              Add Co-Borrower →
+            </button>
+          ) : (
+            <button className="btn-continue" onClick={() => {
+              if (isCollectingCoBorrower) {
+                // Done with co-borrower, go to next stage
+                goToNextStage();
+              } else if (hasMultipleBorrowers) {
+                // Primary done, need co-borrower
+                setCurrentBorrower(2);
+              } else {
+                goToNextStage();
+              }
+            }}>Continue →</button>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Render income
   const renderIncomeStage = () => {
@@ -2321,65 +2461,68 @@ export default function PurchaseApplication() {
           </div>
         )}
 
-        <div className="form-card">
-          {declarations.found_property === 'yes' && (
-            <AddressAutocomplete
-              value={propertyData.address || ''}
-              onChange={(value) => setPropertyData(prev => ({ ...prev, address: value }))}
-              onAddressSelect={(addressData) => {
-                setPropertyData(prev => ({
-                  ...prev,
-                  address: addressData.formatted,
-                  street: addressData.street,
-                  city: addressData.city,
-                  state: addressData.state_code,
-                  zip: addressData.zip,
-                  county: addressData.county,
-                }));
-              }}
-              label="Property Address"
-              placeholder="Enter property address..."
-              className="fun-input-wrapper"
-            />
-          )}
+        {/* Only show this form card if there's something to display */}
+        {(declarations.found_property === 'yes' || !paymentEstimate) && (
+          <div className="form-card">
+            {declarations.found_property === 'yes' && (
+              <AddressAutocomplete
+                value={propertyData.address || ''}
+                onChange={(value) => setPropertyData(prev => ({ ...prev, address: value }))}
+                onAddressSelect={(addressData) => {
+                  setPropertyData(prev => ({
+                    ...prev,
+                    address: addressData.formatted,
+                    street: addressData.street,
+                    city: addressData.city,
+                    state: addressData.state_code,
+                    zip: addressData.zip,
+                    county: addressData.county,
+                  }));
+                }}
+                label="Property Address"
+                placeholder="Enter property address..."
+                className="fun-input-wrapper"
+              />
+            )}
 
-          {/* Only show manual price/down payment inputs when no budget summary exists */}
-          {!paymentEstimate && (
-            <div className="form-row">
-              <div className="form-group">
-                <label>{declarations.found_property === 'yes' ? 'Purchase Price' : 'Target Price Range'}</label>
-                <div className="input-with-prefix">
-                  <span className="input-prefix">$</span>
-                  <input
-                    type="number"
-                    value={propertyData.purchasePrice || prefilledPrice || ''}
-                    onChange={(e) => setPropertyData(prev => ({ ...prev, purchasePrice: e.target.value }))}
-                    className="fun-input"
-                    placeholder="0"
-                  />
+            {/* Only show manual price/down payment inputs when no budget summary exists */}
+            {!paymentEstimate && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>{declarations.found_property === 'yes' ? 'Purchase Price' : 'Target Price Range'}</label>
+                  <div className="input-with-prefix">
+                    <span className="input-prefix">$</span>
+                    <input
+                      type="number"
+                      value={propertyData.purchasePrice || prefilledPrice || ''}
+                      onChange={(e) => setPropertyData(prev => ({ ...prev, purchasePrice: e.target.value }))}
+                      className="fun-input"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Down Payment</label>
+                  <div className="input-with-prefix">
+                    <span className="input-prefix">$</span>
+                    <input
+                      type="number"
+                      value={propertyData.downPayment || prefilledDownPayment || ''}
+                      onChange={(e) => setPropertyData(prev => ({ ...prev, downPayment: e.target.value }))}
+                      className="fun-input"
+                      placeholder="0"
+                    />
+                  </div>
+                  {(propertyData.purchasePrice || prefilledPrice) && (propertyData.downPayment || prefilledDownPayment) && (
+                    <span className="calculated-hint">
+                      {(((propertyData.downPayment || prefilledDownPayment) / (propertyData.purchasePrice || prefilledPrice)) * 100).toFixed(1)}% down
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="form-group">
-                <label>Down Payment</label>
-                <div className="input-with-prefix">
-                  <span className="input-prefix">$</span>
-                  <input
-                    type="number"
-                    value={propertyData.downPayment || prefilledDownPayment || ''}
-                    onChange={(e) => setPropertyData(prev => ({ ...prev, downPayment: e.target.value }))}
-                    className="fun-input"
-                    placeholder="0"
-                  />
-                </div>
-                {(propertyData.purchasePrice || prefilledPrice) && (propertyData.downPayment || prefilledDownPayment) && (
-                  <span className="calculated-hint">
-                    {(((propertyData.downPayment || prefilledDownPayment) / (propertyData.purchasePrice || prefilledPrice)) * 100).toFixed(1)}% down
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Payment Calculator - shows when purchase price is entered and no budget summary exists */}
         {!paymentEstimate && (propertyData.purchasePrice || prefilledPrice) && parseFloat(propertyData.purchasePrice || prefilledPrice) > 0 && (
@@ -2409,76 +2552,272 @@ export default function PurchaseApplication() {
   };
 
   // Render review
-  const renderReviewStage = () => (
-    <div className="stage-content">
-      <div className="stage-header">
-        <h2>Review Your Application</h2>
-        <p>Let's make sure everything looks good!</p>
+  const renderReviewStage = () => {
+    // Calculate totals for summary
+    const totalAssets = (parseFloat(assetData.checking) || 0) +
+      (parseFloat(assetData.savings) || 0) +
+      (parseFloat(assetData.investments) || 0) +
+      (parseFloat(assetData.giftAmount) || 0);
+    const purchasePrice = parseFloat(propertyData.purchasePrice || 0);
+    const downPaymentAmount = parseFloat(propertyData.downPayment || 0);
+    const loanAmount = purchasePrice - downPaymentAmount;
+    const downPaymentPercent = purchasePrice > 0 ? ((downPaymentAmount / purchasePrice) * 100).toFixed(1) : 0;
+
+    return (
+      <div className="stage-content review-stage">
+        <div className="stage-header">
+          <h2>Review Your Application</h2>
+          <p>Almost there! Review your information below and make any edits needed.</p>
+        </div>
+
+        {/* Summary Hero Card */}
+        <div className="review-hero-card">
+          <div className="hero-icon-wrapper">
+            <Icon name="check" size={32} />
+          </div>
+          <div className="hero-content">
+            <h3>Your Loan Summary</h3>
+            <div className="hero-stats">
+              <div className="hero-stat">
+                <span className="stat-label">Purchase Price</span>
+                <span className="stat-value">${purchasePrice.toLocaleString()}</span>
+              </div>
+              <div className="hero-stat-divider"></div>
+              <div className="hero-stat">
+                <span className="stat-label">Down Payment</span>
+                <span className="stat-value">${downPaymentAmount.toLocaleString()} <small>({downPaymentPercent}%)</small></span>
+              </div>
+              <div className="hero-stat-divider"></div>
+              <div className="hero-stat">
+                <span className="stat-label">Loan Amount</span>
+                <span className="stat-value highlight">${loanAmount.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="review-grid">
+          {/* Profile Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon profile-icon">
+                <Icon name="profile" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Personal Information</h4>
+                <span className="card-subtitle">Your contact details</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('profile')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="profile" size={16} />
+                <span className="info-label">Full Name</span>
+                <span className="info-value">{profileData.firstName} {profileData.lastName}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="email" size={16} />
+                <span className="info-label">Email</span>
+                <span className="info-value">{profileData.email}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="phone" size={16} />
+                <span className="info-label">Phone</span>
+                <span className="info-value">{profileData.phone}</span>
+              </div>
+              {ssnDisplay && (
+                <div className="info-row">
+                  <Icon name="lock" size={16} />
+                  <span className="info-label">SSN</span>
+                  <span className="info-value masked">{ssnDisplay}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Income Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon income-icon">
+                <Icon name="briefcase" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Employment & Income</h4>
+                <span className="card-subtitle">Your income sources</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('income')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="briefcase" size={16} />
+                <span className="info-label">Employment Type</span>
+                <span className="info-value capitalize">{incomeData.primaryType?.replace('_', ' ') || 'Not specified'}</span>
+              </div>
+              {incomeData.employerName && (
+                <div className="info-row">
+                  <Icon name="building" size={16} />
+                  <span className="info-label">Employer</span>
+                  <span className="info-value">{incomeData.employerName}</span>
+                </div>
+              )}
+              {incomeData.annualSalary && (
+                <div className="info-row highlight-row">
+                  <Icon name="dollarSign" size={16} />
+                  <span className="info-label">Annual Income</span>
+                  <span className="info-value">${parseFloat(incomeData.annualSalary).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Assets Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon assets-icon">
+                <Icon name="dollarSign" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Assets & Down Payment</h4>
+                <span className="card-subtitle">Your available funds</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('assets')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              {parseFloat(assetData.checking) > 0 && (
+                <div className="info-row">
+                  <Icon name="creditCard" size={16} />
+                  <span className="info-label">Checking</span>
+                  <span className="info-value">${parseFloat(assetData.checking).toLocaleString()}</span>
+                </div>
+              )}
+              {parseFloat(assetData.savings) > 0 && (
+                <div className="info-row">
+                  <Icon name="piggyBank" size={16} />
+                  <span className="info-label">Savings</span>
+                  <span className="info-value">${parseFloat(assetData.savings).toLocaleString()}</span>
+                </div>
+              )}
+              {parseFloat(assetData.investments) > 0 && (
+                <div className="info-row">
+                  <Icon name="chart" size={16} />
+                  <span className="info-label">Investments</span>
+                  <span className="info-value">${parseFloat(assetData.investments).toLocaleString()}</span>
+                </div>
+              )}
+              {declarations.gift_funds === 'yes' && parseFloat(assetData.giftAmount) > 0 && (
+                <div className="info-row">
+                  <Icon name="gift" size={16} />
+                  <span className="info-label">Gift Funds</span>
+                  <span className="info-value">${parseFloat(assetData.giftAmount).toLocaleString()}</span>
+                </div>
+              )}
+              <div className="info-row total-row">
+                <Icon name="wallet" size={16} />
+                <span className="info-label">Total Available</span>
+                <span className="info-value">${totalAssets.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Property Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon property-icon">
+                <Icon name="home" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Property Details</h4>
+                <span className="card-subtitle">Your new home</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('property')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="home" size={16} />
+                <span className="info-label">Property Type</span>
+                <span className="info-value capitalize">{propertyData.propertyType?.replace('_', ' ') || 'Not specified'}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="mapPin" size={16} />
+                <span className="info-label">Location</span>
+                <span className="info-value">{propertyData.state || 'Not specified'}{propertyData.county ? `, ${propertyData.county}` : ''}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="document" size={16} />
+                <span className="info-label">Loan Program</span>
+                <span className="info-value uppercase">{propertyData.program || 'Conventional'}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="calendar" size={16} />
+                <span className="info-label">Occupancy</span>
+                <span className="info-value capitalize">{propertyData.occupancy?.replace('_', ' ') || 'Primary Residence'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Co-Borrower Section if applicable */}
+        {hasMultipleBorrowers && coBorrowerData.firstName && (
+          <div className="review-card coborrower-card">
+            <div className="card-header">
+              <div className="card-icon coborrower-icon">
+                <Icon name="users" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Co-Borrower Information</h4>
+                <span className="card-subtitle">Second applicant details</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('profile')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="profile" size={16} />
+                <span className="info-label">Full Name</span>
+                <span className="info-value">{coBorrowerData.firstName} {coBorrowerData.lastName}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="email" size={16} />
+                <span className="info-label">Email</span>
+                <span className="info-value">{coBorrowerData.email}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="phone" size={16} />
+                <span className="info-label">Phone</span>
+                <span className="info-value">{coBorrowerData.phone}</span>
+              </div>
+              {coBorrowerSsnDisplay && (
+                <div className="info-row">
+                  <Icon name="lock" size={16} />
+                  <span className="info-label">SSN</span>
+                  <span className="info-value masked">{coBorrowerSsnDisplay}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="stage-navigation">
+          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+          <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
+        </div>
       </div>
-
-      <div className="review-sections">
-        <div className="review-section">
-          <div className="section-header">
-            <h3><Icon name="profile" size={18} /> Your Profile</h3>
-            <button className="edit-btn" onClick={() => setCurrentStage('profile')}><Icon name="edit" size={14} /></button>
-          </div>
-          <div className="section-content">
-            <p><strong>Name:</strong> {profileData.firstName} {profileData.lastName}</p>
-            <p><strong>Email:</strong> {profileData.email}</p>
-            <p><strong>Phone:</strong> {profileData.phone}</p>
-          </div>
-        </div>
-
-        <div className="review-section">
-          <div className="section-header">
-            <h3><Icon name="briefcase" size={18} /> Income</h3>
-            <button className="edit-btn" onClick={() => setCurrentStage('income')}><Icon name="edit" size={14} /></button>
-          </div>
-          <div className="section-content">
-            <p><strong>Type:</strong> {incomeData.primaryType}</p>
-            {incomeData.employerName && <p><strong>Employer:</strong> {incomeData.employerName}</p>}
-            {incomeData.annualSalary && <p><strong>Annual Income:</strong> ${parseFloat(incomeData.annualSalary).toLocaleString()}</p>}
-          </div>
-        </div>
-
-        <div className="review-section">
-          <div className="section-header">
-            <h3><Icon name="dollarSign" size={18} /> Down Payment</h3>
-            <button className="edit-btn" onClick={() => setCurrentStage('assets')}><Icon name="edit" size={14} /></button>
-          </div>
-          <div className="section-content">
-            <p><strong>Total Available:</strong> ${(
-              (parseFloat(assetData.checking) || 0) +
-              (parseFloat(assetData.savings) || 0) +
-              (parseFloat(assetData.investments) || 0) +
-              (parseFloat(assetData.giftAmount) || 0)
-            ).toLocaleString()}</p>
-            {declarations.gift_funds === 'yes' && (
-              <p><strong>Gift Funds:</strong> ${parseFloat(assetData.giftAmount || 0).toLocaleString()}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="review-section">
-          <div className="section-header">
-            <h3><Icon name="home" size={18} /> New Home</h3>
-            <button className="edit-btn" onClick={() => setCurrentStage('property')}><Icon name="edit" size={14} /></button>
-          </div>
-          <div className="section-content">
-            <p><strong>Property Type:</strong> {propertyData.propertyType}</p>
-            <p><strong>Purchase Price:</strong> ${parseFloat(propertyData.purchasePrice || 0).toLocaleString()}</p>
-            <p><strong>Down Payment:</strong> ${parseFloat(propertyData.downPayment || 0).toLocaleString()}</p>
-            <p><strong>Loan Program:</strong> {propertyData.program?.toUpperCase()}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="stage-navigation">
-        <button className="btn-back" onClick={goToPrevStage}>← Back</button>
-        <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // Toggle multi-select options for planning
   const togglePlanningOption = (field, value) => {
@@ -2656,29 +2995,236 @@ export default function PurchaseApplication() {
       );
     }
 
-    // Step 6: Professional Network
-    return (
-      <div className="stage-content planning-stage">
-        <div className="stage-header">
-          <h2>Do you currently work with any of these professionals?</h2>
-          <p>We can coordinate with your existing team for a comprehensive financial plan.</p>
-        </div>
+    // Step 6: Professional Network - with substeps for follow-up questions
+    const selectedProfessionals = planningData.professionalNetwork || [];
+    const professionalLabels = {
+      financial_planner: 'Financial Planner',
+      accountant: 'CPA / Accountant',
+      insurance_agent: 'Life Insurance Agent',
+      estate_planner: 'Estate Planner'
+    };
 
-        <div className="form-card planning-section">
-          <div className="multi-select-grid compact">
-            {PLANNING_QUESTIONS.professionalNetwork.options.map(option => (
-              <button
-                key={option.value}
-                className={`multi-select-option ${planningData.professionalNetwork.includes(option.value) ? 'selected' : ''}`}
-                onClick={() => togglePlanningOption('professionalNetwork', option.value)}
-              >
-                <span className="option-icon"><Icon name={option.icon} size={32} /></span>
-                <span className="option-label">{option.label}</span>
-              </button>
-            ))}
+    // Substep 1: Select professionals
+    if (professionalSubStep === 1) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>Do you currently work with any of these professionals?</h2>
+            <p>We can coordinate with your existing team for a comprehensive financial plan.</p>
+          </div>
+
+          <div className="form-card planning-section">
+            <div className="multi-select-grid compact">
+              {PLANNING_QUESTIONS.professionalNetwork.options.map(option => (
+                <button
+                  key={option.value}
+                  className={`multi-select-option ${selectedProfessionals.includes(option.value) ? 'selected' : ''}`}
+                  onClick={() => togglePlanningOption('professionalNetwork', option.value)}
+                >
+                  <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                  <span className="option-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setPlanningStep(5)}>← Back</button>
+            <button className="btn-continue" onClick={() => {
+              if (selectedProfessionals.length > 0) {
+                setProfessionalSubStep(2); // Ask if they want them involved
+              } else {
+                setProfessionalSubStep(4); // Ask if they want introductions
+              }
+            }}>Continue →</button>
           </div>
         </div>
+      );
+    }
 
+    // Substep 2: Ask if they want professionals involved in decision making
+    if (professionalSubStep === 2 && selectedProfessionals.length > 0) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>Would you like your professionals involved in the decision-making process?</h2>
+            <p>We can keep them informed and coordinate for a seamless experience.</p>
+          </div>
+
+          <div className="form-card planning-section">
+            <div className="single-select-options">
+              <button
+                className={`single-select-option ${wantProfessionalsInvolved === true ? 'selected' : ''}`}
+                onClick={() => setWantProfessionalsInvolved(true)}
+              >
+                <span className="option-icon"><Icon name="check" size={32} /></span>
+                <span className="option-label">Yes, please involve them</span>
+              </button>
+              <button
+                className={`single-select-option ${wantProfessionalsInvolved === false ? 'selected' : ''}`}
+                onClick={() => setWantProfessionalsInvolved(false)}
+              >
+                <span className="option-icon"><Icon name="x" size={32} /></span>
+                <span className="option-label">No, not at this time</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setProfessionalSubStep(1)}>← Back</button>
+            <button
+              className="btn-continue"
+              disabled={wantProfessionalsInvolved === null}
+              onClick={() => {
+                if (wantProfessionalsInvolved) {
+                  setProfessionalSubStep(3); // Get contact info
+                } else {
+                  setPlanningStep(1);
+                  goToNextStage();
+                }
+              }}
+            >Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Substep 3: Collect contact info for selected professionals
+    if (professionalSubStep === 3) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>Please provide your professionals' contact information</h2>
+            <p>We'll reach out to coordinate on your behalf.</p>
+          </div>
+
+          <div className="form-card professional-contacts-form">
+            {selectedProfessionals.map((prof, index) => (
+              <div key={prof} className="professional-contact-section">
+                <h4><Icon name={PLANNING_QUESTIONS.professionalNetwork.options.find(o => o.value === prof)?.icon || 'user'} size={20} /> {professionalLabels[prof]}</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Name</label>
+                    <input
+                      type="text"
+                      className="fun-input"
+                      placeholder="Professional's name"
+                      value={professionalContacts[prof]?.name || ''}
+                      onChange={(e) => setProfessionalContacts(prev => ({
+                        ...prev,
+                        [prof]: { ...prev[prof], name: e.target.value }
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      className="fun-input"
+                      placeholder="(555) 123-4567"
+                      value={professionalContacts[prof]?.phone || ''}
+                      onChange={(e) => setProfessionalContacts(prev => ({
+                        ...prev,
+                        [prof]: { ...prev[prof], phone: e.target.value }
+                      }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      className="fun-input"
+                      placeholder="email@example.com"
+                      value={professionalContacts[prof]?.email || ''}
+                      onChange={(e) => setProfessionalContacts(prev => ({
+                        ...prev,
+                        [prof]: { ...prev[prof], email: e.target.value }
+                      }))}
+                    />
+                  </div>
+                </div>
+                {index < selectedProfessionals.length - 1 && <hr className="section-divider" />}
+              </div>
+            ))}
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setProfessionalSubStep(2)}>← Back</button>
+            <button className="btn-continue" onClick={() => { setPlanningStep(1); goToNextStage(); }}>Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Substep 4: Ask if they want introductions to professionals (when none selected)
+    if (professionalSubStep === 4) {
+      return (
+        <div className="stage-content planning-stage">
+          <div className="stage-header">
+            <h2>Would you like an introduction to a trusted professional?</h2>
+            <p>We partner with qualified professionals who can help with your financial planning.</p>
+          </div>
+
+          <div className="form-card planning-section">
+            <div className="single-select-options" style={{ marginBottom: '24px' }}>
+              <button
+                className={`single-select-option ${wantIntroductions === true ? 'selected' : ''}`}
+                onClick={() => setWantIntroductions(true)}
+              >
+                <span className="option-icon"><Icon name="check" size={32} /></span>
+                <span className="option-label">Yes, please connect me</span>
+              </button>
+              <button
+                className={`single-select-option ${wantIntroductions === false ? 'selected' : ''}`}
+                onClick={() => setWantIntroductions(false)}
+              >
+                <span className="option-icon"><Icon name="x" size={32} /></span>
+                <span className="option-label">No thanks, not at this time</span>
+              </button>
+            </div>
+
+            {wantIntroductions === true && (
+              <div className="intro-selection">
+                <h4>Select who you'd like to connect with:</h4>
+                <div className="multi-select-grid compact">
+                  {PLANNING_QUESTIONS.professionalNetwork.options.map(option => (
+                    <button
+                      key={option.value}
+                      className={`multi-select-option ${introductionRequests.includes(option.value) ? 'selected' : ''}`}
+                      onClick={() => {
+                        setIntroductionRequests(prev =>
+                          prev.includes(option.value)
+                            ? prev.filter(v => v !== option.value)
+                            : [...prev, option.value]
+                        );
+                      }}
+                    >
+                      <span className="option-icon"><Icon name={option.icon} size={32} /></span>
+                      <span className="option-label">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setProfessionalSubStep(1)}>← Back</button>
+            <button
+              className="btn-continue"
+              disabled={wantIntroductions === null}
+              onClick={() => { setPlanningStep(1); goToNextStage(); }}
+            >Continue →</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Fallback
+    return (
+      <div className="stage-content planning-stage">
         <div className="stage-navigation">
           <button className="btn-back" onClick={() => setPlanningStep(5)}>← Back</button>
           <button className="btn-continue" onClick={() => { setPlanningStep(1); goToNextStage(); }}>Continue →</button>

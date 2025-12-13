@@ -37,7 +37,7 @@ const PaymentCalculator = ({
       ? Math.round((initialDownPayment / initialHomeValue) * 100)
       : 20
   );
-  const [interestRate, setInterestRate] = useState(7.0);
+  const [interestRate, setInterestRate] = useState(6.5);
   const [loanTermYears, setLoanTermYears] = useState(30);
   const [selectedState, setSelectedState] = useState(initialState);
   const [selectedCountyFips, setSelectedCountyFips] = useState('');
@@ -47,6 +47,7 @@ const PaymentCalculator = ({
   const [creditScore, setCreditScore] = useState(initialCreditScore);
   const [loanType, setLoanType] = useState(initialLoanType);
   const [showMIDetails, setShowMIDetails] = useState(false);
+  const [showValidation, setShowValidation] = useState(true); // Show validation from start
 
   // Get available counties for selected state
   const availableCounties = useMemo(() => {
@@ -238,8 +239,8 @@ const PaymentCalculator = ({
       <div className="calculator-inputs">
         {/* Home Value */}
         <div className="input-group">
-          <label>Home Value</label>
-          <div className="input-with-prefix">
+          <label>Home Value <span className="required-star">*</span></label>
+          <div className={`input-with-prefix ${showValidation && homeValue <= 0 ? 'required-field' : ''}`}>
             <span className="prefix">$</span>
             <input
               type="number"
@@ -345,13 +346,14 @@ const PaymentCalculator = ({
         {/* Location (for tax/insurance estimates) */}
         <div className="input-row">
           <div className="input-group half">
-            <label>State</label>
+            <label>State <span className="required-star">*</span></label>
             <select
               value={selectedState}
               onChange={(e) => {
                 setSelectedState(e.target.value);
                 setSelectedCountyFips('');
               }}
+              className={showValidation && !selectedState ? 'required-field' : ''}
             >
               <option value="">Select State</option>
               {statesList.map((state) => (
@@ -378,10 +380,11 @@ const PaymentCalculator = ({
           <>
             {/* Property Use */}
             <div className="input-group">
-              <label>Property Use</label>
+              <label>Property Use <span className="required-star">*</span></label>
               <select
                 value={propertyUse}
                 onChange={(e) => setPropertyUse(e.target.value)}
+                className={showValidation && !propertyUse ? 'required-field' : ''}
               >
                 <option value="primaryResidence">Primary Residence</option>
                 <option value="secondHome">Second Home</option>
@@ -582,6 +585,30 @@ const PaymentCalculator = ({
           font-weight: 400;
           color: #666;
           margin-left: 8px;
+        }
+
+        .required-star {
+          color: #dc2626;
+          font-weight: 600;
+        }
+
+        .required-field {
+          border: 2px solid #dc2626 !important;
+          border-radius: 8px;
+          animation: pulse-border 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-border {
+          0%, 100% { border-color: #dc2626; }
+          50% { border-color: #ef4444; }
+        }
+
+        .input-with-prefix.required-field {
+          border: 2px solid #dc2626;
+        }
+
+        select.required-field {
+          border: 2px solid #dc2626;
         }
 
         .input-row {

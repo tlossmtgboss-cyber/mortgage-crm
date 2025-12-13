@@ -1591,18 +1591,95 @@ async def submit_application(
         if not lead_id:
             doc_error_msg = "No lead_id available for document storage"
 
+        # =================================================================
+        # CREATE PORTAL WORKSPACE FOR BORROWER
+        # =================================================================
+        workspace_slug = None
+        workspace_id = None
+        workspace_error = None
+
+        if lead_id:
+            try:
+                from services.purl_workspace_service import PURLWorkspaceService
+                from models.purl import WorkspaceCreate
+
+                workspace_service = PURLWorkspaceService(db)
+
+                # Get organization ID (default to 1 or from LO)
+                org_id = 1
+                if submission.loId:
+                    # Try to get org from LO
+                    lo_result = db.execute(text("SELECT organization_id FROM users WHERE id = :lo_id"), {"lo_id": submission.loId}).fetchone()
+                    if lo_result and lo_result[0]:
+                        org_id = lo_result[0]
+
+                # Create workspace for this borrower
+                workspace_data = WorkspaceCreate(
+                    display_name=borrower_name,
+                    slug=None,  # Auto-generate from name
+                    source="online_application",
+                    owner_user_id=submission.loId,
+                    metadata={
+                        "lead_id": lead_id,
+                        "email": borrower_email,
+                        "phone": submission.profileData.get("phone", ""),
+                        "loan_amount": loan_amount,
+                        "property_value": purchase_price,
+                    }
+                )
+
+                workspace_result = workspace_service.create_workspace(
+                    organization_id=org_id,
+                    data=workspace_data,
+                    owner_user_id=submission.loId
+                )
+
+                workspace_id = workspace_result.get("id")
+                workspace_slug = workspace_result.get("slug")
+
+                # Add borrower as a contact in the workspace
+                if workspace_id:
+                    try:
+                        from models.purl import PURLContact
+
+                        contact = PURLContact(
+                            organization_id=org_id,
+                            workspace_id=workspace_id,
+                            first_name=submission.profileData.get("firstName", ""),
+                            last_name=submission.profileData.get("lastName", ""),
+                            email=borrower_email,
+                            phone=submission.profileData.get("phone", ""),
+                            is_primary=True,
+                            contact_type="borrower"
+                        )
+                        db.add(contact)
+                        db.commit()
+                        logger.info(f"Added borrower contact to workspace {workspace_id}")
+                    except Exception as contact_error:
+                        logger.warning(f"Failed to add borrower contact: {contact_error}")
+
+                logger.info(f"Created workspace {workspace_id} with slug {workspace_slug} for lead {lead_id}")
+
+            except Exception as ws_error:
+                logger.warning(f"Workspace creation failed (non-critical): {ws_error}")
+                workspace_error = str(ws_error)
+
         return {
             "success": True,
             "message": "Application submitted successfully",
             "data": {
                 "borrower_id": borrower_id,
                 "lead_id": lead_id,
+                "workspace_id": workspace_id,
+                "workspace_slug": workspace_slug,
+                "portal_url": f"/portal/{workspace_slug}" if workspace_slug else None,
                 "submission_date": submission_date.isoformat(),
                 "pdfs_generated": econsent_pdf is not None and credit_auth_pdf is not None,
                 "fannie_mae_generated": fannie_mae_xml is not None,
                 "email_sent_to_lo": email_sent,
                 "documents_stored": documents_stored,
                 "document_storage_error": doc_error_msg,
+                "workspace_error": workspace_error,
             }
         }
 
