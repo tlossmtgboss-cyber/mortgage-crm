@@ -33656,12 +33656,11 @@ async def setup_admin_user(db: Session = Depends(get_db)):
     This should be disabled after initial setup.
     """
     admin_email = "admin@perenniaai.com"
-    admin_password = "Admin123!"
+    admin_password = "demo123"
 
     try:
-        # Pre-computed bcrypt hash for "Admin123!" using passlib with bcrypt 4.1.3
-        # Generated and verified using: pwd_context.hash("Admin123!")
-        new_hash = "$2b$12$Np5mczq3ThkKa3Wm3Ex9yeHm9sIVv12KXSO8z2wJteNRiTrZjAK8C"
+        # Pre-computed bcrypt hash for "demo123" using passlib with bcrypt 4.1.3
+        new_hash = "$2b$12$okQ2nh4jbjfdA8nmZ7zj4enIL0tFjd3O7s58t2I/0K6bZPNY8nEuy"
 
         logger.info(f"Using pre-computed hash for admin: {new_hash[:30]}...")
 
@@ -50324,13 +50323,13 @@ async def startup_event():
                     "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
                 ))
                 if admin_check.fetchone():
-                    # Pre-computed bcrypt hash for "Admin123!" using passlib with bcrypt 4.1.3
-                    admin_hash = "$2b$12$Np5mczq3ThkKa3Wm3Ex9yeHm9sIVv12KXSO8z2wJteNRiTrZjAK8C"
+                    # Pre-computed bcrypt hash for "demo123" using passlib with bcrypt 4.1.3
+                    admin_hash = "$2b$12$okQ2nh4jbjfdA8nmZ7zj4enIL0tFjd3O7s58t2I/0K6bZPNY8nEuy"
                     db_temp.execute(text(
                         "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
                     ), {"pwd": admin_hash})
                     db_temp.commit()
-                    logger.info("✅ Admin password reset to Admin123!")
+                    logger.info("✅ Admin password reset to demo123")
                 db_temp.close()
             except Exception as pwd_e:
                 logger.warning(f"⚠️ Admin password reset skipped: {pwd_e}")
