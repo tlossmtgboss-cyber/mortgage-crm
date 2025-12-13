@@ -20,7 +20,7 @@
 
 .app-main > * {
   width: 100%;
-  max-width: 1800px;
+  max-width: 100%;
 }
 
 .app-main.with-assistant {
