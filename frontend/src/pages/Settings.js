@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI, agentAPI } from '../services/api';
-import CommandCenter from './CommandCenter';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
@@ -342,7 +341,6 @@ function Settings() {
     { id: 'user-profile', label: 'User Profile', type: 'parent', section: 'userProfile' },
     { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational' },
     { id: 'workflow', label: 'Workflow', type: 'standalone', section: 'workflow', navigate: '/workflow' },
-    { id: 'command-center', label: 'Command Center', type: 'standalone', section: 'command-center' },
     { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
     { id: 'mission-control', label: 'Mission Control', type: 'standalone', section: 'mission-control' },
     { id: 'ai-receptionist', label: 'AI Receptionist', type: 'standalone', section: 'ai-receptionist' },
@@ -2519,10 +2517,6 @@ const API_BASE_URL = isProduction
 
         {/* Main Content */}
         <div className="settings-main">
-          {activeSection === 'command-center' && (
-            <CommandCenter />
-          )}
-
           {activeSection === 'mission-control' && (
             <MissionControl />
           )}
