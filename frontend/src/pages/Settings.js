@@ -333,7 +333,8 @@ function Settings() {
     onboarding: false,
     masterAdmin: false,
     landingPages: false,
-    agentGovernance: false
+    agentGovernance: false,
+    production: false
   });
 
   // Default sidebar items order
@@ -352,8 +353,7 @@ function Settings() {
     { id: 'integrations', label: 'Integrations', type: 'parent', section: 'integrations' },
     { id: 'api-keys', label: 'API Keys', type: 'standalone', section: 'api-keys' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
-    { id: 'smart-scheduler', label: 'Smart Scheduler', type: 'standalone', section: 'smart-scheduler' },
-    { id: 'video-meetings', label: 'Video Meetings', type: 'standalone', section: 'video-meetings' },
+    { id: 'production', label: 'Production', type: 'parent', section: 'production' },
     { id: 'notifications', label: 'Notifications', type: 'standalone', section: 'notifications' },
     { id: 'power-dialer', label: 'Power Dialer', type: 'standalone', section: 'dialer-settings' },
     { id: 'client-portals', label: 'Client Portals', type: 'standalone', section: 'client-portals' },
@@ -2442,6 +2442,33 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'agent-governance-alerts' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-alerts')}><span>Alerts & Notifications</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'agent-governance-compliance' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-compliance')}><span>Compliance</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'agent-governance-gym' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-gym')}><span>Agent Gym Settings</span></button>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Render Production parent with children
+            if (item.id === 'production') {
+              return (
+                <div key={item.id}>
+                  <button
+                    className={`sidebar-btn parent ${expandedSections.production ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
+                    onClick={() => toggleSection('production')}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleDragOver(e, item)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, item)}
+                  >
+                    <span>{item.label}</span>
+                    <span className="expand-icon">{expandedSections.production ? '▼' : '▶'}</span>
+                  </button>
+                  {expandedSections.production && (
+                    <div className="sidebar-children">
+                      <button className={`sidebar-btn child ${activeSection === 'smart-scheduler' ? 'active' : ''}`} onClick={() => setActiveSection('smart-scheduler')}><span>Smart Scheduler</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'video-meetings' ? 'active' : ''}`} onClick={() => setActiveSection('video-meetings')}><span>Video Meetings</span></button>
                     </div>
                   )}
                 </div>
