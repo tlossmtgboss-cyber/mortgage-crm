@@ -158,8 +158,137 @@ class PublicMicrositeResponse(BaseModel):
 
 
 # =============================================================================
+# THEME SEEDING
+# =============================================================================
+
+def seed_default_themes(db: Session):
+    """
+    Seed default microsite themes if they don't exist.
+    This ensures the system is self-initializing.
+    """
+    from microsite_models import MicrositeTheme, ThemeStatus, ThemeCategory
+
+    default_themes = [
+        {
+            "slug": "leadpops-cardinal",
+            "name": "LeadPops Cardinal",
+            "description": "A bold, modern theme inspired by LeadPops with strong call-to-actions and lead capture focus.",
+            "category": ThemeCategory.BOLD,
+            "component_name": "LeadPopsCardinal",
+            "features": ["hero_image", "contact_form", "rate_calculator", "testimonials", "about_section"],
+            "display_order": 1,
+            "is_featured": True,
+            "supports_custom_colors": True,
+            "supports_custom_fonts": True,
+            "layout_options": {"heroStyle": ["image", "gradient"], "headerStyle": ["centered", "left"]}
+        },
+        {
+            "slug": "professional-clean",
+            "name": "Professional Clean",
+            "description": "A clean, professional theme perfect for established loan officers.",
+            "category": ThemeCategory.PROFESSIONAL,
+            "component_name": "ProfessionalClean",
+            "features": ["hero_image", "contact_form", "credentials", "about_section"],
+            "display_order": 2,
+            "is_featured": False,
+            "supports_custom_colors": True,
+            "supports_custom_fonts": True,
+            "layout_options": {"heroStyle": ["solid", "image"], "headerStyle": ["centered", "left"]}
+        },
+        {
+            "slug": "modern-gradient",
+            "name": "Modern Gradient",
+            "description": "A contemporary theme with gradient backgrounds and smooth animations.",
+            "category": ThemeCategory.MODERN,
+            "component_name": "ModernGradient",
+            "features": ["hero_gradient", "contact_form", "testimonials", "about_section"],
+            "display_order": 3,
+            "is_featured": False,
+            "supports_custom_colors": True,
+            "supports_custom_fonts": True,
+            "layout_options": {"gradientDirection": ["diagonal", "horizontal", "vertical"]}
+        },
+        {
+            "slug": "minimal-focus",
+            "name": "Minimal Focus",
+            "description": "A minimalist theme that puts the focus on your message and lead capture.",
+            "category": ThemeCategory.MINIMAL,
+            "component_name": "MinimalFocus",
+            "features": ["contact_form", "about_section"],
+            "display_order": 4,
+            "is_featured": False,
+            "supports_custom_colors": True,
+            "supports_custom_fonts": True,
+            "layout_options": {"layout": ["centered", "split"]}
+        }
+    ]
+
+    seeded_count = 0
+    for theme_data in default_themes:
+        # Check if theme already exists
+        existing = db.query(MicrositeTheme).filter(
+            MicrositeTheme.slug == theme_data["slug"]
+        ).first()
+
+        if not existing:
+            theme = MicrositeTheme(
+                slug=theme_data["slug"],
+                name=theme_data["name"],
+                description=theme_data["description"],
+                category=theme_data["category"],
+                status=ThemeStatus.ACTIVE,
+                component_name=theme_data["component_name"],
+                features=theme_data["features"],
+                display_order=theme_data["display_order"],
+                is_featured=theme_data["is_featured"],
+                supports_custom_colors=theme_data["supports_custom_colors"],
+                supports_custom_fonts=theme_data["supports_custom_fonts"],
+                layout_options=theme_data["layout_options"]
+            )
+            db.add(theme)
+            seeded_count += 1
+
+    if seeded_count > 0:
+        db.commit()
+        logger.info(f"Seeded {seeded_count} default themes")
+
+    return seeded_count
+
+
+# =============================================================================
 # PUBLIC ROUTES
 # =============================================================================
+
+def ensure_themes_table_exists(db: Session):
+    """
+    Ensure the microsite_themes table exists and is seeded.
+    Creates the table if it doesn't exist.
+    """
+    from sqlalchemy import text, inspect
+    from database import engine
+
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+
+    if 'microsite_themes' not in tables:
+        logger.info("microsite_themes table does not exist, creating...")
+        # Import models to register them with Base
+        from microsite_models import MicrositeTheme, Microsite, MicrositeProfile
+        from database import Base
+
+        # Create only the microsite tables
+        Base.metadata.create_all(
+            bind=engine,
+            tables=[
+                MicrositeTheme.__table__,
+                Microsite.__table__,
+                MicrositeProfile.__table__
+            ]
+        )
+        logger.info("Created microsite tables")
+        return True
+    return False
+
 
 @public_router.get("", response_model=ThemeListResponse)
 async def list_themes(
@@ -171,9 +300,19 @@ async def list_themes(
     List all available microsite themes.
 
     This is a public endpoint for browsing the theme marketplace.
+    Auto-seeds default themes if none exist.
     """
     try:
         from microsite_models import MicrositeTheme, ThemeStatus, ThemeCategory
+
+        # Ensure table exists
+        ensure_themes_table_exists(db)
+
+        # Check if any themes exist, seed defaults if not
+        theme_count = db.query(MicrositeTheme).count()
+        if theme_count == 0:
+            logger.info("No themes found, seeding defaults...")
+            seed_default_themes(db)
 
         query = db.query(MicrositeTheme).filter(
             MicrositeTheme.status == ThemeStatus.ACTIVE
