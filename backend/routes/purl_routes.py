@@ -17,7 +17,11 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 
-# Models and schemas
+# IMPORTANT: Import User from main FIRST to ensure it's registered in SQLAlchemy metadata
+# before PURL models are loaded (they have ForeignKey references to users.id)
+from main import get_current_user, User
+
+# Models and schemas (import AFTER User to ensure users table is registered)
 from models.purl import (
     PURLWorkspace,
     PURLContact,
@@ -68,9 +72,6 @@ from middleware.purl_auth import (
     log_purl_action,
     check_purl_rate_limit,
 )
-
-# Internal auth (existing system)
-from main import get_current_user, User
 
 
 logger = logging.getLogger(__name__)

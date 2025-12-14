@@ -17,6 +17,10 @@ import hashlib
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
+# IMPORTANT: Import User from main FIRST to ensure users table is registered
+# in SQLAlchemy metadata before PURL models (which have ForeignKey to users.id)
+from main import User
+
 from models.purl import (
     PURLAccessToken,
     PURLWorkspace,
