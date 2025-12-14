@@ -165,8 +165,22 @@ def seed_default_themes(db: Session):
     """
     Seed default microsite themes if they don't exist.
     This ensures the system is self-initializing.
+    Also renames 'leadpops-cardinal' to 'bold-impact' if it exists.
     """
     from microsite_models import MicrositeTheme, ThemeStatus, ThemeCategory
+
+    # First, check if old 'leadpops-cardinal' theme exists and rename it
+    old_theme = db.query(MicrositeTheme).filter(
+        MicrositeTheme.slug == "leadpops-cardinal"
+    ).first()
+
+    if old_theme:
+        logger.info("Renaming 'leadpops-cardinal' to 'bold-impact'...")
+        old_theme.slug = "bold-impact"
+        old_theme.name = "Bold Impact"
+        old_theme.description = "A bold, modern theme with strong call-to-actions and lead capture focus."
+        db.commit()
+        logger.info("Theme renamed successfully")
 
     default_themes = [
         {
@@ -319,6 +333,19 @@ async def list_themes(
 
         # Ensure table exists
         ensure_themes_table_exists(db)
+
+        # Check for old 'leadpops-cardinal' theme and rename it
+        old_theme = db.query(MicrositeTheme).filter(
+            MicrositeTheme.slug == "leadpops-cardinal"
+        ).first()
+
+        if old_theme:
+            logger.info("Auto-renaming 'leadpops-cardinal' to 'bold-impact'...")
+            old_theme.slug = "bold-impact"
+            old_theme.name = "Bold Impact"
+            old_theme.description = "A bold, modern theme with strong call-to-actions and lead capture focus."
+            db.commit()
+            logger.info("Theme renamed successfully")
 
         # Check if any themes exist, seed defaults if not
         theme_count = db.query(MicrositeTheme).count()
