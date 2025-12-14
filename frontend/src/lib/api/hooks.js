@@ -14,11 +14,12 @@ import { api, PerenniaAPIError } from './client';
  * @param {Object} options - Options
  */
 export function useApiQuery(fetchFn, deps = [], options = {}) {
-  const { enabled = true, onSuccess, onError, initialData = null } = options;
+  const { enabled = true, onSuccess, onError, initialData = null, timeout = 30000, retryOn401 = true } = options;
 
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
+  const retryCountRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!enabled) return;
@@ -26,17 +27,41 @@ export function useApiQuery(fetchFn, deps = [], options = {}) {
     setLoading(true);
     setError(null);
 
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timed out')), timeout);
+    });
+
+    const attemptFetch = async (attempt = 0) => {
+      try {
+        // Race between fetch and timeout
+        const result = await Promise.race([fetchFn(), timeoutPromise]);
+        setData(result);
+        retryCountRef.current = 0; // Reset retry count on success
+        if (onSuccess) onSuccess(result);
+        return result;
+      } catch (err) {
+        // Retry on 401 if this is the first attempt (handles race conditions after submission)
+        const is401 = err?.status === 401 || err?.message?.includes('401');
+        if (is401 && retryOn401 && attempt < 2) {
+          console.log(`[useApiQuery] Got 401, retrying in ${(attempt + 1) * 500}ms... (attempt ${attempt + 1})`);
+          await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 500));
+          return attemptFetch(attempt + 1);
+        }
+        throw err;
+      }
+    };
+
     try {
-      const result = await fetchFn();
-      setData(result);
-      if (onSuccess) onSuccess(result);
+      await attemptFetch();
     } catch (err) {
+      console.error('[useApiQuery] Fetch error after retries:', err);
       setError(err);
       if (onError) onError(err);
     } finally {
       setLoading(false);
     }
-  }, [fetchFn, enabled, onSuccess, onError]);
+  }, [fetchFn, enabled, onSuccess, onError, timeout, retryOn401]);
 
   useEffect(() => {
     fetchData();

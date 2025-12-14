@@ -209,38 +209,56 @@ export default function PURLPortal() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get token from URL or localStorage
+  // Get token from URL or localStorage - initialize synchronously
   const getToken = () => {
     const urlParams = new URLSearchParams(location.search);
     const urlToken = urlParams.get('token');
     if (urlToken) {
       localStorage.setItem(`purl_token_${slug}`, urlToken);
-      // Set auth token on API client
-      api.setAuthToken(urlToken);
       return urlToken;
     }
-    const storedToken = localStorage.getItem(`purl_token_${slug}`);
-    if (storedToken) {
-      api.setAuthToken(storedToken);
-    }
-    return storedToken;
+    return localStorage.getItem(`purl_token_${slug}`);
   };
 
   const [token] = useState(getToken);
+  const [tokenReady, setTokenReady] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Set API token on mount and when token changes - BEFORE data fetching
+  React.useEffect(() => {
+    if (token) {
+      console.log('[PURLPortal] Setting auth token:', token.substring(0, 20) + '...');
+      api.setAuthToken(token);
+      // Small delay to ensure token is set before fetch
+      setTokenReady(true);
+    } else {
+      console.log('[PURLPortal] No token found for slug:', slug);
+    }
+  }, [token, slug]);
 
   // Check for submission success message
   const urlParams = new URLSearchParams(location.search);
   const justSubmitted = urlParams.get('submitted') === 'true';
   const [showSubmitSuccess, setShowSubmitSuccess] = useState(justSubmitted);
 
-  // Use workspace data hook
+  // Use workspace data hook - only enabled after token is ready
   const {
     data: workspaceData,
     loading,
     error,
     refetch: refetchWorkspace,
-  } = useWorkspaceData(slug);
+  } = useWorkspaceData(tokenReady ? slug : null); // Pass null slug to disable until token ready
+
+  // Debug logging for workspace data fetch
+  React.useEffect(() => {
+    if (error) {
+      console.error('[PURLPortal] Error loading workspace:', error);
+    }
+    if (workspaceData) {
+      console.log('[PURLPortal] Workspace data loaded:', workspaceData?.workspace?.id);
+    }
+    console.log('[PURLPortal] State:', { tokenReady, loading, hasError: !!error, hasData: !!workspaceData });
+  }, [tokenReady, loading, error, workspaceData]);
 
   // Extract data from workspace response
   const workspace = workspaceData?.workspace;
@@ -394,13 +412,14 @@ export default function PURLPortal() {
     );
   }
 
-  // Loading state
-  if (loading) {
+  // Loading state - show while token is initializing OR data is loading
+  if (!tokenReady || loading) {
     return (
       <div className="purl-portal loading">
         <div className="loading-spinner">
           <div className="spinner"></div>
           <p>Loading your portal...</p>
+          {!tokenReady && <p className="loading-detail">Authenticating...</p>}
         </div>
       </div>
     );
