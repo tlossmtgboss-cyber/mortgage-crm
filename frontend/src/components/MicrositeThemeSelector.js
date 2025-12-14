@@ -63,23 +63,18 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
 
   const fetchThemes = async () => {
     try {
-      console.log('[MicrositeThemeSelector] Fetching themes from:', `${API_BASE}/api/v1/public/themes`);
       const response = await fetch(`${API_BASE}/api/v1/public/themes`, {
         headers: getAuthHeaders()
       });
-      console.log('[MicrositeThemeSelector] Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
-        console.log('[MicrositeThemeSelector] Themes loaded:', data.themes?.length || 0);
         setThemes(data.themes || []);
       } else {
-        const errorText = await response.text();
-        console.error('[MicrositeThemeSelector] Response error:', errorText);
         throw new Error(`Failed to fetch themes: ${response.status}`);
       }
     } catch (err) {
-      console.error('[MicrositeThemeSelector] Error fetching themes:', err);
-      setError(`Failed to load themes: ${err.message}`);
+      console.error('Error fetching themes:', err);
+      setError('Failed to load themes');
     } finally {
       setLoading(false);
     }
@@ -178,12 +173,18 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
     }
   };
 
-  // Preview theme
+  // Preview theme - opens in new browser tab
   const handlePreview = (theme) => {
+    // Open theme preview in a new browser tab
+    window.open(`/preview/theme/${theme.slug}`, '_blank', 'noopener,noreferrer');
+  };
+
+  // Quick preview (modal) - for viewing details without leaving page
+  const handleQuickPreview = (theme) => {
     setPreviewTheme(theme);
   };
 
-  // Close preview
+  // Close preview modal
   const closePreview = () => {
     setPreviewTheme(null);
   };
@@ -282,7 +283,7 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
           <div
             key={theme.id}
             className={`theme-card ${selectedTheme === theme.id ? 'selected' : ''}`}
-            onClick={() => handlePreview(theme)}
+            onClick={() => handleQuickPreview(theme)}
           >
             {/* Theme Thumbnail */}
             <div className="theme-thumbnail">
@@ -388,9 +389,29 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
                        previewTheme.category === 'modern' ? '✨' :
                        previewTheme.category === 'minimal' ? '⚡' : '🎨'}
                     </span>
-                    <p>Preview not available</p>
+                    <p>Click below to see live preview</p>
                   </div>
                 )}
+                <button
+                  className="open-preview-btn"
+                  onClick={() => handlePreview(previewTheme)}
+                  style={{
+                    marginTop: '12px',
+                    padding: '10px 20px',
+                    background: 'var(--color-primary, #c9a227)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    margin: '12px auto 0'
+                  }}
+                >
+                  🔗 Open Live Preview
+                </button>
               </div>
 
               {/* Theme Details */}

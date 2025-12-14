@@ -101,6 +101,7 @@ const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
 const LOMicrosite = lazy(() => import('./pages/microsites/LOMicrosite'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
+const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
 const LODashboard = lazy(() => import('./pages/LODashboard'));
 const RealtorDashboard = lazy(() => import('./pages/RealtorDashboard'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
@@ -309,6 +310,9 @@ function App() {
           {/* Loan Officer Microsite (public) - Uses ThemeRenderer for dynamic themes */}
           <Route path="/lo/:slug" element={<LazyPage><ThemeRenderer /></LazyPage>} />
           <Route path="/microsite/loan-officer/:userId" element={<LazyPage><ThemeRenderer /></LazyPage>} />
+
+          {/* Theme Preview (public) - Preview themes with sample data */}
+          <Route path="/preview/theme/:themeSlug" element={<LazyPage><ThemePreview /></LazyPage>} />
 
           {/* Borrower Login (public - social login for applicants) */}
           <Route path="/apply/login" element={<LazyPage><BorrowerLogin /></LazyPage>} />
