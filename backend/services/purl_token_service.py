@@ -17,10 +17,6 @@ import hashlib
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
-# IMPORTANT: Import User from main FIRST to ensure users table is registered
-# in SQLAlchemy metadata before PURL models (which have ForeignKey to users.id)
-from main import User
-
 from models.purl import (
     PURLAccessToken,
     PURLWorkspace,
@@ -71,6 +67,8 @@ class PURLTokenService:
         Returns:
             Tuple of (token_id, full_token)
         """
+        from sqlalchemy import text
+
         # Generate token
         full_token, token_hash, token_prefix = PURLTokenGenerator.generate_token()
 
@@ -79,22 +77,34 @@ class PURLTokenService:
         if expires_in_days:
             expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
-        # Create token record
-        token = PURLAccessToken(
-            organization_id=organization_id,
-            workspace_id=workspace_id,
-            token_hash=token_hash,
-            token_prefix=token_prefix,
-            scope=scope.value,
-            status=TokenStatus.ACTIVE.value,
-            contact_id=contact_id,
-            expires_at=expires_at,
-            created_by=created_by
+        # Use raw SQL to bypass ORM ForeignKey resolution issues
+        # The purl_access_tokens table has ForeignKey constraints to users table,
+        # but the ORM can't resolve them if User model isn't loaded first
+        result = self.db.execute(
+            text("""
+                INSERT INTO purl_access_tokens
+                (organization_id, workspace_id, token_hash, token_prefix, scope, status,
+                 contact_id, expires_at, created_by, created_at)
+                VALUES
+                (:org_id, :ws_id, :token_hash, :token_prefix, :scope, :status,
+                 :contact_id, :expires_at, :created_by, :created_at)
+                RETURNING id
+            """),
+            {
+                "org_id": organization_id,
+                "ws_id": workspace_id,
+                "token_hash": token_hash,
+                "token_prefix": token_prefix,
+                "scope": scope.value,
+                "status": TokenStatus.ACTIVE.value,
+                "contact_id": contact_id,
+                "expires_at": expires_at,
+                "created_by": created_by,
+                "created_at": datetime.now(timezone.utc)
+            }
         )
-
-        self.db.add(token)
+        token_id = result.scalar()
         self.db.commit()
-        self.db.refresh(token)
 
         # Emit event - wrapped in try-except with its own transaction
         try:
@@ -103,7 +113,7 @@ class PURLTokenService:
                 workspace_id=workspace_id,
                 event_key="token_created",
                 payload={
-                    "token_id": token.id,
+                    "token_id": token_id,
                     "scope": scope.value,
                     "contact_id": contact_id,
                     "expires_at": expires_at.isoformat() if expires_at else None
@@ -116,9 +126,9 @@ class PURLTokenService:
             self.db.rollback()
             logger.warning(f"Failed to emit token_created event: {e}")
 
-        logger.info(f"Created PURL token {token.id} for workspace {workspace_id}")
+        logger.info(f"Created PURL token {token_id} for workspace {workspace_id}")
 
-        return token.id, full_token
+        return token_id, full_token
 
     # =========================================================================
     # TOKEN VERIFICATION
