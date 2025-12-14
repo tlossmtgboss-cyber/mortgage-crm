@@ -352,6 +352,45 @@ class AgentGovernanceService:
             AgentExecution.created_at >= since
         ).order_by(desc(AgentExecution.created_at)).limit(limit).all()
 
+    def list_executions(
+        self,
+        agent_name: Optional[str] = None,
+        agent_id: Optional[int] = None,
+        status: Optional[str] = None,
+        success: Optional[bool] = None,
+        days: int = 30,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        List executions with filtering and pagination.
+        Used by the statistics and executions API endpoints.
+        """
+        query = self.db.query(AgentExecution)
+
+        # Filter by date range
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        query = query.filter(AgentExecution.created_at >= since)
+
+        if agent_name:
+            query = query.filter(AgentExecution.agent_name == agent_name)
+        if agent_id:
+            query = query.filter(AgentExecution.agent_id == agent_id)
+        if status:
+            query = query.filter(AgentExecution.status == status)
+        if success is not None:
+            query = query.filter(AgentExecution.success == success)
+
+        total = query.count()
+        executions = query.order_by(desc(AgentExecution.created_at)).offset(offset).limit(limit).all()
+
+        return {
+            "executions": executions,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+
     # =========================================================================
     # METRICS & ANALYTICS
     # =========================================================================
@@ -546,6 +585,45 @@ class AgentGovernanceService:
             query = query.filter(AgentAlert.agent_name == agent_name)
 
         return query.order_by(desc(AgentAlert.triggered_at)).limit(limit).all()
+
+    def list_alerts(
+        self,
+        agent_id: Optional[str] = None,
+        alert_type: Optional[str] = None,
+        severity: Optional[str] = None,
+        status: Optional[str] = None,
+        days: int = 7,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        List alerts with filtering and pagination.
+        Used by the alerts API endpoint.
+        """
+        query = self.db.query(AgentAlert)
+
+        # Filter by date range
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        query = query.filter(AgentAlert.triggered_at >= since)
+
+        if agent_id:
+            query = query.filter(AgentAlert.agent_id == agent_id)
+        if alert_type:
+            query = query.filter(AgentAlert.alert_type == alert_type)
+        if severity:
+            query = query.filter(AgentAlert.severity == severity)
+        if status:
+            query = query.filter(AgentAlert.status == status)
+
+        total = query.count()
+        alerts = query.order_by(desc(AgentAlert.triggered_at)).offset(offset).limit(limit).all()
+
+        return {
+            "alerts": alerts,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
 
     def acknowledge_alert(
         self,

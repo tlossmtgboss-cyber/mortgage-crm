@@ -16,6 +16,7 @@
   /* Content should scroll naturally - don't restrict overflow */
   display: flex;
   justify-content: center;
+  padding: 0 24px;
 
   /* Global layout stability */
   scrollbar-gutter: stable;
@@ -23,7 +24,8 @@
 
 .app-main > * {
   width: 100%;
-  max-width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
 /*

@@ -90,20 +90,18 @@ class PortalCloseOnTimeService:
             # Adjust for weekend observance
             observed_date = self._adjust_for_weekend(holiday_date)
 
-            # Check if already exists
+            # Check if already exists (using the observed date as the holiday_date)
             existing = self.db.query(FederalHoliday).filter(
-                and_(
-                    FederalHoliday.year == year,
-                    FederalHoliday.holiday_name == name
-                )
+                FederalHoliday.holiday_date == observed_date
             ).first()
 
             if not existing:
                 holiday = FederalHoliday(
-                    year=year,
-                    holiday_date=holiday_date,
-                    observed_date=observed_date,
+                    holiday_date=observed_date,
                     holiday_name=name,
+                    is_observed=True,
+                    is_auto_generated=True,
+                    notes=f"Actual date: {holiday_date.isoformat()}" if holiday_date != observed_date else None,
                 )
                 self.db.add(holiday)
                 holidays_created.append(name)
@@ -127,16 +125,16 @@ class PortalCloseOnTimeService:
             return self._holiday_cache[year]
 
         holidays = self.db.query(FederalHoliday).filter(
-            FederalHoliday.year == year
-        ).order_by(FederalHoliday.observed_date).all()
+            extract('year', FederalHoliday.holiday_date) == year,
+            FederalHoliday.is_observed == True
+        ).order_by(FederalHoliday.holiday_date).all()
 
         result = [
             {
                 "id": h.id,
                 "name": h.holiday_name,
                 "date": h.holiday_date.isoformat(),
-                "observed_date": h.observed_date.isoformat(),
-                "is_half_day": h.is_half_day,
+                "is_observed": h.is_observed,
             }
             for h in holidays
         ]
@@ -151,16 +149,18 @@ class PortalCloseOnTimeService:
             return False
 
         # Holiday check
-        holidays = self.db.query(FederalHoliday).filter(
-            FederalHoliday.observed_date == check_date
+        holiday = self.db.query(FederalHoliday).filter(
+            FederalHoliday.holiday_date == check_date,
+            FederalHoliday.is_observed == True
         ).first()
 
-        return holidays is None
+        return holiday is None
 
     def is_holiday(self, check_date: date) -> Optional[str]:
         """Check if a date is a holiday. Returns holiday name or None."""
         holiday = self.db.query(FederalHoliday).filter(
-            FederalHoliday.observed_date == check_date
+            FederalHoliday.holiday_date == check_date,
+            FederalHoliday.is_observed == True
         ).first()
 
         return holiday.holiday_name if holiday else None

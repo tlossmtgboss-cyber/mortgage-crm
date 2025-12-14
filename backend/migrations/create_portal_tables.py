@@ -440,6 +440,7 @@ def seed_notification_templates(engine):
 def seed_federal_holidays(engine):
     """Seed federal holidays for current and next year."""
     from sqlalchemy.orm import Session
+    from sqlalchemy import extract
     from services.portal_close_on_time_service import PortalCloseOnTimeService
 
     session = Session(bind=engine)
@@ -447,7 +448,7 @@ def seed_federal_holidays(engine):
     # Check if holidays already exist
     current_year = date.today().year
     existing = session.query(FederalHoliday).filter(
-        FederalHoliday.year == current_year
+        extract('year', FederalHoliday.holiday_date) == current_year
     ).count()
 
     if existing > 0:

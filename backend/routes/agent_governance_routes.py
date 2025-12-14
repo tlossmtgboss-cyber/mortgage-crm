@@ -138,16 +138,18 @@ class AgentExecutionResponse(BaseModel):
 
 class AgentAlertResponse(BaseModel):
     """Response model for agent alert."""
-    id: str
-    agent_id: str
+    id: int
+    agent_id: int
+    agent_name: Optional[str] = None
     alert_type: str
     severity: str
     title: str
     message: Optional[str]
     status: str
     created_at: datetime
-    acknowledged_at: Optional[datetime]
-    resolved_at: Optional[datetime]
+    triggered_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -697,25 +699,25 @@ async def get_health_summary(
     """Get a quick health summary of all agents."""
     service = AgentGovernanceService(db)
 
-    # Get all agents
+    # Get all agents - returns list of dicts from to_dict()
     result = service.list_agents(limit=1000)
     agents = result["agents"]
 
     summary = {
         "total_agents": len(agents),
-        "active": len([a for a in agents if a.status == "active"]),
-        "paused": len([a for a in agents if a.status == "paused"]),
-        "maintenance": len([a for a in agents if a.status == "maintenance"]),
-        "disabled": len([a for a in agents if a.status == "disabled"]),
+        "active": len([a for a in agents if a.get("status") == "active"]),
+        "paused": len([a for a in agents if a.get("status") == "paused"]),
+        "maintenance": len([a for a in agents if a.get("status") == "maintenance"]),
+        "disabled": len([a for a in agents if a.get("status") == "disabled"]),
         "by_type": {}
     }
 
     for agent in agents:
-        agent_type = agent.agent_type
+        agent_type = agent.get("category", "unknown")
         if agent_type not in summary["by_type"]:
             summary["by_type"][agent_type] = {"total": 0, "active": 0}
         summary["by_type"][agent_type]["total"] += 1
-        if agent.status == "active":
+        if agent.get("status") == "active":
             summary["by_type"][agent_type]["active"] += 1
 
     return summary
