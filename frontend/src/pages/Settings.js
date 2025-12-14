@@ -12,6 +12,7 @@ import VideoMeetings from '../components/VideoMeetings';
 import AIFeedbackLog from '../components/AIFeedbackLog';
 import ITHelpdeskAdmin from '../components/ITHelpdeskAdmin';
 import PURLManager from '../components/admin/PURLManager';
+import MicrositeThemeSelector from '../components/MicrositeThemeSelector';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -2642,6 +2643,21 @@ const API_BASE_URL = isProduction
                 >
                   Voicemail
                 </button>
+                <button
+                  onClick={() => setMarketingTab('microsite')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'microsite' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'microsite' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'microsite' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Microsite Theme
+                </button>
               </div>
 
               {/* Landing Pages Tab */}
@@ -2760,6 +2776,13 @@ const API_BASE_URL = isProduction
                       + Record Voicemail
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Microsite Theme Tab */}
+              {marketingTab === 'microsite' && (
+                <div className="marketing-section">
+                  <MicrositeThemeSelector />
                 </div>
               )}
             </div>

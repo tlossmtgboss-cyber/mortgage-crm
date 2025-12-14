@@ -60333,6 +60333,47 @@ async def calculate_public_prequalification(data: PrequalificationRequest):
 
 
 # ============================================================================
+# DATABASE MIGRATIONS (Protected by CRON_API_KEY)
+# ============================================================================
+
+@app.post("/api/v1/admin/run-migration")
+async def run_database_migration(
+    migration_name: str,
+    api_key: str = Header(None, alias="X-API-Key")
+):
+    """Run a database migration (protected by CRON_API_KEY)."""
+    import os
+    from pathlib import Path
+
+    # Verify API key
+    expected_key = os.getenv("CRON_API_KEY")
+    if not expected_key or api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    # Validate migration name (prevent path traversal)
+    if not migration_name.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid migration name")
+
+    migration_path = Path(__file__).parent / "migrations" / f"{migration_name}.sql"
+    if not migration_path.exists():
+        raise HTTPException(status_code=404, detail=f"Migration '{migration_name}' not found")
+
+    try:
+        sql = migration_path.read_text()
+
+        # Execute the migration
+        with engine.connect() as conn:
+            # Split by semicolons but be careful with DO blocks
+            conn.execute(text(sql))
+            conn.commit()
+
+        return {"status": "success", "migration": migration_name, "message": "Migration completed successfully"}
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
