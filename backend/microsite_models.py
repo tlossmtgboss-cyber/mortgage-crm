@@ -110,8 +110,10 @@ class MicrositeTheme(Base):
     is_featured = Column(Boolean, nullable=False, default=False)
 
     # Multi-tenant support
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"))
-    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    # Note: Foreign keys removed to avoid SQLAlchemy validation issues during model loading
+    # The database table has the FK constraints, but the ORM doesn't enforce them
+    organization_id = Column(Integer, nullable=True)
+    created_by_id = Column(Integer, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -161,8 +163,9 @@ class Microsite(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # User linkage
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"))
+    # Note: ForeignKey constraints handled at database level, removed from ORM to avoid validation issues
+    user_id = Column(Integer, nullable=False, unique=True, index=True)
+    organization_id = Column(Integer, nullable=True)
 
     # Theme selection
     theme_id = Column(Integer, ForeignKey("microsite_themes.id", ondelete="SET NULL"))
