@@ -41,8 +41,37 @@ def create_tables(engine):
     # Import portal models to register them with Base
     from models import portal_models
 
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
+    # List of portal-specific tables to create
+    portal_tables = [
+        PortalLoan.__table__,
+        LifecycleStateHistory.__table__,
+        MilestoneTemplate.__table__,
+        MilestoneInstance.__table__,
+        TaskTemplate.__table__,
+        TaskInstance.__table__,
+        FederalHoliday.__table__,
+        CloseOnTimeSchedule.__table__,
+        CloseOnTimeMilestone.__table__,
+        PortalDocument.__table__,
+        DocumentExtraction.__table__,
+        PropertyCosts.__table__,
+        HomePriceIndex.__table__,
+        PropertyValueBaseline.__table__,
+        PropertyValuation.__table__,
+        HomeValueInsight.__table__,
+        NotificationTemplate.__table__,
+        NotificationQueue.__table__,
+        LoanActivityLog.__table__,
+        RiskFlag.__table__,
+        PartnerAccessToken.__table__,
+        AnnualRefreshCycle.__table__,
+        PresentationSession.__table__,
+        PresentationScenario.__table__,
+        PresentationCitation.__table__,
+    ]
+
+    # Create only portal tables
+    Base.metadata.create_all(bind=engine, tables=portal_tables)
 
     print("Tables created successfully!")
 
