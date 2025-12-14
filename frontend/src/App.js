@@ -98,6 +98,7 @@ const CoborrowerApplication = lazy(() => import('./pages/CoborrowerApplication')
 const BorrowerLogin = lazy(() => import('./pages/BorrowerLogin'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
+const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
 const LOMicrosite = lazy(() => import('./pages/microsites/LOMicrosite'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const LODashboard = lazy(() => import('./pages/LODashboard'));
@@ -324,6 +325,10 @@ function App() {
 
           {/* Co-borrower Application (public - token-based access) */}
           <Route path="/coborrower/:token" element={<LazyPage><CoborrowerApplication /></LazyPage>} />
+
+          {/* Borrower Portal (public - token-based access) */}
+          <Route path="/portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />
+          <Route path="/portal" element={<LazyPage><BorrowerPortal /></LazyPage>} />
 
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />

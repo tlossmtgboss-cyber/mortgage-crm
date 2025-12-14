@@ -1,0 +1,475 @@
+/**
+ * Portal API Service
+ *
+ * Handles all API calls to the Perennia Portal backend endpoints.
+ */
+
+const API_BASE = process.env.REACT_APP_API_URL || '';
+
+/**
+ * Make an authenticated API request
+ */
+async function apiRequest(endpoint, options = {}) {
+  const token = localStorage.getItem('authToken');
+
+  const config = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+    ...options,
+  };
+
+  const response = await fetch(`${API_BASE}${endpoint}`, config);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// =============================================================================
+// LIFECYCLE ENDPOINTS
+// =============================================================================
+
+export const lifecycleApi = {
+  /**
+   * Get portal status for a loan
+   */
+  getPortalStatus: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/status`),
+
+  /**
+   * Get current lifecycle stage
+   */
+  getLifecycleStage: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/lifecycle`),
+
+  /**
+   * Transition to a new lifecycle stage
+   */
+  transitionStage: (loanId, newStage, reason = null, force = false) =>
+    apiRequest(`/api/portal/loans/${loanId}/lifecycle/transition`, {
+      method: 'POST',
+      body: JSON.stringify({ new_stage: newStage, reason, force }),
+    }),
+
+  /**
+   * Get lifecycle history
+   */
+  getLifecycleHistory: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/lifecycle/history`),
+
+  /**
+   * Get valid transitions
+   */
+  getValidTransitions: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/lifecycle/valid-transitions`),
+
+  /**
+   * Record heartbeat activity
+   */
+  recordHeartbeat: (loanId, activityType, description, metadata = null) =>
+    apiRequest(`/api/portal/loans/${loanId}/heartbeat`, {
+      method: 'POST',
+      body: JSON.stringify({
+        activity_type: activityType,
+        description,
+        metadata,
+        is_visible_to_borrower: true,
+      }),
+    }),
+
+  /**
+   * Get recent activity
+   */
+  getRecentActivity: (loanId, limit = 20, borrowerVisibleOnly = false) =>
+    apiRequest(`/api/portal/loans/${loanId}/activity?limit=${limit}&borrower_visible_only=${borrowerVisibleOnly}`),
+
+  /**
+   * Get active risks
+   */
+  getActiveRisks: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/risks`),
+
+  /**
+   * Add risk flag
+   */
+  addRiskFlag: (loanId, riskType, severity, description, recommendedAction = null) =>
+    apiRequest(`/api/portal/loans/${loanId}/risks`, {
+      method: 'POST',
+      body: JSON.stringify({
+        risk_type: riskType,
+        severity,
+        description,
+        recommended_action: recommendedAction,
+      }),
+    }),
+
+  /**
+   * Resolve risk flag
+   */
+  resolveRiskFlag: (flagId, resolutionNotes = null) =>
+    apiRequest(`/api/portal/risks/${flagId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution_notes: resolutionNotes }),
+    }),
+};
+
+// =============================================================================
+// MILESTONE ENDPOINTS
+// =============================================================================
+
+export const milestoneApi = {
+  /**
+   * Get loan milestones
+   */
+  getLoanMilestones: (loanId, includeTasks = true, borrowerView = false) =>
+    apiRequest(`/api/portal/loans/${loanId}/milestones?include_tasks=${includeTasks}&borrower_view=${borrowerView}`),
+
+  /**
+   * Get milestone progress
+   */
+  getMilestoneProgress: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/milestones/progress`),
+
+  /**
+   * Generate milestones for a loan
+   */
+  generateMilestones: (loanId, stage, expectedCloseDate = null) => {
+    let url = `/api/portal/loans/${loanId}/milestones/generate?stage=${stage}`;
+    if (expectedCloseDate) {
+      url += `&expected_close_date=${expectedCloseDate}`;
+    }
+    return apiRequest(url, { method: 'POST' });
+  },
+
+  /**
+   * Update milestone status
+   */
+  updateMilestone: (milestoneId, status, notes = null) =>
+    apiRequest(`/api/portal/milestones/${milestoneId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    }),
+
+  /**
+   * Get timeline data
+   */
+  getTimelineData: (loanId, viewType = 'horizontal', borrowerView = false) =>
+    apiRequest(`/api/portal/loans/${loanId}/milestones/timeline?view_type=${viewType}&borrower_view=${borrowerView}`),
+
+  /**
+   * Get journey summary
+   */
+  getJourneySummary: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/milestones/summary`),
+
+  /**
+   * Get task details
+   */
+  getTaskDetails: (taskId) =>
+    apiRequest(`/api/portal/tasks/${taskId}`),
+
+  /**
+   * Update task status
+   */
+  updateTask: (taskId, status, metadata = null) =>
+    apiRequest(`/api/portal/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, metadata }),
+    }),
+
+  /**
+   * Get pending borrower tasks
+   */
+  getBorrowerTasks: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/tasks/borrower`),
+};
+
+// =============================================================================
+// CLOSE-ON-TIME ENDPOINTS
+// =============================================================================
+
+export const closeOnTimeApi = {
+  /**
+   * Create close schedule
+   */
+  createCloseSchedule: (loanId, targetCloseDate, contractDate = null) =>
+    apiRequest(`/api/portal/loans/${loanId}/close-schedule`, {
+      method: 'POST',
+      body: JSON.stringify({
+        target_close_date: targetCloseDate,
+        contract_date: contractDate,
+      }),
+    }),
+
+  /**
+   * Get close schedule
+   */
+  getCloseSchedule: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/close-schedule`),
+
+  /**
+   * Get countdown data
+   */
+  getCountdownData: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/close-countdown`),
+
+  /**
+   * Get calendar view
+   */
+  getCalendarView: (loanId, startDate = null, weeks = 6) => {
+    let url = `/api/portal/loans/${loanId}/close-calendar?weeks=${weeks}`;
+    if (startDate) {
+      url += `&start_date=${startDate}`;
+    }
+    return apiRequest(url);
+  },
+
+  /**
+   * Complete close milestone
+   */
+  completeCloseMilestone: (milestoneId) =>
+    apiRequest(`/api/portal/close-milestones/${milestoneId}/complete`, {
+      method: 'POST',
+    }),
+
+  /**
+   * Get federal holidays
+   */
+  getFederalHolidays: (year) =>
+    apiRequest(`/api/portal/holidays/${year}`),
+
+  /**
+   * Count business days
+   */
+  countBusinessDays: (startDate, endDate) =>
+    apiRequest(`/api/portal/business-days/count?start_date=${startDate}&end_date=${endDate}`),
+};
+
+// =============================================================================
+// HOME VALUE ENDPOINTS
+// =============================================================================
+
+export const homeValueApi = {
+  /**
+   * Set property baseline
+   */
+  setPropertyBaseline: (loanId, baselineData) =>
+    apiRequest(`/api/portal/loans/${loanId}/property-baseline`, {
+      method: 'POST',
+      body: JSON.stringify(baselineData),
+    }),
+
+  /**
+   * Get property baseline
+   */
+  getPropertyBaseline: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/property-baseline`),
+
+  /**
+   * Get current home value
+   */
+  getCurrentHomeValue: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/home-value`),
+
+  /**
+   * Get home value dashboard
+   */
+  getHomeValueDashboard: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/home-value/dashboard`),
+
+  /**
+   * Calculate equity
+   */
+  calculateEquity: (loanId, currentLoanBalance) =>
+    apiRequest(`/api/portal/loans/${loanId}/equity?current_loan_balance=${currentLoanBalance}`),
+
+  /**
+   * Calculate equity unlock potential
+   */
+  calculateEquityUnlock: (loanId, currentLoanBalance, maxLtv = 0.80) =>
+    apiRequest(`/api/portal/loans/${loanId}/equity-unlock?current_loan_balance=${currentLoanBalance}&max_ltv=${maxLtv}`),
+
+  /**
+   * Get home value insights
+   */
+  getHomeValueInsights: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/home-value/insights`),
+
+  /**
+   * Generate insights
+   */
+  generateInsights: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/home-value/generate-insights`, {
+      method: 'POST',
+    }),
+
+  /**
+   * Dismiss insight
+   */
+  dismissInsight: (insightId) =>
+    apiRequest(`/api/portal/insights/${insightId}/dismiss`, {
+      method: 'POST',
+    }),
+};
+
+// =============================================================================
+// DOCUMENT ENDPOINTS
+// =============================================================================
+
+export const documentApi = {
+  /**
+   * Get loan documents
+   */
+  getLoanDocuments: (loanId, documentType = null, status = null, borrowerView = false) => {
+    let url = `/api/portal/loans/${loanId}/documents?borrower_view=${borrowerView}`;
+    if (documentType) url += `&document_type=${documentType}`;
+    if (status) url += `&status=${status}`;
+    return apiRequest(url);
+  },
+
+  /**
+   * Get document details
+   */
+  getDocument: (documentId) =>
+    apiRequest(`/api/portal/documents/${documentId}`),
+
+  /**
+   * Update document status
+   */
+  updateDocumentStatus: (documentId, status, rejectionReason = null) =>
+    apiRequest(`/api/portal/documents/${documentId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, rejection_reason: rejectionReason }),
+    }),
+
+  /**
+   * Get document extraction
+   */
+  getDocumentExtraction: (documentId) =>
+    apiRequest(`/api/portal/documents/${documentId}/extraction`),
+
+  /**
+   * Get document checklist
+   */
+  getDocumentChecklist: (loanId, lifecycleStage) =>
+    apiRequest(`/api/portal/loans/${loanId}/documents/checklist?lifecycle_stage=${lifecycleStage}`),
+
+  /**
+   * Get document summary
+   */
+  getDocumentSummary: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/documents/summary`),
+
+  /**
+   * Set property costs
+   */
+  setPropertyCosts: (loanId, costs) =>
+    apiRequest(`/api/portal/loans/${loanId}/property-costs`, {
+      method: 'POST',
+      body: JSON.stringify(costs),
+    }),
+
+  /**
+   * Get property costs
+   */
+  getPropertyCosts: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/property-costs`),
+};
+
+// =============================================================================
+// NOTIFICATION ENDPOINTS
+// =============================================================================
+
+export const notificationApi = {
+  /**
+   * Queue a notification
+   */
+  queueNotification: (loanId, eventType, recipientEmail, context = {}, channel = 'email') =>
+    apiRequest(`/api/portal/loans/${loanId}/notifications/queue`, {
+      method: 'POST',
+      body: JSON.stringify({
+        event_type: eventType,
+        recipient_email: recipientEmail,
+        context,
+        channel,
+      }),
+    }),
+
+  /**
+   * Get notification history
+   */
+  getNotificationHistory: (loanId, limit = 50) =>
+    apiRequest(`/api/portal/loans/${loanId}/notifications/history?limit=${limit}`),
+
+  /**
+   * Get notification templates
+   */
+  getNotificationTemplates: (eventType = null, channel = null) => {
+    let url = '/api/portal/notifications/templates';
+    const params = [];
+    if (eventType) params.push(`event_type=${eventType}`);
+    if (channel) params.push(`channel=${channel}`);
+    if (params.length) url += `?${params.join('&')}`;
+    return apiRequest(url);
+  },
+};
+
+// =============================================================================
+// BORROWER PORTAL ENDPOINTS
+// =============================================================================
+
+export const borrowerPortalApi = {
+  /**
+   * Get portal by access token (magic link)
+   */
+  getPortalByToken: (token) =>
+    apiRequest(`/api/portal/access/${token}`),
+
+  /**
+   * Get dashboard data by loan ID
+   */
+  getDashboard: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/status`),
+
+  /**
+   * Get borrower dashboard
+   */
+  getBorrowerDashboard: (loanId) =>
+    apiRequest(`/api/portal/borrower/${loanId}/dashboard`),
+
+  /**
+   * Get MUM dashboard
+   */
+  getMumDashboard: (loanId) =>
+    apiRequest(`/api/portal/borrower/${loanId}/mum-dashboard`),
+};
+
+// =============================================================================
+// PARTNER PORTAL ENDPOINTS
+// =============================================================================
+
+export const partnerPortalApi = {
+  /**
+   * Get partner portal data by access token
+   */
+  getPartnerPortalData: (accessToken) =>
+    apiRequest(`/api/portal/partner/${accessToken}`),
+};
+
+// Export all APIs as default
+export default {
+  lifecycle: lifecycleApi,
+  milestone: milestoneApi,
+  closeOnTime: closeOnTimeApi,
+  homeValue: homeValueApi,
+  document: documentApi,
+  notification: notificationApi,
+  borrowerPortal: borrowerPortalApi,
+  partnerPortal: partnerPortalApi,
+};

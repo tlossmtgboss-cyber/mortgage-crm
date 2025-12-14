@@ -21,19 +21,26 @@ export const useLayoutFix = (dependencies = []) => {
 
   const recalculateLayout = useCallback(() => {
     if (containerRef.current) {
+      // Get the CSS-defined min-height before modifying
+      const computedStyle = window.getComputedStyle(containerRef.current);
+      const cssMinHeight = parseInt(computedStyle.minHeight) || 0;
+
+      // Calculate minimum viewport-based height (viewport minus header)
+      const viewportMinHeight = window.innerHeight - 120;
+
       // Reset min-height to auto to get true content height
       containerRef.current.style.minHeight = 'auto';
-      const height = containerRef.current.scrollHeight;
+      const contentHeight = containerRef.current.scrollHeight;
 
-      if (height > 0) {
-        containerRef.current.style.minHeight = `${height}px`;
+      // Use the largest of: content height, CSS min-height, or viewport-based min
+      const finalHeight = Math.max(contentHeight, cssMinHeight, viewportMinHeight);
+
+      if (finalHeight > 0) {
+        containerRef.current.style.minHeight = `${finalHeight}px`;
       }
 
       // Force synchronous reflow
       forceRepaint();
-
-      // Force browser repaint
-      window.dispatchEvent(new Event('resize'));
 
       // Ensure body can scroll if content exceeds viewport
       requestAnimationFrame(() => {

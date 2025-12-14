@@ -2,15 +2,11 @@
 .tasks-page,
 .tasks-skeleton {
   /* Ensure consistent scrollbar gutter to prevent layout shift */
-  overflow-y: scroll;
   scrollbar-gutter: stable;
 
   /* Force GPU compositing for smoother transitions */
   transform: translateZ(0);
   will-change: contents;
-
-  /* Prevent flash of unstyled content */
-  contain: layout style;
 }
 
 /* Transition for smooth content appearance */
@@ -31,12 +27,17 @@
   padding: var(--space-xl);
   max-width: 1400px;
   margin: 0 auto;
-  min-height: 100%;
+  min-height: calc(100vh - 80px); /* Full viewport minus nav header */
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .tasks-container {
   /* Container wrapper */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Header - matches ReconciliationCenter style */
@@ -586,8 +587,8 @@
 /* Tab content - supports both old .tab-content and new .tasks-content */
 .tab-content,
 .tasks-content {
-  flex: 1 1 auto;
-  min-height: 600px;
+  flex: 1;
+  min-height: 0; /* Allow flexbox to shrink/grow properly */
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -996,9 +997,8 @@
   display: grid;
   grid-template-columns: 400px minmax(0, 1fr);
   gap: 0;
-  flex: 1 1 auto;
-  min-height: 700px;
-  /* Let content flow naturally - use min-height instead of fixed height */
+  flex: 1;
+  min-height: calc(100vh - 250px); /* Fill available viewport space */
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -1006,10 +1006,6 @@
   max-width: 100%;
   box-sizing: border-box;
   margin-bottom: 50px;
-
-  /* Layout stability improvements */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 700px;
 }
 
 /* Full-width mode for task detail - hides the inbox list */
@@ -1034,7 +1030,8 @@
   display: flex;
   flex-direction: column;
   background: #f9fafb;
-  min-height: 500px;
+  height: 100%;
+  max-height: calc(100vh - 250px);
   overflow-y: auto;
 }
 
@@ -1289,12 +1286,12 @@
   display: flex;
   flex-direction: column;
   background: white;
-  min-height: 700px;
+  height: 100%;
+  max-height: calc(100vh - 250px);
   overflow-y: auto;
   min-width: 0;
   max-width: 100%;
   padding-bottom: 50px;
-  flex: 1;
 }
 
 .detail-header {

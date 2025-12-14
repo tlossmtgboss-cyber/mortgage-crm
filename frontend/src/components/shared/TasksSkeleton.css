@@ -7,14 +7,13 @@
 .tasks-skeleton.tasks-page {
   padding: var(--space-md, 16px) var(--space-xl, 24px);
   padding-bottom: var(--space-3xl, 48px);
-  max-width: 100%;
+  max-width: 1400px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - 80px);
   box-sizing: border-box;
   width: 100%;
-  overflow-y: scroll;
   scrollbar-gutter: stable;
 }
 
@@ -106,9 +105,10 @@
 /* Email Layout */
 .tasks-skeleton .email-layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: var(--space-lg, 16px);
-  min-height: 600px;
+  grid-template-columns: 400px 1fr;
+  gap: 0;
+  min-height: calc(100vh - 250px);
+  flex: 1;
 }
 
 /* Task Inbox (Left Panel) */
@@ -196,7 +196,9 @@
   border-radius: var(--radius-md, 8px);
   display: flex;
   flex-direction: column;
-  min-height: 600px;
+  height: 100%;
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
 }
 
 .tasks-skeleton .task-detail-main {

@@ -2789,6 +2789,24 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         logger.debug(f"AITask query failed: {e}")
         db.rollback()
 
+    # Get workflow tasks (these are the tasks shown on the /tasks page)
+    workflow_tasks = []
+    try:
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT wt.id, wt.task_title, wt.task_description, wt.priority,
+                   wt.due_date, wt.status, wt.loan_id, l.borrower_name
+            FROM workflow_tasks wt
+            LEFT JOIN loans l ON wt.loan_id = l.id
+            WHERE wt.status NOT IN ('completed', 'cancelled')
+            ORDER BY wt.due_date ASC NULLS LAST
+            LIMIT 50
+        """))
+        workflow_tasks = [dict(row._mapping) for row in result]
+    except Exception as e:
+        logger.debug(f"Workflow tasks query failed (table may not exist): {e}")
+        db.rollback()
+
     # Build loan_id -> borrower_name map for AI tasks using raw SQL to avoid enum issues
     loan_ids = [t.loan_id for t in ai_tasks if t.loan_id]
     loan_map = {}
@@ -3010,6 +3028,21 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
             "source": "ai_task"
         })
 
+    # Add workflow tasks (from /tasks page)
+    for wt in workflow_tasks[:20]:
+        combined_tasks.append({
+            "id": f"wf-{wt['id']}",
+            "title": wt.get('task_title', 'Workflow Task'),
+            "description": wt.get('task_description'),
+            "priority": wt.get('priority', 'medium'),
+            "due_date": wt['due_date'].isoformat() if wt.get('due_date') else None,
+            "lead_id": None,
+            "lead_name": None,
+            "borrower_name": wt.get('borrower_name'),
+            "loan_id": wt.get('loan_id'),
+            "source": "workflow_task"
+        })
+
     # Sort combined tasks by due date (None values at end)
     combined_tasks.sort(key=lambda x: (x["due_date"] is None, x["due_date"] or ""))
 
@@ -3018,7 +3051,8 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         "follow_ups": follow_ups,
         "reconciliations": reconciliations,
         "summary": {
-            "total_tasks": len(all_tasks) + len(ai_tasks),
+            "total_tasks": len(all_tasks) + len(ai_tasks) + len(workflow_tasks),
+            "workflow_tasks": len(workflow_tasks),
             "overdue_tasks": len(overdue_tasks),
             "active_leads": total_leads,
             "hot_prospects": len([l for l in all_leads if l.stage and l.stage.value in ['Prospect', 'Pre-Approved']]),
