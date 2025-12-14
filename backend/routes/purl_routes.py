@@ -924,7 +924,7 @@ async def create_workspace(
     description="List all PURL workspaces"
 )
 async def list_workspaces(
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: Optional[str] = Query(None, description="Filter by status (active, completed, all)"),
     search: Optional[str] = Query(None, description="Search by name or slug"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -936,8 +936,29 @@ async def list_workspaces(
         PURLWorkspace.organization_id == current_user.organization_id
     )
 
-    if status:
-        query = query.filter(PURLWorkspace.status == status)
+    # Map frontend filter values to actual workspace statuses
+    if status and status != 'all':
+        from sqlalchemy import or_
+        if status == 'active':
+            # Active = any workspace that's not post_close (completed), including NULL status
+            active_statuses = [
+                WorkspaceStatus.LEAD.value,
+                WorkspaceStatus.APPLICATION.value,
+                WorkspaceStatus.ACTIVE_LOAN.value,
+                WorkspaceStatus.CLOSING.value,
+            ]
+            query = query.filter(
+                or_(
+                    PURLWorkspace.status.in_(active_statuses),
+                    PURLWorkspace.status.is_(None)  # Include workspaces with NULL status
+                )
+            )
+        elif status == 'completed':
+            # Completed = post_close status
+            query = query.filter(PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value)
+        else:
+            # Allow direct status value filtering as well
+            query = query.filter(PURLWorkspace.status == status)
 
     if search:
         query = query.filter(
@@ -956,7 +977,8 @@ async def list_workspaces(
                 "slug": ws.slug,
                 "display_name": ws.display_name,
                 "borrower_name": ws.display_name,  # Alias for frontend compatibility
-                "status": ws.status,
+                "status": ws.status or "lead",  # Default to 'lead' if NULL
+                "progress": 0,  # Default progress - could be calculated from application completeness
                 "created_at": ws.created_at.isoformat() if ws.created_at else None,
                 "lead_id": ws.meta_data.get('lead_id') if ws.meta_data else None,
                 "loan_id": ws.meta_data.get('loan_id') if ws.meta_data else None,
