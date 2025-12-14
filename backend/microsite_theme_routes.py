@@ -326,9 +326,10 @@ async def list_themes(
             logger.info("No themes found, seeding defaults...")
             seed_default_themes(db)
 
-        # Use string value for enum comparison (PostgreSQL enums are lowercase)
+        # Use text() for enum comparison to bypass SQLAlchemy enum conversion
+        from sqlalchemy import text
         query = db.query(MicrositeTheme).filter(
-            MicrositeTheme.status == 'active'
+            text("microsite_themes.status = 'active'")
         )
 
         # Filter by category
@@ -345,9 +346,9 @@ async def list_themes(
 
         themes = query.all()
 
-        # Get featured themes separately
+        # Get featured themes separately - use text() to bypass enum conversion
         featured_query = db.query(MicrositeTheme).filter(
-            MicrositeTheme.status == 'active',
+            text("microsite_themes.status = 'active'"),
             MicrositeTheme.is_featured == True
         ).order_by(MicrositeTheme.display_order).limit(5)
         featured_themes = featured_query.all()
@@ -376,9 +377,10 @@ async def get_theme(
     try:
         from microsite_models import MicrositeTheme, ThemeStatus
 
+        from sqlalchemy import text
         theme = db.query(MicrositeTheme).filter(
             MicrositeTheme.slug == theme_slug,
-            MicrositeTheme.status == 'active'  # Use lowercase for PostgreSQL enum
+            text("microsite_themes.status = 'active'")
         ).first()
 
         if not theme:
@@ -444,8 +446,9 @@ async def get_public_microsite(
 
             if not default_theme:
                 # Fallback to any active theme
+                from sqlalchemy import text
                 default_theme = db.query(MicrositeTheme).filter(
-                    MicrositeTheme.status == 'active'
+                    text("microsite_themes.status = 'active'")
                 ).first()
 
             theme_data = default_theme.to_dict() if default_theme else {
