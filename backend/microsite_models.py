@@ -108,8 +108,8 @@ class MicrositeTheme(Base):
 
     # Relationships
     microsites = relationship("Microsite", back_populates="theme")
-    organization = relationship("Organization", foreign_keys=[organization_id])
-    created_by = relationship("User", foreign_keys=[created_by_id])
+    # Note: Organization and User relationships removed to avoid circular import issues
+    # Access via direct query when needed: db.query(Organization).get(theme.organization_id)
 
     def __repr__(self):
         return f"<MicrositeTheme {self.slug}: {self.name}>"
@@ -181,8 +181,8 @@ class Microsite(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id])
-    organization = relationship("Organization", foreign_keys=[organization_id])
+    # Note: User and Organization relationships removed to avoid circular import issues
+    # Access via direct query when needed: db.query(User).get(microsite.user_id)
     theme = relationship("MicrositeTheme", back_populates="microsites")
     profile = relationship("MicrositeProfile", back_populates="microsite", uselist=False, cascade="all, delete-orphan")
 
