@@ -711,16 +711,45 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
     if (purlUrl) {
       window.open(purlUrl, '_blank');
     } else {
-      alert('No portal URL available. Please create an access token first.');
+      alert('No portal URL available. Click "Generate Portal Link" to create one.');
+    }
+  };
+
+  const handleGeneratePortalLink = async () => {
+    try {
+      const result = await purlAdminApi.createToken(workspace.id, {
+        token_type: 'full_access',
+        expires_in_days: 365,
+      });
+
+      // The API returns portal_url with the token
+      if (result.portal_url) {
+        setPurlUrl(result.portal_url);
+        // Copy to clipboard
+        navigator.clipboard.writeText(result.portal_url);
+        // Ask if they want to open it
+        if (window.confirm('Portal link generated and copied to clipboard!\n\nClick OK to open the portal in a new tab.')) {
+          window.open(result.portal_url, '_blank');
+        }
+      }
+      loadDetails();
+    } catch (err) {
+      alert('Failed to generate portal link: ' + err.message);
     }
   };
 
   const handleCreateToken = async () => {
     try {
-      await purlAdminApi.createToken(workspace.id, {
+      const result = await purlAdminApi.createToken(workspace.id, {
         token_type: 'full_access',
-        expires_in_days: 30,
+        expires_in_days: 365,
       });
+
+      if (result.portal_url) {
+        setPurlUrl(result.portal_url);
+        navigator.clipboard.writeText(result.portal_url);
+        alert('Token created! Portal URL copied to clipboard.');
+      }
       loadDetails();
     } catch (err) {
       alert('Failed to create token: ' + err.message);
@@ -750,28 +779,52 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
 
         {/* PURL URL */}
         <div className="purl-url-section">
-          <label>PURL URL:</label>
-          <div className="url-display">
-            <input type="text" value={purlUrl || 'No active token - create one in Tokens tab'} readOnly />
-            <button onClick={handleCopyUrl} disabled={!purlUrl}>Copy</button>
-            <button
-              onClick={handleViewPortal}
-              disabled={!purlUrl}
-              className="btn-view-portal"
-              style={{
-                background: purlUrl ? '#2563eb' : '#9ca3af',
-                color: 'white',
-                border: 'none',
-                padding: '0.5rem 1rem',
-                borderRadius: '0.375rem',
-                cursor: purlUrl ? 'pointer' : 'not-allowed',
-                marginLeft: '0.5rem',
-                fontWeight: '500'
-              }}
-            >
-              View Portal
-            </button>
-          </div>
+          <label>Portal Access Link:</label>
+          {purlUrl ? (
+            <div className="url-display">
+              <input type="text" value={purlUrl} readOnly />
+              <button onClick={handleCopyUrl}>Copy</button>
+              <button
+                onClick={handleViewPortal}
+                className="btn-view-portal"
+                style={{
+                  background: '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  marginLeft: '0.5rem',
+                  fontWeight: '500'
+                }}
+              >
+                Open Portal
+              </button>
+            </div>
+          ) : (
+            <div className="url-display" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                Generate a new portal link to share with your client. The link includes authentication and expires in 1 year.
+              </p>
+              <button
+                onClick={handleGeneratePortalLink}
+                style={{
+                  background: '#059669',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.625rem 1.25rem',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>🔗</span> Generate Portal Link
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}

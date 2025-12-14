@@ -1178,10 +1178,17 @@ async def create_token(
     # Get the expiry from the token record
     token_record = db.query(PURLAccessToken).filter(PURLAccessToken.id == token_id).first()
 
+    # Build full portal URL with token
+    import os
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+    portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={full_token}"
+
     return {
         "success": True,
         "token": full_token,  # Only returned once!
         "token_id": token_id,
+        "portal_url": portal_url,  # Full URL with token - only returned on creation!
+        "workspace_slug": workspace.slug,
         "expires_at": token_record.expires_at.isoformat() if token_record and token_record.expires_at else None
     }
 
