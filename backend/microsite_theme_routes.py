@@ -235,8 +235,8 @@ def seed_default_themes(db: Session):
                 slug=theme_data["slug"],
                 name=theme_data["name"],
                 description=theme_data["description"],
-                category=theme_data["category"].value,  # Use lowercase string value
-                status='active',  # Use lowercase string value for PostgreSQL enum
+                category=theme_data["category"],  # Keep as ThemeCategory enum
+                status=ThemeStatus.ACTIVE,  # Keep as ThemeStatus enum
                 component_name=theme_data["component_name"],
                 features=theme_data["features"],
                 display_order=theme_data["display_order"],

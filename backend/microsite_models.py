@@ -62,13 +62,24 @@ class MicrositeTheme(Base):
     description = Column(Text)
 
     # Theme metadata
+    # Use values_callable to send enum's VALUE (lowercase) instead of NAME (uppercase)
     category = Column(
-        SQLEnum(ThemeCategory, name='microsite_theme_category', create_type=False),
+        SQLEnum(
+            ThemeCategory,
+            name='microsite_theme_category',
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x]
+        ),
         nullable=False,
         default=ThemeCategory.PROFESSIONAL
     )
     status = Column(
-        SQLEnum(ThemeStatus, name='microsite_theme_status', create_type=False),
+        SQLEnum(
+            ThemeStatus,
+            name='microsite_theme_status',
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x]
+        ),
         nullable=False,
         default=ThemeStatus.ACTIVE
     )
