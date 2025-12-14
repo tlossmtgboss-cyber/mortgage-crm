@@ -2666,6 +2666,50 @@ async def confirm_public_booking(
         except Exception as team_email_error:
             logger.error(f"Error sending team member notification: {team_email_error}")
 
+    # Auto-create calendar event in team member's Outlook calendar
+    calendar_event_created = False
+    outlook_event_id = None
+    if assigned_user_id:
+        try:
+            # Build event description
+            event_description = f"""
+            <h3>Client Meeting</h3>
+            <p><strong>Client:</strong> {attendee_name or 'Not specified'}</p>
+            <p><strong>Email:</strong> {attendee_email or 'Not specified'}</p>
+            <p><strong>Phone:</strong> {attendee_phone or 'Not specified'}</p>
+            <p><strong>Meeting Type:</strong> {meeting_mode_str}</p>
+            """
+            if appointment.description:
+                event_description += f"<p><strong>Notes:</strong> {appointment.description}</p>"
+            if video_link:
+                event_description += f"<p><strong>Video Link:</strong> <a href='{video_link}'>{video_link}</a></p>"
+
+            # Create calendar event via Microsoft Graph
+            calendar_result: CalendarResult = await create_event_via_graph(
+                user_id=assigned_user_id,
+                subject=f"Meeting: {attendee_name or 'Client'} - {appointment.title}",
+                start=appointment.scheduled_start,
+                end=appointment.scheduled_end,
+                db=db,
+                attendees=[attendee_email] if attendee_email else None,
+                location=video_link if video_link else None,
+                add_teams_link=False,
+                body=event_description
+            )
+
+            if calendar_result.success:
+                calendar_event_created = True
+                outlook_event_id = calendar_result.event_id
+                # Store the event ID in the appointment for future updates/deletions
+                appointment.outlook_event_id = outlook_event_id
+                db.commit()
+                logger.info(f"Outlook calendar event created for public booking {appointment.id}: {outlook_event_id}")
+            else:
+                logger.warning(f"Could not create Outlook calendar event for public booking: {calendar_result.error}")
+
+        except Exception as cal_error:
+            logger.error(f"Error creating Outlook calendar event for public booking: {cal_error}")
+
     if attendee_phone:
         try:
             sms_sent = send_appointment_confirmation_sms(
@@ -2695,8 +2739,10 @@ async def confirm_public_booking(
         },
         "notifications": {
             "email_sent": email_sent,
-            "sms_sent": sms_sent
-        }
+            "sms_sent": sms_sent,
+            "calendar_event_created": calendar_event_created
+        },
+        "outlook_event_id": outlook_event_id
     }
 
 
