@@ -24,6 +24,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from enum import Enum
+import base64
+import uuid as uuid_lib
 
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode, RoutingStrategy,
@@ -89,13 +91,9 @@ async def get_email_service_status():
 # APPOINTMENT NOTIFICATION HELPERS
 # ============================================================================
 
-import base64
-from datetime import datetime as dt
-import uuid as uuid_lib
-
 def generate_ics_content(
     appointment_title: str,
-    start_datetime: dt,
+    start_datetime: datetime,
     duration_minutes: int,
     attendee_email: str,
     attendee_name: str,
@@ -108,7 +106,7 @@ def generate_ics_content(
     """Generate ICS calendar file content"""
     end_datetime = start_datetime + timedelta(minutes=duration_minutes)
     uid = str(uuid_lib.uuid4())
-    dtstamp = dt.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     dtstart = start_datetime.strftime("%Y%m%dT%H%M%SZ")
     dtend = end_datetime.strftime("%Y%m%dT%H%M%SZ")
 
@@ -153,7 +151,7 @@ def send_appointment_confirmation_email(
     team_member_name: str = None,
     team_member_email: str = None,
     video_link: str = None,
-    scheduled_start: dt = None,
+    scheduled_start: datetime = None,
     duration_minutes: int = 30
 ):
     """Send appointment confirmation email with calendar invite using SendGrid"""
@@ -357,7 +355,7 @@ def send_team_member_notification_email(
     duration: str,
     meeting_mode: str = "Phone Call",
     video_link: str = None,
-    scheduled_start: dt = None,
+    scheduled_start: datetime = None,
     duration_minutes: int = 30
 ):
     """Send notification email to the assigned team member about a new appointment with calendar invite"""
