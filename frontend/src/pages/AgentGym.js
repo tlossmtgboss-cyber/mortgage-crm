@@ -1,12 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { agentAPI, agentGymAPI } from '../services/api';
+import { agentAPI, agentGymAPI, aiAPI } from '../services/api';
 import './AgentGym.css';
+
+// Difficulty levels
+const DIFFICULTY_LEVELS = [
+  { value: 'beginner', label: 'Beginner', color: '#10b981', description: 'Basic scenarios for new agents' },
+  { value: 'intermediate', label: 'Intermediate', color: '#f59e0b', description: 'Moderate complexity tasks' },
+  { value: 'advanced', label: 'Advanced', color: '#ef4444', description: 'Complex multi-step scenarios' },
+  { value: 'expert', label: 'Expert', color: '#7c3aed', description: 'Challenging real-world simulations' },
+];
+
+// Agent category mapping for auto-selection
+const AGENT_CATEGORY_MAP = {
+  pipeline_analysis: ['pipeline_analyst', 'team_coach'],
+  compliance: ['compliance_checker', 'regulatory_advisor'],
+  lead_management: ['lead_nurturer', 'sales_coach'],
+  document_management: ['document_tracker', 'processor'],
+  advisory: ['mortgage_advisor', 'client_success'],
+  scheduling: ['scheduler', 'coordinator'],
+  underwriting: ['underwriter', 'risk_analyst'],
+  communication: ['communication_specialist', 'client_success'],
+};
 
 function AgentGym() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const preselectedAgentId = searchParams.get('agent');
+  const chatEndRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,6 +42,26 @@ function AgentGym() {
   const [sessionResult, setSessionResult] = useState(null);
   const [difficultyFilter, setDifficultyFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // New state for create scenario modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newScenario, setNewScenario] = useState({
+    name: '',
+    description: '',
+    category: 'pipeline_analysis',
+    difficulty: 'intermediate',
+    test_prompt: '',
+    success_criteria: [''],
+    expected_tools: [''],
+  });
+  const [creatingScenario, setCreatingScenario] = useState(false);
+
+  // Conversation state
+  const [showConversation, setShowConversation] = useState(false);
+  const [conversationMessages, setConversationMessages] = useState([]);
+  const [userMessage, setUserMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [autoSelectAgent, setAutoSelectAgent] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,10 +107,14 @@ function AgentGym() {
 
   const getDifficultyClass = (difficulty) => {
     switch (difficulty) {
-      case 'easy': return 'difficulty-badge easy';
-      case 'medium': return 'difficulty-badge medium';
-      case 'hard': return 'difficulty-badge hard';
-      default: return 'difficulty-badge';
+      case 'beginner': return 'difficulty-badge beginner';
+      case 'easy': return 'difficulty-badge beginner';
+      case 'intermediate': return 'difficulty-badge intermediate';
+      case 'medium': return 'difficulty-badge intermediate';
+      case 'advanced': return 'difficulty-badge advanced';
+      case 'hard': return 'difficulty-badge advanced';
+      case 'expert': return 'difficulty-badge expert';
+      default: return 'difficulty-badge intermediate';
     }
   };
 
@@ -104,6 +149,134 @@ function AgentGym() {
 
   // Get unique categories
   const categories = [...new Set(scenarios.map(s => s.category))];
+
+  // Auto-select best agent for scenario
+  const selectBestAgent = (scenario) => {
+    if (!scenario || !autoSelectAgent) return;
+
+    const categoryAgentTypes = AGENT_CATEGORY_MAP[scenario.category] || [];
+
+    // Find an agent that matches the category
+    const matchingAgent = agents.find(agent => {
+      const agentType = agent.agent_name?.toLowerCase() || '';
+      return categoryAgentTypes.some(type => agentType.includes(type.toLowerCase()));
+    });
+
+    if (matchingAgent) {
+      setSelectedAgent(matchingAgent.id.toString());
+    } else if (agents.length > 0) {
+      // Fallback to first available agent
+      setSelectedAgent(agents[0].id.toString());
+    }
+  };
+
+  // Handle scenario selection with auto-agent selection
+  const handleScenarioSelect = (scenario) => {
+    setSelectedScenario(scenario);
+    setShowConversation(false);
+    setConversationMessages([]);
+    if (autoSelectAgent) {
+      selectBestAgent(scenario);
+    }
+  };
+
+  // Create new scenario
+  const handleCreateScenario = async () => {
+    if (!newScenario.name || !newScenario.test_prompt) return;
+
+    setCreatingScenario(true);
+    try {
+      const scenarioData = {
+        ...newScenario,
+        success_criteria: newScenario.success_criteria.filter(c => c.trim()),
+        expected_tools: newScenario.expected_tools.filter(t => t.trim()),
+        pass_rate: 0,
+        avg_completion_time: 0,
+      };
+
+      // Call API to create scenario (or add locally for demo)
+      const result = await agentGymAPI.createScenario(scenarioData);
+
+      if (result) {
+        setScenarios(prev => [...prev, { ...scenarioData, id: result.id || Date.now() }]);
+        setShowCreateModal(false);
+        setNewScenario({
+          name: '',
+          description: '',
+          category: 'pipeline_analysis',
+          difficulty: 'intermediate',
+          test_prompt: '',
+          success_criteria: [''],
+          expected_tools: [''],
+        });
+      }
+    } catch (error) {
+      console.error('Error creating scenario:', error);
+      // Add locally even if API fails (for demo purposes)
+      setScenarios(prev => [...prev, { ...newScenario, id: Date.now(), pass_rate: 0, avg_completion_time: 0 }]);
+      setShowCreateModal(false);
+    } finally {
+      setCreatingScenario(false);
+    }
+  };
+
+  // Send message to agent
+  const sendMessageToAgent = async () => {
+    if (!userMessage.trim() || !selectedAgent) return;
+
+    const newUserMessage = {
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date().toISOString(),
+    };
+
+    setConversationMessages(prev => [...prev, newUserMessage]);
+    setUserMessage('');
+    setSendingMessage(true);
+
+    try {
+      // Use the AI assistant API to get a response
+      const response = await aiAPI.chat({
+        message: userMessage,
+        context: selectedScenario ? `Training Scenario: ${selectedScenario.name}\n${selectedScenario.description}\nTest Prompt: ${selectedScenario.test_prompt}` : '',
+        agent_id: parseInt(selectedAgent),
+      });
+
+      const agentMessage = {
+        role: 'assistant',
+        content: response.response || response.message || 'I understand. Let me help you with that.',
+        timestamp: new Date().toISOString(),
+        agent: agents.find(a => a.id === parseInt(selectedAgent))?.display_name || 'Agent',
+      };
+
+      setConversationMessages(prev => [...prev, agentMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: 'I apologize, but I encountered an error processing your request. Please try again.',
+        timestamp: new Date().toISOString(),
+        error: true,
+      };
+      setConversationMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversationMessages]);
+
+  // Add/remove criteria and tools
+  const addCriterion = () => setNewScenario(prev => ({ ...prev, success_criteria: [...prev.success_criteria, ''] }));
+  const removeCriterion = (index) => setNewScenario(prev => ({ ...prev, success_criteria: prev.success_criteria.filter((_, i) => i !== index) }));
+  const updateCriterion = (index, value) => setNewScenario(prev => ({ ...prev, success_criteria: prev.success_criteria.map((c, i) => i === index ? value : c) }));
+
+  const addTool = () => setNewScenario(prev => ({ ...prev, expected_tools: [...prev.expected_tools, ''] }));
+  const removeTool = (index) => setNewScenario(prev => ({ ...prev, expected_tools: prev.expected_tools.filter((_, i) => i !== index) }));
+  const updateTool = (index, value) => setNewScenario(prev => ({ ...prev, expected_tools: prev.expected_tools.map((t, i) => i === index ? value : t) }));
 
   const startTrainingSession = async () => {
     if (!selectedAgent || !selectedScenario) return;
@@ -216,10 +389,22 @@ function AgentGym() {
                   <h3><i className="fas fa-robot"></i> Select Agent</h3>
                 </div>
                 <div className="panel-content">
+                  <div className="auto-select-toggle">
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={autoSelectAgent}
+                        onChange={(e) => setAutoSelectAgent(e.target.checked)}
+                      />
+                      <span className="toggle-switch"></span>
+                      <span className="toggle-text">Auto-select best agent</span>
+                    </label>
+                  </div>
                   <select
                     value={selectedAgent}
                     onChange={(e) => setSelectedAgent(e.target.value)}
                     className="agent-select"
+                    disabled={autoSelectAgent && selectedScenario}
                   >
                     <option value="">All Agents</option>
                     {agents.map(agent => (
@@ -228,6 +413,11 @@ function AgentGym() {
                       </option>
                     ))}
                   </select>
+                  {autoSelectAgent && selectedAgent && (
+                    <div className="auto-selected-info">
+                      <i className="fas fa-magic"></i> Auto-selected based on scenario category
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -238,9 +428,9 @@ function AgentGym() {
                   onChange={(e) => setDifficultyFilter(e.target.value)}
                 >
                   <option value="all">All Difficulties</option>
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
+                  {DIFFICULTY_LEVELS.map(level => (
+                    <option key={level.value} value={level.value}>{level.label}</option>
+                  ))}
                 </select>
                 <select
                   value={categoryFilter}
@@ -253,13 +443,18 @@ function AgentGym() {
                 </select>
               </div>
 
+              {/* Create Scenario Button */}
+              <button className="create-scenario-btn" onClick={() => setShowCreateModal(true)}>
+                <i className="fas fa-plus"></i> Create New Scenario
+              </button>
+
               {/* Scenarios List */}
               <div className="scenarios-list">
                 {filteredScenarios.map(scenario => (
                   <div
                     key={scenario.id}
                     className={`scenario-card ${selectedScenario?.id === scenario.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedScenario(scenario)}
+                    onClick={() => handleScenarioSelect(scenario)}
                   >
                     <div className="scenario-icon">
                       <i className={getCategoryIcon(scenario.category)}></i>
@@ -425,9 +620,101 @@ function AgentGym() {
                           >
                             <i className="fas fa-redo"></i> Run Again
                           </button>
+
+                          <button
+                            className="chat-btn"
+                            onClick={() => setShowConversation(true)}
+                          >
+                            <i className="fas fa-comments"></i> Continue Conversation
+                          </button>
                         </div>
                       )}
                     </div>
+
+                    {/* Conversation Section */}
+                    {showConversation && (
+                      <div className="conversation-section">
+                        <div className="conversation-header">
+                          <h4><i className="fas fa-comments"></i> Conversation with Agent</h4>
+                          <button className="close-chat-btn" onClick={() => setShowConversation(false)}>
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                        <div className="conversation-messages">
+                          {conversationMessages.length === 0 && (
+                            <div className="chat-empty-state">
+                              <i className="fas fa-robot"></i>
+                              <p>Start a conversation with the agent about this scenario</p>
+                            </div>
+                          )}
+                          {conversationMessages.map((msg, idx) => (
+                            <div key={idx} className={`chat-message ${msg.role}`}>
+                              <div className="message-avatar">
+                                {msg.role === 'user' ? (
+                                  <i className="fas fa-user"></i>
+                                ) : (
+                                  <i className="fas fa-robot"></i>
+                                )}
+                              </div>
+                              <div className="message-content">
+                                <div className="message-header">
+                                  <span className="message-sender">
+                                    {msg.role === 'user' ? 'You' : msg.agent || 'Agent'}
+                                  </span>
+                                  <span className="message-time">
+                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <div className={`message-text ${msg.error ? 'error' : ''}`}>
+                                  {msg.content}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {sendingMessage && (
+                            <div className="chat-message assistant typing">
+                              <div className="message-avatar">
+                                <i className="fas fa-robot"></i>
+                              </div>
+                              <div className="message-content">
+                                <div className="typing-indicator">
+                                  <span></span><span></span><span></span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <div ref={chatEndRef} />
+                        </div>
+                        <div className="conversation-input">
+                          <input
+                            type="text"
+                            placeholder="Type your message..."
+                            value={userMessage}
+                            onChange={(e) => setUserMessage(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && sendMessageToAgent()}
+                            disabled={sendingMessage}
+                          />
+                          <button
+                            onClick={sendMessageToAgent}
+                            disabled={!userMessage.trim() || sendingMessage}
+                          >
+                            <i className="fas fa-paper-plane"></i>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Start Conversation Button (when not showing results) */}
+                    {!runningSession && !sessionResult && selectedAgent && (
+                      <div className="start-chat-section">
+                        <button
+                          className="start-chat-btn"
+                          onClick={() => setShowConversation(true)}
+                        >
+                          <i className="fas fa-comments"></i> Chat with Agent
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -567,6 +854,148 @@ function AgentGym() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Scenario Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="create-scenario-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><i className="fas fa-plus-circle"></i> Create New Scenario</h2>
+              <button className="modal-close" onClick={() => setShowCreateModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Scenario Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Complex Pipeline Analysis"
+                  value={newScenario.name}
+                  onChange={(e) => setNewScenario(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  placeholder="Describe what this scenario tests..."
+                  value={newScenario.description}
+                  onChange={(e) => setNewScenario(prev => ({ ...prev, description: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Category</label>
+                  <select
+                    value={newScenario.category}
+                    onChange={(e) => setNewScenario(prev => ({ ...prev, category: e.target.value }))}
+                  >
+                    <option value="pipeline_analysis">Pipeline Analysis</option>
+                    <option value="compliance">Compliance</option>
+                    <option value="lead_management">Lead Management</option>
+                    <option value="document_management">Document Management</option>
+                    <option value="advisory">Advisory</option>
+                    <option value="scheduling">Scheduling</option>
+                    <option value="underwriting">Underwriting</option>
+                    <option value="communication">Communication</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Difficulty</label>
+                  <select
+                    value={newScenario.difficulty}
+                    onChange={(e) => setNewScenario(prev => ({ ...prev, difficulty: e.target.value }))}
+                  >
+                    {DIFFICULTY_LEVELS.map(level => (
+                      <option key={level.value} value={level.value}>{level.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Test Prompt *</label>
+                <textarea
+                  placeholder="The prompt that will be sent to the agent..."
+                  value={newScenario.test_prompt}
+                  onChange={(e) => setNewScenario(prev => ({ ...prev, test_prompt: e.target.value }))}
+                  rows={4}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Success Criteria</label>
+                {newScenario.success_criteria.map((criterion, index) => (
+                  <div key={index} className="array-input-row">
+                    <input
+                      type="text"
+                      placeholder="e.g., Correctly identifies at-risk loans"
+                      value={criterion}
+                      onChange={(e) => updateCriterion(index, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="remove-btn"
+                      onClick={() => removeCriterion(index)}
+                      disabled={newScenario.success_criteria.length <= 1}
+                    >
+                      <i className="fas fa-minus"></i>
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="add-btn" onClick={addCriterion}>
+                  <i className="fas fa-plus"></i> Add Criterion
+                </button>
+              </div>
+
+              <div className="form-group">
+                <label>Expected Tools</label>
+                {newScenario.expected_tools.map((tool, index) => (
+                  <div key={index} className="array-input-row">
+                    <input
+                      type="text"
+                      placeholder="e.g., get_pipeline_metrics"
+                      value={tool}
+                      onChange={(e) => updateTool(index, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="remove-btn"
+                      onClick={() => removeTool(index)}
+                      disabled={newScenario.expected_tools.length <= 1}
+                    >
+                      <i className="fas fa-minus"></i>
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="add-btn" onClick={addTool}>
+                  <i className="fas fa-plus"></i> Add Tool
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowCreateModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="create-btn"
+                onClick={handleCreateScenario}
+                disabled={!newScenario.name || !newScenario.test_prompt || creatingScenario}
+              >
+                {creatingScenario ? (
+                  <><i className="fas fa-spinner fa-spin"></i> Creating...</>
+                ) : (
+                  <><i className="fas fa-plus"></i> Create Scenario</>
+                )}
+              </button>
             </div>
           </div>
         </div>
