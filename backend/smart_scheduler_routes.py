@@ -89,6 +89,59 @@ async def get_email_service_status():
 # APPOINTMENT NOTIFICATION HELPERS
 # ============================================================================
 
+import base64
+from datetime import datetime as dt
+import uuid as uuid_lib
+
+def generate_ics_content(
+    appointment_title: str,
+    start_datetime: dt,
+    duration_minutes: int,
+    attendee_email: str,
+    attendee_name: str,
+    organizer_email: str,
+    organizer_name: str,
+    description: str = "",
+    location: str = "",
+    video_link: str = None
+):
+    """Generate ICS calendar file content"""
+    end_datetime = start_datetime + timedelta(minutes=duration_minutes)
+    uid = str(uuid_lib.uuid4())
+    dtstamp = dt.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    dtstart = start_datetime.strftime("%Y%m%dT%H%M%SZ")
+    dtend = end_datetime.strftime("%Y%m%dT%H%M%SZ")
+
+    # Add video link to description if provided
+    full_description = description
+    if video_link:
+        full_description += f"\\n\\nJoin Video Call: {video_link}"
+        if not location:
+            location = video_link
+
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Perennia AI//Pipeline 360//EN
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:{uid}
+DTSTAMP:{dtstamp}
+DTSTART:{dtstart}
+DTEND:{dtend}
+SUMMARY:{appointment_title}
+DESCRIPTION:{full_description.replace(chr(10), '\\n')}
+LOCATION:{location}
+ORGANIZER;CN={organizer_name}:mailto:{organizer_email}
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN={attendee_name}:mailto:{attendee_email}
+STATUS:CONFIRMED
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR"""
+
+    return ics_content
+
+
 def send_appointment_confirmation_email(
     attendee_email: str,
     attendee_name: str,
@@ -98,10 +151,15 @@ def send_appointment_confirmation_email(
     duration: str,
     meeting_mode: str = "Phone Call",
     team_member_name: str = None,
-    video_link: str = None
+    team_member_email: str = None,
+    video_link: str = None,
+    scheduled_start: dt = None,
+    duration_minutes: int = 30
 ):
-    """Send appointment confirmation email using SendGrid via NotificationService"""
+    """Send appointment confirmation email with calendar invite using SendGrid"""
     try:
+        logger.info(f"Attempting to send appointment email to {attendee_email}")
+
         team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
 
         # Add video call button if video link is provided
@@ -117,6 +175,15 @@ def send_appointment_confirmation_email(
                         Or copy this link: <a href="{video_link}" style="color: #217F8D;">{video_link}</a>
                     </p>
             """
+
+        # Add calendar reminder section
+        calendar_section = """
+                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
+                                📅 A calendar invite is attached to this email. Click on the attachment to add this appointment to your calendar.
+                            </p>
+                        </div>
+        """
 
         html_content = f"""
         <!DOCTYPE html>
@@ -145,6 +212,7 @@ def send_appointment_confirmation_email(
                             {team_member_section}
                         </div>
                         {video_button_section}
+                        {calendar_section}
                         <p style="font-size: 14px; color: #6b7280;">
                             We'll send you a reminder before your appointment. If you need to reschedule,
                             please contact us as soon as possible.
@@ -178,6 +246,8 @@ Duration: {duration}
 Meeting Type: {meeting_mode}
 {f'Meeting with: {team_member_name}' if team_member_name else ''}{video_link_text}
 
+A calendar invite is attached to this email.
+
 We'll send you a reminder before your appointment. If you need to reschedule, please contact us as soon as possible.
 
 Looking forward to speaking with you!
@@ -185,23 +255,56 @@ Looking forward to speaking with you!
 - Perennia AI Team
         """
 
+        # Generate ICS attachment if we have the scheduled_start datetime
+        attachments = []
+        if scheduled_start:
+            try:
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai")
+                organizer_name = team_member_name or "Perennia AI"
+
+                ics_content = generate_ics_content(
+                    appointment_title=appointment_title,
+                    start_datetime=scheduled_start,
+                    duration_minutes=duration_minutes,
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    organizer_email=organizer_email,
+                    organizer_name=organizer_name,
+                    description=f"Appointment: {appointment_title}",
+                    video_link=video_link
+                )
+
+                attachments.append({
+                    'content': base64.b64encode(ics_content.encode('utf-8')).decode('utf-8'),
+                    'filename': 'appointment.ics',
+                    'type': 'text/calendar'
+                })
+                logger.info("ICS calendar attachment created successfully")
+            except Exception as ics_error:
+                logger.error(f"Failed to generate ICS attachment: {ics_error}")
+
         # Use SendGrid via NotificationService
+        logger.info(f"Calling notification_service.send_email to {attendee_email}")
         result = notification_service.send_email(
             to_email=attendee_email,
             subject=f"Appointment Confirmed: {appointment_title}",
             html_content=html_content,
-            plain_content=text_content
+            plain_content=text_content,
+            attachments=attachments if attachments else None
         )
 
+        logger.info(f"SendGrid response: {result}")
+
         if result.get("success"):
-            logger.info(f"Appointment confirmation email sent to {attendee_email}")
+            logger.info(f"Appointment confirmation email sent successfully to {attendee_email}")
             return True
         else:
-            logger.warning(f"Failed to send appointment email: {result.get('error', 'Unknown error')}")
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to send appointment email to {attendee_email}: {error_msg}")
             return False
 
     except Exception as e:
-        logger.error(f"Failed to send appointment confirmation email: {e}")
+        logger.error(f"Exception in send_appointment_confirmation_email: {e}", exc_info=True)
         return False
 
 
@@ -253,10 +356,14 @@ def send_team_member_notification_email(
     appointment_time: str,
     duration: str,
     meeting_mode: str = "Phone Call",
-    video_link: str = None
+    video_link: str = None,
+    scheduled_start: dt = None,
+    duration_minutes: int = 30
 ):
-    """Send notification email to the assigned team member about a new appointment"""
+    """Send notification email to the assigned team member about a new appointment with calendar invite"""
     try:
+        logger.info(f"Sending team member notification to {team_member_email}")
+
         # Add video call button if video link is provided
         video_button_section = ""
         if video_link:
@@ -270,6 +377,15 @@ def send_team_member_notification_email(
                         Video link: <a href="{video_link}" style="color: #217F8D;">{video_link}</a>
                     </p>
             """
+
+        # Add calendar reminder section
+        calendar_section = """
+                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
+                                📅 A calendar invite is attached to this email. Click on the attachment to add this appointment to your calendar.
+                            </p>
+                        </div>
+        """
 
         html_content = f"""
         <!DOCTYPE html>
@@ -300,9 +416,7 @@ def send_team_member_notification_email(
                             <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
                         </div>
                         {video_button_section}
-                        <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
-                            This appointment has been added to your calendar.
-                        </p>
+                        {calendar_section}
                     </div>
                 </div>
 
@@ -330,28 +444,56 @@ Time: {appointment_time}
 Duration: {duration}
 Meeting Type: {meeting_mode}{video_link_text}
 
-This appointment has been added to your calendar.
+A calendar invite is attached to this email.
 
 - Perennia AI Team
         """
+
+        # Generate ICS attachment if we have the scheduled_start datetime
+        attachments = []
+        if scheduled_start:
+            try:
+                ics_content = generate_ics_content(
+                    appointment_title=f"Meeting with {attendee_name}: {appointment_title}",
+                    start_datetime=scheduled_start,
+                    duration_minutes=duration_minutes,
+                    attendee_email=team_member_email,
+                    attendee_name=team_member_name,
+                    organizer_email=os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai"),
+                    organizer_name="Perennia AI",
+                    description=f"Meeting with {attendee_name}\\nEmail: {attendee_email}\\nPhone: {attendee_phone or 'N/A'}",
+                    video_link=video_link
+                )
+
+                attachments.append({
+                    'content': base64.b64encode(ics_content.encode('utf-8')).decode('utf-8'),
+                    'filename': 'appointment.ics',
+                    'type': 'text/calendar'
+                })
+                logger.info("ICS calendar attachment created for team member")
+            except Exception as ics_error:
+                logger.error(f"Failed to generate ICS attachment for team member: {ics_error}")
 
         # Use SendGrid via NotificationService
         result = notification_service.send_email(
             to_email=team_member_email,
             subject=f"New Appointment: {appointment_title}",
             html_content=html_content,
-            plain_content=text_content
+            plain_content=text_content,
+            attachments=attachments if attachments else None
         )
 
+        logger.info(f"Team member email SendGrid response: {result}")
+
         if result.get("success"):
-            logger.info(f"Team member notification email sent to {team_member_email}")
+            logger.info(f"Team member notification email sent successfully to {team_member_email}")
             return True
         else:
             logger.warning(f"Failed to send team member notification: {result.get('error', 'Unknown error')}")
             return False
 
     except Exception as e:
-        logger.error(f"Failed to send team member notification email: {e}")
+        logger.error(f"Failed to send team member notification email: {e}", exc_info=True)
         return False
 
 
@@ -1406,7 +1548,7 @@ async def create_appointment(
             if appointment.video_link:
                 video_link = appointment.video_link
 
-            # Send confirmation email to attendee (borrower)
+            # Send confirmation email to attendee (borrower) with calendar invite
             email_sent = send_appointment_confirmation_email(
                 attendee_email=appt_data.attendee_email,
                 attendee_name=appt_data.attendee_name or "there",
@@ -1416,10 +1558,13 @@ async def create_appointment(
                 duration=duration_str,
                 meeting_mode=meeting_mode_str,
                 team_member_name=team_member_name,
-                video_link=video_link
+                team_member_email=team_member_email,
+                video_link=video_link,
+                scheduled_start=appointment.scheduled_start,
+                duration_minutes=appointment.duration_minutes
             )
 
-            # Send notification email to team member (loan officer)
+            # Send notification email to team member (loan officer) with calendar invite
             if team_member_email:
                 try:
                     send_team_member_notification_email(
@@ -1433,7 +1578,9 @@ async def create_appointment(
                         appointment_time=appointment_time,
                         duration=duration_str,
                         meeting_mode=meeting_mode_str,
-                        video_link=video_link
+                        video_link=video_link,
+                        scheduled_start=appointment.scheduled_start,
+                        duration_minutes=appointment.duration_minutes
                     )
                     logger.info(f"Team member notification sent to {team_member_email}")
                 except Exception as team_email_error:
@@ -2390,14 +2537,26 @@ async def confirm_public_booking(
     elif meeting_mode == MeetingMode.IN_PERSON:
         meeting_mode_str = "In Person"
 
-    # Get team member name - prefer explicit parameter, then try to parse from notes
+    # Get team member name and email - prefer explicit parameter, then try to fetch from user
     team_member_name = booking_data.team_member_name
+    team_member_email = None
+
+    User = _models.get('User')
+    if assigned_user_id and User:
+        assigned_user = db.query(User).filter(User.id == assigned_user_id).first()
+        if assigned_user:
+            if not team_member_name:
+                team_member_name = assigned_user.first_name
+                if assigned_user.last_name:
+                    team_member_name += f" {assigned_user.last_name}"
+            team_member_email = assigned_user.email
+
     if not team_member_name and intake_responses and intake_responses.get("notes"):
         notes = intake_responses.get("notes", "")
         if "Appointment with:" in notes:
             team_member_name = notes.split("Appointment with:")[-1].strip()
 
-    # Send email confirmation (runs in background to not block response)
+    # Send email confirmation with calendar invite
     email_sent = False
     sms_sent = False
 
@@ -2412,11 +2571,36 @@ async def confirm_public_booking(
                 duration=duration_str,
                 meeting_mode=meeting_mode_str,
                 team_member_name=team_member_name,
-                video_link=video_link
+                team_member_email=team_member_email,
+                video_link=video_link,
+                scheduled_start=appointment.scheduled_start,
+                duration_minutes=appointment.duration_minutes
             )
             logger.info(f"Confirmation email sent to {attendee_email}, email_sent={email_sent}, video_link={video_link}")
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
+
+    # Also send notification to team member
+    if team_member_email:
+        try:
+            send_team_member_notification_email(
+                team_member_email=team_member_email,
+                team_member_name=team_member_name or "Team Member",
+                attendee_name=attendee_name,
+                attendee_email=attendee_email or "",
+                attendee_phone=attendee_phone or "",
+                appointment_title=appointment.title,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                duration=duration_str,
+                meeting_mode=meeting_mode_str,
+                video_link=video_link,
+                scheduled_start=appointment.scheduled_start,
+                duration_minutes=appointment.duration_minutes
+            )
+            logger.info(f"Team member notification sent to {team_member_email}")
+        except Exception as team_email_error:
+            logger.error(f"Error sending team member notification: {team_email_error}")
 
     if attendee_phone:
         try:
