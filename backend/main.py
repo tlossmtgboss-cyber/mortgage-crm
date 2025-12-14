@@ -7791,7 +7791,7 @@ The Team menu item appears for managers and management roles.
                 SELECT t.id, t.title, t.due_date, t.type as status, t.priority, t.description,
                        COALESCE(t.borrower_name, ln.borrower_name, ld.name) as borrower_name,
                        ln.amount as loan_amount, ln.stage as loan_stage, ln.loan_number,
-                       t.loan_id, t.lead_id
+                       t.loan_id, t.lead_id, 'ai_task' as source
                 FROM ai_tasks t
                 LEFT JOIN loans ln ON t.loan_id = ln.id
                 LEFT JOIN leads ld ON t.lead_id = ld.id
@@ -7802,7 +7802,26 @@ The Team menu item appears for managers and management roles.
                     t.due_date ASC NULLS LAST
             """)
             result = db.execute(task_query, {"user_id": current_user.id})
-            all_task_rows = result.fetchall()
+            all_task_rows = list(result.fetchall())
+
+            # Also query workflow_tasks (shown on /tasks page)
+            try:
+                workflow_query = text("""
+                    SELECT wt.id, wt.task_title as title, wt.due_date, wt.status, wt.priority,
+                           wt.task_description as description, l.borrower_name,
+                           l.amount as loan_amount, l.stage as loan_stage, l.loan_number,
+                           wt.loan_id, NULL as lead_id, 'workflow_task' as source
+                    FROM workflow_tasks wt
+                    LEFT JOIN loans l ON wt.loan_id = l.id
+                    WHERE wt.status NOT IN ('completed', 'cancelled')
+                    ORDER BY
+                        CASE WHEN wt.priority = 'high' THEN 1 WHEN wt.priority = 'medium' THEN 2 ELSE 3 END,
+                        wt.due_date ASC NULLS LAST
+                """)
+                workflow_result = db.execute(workflow_query)
+                all_task_rows.extend(workflow_result.fetchall())
+            except Exception as e:
+                logger.debug(f"Workflow tasks query failed: {e}")
 
             # Filter based on timeframe
             filtered_tasks = []
@@ -7840,7 +7859,8 @@ The Team menu item appears for managers and management roles.
                     "loan_stage": r[8],
                     "loan_number": r[9],
                     "loan_id": r[10],
-                    "lead_id": r[11]
+                    "lead_id": r[11],
+                    "source": r[12] if len(r) > 12 else "unknown"
                 } for r in filtered_tasks[:15]]
             }
 
@@ -20746,21 +20766,64 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         return parts[-1].lower() if parts else ""
 
     def names_match(name1: str, name2: str) -> tuple[bool, float]:
-        """Check if names match - returns (is_match, confidence)"""
+        """Check if names match - returns (is_match, confidence)
+
+        Handles various name formats:
+        - "First Last" vs "First Last" (exact)
+        - "First Last" vs "Last, First" (reversed with comma)
+        - Partial matches (one contains the other)
+        - Last name only matches (family members)
+        """
         if not name1 or not name2:
             return False, 0.0
         n1 = name1.lower().strip()
         n2 = name2.lower().strip()
+
         # Exact match
         if n1 == n2:
             return True, 0.95
+
         # One contains the other (partial name match)
         if n1 in n2 or n2 in n1:
             return True, 0.80
-        # Last name match (likely spouse/family)
+
+        # Handle "Last, First" vs "First Last" format
+        # Normalize both names to "first last" format for comparison
+        def normalize_name(name: str) -> set:
+            """Extract name parts, handling 'Last, First' and 'First Last' formats"""
+            # Remove common suffixes/prefixes
+            name = name.lower().strip()
+            # Split by comma first (handles "Last, First")
+            if ',' in name:
+                parts = [p.strip() for p in name.split(',')]
+                # Reverse if comma format: "Last, First" -> ["First", "Last"]
+                parts = list(reversed(parts))
+            else:
+                parts = name.split()
+            # Return as set for comparison (ignores order)
+            return set(p for p in parts if len(p) > 1)  # Ignore single letter initials
+
+        parts1 = normalize_name(n1)
+        parts2 = normalize_name(n2)
+
+        # If at least 2 parts match (first and last name), consider it a match
+        common_parts = parts1 & parts2
+        if len(common_parts) >= 2:
+            return True, 0.90  # High confidence for matching first AND last name
+
+        # If just the last name matches (1 common part that's likely the last name)
+        if len(common_parts) == 1:
+            # Check if the common part is the last name
+            ln1 = get_last_name(name1)
+            ln2 = get_last_name(name2)
+            if ln1 and ln2 and ln1 == ln2:
+                return True, 0.75  # Last name match (family member)
+
+        # Last name match fallback (using original get_last_name)
         ln1, ln2 = get_last_name(name1), get_last_name(name2)
         if ln1 and ln2 and ln1 == ln2:
             return True, 0.75
+
         return False, 0.0
 
     def normalize_phone(phone: str) -> str:
@@ -20796,10 +20859,26 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
     logger.info(f"Matching with: name='{borrower_name}', email='{extracted_email}', phone='{extracted_phone}'")
 
+    # Collect all potential loan numbers from various fields
+    loan_numbers_to_try = []
+    if "loan_number" in fields and fields["loan_number"].get("value"):
+        loan_numbers_to_try.append(str(fields["loan_number"]["value"]).strip())
+    if "file_number" in fields and fields["file_number"].get("value"):
+        loan_numbers_to_try.append(str(fields["file_number"]["value"]).strip())
+    if "cmg_file_number" in fields and fields["cmg_file_number"].get("value"):
+        loan_numbers_to_try.append(str(fields["cmg_file_number"]["value"]).strip())
+    if "lender_loan_number" in fields and fields["lender_loan_number"].get("value"):
+        loan_numbers_to_try.append(str(fields["lender_loan_number"]["value"]).strip())
+    if "investor_loan_number" in fields and fields["investor_loan_number"].get("value"):
+        loan_numbers_to_try.append(str(fields["investor_loan_number"]["value"]).strip())
+
+    # Remove duplicates while preserving order
+    loan_numbers_to_try = list(dict.fromkeys(loan_numbers_to_try))
+    logger.info(f"Loan numbers to try: {loan_numbers_to_try}")
+
     # Try to match by loan number first (highest confidence)
     # IMPORTANT: Check ALL tables and collect candidates, then pick the best match
-    if "loan_number" in fields and fields["loan_number"].get("value"):
-        loan_num = str(fields["loan_number"]["value"]).strip()
+    for loan_num in loan_numbers_to_try:
         loan_num_upper = loan_num.upper()  # For case-insensitive comparison
         logger.info(f"Attempting to match loan number: '{loan_num}'")
 
@@ -36305,9 +36384,10 @@ async def get_command_center(
             FROM sla_alerts sa
             LEFT JOIN loans l ON sa.loan_id = l.id
             WHERE sa.status = 'active'
+              AND l.loan_officer_id = :user_id
             ORDER BY sa.alert_type DESC, sa.created_at ASC
             LIMIT 20
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
         for alert in sla_alerts:
             action_items["urgent"].append({
@@ -36363,17 +36443,17 @@ async def get_command_center(
         db.rollback()  # Reset transaction state
 
     # Also get leads needing follow-up (no contact in X days based on stage)
-    # For demo purposes, show all leads if user has none assigned
     try:
-        # Simplified query - just get leads that need follow-up
+        # Get leads assigned to this user that need follow-up
         stale_leads = db.execute(text("""
             SELECT l.id, l.name, l.stage::text as stage, l.last_contact, l.email, l.phone,
                    EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.created_at)))/86400 as days_since_contact
             FROM leads l
-            WHERE l.stage::text NOT IN ('Closed', 'Withdrawn', 'Does Not Qualify')
+            WHERE l.owner_id = :user_id
+            AND l.stage::text NOT IN ('Closed', 'Withdrawn', 'Does Not Qualify')
             ORDER BY l.last_contact ASC NULLS FIRST, l.created_at DESC
             LIMIT 15
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
         for lead in stale_leads:
             days = int(lead.days_since_contact) if lead.days_since_contact else 999
@@ -36445,14 +36525,15 @@ async def get_command_center(
                        ELSE 'deadline'
                    END as deadline_type
             FROM loans l
-            WHERE UPPER(l.stage::text) NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
+            WHERE l.loan_officer_id = :user_id
+              AND UPPER(l.stage::text) NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
               AND (
                   (l.lock_expiration_date IS NOT NULL AND l.lock_expiration_date < NOW() + INTERVAL '5 days')
                   OR (l.closing_date IS NOT NULL AND l.closing_date < NOW() + INTERVAL '7 days')
               )
             ORDER BY COALESCE(l.lock_expiration_date, l.closing_date) ASC
             LIMIT 15
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
         # If no deadline loans, show active loans that need attention
         if not upcoming_deadlines:
@@ -36461,10 +36542,11 @@ async def get_command_center(
                        l.closing_date, l.lock_expiration_date as lock_expiration,
                        'active_loan' as deadline_type
                 FROM loans l
-                WHERE UPPER(l.stage::text) NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
+                WHERE l.loan_officer_id = :user_id
+                  AND UPPER(l.stage::text) NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
                 ORDER BY l.created_at DESC
                 LIMIT 10
-            """)).fetchall()
+            """), {"user_id": user_id}).fetchall()
 
         for loan in upcoming_deadlines:
             deadline_date = loan.lock_expiration if loan.deadline_type == 'lock_expiring' else loan.closing_date
@@ -36503,10 +36585,11 @@ async def get_command_center(
             SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
                    l.funded_date, l.amount, l.closing_date
             FROM loans l
-            WHERE UPPER(l.stage::text) = 'FUNDED'
+            WHERE l.loan_officer_id = :user_id
+              AND UPPER(l.stage::text) = 'FUNDED'
             ORDER BY COALESCE(l.funded_date, l.closing_date, l.updated_at) DESC
             LIMIT 20
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
         for loan in funded_loans:
             action_items["portfolio"].append({
@@ -36533,22 +36616,24 @@ async def get_command_center(
                    m.next_touchpoint, m.refinance_opportunity, m.estimated_savings,
                    m.last_contact, m.interest_rate, m.current_loan_amount
             FROM mum_clients m
-            WHERE m.next_touchpoint IS NOT NULL
+            WHERE m.loan_officer_id = :user_id
+              AND m.next_touchpoint IS NOT NULL
               AND m.next_touchpoint <= NOW() + INTERVAL '14 days'
             ORDER BY m.next_touchpoint ASC
             LIMIT 15
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
-        # If no touchpoints due, show recent portfolio clients for demo
+        # If no touchpoints due, show recent portfolio clients for this user
         if not portfolio_items:
             portfolio_items = db.execute(text("""
                 SELECT m.id, m.client_name, m.email, m.phone, m.loan_number,
                        m.next_touchpoint, m.refinance_opportunity, m.estimated_savings,
                        m.last_contact, m.interest_rate, m.current_loan_amount
                 FROM mum_clients m
+                WHERE m.loan_officer_id = :user_id
                 ORDER BY m.id DESC
                 LIMIT 10
-            """)).fetchall()
+            """), {"user_id": user_id}).fetchall()
 
         for client in portfolio_items:
             is_overdue = client.next_touchpoint < now if client.next_touchpoint else False
@@ -50619,6 +50704,21 @@ async def startup_event():
                 db_temp.close()
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
+
+            # Add landing_page_settings column to scheduler_configs (for booking page customization)
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'scheduler_configs' AND column_name = 'landing_page_settings'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("ALTER TABLE scheduler_configs ADD COLUMN landing_page_settings JSONB DEFAULT '{}'::jsonb"))
+                    db_temp.commit()
+                    logger.info("✅ Added 'landing_page_settings' column to scheduler_configs table")
+                db_temp.close()
+            except Exception as lps_e:
+                logger.warning(f"⚠️ Landing page settings column migration skipped: {lps_e}")
 
             # Add document type and category enum values for e-sign documents
             try:
