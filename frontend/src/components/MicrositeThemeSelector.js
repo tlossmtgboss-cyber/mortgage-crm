@@ -63,18 +63,23 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
 
   const fetchThemes = async () => {
     try {
+      console.log('[MicrositeThemeSelector] Fetching themes from:', `${API_BASE}/api/v1/public/themes`);
       const response = await fetch(`${API_BASE}/api/v1/public/themes`, {
         headers: getAuthHeaders()
       });
+      console.log('[MicrositeThemeSelector] Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('[MicrositeThemeSelector] Themes loaded:', data.themes?.length || 0);
         setThemes(data.themes || []);
       } else {
-        throw new Error('Failed to fetch themes');
+        const errorText = await response.text();
+        console.error('[MicrositeThemeSelector] Response error:', errorText);
+        throw new Error(`Failed to fetch themes: ${response.status}`);
       }
     } catch (err) {
-      console.error('Error fetching themes:', err);
-      setError('Failed to load themes');
+      console.error('[MicrositeThemeSelector] Error fetching themes:', err);
+      setError(`Failed to load themes: ${err.message}`);
     } finally {
       setLoading(false);
     }
