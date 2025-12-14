@@ -300,15 +300,18 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
       if (response.ok) {
         const data = await response.json();
         // Open video call in new window using the room code
-        const roomCode = data.room_code || data.room?.room_code;
+        // Backend returns: { success: true, meeting: { room_code: "..." } }
+        const roomCode = data.meeting?.room_code || data.room_code || data.room?.room_code;
         if (roomCode) {
           const roomUrl = `${window.location.origin}/meeting/${roomCode}`;
           window.open(roomUrl, '_blank', 'width=1200,height=800');
           if (onStartVideoCall) {
             onStartVideoCall({ room_url: roomUrl, room_code: roomCode, ...data });
           }
+          onClose();
+        } else {
+          throw new Error('No room code returned from server');
         }
-        onClose();
       } else {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to create meeting room');
