@@ -116,6 +116,9 @@ const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQ
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
 const PartnerPortalView = lazy(() => import('./components/portal/PartnerPortalView'));
+const PerenniaClientPortalUltimate = lazy(() => import('./components/portal/PerenniaClientPortalUltimate'));
+const HomeValueIntelligence = lazy(() => import('./components/portal/HomeValueIntelligence'));
+const PresentationEngine = lazy(() => import('./components/portal/PresentationEngine'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -341,6 +344,10 @@ function App() {
           {/* Active Loan Portal - Real-time borrower dashboard with WebSocket updates */}
           <Route path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />
           <Route path="/portal/active/:token" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />
+
+          {/* Perennia Client Portal Ultimate - Production-ready lifecycle portal */}
+          <Route path="/portal/ultimate/:loanId" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />
+          <Route path="/portal/ultimate/token/:token" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />
 
           {/* Partner Portal - Realtor/Partner view with magic link access */}
           <Route path="/partner/:token" element={<LazyPage><PartnerPortalView /></LazyPage>} />

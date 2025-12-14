@@ -1,0 +1,844 @@
+/**
+ * PresentationEngine Styles
+ */
+
+/* =============================================================================
+   CSS VARIABLES
+   ============================================================================= */
+
+.presentation-engine {
+  --primary-color: #10b981;
+  --primary-dark: #059669;
+  --secondary-color: #3b82f6;
+  --accent-color: #8b5cf6;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --success-color: #10b981;
+
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+
+  --border-color: #e5e7eb;
+  --border-radius: 12px;
+  --border-radius-sm: 8px;
+  --border-radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* =============================================================================
+   BASE LAYOUT
+   ============================================================================= */
+
+.presentation-engine {
+  background: var(--bg-secondary);
+  min-height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* =============================================================================
+   HEADER
+   ============================================================================= */
+
+.pe-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.pe-header-content h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pe-header-content p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.equity-summary {
+  text-align: right;
+}
+
+.equity-badge {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: var(--border-radius);
+  color: white;
+}
+
+.equity-label {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.equity-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+/* =============================================================================
+   SCENARIO NAV
+   ============================================================================= */
+
+.scenario-nav {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  background: var(--bg-primary);
+  overflow-x: auto;
+}
+
+.scenario-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.scenario-tab:hover {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+}
+
+.scenario-tab.active {
+  background: var(--bg-primary);
+  border-color: var(--accent-color, var(--primary-color));
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.scenario-icon {
+  font-size: 28px;
+}
+
+.scenario-title {
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* =============================================================================
+   SCENARIO CONTENT
+   ============================================================================= */
+
+.scenario-content {
+  padding: 24px;
+}
+
+/* =============================================================================
+   CALCULATOR PANEL
+   ============================================================================= */
+
+.calculator-panel {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.calc-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.calc-icon {
+  font-size: 40px;
+}
+
+.calc-title h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.calc-title p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.calc-body {
+  padding: 24px;
+}
+
+.calc-footer {
+  padding: 24px;
+  background: var(--bg-tertiary);
+  text-align: center;
+}
+
+/* =============================================================================
+   INPUT SECTION
+   ============================================================================= */
+
+.input-section {
+  margin-bottom: 24px;
+}
+
+.input-group {
+  margin-bottom: 24px;
+}
+
+.input-group:last-child {
+  margin-bottom: 0;
+}
+
+.input-group label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.input-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.input-group input[type="range"] {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  outline: none;
+}
+
+.input-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s;
+}
+
+.input-group input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.input-group input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Term Buttons */
+.term-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.term-btn {
+  flex: 1;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--border-radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.term-btn:hover {
+  border-color: var(--border-color);
+}
+
+.term-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* =============================================================================
+   RESULTS SECTION
+   ============================================================================= */
+
+.results-section {
+  padding: 20px;
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius);
+}
+
+/* Current vs New */
+.current-vs-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.payment-box {
+  flex: 1;
+  max-width: 200px;
+  padding: 16px;
+  border-radius: var(--border-radius-sm);
+  text-align: center;
+}
+
+.payment-box.current {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+}
+
+.payment-box.new {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.payment-label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.payment-box.current .payment-label {
+  color: var(--text-secondary);
+}
+
+.payment-box.new .payment-label {
+  opacity: 0.9;
+}
+
+.payment-amount {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.arrow {
+  font-size: 24px;
+  color: var(--text-muted);
+}
+
+/* Savings Highlight */
+.savings-highlight {
+  text-align: center;
+  padding: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-sm);
+}
+
+.savings-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.savings-amount {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.savings-amount.positive {
+  color: var(--success-color);
+}
+
+.savings-amount.negative {
+  color: var(--danger-color);
+}
+
+/* Details Toggle */
+.details-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.details-toggle:hover {
+  background: var(--bg-primary);
+}
+
+/* Result Details */
+.result-details {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-sm);
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row .positive {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+/* Result Cards */
+.result-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.result-card {
+  padding: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-sm);
+  text-align: center;
+}
+
+.card-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.card-value {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.card-value.highlight {
+  color: var(--primary-color);
+  font-size: 24px;
+}
+
+/* =============================================================================
+   EQUITY METER
+   ============================================================================= */
+
+.equity-meter {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius);
+}
+
+.meter-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.meter-value {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.meter-bar {
+  height: 12px;
+  background: var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+/* =============================================================================
+   USE CASES
+   ============================================================================= */
+
+.use-cases {
+  margin-top: 20px;
+}
+
+.use-cases h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.use-case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.use-case {
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-sm);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* =============================================================================
+   HELOC SPECIFIC
+   ============================================================================= */
+
+.heloc-explainer {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #d1fae5;
+  border-radius: var(--border-radius);
+}
+
+.explainer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #065f46;
+}
+
+.explainer-icon {
+  color: var(--success-color);
+  font-weight: bold;
+}
+
+.heloc-limit {
+  text-align: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border-radius: var(--border-radius);
+  color: white;
+  margin-bottom: 24px;
+}
+
+.limit-label {
+  display: block;
+  font-size: 13px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.limit-amount {
+  font-size: 40px;
+  font-weight: 700;
+}
+
+.heloc-payment {
+  text-align: center;
+  padding: 20px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-sm);
+}
+
+.heloc-payment .payment-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.heloc-payment .payment-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 8px 0;
+}
+
+.heloc-payment .payment-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* HELOC Comparison */
+.heloc-comparison {
+  margin-top: 24px;
+}
+
+.heloc-comparison h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.comparison-table th,
+.comparison-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comparison-table th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+.comparison-table td.good {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+/* =============================================================================
+   SELL CALCULATOR
+   ============================================================================= */
+
+.proceeds-breakdown {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+}
+
+.breakdown-row:last-child {
+  border-bottom: none;
+}
+
+.breakdown-row.subtract span:last-child {
+  color: var(--text-secondary);
+}
+
+.breakdown-row.total {
+  margin-top: 8px;
+  padding-top: 16px;
+  font-size: 18px;
+  font-weight: 600;
+  border-top: 2px solid var(--border-color);
+}
+
+.breakdown-row.total .positive {
+  color: var(--success-color);
+}
+
+.breakdown-row.total .negative {
+  color: var(--danger-color);
+}
+
+/* Proceeds Visual */
+.proceeds-visual {
+  margin-top: 20px;
+}
+
+.visual-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.visual-fill {
+  height: 100%;
+}
+
+.visual-fill.equity {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.visual-fill.costs {
+  background: #f59e0b;
+}
+
+.visual-fill.loan {
+  background: #6b7280;
+}
+
+.visual-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-dot.equity {
+  background: var(--success-color);
+}
+
+.legend-dot.costs {
+  background: var(--warning-color);
+}
+
+.legend-dot.loan {
+  background: #6b7280;
+}
+
+/* =============================================================================
+   CTA BUTTON
+   ============================================================================= */
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 32px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cta-button.primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.cta-button.primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.disclaimer {
+  margin: 16px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* =============================================================================
+   RESPONSIVE
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  .pe-header {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .equity-summary {
+    text-align: center;
+  }
+
+  .scenario-nav {
+    gap: 6px;
+  }
+
+  .scenario-tab {
+    min-width: 100px;
+    padding: 12px 16px;
+  }
+
+  .scenario-icon {
+    font-size: 24px;
+  }
+
+  .current-vs-new {
+    flex-direction: column;
+  }
+
+  .arrow {
+    transform: rotate(90deg);
+  }
+
+  .payment-box {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .result-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .heloc-explainer {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .use-case-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-table {
+    font-size: 12px;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .calc-header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .limit-amount {
+    font-size: 32px;
+  }
+
+  .savings-amount {
+    font-size: 28px;
+  }
+}
