@@ -60,6 +60,159 @@ const ACTIVE_LOAN_STAGES = [
 // Default status options if none provided (legacy, use the specific ones above)
 const DEFAULT_STATUS_OPTIONS = LEAD_STATUS_OPTIONS;
 
+// Task guidance templates based on workflow type and day
+const getTaskGuidance = (task) => {
+  const workflowName = (task.workflow_name || '').toLowerCase();
+  const title = (task.title || '').toLowerCase();
+  const dayMatch = title.match(/day\s*(\d+)/i) || (task.workflow_name || '').match(/day\s*(\d+)/i);
+  const day = dayMatch ? parseInt(dayMatch[1]) : null;
+  const stage = (task.stage || '').toLowerCase();
+
+  // Prospect/Lead nurture workflows
+  if (workflowName.includes('prospect') || workflowName.includes('lead') || workflowName.includes('nurture')) {
+    if (day === 1 || day === 0) {
+      return {
+        action: 'Make initial contact to introduce yourself and understand their needs',
+        goal: 'Build rapport and qualify the prospect',
+        talkingPoints: [
+          'Introduce yourself and your role',
+          'Ask about their timeline for buying/refinancing',
+          'Understand their motivation (first-time buyer, moving, investment, etc.)',
+          'Ask if they\'re working with a realtor',
+          'Offer to answer any initial questions about the mortgage process'
+        ],
+        tips: 'Keep it conversational. Focus on listening more than talking.'
+      };
+    } else if (day >= 2 && day <= 5) {
+      return {
+        action: 'Follow up to check if they have questions and gauge interest level',
+        goal: 'Move the conversation forward and identify next steps',
+        talkingPoints: [
+          'Reference your previous conversation',
+          'Ask if they\'ve had a chance to think about their options',
+          'Offer to send rate information or pre-qualification details',
+          'Ask about their preferred timeline',
+          'Suggest scheduling a call to discuss their specific situation'
+        ],
+        tips: 'Be helpful, not pushy. Offer value in every interaction.'
+      };
+    } else if (day >= 6 && day <= 14) {
+      return {
+        action: 'Provide value and stay top-of-mind with relevant information',
+        goal: 'Maintain engagement and demonstrate expertise',
+        talkingPoints: [
+          'Share a relevant market update or rate trend',
+          'Ask if their situation or timeline has changed',
+          'Offer educational content (buying tips, process overview)',
+          'Remind them you\'re available when they\'re ready'
+        ],
+        tips: 'Focus on being a resource rather than making a sale.'
+      };
+    } else if (day >= 15 && day <= 30) {
+      return {
+        action: 'Re-engage with a personalized check-in',
+        goal: 'Rekindle interest and assess if they\'re still in the market',
+        talkingPoints: [
+          'Ask if they\'re still considering a home purchase/refinance',
+          'Share any significant rate changes since you last spoke',
+          'Offer to do a quick pre-qualification if they haven\'t already',
+          'Ask if there\'s anything holding them back'
+        ],
+        tips: 'Be understanding if they\'re not ready. Ask permission to follow up later.'
+      };
+    } else if (day > 30) {
+      return {
+        action: 'Long-term nurture touchpoint to maintain relationship',
+        goal: 'Stay connected for when they\'re ready to move forward',
+        talkingPoints: [
+          'Check in on their current situation',
+          'Share valuable market insights',
+          'Ask if their homeownership goals have changed',
+          'Offer to be a resource for any real estate questions'
+        ],
+        tips: 'Keep it brief and respectful of their time.'
+      };
+    }
+  }
+
+  // Pre-approval follow-up
+  if (stage.includes('pre-approved') || stage.includes('pre_approved') || title.includes('pre-approval')) {
+    return {
+      action: 'Follow up on pre-approval status and next steps',
+      goal: 'Keep them engaged in their home search',
+      talkingPoints: [
+        'Congratulate them on their pre-approval (if recent)',
+        'Ask how their home search is going',
+        'Remind them of their pre-approval amount and expiration',
+        'Ask if they\'re working with a realtor',
+        'Offer to connect them with trusted real estate agents'
+      ],
+      tips: 'Pre-approved leads are hot! They\'re actively looking.'
+    };
+  }
+
+  // Document collection
+  if (title.includes('document') || title.includes('upload') || workflowName.includes('document')) {
+    return {
+      action: 'Follow up on outstanding documents needed for the loan',
+      goal: 'Collect all required documents to keep the loan moving',
+      talkingPoints: [
+        'Ask if they received the document request',
+        'Offer to help if they have questions about any items',
+        'Explain why each document is needed (briefly)',
+        'Offer alternative ways to submit (email, portal, photos)',
+        'Set a clear expectation for when documents are needed'
+      ],
+      tips: 'Make it easy for them. Offer to accept photos via text if needed.'
+    };
+  }
+
+  // Application follow-up
+  if (stage.includes('application') || title.includes('application')) {
+    return {
+      action: 'Guide them through completing their loan application',
+      goal: 'Get a complete application submitted',
+      talkingPoints: [
+        'Check if they\'ve started the application',
+        'Ask if they have questions about any section',
+        'Offer to complete the application together over the phone',
+        'Explain next steps after application submission',
+        'Set expectations for the timeline'
+      ],
+      tips: 'Many people get stuck on applications. Offer to do it together.'
+    };
+  }
+
+  // Processing stage
+  if (stage.includes('processing') || workflowName.includes('processing')) {
+    return {
+      action: 'Provide a status update and address any outstanding items',
+      goal: 'Keep the loan moving smoothly through processing',
+      talkingPoints: [
+        'Give a brief update on where their file stands',
+        'Ask about any outstanding conditions or documents',
+        'Set expectations for underwriting timeline',
+        'Ask if they have questions about the process',
+        'Remind them not to make major financial changes'
+      ],
+      tips: 'Proactive communication prevents anxious borrowers from calling repeatedly.'
+    };
+  }
+
+  // Default guidance for unmatched tasks
+  return {
+    action: task.description || task.ai_action || 'Complete this task and update the client',
+    goal: 'Maintain communication and move the process forward',
+    talkingPoints: [
+      'Review the client\'s current status before reaching out',
+      'Prepare any relevant updates or information',
+      'Ask if they have any questions or concerns',
+      'Set clear expectations for next steps'
+    ],
+    tips: 'Always end the conversation with a clear next step.'
+  };
+};
+
 const TaskDetailPanel = ({
   task,
   onComplete,
@@ -383,36 +536,79 @@ const TaskDetailPanel = ({
         </div>
 
         {/* Task Description - What needs to be accomplished */}
-        {(task.description || task.ai_action || task.workflow_name) && (
-          <div className="task-description-section">
-            <div className="task-description-header">
-              <span className="description-icon">📋</span>
-              <span className="description-title">What to Accomplish</span>
-            </div>
-            <div className="task-description-content">
-              {task.description && (
-                <p className="task-description-text">{task.description}</p>
-              )}
-              {task.ai_action && !task.description && (
-                <p className="task-description-text">{task.ai_action}</p>
-              )}
-              {task.workflow_name && (
-                <p className="task-workflow-info">
-                  <span className="workflow-badge" style={{ backgroundColor: task.workflow_color || '#218D8D' }}>
-                    {task.workflow_name}
-                  </span>
-                  {task.days_until_due !== undefined && (
-                    <span className="days-info">
-                      {task.days_until_due === 0 ? 'Due today' :
-                       task.days_until_due === 1 ? 'Due tomorrow' :
-                       `Due in ${task.days_until_due} days`}
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
+        <div className="task-description-section">
+          <div className="task-description-header">
+            <span className="description-icon">📋</span>
+            <span className="description-title">What to Accomplish</span>
           </div>
-        )}
+          <div className="task-description-content">
+            {/* Workflow badge if applicable */}
+            {task.workflow_name && (
+              <p className="task-workflow-info">
+                <span className="workflow-badge" style={{ backgroundColor: task.workflow_color || '#218D8D' }}>
+                  {task.workflow_name}
+                </span>
+                {task.days_until_due !== undefined && (
+                  <span className="days-info">
+                    {task.days_until_due === 0 ? 'Due today' :
+                     task.days_until_due === 1 ? 'Due tomorrow' :
+                     `Due in ${task.days_until_due} days`}
+                  </span>
+                )}
+              </p>
+            )}
+
+            {/* Enhanced Task Guidance */}
+            {(() => {
+              const guidance = getTaskGuidance(task);
+              return (
+                <div className="task-guidance">
+                  {/* Action */}
+                  <div className="guidance-section guidance-action">
+                    <div className="guidance-label">
+                      <span className="guidance-icon">🎯</span>
+                      <span>Action</span>
+                    </div>
+                    <p className="guidance-text">{guidance.action}</p>
+                  </div>
+
+                  {/* Goal */}
+                  <div className="guidance-section guidance-goal">
+                    <div className="guidance-label">
+                      <span className="guidance-icon">🏁</span>
+                      <span>Goal</span>
+                    </div>
+                    <p className="guidance-text">{guidance.goal}</p>
+                  </div>
+
+                  {/* Talking Points */}
+                  <div className="guidance-section guidance-talking-points">
+                    <div className="guidance-label">
+                      <span className="guidance-icon">💬</span>
+                      <span>Talking Points</span>
+                    </div>
+                    <ul className="talking-points-list">
+                      {guidance.talkingPoints.map((point, idx) => (
+                        <li key={idx}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Tips */}
+                  {guidance.tips && (
+                    <div className="guidance-section guidance-tips">
+                      <div className="guidance-label">
+                        <span className="guidance-icon">💡</span>
+                        <span>Pro Tip</span>
+                      </div>
+                      <p className="guidance-text tip-text">{guidance.tips}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
 
         {/* SLA Milestone Date Input Section */}
         {isSlaTask && (

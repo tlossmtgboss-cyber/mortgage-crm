@@ -997,6 +997,111 @@
   color: #6b7280;
 }
 
+/* Task Guidance - Enhanced What to Accomplish */
+.task-detail-panel .task-guidance {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.task-detail-panel .guidance-section {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(33, 141, 141, 0.15);
+}
+
+.task-detail-panel .guidance-action {
+  border-left: 3px solid #218D8D;
+}
+
+.task-detail-panel .guidance-goal {
+  border-left: 3px solid #10b981;
+}
+
+.task-detail-panel .guidance-talking-points {
+  border-left: 3px solid #6366f1;
+}
+
+.task-detail-panel .guidance-tips {
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.task-detail-panel .guidance-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #374151;
+}
+
+.task-detail-panel .guidance-icon {
+  font-size: 14px;
+}
+
+.task-detail-panel .guidance-text {
+  margin: 0;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.task-detail-panel .tip-text {
+  font-style: italic;
+  color: #92400e;
+}
+
+.task-detail-panel .talking-points-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style-type: none;
+}
+
+.task-detail-panel .talking-points-list li {
+  position: relative;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.4;
+  padding-left: 4px;
+}
+
+.task-detail-panel .talking-points-list li::before {
+  content: '•';
+  position: absolute;
+  left: -14px;
+  color: #6366f1;
+  font-weight: bold;
+}
+
+.task-detail-panel .talking-points-list li:last-child {
+  margin-bottom: 0;
+}
+
+/* Compact mode adjustments for guidance */
+.task-detail-panel.compact .task-guidance {
+  gap: 10px;
+}
+
+.task-detail-panel.compact .guidance-section {
+  padding: 10px;
+}
+
+.task-detail-panel.compact .guidance-label {
+  font-size: 10px;
+}
+
+.task-detail-panel.compact .guidance-text,
+.task-detail-panel.compact .talking-points-list li {
+  font-size: 12px;
+}
+
 /* Missing Documents Section */
 .task-detail-panel .detail-missing-docs-section {
   margin: 16px;
