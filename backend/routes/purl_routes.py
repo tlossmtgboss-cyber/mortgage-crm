@@ -1154,43 +1154,52 @@ async def create_token(
     db: Session = Depends(get_db)
 ):
     """Create a new access token for a workspace."""
-    # Verify workspace ownership
-    workspace = db.query(PURLWorkspace).filter(
-        PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
-    ).first()
-
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    service = PURLTokenService(db)
-
-    # Service returns Tuple[token_id, full_token]
-    token_id, full_token = service.create_token(
-        organization_id=current_user.organization_id,
-        workspace_id=workspace_id,
-        scope=token_data.scope if token_data else TokenScope.WRITE,
-        contact_id=token_data.contact_id if token_data else None,
-        expires_in_days=token_data.expires_in_days if token_data else 365,
-        created_by=current_user.id
-    )
-
-    # Get the expiry from the token record
-    token_record = db.query(PURLAccessToken).filter(PURLAccessToken.id == token_id).first()
-
-    # Build full portal URL with token
     import os
-    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
-    portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={full_token}"
+    import traceback
 
-    return {
-        "success": True,
-        "token": full_token,  # Only returned once!
-        "token_id": token_id,
-        "portal_url": portal_url,  # Full URL with token - only returned on creation!
-        "workspace_slug": workspace.slug,
-        "expires_at": token_record.expires_at.isoformat() if token_record and token_record.expires_at else None
-    }
+    try:
+        # Verify workspace ownership
+        workspace = db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == workspace_id,
+            PURLWorkspace.organization_id == current_user.organization_id
+        ).first()
+
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        service = PURLTokenService(db)
+
+        # Service returns Tuple[token_id, full_token]
+        token_id, full_token = service.create_token(
+            organization_id=current_user.organization_id,
+            workspace_id=workspace_id,
+            scope=token_data.scope if token_data else TokenScope.WRITE,
+            contact_id=token_data.contact_id if token_data else None,
+            expires_in_days=token_data.expires_in_days if token_data else 365,
+            created_by=current_user.id
+        )
+
+        # Get the expiry from the token record
+        token_record = db.query(PURLAccessToken).filter(PURLAccessToken.id == token_id).first()
+
+        # Build full portal URL with token
+        base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+        portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={full_token}"
+
+        return {
+            "success": True,
+            "token": full_token,  # Only returned once!
+            "token_id": token_id,
+            "portal_url": portal_url,  # Full URL with token - only returned on creation!
+            "workspace_slug": workspace.slug,
+            "expires_at": token_record.expires_at.isoformat() if token_record and token_record.expires_at else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create token: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Token creation failed: {str(e)}")
 
 
 @purl_admin_router.get(
