@@ -16,7 +16,7 @@ load_dotenv()
 # ✅ Zapier Integration via API Keys
 # ============================================================================
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect, BackgroundTasks, Body
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect, BackgroundTasks, Body, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -20196,6 +20196,18 @@ except Exception as e:
     portal_auth_error = traceback.format_exc()
     logger.warning(f"⚠️ Portal Authentication routes not loaded: {e}")
 
+# Include Perennia Portal routes (Client Portal with lifecycle, milestones, close-on-time)
+perennia_portal_error = None
+try:
+    from portal_routes import router as perennia_portal_router
+    app.include_router(perennia_portal_router, tags=["Perennia Portal"])
+    logger.info("✅ Perennia Portal routes loaded")
+except Exception as e:
+    perennia_portal_error = str(e)
+    import traceback
+    perennia_portal_error = traceback.format_exc()
+    logger.warning(f"⚠️ Perennia Portal routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""
@@ -20215,6 +20227,10 @@ async def debug_portal_services_status():
         "portal_auth": {
             "loaded": portal_auth_error is None,
             "error": portal_auth_error
+        },
+        "perennia_portal": {
+            "loaded": perennia_portal_error is None,
+            "error": perennia_portal_error
         }
     }
 

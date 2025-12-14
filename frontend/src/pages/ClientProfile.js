@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI } from '../services/api';
+import { loansAPI, activitiesAPI, schedulerAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -64,6 +64,8 @@ function ClientProfile() {
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [circleContacts, setCircleContacts] = useState([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
 
   const handleAddCustomField = () => {
     if (!newFieldName.trim()) return;
@@ -81,6 +83,7 @@ function ClientProfile() {
     loadClientData();
     loadEmails();
     loadCircleContacts();
+    loadUpcomingAppointments();
     markLoanAsViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -204,6 +207,28 @@ function ClientProfile() {
       }
     } catch (error) {
       console.error('Failed to load circle contacts:', error);
+    }
+  };
+
+  const loadUpcomingAppointments = async () => {
+    try {
+      setAppointmentsLoading(true);
+      // Get appointments for this loan, filter for upcoming only
+      const today = new Date().toISOString().split('T')[0];
+      const appointments = await schedulerAPI.getAppointments({
+        loan_id: id,
+        start_date: today
+      });
+      // Filter for booked/tentative status and sort by date
+      const upcoming = (appointments || [])
+        .filter(apt => ['booked', 'tentative'].includes(apt.status))
+        .sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start));
+      setUpcomingAppointments(upcoming);
+    } catch (error) {
+      console.error('Failed to load appointments:', error);
+      setUpcomingAppointments([]);
+    } finally {
+      setAppointmentsLoading(false);
     }
   };
 
@@ -1468,6 +1493,165 @@ function ClientProfile() {
 
         {/* Right Column - Actions & Email History */}
         <div className="right-column">
+          {/* Upcoming Appointments */}
+          <div className="appointments-card" style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>📅 Upcoming Appointments</h3>
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                style={{
+                  background: '#217F8D',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                + Schedule
+              </button>
+            </div>
+
+            {appointmentsLoading ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                Loading appointments...
+              </div>
+            ) : upcomingAppointments.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {upcomingAppointments.slice(0, 5).map(apt => {
+                  const aptDate = new Date(apt.scheduled_start);
+                  const isToday = aptDate.toDateString() === new Date().toDateString();
+                  const isTomorrow = aptDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
+
+                  return (
+                    <div
+                      key={apt.id}
+                      style={{
+                        background: isToday ? '#fef3c7' : '#f8fafc',
+                        border: isToday ? '1px solid #f59e0b' : '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        position: 'relative'
+                      }}
+                    >
+                      {isToday && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '8px',
+                          background: '#f59e0b',
+                          color: 'white',
+                          fontSize: '10px',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontWeight: 600
+                        }}>
+                          TODAY
+                        </span>
+                      )}
+                      {isTomorrow && !isToday && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '-8px',
+                          right: '8px',
+                          background: '#3b82f6',
+                          color: 'white',
+                          fontSize: '10px',
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontWeight: 600
+                        }}>
+                          TOMORROW
+                        </span>
+                      )}
+                      <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                        {apt.title}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>
+                        {aptDate.toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric'
+                        })} at {aptDate.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px' }}>
+                        <span style={{
+                          background: apt.meeting_mode === 'video' ? '#dbeafe' : apt.meeting_mode === 'phone' ? '#dcfce7' : '#f3e8ff',
+                          color: apt.meeting_mode === 'video' ? '#1d4ed8' : apt.meeting_mode === 'phone' ? '#166534' : '#7c3aed',
+                          padding: '2px 8px',
+                          borderRadius: '4px'
+                        }}>
+                          {apt.meeting_mode === 'video' ? '📹 Video' : apt.meeting_mode === 'phone' ? '📞 Phone' : '👤 In Person'}
+                        </span>
+                        <span style={{ color: '#94a3b8' }}>
+                          {apt.duration_minutes} min
+                        </span>
+                      </div>
+                      {apt.video_link && (
+                        <a
+                          href={apt.video_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-block',
+                            marginTop: '8px',
+                            color: '#217F8D',
+                            fontSize: '12px',
+                            textDecoration: 'none'
+                          }}
+                        >
+                          🔗 Join Video Call
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+                {upcomingAppointments.length > 5 && (
+                  <div style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>
+                    + {upcomingAppointments.length - 5} more appointments
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                textAlign: 'center',
+                padding: '24px 16px',
+                color: '#94a3b8',
+                background: '#f8fafc',
+                borderRadius: '8px'
+              }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📅</div>
+                <div style={{ fontSize: '14px' }}>No upcoming appointments</div>
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  style={{
+                    marginTop: '12px',
+                    background: 'none',
+                    border: '1px solid #217F8D',
+                    color: '#217F8D',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Schedule Appointment
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Action Buttons */}
           <div className="actions-card">
             <h3>Quick Actions</h3>
@@ -1600,6 +1784,7 @@ function ClientProfile() {
         <ScheduleAppointmentModal
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
+          onSuccess={() => loadUpcomingAppointments()}
           borrower={client}
         />
       )}

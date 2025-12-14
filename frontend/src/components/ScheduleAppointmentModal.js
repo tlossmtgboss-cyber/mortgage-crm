@@ -334,7 +334,8 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
           attendee_name: attendeeName,
           attendee_email: borrower.email || borrower.borrower_email,
           attendee_phone: borrower.phone || borrower.borrower_phone || '',
-          lead_id: borrower.id || null,
+          lead_id: borrower.lead_id || null,
+          loan_id: borrower.id || borrower.loan_id || null,
           assigned_user_id: parseInt(selectedTeamMember) || null
         })
       });
