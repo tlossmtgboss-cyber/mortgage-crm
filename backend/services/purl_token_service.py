@@ -92,18 +92,25 @@ class PURLTokenService:
         self.db.commit()
         self.db.refresh(token)
 
-        # Emit event
-        self._emit_event(
-            organization_id=organization_id,
-            workspace_id=workspace_id,
-            event_key="token_created",
-            payload={
-                "token_id": token.id,
-                "scope": scope.value,
-                "contact_id": contact_id,
-                "expires_at": expires_at.isoformat() if expires_at else None
-            }
-        )
+        # Emit event - wrapped in try-except with its own transaction
+        try:
+            self._emit_event(
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                event_key="token_created",
+                payload={
+                    "token_id": token.id,
+                    "scope": scope.value,
+                    "contact_id": contact_id,
+                    "expires_at": expires_at.isoformat() if expires_at else None
+                }
+            )
+            # Commit event separately so failure doesn't affect token creation
+            self.db.commit()
+        except Exception as e:
+            # Rollback just the event, keep the token
+            self.db.rollback()
+            logger.warning(f"Failed to emit token_created event: {e}")
 
         logger.info(f"Created PURL token {token.id} for workspace {workspace_id}")
 
@@ -248,17 +255,22 @@ class PURLTokenService:
 
         self.db.commit()
 
-        # Emit event
-        self._emit_event(
-            organization_id=token.organization_id,
-            workspace_id=token.workspace_id,
-            event_key="token_revoked",
-            payload={
-                "token_id": token_id,
-                "revoked_by": revoked_by,
-                "reason": reason
-            }
-        )
+        # Emit event - wrapped in try-except
+        try:
+            self._emit_event(
+                organization_id=token.organization_id,
+                workspace_id=token.workspace_id,
+                event_key="token_revoked",
+                payload={
+                    "token_id": token_id,
+                    "revoked_by": revoked_by,
+                    "reason": reason
+                }
+            )
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            logger.warning(f"Failed to emit token_revoked event: {e}")
 
         logger.info(f"Revoked token {token_id}")
         return True
@@ -296,16 +308,21 @@ class PURLTokenService:
             ).first()
 
             if workspace:
-                self._emit_event(
-                    organization_id=workspace.organization_id,
-                    workspace_id=workspace_id,
-                    event_key="all_tokens_revoked",
-                    payload={
-                        "count": result,
-                        "revoked_by": revoked_by,
-                        "reason": reason
-                    }
-                )
+                try:
+                    self._emit_event(
+                        organization_id=workspace.organization_id,
+                        workspace_id=workspace_id,
+                        event_key="all_tokens_revoked",
+                        payload={
+                            "count": result,
+                            "revoked_by": revoked_by,
+                            "reason": reason
+                        }
+                    )
+                    self.db.commit()
+                except Exception as e:
+                    self.db.rollback()
+                    logger.warning(f"Failed to emit all_tokens_revoked event: {e}")
 
         logger.info(f"Revoked {result} tokens for workspace {workspace_id}")
         return result
