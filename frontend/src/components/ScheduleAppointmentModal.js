@@ -14,6 +14,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [emailSent, setEmailSent] = useState(null); // Track if email was actually sent
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedTeamMember, setSelectedTeamMember] = useState('');
   const [teamMemberWorkHours, setTeamMemberWorkHours] = useState({
@@ -161,6 +162,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       setSelectedTeamMember('');
       setError(null);
       setSuccess(false);
+      setEmailSent(null);
 
       // Fetch team members
       fetchTeamMembers();
@@ -337,22 +339,27 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         })
       });
 
+      // Parse response
+      const result = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to schedule appointment');
+        throw new Error(result.detail || 'Failed to schedule appointment');
       }
 
+      console.log('Appointment created:', result);
+
       setSuccess(true);
+      setEmailSent(result.email_sent === true);
 
       // Call onSuccess callback if provided (to refresh calendar/data)
       if (onSuccess) {
         onSuccess();
       }
 
-      // Close modal after 2 seconds
+      // Close modal after 3 seconds (longer to show email status)
       setTimeout(() => {
         onClose();
-      }, 2000);
+      }, 3000);
     } catch (err) {
       console.error('Error scheduling appointment:', err);
       setError(err.message || 'Failed to schedule appointment. Please try again.');
@@ -380,7 +387,13 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
               </svg>
             </div>
             <h2>Appointment Scheduled!</h2>
-            <p>A confirmation email has been sent to {borrower?.email || borrower?.borrower_email}</p>
+            {emailSent ? (
+              <p style={{ color: '#10b981' }}>A confirmation email has been sent to {borrower?.email || borrower?.borrower_email}</p>
+            ) : (
+              <p style={{ color: '#f59e0b' }}>
+                Appointment created, but email could not be sent. Please manually notify the contact at {borrower?.email || borrower?.borrower_email}
+              </p>
+            )}
           </div>
         ) : (
           <>

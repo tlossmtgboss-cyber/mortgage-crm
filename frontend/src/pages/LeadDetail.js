@@ -1364,11 +1364,20 @@ function LeadDetail() {
       try {
         const existingWorkspace = await purlAPI.getWorkspaceByLead(lead.id);
         if (existingWorkspace && existingWorkspace.workspace) {
-          // Portal exists - get the URL
+          // Portal exists - create a fresh token to get access
           const workspaceId = existingWorkspace.workspace.workspace_id || existingWorkspace.workspace.id;
-          const purlUrlData = await purlAPI.getPurlUrl(workspaceId);
-          const portalUrl = purlUrlData.portal_url || purlUrlData.purl_url ||
-            `https://client.perennia.ai/portal/${existingWorkspace.workspace.slug}`;
+          const slug = existingWorkspace.workspace.workspace_slug || existingWorkspace.workspace.slug;
+
+          // Create a new token so we have the full token string for the URL
+          const tokenResponse = await purlAPI.createToken(workspaceId, {
+            scope: 'full',
+            expires_in_days: 90
+          });
+          const fullToken = tokenResponse.token;
+
+          // Build portal URL with token
+          const baseUrl = `${window.location.origin}/portal/${slug}`;
+          const portalUrl = fullToken ? `${baseUrl}?token=${fullToken}` : baseUrl;
 
           setClientPortalData({
             workspace_id: workspaceId,
@@ -1403,15 +1412,16 @@ function LeadDetail() {
       const response = await purlAPI.createWorkspace(createData);
       const newWorkspace = response.workspace || response;
 
-      // Create an access token for the workspace
-      await purlAPI.createToken(newWorkspace.id, {
+      // Create an access token for the workspace and capture the full token
+      const tokenResponse = await purlAPI.createToken(newWorkspace.id, {
         scope: 'full',
         expires_in_days: 90
       });
+      const fullToken = tokenResponse.token;
 
-      // Get the PURL URL
-      const purlUrlData = await purlAPI.getPurlUrl(newWorkspace.id);
-      const portalUrl = purlUrlData.portal_url || purlUrlData.purl_url || purlUrlData.url;
+      // Build portal URL with token included
+      const baseUrl = `${window.location.origin}/portal/${newWorkspace.slug}`;
+      const portalUrl = fullToken ? `${baseUrl}?token=${fullToken}` : baseUrl;
 
       setClientPortalData({
         workspace_id: newWorkspace.id,

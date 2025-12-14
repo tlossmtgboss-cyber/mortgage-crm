@@ -68,6 +68,24 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 
 # ============================================================================
+# EMAIL SERVICE STATUS ENDPOINT
+# ============================================================================
+
+@router.get("/email-service-status")
+async def get_email_service_status():
+    """Check if email service is properly configured"""
+    sendgrid_configured = bool(os.getenv("SENDGRID_API_KEY"))
+    sendgrid_from_email = os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai")
+
+    return {
+        "sendgrid_configured": sendgrid_configured,
+        "from_email": sendgrid_from_email,
+        "status": "ready" if sendgrid_configured else "not_configured",
+        "message": "Email service is ready to send" if sendgrid_configured else "SendGrid API key not configured - emails will be logged only (dry run)"
+    }
+
+
+# ============================================================================
 # APPOINTMENT NOTIFICATION HELPERS
 # ============================================================================
 
@@ -378,6 +396,26 @@ class SchedulerConfigUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class LandingPageSettings(BaseModel):
+    logo_url: Optional[str] = ''
+    profile_picture_url: Optional[str] = ''
+    video_url: Optional[str] = ''
+    video_type: Optional[str] = 'youtube'  # youtube, vimeo, loom, custom
+    headline: Optional[str] = 'Schedule a Meeting'
+    subheadline: Optional[str] = 'Choose a time that works for you'
+    description: Optional[str] = ''
+    show_profile: Optional[bool] = True
+    profile_name: Optional[str] = ''
+    profile_title: Optional[str] = ''
+    profile_bio: Optional[str] = ''
+    accent_color: Optional[str] = '#217F8D'
+    background_style: Optional[str] = 'white'  # white, light, gradient
+    show_company_logo: Optional[bool] = True
+    show_social_proof: Optional[bool] = False
+    testimonial_text: Optional[str] = ''
+    testimonial_author: Optional[str] = ''
+
+
 class AppointmentTypeCreate(BaseModel):
     type_key: str
     type_name: str
@@ -667,6 +705,92 @@ async def update_scheduler_config(
     db.refresh(config)
 
     return {"message": "Configuration updated", "config_id": config.id}
+
+
+# ============================================================================
+# LANDING PAGE SETTINGS ENDPOINTS
+# ============================================================================
+
+@router.get("/landing-page-settings")
+async def get_landing_page_settings(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get landing page customization settings"""
+    user = await get_current_user(request, db)
+
+    SchedulerConfig = _models['SchedulerConfig']
+
+    config = db.query(SchedulerConfig).filter(
+        SchedulerConfig.user_id == user.id
+    ).first()
+
+    # Return default settings if no config exists
+    default_settings = {
+        "logo_url": "",
+        "profile_picture_url": "",
+        "video_url": "",
+        "video_type": "youtube",
+        "headline": "Schedule a Meeting",
+        "subheadline": "Choose a time that works for you",
+        "description": "",
+        "show_profile": True,
+        "profile_name": user.first_name or "",
+        "profile_title": "Loan Officer",
+        "profile_bio": "",
+        "accent_color": "#217F8D",
+        "background_style": "white",
+        "show_company_logo": True,
+        "show_social_proof": False,
+        "testimonial_text": "",
+        "testimonial_author": ""
+    }
+
+    if not config:
+        return {"settings": default_settings}
+
+    # Get landing page settings from config (stored as JSON)
+    stored_settings = getattr(config, 'landing_page_settings', None) or {}
+
+    # Merge with defaults
+    settings = {**default_settings, **stored_settings}
+
+    return {"settings": settings}
+
+
+@router.put("/landing-page-settings")
+async def update_landing_page_settings(
+    settings_data: LandingPageSettings,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Update landing page customization settings"""
+    user = await get_current_user(request, db)
+
+    SchedulerConfig = _models['SchedulerConfig']
+
+    config = db.query(SchedulerConfig).filter(
+        SchedulerConfig.user_id == user.id
+    ).first()
+
+    if not config:
+        # Auto-create config with landing page settings
+        config = SchedulerConfig(
+            user_id=user.id,
+            config_name=f"{user.email}'s Schedule",
+            working_hours=DEFAULT_WORKING_HOURS,
+            landing_page_settings=settings_data.dict()
+        )
+        db.add(config)
+    else:
+        # Update existing config
+        config.landing_page_settings = settings_data.dict()
+
+    db.commit()
+
+    logger.info(f"Landing page settings updated for user {user.id}")
+
+    return {"message": "Landing page settings saved successfully"}
 
 
 # ============================================================================
@@ -2447,6 +2571,20 @@ async def run_scheduler_migration(
 
         # Create tables
         metadata.create_all(bind=db.bind, checkfirst=True)
+
+        # Add landing_page_settings column if it doesn't exist
+        try:
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'scheduler_configs' AND column_name = 'landing_page_settings'
+            """))
+            if not result.fetchone():
+                db.execute(text("ALTER TABLE scheduler_configs ADD COLUMN landing_page_settings JSONB DEFAULT '{}'::jsonb"))
+                db.commit()
+                logger.info("Added landing_page_settings column to scheduler_configs")
+        except Exception as col_e:
+            logger.warning(f"Could not add landing_page_settings column: {col_e}")
 
         logger.info(f"Scheduler migration complete. Created tables: {created}")
 

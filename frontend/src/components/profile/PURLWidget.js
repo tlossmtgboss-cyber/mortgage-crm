@@ -224,7 +224,10 @@ function PURLWidget({ leadId, loanId, contactData }) {
   const activeTokens = tokens.filter(t => t.status === 'active');
   const latestToken = activeTokens[0];
   const slug = workspace.workspace_slug || workspace.slug;
-  const portalUrl = `${PURL_DOMAIN}/portal/${slug}`;
+  // Include token in portal URL for direct access
+  const portalUrl = latestToken?.token
+    ? `${PURL_DOMAIN}/portal/${slug}?token=${latestToken.token}`
+    : `${PURL_DOMAIN}/portal/${slug}`;
 
   return (
     <div className="purl-widget has-portal">
