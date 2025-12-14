@@ -113,9 +113,12 @@ def generate_ics_content(
     # Add video link to description if provided
     full_description = description
     if video_link:
-        full_description += f"\\n\\nJoin Video Call: {video_link}"
+        full_description += "\\n\\nJoin Video Call: " + video_link
         if not location:
             location = video_link
+
+    # Escape newlines for ICS format - must be done outside f-string
+    ics_description = full_description.replace("\n", "\\n")
 
     ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -128,7 +131,7 @@ DTSTAMP:{dtstamp}
 DTSTART:{dtstart}
 DTEND:{dtend}
 SUMMARY:{appointment_title}
-DESCRIPTION:{full_description.replace(chr(10), '\\n')}
+DESCRIPTION:{ics_description}
 LOCATION:{location}
 ORGANIZER;CN={organizer_name}:mailto:{organizer_email}
 ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN={attendee_name}:mailto:{attendee_email}
