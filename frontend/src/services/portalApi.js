@@ -458,8 +458,74 @@ export const partnerPortalApi = {
   /**
    * Get partner portal data by access token
    */
+  getPortalByToken: (accessToken) =>
+    apiRequest(`/api/portal/partner/${accessToken}`),
+
+  /**
+   * Get partner portal data (alias for compatibility)
+   */
   getPartnerPortalData: (accessToken) =>
     apiRequest(`/api/portal/partner/${accessToken}`),
+
+  /**
+   * Get filtered milestones for partner view
+   */
+  getPartnerMilestones: (accessToken) =>
+    apiRequest(`/api/portal/partner/${accessToken}/milestones`),
+
+  /**
+   * Get critical dates visible to partners
+   */
+  getCriticalDates: (accessToken) =>
+    apiRequest(`/api/portal/partner/${accessToken}/critical-dates`),
+
+  /**
+   * Get risk flags visible to partners
+   */
+  getRiskFlags: (accessToken) =>
+    apiRequest(`/api/portal/partner/${accessToken}/risk-flags`),
+};
+
+// =============================================================================
+// ACTIVE LOAN PORTAL ENDPOINTS
+// =============================================================================
+
+export const activeLoanPortalApi = {
+  /**
+   * Get complete loan portal data
+   */
+  getPortalData: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/complete`),
+
+  /**
+   * Get portal by access token
+   */
+  getPortalByToken: (token) =>
+    apiRequest(`/api/portal/access/${token}`),
+
+  /**
+   * Get Close On Time milestones for arrow timeline
+   */
+  getCloseOnTimeMilestones: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/close-on-time/milestones`),
+
+  /**
+   * Get document summary for portal
+   */
+  getDocumentSummary: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/documents/summary`),
+
+  /**
+   * Get pending tasks for borrower
+   */
+  getPendingTasks: (loanId) =>
+    apiRequest(`/api/portal/loans/${loanId}/tasks/borrower`),
+
+  /**
+   * Get recent activity
+   */
+  getRecentActivity: (loanId, limit = 20) =>
+    apiRequest(`/api/portal/loans/${loanId}/activity?limit=${limit}`),
 };
 
 // Export all APIs as default
@@ -472,4 +538,5 @@ export default {
   notification: notificationApi,
   borrowerPortal: borrowerPortalApi,
   partnerPortal: partnerPortalApi,
+  activeLoanPortal: activeLoanPortalApi,
 };

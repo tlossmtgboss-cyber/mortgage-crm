@@ -20208,6 +20208,30 @@ except Exception as e:
     perennia_portal_error = traceback.format_exc()
     logger.warning(f"⚠️ Perennia Portal routes not loaded: {e}")
 
+# CRM Webhooks routes (real-time CRM integration)
+crm_webhooks_error = None
+try:
+    from routes.crm_webhooks import router as crm_webhooks_router
+    app.include_router(crm_webhooks_router, tags=["CRM Webhooks"])
+    logger.info("✅ CRM Webhooks routes loaded")
+except Exception as e:
+    crm_webhooks_error = str(e)
+    import traceback
+    crm_webhooks_error = traceback.format_exc()
+    logger.warning(f"⚠️ CRM Webhooks routes not loaded: {e}")
+
+# Portal WebSocket routes (real-time updates)
+portal_websocket_error = None
+try:
+    from services.portal_websocket_service import router as portal_websocket_router
+    app.include_router(portal_websocket_router, tags=["Portal WebSocket"])
+    logger.info("✅ Portal WebSocket routes loaded")
+except Exception as e:
+    portal_websocket_error = str(e)
+    import traceback
+    portal_websocket_error = traceback.format_exc()
+    logger.warning(f"⚠️ Portal WebSocket routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""

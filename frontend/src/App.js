@@ -112,6 +112,10 @@ const PURLPortal = lazy(() => import('./pages/PURLPortal'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
 
+// Portal Components - Real-time borrower and partner portals
+const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
+const PartnerPortalView = lazy(() => import('./components/portal/PartnerPortalView'));
+
 // Simple loading component
 const PageLoader = () => (
   <div style={{
@@ -329,6 +333,13 @@ function App() {
           {/* Borrower Portal (public - token-based access) */}
           <Route path="/portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />
           <Route path="/portal" element={<LazyPage><BorrowerPortal /></LazyPage>} />
+
+          {/* Active Loan Portal - Real-time borrower dashboard with WebSocket updates */}
+          <Route path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />
+          <Route path="/portal/active/:token" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />
+
+          {/* Partner Portal - Realtor/Partner view with magic link access */}
+          <Route path="/partner/:token" element={<LazyPage><PartnerPortalView /></LazyPage>} />
 
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />

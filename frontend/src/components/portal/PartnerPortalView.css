@@ -1,0 +1,534 @@
+/**
+ * PartnerPortalView Styles
+ *
+ * Partner/Realtor portal with magic link access.
+ */
+
+.partner-portal {
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* Header */
+.partner-header {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: white;
+  padding: 24px;
+}
+
+.header-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.partner-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.badge-icon {
+  font-size: 16px;
+}
+
+.read-only {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.partner-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.loan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-item .label {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.summary-item .value {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.stage-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Main Content */
+.partner-content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.partner-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.partner-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.warning-icon {
+  font-size: 18px;
+}
+
+/* Critical Dates */
+.critical-dates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.date-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  text-align: center;
+  position: relative;
+}
+
+.date-card.past {
+  opacity: 0.6;
+}
+
+.date-card.near {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+}
+
+.date-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.date-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.date-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.near-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  background: #f59e0b;
+  color: white;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.empty-dates {
+  text-align: center;
+  padding: 24px;
+  color: #9ca3af;
+}
+
+/* Risk Flags */
+.risk-section {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.risk-section h2 {
+  color: #991b1b;
+}
+
+.risk-flags-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.risk-flag {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.risk-flag:last-child {
+  margin-bottom: 0;
+}
+
+.risk-flag.high {
+  border-left: 4px solid #ef4444;
+}
+
+.risk-flag.medium {
+  border-left: 4px solid #f59e0b;
+}
+
+.risk-flag.low {
+  border-left: 4px solid #fbbf24;
+}
+
+.flag-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flag-title {
+  font-weight: 500;
+  color: #374151;
+}
+
+.flag-description {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.severity-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity-badge.high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.severity-badge.medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.severity-badge.low {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+/* Loan Officer Card */
+.contact-section {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+}
+
+.lo-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.lo-card.empty {
+  justify-content: center;
+  padding: 24px;
+  color: #9ca3af;
+}
+
+.lo-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #4f46e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lo-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-initials {
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+}
+
+.lo-info {
+  flex: 1;
+  min-width: 150px;
+}
+
+.lo-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  color: #111827;
+}
+
+.lo-title {
+  margin: 0 0 2px 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.lo-nmls {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.lo-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contact-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.contact-btn.phone {
+  background: #4f46e5;
+  color: white;
+}
+
+.contact-btn.phone:hover {
+  background: #4338ca;
+}
+
+.contact-btn.email {
+  background: white;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.contact-btn.email:hover {
+  background: #f9fafb;
+}
+
+.contact-btn .icon {
+  font-size: 16px;
+}
+
+/* Footer */
+.partner-footer {
+  text-align: center;
+  padding: 24px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.partner-footer p {
+  margin: 0 0 8px 0;
+}
+
+.powered-by {
+  font-size: 12px;
+}
+
+/* Error State */
+.partner-portal-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: #f9fafb;
+}
+
+.error-card {
+  max-width: 400px;
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.error-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.error-card h1 {
+  font-size: 24px;
+  color: #111827;
+  margin: 0 0 8px 0;
+}
+
+.error-card p {
+  color: #6b7280;
+  margin: 0 0 16px 0;
+}
+
+.help-text {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* Skeleton */
+.partner-portal.skeleton .skeleton-badge {
+  width: 120px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+}
+
+.partner-portal.skeleton .skeleton-title {
+  width: 200px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+.partner-portal.skeleton .skeleton-summary {
+  width: 100%;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.skeleton-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.skeleton-section-title {
+  width: 150px;
+  height: 20px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-section-content {
+  height: 100px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .partner-header {
+    padding: 20px;
+  }
+
+  .partner-header h1 {
+    font-size: 24px;
+  }
+
+  .loan-summary {
+    gap: 16px;
+  }
+
+  .partner-content {
+    padding: 16px;
+  }
+
+  .partner-section {
+    padding: 16px;
+  }
+
+  .lo-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .lo-contact {
+    width: 100%;
+  }
+
+  .contact-btn {
+    justify-content: center;
+  }
+}
