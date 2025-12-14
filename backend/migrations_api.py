@@ -679,3 +679,78 @@ async def run_email_response_training_migration(
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/add-microsite-themes")
+async def run_microsite_themes_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Run the Microsite Themes migration.
+
+    Creates tables and seeds default themes for the microsite theme marketplace:
+    - microsite_themes - Registry of available themes
+    - microsites - User microsite configuration
+    - microsite_profiles - Extended profile data for microsites
+
+    Seeds 4 default themes:
+    - LeadPops Cardinal (bold)
+    - Professional Clean (professional)
+    - Modern Gradient (modern)
+    - Minimal Focus (minimal)
+    """
+    try:
+        import os
+        from pathlib import Path
+        from database import engine
+        from sqlalchemy import text
+
+        logger.info("Starting Microsite Themes migration...")
+
+        # Read the migration file
+        migration_path = Path(__file__).parent / "migrations" / "add_microsite_themes.sql"
+        if not migration_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Migration file not found at {migration_path}"
+            )
+
+        sql = migration_path.read_text()
+
+        # Execute the migration
+        with engine.connect() as conn:
+            conn.execute(text(sql))
+            conn.commit()
+
+            # Verify tables were created
+            result = conn.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name IN ('microsite_themes', 'microsites', 'microsite_profiles')
+                ORDER BY table_name
+            """))
+            tables = [row[0] for row in result.fetchall()]
+
+            # Count themes
+            result = conn.execute(text("SELECT COUNT(*) FROM microsite_themes"))
+            theme_count = result.fetchone()[0]
+
+        logger.info(f"Migration completed. Tables: {tables}, Themes: {theme_count}")
+
+        return {
+            "status": "success",
+            "message": "Microsite Themes tables created and seeded successfully",
+            "tables_created": tables,
+            "themes_seeded": theme_count,
+            "default_themes": [
+                "leadpops-cardinal",
+                "professional-clean",
+                "modern-gradient",
+                "minimal-focus"
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
