@@ -217,8 +217,8 @@ export default function PURLManager() {
         </div>
       )}
 
-      {/* Workspace Grid */}
-      <div className="workspace-grid">
+      {/* Workspace List */}
+      <div className="workspace-list">
         {filteredWorkspaces.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">&#128194;</div>
@@ -226,13 +226,24 @@ export default function PURLManager() {
             <p>Create a workspace to get started with PURL portals</p>
           </div>
         ) : (
-          filteredWorkspaces.map(workspace => (
-            <WorkspaceCard
-              key={workspace.id}
-              workspace={workspace}
-              onClick={() => setSelectedWorkspace(workspace)}
-            />
-          ))
+          <>
+            {/* Table Header */}
+            <div className="workspace-list-header">
+              <span className="col-name">Client Name</span>
+              <span className="col-slug">Slug</span>
+              <span className="col-status">Status</span>
+              <span className="col-created">Created</span>
+              <span className="col-actions">Actions</span>
+            </div>
+            {/* Table Rows */}
+            {filteredWorkspaces.map(workspace => (
+              <WorkspaceListItem
+                key={workspace.id}
+                workspace={workspace}
+                onClick={() => setSelectedWorkspace(workspace)}
+              />
+            ))}
+          </>
         )}
       </div>
 
@@ -257,53 +268,48 @@ export default function PURLManager() {
 }
 
 // =============================================================================
-// WORKSPACE CARD
+// WORKSPACE LIST ITEM
 // =============================================================================
 
-function WorkspaceCard({ workspace, onClick }) {
+function WorkspaceListItem({ workspace, onClick }) {
   const statusColors = {
-    active: 'status-blue',
-    application_started: 'status-yellow',
-    application_submitted: 'status-green',
-    in_processing: 'status-purple',
-    completed: 'status-emerald',
+    lead: 'status-gray',
+    application: 'status-blue',
+    active_loan: 'status-green',
+    closing: 'status-purple',
+    post_close: 'status-emerald',
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return '-';
+    }
   };
 
   return (
-    <div className="workspace-card" onClick={onClick}>
-      <div className="card-header">
-        <h3>{workspace.borrower_name || 'Unnamed Borrower'}</h3>
+    <div className="workspace-list-item" onClick={onClick}>
+      <span className="col-name">
+        <strong>{workspace.borrower_name || workspace.display_name || 'Unnamed Client'}</strong>
+      </span>
+      <span className="col-slug">
+        <code>{workspace.slug}</code>
+      </span>
+      <span className="col-status">
         <span className={`status-badge ${statusColors[workspace.status] || 'status-gray'}`}>
-          {workspace.status?.replace(/_/g, ' ')}
+          {(workspace.status || 'lead').replace(/_/g, ' ')}
         </span>
-      </div>
-
-      <div className="card-body">
-        <div className="card-detail">
-          <span className="label">Slug:</span>
-          <span className="value">{workspace.slug}</span>
-        </div>
-        <div className="card-detail">
-          <span className="label">Created:</span>
-          <span className="value">{new Date(workspace.created_at).toLocaleDateString()}</span>
-        </div>
-        {workspace.loan_id && (
-          <div className="card-detail">
-            <span className="label">Loan:</span>
-            <span className="value">{workspace.loan_number || workspace.loan_id}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="card-footer">
-        <div className="progress-mini">
-          <div
-            className="progress-fill"
-            style={{ width: `${workspace.progress || 0}%` }}
-          ></div>
-        </div>
-        <span className="progress-text">{workspace.progress || 0}% complete</span>
-      </div>
+      </span>
+      <span className="col-created">
+        {formatDate(workspace.created_at)}
+      </span>
+      <span className="col-actions">
+        <button className="btn-view" onClick={(e) => { e.stopPropagation(); onClick(); }}>
+          View Details
+        </button>
+      </span>
     </div>
   );
 }
@@ -687,8 +693,8 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
       ]);
       setDetails(detailsData);
       setTokens(tokensData.tokens || []);
-      setActivity(activityData.events || []);
-      setPurlUrl(urlData.url || '');
+      setActivity(activityData.events || activityData.activities || []);
+      setPurlUrl(urlData.portal_url || urlData.url || '');
     } catch (err) {
       console.error('Failed to load workspace details:', err);
     } finally {
@@ -699,6 +705,14 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(purlUrl);
     alert('PURL copied to clipboard!');
+  };
+
+  const handleViewPortal = () => {
+    if (purlUrl) {
+      window.open(purlUrl, '_blank');
+    } else {
+      alert('No portal URL available. Please create an access token first.');
+    }
   };
 
   const handleCreateToken = async () => {
@@ -738,8 +752,25 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
         <div className="purl-url-section">
           <label>PURL URL:</label>
           <div className="url-display">
-            <input type="text" value={purlUrl} readOnly />
-            <button onClick={handleCopyUrl}>Copy</button>
+            <input type="text" value={purlUrl || 'No active token - create one in Tokens tab'} readOnly />
+            <button onClick={handleCopyUrl} disabled={!purlUrl}>Copy</button>
+            <button
+              onClick={handleViewPortal}
+              disabled={!purlUrl}
+              className="btn-view-portal"
+              style={{
+                background: purlUrl ? '#2563eb' : '#9ca3af',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '0.375rem',
+                cursor: purlUrl ? 'pointer' : 'not-allowed',
+                marginLeft: '0.5rem',
+                fontWeight: '500'
+              }}
+            >
+              View Portal
+            </button>
           </div>
         </div>
 
