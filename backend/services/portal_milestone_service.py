@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 
 from models.portal_models import (
-    LifecycleStage, MilestoneStatus, TaskStatus,
+    LifecycleStage, MilestoneStatus, TaskStatus, PortalUserRole,
     MilestoneTemplate, MilestoneInstance, TaskTemplate, TaskInstance,
     PortalLoan, LoanActivityLog
 )
@@ -41,51 +41,49 @@ class PortalMilestoneService:
         )
 
         if stage:
-            query = query.filter(MilestoneTemplate.lifecycle_stage == stage)
+            query = query.filter(MilestoneTemplate.stage == stage)
 
         templates = query.order_by(
-            MilestoneTemplate.lifecycle_stage,
-            MilestoneTemplate.order_index
+            MilestoneTemplate.stage,
+            MilestoneTemplate.display_order
         ).all()
 
         return [
             {
                 "id": t.id,
-                "code": t.code,
+                "key": t.key,
                 "name": t.name,
                 "description": t.description,
-                "lifecycle_stage": t.lifecycle_stage.value,
-                "order_index": t.order_index,
+                "stage": t.stage.value if t.stage else None,
+                "display_order": t.display_order,
                 "icon": t.icon,
-                "color": t.color,
-                "typical_duration_days": t.typical_duration_days,
-                "is_borrower_visible": t.is_borrower_visible,
-                "is_partner_visible": t.is_partner_visible,
+                "color_code": t.color_code,
+                "visible_to_borrower": t.visible_to_borrower,
+                "visible_to_partner": t.visible_to_partner,
             }
             for t in templates
         ]
 
     def create_milestone_template(
         self,
-        code: str,
+        key: str,
         name: str,
         description: str,
-        lifecycle_stage: LifecycleStage,
-        order_index: int,
+        stage: LifecycleStage,
+        display_order: int,
         **kwargs,
     ) -> Dict[str, Any]:
         """Create a new milestone template."""
         template = MilestoneTemplate(
-            code=code,
+            key=key,
             name=name,
             description=description,
-            lifecycle_stage=lifecycle_stage,
-            order_index=order_index,
+            stage=stage,
+            display_order=display_order,
             icon=kwargs.get("icon", "check-circle"),
-            color=kwargs.get("color", "#3B82F6"),
-            typical_duration_days=kwargs.get("typical_duration_days"),
-            is_borrower_visible=kwargs.get("is_borrower_visible", True),
-            is_partner_visible=kwargs.get("is_partner_visible", True),
+            color_code=kwargs.get("color_code", "#3B82F6"),
+            visible_to_borrower=kwargs.get("visible_to_borrower", True),
+            visible_to_partner=kwargs.get("visible_to_partner", True),
             is_active=True,
         )
         self.db.add(template)
@@ -108,10 +106,10 @@ class PortalMilestoneService:
         # Get templates for this stage
         templates = self.db.query(MilestoneTemplate).filter(
             and_(
-                MilestoneTemplate.lifecycle_stage == stage,
+                MilestoneTemplate.stage == stage,
                 MilestoneTemplate.is_active == True
             )
-        ).order_by(MilestoneTemplate.order_index).all()
+        ).order_by(MilestoneTemplate.display_order).all()
 
         if not templates:
             return {
@@ -123,44 +121,44 @@ class PortalMilestoneService:
         created = []
         cumulative_days = 0
 
-        for template in templates:
-            # Calculate target date based on expected close or typical duration
-            if expected_close_date and template.typical_duration_days:
+        for i, template in enumerate(templates):
+            # Calculate due date based on expected close or SLA duration
+            if expected_close_date and template.sla_duration:
                 # Work backwards from close date for later milestones
-                target_date = expected_close_date - timedelta(
-                    days=(len(templates) - template.order_index) * template.typical_duration_days
+                due = expected_close_date - timedelta(
+                    days=(len(templates) - i) * (template.sla_duration or 3)
                 )
-            elif template.typical_duration_days:
-                cumulative_days += template.typical_duration_days
-                target_date = date.today() + timedelta(days=cumulative_days)
+            elif template.sla_duration:
+                cumulative_days += template.sla_duration
+                due = date.today() + timedelta(days=cumulative_days)
             else:
-                target_date = None
+                due = None
 
             milestone = MilestoneInstance(
                 loan_id=loan_id,
                 template_id=template.id,
-                status=MilestoneStatus.PENDING,
-                target_date=target_date,
-                is_visible_to_borrower=template.is_borrower_visible,
-                is_visible_to_partner=template.is_partner_visible,
+                status=MilestoneStatus.LOCKED if i > 0 else MilestoneStatus.ACTIVE,
+                due_date=due,
             )
             self.db.add(milestone)
+            self.db.flush()  # Get the milestone ID
             created.append(template.name)
 
             # Generate tasks for this milestone
             task_templates = self.db.query(TaskTemplate).filter(
                 and_(
                     TaskTemplate.milestone_template_id == template.id,
-                    TaskTemplate.is_active == True
                 )
-            ).order_by(TaskTemplate.order_index).all()
+            ).order_by(TaskTemplate.display_order).all()
 
             for task_template in task_templates:
                 task = TaskInstance(
-                    milestone_id=milestone.id,
-                    task_template_id=task_template.id,
-                    status=TaskStatus.PENDING,
-                    is_visible_to_borrower=task_template.is_borrower_visible,
+                    milestone_instance_id=milestone.id,
+                    template_id=task_template.id,
+                    title=task_template.title,
+                    instructions=task_template.instructions,
+                    owner_role=task_template.owner_role,
+                    status=TaskStatus.TODO,
                 )
                 self.db.add(task)
 
@@ -186,50 +184,50 @@ class PortalMilestoneService:
         )
 
         if borrower_view:
-            query = query.filter(MilestoneInstance.is_visible_to_borrower == True)
+            query = query.join(MilestoneTemplate).filter(
+                MilestoneTemplate.visible_to_borrower == True
+            )
 
         milestones = query.join(MilestoneTemplate).order_by(
-            MilestoneTemplate.lifecycle_stage,
-            MilestoneTemplate.order_index
+            MilestoneTemplate.stage,
+            MilestoneTemplate.display_order
         ).all()
 
         result = []
         for m in milestones:
             milestone_data = {
                 "id": m.id,
-                "code": m.template.code,
+                "key": m.template.key,
                 "name": m.template.name,
                 "description": m.template.description,
-                "status": m.status.value,
-                "lifecycle_stage": m.template.lifecycle_stage.value,
-                "order_index": m.template.order_index,
+                "status": m.status.value if m.status else None,
+                "stage": m.template.stage.value if m.template.stage else None,
+                "display_order": m.template.display_order,
                 "icon": m.template.icon,
-                "color": m.template.color,
-                "target_date": m.target_date.isoformat() if m.target_date else None,
-                "started_at": m.started_at.isoformat() if m.started_at else None,
+                "color_code": m.template.color_code,
+                "due_date": m.due_date.isoformat() if m.due_date else None,
+                "entered_at": m.entered_at.isoformat() if m.entered_at else None,
                 "completed_at": m.completed_at.isoformat() if m.completed_at else None,
                 "notes": m.notes,
             }
 
             if include_tasks:
-                task_query = self.db.query(TaskInstance).filter(
-                    TaskInstance.milestone_id == m.id
-                )
-                if borrower_view:
-                    task_query = task_query.filter(TaskInstance.is_visible_to_borrower == True)
-
-                tasks = task_query.join(TaskTemplate).order_by(
-                    TaskTemplate.order_index
+                tasks = self.db.query(TaskInstance).filter(
+                    TaskInstance.milestone_instance_id == m.id
                 ).all()
+
+                # For borrower view, only show tasks owned by borrower
+                if borrower_view:
+                    tasks = [t for t in tasks if t.owner_role == PortalUserRole.BORROWER]
 
                 milestone_data["tasks"] = [
                     {
                         "id": t.id,
-                        "name": t.task_template.name,
-                        "description": t.task_template.description,
-                        "status": t.status.value,
-                        "is_required": t.task_template.is_required,
-                        "is_borrower_action": t.task_template.is_borrower_action,
+                        "title": t.title,
+                        "instructions": t.instructions,
+                        "status": t.status.value if t.status else None,
+                        "owner_role": t.owner_role.value if t.owner_role else None,
+                        "is_borrower_task": t.owner_role == PortalUserRole.BORROWER,
                         "completed_at": t.completed_at.isoformat() if t.completed_at else None,
                         "completed_by": t.completed_by,
                     }
@@ -257,13 +255,13 @@ class PortalMilestoneService:
             }
 
         completed = len([m for m in milestones if m.status == MilestoneStatus.COMPLETED])
-        in_progress = len([m for m in milestones if m.status == MilestoneStatus.IN_PROGRESS])
-        pending = len([m for m in milestones if m.status == MilestoneStatus.PENDING])
+        active = len([m for m in milestones if m.status == MilestoneStatus.ACTIVE])
+        locked = len([m for m in milestones if m.status == MilestoneStatus.LOCKED])
 
-        # Find current milestone (first in-progress or first pending)
+        # Find current milestone (first active or first locked if none active)
         current = None
         for m in milestones:
-            if m.status == MilestoneStatus.IN_PROGRESS:
+            if m.status == MilestoneStatus.ACTIVE:
                 current = {
                     "id": m.id,
                     "name": m.template.name,
@@ -272,7 +270,7 @@ class PortalMilestoneService:
                 break
         if not current:
             for m in milestones:
-                if m.status == MilestoneStatus.PENDING:
+                if m.status == MilestoneStatus.LOCKED:
                     current = {
                         "id": m.id,
                         "name": m.template.name,
@@ -283,8 +281,8 @@ class PortalMilestoneService:
         return {
             "total": len(milestones),
             "completed": completed,
-            "in_progress": in_progress,
-            "pending": pending,
+            "in_progress": active,
+            "pending": locked,
             "progress_percent": round((completed / len(milestones) * 100) if milestones else 0, 1),
             "current_milestone": current,
         }
@@ -294,7 +292,7 @@ class PortalMilestoneService:
         milestone_id: int,
         status: MilestoneStatus,
         notes: Optional[str] = None,
-        updated_by: Optional[str] = None,
+        updated_by: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Update milestone status."""
         milestone = self.db.query(MilestoneInstance).filter(
@@ -307,11 +305,10 @@ class PortalMilestoneService:
         old_status = milestone.status
         milestone.status = status
 
-        if status == MilestoneStatus.IN_PROGRESS and not milestone.started_at:
-            milestone.started_at = datetime.utcnow()
+        if status == MilestoneStatus.ACTIVE and not milestone.entered_at:
+            milestone.entered_at = datetime.utcnow()
         elif status == MilestoneStatus.COMPLETED:
             milestone.completed_at = datetime.utcnow()
-            milestone.completed_by = updated_by
 
         if notes:
             milestone.notes = notes
@@ -320,14 +317,15 @@ class PortalMilestoneService:
         activity = LoanActivityLog(
             loan_id=milestone.loan_id,
             activity_type="milestone_update",
-            description=f"Milestone '{milestone.template.name}' changed from {old_status.value} to {status.value}",
-            metadata={
+            activity_title=f"Milestone Updated: {milestone.template.name}",
+            activity_description=f"Milestone '{milestone.template.name}' changed from {old_status.value} to {status.value}",
+            extra_data={
                 "milestone_id": milestone_id,
                 "old_status": old_status.value,
                 "new_status": status.value,
             },
-            actor=updated_by,
-            is_visible_to_borrower=True,
+            actor_id=updated_by,
+            visible_to_borrower=True,
         )
         self.db.add(activity)
 
@@ -357,24 +355,24 @@ class PortalMilestoneService:
 
         return {
             "id": task.id,
-            "name": task.task_template.name,
-            "description": task.task_template.description,
-            "milestone_id": task.milestone_id,
-            "milestone_name": task.milestone.template.name,
-            "status": task.status.value,
-            "is_required": task.task_template.is_required,
-            "is_borrower_action": task.task_template.is_borrower_action,
+            "title": task.title,
+            "instructions": task.instructions,
+            "milestone_id": task.milestone_instance_id,
+            "milestone_name": task.milestone.template.name if task.milestone and task.milestone.template else None,
+            "status": task.status.value if task.status else None,
+            "owner_role": task.owner_role.value if task.owner_role else None,
+            "is_borrower_task": task.owner_role == PortalUserRole.BORROWER,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
             "completed_by": task.completed_by,
-            "metadata": task.metadata,
+            "notes": task.notes,
         }
 
     def update_task_status(
         self,
         task_id: int,
         status: TaskStatus,
-        completed_by: Optional[str] = None,
-        metadata: Optional[Dict] = None,
+        completed_by: Optional[int] = None,
+        notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update task status."""
         task = self.db.query(TaskInstance).filter(
@@ -387,38 +385,50 @@ class PortalMilestoneService:
         old_status = task.status
         task.status = status
 
-        if status == TaskStatus.COMPLETED:
+        if status == TaskStatus.DONE:
             task.completed_at = datetime.utcnow()
             task.completed_by = completed_by
 
-        if metadata:
-            task.metadata = {**(task.metadata or {}), **metadata}
+        if notes:
+            task.notes = notes
 
         # Check if all tasks in milestone are complete
         milestone = task.milestone
         all_tasks = self.db.query(TaskInstance).filter(
-            TaskInstance.milestone_id == milestone.id
+            TaskInstance.milestone_instance_id == milestone.id
         ).all()
 
-        required_tasks_complete = all(
-            t.status == TaskStatus.COMPLETED
-            for t in all_tasks
-            if t.task_template.is_required
-        )
+        # Get required tasks from templates
+        all_required_complete = True
+        for t in all_tasks:
+            if t.template_id:
+                template = self.db.query(TaskTemplate).filter(
+                    TaskTemplate.id == t.template_id
+                ).first()
+                if template and template.is_required and t.status != TaskStatus.DONE:
+                    all_required_complete = False
+                    break
+            elif t.status != TaskStatus.DONE:
+                # If no template, assume required
+                all_required_complete = False
+                break
 
         # Auto-advance milestone if all required tasks complete
-        if required_tasks_complete and milestone.status != MilestoneStatus.COMPLETED:
+        milestone_auto_completed = False
+        if all_required_complete and milestone.status != MilestoneStatus.COMPLETED:
             milestone.status = MilestoneStatus.COMPLETED
             milestone.completed_at = datetime.utcnow()
+            milestone_auto_completed = True
 
             # Log milestone completion
             activity = LoanActivityLog(
                 loan_id=milestone.loan_id,
                 activity_type="milestone_completed",
-                description=f"Milestone '{milestone.template.name}' completed",
-                metadata={"milestone_id": milestone.id},
-                actor=completed_by,
-                is_visible_to_borrower=True,
+                activity_title=f"Milestone Completed: {milestone.template.name}",
+                activity_description=f"Milestone '{milestone.template.name}' completed",
+                extra_data={"milestone_id": milestone.id},
+                actor_id=completed_by,
+                visible_to_borrower=True,
             )
             self.db.add(activity)
 
@@ -427,30 +437,28 @@ class PortalMilestoneService:
         return {
             "success": True,
             "task_id": task_id,
-            "old_status": old_status.value,
+            "old_status": old_status.value if old_status else None,
             "new_status": status.value,
-            "milestone_auto_completed": required_tasks_complete and milestone.status == MilestoneStatus.COMPLETED,
+            "milestone_auto_completed": milestone_auto_completed,
         }
 
     def get_pending_borrower_tasks(self, loan_id: int) -> List[Dict[str, Any]]:
         """Get tasks requiring borrower action."""
-        tasks = self.db.query(TaskInstance).join(TaskTemplate).join(MilestoneInstance).filter(
+        tasks = self.db.query(TaskInstance).join(MilestoneInstance).filter(
             and_(
                 MilestoneInstance.loan_id == loan_id,
-                TaskTemplate.is_borrower_action == True,
-                TaskInstance.status.in_([TaskStatus.PENDING, TaskStatus.IN_PROGRESS]),
-                TaskInstance.is_visible_to_borrower == True
+                TaskInstance.owner_role == PortalUserRole.BORROWER,
+                TaskInstance.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]),
             )
         ).all()
 
         return [
             {
                 "id": t.id,
-                "name": t.task_template.name,
-                "description": t.task_template.description,
-                "milestone_name": t.milestone.template.name,
-                "status": t.status.value,
-                "is_required": t.task_template.is_required,
+                "title": t.title,
+                "instructions": t.instructions,
+                "milestone_name": t.milestone.template.name if t.milestone and t.milestone.template else None,
+                "status": t.status.value if t.status else None,
             }
             for t in tasks
         ]
@@ -477,7 +485,7 @@ class PortalMilestoneService:
         # Group milestones by lifecycle stage
         by_stage = {}
         for m in milestones:
-            stage = m["lifecycle_stage"]
+            stage = m["stage"]
             if stage not in by_stage:
                 by_stage[stage] = []
             by_stage[stage].append(m)
@@ -503,9 +511,9 @@ class PortalMilestoneService:
         next_milestone = self.db.query(MilestoneInstance).join(MilestoneTemplate).filter(
             and_(
                 MilestoneInstance.loan_id == loan_id,
-                MilestoneInstance.status.in_([MilestoneStatus.PENDING, MilestoneStatus.IN_PROGRESS])
+                MilestoneInstance.status.in_([MilestoneStatus.LOCKED, MilestoneStatus.ACTIVE])
             )
-        ).order_by(MilestoneTemplate.order_index).first()
+        ).order_by(MilestoneTemplate.display_order).first()
 
         return {
             "progress": progress,
@@ -514,6 +522,6 @@ class PortalMilestoneService:
             "next_milestone": {
                 "id": next_milestone.id,
                 "name": next_milestone.template.name,
-                "target_date": next_milestone.target_date.isoformat() if next_milestone and next_milestone.target_date else None,
+                "due_date": next_milestone.due_date.isoformat() if next_milestone and next_milestone.due_date else None,
             } if next_milestone else None,
         }
