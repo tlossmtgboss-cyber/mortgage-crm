@@ -173,34 +173,9 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   const fetchSlots = useCallback(async () => {
     if (!selectedDate) return;
 
-    try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
-      const response = await fetch(
-        `${API_BASE}/api/v1/scheduler/public/book/demo/slots?date=${dateStr}&appointment_type_id=1&duration_minutes=30`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const slots = (data.available_slots || []).map(slot => ({
-          ...slot,
-          start_time: slot.start,
-          display: formatTime(slot.start)
-        }));
-        setAvailableSlots(slots);
-
-        // Auto-select first available time
-        if (slots.length > 0) {
-          setSelectedTime(slots[0].start_time);
-        } else {
-          setSelectedTime('');
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching slots:', err);
-      // Generate default slots if API fails
-      generateDefaultSlots();
-    }
-  }, [selectedDate]);
+    // Always generate slots from work hours - more reliable than API
+    generateSlotsFromWorkHours();
+  }, [selectedDate, generateSlotsFromWorkHours]);
 
   // Get day name from date
   const getDayName = (date) => {
@@ -245,11 +220,6 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       setSelectedTime('');
     }
   }, [selectedDate, teamMemberWorkHours]);
-
-  // Generate default slots (uses team member work hours or 9am-5pm fallback)
-  const generateDefaultSlots = () => {
-    generateSlotsFromWorkHours();
-  };
 
   useEffect(() => {
     if (selectedDate) {
