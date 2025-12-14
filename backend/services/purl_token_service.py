@@ -432,12 +432,16 @@ class PURLTokenService:
         payload: Dict[str, Any]
     ):
         """Emit event to outbox."""
-        event = PURLEventsOutbox(
-            organization_id=organization_id,
-            workspace_id=workspace_id,
-            event_key=event_key,
-            payload=payload,
-            status=EventStatus.PENDING.value
-        )
-        self.db.add(event)
-        # Don't commit here - let caller handle transaction
+        try:
+            event = PURLEventsOutbox(
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                event_key=event_key,
+                payload=payload,
+                status=EventStatus.PENDING.value
+            )
+            self.db.add(event)
+            # Don't commit here - let caller handle transaction
+        except Exception as e:
+            # Don't fail the main operation if event emission fails
+            logger.warning(f"Failed to emit event {event_key}: {e}")
