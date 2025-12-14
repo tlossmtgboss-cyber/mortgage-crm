@@ -326,17 +326,15 @@ async def list_themes(
             logger.info("No themes found, seeding defaults...")
             seed_default_themes(db)
 
+        # Use string value for enum comparison (PostgreSQL enums are lowercase)
         query = db.query(MicrositeTheme).filter(
-            MicrositeTheme.status == ThemeStatus.ACTIVE
+            MicrositeTheme.status == 'active'
         )
 
         # Filter by category
         if category:
-            try:
-                cat_enum = ThemeCategory(category)
-                query = query.filter(MicrositeTheme.category == cat_enum)
-            except ValueError:
-                pass  # Invalid category, ignore filter
+            # Use lowercase string value for category enum
+            query = query.filter(MicrositeTheme.category == category.lower())
 
         # Filter featured only
         if featured_only:
@@ -349,7 +347,7 @@ async def list_themes(
 
         # Get featured themes separately
         featured_query = db.query(MicrositeTheme).filter(
-            MicrositeTheme.status == ThemeStatus.ACTIVE,
+            MicrositeTheme.status == 'active',
             MicrositeTheme.is_featured == True
         ).order_by(MicrositeTheme.display_order).limit(5)
         featured_themes = featured_query.all()
