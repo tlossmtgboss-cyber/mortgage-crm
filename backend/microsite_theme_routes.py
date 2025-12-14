@@ -272,6 +272,32 @@ def ensure_themes_table_exists(db: Session):
 
     if 'microsite_themes' not in tables:
         logger.info("microsite_themes table does not exist, creating...")
+
+        # First, create the enum types if they don't exist
+        with engine.connect() as conn:
+            # Create theme category enum
+            conn.execute(text("""
+                DO $$ BEGIN
+                    CREATE TYPE microsite_theme_category AS ENUM (
+                        'professional', 'modern', 'classic', 'minimal', 'bold', 'elegant', 'custom'
+                    );
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+            """))
+
+            # Create theme status enum
+            conn.execute(text("""
+                DO $$ BEGIN
+                    CREATE TYPE microsite_theme_status AS ENUM (
+                        'active', 'draft', 'deprecated', 'archived'
+                    );
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+            """))
+            conn.commit()
+
         # Import models to register them with Base
         from microsite_models import MicrositeTheme, Microsite, MicrositeProfile
         from database import Base
