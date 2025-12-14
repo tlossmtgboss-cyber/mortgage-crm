@@ -19411,7 +19411,9 @@ try:
     app.include_router(smart_scheduler_router, tags=["Smart Scheduler"])
     logger.info("✅ Smart Scheduler routes loaded")
 except Exception as e:
-    logger.warning(f"⚠️ Could not load Smart Scheduler routes: {e}")
+    import traceback
+    logger.error(f"⚠️ Could not load Smart Scheduler routes: {e}")
+    logger.error(f"Smart Scheduler traceback: {traceback.format_exc()}")
 
 # Include Enhanced Scheduler routes (Advanced features)
 try:
@@ -33434,13 +33436,29 @@ async def health_check(db: Session = Depends(get_db)):
     """Basic health check - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2024.12.14.1"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2024.12.14.2"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
             status_code=503,
             content={"status": "unhealthy", "error": str(e)}
         )
+
+
+@app.get("/debug/routers")
+async def debug_routers():
+    """Debug endpoint to check loaded routers"""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'path'):
+            routes.append(route.path)
+    scheduler_routes = [r for r in routes if 'scheduler' in r.lower()]
+    return {
+        "total_routes": len(routes),
+        "scheduler_routes_count": len(scheduler_routes),
+        "scheduler_routes_sample": scheduler_routes[:20] if scheduler_routes else [],
+        "smart_scheduler_loaded": any('/api/v1/scheduler/' in r for r in routes)
+    }
 
 
 @app.get("/health/detailed")
