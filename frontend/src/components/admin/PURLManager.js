@@ -26,13 +26,24 @@ const getAuthHeaders = () => ({
 const purlAdminApi = {
   baseUrl: `${API_BASE}/api/v1/purl-admin`,
 
+  async searchContacts(query) {
+    const response = await fetch(`${this.baseUrl}/contacts/search?q=${encodeURIComponent(query)}&limit=10`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to search contacts');
+    return response.json();
+  },
+
   async createWorkspace(data) {
     const response = await fetch(`${this.baseUrl}/workspaces`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to create workspace');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to create workspace' }));
+      throw new Error(error.detail || 'Failed to create workspace');
+    }
     return response.json();
   },
 
@@ -302,19 +313,116 @@ function WorkspaceCard({ workspace, onClick }) {
 // =============================================================================
 
 function CreateWorkspaceModal({ onClose, onCreate }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isNewContact, setIsNewContact] = useState(false);
   const [formData, setFormData] = useState({
-    contact_id: '',
+    borrower_name: '',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
     loan_id: '',
     custom_slug: '',
-    settings: {},
   });
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const searchTimeoutRef = React.useRef(null);
+
+  // Debounced search
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    setError('');
+
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Debounce search
+    searchTimeoutRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await purlAdminApi.searchContacts(query);
+        setSearchResults(results.contacts || []);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error('Search failed:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  };
+
+  const handleSelectContact = (contact) => {
+    if (contact.has_workspace) {
+      setError(`This borrower already has a client portal (${contact.existing_workspace?.workspace_slug})`);
+      return;
+    }
+    setSelectedContact(contact);
+    setSearchQuery(contact.name);
+    setShowDropdown(false);
+    setIsNewContact(false);
+  };
+
+  const handleCreateNew = () => {
+    setIsNewContact(true);
+    setSelectedContact(null);
+    setShowDropdown(false);
+    setFormData({
+      ...formData,
+      borrower_name: searchQuery,
+      first_name: searchQuery.split(' ')[0] || '',
+      last_name: searchQuery.split(' ').slice(1).join(' ') || '',
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedContact(null);
+    setSearchQuery('');
+    setIsNewContact(false);
+    setError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setError('');
+
     try {
-      await onCreate(formData);
+      let payload = {
+        custom_slug: formData.custom_slug || undefined,
+        loan_id: formData.loan_id ? parseInt(formData.loan_id) : undefined,
+      };
+
+      if (selectedContact) {
+        payload.lead_id = selectedContact.id;
+      } else if (isNewContact) {
+        payload.borrower_name = formData.borrower_name || searchQuery;
+        payload.first_name = formData.first_name;
+        payload.last_name = formData.last_name;
+        payload.email = formData.email;
+        payload.phone = formData.phone;
+      } else {
+        setError('Please select a borrower or create a new one');
+        setSubmitting(false);
+        return;
+      }
+
+      await onCreate(payload);
+    } catch (err) {
+      setError(err.message || 'Failed to create workspace');
     } finally {
       setSubmitting(false);
     }
@@ -329,15 +437,188 @@ function CreateWorkspaceModal({ onClose, onCreate }) {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {error && (
+            <div className="form-error" style={{
+              background: '#fee2e2',
+              border: '1px solid #ef4444',
+              color: '#dc2626',
+              padding: '0.75rem',
+              borderRadius: '0.375rem',
+              marginBottom: '1rem',
+              fontSize: '0.875rem'
+            }}>
+              {error}
+            </div>
+          )}
+
           <div className="form-group">
-            <label>Contact ID *</label>
-            <input
-              type="text"
-              value={formData.contact_id}
-              onChange={e => setFormData({...formData, contact_id: e.target.value})}
-              placeholder="Enter contact ID"
-              required
-            />
+            <label>Borrower Name *</label>
+            {selectedContact ? (
+              <div className="selected-contact" style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem',
+                background: '#f0fdf4',
+                border: '1px solid #22c55e',
+                borderRadius: '0.375rem'
+              }}>
+                <div>
+                  <strong>{selectedContact.name}</strong>
+                  {selectedContact.email && <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>{selectedContact.email}</span>}
+                  <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                    Stage: {selectedContact.stage || 'N/A'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '1.25rem',
+                    color: '#6b7280'
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+            ) : isNewContact ? (
+              <div style={{ background: '#fefce8', border: '1px solid #eab308', borderRadius: '0.375rem', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: '500' }}>Creating new borrower</span>
+                  <button
+                    type="button"
+                    onClick={handleClearSelection}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem' }}
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={formData.first_name}
+                    onChange={e => setFormData({...formData, first_name: e.target.value})}
+                    placeholder="First name"
+                    style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                  />
+                  <input
+                    type="text"
+                    value={formData.last_name}
+                    onChange={e => setFormData({...formData, last_name: e.target.value})}
+                    placeholder="Last name"
+                    style={{ padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem' }}
+                  />
+                </div>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                  placeholder="Email (optional)"
+                  style={{ marginTop: '0.5rem', width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', boxSizing: 'border-box' }}
+                />
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={e => setFormData({...formData, phone: e.target.value})}
+                  placeholder="Phone (optional)"
+                  style={{ marginTop: '0.5rem', width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.25rem', boxSizing: 'border-box' }}
+                />
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+                  placeholder="Type borrower name to search..."
+                  autoComplete="off"
+                />
+                {isSearching && (
+                  <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                    Searching...
+                  </span>
+                )}
+                {showDropdown && (
+                  <div className="search-dropdown" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: 'white',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                    maxHeight: '240px',
+                    overflowY: 'auto',
+                    zIndex: 10
+                  }}>
+                    {searchResults.length === 0 ? (
+                      <div style={{ padding: '0.75rem', color: '#6b7280', textAlign: 'center' }}>
+                        No matches found
+                      </div>
+                    ) : (
+                      searchResults.map(contact => (
+                        <div
+                          key={contact.id}
+                          onClick={() => handleSelectContact(contact)}
+                          style={{
+                            padding: '0.75rem',
+                            cursor: contact.has_workspace ? 'not-allowed' : 'pointer',
+                            borderBottom: '1px solid #f3f4f6',
+                            background: contact.has_workspace ? '#f9fafb' : 'white',
+                            opacity: contact.has_workspace ? 0.7 : 1,
+                          }}
+                          onMouseEnter={e => !contact.has_workspace && (e.target.style.background = '#f3f4f6')}
+                          onMouseLeave={e => !contact.has_workspace && (e.target.style.background = 'white')}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <strong>{contact.name}</strong>
+                              {contact.email && <span style={{ color: '#6b7280', marginLeft: '0.5rem', fontSize: '0.875rem' }}>{contact.email}</span>}
+                            </div>
+                            {contact.has_workspace && (
+                              <span style={{
+                                fontSize: '0.75rem',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                padding: '0.125rem 0.5rem',
+                                borderRadius: '9999px'
+                              }}>
+                                Has Portal
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                            {contact.phone && <span>{contact.phone}</span>}
+                            {contact.stage && <span style={{ marginLeft: '0.5rem' }}>• {contact.stage}</span>}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <div
+                      onClick={handleCreateNew}
+                      style={{
+                        padding: '0.75rem',
+                        cursor: 'pointer',
+                        background: '#eff6ff',
+                        color: '#2563eb',
+                        fontWeight: '500',
+                        borderTop: '1px solid #d1d5db'
+                      }}
+                      onMouseEnter={e => e.target.style.background = '#dbeafe'}
+                      onMouseLeave={e => e.target.style.background = '#eff6ff'}
+                    >
+                      + Create new borrower "{searchQuery}"
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <small>Search for an existing borrower or create a new one</small>
           </div>
 
           <div className="form-group">
@@ -365,7 +646,11 @@ function CreateWorkspaceModal({ onClose, onCreate }) {
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting || (!selectedContact && !isNewContact)}
+            >
               {submitting ? 'Creating...' : 'Create Workspace'}
             </button>
           </div>

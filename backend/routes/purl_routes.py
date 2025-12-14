@@ -731,8 +731,94 @@ async def mark_message_read(
 
 
 # =============================================================================
+# INTERNAL ADMIN ENDPOINTS - Lead/Contact Search
+# =============================================================================
+
+@purl_admin_router.get(
+    "/contacts/search",
+    summary="Search leads/contacts by name",
+    description="Search for leads by name to create a workspace"
+)
+async def search_contacts_for_workspace(
+    q: str = Query(..., min_length=1, description="Search query (name)"),
+    limit: int = Query(10, ge=1, le=50, description="Max results"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Search leads by name for workspace creation.
+    Returns leads that match the search query along with their existing workspace status.
+    """
+    from main import Lead
+    from sqlalchemy import or_, cast, String
+
+    search_term = f"%{q}%"
+
+    # Search leads by name (full name or first/last name)
+    leads = db.query(Lead).filter(
+        Lead.owner_id == current_user.id,
+        or_(
+            Lead.name.ilike(search_term),
+            Lead.first_name.ilike(search_term),
+            Lead.last_name.ilike(search_term),
+            (Lead.first_name + " " + Lead.last_name).ilike(search_term)
+        )
+    ).order_by(Lead.name).limit(limit).all()
+
+    # Check which leads already have workspaces
+    lead_ids = [str(lead.id) for lead in leads]
+    existing_workspaces = {}
+
+    if lead_ids:
+        # Find workspaces that have these lead_ids in their metadata
+        workspaces_with_leads = db.query(PURLWorkspace).filter(
+            PURLWorkspace.organization_id == current_user.organization_id,
+            PURLWorkspace.meta_data['lead_id'].astext.in_(lead_ids)
+        ).all()
+
+        for ws in workspaces_with_leads:
+            lead_id = ws.meta_data.get('lead_id')
+            if lead_id:
+                existing_workspaces[str(lead_id)] = {
+                    "workspace_id": ws.id,
+                    "workspace_slug": ws.slug,
+                    "status": ws.status
+                }
+
+    return {
+        "contacts": [
+            {
+                "id": lead.id,
+                "name": lead.name,
+                "first_name": lead.first_name,
+                "last_name": lead.last_name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "stage": lead.stage.value if lead.stage else None,
+                "has_workspace": str(lead.id) in existing_workspaces,
+                "existing_workspace": existing_workspaces.get(str(lead.id))
+            }
+            for lead in leads
+        ],
+        "total": len(leads)
+    }
+
+
+# =============================================================================
 # INTERNAL ADMIN ENDPOINTS - Workspace Management
 # =============================================================================
+
+class WorkspaceCreateRequest(BaseModel):
+    """Extended workspace creation request with lead linking."""
+    lead_id: Optional[int] = Field(None, description="Lead ID to link to this workspace")
+    borrower_name: Optional[str] = Field(None, description="Borrower name (required if no lead_id)")
+    first_name: Optional[str] = Field(None, description="Borrower first name")
+    last_name: Optional[str] = Field(None, description="Borrower last name")
+    email: Optional[str] = Field(None, description="Borrower email")
+    phone: Optional[str] = Field(None, description="Borrower phone")
+    loan_id: Optional[int] = Field(None, description="Optional loan ID to link")
+    custom_slug: Optional[str] = Field(None, description="Custom workspace slug")
+
 
 @purl_admin_router.post(
     "/workspaces",
@@ -740,20 +826,91 @@ async def mark_message_read(
     description="Create a new PURL workspace"
 )
 async def create_workspace(
-    workspace: WorkspaceCreate,
+    request: WorkspaceCreateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new PURL workspace with initial contacts."""
+    """Create a new PURL workspace with duplicate prevention."""
+    from main import Lead
+
+    # Get lead if lead_id provided
+    lead = None
+    if request.lead_id:
+        lead = db.query(Lead).filter(
+            Lead.id == request.lead_id,
+            Lead.owner_id == current_user.id
+        ).first()
+
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # Check for existing workspace for this lead
+        existing = db.query(PURLWorkspace).filter(
+            PURLWorkspace.organization_id == current_user.organization_id,
+            PURLWorkspace.meta_data['lead_id'].astext == str(request.lead_id)
+        ).first()
+
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"A client portal already exists for this borrower (workspace: {existing.slug})"
+            )
+
+    # Determine display name
+    if lead:
+        display_name = lead.name or f"{lead.first_name or ''} {lead.last_name or ''}".strip()
+    elif request.borrower_name:
+        display_name = request.borrower_name
+    elif request.first_name or request.last_name:
+        display_name = f"{request.first_name or ''} {request.last_name or ''}".strip()
+    else:
+        raise HTTPException(status_code=400, detail="Borrower name is required")
+
+    # Build metadata with lead/loan linking
+    metadata = {}
+    if request.lead_id:
+        metadata['lead_id'] = str(request.lead_id)
+    if request.loan_id:
+        metadata['loan_id'] = str(request.loan_id)
+
+    # Create workspace using service
     service = PURLWorkspaceService(db)
+
+    workspace_data = WorkspaceCreate(
+        display_name=display_name,
+        slug=request.custom_slug or None,
+        source="purl_manager",
+        owner_user_id=current_user.id,
+        metadata=metadata
+    )
 
     try:
         result = service.create_workspace(
             organization_id=current_user.organization_id,
-            data=workspace
+            data=workspace_data,
+            owner_user_id=current_user.id
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Add borrower as primary contact
+    borrower_email = lead.email if lead else request.email
+    borrower_phone = lead.phone if lead else request.phone
+    borrower_first = (lead.first_name if lead else request.first_name) or display_name.split()[0] if display_name else None
+    borrower_last = (lead.last_name if lead else request.last_name) or (display_name.split()[-1] if len(display_name.split()) > 1 else None)
+
+    if borrower_email or borrower_phone:
+        contact = PURLContact(
+            organization_id=current_user.organization_id,
+            workspace_id=result["id"],
+            contact_type="borrower",
+            first_name=borrower_first,
+            last_name=borrower_last,
+            email=borrower_email,
+            phone=borrower_phone
+        )
+        db.add(contact)
+        db.commit()
 
     return {
         "success": True,
@@ -798,8 +955,11 @@ async def list_workspaces(
                 "id": ws.id,
                 "slug": ws.slug,
                 "display_name": ws.display_name,
+                "borrower_name": ws.display_name,  # Alias for frontend compatibility
                 "status": ws.status,
-                "created_at": ws.created_at.isoformat() if ws.created_at else None
+                "created_at": ws.created_at.isoformat() if ws.created_at else None,
+                "lead_id": ws.meta_data.get('lead_id') if ws.meta_data else None,
+                "loan_id": ws.meta_data.get('loan_id') if ws.meta_data else None,
             }
             for ws in workspaces
         ]
