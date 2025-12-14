@@ -262,57 +262,43 @@ def seed_default_themes(db: Session):
 def ensure_themes_table_exists(db: Session):
     """
     Ensure the microsite_themes table exists and is seeded.
-    Creates the table if it doesn't exist.
+    Creates the table if it doesn't exist using the raw SQL migration.
     """
-    from sqlalchemy import text, inspect
+    from sqlalchemy import text
     from database import engine
+    from pathlib import Path
 
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-
-    if 'microsite_themes' not in tables:
-        logger.info("microsite_themes table does not exist, creating...")
-
-        # First, create the enum types if they don't exist
+    try:
+        # Check if table exists
         with engine.connect() as conn:
-            # Create theme category enum
-            conn.execute(text("""
-                DO $$ BEGIN
-                    CREATE TYPE microsite_theme_category AS ENUM (
-                        'professional', 'modern', 'classic', 'minimal', 'bold', 'elegant', 'custom'
-                    );
-                EXCEPTION
-                    WHEN duplicate_object THEN NULL;
-                END $$;
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name = 'microsite_themes'
+                )
             """))
+            table_exists = result.scalar()
 
-            # Create theme status enum
-            conn.execute(text("""
-                DO $$ BEGIN
-                    CREATE TYPE microsite_theme_status AS ENUM (
-                        'active', 'draft', 'deprecated', 'archived'
-                    );
-                EXCEPTION
-                    WHEN duplicate_object THEN NULL;
-                END $$;
-            """))
-            conn.commit()
+            if not table_exists:
+                logger.info("microsite_themes table does not exist, creating via migration...")
 
-        # Import models to register them with Base
-        from microsite_models import MicrositeTheme, Microsite, MicrositeProfile
-        from database import Base
+                # Read and execute the migration SQL file
+                migration_path = Path(__file__).parent / "migrations" / "add_microsite_themes.sql"
+                if migration_path.exists():
+                    sql = migration_path.read_text()
+                    conn.execute(text(sql))
+                    conn.commit()
+                    logger.info("Migration executed successfully")
+                    return True
+                else:
+                    logger.error(f"Migration file not found at {migration_path}")
+                    return False
 
-        # Create only the microsite tables
-        Base.metadata.create_all(
-            bind=engine,
-            tables=[
-                MicrositeTheme.__table__,
-                Microsite.__table__,
-                MicrositeProfile.__table__
-            ]
-        )
-        logger.info("Created microsite tables")
-        return True
+    except Exception as e:
+        logger.error(f"Error ensuring themes table exists: {e}")
+        # Don't raise - try to continue anyway
+
     return False
 
 
@@ -375,8 +361,10 @@ async def list_themes(
         )
 
     except Exception as e:
-        logger.error(f"Error listing themes: {e}")
-        raise HTTPException(status_code=500, detail="Error loading themes")
+        import traceback
+        error_trace = traceback.format_exc()
+        logger.error(f"Error listing themes: {e}\n{error_trace}")
+        raise HTTPException(status_code=500, detail=f"Error loading themes: {str(e)}")
 
 
 @public_router.get("/{theme_slug}", response_model=ThemeResponse)
