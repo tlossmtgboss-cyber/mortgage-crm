@@ -680,6 +680,73 @@ async def run_email_response_training_migration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/rename-theme")
+async def rename_microsite_theme(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Rename 'LeadPops Cardinal' theme to 'Bold Impact'
+    Updates both slug and name in the database
+    """
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        logger.info("Renaming theme from 'LeadPops Cardinal' to 'Bold Impact'...")
+
+        with engine.connect() as conn:
+            # Update the theme
+            result = conn.execute(text("""
+                UPDATE microsite_themes
+                SET slug = 'bold-impact',
+                    name = 'Bold Impact',
+                    description = 'A bold, modern theme with strong call-to-actions and lead capture focus.'
+                WHERE slug = 'leadpops-cardinal'
+                RETURNING id, slug, name
+            """))
+
+            updated = result.fetchone()
+            conn.commit()
+
+            if updated:
+                logger.info(f"Theme renamed: {updated}")
+                return {
+                    "status": "success",
+                    "message": "Theme renamed from 'LeadPops Cardinal' to 'Bold Impact'",
+                    "theme": {
+                        "id": updated[0],
+                        "slug": updated[1],
+                        "name": updated[2]
+                    }
+                }
+            else:
+                # Check if already renamed
+                result = conn.execute(text("""
+                    SELECT id, slug, name FROM microsite_themes WHERE slug = 'bold-impact'
+                """))
+                existing = result.fetchone()
+
+                if existing:
+                    return {
+                        "status": "success",
+                        "message": "Theme is already named 'Bold Impact'",
+                        "theme": {
+                            "id": existing[0],
+                            "slug": existing[1],
+                            "name": existing[2]
+                        }
+                    }
+                else:
+                    return {
+                        "status": "warning",
+                        "message": "Theme 'leadpops-cardinal' not found in database"
+                    }
+
+    except Exception as e:
+        logger.error(f"Theme rename error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/add-microsite-themes")
 async def run_microsite_themes_migration(
     admin: Any = Depends(get_admin_user)

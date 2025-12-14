@@ -170,9 +170,9 @@ def seed_default_themes(db: Session):
 
     default_themes = [
         {
-            "slug": "leadpops-cardinal",
-            "name": "LeadPops Cardinal",
-            "description": "A bold, modern theme inspired by LeadPops with strong call-to-actions and lead capture focus.",
+            "slug": "bold-impact",
+            "name": "Bold Impact",
+            "description": "A bold, modern theme with strong call-to-actions and lead capture focus.",
             "category": ThemeCategory.BOLD,
             "component_name": "LeadPopsCardinal",
             "features": ["hero_image", "contact_form", "rate_calculator", "testimonials", "about_section"],
@@ -441,7 +441,7 @@ async def get_public_microsite(
         # If no microsite configured, use default theme
         if not microsite:
             default_theme = db.query(MicrositeTheme).filter(
-                MicrositeTheme.slug == "leadpops-cardinal"
+                MicrositeTheme.slug == "bold-impact"
             ).first()
 
             if not default_theme:
