@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import './MicrositeThemeSelector.css';
+import MicrositeThemeCustomizer from './MicrositeThemeCustomizer';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -44,6 +45,8 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
   const [microsite, setMicrosite] = useState(null);
   const [saving, setSaving] = useState(false);
   const [userSlug, setUserSlug] = useState(null);
+  const [showCustomizer, setShowCustomizer] = useState(false);
+  const [themeConfig, setThemeConfig] = useState({});
 
   // Get auth headers
   const getAuthHeaders = () => ({
@@ -87,6 +90,9 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
         setMicrosite(data);
         if (data.themeId) {
           setSelectedTheme(data.themeId);
+        }
+        if (data.themeConfig) {
+          setThemeConfig(data.themeConfig);
         }
       }
     } catch (err) {
@@ -204,6 +210,14 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
           <p>Select a professional theme for your loan officer microsite</p>
         </div>
         <div className="header-actions">
+          {selectedTheme && (
+            <button
+              className="customize-btn"
+              onClick={() => setShowCustomizer(!showCustomizer)}
+            >
+              {showCustomizer ? 'Hide Customizer' : 'Customize Theme'}
+            </button>
+          )}
           {userSlug && (
             <a
               href={`/lo/${userSlug}`}
@@ -228,6 +242,21 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
           )}
         </div>
       </div>
+
+      {/* Theme Customizer */}
+      {showCustomizer && selectedTheme && (
+        <div className="customizer-container">
+          <MicrositeThemeCustomizer
+            theme={themes.find(t => t.id === selectedTheme)}
+            currentConfig={themeConfig}
+            onConfigChange={(newConfig) => setThemeConfig(newConfig)}
+            onSave={(savedConfig) => {
+              setThemeConfig(savedConfig);
+              fetchMicrosite();
+            }}
+          />
+        </div>
+      )}
 
       {/* Category Filter */}
       <div className="category-filter">

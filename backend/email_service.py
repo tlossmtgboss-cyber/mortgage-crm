@@ -791,6 +791,233 @@ This meeting invite was sent via Pipeline 360 CRM
 
         return self.send_html_email(to_email, subject, html_body, plain_text)
 
+    def format_new_lead_notification(
+        self,
+        lo_name: str,
+        lead_name: str,
+        lead_email: str,
+        lead_phone: Optional[str],
+        loan_type: str,
+        source: str,
+        message: Optional[str] = None,
+        lead_id: Optional[int] = None
+    ) -> str:
+        """Format new lead notification email as HTML"""
+        phone_html = f"<strong>Phone:</strong> <a href='tel:{lead_phone}'>{lead_phone}</a>" if lead_phone else "<strong>Phone:</strong> Not provided"
+        message_html = f"""
+            <div style="margin-top: 16px; padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 4px solid #c9a227;">
+                <strong>Message from lead:</strong>
+                <p style="margin: 8px 0 0 0; color: #4b5563; font-style: italic;">"{message}"</p>
+            </div>
+        """ if message else ""
+
+        crm_link = os.getenv('FRONTEND_URL', 'https://pipeline360.vercel.app')
+        lead_link = f"{crm_link}/leads/{lead_id}" if lead_id else crm_link
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #e5e7eb;
+        }}
+        .header h1 {{
+            color: #c9a227;
+            font-size: 24px;
+            margin: 0;
+        }}
+        .alert-badge {{
+            display: inline-block;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }}
+        h2 {{
+            color: #1a1a2e;
+            margin: 0 0 16px 0;
+            font-size: 20px;
+        }}
+        .lead-card {{
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }}
+        .lead-card p {{
+            margin: 8px 0;
+            color: #374151;
+        }}
+        .lead-card a {{
+            color: #2563eb;
+        }}
+        .loan-type {{
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }}
+        .btn-primary {{
+            display: inline-block;
+            background: #c9a227;
+            color: white !important;
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 16px 0;
+        }}
+        .btn-primary:hover {{
+            background: #a68820;
+        }}
+        .tips {{
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }}
+        .tips h4 {{
+            margin: 0 0 12px 0;
+            color: #374151;
+            font-size: 14px;
+        }}
+        .tips ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+        .tips li {{
+            margin: 6px 0;
+            color: #6b7280;
+            font-size: 13px;
+        }}
+        .footer {{
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 12px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="alert-badge">New Lead Alert</span>
+            <h1>You Have a New Lead!</h1>
+        </div>
+
+        <p>Hi {lo_name},</p>
+        <p>Great news! Someone just submitted a lead form on your microsite.</p>
+
+        <div class="lead-card">
+            <h2>{lead_name}</h2>
+            <p><strong>Email:</strong> <a href="mailto:{lead_email}">{lead_email}</a></p>
+            <p>{phone_html}</p>
+            <p><strong>Loan Type:</strong> <span class="loan-type">{loan_type.replace('_', ' ')}</span></p>
+            <p><strong>Source:</strong> {source}</p>
+        </div>
+
+        {message_html}
+
+        <div style="text-align: center;">
+            <a href="{lead_link}" class="btn-primary">View Lead in CRM</a>
+        </div>
+
+        <div class="tips">
+            <h4>Quick Tips for Following Up:</h4>
+            <ul>
+                <li>Respond within the first 5 minutes for best results</li>
+                <li>Call first, then follow up with an email</li>
+                <li>Reference their specific loan type in your outreach</li>
+                <li>Prepare rate quotes before your call</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>This notification was sent by Pipeline 360 CRM</p>
+            <p>Lead captured at {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        return html
+
+    def send_new_lead_notification(
+        self,
+        to_email: str,
+        lo_name: str,
+        lead_name: str,
+        lead_email: str,
+        lead_phone: Optional[str] = None,
+        loan_type: str = "purchase",
+        source: str = "microsite",
+        message: Optional[str] = None,
+        lead_id: Optional[int] = None
+    ) -> bool:
+        """Send new lead notification email to loan officer"""
+        subject = f"New Lead Alert: {lead_name} - {loan_type.replace('_', ' ').title()}"
+        html_body = self.format_new_lead_notification(
+            lo_name, lead_name, lead_email, lead_phone, loan_type, source, message, lead_id
+        )
+
+        plain_text = f"""
+New Lead Alert!
+
+Hi {lo_name},
+
+Great news! Someone just submitted a lead form on your microsite.
+
+LEAD DETAILS:
+- Name: {lead_name}
+- Email: {lead_email}
+- Phone: {lead_phone or 'Not provided'}
+- Loan Type: {loan_type.replace('_', ' ').title()}
+- Source: {source}
+{f'- Message: "{message}"' if message else ''}
+
+Log in to your CRM to view and follow up with this lead.
+
+Quick Tips:
+- Respond within the first 5 minutes for best results
+- Call first, then follow up with an email
+- Reference their specific loan type in your outreach
+
+This notification was sent by Pipeline 360 CRM
+"""
+
+        return self.send_html_email(to_email, subject, html_body, plain_text)
+
 
 # Global instance
 email_service = EmailService()
@@ -813,4 +1040,29 @@ async def send_meeting_invite_email(
         meeting_name=meeting_name,
         join_url=join_url,
         scheduled_time=scheduled_time
+    )
+
+
+async def send_lead_notification_email(
+    to_email: str,
+    lo_name: str,
+    lead_name: str,
+    lead_email: str,
+    lead_phone: Optional[str] = None,
+    loan_type: str = "purchase",
+    source: str = "microsite",
+    message: Optional[str] = None,
+    lead_id: Optional[int] = None
+) -> bool:
+    """Async wrapper for sending lead notification emails"""
+    return email_service.send_new_lead_notification(
+        to_email=to_email,
+        lo_name=lo_name,
+        lead_name=lead_name,
+        lead_email=lead_email,
+        lead_phone=lead_phone,
+        loan_type=loan_type,
+        source=source,
+        message=message,
+        lead_id=lead_id
     )

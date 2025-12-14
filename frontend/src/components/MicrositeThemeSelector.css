@@ -80,6 +80,27 @@
   font-weight: 600;
 }
 
+.customize-btn {
+  padding: 10px 20px;
+  background: var(--color-primary, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.customize-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Customizer Container */
+.customizer-container {
+  margin-bottom: 24px;
+}
+
 /* Category Filter */
 .category-filter {
   display: flex;

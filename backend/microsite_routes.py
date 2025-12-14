@@ -202,8 +202,34 @@ async def submit_microsite_lead(
                 from main import User
                 lo = db.query(User).filter(User.id == lead_data.loan_officer_id).first()
                 if lo and lo.email:
-                    # Queue notification (implement async email later)
-                    logger.info(f"Would notify LO {lo.email} about new lead")
+                    # Import and send notification email
+                    try:
+                        from email_service import send_lead_notification_email
+                        import asyncio
+
+                        # Get LO name
+                        lo_name = getattr(lo, 'name', None) or \
+                                  f"{getattr(lo, 'first_name', '')} {getattr(lo, 'last_name', '')}".strip() or \
+                                  "Loan Officer"
+
+                        # Build lead name
+                        lead_name = f"{lead_data.first_name} {lead_data.last_name}"
+
+                        # Send notification (run async in background)
+                        asyncio.create_task(send_lead_notification_email(
+                            to_email=lo.email,
+                            lo_name=lo_name,
+                            lead_name=lead_name,
+                            lead_email=lead_data.email,
+                            lead_phone=lead_data.phone,
+                            loan_type=lead_data.loan_type or "purchase",
+                            source=lead_data.source or "microsite",
+                            message=lead_data.message,
+                            lead_id=new_lead.id
+                        ))
+                        logger.info(f"Lead notification email queued for LO {lo.email}")
+                    except Exception as email_err:
+                        logger.warning(f"Could not send LO notification email: {email_err}")
         except Exception as e:
             logger.warning(f"Could not send LO notification: {e}")
 
