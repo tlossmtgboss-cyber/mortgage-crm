@@ -95,7 +95,9 @@ class ClaudeEmailParser:
                 'borrower_phone': {'type': 'phone', 'description': 'Borrower phone number'}
             },
             'loan_details': {
-                'loan_number': {'type': 'string', 'description': 'Loan number', 'required': True},
+                'loan_number': {'type': 'string', 'description': 'Loan number (e.g., RCA0000010794)', 'required': True},
+                'file_number': {'type': 'string', 'description': 'Lender file number (e.g., CMG-0154304) - different from loan_number'},
+                'lender_loan_number': {'type': 'string', 'description': 'Lender-specific loan identifier if different from primary loan number'},
                 'amount': {'type': 'currency', 'description': 'Loan amount'},
                 'rate': {'type': 'percentage', 'description': 'Interest rate'},
                 'term': {'type': 'integer', 'description': 'Loan term in years'},
@@ -425,6 +427,11 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
         elif profile_type == 'active_loan':
             prompt += """
 - CRITICAL: Extract loan_number if present (required field)
+- MULTIPLE LOAN NUMBERS: Emails may contain MULTIPLE loan identifiers. Extract ALL of them:
+  * loan_number: Primary loan number (e.g., RCA0000010794)
+  * file_number: Lender file number (e.g., CMG-0154304) - often appears at start of subject line
+  * lender_loan_number: Alternative lender ID if present
+  * Example subject: "CMG-0154304 [Stewart-RCA0000008590]: Order Complete" has BOTH CMG-0154304 (file_number) AND RCA0000008590 (loan_number)
 - Track ALL milestone dates mentioned (appraisal, title, closing, etc.)
 - Detect status changes (contract received, clear to close, funded)
 - Extract team member names and emails
