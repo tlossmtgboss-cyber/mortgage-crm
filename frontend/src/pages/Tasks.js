@@ -2045,66 +2045,73 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
 
   return (
     <div className="tasks-page" ref={containerRef}>
-      <div className="page-header">
-        <h1>Tasks</h1>
-        <p>{allTasks.length} total tasks</p>
+      <div className="tasks-container">
+        <div className="tasks-header">
+          <div className="header-content">
+            <h1>Tasks</h1>
+            <p>Manage and complete your outstanding tasks</p>
+
+            {/* Tab Navigation */}
+            <div className="tab-navigation">
+              <button
+                className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
+                onClick={() => setActiveTab('outstanding')}
+              >
+                Outstanding ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
+              </button>
+              <button
+                className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
+                onClick={() => setActiveTab('reconciliation')}
+              >
+                Reconciliation ({reconciliationStats.pending_count || 0})
+              </button>
+              <button
+                className={`tab-button ${activeTab === 'phone' ? 'active' : ''}`}
+                onClick={() => setActiveTab('phone')}
+              >
+                Phone ({phoneTasks.length})
+              </button>
+              <button
+                className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
+                onClick={() => setActiveTab('completed')}
+              >
+                Completed ({getCompletedTasks().length})
+              </button>
+            </div>
+          </div>
+          <div className="header-actions">
+            {/* Action button placeholder - can be customized per tab */}
+          </div>
+        </div>
+
+        {/* Outstanding Tasks Tab */}
+        {activeTab === 'outstanding' && (
+          <div className="tasks-content">
+            <TaskEmailLayout tasks={tabTasks} emptyMessage="No outstanding tasks" />
+          </div>
+        )}
+
+        {/* Reconciliation Tab */}
+        {activeTab === 'reconciliation' && (
+          <div className="tasks-content">
+            <ReconciliationEmailLayout />
+          </div>
+        )}
+
+        {/* Phone Tab */}
+        {activeTab === 'phone' && (
+          <div className="tasks-content">
+            <PhoneEmailLayout />
+          </div>
+        )}
+
+        {/* Completed Tasks Tab */}
+        {activeTab === 'completed' && (
+          <div className="tasks-content">
+            <TaskEmailLayout tasks={tabTasks} emptyMessage="No completed tasks yet" />
+          </div>
+        )}
       </div>
-
-      {/* Tab Navigation */}
-      <div className="task-tabs">
-        <button
-          className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
-          onClick={() => setActiveTab('outstanding')}
-        >
-          Outstanding Tasks ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reconciliation')}
-        >
-          📧 Reconciliation ({reconciliationStats.pending_count || 0})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'phone' ? 'active' : ''}`}
-          onClick={() => setActiveTab('phone')}
-        >
-          📞 Phone ({phoneTasks.length})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
-          onClick={() => setActiveTab('completed')}
-        >
-          ✅ Completed Tasks ({getCompletedTasks().length})
-        </button>
-      </div>
-
-      {/* Outstanding Tasks Tab */}
-      {activeTab === 'outstanding' && (
-        <div className="tab-content">
-          <TaskEmailLayout tasks={tabTasks} emptyMessage="No outstanding tasks" />
-        </div>
-      )}
-
-      {/* Reconciliation Tab */}
-      {activeTab === 'reconciliation' && (
-        <div className="tab-content">
-          <ReconciliationEmailLayout />
-        </div>
-      )}
-
-      {/* Phone Tab */}
-      {activeTab === 'phone' && (
-        <div className="tab-content">
-          <PhoneEmailLayout />
-        </div>
-      )}
-
-      {/* Completed Tasks Tab */}
-      {activeTab === 'completed' && (
-        <div className="tab-content">
-          <TaskEmailLayout tasks={tabTasks} emptyMessage="No completed tasks yet" />
-        </div>
-      )}
 
       {/* Delete and Delegate modals are now handled inside TaskDetailPanel */}
 

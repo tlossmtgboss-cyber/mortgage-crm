@@ -28,18 +28,88 @@
 }
 
 .tasks-page {
-  padding: var(--space-md) var(--space-xl);
-  padding-bottom: var(--space-3xl);
-  max-width: 100%;
+  padding: var(--space-xl);
+  max-width: 1400px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  /* Let the page grow naturally with content */
-  min-height: calc(100vh - 60px);
-  box-sizing: border-box;
-  width: 100%;
+  min-height: 100%;
+  overflow-y: auto;
 }
 
+.tasks-container {
+  /* Container wrapper */
+}
+
+/* Header - matches ReconciliationCenter style */
+.tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-xl);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border-light);
+  flex-wrap: nowrap;
+  gap: var(--space-lg);
+}
+
+.tasks-header .header-content h1 {
+  font-size: var(--font-3xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-xs) 0;
+}
+
+.tasks-header .header-content p {
+  font-size: var(--font-base);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.tasks-header .header-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Tab Navigation - matches ReconciliationCenter style */
+.tasks-page .tab-navigation {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.tasks-page .tab-button {
+  background: var(--color-bg-surface);
+  border: 2px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tasks-page .tab-button:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.tasks-page .tab-button.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+/* Main Content Layout */
+.tasks-content {
+  margin-top: var(--space-lg);
+}
+
+/* Legacy page-header support */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -507,40 +577,15 @@
   transform: scale(1.1);
 }
 
-/* Tabs */
+/* Legacy Tabs - deprecated in favor of .tab-navigation styles above */
+/* These are kept for backwards compatibility but overridden by .tasks-page scoped styles */
 .task-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  border-bottom: 2px solid #e5e7eb;
-  flex-shrink: 0;
+  display: none; /* Hide old tab container */
 }
 
-.tab-button {
-  padding: 10px 20px;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 500;
-  color: #666;
-  transition: all 0.2s;
-  position: relative;
-  bottom: -2px;
-}
-
-.tab-button:hover {
-  color: #18a0a6;
-}
-
-.tab-button.active {
-  color: #18a0a6;
-  border-bottom-color: #18a0a6;
-  font-weight: 600;
-}
-
-.tab-content {
+/* Tab content - supports both old .tab-content and new .tasks-content */
+.tab-content,
+.tasks-content {
   flex: 1 1 auto;
   min-height: 600px;
   display: flex;
@@ -902,14 +947,16 @@
     grid-template-columns: 1fr;
   }
 
-  .task-tabs {
+  .tasks-page .tab-navigation {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
   }
 
-  .tab-button {
+  .tasks-page .tab-button {
     white-space: nowrap;
     padding: var(--space-sm) var(--space-md);
+    font-size: var(--font-sm);
   }
 
   .message-item {
