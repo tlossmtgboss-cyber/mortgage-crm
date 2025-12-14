@@ -19289,6 +19289,15 @@ app.include_router(public_router, tags=["Public"])
 from microsite_routes import router as microsite_router
 app.include_router(microsite_router, tags=["Microsite"])
 
+# Include microsite theme marketplace routes
+try:
+    from microsite_theme_routes import public_router as theme_public_router, auth_router as theme_auth_router
+    app.include_router(theme_public_router, tags=["Microsite Themes (Public)"])
+    app.include_router(theme_auth_router, tags=["Microsite Configuration"])
+    logger.info("✅ Microsite Theme Marketplace routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load microsite theme routes: {e}")
+
 # Include borrower authentication routes (social login for applicants)
 from borrower_auth_routes import router as borrower_auth_router
 app.include_router(borrower_auth_router, tags=["Borrower Auth"])
@@ -20857,7 +20866,13 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     if "borrower_phone" in fields and fields["borrower_phone"].get("value"):
         extracted_phone = normalize_phone(fields["borrower_phone"]["value"])
 
-    logger.info(f"Matching with: name='{borrower_name}', email='{extracted_email}', phone='{extracted_phone}'")
+    logger.info(f"=" * 60)
+    logger.info(f"MATCH_ENTITY DEBUG - Starting match process")
+    logger.info(f"=" * 60)
+    logger.info(f"Input fields: {list(fields.keys()) if fields else 'None'}")
+    logger.info(f"Extracted borrower_name: '{borrower_name}'")
+    logger.info(f"Extracted email: '{extracted_email}'")
+    logger.info(f"Extracted phone: '{extracted_phone}'")
 
     # Collect all potential loan numbers from various fields
     loan_numbers_to_try = []
@@ -20875,6 +20890,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     # Remove duplicates while preserving order
     loan_numbers_to_try = list(dict.fromkeys(loan_numbers_to_try))
     logger.info(f"Loan numbers to try: {loan_numbers_to_try}")
+    logger.info(f"Total loan numbers to match: {len(loan_numbers_to_try)}")
 
     # Try to match by loan number first (highest confidence)
     # IMPORTANT: Check ALL tables and collect candidates, then pick the best match
@@ -20891,14 +20907,19 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
         # ========== CHECK MUM CLIENTS FIRST (Portfolio) ==========
         # MUM clients are portfolio/past clients - check these BEFORE loans
+        logger.info(f"[MUM] Searching MUM clients for loan_number='{loan_num}'")
         try:
+            # Count total MUM clients for context
+            total_mum = db.query(MUMClient).count()
+            logger.info(f"[MUM] Total MUM clients in database: {total_mum}")
+
             # Exact match (case-insensitive)
             mum_client = db.query(MUMClient).filter(
                 func.upper(MUMClient.loan_number) == loan_num_upper
             ).first()
 
             if mum_client:
-                logger.info(f"Found exact MUM client match by loan number: {mum_client.name} (id={mum_client.id})")
+                logger.info(f"[MUM] ✓ EXACT MATCH: {mum_client.name} (id={mum_client.id}, loan#={mum_client.loan_number})")
                 match_results["candidates"].append({
                     "type": "portfolio",
                     "id": mum_client.id,
@@ -20908,12 +20929,14 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                     "match_type": "mum_loan_number_exact"
                 })
             else:
+                logger.info(f"[MUM] No exact match for loan_number='{loan_num}'")
                 # Try partial match (case-insensitive)
                 mum_clients = db.query(MUMClient).filter(
                     MUMClient.loan_number.ilike(f"%{loan_num}%")
                 ).all()
+                logger.info(f"[MUM] Partial match search found {len(mum_clients)} clients")
                 for client in mum_clients:
-                    logger.info(f"Found partial MUM client match by loan number: {client.name}")
+                    logger.info(f"[MUM] ✓ PARTIAL MATCH: {client.name} (loan#={client.loan_number})")
                     match_results["candidates"].append({
                         "type": "portfolio",
                         "id": client.id,
@@ -21374,9 +21397,15 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
     # Check by name, email, phone
     if borrower_name or extracted_email or extracted_phone:
-        logger.info("Trying portfolio/MUM client match by name/email/phone...")
+        logger.info(f"[MUM-NAME] Starting name/email/phone matching for borrower='{borrower_name}'")
         try:
             all_mum_clients = db.query(MUMClient).all()
+            logger.info(f"[MUM-NAME] Checking {len(all_mum_clients)} MUM clients for name match")
+
+            # Log first 5 client names for debugging
+            sample_names = [c.name for c in all_mum_clients[:5]]
+            logger.info(f"[MUM-NAME] Sample MUM client names: {sample_names}")
+
             for client in all_mum_clients:
                 # Skip if already matched by loan number
                 existing = next((c for c in match_results["candidates"]
@@ -21423,15 +21452,27 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     # borrower_email, borrower_phone, and co_borrower_email (handled above)
 
     # Return best candidate if found
+    logger.info(f"=" * 60)
+    logger.info(f"MATCH_ENTITY DEBUG - Final Results")
+    logger.info(f"=" * 60)
+    logger.info(f"Total candidates found: {len(match_results['candidates'])}")
+
     if match_results["candidates"]:
+        # Log all candidates
+        for i, cand in enumerate(match_results["candidates"]):
+            logger.info(f"  Candidate {i+1}: {cand['type']} - {cand.get('name', 'N/A')} (id={cand['id']}, conf={cand['confidence']:.2f}, via={cand.get('match_type', 'unknown')})")
+
         best = max(match_results["candidates"], key=lambda x: x["confidence"])
-        logger.info(f"Best match: {best['type']} id={best['id']} conf={best['confidence']:.2f} via {best.get('match_type', 'unknown')}")
+        logger.info(f"✓ BEST MATCH: {best['type']} - {best.get('name', 'N/A')} (id={best['id']}, conf={best['confidence']:.2f})")
         match_results["entity_type"] = best["type"]
         match_results["entity_id"] = best["id"]
         match_results["confidence"] = best["confidence"]
     else:
-        logger.info("No entity match found")
+        logger.info("✗ NO MATCH FOUND - All matching strategies failed")
+        logger.info(f"  Searched with: name='{borrower_name}', email='{extracted_email}', phone='{extracted_phone}'")
+        logger.info(f"  Loan numbers tried: {loan_numbers_to_try}")
 
+    logger.info(f"=" * 60)
     return match_results
 
 def classify_email_intent(subject: str, content: str, fields: Dict[str, Any]) -> Dict[str, Any]:
