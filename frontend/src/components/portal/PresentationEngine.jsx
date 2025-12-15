@@ -10,7 +10,7 @@
  * - Comparison tools
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import './PresentationEngine.css';
 
 // =============================================================================
@@ -75,7 +75,6 @@ export default function PresentationEngine({
 
   // Calculate base equity
   const equity = homeValue - loanBalance;
-  const ltv = (loanBalance / homeValue) * 100;
 
   return (
     <div className="presentation-engine">
@@ -171,7 +170,6 @@ function RefinanceCalculator({
     const newPayment = (loanBalance * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -numPayments));
 
     // Current loan remaining (assume 25 years left)
-    const currentMonthlyRate = currentRate / 100 / 12;
     const currentRemaining = 25 * 12;
     const currentTotalInterest = (monthlyPayment * currentRemaining) - loanBalance;
 
@@ -315,7 +313,7 @@ function CashOutCalculator({
 }) {
   const [cashOutAmount, setCashOutAmount] = useState(50000);
   const [newRate, setNewRate] = useState(currentRate + 0.25);
-  const [newTerm, setNewTerm] = useState(30);
+  const newTerm = 30; // Fixed 30-year term for cash-out
 
   const calculations = useMemo(() => {
     const maxLtv = 0.80;
@@ -336,7 +334,7 @@ function CashOutCalculator({
       newPayment,
       effectiveCashOut: Math.min(cashOutAmount, maxCashOut),
     };
-  }, [homeValue, loanBalance, cashOutAmount, newRate, newTerm]);
+  }, [homeValue, loanBalance, cashOutAmount, newRate]);
 
   return (
     <div className="calculator-panel cash-out">

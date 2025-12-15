@@ -25,7 +25,6 @@ import {
   borrowerPortalApi,
   closeOnTimeApi,
   lifecycleApi,
-  milestoneApi,
   documentApi,
   homeValueApi
 } from '../../services/portalApi';
