@@ -55,7 +55,7 @@ function LeadDetail() {
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
   const [activeTab, setActiveTab] = useState('loan-details');
-  const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info' or 'employment'
+  const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info', 'employment', or 'assets'
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [borrowers, setBorrowers] = useState([]);
@@ -2120,6 +2120,22 @@ function LeadDetail() {
               >
                 Employment
               </button>
+              <button
+                onClick={() => setPersonalSubTab('assets')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'assets' ? '600' : '400',
+                  color: personalSubTab === 'assets' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'assets' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Assets
+              </button>
             </div>
 
             {/* Personal Information Sub-tab Content */}
@@ -2269,6 +2285,253 @@ function LeadDetail() {
                 onFieldChange={handleFieldChange}
                 entityType="leads"
               />
+            )}
+
+            {/* Assets Sub-tab Content */}
+            {personalSubTab === 'assets' && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ margin: 0 }}>Assets</h2>
+                </div>
+
+                {/* Bank Accounts Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Bank Accounts</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Checking Account Balance</label>
+                      <input
+                        type="text"
+                        value={formData.checking_balance || ''}
+                        onChange={(e) => handleFieldChange('checking_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Savings Account Balance</label>
+                      <input
+                        type="text"
+                        value={formData.savings_balance || ''}
+                        onChange={(e) => handleFieldChange('savings_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Money Market Balance</label>
+                      <input
+                        type="text"
+                        value={formData.money_market_balance || ''}
+                        onChange={(e) => handleFieldChange('money_market_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>CD Balance</label>
+                      <input
+                        type="text"
+                        value={formData.cd_balance || ''}
+                        onChange={(e) => handleFieldChange('cd_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Investment Accounts Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Investment Accounts</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Stocks/Bonds Value</label>
+                      <input
+                        type="text"
+                        value={formData.stocks_bonds_value || ''}
+                        onChange={(e) => handleFieldChange('stocks_bonds_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Mutual Funds Value</label>
+                      <input
+                        type="text"
+                        value={formData.mutual_funds_value || ''}
+                        onChange={(e) => handleFieldChange('mutual_funds_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Brokerage Account Value</label>
+                      <input
+                        type="text"
+                        value={formData.brokerage_value || ''}
+                        onChange={(e) => handleFieldChange('brokerage_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Retirement Accounts Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Retirement Accounts</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>401(k) Balance</label>
+                      <input
+                        type="text"
+                        value={formData.retirement_401k || ''}
+                        onChange={(e) => handleFieldChange('retirement_401k', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>IRA Balance</label>
+                      <input
+                        type="text"
+                        value={formData.ira_balance || ''}
+                        onChange={(e) => handleFieldChange('ira_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Roth IRA Balance</label>
+                      <input
+                        type="text"
+                        value={formData.roth_ira_balance || ''}
+                        onChange={(e) => handleFieldChange('roth_ira_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Pension Value</label>
+                      <input
+                        type="text"
+                        value={formData.pension_value || ''}
+                        onChange={(e) => handleFieldChange('pension_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Other Assets Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Other Assets</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Real Estate (Other Properties)</label>
+                      <input
+                        type="text"
+                        value={formData.other_real_estate_value || ''}
+                        onChange={(e) => handleFieldChange('other_real_estate_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Vehicle Value</label>
+                      <input
+                        type="text"
+                        value={formData.vehicle_value || ''}
+                        onChange={(e) => handleFieldChange('vehicle_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Life Insurance Cash Value</label>
+                      <input
+                        type="text"
+                        value={formData.life_insurance_value || ''}
+                        onChange={(e) => handleFieldChange('life_insurance_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Other Assets</label>
+                      <input
+                        type="text"
+                        value={formData.other_assets_value || ''}
+                        onChange={(e) => handleFieldChange('other_assets_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Gift Funds Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Gift Funds</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Gift Amount</label>
+                      <input
+                        type="text"
+                        value={formData.gift_amount || ''}
+                        onChange={(e) => handleFieldChange('gift_amount', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Gift Donor Name</label>
+                      <input
+                        type="text"
+                        value={formData.gift_donor_name || ''}
+                        onChange={(e) => handleFieldChange('gift_donor_name', e.target.value)}
+                        placeholder="Donor's full name"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Gift Donor Relationship</label>
+                      <select
+                        value={formData.gift_donor_relationship || ''}
+                        onChange={(e) => handleFieldChange('gift_donor_relationship', e.target.value)}
+                        style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                      >
+                        <option value="">-- Select Relationship --</option>
+                        <option value="parent">Parent</option>
+                        <option value="grandparent">Grandparent</option>
+                        <option value="sibling">Sibling</option>
+                        <option value="spouse">Spouse</option>
+                        <option value="other_relative">Other Relative</option>
+                        <option value="employer">Employer</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Assets Summary */}
+                <div style={{
+                  background: '#f8f9fa',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  marginTop: '1rem',
+                  border: '1px solid #e0e0e0'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: '600', color: '#333' }}>Total Assets</span>
+                    <span style={{ fontWeight: '700', fontSize: '18px', color: '#1a73e8' }}>
+                      ${(
+                        parseFloat((formData.checking_balance || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.savings_balance || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.money_market_balance || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.cd_balance || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.stocks_bonds_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.mutual_funds_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.brokerage_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.retirement_401k || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.ira_balance || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.roth_ira_balance || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.pension_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.other_real_estate_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.vehicle_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.life_insurance_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.other_assets_value || '0').replace(/[^0-9.-]/g, '')) +
+                        parseFloat((formData.gift_amount || '0').replace(/[^0-9.-]/g, ''))
+                      ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </>
             )}
           </div>
           )}
