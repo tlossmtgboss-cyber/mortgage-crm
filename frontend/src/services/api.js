@@ -2024,6 +2024,29 @@ export const agentChatAPI = {
 
 // PURL (Client Portal) API
 export const purlAPI = {
+  // Health check for debugging
+  healthCheck: async () => {
+    try {
+      console.log('[PURL API] Health check - API Base URL:', API_BASE_URL);
+      console.log('[PURL API] Health check - Token exists:', !!localStorage.getItem('token'));
+      const response = await api.get('/api/v1/purl-admin/health');
+      console.log('[PURL API] Health check response:', response.data);
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('[PURL API] Health check failed:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL
+        }
+      });
+      return { success: false, error: error.message, details: error.response?.data };
+    }
+  },
+
   // Get workspace by lead ID (check if portal exists for this lead)
   getWorkspaceByLead: async (leadId, retryCount = 0) => {
     const maxRetries = 2;
@@ -2261,3 +2284,21 @@ export const perenniaDocsAPI = {
 };
 
 export default api;
+
+// Debug function for console - helps diagnose API issues
+if (typeof window !== 'undefined') {
+  window.debugPURLAPI = async () => {
+    console.log('=== PURL API Debug ===');
+    console.log('API Base URL:', API_BASE_URL);
+    console.log('Token exists:', !!localStorage.getItem('token'));
+    console.log('Token (first 20 chars):', localStorage.getItem('token')?.substring(0, 20) + '...');
+
+    console.log('\nTesting PURL health endpoint...');
+    const result = await purlAPI.healthCheck();
+    console.log('Health check result:', result);
+
+    console.log('\n=== End Debug ===');
+    return result;
+  };
+  console.log('[API] Debug function available: window.debugPURLAPI()');
+}

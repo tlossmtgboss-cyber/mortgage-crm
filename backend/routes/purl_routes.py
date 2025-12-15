@@ -154,6 +154,24 @@ purl_admin_router = APIRouter(prefix="/api/v1/purl-admin", tags=["PURL Administr
 
 
 # =============================================================================
+# HEALTH CHECK (no auth required for debugging)
+# =============================================================================
+
+@purl_admin_router.get("/health", summary="PURL Admin Health Check")
+async def purl_admin_health():
+    """
+    Health check endpoint for PURL admin routes.
+    Returns status information for debugging connection issues.
+    """
+    return {
+        "status": "ok",
+        "service": "purl-admin",
+        "routes_loaded": True,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+# =============================================================================
 # RESPONSE MODELS
 # =============================================================================
 
