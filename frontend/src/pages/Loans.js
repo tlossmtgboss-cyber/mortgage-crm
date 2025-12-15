@@ -137,56 +137,58 @@ function Loans() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Combine primary borrower data with property and loan data
+    const primaryBorrower = borrowers[0];
+
+    // Validate required fields
+    const fullName = `${primaryBorrower.first_name || ''} ${primaryBorrower.last_name || ''}`.trim();
+    if (!fullName) {
+      alert('Please enter borrower first name and last name');
+      return;
+    }
+
+    if (!loanData.loan_number) {
+      alert('Please enter a loan number');
+      return;
+    }
+
+    if (!loanData.amount) {
+      alert('Please enter a loan amount');
+      return;
+    }
+
+    // Build submit data matching backend LoanCreate model
+    // Defined outside try block so it's accessible in catch block for retry
+    const submitData = {
+      loan_number: loanData.loan_number,
+      borrower_name: fullName,
+      borrower_email: primaryBorrower.email || null,
+      borrower_phone: primaryBorrower.phone || null,
+      coborrower_name: borrowers.length > 1
+        ? `${borrowers[1].first_name || ''} ${borrowers[1].last_name || ''}`.trim() || null
+        : null,
+      amount: parseFloat(loanData.amount),
+      product_type: loanData.product_type || null,
+      loan_type: loanData.loan_type || null,
+      interest_rate: loanData.interest_rate ? parseFloat(loanData.interest_rate) : null,
+      term: loanData.term || 360,
+      purchase_price: propertyData.property_value ? parseFloat(propertyData.property_value) : null,
+      down_payment: propertyData.down_payment ? parseFloat(propertyData.down_payment) : null,
+      property_address: propertyData.address || null,
+      property_city: propertyData.city || null,
+      property_state: propertyData.state || null,
+      property_zip: propertyData.zip_code || null,
+      lock_date: loanData.lock_date ? `${loanData.lock_date}T00:00:00` : null,
+      closing_date: loanData.closing_date ? `${loanData.closing_date}T00:00:00` : null,
+      processor: loanData.processor || null,
+      underwriter: loanData.underwriter || null,
+      realtor_agent: loanData.realtor_agent || null,
+      title_company: loanData.title_company || null,
+      notes: loanData.notes || null,
+    };
+
     try {
-      // Combine primary borrower data with property and loan data
-      const primaryBorrower = borrowers[0];
-
-      // Validate required fields
-      const fullName = `${primaryBorrower.first_name || ''} ${primaryBorrower.last_name || ''}`.trim();
-      if (!fullName) {
-        alert('Please enter borrower first name and last name');
-        return;
-      }
-
-      if (!loanData.loan_number) {
-        alert('Please enter a loan number');
-        return;
-      }
-
-      if (!loanData.amount) {
-        alert('Please enter a loan amount');
-        return;
-      }
-
-      // Build submit data matching backend LoanCreate model
-      const submitData = {
-        loan_number: loanData.loan_number,
-        borrower_name: fullName,
-        borrower_email: primaryBorrower.email || null,
-        borrower_phone: primaryBorrower.phone || null,
-        coborrower_name: borrowers.length > 1
-          ? `${borrowers[1].first_name || ''} ${borrowers[1].last_name || ''}`.trim() || null
-          : null,
-        amount: parseFloat(loanData.amount),
-        product_type: loanData.product_type || null,
-        loan_type: loanData.loan_type || null,
-        interest_rate: loanData.interest_rate ? parseFloat(loanData.interest_rate) : null,
-        term: loanData.term || 360,
-        purchase_price: propertyData.property_value ? parseFloat(propertyData.property_value) : null,
-        down_payment: propertyData.down_payment ? parseFloat(propertyData.down_payment) : null,
-        property_address: propertyData.address || null,
-        property_city: propertyData.city || null,
-        property_state: propertyData.state || null,
-        property_zip: propertyData.zip_code || null,
-        lock_date: loanData.lock_date ? `${loanData.lock_date}T00:00:00` : null,
-        closing_date: loanData.closing_date ? `${loanData.closing_date}T00:00:00` : null,
-        processor: loanData.processor || null,
-        underwriter: loanData.underwriter || null,
-        realtor_agent: loanData.realtor_agent || null,
-        title_company: loanData.title_company || null,
-        notes: loanData.notes || null,
-      };
-
       console.log('Submitting loan data:', submitData);
       console.log('Auth token exists:', !!localStorage.getItem('token'));
 

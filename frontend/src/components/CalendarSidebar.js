@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../services/api';
 import './CalendarSidebar.css';
 
+// v1.1 - Added diagnostic logging
+console.log('[CalendarSidebar] Component loaded');
+
 function CalendarSidebar({ leadId, loanId, children }) {
+  console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -32,6 +36,10 @@ function CalendarSidebar({ leadId, loanId, children }) {
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
 
+      console.log('[CalendarSidebar] loadAppointments called');
+      console.log('[CalendarSidebar] Date range:', startDate.toISOString(), 'to', endDate.toISOString());
+      console.log('[CalendarSidebar] Filters - lead_id:', leadId, 'loan_id:', loanId);
+
       const data = await schedulerAPI.getAppointments({
         start_date: startDate.toISOString(),
         end_date: endDate.toISOString(),
@@ -39,14 +47,22 @@ function CalendarSidebar({ leadId, loanId, children }) {
         loan_id: loanId || undefined,
       });
 
+      console.log('[CalendarSidebar] Raw API response:', data);
+      console.log('[CalendarSidebar] Appointments count:', data?.length || 0);
+
       // Filter out cancelled appointments and sort by date
       const filteredAppointments = (data || [])
         .filter(appt => appt.status !== 'CANCELLED')
         .sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start));
 
+      console.log('[CalendarSidebar] Filtered appointments:', filteredAppointments.length);
+      if (filteredAppointments.length > 0) {
+        console.log('[CalendarSidebar] First appointment:', filteredAppointments[0]);
+      }
+
       setAppointments(filteredAppointments);
     } catch (error) {
-      console.error('Failed to load appointments:', error);
+      console.error('[CalendarSidebar] Failed to load appointments:', error);
       setAppointments([]);
     } finally {
       setLoading(false);
@@ -520,6 +536,16 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
       {/* View Full Calendar Link */}
       <div className="calendar-footer">
+        <button
+          className="refresh-calendar-btn"
+          onClick={() => {
+            console.log('[CalendarSidebar] Manual refresh triggered');
+            loadAppointments();
+          }}
+          style={{ marginRight: '10px', padding: '8px 12px', fontSize: '12px', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer' }}
+        >
+          ↻ Refresh
+        </button>
         <button
           className="view-calendar-btn"
           onClick={() => navigate('/calendar')}
