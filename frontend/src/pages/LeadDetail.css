@@ -8,7 +8,8 @@
 .lead-detail-page {
   flex: 1;
   padding: 32px;
-  max-width: 1600px;
+  padding-right: 312px; /* Account for fixed sidebar (280px + 32px padding) */
+  max-width: 100%;
   background: #ffffff;
   min-height: 100vh;
   min-width: 0;
@@ -631,18 +632,19 @@ button.borrower-btn.add-borrower-btn:hover {
   line-height: 1.4;
 }
 
-/* Two Column Layout */
+/* Main Content Layout */
 .detail-content {
-  display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-/* Left Column */
+/* Left Column - Now Full Width */
 .left-column {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
 }
 
 .info-section {
