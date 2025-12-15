@@ -3,7 +3,7 @@
   display: flex;
   width: 100%;
   min-height: calc(100vh - 60px);
-  overflow: visible;
+  overflow-y: auto;
   scrollbar-gutter: auto;
 }
 
@@ -16,7 +16,7 @@
   background: #ffffff;
   min-height: calc(100vh - 60px);
   min-width: 0;
-  overflow: visible;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
