@@ -1082,6 +1082,49 @@
   color: #1e293b;
 }
 
+.checklist-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checklist-due {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.checklist-empty {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.checklist-empty p {
+  margin: 0;
+}
+
+.checklist-item.status-done {
+  background: #f0fdf4;
+  opacity: 0.8;
+}
+
+.checklist-item.status-done .checklist-icon {
+  background: #dcfce7;
+  color: #22c55e;
+}
+
+.checklist-item.status-blocked {
+  background: #fef2f2;
+}
+
+.checklist-item.status-blocked .checklist-icon {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
 .upload-cta-btn {
   display: block;
   width: 100%;

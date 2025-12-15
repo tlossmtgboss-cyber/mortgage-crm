@@ -293,74 +293,106 @@ const LoanSummaryCard = ({ loan, workspace, contacts }) => {
   );
 };
 
-// Document Checklist Card - Shows required documents and their status
-const DocumentChecklistCard = ({ documents, onUploadClick }) => {
-  // Define required document categories
-  const requiredDocs = [
-    { category: 'income', label: 'Income Verification', types: ['paystub', 'w2', 'tax_return', '1099'] },
-    { category: 'assets', label: 'Asset Statements', types: ['bank_statement', 'investment_statement'] },
-    { category: 'identity', label: 'Identity Documents', types: ['drivers_license', 'passport', 'ssn_card'] },
-    { category: 'property', label: 'Property Documents', types: ['purchase_contract', 'insurance', 'appraisal'] },
-  ];
+// Needs List Card - Shows conditions/tasks from loan application submission
+const NeedsListCard = ({ tasks, onViewAll }) => {
+  // Filter to show pending tasks (conditions that need to be completed)
+  const pendingTasks = tasks?.filter(t =>
+    t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS'
+  ) || [];
+  const completedTasks = tasks?.filter(t =>
+    t.status === 'completed' || t.status === 'DONE'
+  ) || [];
 
-  // Check document status by category
-  const getDocStatus = (types) => {
-    const matchingDocs = documents?.filter(d =>
-      types.some(t => d.doc_type?.toLowerCase().includes(t) || d.document_type?.toLowerCase().includes(t))
-    ) || [];
+  const totalTasks = (tasks || []).length;
+  const completedCount = completedTasks.length;
+  const completionPct = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
 
-    if (matchingDocs.length === 0) return 'needed';
-    if (matchingDocs.some(d => d.status === 'verified' || d.status === 'approved')) return 'approved';
-    if (matchingDocs.some(d => d.status === 'rejected')) return 'rejected';
-    if (matchingDocs.some(d => d.status === 'needs_review' || d.status === 'processing')) return 'pending';
-    return 'uploaded';
+  // Map task status to display status
+  const getDisplayStatus = (status) => {
+    const statusMap = {
+      'open': 'needed',
+      'TODO': 'needed',
+      'IN_PROGRESS': 'pending',
+      'completed': 'done',
+      'DONE': 'done',
+      'BLOCKED': 'blocked',
+      'NA': 'na',
+    };
+    return statusMap[status] || 'needed';
   };
 
   const statusIcons = {
     needed: '○',
-    uploaded: '◐',
     pending: '◐',
-    approved: '●',
-    rejected: '✗',
+    done: '●',
+    blocked: '⚠',
+    na: '—',
   };
 
   const statusLabels = {
-    needed: 'Needed',
-    uploaded: 'Uploaded',
-    pending: 'In Review',
-    approved: 'Approved',
-    rejected: 'Needs Attention',
+    needed: 'Action Required',
+    pending: 'In Progress',
+    done: 'Complete',
+    blocked: 'Blocked',
+    na: 'N/A',
   };
 
-  // Calculate completion percentage
-  const completedCount = requiredDocs.filter(d => getDocStatus(d.types) === 'approved').length;
-  const completionPct = Math.round((completedCount / requiredDocs.length) * 100);
+  // If no tasks, show empty state
+  if (!tasks || tasks.length === 0) {
+    return (
+      <div className="document-checklist-card">
+        <div className="checklist-header">
+          <h3>Your Needs List</h3>
+        </div>
+        <div className="checklist-empty">
+          <p>Your task list will appear here once your application is processed.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="document-checklist-card">
       <div className="checklist-header">
-        <h3>Document Checklist</h3>
+        <h3>Your Needs List</h3>
         <span className="completion-badge">{completionPct}% Complete</span>
       </div>
 
-      <ProgressBar percentage={completionPct} label="Documents" />
+      <ProgressBar percentage={completionPct} label="Tasks" />
 
       <div className="checklist-items">
-        {requiredDocs.map((doc, idx) => {
-          const status = getDocStatus(doc.types);
+        {/* Show pending tasks first (max 5) */}
+        {pendingTasks.slice(0, 5).map((task) => {
+          const displayStatus = getDisplayStatus(task.status);
           return (
-            <div key={idx} className={`checklist-item status-${status}`}>
-              <span className="checklist-icon">{statusIcons[status]}</span>
-              <span className="checklist-label">{doc.label}</span>
-              <span className={`checklist-status status-${status}`}>{statusLabels[status]}</span>
+            <div key={task.id} className={`checklist-item status-${displayStatus}`}>
+              <span className="checklist-icon">{statusIcons[displayStatus]}</span>
+              <div className="checklist-info">
+                <span className="checklist-label">{task.title}</span>
+                {task.due_at && (
+                  <span className="checklist-due">Due: {new Date(task.due_at).toLocaleDateString()}</span>
+                )}
+              </div>
+              <span className={`checklist-status status-${displayStatus}`}>{statusLabels[displayStatus]}</span>
             </div>
           );
         })}
+
+        {/* Show recent completed tasks (max 2) */}
+        {completedTasks.slice(0, 2).map((task) => (
+          <div key={task.id} className="checklist-item status-done">
+            <span className="checklist-icon">{statusIcons.done}</span>
+            <span className="checklist-label">{task.title}</span>
+            <span className="checklist-status status-done">{statusLabels.done}</span>
+          </div>
+        ))}
       </div>
 
-      <button className="upload-cta-btn" onClick={onUploadClick}>
-        📤 Upload Documents
-      </button>
+      {pendingTasks.length > 5 && (
+        <button className="upload-cta-btn" onClick={onViewAll}>
+          View All {pendingTasks.length} Items
+        </button>
+      )}
     </div>
   );
 };
@@ -727,11 +759,11 @@ export default function PURLPortal() {
 
             {/* Two Column Layout */}
             <div className="overview-columns">
-              {/* Left Column - Documents */}
+              {/* Left Column - Needs List (Conditions from application) */}
               <div className="overview-column">
-                <DocumentChecklistCard
-                  documents={documents}
-                  onUploadClick={() => setActiveTab('documents')}
+                <NeedsListCard
+                  tasks={tasks}
+                  onViewAll={() => setActiveTab('tasks')}
                 />
               </div>
 
