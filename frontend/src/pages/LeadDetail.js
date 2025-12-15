@@ -1871,6 +1871,45 @@ function LeadDetail() {
           {activeTab === 'loan-details' && (
           <div className="info-section">
             <h2>Loan Details</h2>
+
+            {/* Transaction Type Toggle */}
+            <div className="transaction-type-toggle" style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#374151' }}>Transaction Type</label>
+              <div style={{ display: 'flex', gap: '0', borderRadius: '8px', overflow: 'hidden', border: '1px solid #d1d5db', width: 'fit-content' }}>
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange('loan_purpose', 'Purchase')}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    border: 'none',
+                    background: (formData.loan_purpose === 'Purchase' || !formData.loan_purpose) ? '#3b82f6' : '#f3f4f6',
+                    color: (formData.loan_purpose === 'Purchase' || !formData.loan_purpose) ? 'white' : '#374151',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Purchase
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange('loan_purpose', 'Refinance')}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    border: 'none',
+                    borderLeft: '1px solid #d1d5db',
+                    background: formData.loan_purpose === 'Refinance' ? '#3b82f6' : '#f3f4f6',
+                    color: formData.loan_purpose === 'Refinance' ? 'white' : '#374151',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Refinance
+                </button>
+              </div>
+            </div>
+
             <div className="info-grid">
               <div className="info-field">
                 <label>Loan Number</label>
@@ -1881,6 +1920,19 @@ function LeadDetail() {
                   placeholder="Enter loan number"
                 />
               </div>
+
+              {/* Purchase Price - only show for Purchase transactions */}
+              {(formData.loan_purpose === 'Purchase' || !formData.loan_purpose) && (
+                <div className="info-field">
+                  <label>Purchase Price</label>
+                  <input
+                    type="number"
+                    value={formData.purchase_price || ''}
+                    onChange={(e) => handleFieldChange('purchase_price', e.target.value)}
+                    placeholder="$"
+                  />
+                </div>
+              )}
 
               <div className="info-field">
                 <label>Loan Amount</label>
@@ -1909,7 +1961,7 @@ function LeadDetail() {
                   type="number"
                   value={formData.loan_term || ''}
                   onChange={(e) => handleFieldChange('loan_term', e.target.value)}
-                  placeholder="Years"
+                  placeholder="Months"
                 />
               </div>
 
@@ -1965,42 +2017,6 @@ function LeadDetail() {
                   step="0.125"
                   value={formData.points || ''}
                   onChange={(e) => handleFieldChange('points', e.target.value)}
-                />
-              </div>
-
-              <div className="info-field">
-                <label>Lender</label>
-                <input
-                  type="text"
-                  value={formData.lender || ''}
-                  onChange={(e) => handleFieldChange('lender', e.target.value)}
-                />
-              </div>
-
-              <div className="info-field">
-                <label>Loan Officer</label>
-                <input
-                  type="text"
-                  value={formData.loan_officer || ''}
-                  onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
-                />
-              </div>
-
-              <div className="info-field">
-                <label>Processor</label>
-                <input
-                  type="text"
-                  value={formData.processor || ''}
-                  onChange={(e) => handleFieldChange('processor', e.target.value)}
-                />
-              </div>
-
-              <div className="info-field">
-                <label>Underwriter</label>
-                <input
-                  type="text"
-                  value={formData.underwriter || ''}
-                  onChange={(e) => handleFieldChange('underwriter', e.target.value)}
                 />
               </div>
 
