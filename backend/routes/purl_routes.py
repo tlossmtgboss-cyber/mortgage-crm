@@ -566,6 +566,142 @@ async def update_task(
 
 
 # =============================================================================
+# PUBLIC PURL ENDPOINTS - Conditions (Needs List)
+# =============================================================================
+
+@purl_router.get(
+    "/workspace/{slug}/conditions",
+    summary="List conditions",
+    description="Get conditions/needs list for this workspace (documents needed from borrower)"
+)
+async def list_conditions(
+    slug: str = Path(..., description="Workspace slug"),
+    status: Optional[str] = Query(None, description="Filter by status (pending, received, approved, waived)"),
+    context: PURLAuthContext = Depends(require_purl_token),
+    db: Session = Depends(get_db)
+):
+    """List all conditions (needs list items) for the workspace."""
+    from sqlalchemy import text
+
+    verify_workspace_access(context, slug)
+
+    # Get the workspace to find the lead_id
+    workspace = db.query(PURLWorkspace).filter(
+        PURLWorkspace.id == context.workspace_id
+    ).first()
+
+    if not workspace or not workspace.lead_id:
+        return {"conditions": [], "message": "No lead associated with workspace"}
+
+    # Build query for lead_conditions
+    query = """
+        SELECT
+            id, lead_id, name, description, category, priority,
+            due_date, status, is_new, created_at, updated_at
+        FROM lead_conditions
+        WHERE lead_id = :lead_id
+    """
+    params = {"lead_id": workspace.lead_id}
+
+    if status:
+        query += " AND status = :status"
+        params["status"] = status
+
+    query += " ORDER BY CASE WHEN status = 'pending' THEN 0 WHEN status = 'received' THEN 1 WHEN status = 'approved' THEN 2 ELSE 3 END, created_at DESC"
+
+    try:
+        result = db.execute(text(query), params)
+        rows = result.fetchall()
+
+        conditions = []
+        for row in rows:
+            conditions.append({
+                "id": row.id,
+                "lead_id": row.lead_id,
+                "name": row.name,
+                "description": row.description,
+                "category": row.category,
+                "priority": row.priority,
+                "due_date": row.due_date.isoformat() if row.due_date else None,
+                "status": row.status,
+                "is_new": row.is_new,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            })
+
+        return {
+            "conditions": conditions,
+            "total": len(conditions),
+            "pending_count": len([c for c in conditions if c["status"] == "pending"]),
+            "received_count": len([c for c in conditions if c["status"] == "received"]),
+            "approved_count": len([c for c in conditions if c["status"] == "approved"]),
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch conditions: {e}")
+        return {"conditions": [], "message": "Failed to fetch conditions", "error": str(e)}
+
+
+@purl_router.patch(
+    "/workspace/{slug}/conditions/{condition_id}/mark-received",
+    summary="Mark condition as received",
+    description="Mark a condition as received when borrower uploads documents"
+)
+async def mark_condition_received(
+    slug: str = Path(..., description="Workspace slug"),
+    condition_id: int = Path(..., description="Condition ID"),
+    context: PURLAuthContext = Depends(require_purl_write_scope),
+    db: Session = Depends(get_db)
+):
+    """Mark a condition as received (borrower uploaded documents)."""
+    from sqlalchemy import text
+
+    verify_workspace_access(context, slug)
+
+    # Get the workspace to find the lead_id
+    workspace = db.query(PURLWorkspace).filter(
+        PURLWorkspace.id == context.workspace_id
+    ).first()
+
+    if not workspace or not workspace.lead_id:
+        raise HTTPException(status_code=404, detail="No lead associated with workspace")
+
+    # Update the condition
+    try:
+        result = db.execute(
+            text("""
+                UPDATE lead_conditions
+                SET status = 'received', is_new = false, updated_at = NOW()
+                WHERE id = :condition_id AND lead_id = :lead_id
+                RETURNING id, name, status
+            """),
+            {"condition_id": condition_id, "lead_id": workspace.lead_id}
+        )
+        row = result.fetchone()
+        db.commit()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Condition not found")
+
+        # Log the action
+        await log_purl_action(
+            db=db,
+            context=context,
+            action="condition_received",
+            resource_type="condition",
+            resource_id=condition_id,
+            changes={"status": "received"}
+        )
+
+        return {"success": True, "condition_id": row.id, "name": row.name, "status": row.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update condition: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update condition")
+
+
+# =============================================================================
 # PUBLIC PURL ENDPOINTS - Timeline & Milestones
 # =============================================================================
 

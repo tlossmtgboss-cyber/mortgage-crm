@@ -1144,6 +1144,92 @@
   background: #2563eb;
 }
 
+/* Conditions Needs List Styles */
+.checklist-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.checklist-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.checklist-category {
+  background: #e2e8f0;
+  color: #475569;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.checklist-description {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.new-condition-badge {
+  display: inline-block;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.checklist-actions {
+  flex-shrink: 0;
+}
+
+.upload-condition-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #3b82f6;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.upload-condition-btn:hover {
+  background: #2563eb;
+}
+
+.upload-condition-btn input {
+  display: none;
+}
+
+.upload-condition-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
 .calculator-intro {
   color: #64748b;
   margin-bottom: 24px;

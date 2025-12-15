@@ -502,6 +502,29 @@ class PerenniaAPI {
   }
 
   // ==========================================================================
+  // CONDITIONS (NEEDS LIST)
+  // ==========================================================================
+
+  /**
+   * Get workspace conditions (needs list)
+   * @param {string} slug
+   * @param {Object} params
+   */
+  async getWorkspaceConditions(slug, { status } = {}) {
+    const params = status ? `?status=${status}` : '';
+    return this.get(`/api/purl/workspace/${slug}/conditions${params}`);
+  }
+
+  /**
+   * Mark condition as received
+   * @param {string} slug
+   * @param {number} conditionId
+   */
+  async markConditionReceived(slug, conditionId) {
+    return this.patch(`/api/purl/workspace/${slug}/conditions/${conditionId}/mark-received`, {});
+  }
+
+  // ==========================================================================
   // HTTP METHODS
   // ==========================================================================
 

@@ -293,7 +293,144 @@ const LoanSummaryCard = ({ loan, workspace, contacts, subStage }) => {
   );
 };
 
-// Needs List Card - Shows conditions/tasks from loan application submission
+// Conditions Needs List Card - Shows conditions from lead_conditions table
+const ConditionsNeedsListCard = ({ conditions, onViewAll, onUploadForCondition, uploading }) => {
+  // Filter conditions by status
+  const pendingConditions = conditions?.filter(c => c.status === 'pending') || [];
+  const receivedConditions = conditions?.filter(c => c.status === 'received') || [];
+  const approvedConditions = conditions?.filter(c => c.status === 'approved') || [];
+
+  const totalConditions = (conditions || []).length;
+  const completedCount = approvedConditions.length + receivedConditions.length;
+  const completionPct = totalConditions > 0 ? Math.round((completedCount / totalConditions) * 100) : 0;
+
+  // Map condition status to display status
+  const getDisplayStatus = (status) => {
+    const statusMap = {
+      'pending': 'needed',
+      'received': 'pending',
+      'approved': 'done',
+      'waived': 'na',
+    };
+    return statusMap[status] || 'needed';
+  };
+
+  const statusIcons = {
+    needed: '○',
+    pending: '◐',
+    done: '●',
+    na: '—',
+  };
+
+  const statusLabels = {
+    needed: 'Document Needed',
+    pending: 'Under Review',
+    done: 'Approved',
+    na: 'Waived',
+  };
+
+  // Category display names
+  const categoryNames = {
+    income_verification: 'Income',
+    asset_verification: 'Assets',
+    employment: 'Employment',
+    property: 'Property',
+    credit: 'Credit',
+    other: 'Other',
+  };
+
+  // If no conditions, show empty state
+  if (!conditions || conditions.length === 0) {
+    return (
+      <div className="document-checklist-card">
+        <div className="checklist-header">
+          <h3>Your Needs List</h3>
+        </div>
+        <div className="checklist-empty">
+          <p>Your document requirements will appear here once your application is processed.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="document-checklist-card">
+      <div className="checklist-header">
+        <h3>Your Needs List</h3>
+        <span className="completion-badge">{completionPct}% Complete</span>
+      </div>
+
+      <ProgressBar percentage={completionPct} label="Documents" />
+
+      <div className="checklist-items">
+        {/* Show pending conditions first (max 5) */}
+        {pendingConditions.slice(0, 5).map((condition) => {
+          const displayStatus = getDisplayStatus(condition.status);
+          return (
+            <div key={condition.id} className={`checklist-item status-${displayStatus}`}>
+              <span className="checklist-icon">{statusIcons[displayStatus]}</span>
+              <div className="checklist-info">
+                <span className="checklist-label">
+                  {condition.name}
+                  {condition.is_new && <span className="new-condition-badge">NEW</span>}
+                </span>
+                <div className="checklist-meta">
+                  <span className="checklist-category">{categoryNames[condition.category] || condition.category}</span>
+                  {condition.due_date && (
+                    <span className="checklist-due">Due: {new Date(condition.due_date).toLocaleDateString()}</span>
+                  )}
+                </div>
+                {condition.description && (
+                  <span className="checklist-description">{condition.description}</span>
+                )}
+              </div>
+              <div className="checklist-actions">
+                <label className="upload-condition-btn">
+                  <input
+                    type="file"
+                    onChange={(e) => onUploadForCondition(condition.id, e)}
+                    disabled={uploading}
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  />
+                  {uploading ? '...' : '↑ Upload'}
+                </label>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Show received conditions (under review) */}
+        {receivedConditions.slice(0, 2).map((condition) => (
+          <div key={condition.id} className="checklist-item status-pending">
+            <span className="checklist-icon">{statusIcons.pending}</span>
+            <div className="checklist-info">
+              <span className="checklist-label">{condition.name}</span>
+              <span className="checklist-category">{categoryNames[condition.category] || condition.category}</span>
+            </div>
+            <span className="checklist-status status-pending">{statusLabels.pending}</span>
+          </div>
+        ))}
+
+        {/* Show recent approved conditions (max 2) */}
+        {approvedConditions.slice(0, 2).map((condition) => (
+          <div key={condition.id} className="checklist-item status-done">
+            <span className="checklist-icon">{statusIcons.done}</span>
+            <span className="checklist-label">{condition.name}</span>
+            <span className="checklist-status status-done">{statusLabels.done}</span>
+          </div>
+        ))}
+      </div>
+
+      {pendingConditions.length > 5 && (
+        <button className="upload-cta-btn" onClick={onViewAll}>
+          View All {pendingConditions.length} Items Needed
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Legacy Needs List Card - Shows tasks (fallback if no conditions)
 const NeedsListCard = ({ tasks, onViewAll }) => {
   // Filter to show pending tasks (conditions that need to be completed)
   const pendingTasks = tasks?.filter(t =>
@@ -441,10 +578,13 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   // Local state for mutable data
   const [documents, setDocuments] = useState(data?.documents || []);
   const [tasks, setTasks] = useState(data?.tasks || []);
+  const [conditions, setConditions] = useState([]);
+  const [conditionsLoading, setConditionsLoading] = useState(false);
   const [milestones, setMilestones] = useState(data?.milestones || []);
   const [timeline, setTimeline] = useState(data?.timeline || []);
   const [messages, setMessages] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [conditionUploading, setConditionUploading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
 
   // UI state
@@ -466,6 +606,25 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       setTimeline(data.timeline || []);
     }
   }, [data]);
+
+  // Load conditions
+  const loadConditions = useCallback(async () => {
+    if (!slug) return;
+    setConditionsLoading(true);
+    try {
+      const conditionsData = await api.getWorkspaceConditions(slug);
+      setConditions(conditionsData.conditions || []);
+    } catch (err) {
+      console.error('Failed to load conditions:', err);
+    } finally {
+      setConditionsLoading(false);
+    }
+  }, [slug]);
+
+  // Load conditions on mount and when slug changes
+  useEffect(() => {
+    loadConditions();
+  }, [loadConditions]);
 
   // Load messages
   const loadMessages = useCallback(async () => {
@@ -537,6 +696,58 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       }
     } finally {
       setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  // Handle document upload for a specific condition
+  const handleUploadForCondition = async (conditionId, event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setConditionUploading(true);
+    try {
+      for (const file of files) {
+        try {
+          // Get upload URL
+          const uploadData = await api.getDocumentUploadUrl(slug, {
+            filename: file.name,
+            contentType: file.type,
+            documentType: `condition_${conditionId}`,
+          });
+
+          // Upload to S3
+          await fetch(uploadData.upload_url, {
+            method: 'PUT',
+            body: file,
+            headers: {
+              'Content-Type': file.type,
+            },
+          });
+
+          // Complete upload
+          await api.completeDocumentUpload(slug, {
+            documentKey: uploadData.document_key,
+            filename: file.name,
+            fileSize: file.size,
+            contentType: file.type,
+            documentType: `condition_${conditionId}`,
+          });
+
+          // Mark condition as received
+          await api.markConditionReceived(slug, conditionId);
+
+          // Refresh conditions and documents
+          await loadConditions();
+          const docsData = await api.getWorkspaceDocuments(slug);
+          setDocuments(docsData.documents || []);
+        } catch (err) {
+          console.error('Upload failed:', err);
+          alert(`Failed to upload ${file.name}`);
+        }
+      }
+    } finally {
+      setConditionUploading(false);
       event.target.value = '';
     }
   };
@@ -677,10 +888,20 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             <div className="overview-columns">
               {/* Left Column - Needs List (Conditions from application) */}
               <div className="overview-column">
-                <NeedsListCard
-                  tasks={tasks}
-                  onViewAll={() => setActiveTab('tasks')}
-                />
+                {/* Show conditions if available, otherwise fall back to tasks */}
+                {conditions.length > 0 ? (
+                  <ConditionsNeedsListCard
+                    conditions={conditions}
+                    onViewAll={() => setActiveTab('tasks')}
+                    onUploadForCondition={handleUploadForCondition}
+                    uploading={conditionUploading}
+                  />
+                ) : (
+                  <NeedsListCard
+                    tasks={tasks}
+                    onViewAll={() => setActiveTab('tasks')}
+                  />
+                )}
               </div>
 
               {/* Right Column - Progress & Tasks */}
