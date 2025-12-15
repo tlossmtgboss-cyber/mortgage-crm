@@ -657,177 +657,6 @@ function MumClientDetail() {
         </div>
       </div>
 
-      {/* Loan Information Toolbar */}
-      <div className="loan-toolbar">
-        <div className="toolbar-header">
-          <h3>Loan Details</h3>
-        </div>
-        <div className="loan-fields-grid">
-          <div className="loan-field">
-            <label>Loan Amount</label>
-            <input
-              type="number"
-              value={formData.loan_amount || ''}
-              onChange={(e) => handleFieldChange('loan_amount', e.target.value)}
-              placeholder="$"
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Interest Rate</label>
-            <input
-              type="number"
-              step="0.001"
-              value={formData.interest_rate || ''}
-              onChange={(e) => handleFieldChange('interest_rate', e.target.value)}
-              placeholder="%"
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Loan Term</label>
-            <input
-              type="number"
-              value={formData.loan_term || ''}
-              onChange={(e) => handleFieldChange('loan_term', e.target.value)}
-              placeholder="Years"
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Loan Type</label>
-            <select
-              value={formData.loan_type || ''}
-              onChange={(e) => handleFieldChange('loan_type', e.target.value)}
-            >
-              <option value="">Select...</option>
-              <option value="Conventional">Conventional</option>
-              <option value="FHA">FHA</option>
-              <option value="VA">VA</option>
-              <option value="USDA">USDA</option>
-              <option value="Jumbo">Jumbo</option>
-              <option value="HELOC">HELOC</option>
-            </select>
-          </div>
-
-          <div className="loan-field">
-            <label>Lock Date</label>
-            <input
-              type="date"
-              value={formData.lock_date || ''}
-              onChange={(e) => handleFieldChange('lock_date', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Lock Expiration</label>
-            <input
-              type="date"
-              value={formData.lock_expiration || ''}
-              onChange={(e) => handleFieldChange('lock_expiration', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>APR</label>
-            <input
-              type="number"
-              step="0.001"
-              value={formData.apr || ''}
-              onChange={(e) => handleFieldChange('apr', e.target.value)}
-              placeholder="%"
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Points</label>
-            <input
-              type="number"
-              step="0.125"
-              value={formData.points || ''}
-              onChange={(e) => handleFieldChange('points', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Lender</label>
-            <input
-              type="text"
-              value={formData.lender || ''}
-              onChange={(e) => handleFieldChange('lender', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Loan Officer</label>
-            <input
-              type="text"
-              value={formData.loan_officer || ''}
-              onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Processor</label>
-            <input
-              type="text"
-              value={formData.processor || ''}
-              onChange={(e) => handleFieldChange('processor', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Underwriter</label>
-            <input
-              type="text"
-              value={formData.underwriter || ''}
-              onChange={(e) => handleFieldChange('underwriter', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Closing Date</label>
-            <input
-              type="date"
-              value={formData.closing_date || ''}
-              onChange={(e) => handleFieldChange('closing_date', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Appraisal Value</label>
-            <input
-              type="number"
-              value={formData.appraisal_value || ''}
-              onChange={(e) => handleFieldChange('appraisal_value', e.target.value)}
-              placeholder="$"
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>LTV %</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.ltv || ''}
-              onChange={(e) => handleFieldChange('ltv', e.target.value)}
-              placeholder="%"
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>DTI %</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.dti || ''}
-              onChange={(e) => handleFieldChange('dti', e.target.value)}
-              placeholder="%"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Borrower Selector */}
       <div className="borrower-selector">
         {borrowers.map((borrower, index) => (
@@ -847,6 +676,12 @@ function MumClientDetail() {
 
       {/* Tab Navigation */}
       <div className="profile-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'loan-details' ? 'active' : ''}`}
+          onClick={() => setActiveTab('loan-details')}
+        >
+          Loan Details
+        </button>
         <button
           className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
           onClick={() => setActiveTab('personal')}
@@ -912,6 +747,187 @@ function MumClientDetail() {
       <div className="detail-content">
         {/* Left Column - Lead Information */}
         <div className="left-column">
+          {/* Loan Details Tab */}
+          {activeTab === 'loan-details' && (
+          <div className="info-section">
+            <h2>Loan Details</h2>
+            <div className="info-grid">
+              <div className="info-field">
+                <label>Loan Number</label>
+                <input
+                  type="text"
+                  value={formData.loan_number || ''}
+                  onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+                  placeholder="Enter loan number"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Loan Amount</label>
+                <input
+                  type="number"
+                  value={formData.loan_amount || ''}
+                  onChange={(e) => handleFieldChange('loan_amount', e.target.value)}
+                  placeholder="$"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Interest Rate</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={formData.interest_rate || ''}
+                  onChange={(e) => handleFieldChange('interest_rate', e.target.value)}
+                  placeholder="%"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Loan Term</label>
+                <input
+                  type="number"
+                  value={formData.loan_term || ''}
+                  onChange={(e) => handleFieldChange('loan_term', e.target.value)}
+                  placeholder="Years"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Loan Type</label>
+                <select
+                  value={formData.loan_type || ''}
+                  onChange={(e) => handleFieldChange('loan_type', e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  <option value="Conventional">Conventional</option>
+                  <option value="FHA">FHA</option>
+                  <option value="VA">VA</option>
+                  <option value="USDA">USDA</option>
+                  <option value="Jumbo">Jumbo</option>
+                  <option value="HELOC">HELOC</option>
+                </select>
+              </div>
+
+              <div className="info-field">
+                <label>Lock Date</label>
+                <input
+                  type="date"
+                  value={formData.lock_date || ''}
+                  onChange={(e) => handleFieldChange('lock_date', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Lock Expiration</label>
+                <input
+                  type="date"
+                  value={formData.lock_expiration || ''}
+                  onChange={(e) => handleFieldChange('lock_expiration', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>APR</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={formData.apr || ''}
+                  onChange={(e) => handleFieldChange('apr', e.target.value)}
+                  placeholder="%"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Points</label>
+                <input
+                  type="number"
+                  step="0.125"
+                  value={formData.points || ''}
+                  onChange={(e) => handleFieldChange('points', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Lender</label>
+                <input
+                  type="text"
+                  value={formData.lender || ''}
+                  onChange={(e) => handleFieldChange('lender', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Loan Officer</label>
+                <input
+                  type="text"
+                  value={formData.loan_officer || ''}
+                  onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Processor</label>
+                <input
+                  type="text"
+                  value={formData.processor || ''}
+                  onChange={(e) => handleFieldChange('processor', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Underwriter</label>
+                <input
+                  type="text"
+                  value={formData.underwriter || ''}
+                  onChange={(e) => handleFieldChange('underwriter', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Closing Date</label>
+                <input
+                  type="date"
+                  value={formData.closing_date || ''}
+                  onChange={(e) => handleFieldChange('closing_date', e.target.value)}
+                />
+              </div>
+
+              <div className="info-field">
+                <label>Appraisal Value</label>
+                <input
+                  type="number"
+                  value={formData.appraisal_value || ''}
+                  onChange={(e) => handleFieldChange('appraisal_value', e.target.value)}
+                  placeholder="$"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>LTV %</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.ltv || ''}
+                  onChange={(e) => handleFieldChange('ltv', e.target.value)}
+                  placeholder="%"
+                />
+              </div>
+
+              <div className="info-field">
+                <label>DTI %</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.dti || ''}
+                  onChange={(e) => handleFieldChange('dti', e.target.value)}
+                  placeholder="%"
+                />
+              </div>
+            </div>
+          </div>
+          )}
+
           {/* Personal Information Tab */}
           {activeTab === 'personal' && (
           <div className="info-section">
