@@ -5,20 +5,27 @@
  * preview what each theme looks like before selecting it.
  */
 
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+
+// Direct imports instead of lazy to avoid nested lazy loading issues
+// (ThemePreview is already lazy-loaded from App.js)
+import LeadPopsCardinal from './themes/LeadPopsCardinal';
+import ProfessionalClean from './themes/ProfessionalClean';
+import ModernGradient from './themes/ModernGradient';
+import MinimalFocus from './themes/MinimalFocus';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-// Lazy load theme components
+// Theme components map
 const themeComponents = {
-  LeadPopsCardinal: lazy(() => import('./themes/LeadPopsCardinal')),
-  ProfessionalClean: lazy(() => import('./themes/ProfessionalClean')),
-  ModernGradient: lazy(() => import('./themes/ModernGradient')),
-  MinimalFocus: lazy(() => import('./themes/MinimalFocus')),
+  LeadPopsCardinal,
+  ProfessionalClean,
+  ModernGradient,
+  MinimalFocus,
 };
 
 // Sample demo data for previewing themes
@@ -245,13 +252,11 @@ const ThemePreview = () => {
     <>
       <PreviewBanner themeName={themeData.name} onClose={handleClose} />
       <div style={{ paddingTop: '52px' }}>
-        <Suspense fallback={<LoadingState />}>
-          <ThemeComponent
-            user={DEMO_USER}
-            profile={DEMO_PROFILE}
-            themeConfig={themeConfig}
-          />
-        </Suspense>
+        <ThemeComponent
+          user={DEMO_USER}
+          profile={DEMO_PROFILE}
+          themeConfig={themeConfig}
+        />
       </div>
     </>
   );
