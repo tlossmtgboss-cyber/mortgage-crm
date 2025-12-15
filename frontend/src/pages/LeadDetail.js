@@ -1827,12 +1827,6 @@ function LeadDetail() {
           Property
         </button>
         <button
-          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
-          onClick={() => setActiveTab('team')}
-        >
-          Team Members
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
           onClick={() => setActiveTab('tasks')}
         >
@@ -1861,6 +1855,12 @@ function LeadDetail() {
           onClick={() => setActiveTab('important-dates')}
         >
           SLA Dates
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+          onClick={() => setActiveTab('team')}
+        >
+          Team Members
         </button>
       </div>
 
