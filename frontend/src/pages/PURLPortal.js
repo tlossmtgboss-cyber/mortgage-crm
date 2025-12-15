@@ -3,10 +3,12 @@
  *
  * Main portal page for borrowers to access their workspace through
  * a persistent URL. Provides access to:
- * - Application status and progress
- * - Document uploads
+ * - Loan status and terms
+ * - Document needs list and uploads
  * - Task management
  * - Timeline/milestones
+ * - Appointment scheduling
+ * - Payment calculators
  * - Messages with loan team
  */
 
@@ -19,6 +21,8 @@ import {
   useDocumentUpload,
   useSendMessage,
 } from '../lib/api';
+import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
+import PaymentCalculator from '../components/PaymentCalculator';
 import './PURLPortal.css';
 
 // Tab components
@@ -203,6 +207,186 @@ const MessageItem = ({ message, isMine }) => (
   </div>
 );
 
+// Helper function to format address
+const formatAddress = (address) => {
+  if (!address) return 'Address pending';
+  if (typeof address === 'string') return address;
+  const parts = [address.street, address.city, address.state, address.zip_code].filter(Boolean);
+  return parts.join(', ') || 'Address pending';
+};
+
+// Helper function to format currency
+const formatCurrency = (amount) => {
+  if (!amount) return '$0';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+// Helper function to format date
+const formatDate = (dateStr) => {
+  if (!dateStr) return 'TBD';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+// Helper function to calculate days until close
+const daysUntilClose = (closeDate) => {
+  if (!closeDate) return null;
+  const today = new Date();
+  const close = new Date(closeDate);
+  const diffTime = close - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+// Loan Summary Card Component - Shows loan details at a glance
+const LoanSummaryCard = ({ loan, workspace, contacts }) => {
+  const borrower = contacts?.find(c => c.contact_type === 'borrower') || contacts?.[0];
+  const daysLeft = daysUntilClose(loan?.target_close_date);
+
+  return (
+    <div className="loan-summary-card">
+      <div className="loan-header">
+        <div className="loan-type-badge">
+          {loan?.product_type || loan?.loan_purpose || 'Your Loan'}
+        </div>
+        <StatusBadge status={workspace?.status} />
+      </div>
+
+      <div className="loan-details-grid">
+        <div className="loan-detail">
+          <span className="detail-label">Loan Amount</span>
+          <span className="detail-value">{formatCurrency(loan?.loan_amount)}</span>
+        </div>
+        <div className="loan-detail">
+          <span className="detail-label">Interest Rate</span>
+          <span className="detail-value">{loan?.interest_rate ? `${loan.interest_rate}%` : 'TBD'}</span>
+        </div>
+        <div className="loan-detail">
+          <span className="detail-label">Property</span>
+          <span className="detail-value detail-address">{formatAddress(loan?.property_address)}</span>
+        </div>
+        <div className="loan-detail">
+          <span className="detail-label">Expected Close</span>
+          <span className="detail-value">
+            {formatDate(loan?.target_close_date)}
+            {daysLeft !== null && daysLeft > 0 && (
+              <span className="days-badge">{daysLeft} days</span>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {!loan && (
+        <div className="loan-empty-state">
+          <p>Your loan details will appear here once your application is processed.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Document Checklist Card - Shows required documents and their status
+const DocumentChecklistCard = ({ documents, onUploadClick }) => {
+  // Define required document categories
+  const requiredDocs = [
+    { category: 'income', label: 'Income Verification', types: ['paystub', 'w2', 'tax_return', '1099'] },
+    { category: 'assets', label: 'Asset Statements', types: ['bank_statement', 'investment_statement'] },
+    { category: 'identity', label: 'Identity Documents', types: ['drivers_license', 'passport', 'ssn_card'] },
+    { category: 'property', label: 'Property Documents', types: ['purchase_contract', 'insurance', 'appraisal'] },
+  ];
+
+  // Check document status by category
+  const getDocStatus = (types) => {
+    const matchingDocs = documents?.filter(d =>
+      types.some(t => d.doc_type?.toLowerCase().includes(t) || d.document_type?.toLowerCase().includes(t))
+    ) || [];
+
+    if (matchingDocs.length === 0) return 'needed';
+    if (matchingDocs.some(d => d.status === 'verified' || d.status === 'approved')) return 'approved';
+    if (matchingDocs.some(d => d.status === 'rejected')) return 'rejected';
+    if (matchingDocs.some(d => d.status === 'needs_review' || d.status === 'processing')) return 'pending';
+    return 'uploaded';
+  };
+
+  const statusIcons = {
+    needed: '○',
+    uploaded: '◐',
+    pending: '◐',
+    approved: '●',
+    rejected: '✗',
+  };
+
+  const statusLabels = {
+    needed: 'Needed',
+    uploaded: 'Uploaded',
+    pending: 'In Review',
+    approved: 'Approved',
+    rejected: 'Needs Attention',
+  };
+
+  // Calculate completion percentage
+  const completedCount = requiredDocs.filter(d => getDocStatus(d.types) === 'approved').length;
+  const completionPct = Math.round((completedCount / requiredDocs.length) * 100);
+
+  return (
+    <div className="document-checklist-card">
+      <div className="checklist-header">
+        <h3>Document Checklist</h3>
+        <span className="completion-badge">{completionPct}% Complete</span>
+      </div>
+
+      <ProgressBar percentage={completionPct} label="Documents" />
+
+      <div className="checklist-items">
+        {requiredDocs.map((doc, idx) => {
+          const status = getDocStatus(doc.types);
+          return (
+            <div key={idx} className={`checklist-item status-${status}`}>
+              <span className="checklist-icon">{statusIcons[status]}</span>
+              <span className="checklist-label">{doc.label}</span>
+              <span className={`checklist-status status-${status}`}>{statusLabels[status]}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <button className="upload-cta-btn" onClick={onUploadClick}>
+        📤 Upload Documents
+      </button>
+    </div>
+  );
+};
+
+// Quick Actions Bar - Provides quick access to common actions
+const QuickActionsBar = ({ onSchedule, onMessage, onUpload, onCalculator }) => (
+  <div className="quick-actions-bar">
+    <button className="quick-action-btn" onClick={onSchedule}>
+      <span className="action-icon">📅</span>
+      <span className="action-label">Schedule Call</span>
+    </button>
+    <button className="quick-action-btn" onClick={onMessage}>
+      <span className="action-icon">💬</span>
+      <span className="action-label">Message</span>
+    </button>
+    <button className="quick-action-btn" onClick={onUpload}>
+      <span className="action-icon">📄</span>
+      <span className="action-label">Upload Docs</span>
+    </button>
+    <button className="quick-action-btn" onClick={onCalculator}>
+      <span className="action-icon">🧮</span>
+      <span className="action-label">Calculator</span>
+    </button>
+  </div>
+);
+
 // Main portal component
 export default function PURLPortal() {
   const { slug } = useParams();
@@ -223,6 +407,7 @@ export default function PURLPortal() {
   const [token] = useState(getToken);
   const [tokenReady, setTokenReady] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   // Set API token on mount and when token changes - BEFORE data fetching
   React.useEffect(() => {
@@ -263,6 +448,9 @@ export default function PURLPortal() {
   // Extract data from workspace response
   const workspace = workspaceData?.workspace;
   const application = workspaceData?.application;
+  const loan = workspaceData?.loan;
+  const contacts = workspaceData?.contacts || [];
+  const borrower = contacts.find(c => c.contact_type === 'borrower') || contacts[0];
   const [documents, setDocuments] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [milestones, setMilestones] = useState([]);
@@ -513,6 +701,12 @@ export default function PURLPortal() {
           onClick={() => setActiveTab('messages')}
           badge={unreadMessagesCount}
         />
+        <TabButton
+          label="Calculator"
+          icon="🧮"
+          isActive={activeTab === 'calculator'}
+          onClick={() => setActiveTab('calculator')}
+        />
       </nav>
 
       {/* Tab Content */}
@@ -520,38 +714,77 @@ export default function PURLPortal() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="tab-content overview-tab">
-            <section className="overview-section">
-              <h2>Loan Progress</h2>
-              <MilestoneTracker milestones={milestones} />
-            </section>
+            {/* Loan Summary Card */}
+            <LoanSummaryCard loan={loan} workspace={workspace} contacts={contacts} />
 
-            <section className="overview-section">
-              <h2>Your To-Do List</h2>
-              {tasks.filter(t => t.status === 'open').slice(0, 3).map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onComplete={handleTaskComplete}
+            {/* Quick Actions Bar */}
+            <QuickActionsBar
+              onSchedule={() => setShowScheduleModal(true)}
+              onMessage={() => setActiveTab('messages')}
+              onUpload={() => setActiveTab('documents')}
+              onCalculator={() => setActiveTab('calculator')}
+            />
+
+            {/* Two Column Layout */}
+            <div className="overview-columns">
+              {/* Left Column - Documents */}
+              <div className="overview-column">
+                <DocumentChecklistCard
+                  documents={documents}
+                  onUploadClick={() => setActiveTab('documents')}
                 />
-              ))}
-              {pendingTasksCount > 3 && (
-                <button
-                  className="view-all-btn"
-                  onClick={() => setActiveTab('tasks')}
-                >
-                  View all {pendingTasksCount} tasks →
-                </button>
-              )}
-            </section>
-
-            <section className="overview-section">
-              <h2>Recent Activity</h2>
-              <div className="recent-timeline">
-                {timeline.slice(0, 5).map((event, index) => (
-                  <TimelineEvent key={event.id || index} event={event} />
-                ))}
               </div>
-            </section>
+
+              {/* Right Column - Progress & Tasks */}
+              <div className="overview-column">
+                <section className="overview-section">
+                  <h2>Loan Progress</h2>
+                  <MilestoneTracker milestones={milestones} />
+                </section>
+
+                <section className="overview-section">
+                  <h2>Your To-Do List</h2>
+                  {tasks.filter(t => t.status === 'open').length === 0 ? (
+                    <div className="empty-state">
+                      <p>✓ No pending tasks - you're all caught up!</p>
+                    </div>
+                  ) : (
+                    <>
+                      {tasks.filter(t => t.status === 'open').slice(0, 3).map(task => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onComplete={handleTaskComplete}
+                        />
+                      ))}
+                      {pendingTasksCount > 3 && (
+                        <button
+                          className="view-all-btn"
+                          onClick={() => setActiveTab('tasks')}
+                        >
+                          View all {pendingTasksCount} tasks →
+                        </button>
+                      )}
+                    </>
+                  )}
+                </section>
+
+                <section className="overview-section">
+                  <h2>Recent Activity</h2>
+                  <div className="recent-timeline">
+                    {timeline.length === 0 ? (
+                      <div className="empty-state">
+                        <p>Activity will appear here as your loan progresses.</p>
+                      </div>
+                    ) : (
+                      timeline.slice(0, 5).map((event, index) => (
+                        <TimelineEvent key={event.id || index} event={event} />
+                      ))
+                    )}
+                  </div>
+                </section>
+              </div>
+            </div>
           </div>
         )}
 
@@ -695,7 +928,46 @@ export default function PURLPortal() {
             </div>
           </div>
         )}
+
+        {/* Calculator Tab */}
+        {activeTab === 'calculator' && (
+          <div className="tab-content calculator-tab">
+            <h2>Payment Calculator</h2>
+            <p className="calculator-intro">
+              Estimate your monthly payment and explore different scenarios.
+            </p>
+            <PaymentCalculator
+              initialHomeValue={loan?.loan_amount ? Math.round(loan.loan_amount / 0.8) : 400000}
+              initialDownPayment={loan?.loan_amount ? Math.round(loan.loan_amount * 0.2 / 0.8) : 80000}
+              initialState={loan?.property_address?.state || ''}
+              initialCounty={loan?.property_address?.county || ''}
+              initialCreditScore={720}
+              initialLoanType={loan?.product_type?.toLowerCase().includes('fha') ? 'fha' :
+                              loan?.product_type?.toLowerCase().includes('va') ? 'va' :
+                              loan?.product_type?.toLowerCase().includes('usda') ? 'usda' : 'conventional'}
+              compact={false}
+              showAdvancedOptions={true}
+            />
+          </div>
+        )}
       </main>
+
+      {/* Schedule Appointment Modal */}
+      <ScheduleAppointmentModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onSuccess={() => {
+          setShowScheduleModal(false);
+          // Could show a success message here
+        }}
+        borrower={borrower ? {
+          id: borrower.id,
+          first_name: borrower.first_name,
+          last_name: borrower.last_name,
+          email: borrower.email,
+          phone: borrower.phone,
+        } : null}
+      />
 
       {/* Footer */}
       <footer className="portal-footer">
