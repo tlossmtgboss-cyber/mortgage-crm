@@ -103,6 +103,153 @@
 .status-green { background: rgba(34, 197, 94, 0.2); color: #86efac; }
 .status-emerald { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
 .status-gray { background: rgba(156, 163, 175, 0.2); color: #d1d5db; }
+.status-orange { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
+
+/* Header Milestone Progress */
+.header-milestone-progress {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-top: 8px;
+}
+
+.milestone-steps {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+}
+
+.milestone-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  z-index: 1;
+}
+
+.milestone-step .step-indicator {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+/* Pending step */
+.milestone-step.pending .step-indicator {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Current step - highlighted */
+.milestone-step.current .step-indicator {
+  background: white;
+  color: #3b82f6;
+  border: 3px solid #93c5fd;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+  transform: scale(1.1);
+}
+
+/* Completed step */
+.milestone-step.complete .step-indicator {
+  background: #22c55e;
+  color: white;
+  border: 2px solid #22c55e;
+}
+
+.milestone-step .step-check {
+  font-size: 16px;
+}
+
+.milestone-step .step-number {
+  font-size: 14px;
+}
+
+.milestone-step .step-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  max-width: 80px;
+  line-height: 1.2;
+}
+
+.milestone-step.current .step-label {
+  color: white;
+  font-weight: 600;
+}
+
+.milestone-step.complete .step-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Connector line between steps */
+.step-connector {
+  position: absolute;
+  top: 18px;
+  left: calc(50% + 24px);
+  width: calc(100% - 48px);
+  height: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 0;
+}
+
+.step-connector.complete {
+  background: #22c55e;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .header-milestone-progress {
+    padding: 16px 12px;
+    overflow-x: auto;
+  }
+
+  .milestone-steps {
+    min-width: 500px;
+  }
+
+  .milestone-step .step-indicator {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .milestone-step .step-label {
+    font-size: 10px;
+    max-width: 60px;
+  }
+
+  .step-connector {
+    top: 16px;
+    left: calc(50% + 20px);
+    width: calc(100% - 40px);
+  }
+}
+
+@media (max-width: 480px) {
+  .milestone-step .step-label {
+    display: none;
+  }
+
+  .milestone-steps {
+    min-width: 300px;
+  }
+
+  .milestone-step .step-indicator {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+}
 
 /* Progress bar */
 .purl-progress-container {

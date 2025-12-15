@@ -69,6 +69,81 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// Header Milestone Progress - Horizontal step indicator for loan stages
+const HeaderMilestoneProgress = ({ subStage, workspaceStatus }) => {
+  // Define the loan journey stages
+  const stages = [
+    { id: 'application', label: 'Application', shortLabel: 'Applied' },
+    { id: 'processing', label: 'Processing', shortLabel: 'Processing' },
+    { id: 'underwriting', label: 'Underwriting', shortLabel: 'Underwriting' },
+    { id: 'approval', label: 'Approval', shortLabel: 'Approved' },
+    { id: 'clear_to_close', label: 'Clear to Close', shortLabel: 'CTC' },
+    { id: 'closing', label: 'Closing', shortLabel: 'Closing' },
+  ];
+
+  // Determine current stage index based on subStage or workspaceStatus
+  const getCurrentStageIndex = () => {
+    const status = subStage || workspaceStatus;
+
+    // Map various statuses to stage index
+    const statusToIndex = {
+      'lead': -1,
+      'application': 0,
+      'submitted': 0,
+      'active': 0,
+      'active_loan': 0,
+      'preapproval': 1,
+      'processing': 1,
+      'underwriting': 2,
+      'conditional_approval': 3,
+      'approved': 3,
+      'approval': 3,
+      'clear_to_close': 4,
+      'ctc': 4,
+      'closing': 5,
+      'docs_out': 5,
+      'docs_back': 5,
+      'funded': 6,
+      'closed': 6,
+    };
+
+    return statusToIndex[status?.toLowerCase()] ?? 0;
+  };
+
+  const currentIndex = getCurrentStageIndex();
+
+  return (
+    <div className="header-milestone-progress">
+      <div className="milestone-steps">
+        {stages.map((stage, index) => {
+          const isComplete = index < currentIndex;
+          const isCurrent = index === currentIndex;
+          const isPending = index > currentIndex;
+
+          return (
+            <div
+              key={stage.id}
+              className={`milestone-step ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''} ${isPending ? 'pending' : ''}`}
+            >
+              <div className="step-indicator">
+                {isComplete ? (
+                  <span className="step-check">✓</span>
+                ) : (
+                  <span className="step-number">{index + 1}</span>
+                )}
+              </div>
+              <span className="step-label">{stage.shortLabel}</span>
+              {index < stages.length - 1 && (
+                <div className={`step-connector ${isComplete ? 'complete' : ''}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Document card component
 const DocumentCard = ({ document, onDownload }) => {
   const statusIcons = {
@@ -800,14 +875,12 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
         <div className="header-content">
           <div className="workspace-info">
             <h1>{workspace?.display_name || 'Your Loan Portal'}</h1>
-            <StatusBadge status={subStage || workspace?.status} />
           </div>
-          {application && (
-            <ProgressBar
-              percentage={application.completeness_pct || 0}
-              label="Application Progress"
-            />
-          )}
+          {/* Milestone Progress Indicator */}
+          <HeaderMilestoneProgress
+            subStage={subStage}
+            workspaceStatus={workspace?.status}
+          />
         </div>
       </header>
 
