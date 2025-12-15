@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.4 - Fixed team member name display - build 20251215-1720
-// Fixed: Use full_name from API instead of name
-console.log('[ScheduleAppointmentModal] v3.4 loaded - build 20251215-1720');
+// v3.5 - Added email error display - build 20251215-1755
+// Fixed: Show detailed email error messages from backend
+console.log('[ScheduleAppointmentModal] v3.5 loaded - build 20251215-1755');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -18,6 +18,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [emailSent, setEmailSent] = useState(null); // Track if email was actually sent
+  const [emailError, setEmailError] = useState(null); // Store email error message
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedTeamMember, setSelectedTeamMember] = useState('');
   const [teamMemberWorkHours, setTeamMemberWorkHours] = useState({
@@ -344,9 +345,11 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       }
 
       console.log('[ScheduleAppointmentModal] Appointment created:', result);
+      console.log('[ScheduleAppointmentModal] email_sent:', result.email_sent, 'email_error:', result.email_error);
 
       setSuccess(true);
       setEmailSent(result.email_sent === true);
+      setEmailError(result.email_error || null);
 
       // Call onSuccess callback if provided (to refresh calendar/data)
       if (onSuccess) {
@@ -398,9 +401,11 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
             {emailSent ? (
               <p style={{ color: '#10b981' }}>A confirmation email has been sent to {borrower?.email || borrower?.borrower_email}</p>
             ) : (
-              <p style={{ color: '#f59e0b' }}>
-                Appointment created, but email could not be sent. Please manually notify the contact at {borrower?.email || borrower?.borrower_email}
-              </p>
+              <div style={{ color: '#f59e0b' }}>
+                <p>Appointment created, but email could not be sent.</p>
+                {emailError && <p style={{ fontSize: '12px', marginTop: '4px' }}>Error: {emailError}</p>}
+                <p style={{ marginTop: '8px' }}>Please manually notify the contact at {borrower?.email || borrower?.borrower_email}</p>
+              </div>
             )}
           </div>
         ) : (

@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../services/api';
 import './CalendarSidebar.css';
 
-// v1.1 - Added diagnostic logging
-console.log('[CalendarSidebar] Component loaded');
+// v1.2 - Fixed date format for API calls - build 20251215-1750
+console.log('[CalendarSidebar] v1.2 loaded - build 20251215-1750');
 
 function CalendarSidebar({ leadId, loanId, children }) {
   console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
@@ -29,20 +29,32 @@ function CalendarSidebar({ leadId, loanId, children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate, leadId, loanId]);
 
+  // Helper to format date as YYYY-MM-DD for API
+  const formatDateForAPI = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const loadAppointments = async () => {
     try {
       setLoading(true);
       // Get appointments for the current month
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+
+      // Format dates as YYYY-MM-DD for backend
+      const startDateStr = formatDateForAPI(startDate);
+      const endDateStr = formatDateForAPI(endDate);
 
       console.log('[CalendarSidebar] loadAppointments called');
-      console.log('[CalendarSidebar] Date range:', startDate.toISOString(), 'to', endDate.toISOString());
+      console.log('[CalendarSidebar] Date range:', startDateStr, 'to', endDateStr);
       console.log('[CalendarSidebar] Filters - lead_id:', leadId, 'loan_id:', loanId);
 
       const data = await schedulerAPI.getAppointments({
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
+        start_date: startDateStr,
+        end_date: endDateStr,
         lead_id: leadId || undefined,
         loan_id: loanId || undefined,
       });

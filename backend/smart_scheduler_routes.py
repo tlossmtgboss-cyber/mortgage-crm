@@ -1515,6 +1515,7 @@ async def create_appointment(
 
     # Send confirmation email if attendee email is provided
     email_sent = False
+    email_error = None
     if appt_data.attendee_email:
         try:
             # Format date and time for email
@@ -1550,6 +1551,7 @@ async def create_appointment(
             if appointment.video_link:
                 video_link = appointment.video_link
 
+            logger.info(f"Sending confirmation email to {appt_data.attendee_email}")
             # Send confirmation email to attendee (borrower) with calendar invite
             email_sent = send_appointment_confirmation_email(
                 attendee_email=appt_data.attendee_email,
@@ -1565,6 +1567,10 @@ async def create_appointment(
                 scheduled_start=appointment.scheduled_start,
                 duration_minutes=appointment.duration_minutes
             )
+
+            if not email_sent:
+                email_error = "SendGrid returned failure - check server logs for details"
+                logger.warning(f"Email send returned False for {appt_data.attendee_email}")
 
             # Send notification email to team member (loan officer) with calendar invite
             if team_member_email:
@@ -1588,6 +1594,7 @@ async def create_appointment(
                 except Exception as team_email_error:
                     logger.error(f"Error sending team member notification: {team_email_error}")
         except Exception as e:
+            email_error = str(e)
             logger.error(f"Error sending confirmation email: {e}")
 
     # Auto-create calendar event in team member's Outlook calendar
@@ -1656,6 +1663,7 @@ async def create_appointment(
         "scheduled_start": appointment.scheduled_start.isoformat(),
         "scheduled_end": appointment.scheduled_end.isoformat(),
         "email_sent": email_sent,
+        "email_error": email_error,
         "calendar_event_created": calendar_event_created,
         "outlook_event_id": outlook_event_id
     }
