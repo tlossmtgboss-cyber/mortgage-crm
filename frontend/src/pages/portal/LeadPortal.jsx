@@ -120,6 +120,50 @@ const QuickStats = () => (
   </div>
 );
 
+// Pre-Approval Milestone Progress Bar
+const PreApprovalProgress = ({ currentStep = 0 }) => {
+  const steps = [
+    { id: 1, label: 'Complete Application', shortLabel: 'Application', icon: '📝' },
+    { id: 2, label: 'Upload Documents', shortLabel: 'Documents', icon: '📄' },
+    { id: 3, label: 'Review & Processing', shortLabel: 'Processing', icon: '⏳' },
+    { id: 4, label: 'Get Pre-Approved', shortLabel: 'Pre-Approved', icon: '✓' },
+  ];
+
+  return (
+    <div className="preapproval-progress">
+      <div className="progress-title">
+        <h3>Your Path to Pre-Approval</h3>
+      </div>
+      <div className="progress-steps">
+        {steps.map((step, index) => {
+          const isComplete = index < currentStep;
+          const isCurrent = index === currentStep;
+          const isPending = index > currentStep;
+
+          return (
+            <div
+              key={step.id}
+              className={`progress-step ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''} ${isPending ? 'pending' : ''}`}
+            >
+              <div className="step-indicator">
+                {isComplete ? (
+                  <span className="step-check">✓</span>
+                ) : (
+                  <span className="step-icon">{step.icon}</span>
+                )}
+              </div>
+              <span className="step-label">{step.shortLabel}</span>
+              {index < steps.length - 1 && (
+                <div className={`step-connector ${isComplete ? 'complete' : ''}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Application Steps Overview
 const ApplicationSteps = () => (
   <div className="application-steps">
@@ -187,6 +231,8 @@ export default function LeadPortal({ data, slug, onRefresh }) {
               Talk to an Expert
             </button>
           </div>
+
+          <PreApprovalProgress currentStep={0} />
 
           <QuickStats />
         </div>

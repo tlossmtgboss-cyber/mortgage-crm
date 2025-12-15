@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.2 - Enhanced error diagnostics - build 20251215-1600
-// This version has better error handling to diagnose "Failed to fetch"
-console.log('[ScheduleAppointmentModal] v3.2 loaded - build 20251215-1600');
+// v3.3 - Fixed lead/loan ID mapping - build 20251215-1650
+// Fixed: Previously passed lead.id as loan_id which caused DB errors
+console.log('[ScheduleAppointmentModal] v3.3 loaded - build 20251215-1650');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -290,6 +290,16 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       console.log('[ScheduleAppointmentModal] Token present:', !!token);
       console.log('[ScheduleAppointmentModal] Token length:', token ? token.length : 0);
 
+      // Determine if borrower is a lead or loan object and set IDs correctly
+      // Leads have: id (lead id), no loan_number field
+      // Loans have: id (loan id), loan_number field
+      const isLoan = Boolean(borrower.loan_number);
+      const leadId = isLoan ? (borrower.lead_id || null) : (borrower.id || null);
+      const loanId = isLoan ? (borrower.id || null) : null;
+
+      console.log('[ScheduleAppointmentModal] Object type:', isLoan ? 'Loan' : 'Lead');
+      console.log('[ScheduleAppointmentModal] lead_id:', leadId, 'loan_id:', loanId);
+
       const requestBody = {
         title: `${meetingMode === 'video' ? 'Video Call' : 'Phone Call'} with ${attendeeName}`,
         description: `Appointment with: ${teamMemberName}`,
@@ -299,8 +309,8 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         attendee_name: attendeeName,
         attendee_email: borrower.email || borrower.borrower_email,
         attendee_phone: borrower.phone || borrower.borrower_phone || '',
-        lead_id: borrower.lead_id || null,
-        loan_id: borrower.id || borrower.loan_id || null,
+        lead_id: leadId,
+        loan_id: loanId,
         assigned_user_id: parseInt(selectedTeamMember) || null
       };
 
