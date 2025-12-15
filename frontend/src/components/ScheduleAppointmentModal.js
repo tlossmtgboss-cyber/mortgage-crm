@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.3 - Fixed lead/loan ID mapping - build 20251215-1650
-// Fixed: Previously passed lead.id as loan_id which caused DB errors
-console.log('[ScheduleAppointmentModal] v3.3 loaded - build 20251215-1650');
+// v3.4 - Fixed team member name display - build 20251215-1720
+// Fixed: Use full_name from API instead of name
+console.log('[ScheduleAppointmentModal] v3.4 loaded - build 20251215-1720');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -266,7 +266,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     const selectedMember = teamMembers.find(m =>
       (m.member_id || m.user_id || m.id)?.toString() === selectedTeamMember?.toString()
     );
-    const teamMemberName = selectedMember?.name ||
+    const teamMemberName = selectedMember?.full_name || selectedMember?.name ||
       `${selectedMember?.first_name || ''} ${selectedMember?.last_name || ''}`.trim() ||
       'Team Member';
 
@@ -513,8 +513,8 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
                   <option value="">Select team member...</option>
                   {teamMembers.map((member, idx) => {
                     const memberId = member.member_id || member.user_id || member.id;
-                    const memberName = member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim();
-                    const memberRole = member.role || '';
+                    const memberName = member.full_name || member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Unknown';
+                    const memberRole = member.role || member.title || '';
                     return (
                       <option key={idx} value={memberId}>
                         {memberName}{memberRole ? ` - ${memberRole}` : ''}
