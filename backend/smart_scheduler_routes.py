@@ -78,7 +78,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 async def get_email_service_status():
     """Check if email service is properly configured"""
     sendgrid_configured = bool(os.getenv("SENDGRID_API_KEY"))
-    sendgrid_from_email = os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai")
+    sendgrid_from_email = os.getenv("SENDGRID_FROM_EMAIL", "admin@perenniaai.com")
 
     return {
         "sendgrid_configured": sendgrid_configured,
@@ -110,7 +110,7 @@ async def test_email_send(to_email: str = "tloss@me.com"):
         return {
             "test_result": result,
             "to_email": to_email,
-            "from_email": os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai"),
+            "from_email": os.getenv("SENDGRID_FROM_EMAIL", "admin@perenniaai.com"),
             "sendgrid_key_present": bool(os.getenv("SENDGRID_API_KEY")),
             "sendgrid_key_length": len(os.getenv("SENDGRID_API_KEY", "")) if os.getenv("SENDGRID_API_KEY") else 0
         }
@@ -295,7 +295,7 @@ Looking forward to speaking with you!
         attachments = []
         if scheduled_start:
             try:
-                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai")
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "admin@perenniaai.com")
                 organizer_name = team_member_name or "Perennia AI"
 
                 ics_content = generate_ics_content(
@@ -495,7 +495,7 @@ A calendar invite is attached to this email.
                     duration_minutes=duration_minutes,
                     attendee_email=team_member_email,
                     attendee_name=team_member_name,
-                    organizer_email=os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai"),
+                    organizer_email=os.getenv("SENDGRID_FROM_EMAIL", "admin@perenniaai.com"),
                     organizer_name="Perennia AI",
                     description=f"Meeting with {attendee_name}\\nEmail: {attendee_email}\\nPhone: {attendee_phone or 'N/A'}",
                     video_link=video_link

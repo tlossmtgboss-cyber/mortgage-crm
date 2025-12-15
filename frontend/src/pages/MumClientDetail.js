@@ -76,6 +76,7 @@ function MumClientDetail() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [customFields, setCustomFields] = useState([]);
@@ -604,6 +605,26 @@ function MumClientDetail() {
         break;
       case 'voice':
         handleVoiceCommand();
+        break;
+      case 'send_application':
+        // For MUM clients, typically for refinance applications
+        if (client.email) {
+          const appUrl = `${window.location.origin}/apply/refinance`;
+          window.open(appUrl, '_blank');
+        } else {
+          alert('Client email is required to send application');
+        }
+        break;
+      case 'client_portal':
+        // Open client portal for this MUM client
+        if (client.workspace_slug) {
+          window.open(`${window.location.origin}/portal/${client.workspace_slug}`, '_blank');
+        } else {
+          alert('No client portal found. Please create one from the client details.');
+        }
+        break;
+      case 'escalation':
+        setShowEscalationModal(true);
         break;
       default:
         break;
@@ -1904,6 +1925,30 @@ function MumClientDetail() {
           >
             <span className="icon">📞</span>
             <span>Voicemail Drop</span>
+          </button>
+          <button
+            className="action-btn application"
+            onClick={() => handleAction('send_application')}
+            title="Send borrower application link"
+          >
+            <span className="icon">📝</span>
+            <span>Send Application</span>
+          </button>
+          <button
+            className="action-btn portal"
+            onClick={() => handleAction('client_portal')}
+            title="Open or create client portal"
+          >
+            <span className="icon">🌐</span>
+            <span>Client Portal</span>
+          </button>
+          <button
+            className="action-btn escalation"
+            onClick={() => handleAction('escalation')}
+            title="Escalate issue to team member"
+          >
+            <span className="icon">🚨</span>
+            <span>Escalation</span>
           </button>
         </div>
       </div>

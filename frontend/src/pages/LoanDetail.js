@@ -673,6 +673,23 @@ function LoanDetail() {
       case 'escalation':
         setShowEscalationModal(true);
         break;
+      case 'send_application':
+        // For active loans, open the existing application or create new
+        if (loan.borrower_email) {
+          const appUrl = `${window.location.origin}/apply/purchase`;
+          window.open(appUrl, '_blank');
+        } else {
+          alert('Borrower email is required to send application');
+        }
+        break;
+      case 'client_portal':
+        // Open client portal for this loan
+        if (loan.workspace_slug) {
+          window.open(`${window.location.origin}/portal/${loan.workspace_slug}`, '_blank');
+        } else {
+          alert('No client portal found for this loan. Please create one from the loan details.');
+        }
+        break;
       default:
         break;
     }
@@ -2645,6 +2662,22 @@ function LoanDetail() {
           >
             <span className="icon">📞</span>
             <span>Voicemail Drop</span>
+          </button>
+          <button
+            className="action-btn application"
+            onClick={() => handleAction('send_application')}
+            title="Send borrower application link"
+          >
+            <span className="icon">📝</span>
+            <span>Send Application</span>
+          </button>
+          <button
+            className="action-btn portal"
+            onClick={() => handleAction('client_portal')}
+            title="Open or create client portal"
+          >
+            <span className="icon">🌐</span>
+            <span>Client Portal</span>
           </button>
           <button
             className="action-btn escalation"
