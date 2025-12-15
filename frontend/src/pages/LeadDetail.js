@@ -54,7 +54,8 @@ function LeadDetail() {
   const [editing, setEditing] = useState(true); // Always in edit mode
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
-  const [activeTab, setActiveTab] = useState('personal');
+  const [activeTab, setActiveTab] = useState('loan-details');
+  const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info' or 'employment'
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [borrowers, setBorrowers] = useState([]);
@@ -1820,12 +1821,6 @@ function LeadDetail() {
           Personal
         </button>
         <button
-          className={`tab-btn ${activeTab === 'employment' ? 'active' : ''}`}
-          onClick={() => setActiveTab('employment')}
-        >
-          Employment
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
@@ -2075,6 +2070,45 @@ function LeadDetail() {
               </button>
             </div>
 
+            {/* Sub-tabs for Personal Information and Employment */}
+            <div style={{ display: 'flex', gap: '0', marginBottom: '1.5rem', borderBottom: '1px solid #e0e0e0' }}>
+              <button
+                onClick={() => setPersonalSubTab('info')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'info' ? '600' : '400',
+                  color: personalSubTab === 'info' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'info' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Personal Information
+              </button>
+              <button
+                onClick={() => setPersonalSubTab('employment')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'employment' ? '600' : '400',
+                  color: personalSubTab === 'employment' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'employment' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Employment
+              </button>
+            </div>
+
+            {/* Personal Information Sub-tab Content */}
+            {personalSubTab === 'info' && (
+            <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ margin: 0 }}>Personal Information</h2>
               <button
@@ -2208,17 +2242,19 @@ function LeadDetail() {
                 </div>
               </div>
             )}
-          </div>
-          )}
+            </>
+            )}
 
-          {/* Employment Tab */}
-          {activeTab === 'employment' && (
-            <EmploymentTab
-              leadId={id}
-              formData={formData}
-              onFieldChange={handleFieldChange}
-              entityType="leads"
-            />
+            {/* Employment Sub-tab Content */}
+            {personalSubTab === 'employment' && (
+              <EmploymentTab
+                leadId={id}
+                formData={formData}
+                onFieldChange={handleFieldChange}
+                entityType="leads"
+              />
+            )}
+          </div>
           )}
 
           {/* Loan Information Tab */}
