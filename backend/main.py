@@ -38017,6 +38017,202 @@ async def auto_deduplicate_loans(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/loans/run-duplicate-check")
+async def run_duplicate_check(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run duplicate detection and create tasks for users to review.
+    This should be called daily (via cron or scheduler).
+    Creates tasks for loan officers when duplicate borrowers are detected.
+    """
+    try:
+        # Find duplicate loans by borrower name
+        duplicates = db.execute(text("""
+            SELECT
+                LOWER(TRIM(borrower_name)) as normalized_name,
+                COUNT(*) as count,
+                ARRAY_AGG(id ORDER BY created_at) as loan_ids,
+                ARRAY_AGG(loan_number ORDER BY created_at) as loan_numbers,
+                ARRAY_AGG(loan_officer_id ORDER BY created_at) as lo_ids,
+                ARRAY_AGG(stage::text ORDER BY created_at) as stages,
+                ARRAY_AGG(amount ORDER BY created_at) as amounts
+            FROM loans
+            WHERE borrower_name IS NOT NULL
+              AND borrower_name != ''
+              AND borrower_name != 'Unknown Borrower'
+            GROUP BY LOWER(TRIM(borrower_name))
+            HAVING COUNT(*) > 1
+            ORDER BY COUNT(*) DESC
+        """)).fetchall()
+
+        tasks_created = 0
+        duplicate_groups_found = len(duplicates)
+
+        for row in duplicates:
+            normalized_name = row[0]
+            count = row[1]
+            loan_ids = row[2]
+            loan_numbers = row[3]
+            lo_ids = row[4]
+            stages = row[5]
+            amounts = row[6]
+
+            # Get the loan officer(s) to assign the task to
+            # Use the first non-null loan officer, or current user as fallback
+            assigned_lo_id = None
+            for lo_id in lo_ids:
+                if lo_id:
+                    assigned_lo_id = lo_id
+                    break
+            if not assigned_lo_id:
+                assigned_lo_id = current_user.id
+
+            # Check if a task already exists for this duplicate group
+            existing_task = db.execute(text("""
+                SELECT id FROM tasks
+                WHERE title LIKE :title_pattern
+                  AND status != 'completed'
+                  AND created_at > CURRENT_DATE - INTERVAL '7 days'
+            """), {"title_pattern": f"%Duplicate Borrower: {normalized_name.title()}%"}).first()
+
+            if existing_task:
+                continue  # Skip if task already exists
+
+            # Format loan details for task description
+            loan_details = []
+            for i in range(count):
+                loan_details.append(
+                    f"• Loan #{loan_numbers[i]} - {stages[i]} - ${amounts[i]:,.0f if amounts[i] else 0}"
+                )
+
+            task_description = (
+                f"Possible duplicate borrower detected: {normalized_name.title()}\n\n"
+                f"Found {count} loans with the same borrower name:\n"
+                f"{chr(10).join(loan_details)}\n\n"
+                f"Please review and either:\n"
+                f"1. Merge the duplicate loans if they are the same person\n"
+                f"2. Rename one borrower if they are different people\n"
+                f"3. Delete the duplicate if it was created in error"
+            )
+
+            # Create task for the loan officer
+            new_task = Task(
+                title=f"⚠️ Duplicate Borrower: {normalized_name.title()}",
+                description=task_description,
+                status="pending",
+                priority="high",
+                owner_id=assigned_lo_id,
+                loan_id=loan_ids[0],  # Link to the first loan
+                related_contact_name=normalized_name.title(),
+                related_type="duplicate_review",
+                due_date=datetime.now(timezone.utc) + timedelta(days=3),
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(new_task)
+            tasks_created += 1
+
+        db.commit()
+
+        return {
+            "success": True,
+            "duplicate_groups_found": duplicate_groups_found,
+            "tasks_created": tasks_created,
+            "message": f"Found {duplicate_groups_found} duplicate groups, created {tasks_created} new tasks"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error running duplicate check: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/scheduled/daily-duplicate-check")
+async def scheduled_daily_duplicate_check():
+    """
+    Endpoint for scheduled daily duplicate check.
+    Can be called by Vercel Cron or external scheduler.
+    """
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+
+        # Find duplicates and create tasks
+        duplicates = db.execute(text("""
+            SELECT
+                LOWER(TRIM(borrower_name)) as normalized_name,
+                COUNT(*) as count,
+                ARRAY_AGG(id ORDER BY created_at) as loan_ids,
+                ARRAY_AGG(loan_number ORDER BY created_at) as loan_numbers,
+                ARRAY_AGG(loan_officer_id ORDER BY created_at) as lo_ids,
+                ARRAY_AGG(stage::text ORDER BY created_at) as stages,
+                ARRAY_AGG(amount ORDER BY created_at) as amounts
+            FROM loans
+            WHERE borrower_name IS NOT NULL
+              AND borrower_name != ''
+              AND borrower_name != 'Unknown Borrower'
+            GROUP BY LOWER(TRIM(borrower_name))
+            HAVING COUNT(*) > 1
+        """)).fetchall()
+
+        tasks_created = 0
+
+        for row in duplicates:
+            normalized_name = row[0]
+            count = row[1]
+            loan_ids = row[2]
+            loan_numbers = row[3]
+            lo_ids = row[4]
+            stages = row[5]
+            amounts = row[6]
+
+            assigned_lo_id = next((lo_id for lo_id in lo_ids if lo_id), 1)
+
+            # Check if task already exists
+            existing_task = db.execute(text("""
+                SELECT id FROM tasks
+                WHERE title LIKE :title_pattern
+                  AND status != 'completed'
+                  AND created_at > CURRENT_DATE - INTERVAL '7 days'
+            """), {"title_pattern": f"%Duplicate Borrower: {normalized_name.title()}%"}).first()
+
+            if existing_task:
+                continue
+
+            loan_details = [
+                f"• Loan #{loan_numbers[i]} - {stages[i]} - ${amounts[i]:,.0f if amounts[i] else 0}"
+                for i in range(count)
+            ]
+
+            new_task = Task(
+                title=f"⚠️ Duplicate Borrower: {normalized_name.title()}",
+                description=(
+                    f"Possible duplicate borrower detected: {normalized_name.title()}\n\n"
+                    f"Found {count} loans with the same borrower name:\n"
+                    f"{chr(10).join(loan_details)}\n\n"
+                    f"Please review and merge, rename, or delete duplicates."
+                ),
+                status="pending",
+                priority="high",
+                owner_id=assigned_lo_id,
+                loan_id=loan_ids[0],
+                related_contact_name=normalized_name.title(),
+                related_type="duplicate_review",
+                due_date=datetime.now(timezone.utc) + timedelta(days=3)
+            )
+            db.add(new_task)
+            tasks_created += 1
+
+        db.commit()
+        db.close()
+
+        logger.info(f"Daily duplicate check: {len(duplicates)} groups found, {tasks_created} tasks created")
+        return {"success": True, "duplicates_found": len(duplicates), "tasks_created": tasks_created}
+    except Exception as e:
+        logger.error(f"Scheduled duplicate check failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get single loan using raw SQL to avoid enum deserialization issues"""
