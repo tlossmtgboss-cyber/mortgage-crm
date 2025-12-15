@@ -366,7 +366,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const totalItems = getTabCount('tasks') + getTabCount('emails') + getTabCount('calls');
 
   return (
-    <div className="action-sidebar">
+    <div className={`action-sidebar ${selectedItem ? 'expanded' : ''}`}>
       <div className="action-sidebar-header">
         <h2>Action Center</h2>
         <div className="header-actions">

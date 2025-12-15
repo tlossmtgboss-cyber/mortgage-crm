@@ -185,6 +185,28 @@
   padding: 12px 16px 16px;
 }
 
+/* Action list styling in expanded sidebar - mirrors Tasks page inbox */
+.action-sidebar.expanded .action-list {
+  padding: 0;
+}
+
+.action-sidebar.expanded .action-list .action-item {
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+}
+
+.action-sidebar.expanded .action-list .action-item:first-child {
+  border-top: none;
+}
+
+.action-sidebar.expanded .action-list .action-item.selected {
+  background: #e8f4f6;
+  border-left: 3px solid #217F8D;
+}
+
 /* Loading State */
 .action-loading {
   display: flex;
@@ -1252,11 +1274,24 @@
   .action-sidebar {
     width: 340px;
   }
+
+  .action-sidebar.expanded {
+    width: 720px;
+  }
+
+  .action-content.with-detail .action-list {
+    flex: 0 0 300px;
+    width: 300px;
+  }
 }
 
 @media (max-width: 1200px) {
   .action-sidebar {
     width: 320px;
+  }
+
+  .action-sidebar.expanded {
+    width: 640px;
   }
 
   .action-tab .tab-label {
@@ -1265,6 +1300,30 @@
 
   .action-tab {
     gap: 4px;
+  }
+
+  .action-content.with-detail .action-list {
+    flex: 0 0 260px;
+    width: 260px;
+  }
+}
+
+@media (max-width: 1000px) {
+  /* On smaller screens, revert to vertical stacked layout */
+  .action-sidebar.expanded {
+    width: 380px;
+  }
+
+  .action-content.with-detail {
+    flex-direction: column;
+  }
+
+  .action-content.with-detail .action-list {
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
   }
 }
 
