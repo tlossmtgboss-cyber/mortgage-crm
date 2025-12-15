@@ -4794,6 +4794,17 @@ def is_allowed_origin(origin: str) -> bool:
         return True
     return False
 
+# Add security middleware FIRST (order matters - last added = outermost = first to execute)
+# Security middleware runs first, then CORS wraps everything including error responses
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(IPBlockingMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=300, requests_per_hour=5000)
+app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
+app.add_middleware(SecurityLoggingMiddleware)
+
+# CORS middleware added LAST = outermost = wraps ALL responses including security middleware errors
+# This ensures CORS headers are added even when security middleware returns 403/429/etc
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://.*\.vercel\.app$",
@@ -4805,17 +4816,8 @@ app.add_middleware(
     max_age=3600,
 )
 
-# Add security middleware (order matters - first added is last executed)
-# IPAccessControlMiddleware should be early in the chain to block unauthorized IPs
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RequestValidationMiddleware)
-app.add_middleware(IPBlockingMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=300, requests_per_hour=5000)
-app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
-app.add_middleware(SecurityLoggingMiddleware)
-
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
-            "IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
+            "CORS (outermost), IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 
 # ============================================================================
 # PRODUCTION HARDENING - Sentry, structured logging, request tracing
