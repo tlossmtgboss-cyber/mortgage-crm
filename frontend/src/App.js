@@ -339,9 +339,9 @@ function App() {
           {/* Co-borrower Application (public - token-based access) */}
           <Route path="/coborrower/:token" element={<LazyPage><CoborrowerApplication /></LazyPage>} />
 
-          {/* Borrower Portal (public - token-based access) */}
-          <Route path="/portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />
-          <Route path="/portal" element={<LazyPage><BorrowerPortal /></LazyPage>} />
+          {/* Legacy Borrower Portal - moved to /borrower-portal to avoid conflict with PURL /portal/:slug route */}
+          <Route path="/borrower-portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />
+          <Route path="/borrower-portal" element={<LazyPage><BorrowerPortal /></LazyPage>} />
 
           {/* Active Loan Portal - Real-time borrower dashboard with WebSocket updates */}
           <Route path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />
