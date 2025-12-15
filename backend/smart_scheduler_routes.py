@@ -299,15 +299,15 @@ Looking forward to speaking with you!
 
         if result.get("success"):
             logger.info(f"Appointment confirmation email sent successfully to {attendee_email}")
-            return True
+            return {"success": True, "error": None}
         else:
-            error_msg = result.get('error', 'Unknown error')
+            error_msg = result.get('error', f"SendGrid returned status {result.get('status_code', 'unknown')}")
             logger.error(f"Failed to send appointment email to {attendee_email}: {error_msg}")
-            return False
+            return {"success": False, "error": error_msg}
 
     except Exception as e:
         logger.error(f"Exception in send_appointment_confirmation_email: {e}", exc_info=True)
-        return False
+        return {"success": False, "error": str(e)}
 
 
 def send_appointment_confirmation_sms(
@@ -1553,7 +1553,7 @@ async def create_appointment(
 
             logger.info(f"Sending confirmation email to {appt_data.attendee_email}")
             # Send confirmation email to attendee (borrower) with calendar invite
-            email_sent = send_appointment_confirmation_email(
+            email_result = send_appointment_confirmation_email(
                 attendee_email=appt_data.attendee_email,
                 attendee_name=appt_data.attendee_name or "there",
                 appointment_title=appointment.title,
@@ -1568,9 +1568,10 @@ async def create_appointment(
                 duration_minutes=appointment.duration_minutes
             )
 
+            email_sent = email_result.get("success", False)
             if not email_sent:
-                email_error = "SendGrid returned failure - check server logs for details"
-                logger.warning(f"Email send returned False for {appt_data.attendee_email}")
+                email_error = email_result.get("error", "Unknown email error")
+                logger.warning(f"Email send failed for {appt_data.attendee_email}: {email_error}")
 
             # Send notification email to team member (loan officer) with calendar invite
             if team_member_email:
