@@ -3,8 +3,7 @@
   display: flex;
   width: 100%;
   min-height: calc(100vh - 60px);
-  overflow-y: auto;
-  scrollbar-gutter: auto;
+  overflow: hidden;
 }
 
 .lead-detail-page {
@@ -15,28 +14,19 @@
   max-width: 100%;
   background: #ffffff;
   min-height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
   min-width: 0;
   overflow-y: auto;
   box-sizing: border-box;
-}
-
-/* Hide scrollbar */
-.lead-detail-page-wrapper {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-}
-
-.lead-detail-page-wrapper::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari, Opera */
-}
-
-.lead-detail-page {
+  /* Hide scrollbar but keep scrolling */
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
 .lead-detail-page::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 .detail-header {
