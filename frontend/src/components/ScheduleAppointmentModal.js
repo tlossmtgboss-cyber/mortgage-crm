@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
-// v2.2 - Fixed "Failed to fetch" error - build 20251215-1339
+// v3.1 - Fixed deployment - build 20251215-1515
+// This version does NOT call team-assignments endpoint
+console.log('[ScheduleAppointmentModal] v3.1 loaded - build 20251215-1515');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
