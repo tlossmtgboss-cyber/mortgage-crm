@@ -15,7 +15,7 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 
 // Lazy load theme components
 const themeComponents = {
-  LeadPopsCardinal: lazy(() => import('./themes/LeadPopsCardinal')),
+  BoldImpact: lazy(() => import('./themes/BoldImpact')),
   ProfessionalClean: lazy(() => import('./themes/ProfessionalClean').catch(() => ({ default: FallbackTheme }))),
   ModernGradient: lazy(() => import('./themes/ModernGradient').catch(() => ({ default: FallbackTheme }))),
   MinimalFocus: lazy(() => import('./themes/MinimalFocus').catch(() => ({ default: FallbackTheme }))),

@@ -119,6 +119,7 @@ const PartnerPortalView = lazy(() => import('./components/portal/PartnerPortalVi
 const PerenniaClientPortalUltimate = lazy(() => import('./components/portal/PerenniaClientPortalUltimate'));
 const HomeValueIntelligence = lazy(() => import('./components/portal/HomeValueIntelligence'));
 const PresentationEngine = lazy(() => import('./components/portal/PresentationEngine'));
+const TotalCostAnalysis = lazy(() => import('./components/portal/TotalCostAnalysis'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -348,6 +349,10 @@ function App() {
           {/* Perennia Client Portal Ultimate - Production-ready lifecycle portal */}
           <Route path="/portal/ultimate/:loanId" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />
           <Route path="/portal/ultimate/token/:token" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />
+
+          {/* Total Cost Analysis - Mortgage Coach style comparison tool */}
+          <Route path="/portal/tca/:loanId" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />
+          <Route path="/analysis/:token" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />
 
           {/* Partner Portal - Realtor/Partner view with magic link access */}
           <Route path="/partner/:token" element={<LazyPage><PartnerPortalView /></LazyPage>} />

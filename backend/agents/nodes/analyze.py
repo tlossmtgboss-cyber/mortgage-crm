@@ -69,6 +69,7 @@ BASE_TOOLS = [
     "send_sms",
     "send_text",
     "send_email",
+    "bulk_lead_outreach",  # Bulk outreach to leads with scheduling
 ]
 
 # Map intents to the base tools that support them
@@ -342,6 +343,22 @@ INTENT_PATTERNS = {
         "urgency": "medium",
         "complexity": "simple",
         "confidence": 0.95,
+        "requires_action": True
+    },
+
+    # Communication - Bulk outreach to leads
+    "bulk_lead_outreach": {
+        "patterns": [
+            r"(send|text|sms|message).*(all|every|each).*(lead|new lead|prospect)",  # send text to all leads
+            r"(text|sms|message|reach out).*(all|my).*(new|hot|cold|stale)?\s*(lead|prospect)",  # text all my new leads
+            r"(bulk|mass) (text|sms|outreach|message)",  # bulk text
+            r"(schedule|set up).*(call|meeting).*(with|for).*(all|every|each).*(lead)",  # schedule calls with all leads
+        ],
+        "intent": QueryIntent.ACTION_REQUEST,
+        "tools": ["bulk_lead_outreach", "get_leads_by_status", "send_sms"],
+        "urgency": "medium",
+        "complexity": "complex",
+        "confidence": 0.90,
         "requires_action": True
     },
 

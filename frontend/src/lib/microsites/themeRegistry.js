@@ -7,7 +7,7 @@
 
 // Import theme components (lazy loaded for performance)
 const themeComponents = {
-  LeadPopsCardinal: () => import('../../pages/microsites/themes/LeadPopsCardinal'),
+  BoldImpact: () => import('../../pages/microsites/themes/BoldImpact'),
   ProfessionalClean: () => import('../../pages/microsites/themes/ProfessionalClean'),
   ModernGradient: () => import('../../pages/microsites/themes/ModernGradient'),
   MinimalFocus: () => import('../../pages/microsites/themes/MinimalFocus'),
@@ -19,17 +19,17 @@ const themeComponents = {
  * Theme metadata for UI display
  */
 export const themeMetadata = {
-  'leadpops-cardinal': {
-    slug: 'leadpops-cardinal',
-    name: 'LeadPops Cardinal',
-    description: 'A bold, modern theme inspired by LeadPops with strong call-to-actions and lead capture focus.',
+  'bold-impact': {
+    slug: 'bold-impact',
+    name: 'Bold Impact',
+    description: 'A bold, modern theme with strong call-to-actions and lead capture focus.',
     category: 'bold',
-    componentName: 'LeadPopsCardinal',
+    componentName: 'BoldImpact',
     features: ['hero_image', 'contact_form', 'rate_calculator', 'testimonials', 'about_section'],
-    thumbnailUrl: '/images/themes/leadpops-cardinal-thumb.png',
+    thumbnailUrl: '/images/themes/bold-impact-thumb.png',
     previewImages: [
-      '/images/themes/leadpops-cardinal-1.png',
-      '/images/themes/leadpops-cardinal-2.png',
+      '/images/themes/bold-impact-1.png',
+      '/images/themes/bold-impact-2.png',
     ],
     supportsCustomColors: true,
     layoutOptions: {

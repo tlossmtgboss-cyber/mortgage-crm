@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS microsite_themes (
 -- Insert default themes
 INSERT INTO microsite_themes (slug, name, description, category, component_name, features, display_order, is_featured)
 VALUES
-    ('leadpops-cardinal', 'LeadPops Cardinal', 'A bold, modern theme inspired by LeadPops with strong call-to-actions and lead capture focus.', 'bold', 'LeadPopsCardinal', '["hero_image", "contact_form", "rate_calculator", "testimonials", "about_section"]', 1, TRUE),
+    ('bold-impact', 'Bold Impact', 'A bold, modern theme with strong call-to-actions and lead capture focus.', 'bold', 'BoldImpact', '["hero_image", "contact_form", "rate_calculator", "testimonials", "about_section"]', 1, TRUE),
     ('professional-clean', 'Professional Clean', 'A clean, professional theme perfect for established loan officers.', 'professional', 'ProfessionalClean', '["hero_image", "contact_form", "credentials", "about_section"]', 2, FALSE),
     ('modern-gradient', 'Modern Gradient', 'A contemporary theme with gradient backgrounds and smooth animations.', 'modern', 'ModernGradient', '["hero_gradient", "contact_form", "testimonials", "about_section"]', 3, FALSE),
     ('minimal-focus', 'Minimal Focus', 'A minimalist theme that puts the focus on your message and lead capture.', 'minimal', 'MinimalFocus', '["contact_form", "about_section"]', 4, FALSE)

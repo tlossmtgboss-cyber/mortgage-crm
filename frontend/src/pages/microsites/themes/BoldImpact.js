@@ -1,20 +1,20 @@
 /**
- * LeadPops Cardinal Theme
+ * Bold Impact Theme
  *
- * A bold, modern theme inspired by LeadPops with strong call-to-actions
- * and lead capture focus. Features prominent hero section, rate calculator,
- * testimonials, and comprehensive contact form.
+ * A bold, modern theme with strong call-to-actions and lead capture focus.
+ * Features prominent hero section, rate calculator, testimonials, and
+ * comprehensive contact form.
  */
 
 import React, { useState } from 'react';
-import './LeadPopsCardinal.css';
+import './BoldImpact.css';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
+const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -79,9 +79,9 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
           ...formData,
           source: 'microsite',
           loan_officer_id: user?.id,
-          referral_source: `microsite_leadpops_${user?.id}`,
+          referral_source: `microsite_bold_impact_${user?.id}`,
           utm_source: 'microsite',
-          utm_medium: 'leadpops_cardinal',
+          utm_medium: 'bold_impact',
           utm_campaign: user?.slug || user?.id
         })
       });
@@ -107,7 +107,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
 
   if (submitted) {
     return (
-      <div className="leadpops-cardinal" style={customStyles}>
+      <div className="bold-impact" style={customStyles}>
         <div className="success-message">
           <div className="success-icon">✓</div>
           <h2>Thank You!</h2>
@@ -125,9 +125,9 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
   }
 
   return (
-    <div className="leadpops-cardinal" style={customStyles}>
+    <div className="bold-impact" style={customStyles}>
       {/* Navigation */}
-      <nav className={`cardinal-nav ${config.headerStyle}`}>
+      <nav className={`bold-impact-nav ${config.headerStyle}`}>
         <div className="nav-container">
           <div className="nav-brand">
             {loPhoto && <img src={loPhoto} alt={loName} className="nav-avatar" />}
@@ -148,7 +148,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
       </nav>
 
       {/* Hero Section */}
-      <section className={`cardinal-hero ${config.heroStyle}`}>
+      <section className={`bold-impact-hero ${config.heroStyle}`}>
         <div className="hero-background"></div>
         <div className="hero-content">
           <div className="hero-text">
@@ -187,7 +187,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
 
       {/* Specialties Section */}
       {specialties.length > 0 && (
-        <section className="cardinal-specialties">
+        <section className="bold-impact-specialties">
           <div className="specialties-container">
             <h2>How I Can Help You</h2>
             <div className="specialties-grid">
@@ -204,7 +204,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
 
       {/* About Section */}
       {bioExtended && (
-        <section className="cardinal-about">
+        <section className="bold-impact-about">
           <div className="about-container">
             <div className="about-content">
               {loPhoto && (
@@ -228,7 +228,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
 
       {/* Testimonials Section */}
       {config.showTestimonials && testimonials.length > 0 && (
-        <section className="cardinal-testimonials">
+        <section className="bold-impact-testimonials">
           <div className="testimonials-container">
             <h2>What Clients Say</h2>
             <div className="testimonials-grid">
@@ -252,7 +252,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
       )}
 
       {/* Contact Form Section */}
-      <section id="contact-form" className="cardinal-contact">
+      <section id="contact-form" className="bold-impact-contact">
         <div className="contact-container">
           <div className="contact-header">
             <h2>Get Your Free Quote</h2>
@@ -417,7 +417,7 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
       </section>
 
       {/* Footer */}
-      <footer className="cardinal-footer">
+      <footer className="bold-impact-footer">
         <div className="footer-container">
           <div className="footer-info">
             <strong>{loName}</strong>
@@ -449,4 +449,4 @@ const LeadPopsCardinal = ({ user, profile, themeConfig = {} }) => {
   );
 };
 
-export default LeadPopsCardinal;
+export default BoldImpact;

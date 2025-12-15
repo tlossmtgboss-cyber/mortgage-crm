@@ -179,6 +179,7 @@ def seed_default_themes(db: Session):
         old_theme.slug = "bold-impact"
         old_theme.name = "Bold Impact"
         old_theme.description = "A bold, modern theme with strong call-to-actions and lead capture focus."
+        old_theme.component_name = "BoldImpact"
         db.commit()
         logger.info("Theme renamed successfully")
 
@@ -188,7 +189,7 @@ def seed_default_themes(db: Session):
             "name": "Bold Impact",
             "description": "A bold, modern theme with strong call-to-actions and lead capture focus.",
             "category": ThemeCategory.BOLD,
-            "component_name": "LeadPopsCardinal",
+            "component_name": "BoldImpact",
             "features": ["hero_image", "contact_form", "rate_calculator", "testimonials", "about_section"],
             "display_order": 1,
             "is_featured": True,
@@ -344,8 +345,20 @@ async def list_themes(
             old_theme.slug = "bold-impact"
             old_theme.name = "Bold Impact"
             old_theme.description = "A bold, modern theme with strong call-to-actions and lead capture focus."
+            old_theme.component_name = "BoldImpact"
             db.commit()
             logger.info("Theme renamed successfully")
+
+        # Also check for old component_name and update it
+        old_component = db.query(MicrositeTheme).filter(
+            MicrositeTheme.component_name == "LeadPopsCardinal"
+        ).first()
+
+        if old_component:
+            logger.info("Updating component_name from 'LeadPopsCardinal' to 'BoldImpact'...")
+            old_component.component_name = "BoldImpact"
+            db.commit()
+            logger.info("Component name updated successfully")
 
         # Check if any themes exist, seed defaults if not
         theme_count = db.query(MicrositeTheme).count()

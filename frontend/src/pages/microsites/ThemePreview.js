@@ -10,7 +10,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 
 // Direct imports instead of lazy to avoid nested lazy loading issues
 // (ThemePreview is already lazy-loaded from App.js)
-import LeadPopsCardinal from './themes/LeadPopsCardinal';
+import BoldImpact from './themes/BoldImpact';
 import ProfessionalClean from './themes/ProfessionalClean';
 import ModernGradient from './themes/ModernGradient';
 import MinimalFocus from './themes/MinimalFocus';
@@ -22,7 +22,7 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 
 // Theme components map
 const themeComponents = {
-  LeadPopsCardinal,
+  BoldImpact,
   ProfessionalClean,
   ModernGradient,
   MinimalFocus,
@@ -234,7 +234,7 @@ const ThemePreview = () => {
   }
 
   // Get the theme component
-  const componentName = themeData.componentName || 'LeadPopsCardinal';
+  const componentName = themeData.componentName || 'BoldImpact';
   const ThemeComponent = themeComponents[componentName];
 
   if (!ThemeComponent) {

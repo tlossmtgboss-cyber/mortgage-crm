@@ -1896,6 +1896,142 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
     tools["send_text"] = execute_send_sms  # Alias for natural language
     tools["text_contact"] = execute_send_sms  # Another alias
 
+    async def execute_bulk_lead_outreach(args):
+        """
+        Send bulk text messages to leads and create follow-up tasks.
+
+        Args:
+            lead_status: Status of leads to contact (e.g., "NEW", "ATTEMPTED_CONTACT")
+            message_template: Message to send (can include {name} placeholder)
+            include_calendar_link: Whether to include user's calendar booking link
+            create_followup_tasks: Whether to create tasks for non-responders
+        """
+        from sqlalchemy import text
+        from database import SessionLocal
+        from integrations.twilio_service import TwilioSMSClient
+
+        lead_status = args.get("lead_status", "NEW")
+        message_template = args.get("message_template", "")
+        include_calendar_link = args.get("include_calendar_link", True)
+        create_followup_tasks = args.get("create_followup_tasks", True)
+
+        if not message_template:
+            message_template = "Hi {name}, this is your loan officer. I'd love to schedule a time to discuss your mortgage needs. When works best for you?"
+
+        db = SessionLocal()
+        results = {
+            "leads_found": 0,
+            "texts_sent": 0,
+            "texts_failed": 0,
+            "tasks_created": 0,
+            "leads_contacted": [],
+            "leads_no_phone": []
+        }
+
+        try:
+            # Get leads by status
+            query = text("""
+                SELECT id, first_name, last_name, phone, email, stage
+                FROM leads
+                WHERE stage = :status
+                AND phone IS NOT NULL
+                AND phone != ''
+                LIMIT 50
+            """)
+            leads = db.execute(query, {"status": lead_status}).fetchall()
+            results["leads_found"] = len(leads)
+
+            if not leads:
+                return {
+                    "success": True,
+                    "message": f"No leads found with status '{lead_status}' that have phone numbers.",
+                    "data": results
+                }
+
+            # Get calendar booking link for user if available
+            booking_link = ""
+            if include_calendar_link and user_id:
+                booking_query = text("""
+                    SELECT booking_slug FROM users WHERE id = :user_id
+                """)
+                user_result = db.execute(booking_query, {"user_id": user_id}).fetchone()
+                if user_result and user_result.booking_slug:
+                    booking_link = f"\n\nBook a time here: https://mortgage-crm-nine.vercel.app/book/{user_result.booking_slug}"
+
+            # Initialize SMS client
+            sms_client = TwilioSMSClient()
+
+            for lead in leads:
+                lead_id, first_name, last_name, phone, email, stage = lead
+                name = f"{first_name or ''} {last_name or ''}".strip() or "there"
+
+                if not phone:
+                    results["leads_no_phone"].append({"id": lead_id, "name": name})
+                    continue
+
+                # Personalize message
+                message = message_template.replace("{name}", first_name or name)
+                message += booking_link
+
+                try:
+                    # Send SMS
+                    sid = await sms_client.send_sms(to_number=phone, message=message)
+                    if sid:
+                        results["texts_sent"] += 1
+                        results["leads_contacted"].append({
+                            "id": lead_id,
+                            "name": name,
+                            "phone": phone,
+                            "message_sid": sid
+                        })
+
+                        # Log communication
+                        log_query = text("""
+                            INSERT INTO communications (lead_id, type, direction, content, status, created_at)
+                            VALUES (:lead_id, 'sms', 'outbound', :content, 'sent', NOW())
+                        """)
+                        db.execute(log_query, {"lead_id": lead_id, "content": message})
+
+                        # Create follow-up task if requested
+                        if create_followup_tasks:
+                            task_query = text("""
+                                INSERT INTO tasks (
+                                    title, description, due_date, priority, status,
+                                    related_to_type, related_to_id, created_at
+                                ) VALUES (
+                                    :title, :description, NOW() + INTERVAL '2 days',
+                                    'medium', 'pending', 'lead', :lead_id, NOW()
+                                )
+                            """)
+                            db.execute(task_query, {
+                                "title": f"Follow up with {name} - no SMS response",
+                                "description": f"Sent scheduling text on {datetime.now().strftime('%m/%d')}. Follow up if no response.",
+                                "lead_id": lead_id
+                            })
+                            results["tasks_created"] += 1
+                    else:
+                        results["texts_failed"] += 1
+                except Exception as e:
+                    logger.error(f"Failed to send SMS to {phone}: {e}")
+                    results["texts_failed"] += 1
+
+            db.commit()
+
+            return {
+                "success": True,
+                "message": f"Sent {results['texts_sent']} texts to {lead_status} leads. Created {results['tasks_created']} follow-up tasks.",
+                "data": results
+            }
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error in bulk_lead_outreach: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            db.close()
+
+    tools["bulk_lead_outreach"] = execute_bulk_lead_outreach
+
     async def execute_send_email(args):
         """
         Send an email to an external contact via Microsoft Graph.
