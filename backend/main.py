@@ -3582,8 +3582,11 @@ class LeadCreate(BaseModel):
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    preferred_communication: Optional[str] = None
     co_applicant_name: Optional[str] = None
     co_applicant_email: Optional[str] = None
     co_applicant_phone: Optional[str] = None
