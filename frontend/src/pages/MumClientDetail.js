@@ -1841,10 +1841,9 @@ function MumClientDetail() {
         entityData={client}
       />
       </div>
-    </div>
 
-    {/* Fixed Sidebar */}
-    <CalendarSidebar key={calendarRefreshKey}>
+      {/* Fixed Sidebar */}
+      <CalendarSidebar key={calendarRefreshKey}>
       {/* Quick Actions */}
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
@@ -1925,6 +1924,7 @@ function MumClientDetail() {
         </div>
       </div>
     </CalendarSidebar>
+    </div>
   );
 }
 

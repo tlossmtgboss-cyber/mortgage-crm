@@ -2586,10 +2586,9 @@ function LoanDetail() {
         }}
       />
       </div>
-    </div>
 
-    {/* Fixed Sidebar */}
-    <CalendarSidebar loanId={id} key={calendarRefreshKey}>
+      {/* Fixed Sidebar */}
+      <CalendarSidebar loanId={id} key={calendarRefreshKey}>
       {/* Quick Actions */}
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
@@ -2674,6 +2673,7 @@ function LoanDetail() {
         </div>
       </div>
     </CalendarSidebar>
+    </div>
   );
 }
 

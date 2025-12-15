@@ -3862,10 +3862,9 @@ function LeadDetail() {
         </div>
       )}
       </div>
-    </div>
 
-    {/* Fixed Sidebar */}
-    <CalendarSidebar leadId={id} key={calendarRefreshKey}>
+      {/* Fixed Sidebar */}
+      <CalendarSidebar leadId={id} key={calendarRefreshKey}>
       {/* Quick Actions */}
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
@@ -3972,6 +3971,7 @@ function LeadDetail() {
         </div>
       </div>
     </CalendarSidebar>
+    </div>
   );
 }
 
