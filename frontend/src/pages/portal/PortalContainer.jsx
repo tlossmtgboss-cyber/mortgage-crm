@@ -156,15 +156,7 @@ const detectPortalStage = (workspaceData) => {
 
   // IMPORTANT: Portals are created when applications are submitted
   // So if a workspace/portal exists, it should ALWAYS show ActiveLoanPortal
-  // unless explicitly marked as 'lead' status AND no application exists
-
-  // Only show Lead portal if explicitly marked as lead AND no application
-  if (status === 'lead' && !application) {
-    return PortalStage.LEAD;
-  }
-
-  // Default to active loan for any workspace that exists
-  // Portals are created when application is submitted, so this is the correct default
+  // The LeadPortal is deprecated - all portals show ActiveLoanPortal
   return PortalStage.ACTIVE_LOAN;
 };
 
