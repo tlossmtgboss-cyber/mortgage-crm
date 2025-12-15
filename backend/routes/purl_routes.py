@@ -77,6 +77,61 @@ from middleware.purl_auth import (
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# AUTO-CREATE LEAD_CONDITIONS TABLE IF NOT EXISTS
+# =============================================================================
+
+def ensure_lead_conditions_table():
+    """Ensure the lead_conditions table exists in the database."""
+    from database import get_db
+    from sqlalchemy import text
+
+    try:
+        db = next(get_db())
+        # Check if table exists
+        result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'lead_conditions'
+            )
+        """))
+        exists = result.scalar()
+
+        if not exists:
+            logger.info("Creating lead_conditions table...")
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS lead_conditions (
+                    id SERIAL PRIMARY KEY,
+                    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    category VARCHAR(100) DEFAULT 'other',
+                    priority VARCHAR(50) DEFAULT 'required',
+                    due_date DATE,
+                    status VARCHAR(50) DEFAULT 'pending',
+                    is_new BOOLEAN DEFAULT true,
+                    created_by_id INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_lead_conditions_lead_id ON lead_conditions(lead_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_lead_conditions_status ON lead_conditions(status)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_lead_conditions_category ON lead_conditions(category)"))
+            db.commit()
+            logger.info("✅ lead_conditions table created successfully")
+        else:
+            logger.debug("lead_conditions table already exists")
+        db.close()
+    except Exception as e:
+        logger.warning(f"Could not auto-create lead_conditions table: {e}")
+
+# Run table creation check on module load
+try:
+    ensure_lead_conditions_table()
+except Exception as e:
+    logger.warning(f"Error during lead_conditions table check: {e}")
+
+# =============================================================================
 # ROUTERS
 # =============================================================================
 
