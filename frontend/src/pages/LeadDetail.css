@@ -1007,9 +1007,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.calendar,
 .action-btn.video,
 .action-btn.teams,
-.action-btn.record,
 .action-btn.voicemail,
-.action-btn.voice,
 .action-btn.escalation,
 .action-btn.application {
   background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
@@ -1025,9 +1023,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.calendar:hover:not(:disabled),
 .action-btn.video:hover:not(:disabled),
 .action-btn.teams:hover:not(:disabled),
-.action-btn.record:hover:not(:disabled),
 .action-btn.voicemail:hover:not(:disabled),
-.action-btn.voice:hover:not(:disabled),
 .action-btn.escalation:hover:not(:disabled),
 .action-btn.application:hover:not(:disabled) {
   background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
@@ -1042,9 +1038,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.calendar .icon,
 .action-btn.video .icon,
 .action-btn.teams .icon,
-.action-btn.record .icon,
 .action-btn.voicemail .icon,
-.action-btn.voice .icon,
 .action-btn.escalation .icon,
 .action-btn.application .icon {
   color: white;
@@ -1070,34 +1064,6 @@ button.borrower-btn.add-borrower-btn:hover {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
-/* Listening state animation */
-.action-btn.voice.listening {
-  animation: pulse 1.5s ease-in-out infinite;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border-color: #ef4444;
-}
-
-.action-btn.voice.listening .icon {
-  animation: scale-pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-  }
-  50% {
-    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.6);
-  }
-}
-
-@keyframes scale-pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.2);
-  }
-}
 
 /* Email History */
 .email-list {
