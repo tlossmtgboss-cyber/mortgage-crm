@@ -7,19 +7,20 @@
 
 .lead-detail-page {
   flex: 1;
-  padding: 32px;
-  padding-right: 312px; /* Account for fixed sidebar (280px + 32px padding) */
+  padding: 16px 24px;
+  padding-right: 304px; /* Account for fixed sidebar (280px + 24px padding) */
   max-width: 100%;
   background: #ffffff;
-  min-height: 100vh;
+  min-height: calc(100vh - 60px);
   min-width: 0;
+  overflow-y: auto;
 }
 
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .nav-buttons {
@@ -193,9 +194,9 @@
 /* Borrower Selector */
 .borrower-selector {
   display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-  padding: 20px 24px;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
@@ -345,19 +346,19 @@ button.borrower-btn.add-borrower-btn:hover {
 /* Profile Tabs */
 .profile-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
+  gap: 4px;
+  margin-bottom: 12px;
   border-bottom: 2px solid #e0e0e0;
   padding-bottom: 0;
 }
 
 .tab-btn {
-  padding: 12px 24px;
+  padding: 8px 16px;
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: #666;
   transition: all 0.2s ease;
@@ -636,7 +637,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .detail-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   width: 100%;
 }
 
@@ -644,7 +645,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .left-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   width: 100%;
   flex: 1;
 }
@@ -652,18 +653,18 @@ button.borrower-btn.add-borrower-btn:hover {
 .info-section {
   background: white;
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px 20px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
   width: 100%;
 }
 
 .info-section h2 {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: #64748b;
-  margin: 0 0 20px 0;
-  padding-bottom: 12px;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
   border-bottom: 2px solid #e2e8f0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -673,7 +674,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .info-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 12px;
 }
 
 /* Compact Info Grid */
