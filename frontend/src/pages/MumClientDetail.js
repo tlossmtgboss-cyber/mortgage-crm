@@ -14,6 +14,7 @@ import VideoMeetings from '../components/VideoMeetings';
 import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EmailComposerModal from '../components/EmailComposerModal';
+import EscalationModal from '../components/EscalationModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import './LeadDetail.css';
 
@@ -1859,6 +1860,15 @@ function MumClientDetail() {
           email: client?.email
         }}
         entityType="mum"
+        entityData={client}
+      />
+
+      {/* Escalation Modal */}
+      <EscalationModal
+        isOpen={showEscalationModal}
+        onClose={() => setShowEscalationModal(false)}
+        entityType="mum"
+        entityId={id}
         entityData={client}
       />
       </div>
