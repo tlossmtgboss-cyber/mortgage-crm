@@ -123,10 +123,10 @@ const QuickStats = () => (
 // Pre-Approval Milestone Progress Bar
 const PreApprovalProgress = ({ currentStep = 0 }) => {
   const steps = [
-    { id: 1, label: 'Complete Application', shortLabel: 'Application', icon: '📝' },
-    { id: 2, label: 'Upload Documents', shortLabel: 'Documents', icon: '📄' },
-    { id: 3, label: 'Review & Processing', shortLabel: 'Processing', icon: '⏳' },
-    { id: 4, label: 'Get Pre-Approved', shortLabel: 'Pre-Approved', icon: '✓' },
+    { id: 1, label: 'Application' },
+    { id: 2, label: 'Documents' },
+    { id: 3, label: 'Processing' },
+    { id: 4, label: 'Pre-Approved' },
   ];
 
   return (
@@ -134,31 +134,37 @@ const PreApprovalProgress = ({ currentStep = 0 }) => {
       <div className="progress-title">
         <h3>Your Path to Pre-Approval</h3>
       </div>
-      <div className="progress-steps">
-        {steps.map((step, index) => {
-          const isComplete = index < currentStep;
-          const isCurrent = index === currentStep;
-          const isPending = index > currentStep;
+      <div className="progress-track">
+        <div className="track-line">
+          <div
+            className="track-fill"
+            style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
+          />
+        </div>
+        <div className="progress-steps">
+          {steps.map((step, index) => {
+            const isComplete = index < currentStep;
+            const isCurrent = index === currentStep;
 
-          return (
-            <div
-              key={step.id}
-              className={`progress-step ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''} ${isPending ? 'pending' : ''}`}
-            >
-              <div className="step-indicator">
-                {isComplete ? (
-                  <span className="step-check">✓</span>
-                ) : (
-                  <span className="step-icon">{step.icon}</span>
-                )}
+            return (
+              <div
+                key={step.id}
+                className={`progress-step ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''}`}
+              >
+                <div className="step-indicator">
+                  {isComplete ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <span className="step-number">{index + 1}</span>
+                  )}
+                </div>
+                <span className="step-label">{step.label}</span>
               </div>
-              <span className="step-label">{step.shortLabel}</span>
-              {index < steps.length - 1 && (
-                <div className={`step-connector ${isComplete ? 'complete' : ''}`} />
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
