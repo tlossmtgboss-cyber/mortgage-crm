@@ -70,10 +70,27 @@ const StatusBadge = ({ status }) => {
 };
 
 // Header Milestone Progress - Horizontal step indicator for loan stages
-const HeaderMilestoneProgress = ({ subStage, workspaceStatus }) => {
-  // Define the loan journey stages
-  const stages = [
-    { id: 'application', label: 'Application', shortLabel: 'Applied' },
+const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
+  // Determine if we're in the lead/pre-approval phase or active loan phase
+  const status = subStage || workspaceStatus || '';
+  const statusLower = status?.toLowerCase() || '';
+
+  // Check if we're in the lead stage (pre-approval journey)
+  // Lead stages: new, contacted, qualified, application, pre_qualified, pre_approved
+  const isLeadStage = [
+    'lead', 'new', 'contacted', 'qualified', 'application',
+    'pre_qualified', 'pre_approved', 'preapproval', 'active'
+  ].includes(statusLower) || leadStage;
+
+  // Define lead journey milestones (matches CRM Lead stages)
+  const leadStages = [
+    { id: 'application_completed', label: 'Application Completed', shortLabel: 'App Completed' },
+    { id: 'document_fulfillment', label: 'Document Fulfillment', shortLabel: 'Doc Fulfillment' },
+    { id: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre-Approved' },
+  ];
+
+  // Define full loan journey stages (after pre-approval)
+  const loanStages = [
     { id: 'processing', label: 'Processing', shortLabel: 'Processing' },
     { id: 'underwriting', label: 'Underwriting', shortLabel: 'Underwriting' },
     { id: 'approval', label: 'Approval', shortLabel: 'Approved' },
@@ -81,33 +98,46 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus }) => {
     { id: 'closing', label: 'Closing', shortLabel: 'Closing' },
   ];
 
-  // Determine current stage index based on subStage or workspaceStatus
+  // Use appropriate stages based on current phase
+  const stages = isLeadStage ? leadStages : loanStages;
+
+  // Determine current stage index based on status
   const getCurrentStageIndex = () => {
-    const status = subStage || workspaceStatus;
-
-    // Map various statuses to stage index
-    const statusToIndex = {
-      'lead': -1,
-      'application': 0,
-      'submitted': 0,
-      'active': 0,
-      'active_loan': 0,
-      'preapproval': 1,
-      'processing': 1,
-      'underwriting': 2,
-      'conditional_approval': 3,
-      'approved': 3,
-      'approval': 3,
-      'clear_to_close': 4,
-      'ctc': 4,
-      'closing': 5,
-      'docs_out': 5,
-      'docs_back': 5,
-      'funded': 6,
-      'closed': 6,
-    };
-
-    return statusToIndex[status?.toLowerCase()] ?? 0;
+    if (isLeadStage) {
+      // Lead stage mapping:
+      // Application Completed (0) - always complete when portal exists (application was submitted)
+      // Document Fulfillment (1) - Pre-Qualified in CRM
+      // Pre-Approved (2) - Pre-Approved in CRM
+      const leadStatusToIndex = {
+        'new': 1,           // Application completed, working on documents
+        'contacted': 1,     // Application completed, working on documents
+        'qualified': 1,     // Application completed, working on documents
+        'application': 1,   // Application completed, working on documents
+        'lead': 1,          // Application completed, working on documents
+        'active': 1,        // Application completed, working on documents
+        'preapproval': 1,   // Application completed, working on documents
+        'pre_qualified': 2, // Documents done, working on pre-approval
+        'pre_approved': 3,  // All complete
+      };
+      return leadStatusToIndex[statusLower] ?? 1; // Default: application complete
+    } else {
+      // Full loan process mapping
+      const loanStatusToIndex = {
+        'processing': 0,
+        'underwriting': 1,
+        'conditional_approval': 2,
+        'approved': 2,
+        'approval': 2,
+        'clear_to_close': 3,
+        'ctc': 3,
+        'closing': 4,
+        'docs_out': 4,
+        'docs_back': 4,
+        'funded': 5,
+        'closed': 5,
+      };
+      return loanStatusToIndex[statusLower] ?? 0;
+    }
   };
 
   const currentIndex = getCurrentStageIndex();
@@ -880,6 +910,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           <HeaderMilestoneProgress
             subStage={subStage}
             workspaceStatus={workspace?.status}
+            leadStage={workspace?.lead_stage || data?.lead?.stage}
           />
         </div>
       </header>
