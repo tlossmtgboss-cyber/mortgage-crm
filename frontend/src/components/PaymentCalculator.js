@@ -236,6 +236,7 @@ const PaymentCalculator = ({
         <p>See your estimated monthly mortgage payment</p>
       </div>
 
+      <div className="calculator-layout">
       <div className="calculator-inputs">
         {/* Home Value */}
         <div className="input-group">
@@ -410,10 +411,12 @@ const PaymentCalculator = ({
         )}
       </div>
 
+      {/* Results Column */}
+      <div className="calculator-results-column">
       {/* Message when no home value */}
       {!calculation && homeValue <= 0 && (
         <div className="calculator-prompt">
-          <p>Enter a home value above to see your estimated monthly payment breakdown.</p>
+          <p>Enter a home value to see your estimated monthly payment breakdown.</p>
         </div>
       )}
 
@@ -536,6 +539,8 @@ const PaymentCalculator = ({
           </p>
         </div>
       )}
+      </div>
+      </div>
 
       <style jsx>{`
         .payment-calculator {
@@ -562,11 +567,28 @@ const PaymentCalculator = ({
           font-size: 14px;
         }
 
+        .calculator-layout {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 32px;
+          align-items: start;
+        }
+
+        @media (max-width: 900px) {
+          .calculator-layout {
+            grid-template-columns: 1fr;
+          }
+        }
+
         .calculator-inputs {
           display: flex;
           flex-direction: column;
           gap: 16px;
-          margin-bottom: 24px;
+        }
+
+        .calculator-results-column {
+          position: sticky;
+          top: 24px;
         }
 
         .input-group {
@@ -702,6 +724,7 @@ const PaymentCalculator = ({
           border-radius: 12px;
           padding: 24px;
           color: white;
+          height: fit-content;
         }
 
         .total-payment {
@@ -719,8 +742,14 @@ const PaymentCalculator = ({
         }
 
         .total-payment .amount {
-          font-size: 48px;
+          font-size: 42px;
           font-weight: 700;
+        }
+
+        @media (max-width: 900px) {
+          .total-payment .amount {
+            font-size: 48px;
+          }
         }
 
         .payment-breakdown {
@@ -849,9 +878,13 @@ const PaymentCalculator = ({
         .calculator-prompt {
           background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 100%);
           border-radius: 12px;
-          padding: 24px;
+          padding: 40px 24px;
           text-align: center;
           border: 2px dashed #ccd5e0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 200px;
         }
 
         .calculator-prompt p {
