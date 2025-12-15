@@ -666,6 +666,13 @@ button.borrower-btn.add-borrower-btn:hover {
   letter-spacing: 0.5px;
 }
 
+/* Info Grid - Full Width */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
 /* Compact Info Grid */
 .info-grid.compact {
   display: grid;
@@ -1178,7 +1185,23 @@ button.borrower-btn.add-borrower-btn:hover {
   }
 }
 
+@media (max-width: 1200px) {
+  .info-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
   .info-grid.compact {
     grid-template-columns: 1fr;
   }
