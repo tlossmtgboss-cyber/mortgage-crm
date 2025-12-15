@@ -1943,19 +1943,32 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .dates-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
   margin-top: 24px;
 }
 
+@media (max-width: 1200px) {
+  .dates-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dates-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .date-field input[type="datetime-local"] {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.2s;
   background: white;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .date-field input[type="datetime-local"]:focus {
@@ -1967,22 +1980,24 @@ button.borrower-btn.add-borrower-btn:hover {
 .date-field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .date-field label {
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
   color: #333;
 }
 
 .date-field input[type="date"] {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.2s;
   background: white;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .date-field input[type="date"]:focus {
