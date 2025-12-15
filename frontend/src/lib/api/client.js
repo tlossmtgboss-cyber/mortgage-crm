@@ -7,6 +7,7 @@
 
 const FASTAPI_BASE_URL = process.env.NEXT_PUBLIC_FASTAPI_URL ||
                          process.env.REACT_APP_FASTAPI_URL ||
+                         process.env.REACT_APP_API_URL ||
                          'http://localhost:8000';
 
 class PerenniaAPIError extends Error {
