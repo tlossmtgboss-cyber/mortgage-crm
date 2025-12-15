@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.1 - Fixed deployment - build 20251215-1515
-// This version does NOT call team-assignments endpoint
-console.log('[ScheduleAppointmentModal] v3.1 loaded - build 20251215-1515');
+// v3.2 - Enhanced error diagnostics - build 20251215-1600
+// This version has better error handling to diagnose "Failed to fetch"
+console.log('[ScheduleAppointmentModal] v3.2 loaded - build 20251215-1600');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -271,37 +271,69 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       'Team Member';
 
     try {
+      // First verify API is reachable with a health check
+      console.log('[ScheduleAppointmentModal] Checking API health at:', API_BASE);
+      try {
+        const healthCheck = await fetch(`${API_BASE}/health`, { method: 'GET' });
+        console.log('[ScheduleAppointmentModal] Health check status:', healthCheck.status);
+      } catch (healthErr) {
+        console.error('[ScheduleAppointmentModal] Health check failed:', healthErr);
+        // Continue anyway - health endpoint might not exist
+      }
+
       // Use authenticated endpoint to ensure appointment is linked to current user
       const attendeeName = borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim();
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments`, {
+      const appointmentUrl = `${API_BASE}/api/v1/scheduler/appointments`;
+      const token = localStorage.getItem('token');
+
+      console.log('[ScheduleAppointmentModal] Creating appointment at:', appointmentUrl);
+      console.log('[ScheduleAppointmentModal] Token present:', !!token);
+      console.log('[ScheduleAppointmentModal] Token length:', token ? token.length : 0);
+
+      const requestBody = {
+        title: `${meetingMode === 'video' ? 'Video Call' : 'Phone Call'} with ${attendeeName}`,
+        description: `Appointment with: ${teamMemberName}`,
+        scheduled_start: selectedTime,
+        duration_minutes: 30,
+        meeting_mode: meetingMode,
+        attendee_name: attendeeName,
+        attendee_email: borrower.email || borrower.borrower_email,
+        attendee_phone: borrower.phone || borrower.borrower_phone || '',
+        lead_id: borrower.lead_id || null,
+        loan_id: borrower.id || borrower.loan_id || null,
+        assigned_user_id: parseInt(selectedTeamMember) || null
+      };
+
+      console.log('[ScheduleAppointmentModal] Request body:', JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(appointmentUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          title: `${meetingMode === 'video' ? 'Video Call' : 'Phone Call'} with ${attendeeName}`,
-          description: `Appointment with: ${teamMemberName}`,
-          scheduled_start: selectedTime,
-          duration_minutes: 30,
-          meeting_mode: meetingMode,
-          attendee_name: attendeeName,
-          attendee_email: borrower.email || borrower.borrower_email,
-          attendee_phone: borrower.phone || borrower.borrower_phone || '',
-          lead_id: borrower.lead_id || null,
-          loan_id: borrower.id || borrower.loan_id || null,
-          assigned_user_id: parseInt(selectedTeamMember) || null
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      // Parse response
-      const result = await response.json();
+      console.log('[ScheduleAppointmentModal] Response status:', response.status);
+      console.log('[ScheduleAppointmentModal] Response ok:', response.ok);
 
-      if (!response.ok) {
-        throw new Error(result.detail || 'Failed to schedule appointment');
+      // Try to parse response - might fail if response is not JSON
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('[ScheduleAppointmentModal] Response text:', responseText.substring(0, 500));
+        result = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('[ScheduleAppointmentModal] Failed to parse response:', parseErr);
+        throw new Error(`Server returned invalid response (status ${response.status})`);
       }
 
-      console.log('Appointment created:', result);
+      if (!response.ok) {
+        throw new Error(result.detail || `Server error: ${response.status}`);
+      }
+
+      console.log('[ScheduleAppointmentModal] Appointment created:', result);
 
       setSuccess(true);
       setEmailSent(result.email_sent === true);
@@ -316,8 +348,19 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         onClose();
       }, 3000);
     } catch (err) {
-      console.error('Error scheduling appointment:', err);
-      setError(err.message || 'Failed to schedule appointment. Please try again.');
+      console.error('[ScheduleAppointmentModal] Error scheduling appointment:', err);
+      console.error('[ScheduleAppointmentModal] Error name:', err.name);
+      console.error('[ScheduleAppointmentModal] Error message:', err.message);
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to schedule appointment. Please try again.';
+      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+        errorMessage = 'Unable to connect to server. Please check your internet connection or try again later.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
