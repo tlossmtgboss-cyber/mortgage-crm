@@ -169,14 +169,6 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     }
   }, [isOpen, fetchTeamMembers]);
 
-  // Fetch available slots when date changes
-  const fetchSlots = useCallback(async () => {
-    if (!selectedDate) return;
-
-    // Always generate slots from work hours - more reliable than API
-    generateSlotsFromWorkHours();
-  }, [selectedDate, generateSlotsFromWorkHours]);
-
   // Get day name from date
   const getDayName = (date) => {
     return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
@@ -220,6 +212,14 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       setSelectedTime('');
     }
   }, [selectedDate, teamMemberWorkHours]);
+
+  // Fetch available slots when date changes
+  const fetchSlots = useCallback(async () => {
+    if (!selectedDate) return;
+
+    // Always generate slots from work hours - more reliable than API
+    generateSlotsFromWorkHours();
+  }, [selectedDate, generateSlotsFromWorkHours]);
 
   useEffect(() => {
     if (selectedDate) {
