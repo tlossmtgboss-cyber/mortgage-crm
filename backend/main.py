@@ -38175,6 +38175,220 @@ async def get_lead_circle_contacts(lead_id: int, db: Session = Depends(get_db), 
     }
 
 
+# ============================================================================
+# LEAD CONDITIONS ENDPOINTS (for Needs List / Client Portal integration)
+# ============================================================================
+
+class ConditionCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: str = "other"
+    priority: str = "required"
+    due_date: Optional[str] = None
+    status: str = "pending"
+    notify_client: bool = True
+
+class ConditionUpdate(BaseModel):
+    status: Optional[str] = None
+    description: Optional[str] = None
+    due_date: Optional[str] = None
+
+@app.get("/api/v1/leads/{lead_id}/conditions")
+async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get all conditions/needs list items for a lead"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get conditions from database using raw SQL (table may not exist yet)
+    try:
+        result = db.execute(text("""
+            SELECT id, name, description, category, priority, due_date, status, is_new, created_at, updated_at
+            FROM lead_conditions
+            WHERE lead_id = :lead_id
+            ORDER BY
+                CASE priority WHEN 'required' THEN 1 WHEN 'recommended' THEN 2 ELSE 3 END,
+                created_at DESC
+        """), {"lead_id": lead_id})
+
+        conditions = []
+        for row in result:
+            conditions.append({
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "category": row[3],
+                "priority": row[4],
+                "due_date": row[5].isoformat() if row[5] else None,
+                "status": row[6],
+                "is_new": row[7],
+                "created_at": row[8].isoformat() if row[8] else None,
+                "updated_at": row[9].isoformat() if row[9] else None
+            })
+
+        return {"conditions": conditions, "total": len(conditions)}
+    except Exception as e:
+        # Table might not exist yet - return empty list
+        logger.warning(f"Error fetching conditions: {e}")
+        return {"conditions": [], "total": 0}
+
+@app.post("/api/v1/leads/{lead_id}/conditions")
+async def create_lead_condition(lead_id: int, condition: ConditionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Create a new condition/needs list item for a lead"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        # Insert condition
+        result = db.execute(text("""
+            INSERT INTO lead_conditions (lead_id, name, description, category, priority, due_date, status, is_new, created_by_id, created_at, updated_at)
+            VALUES (:lead_id, :name, :description, :category, :priority, :due_date, :status, true, :created_by, NOW(), NOW())
+            RETURNING id, name, description, category, priority, due_date, status, is_new, created_at, updated_at
+        """), {
+            "lead_id": lead_id,
+            "name": condition.name,
+            "description": condition.description,
+            "category": condition.category,
+            "priority": condition.priority,
+            "due_date": condition.due_date if condition.due_date else None,
+            "status": condition.status,
+            "created_by": current_user.id
+        })
+        db.commit()
+
+        row = result.fetchone()
+        new_condition = {
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "category": row[3],
+            "priority": row[4],
+            "due_date": row[5].isoformat() if row[5] else None,
+            "status": row[6],
+            "is_new": row[7],
+            "created_at": row[8].isoformat() if row[8] else None,
+            "updated_at": row[9].isoformat() if row[9] else None
+        }
+
+        # If notify_client is true, create notification for client portal
+        if condition.notify_client and lead.email:
+            try:
+                # Create notification record
+                db.execute(text("""
+                    INSERT INTO notifications (user_id, lead_id, type, title, message, is_read, created_at)
+                    VALUES (
+                        (SELECT id FROM users WHERE email = :lead_email LIMIT 1),
+                        :lead_id, 'condition_requested', 'New Document Requested',
+                        :message, false, NOW()
+                    )
+                """), {
+                    "lead_email": lead.email,
+                    "lead_id": lead_id,
+                    "message": f"A new document has been requested: {condition.name}"
+                })
+                db.commit()
+            except Exception as notify_error:
+                logger.warning(f"Failed to create notification: {notify_error}")
+
+        return {"condition": new_condition, "message": "Condition created successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating condition: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create condition: {str(e)}")
+
+@app.patch("/api/v1/leads/{lead_id}/conditions/{condition_id}")
+async def update_lead_condition(lead_id: int, condition_id: int, condition_update: ConditionUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Update a condition status"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        # Build update query dynamically
+        updates = ["updated_at = NOW()", "is_new = false"]
+        params = {"condition_id": condition_id, "lead_id": lead_id}
+
+        if condition_update.status:
+            updates.append("status = :status")
+            params["status"] = condition_update.status
+        if condition_update.description:
+            updates.append("description = :description")
+            params["description"] = condition_update.description
+        if condition_update.due_date:
+            updates.append("due_date = :due_date")
+            params["due_date"] = condition_update.due_date
+
+        result = db.execute(text(f"""
+            UPDATE lead_conditions
+            SET {', '.join(updates)}
+            WHERE id = :condition_id AND lead_id = :lead_id
+            RETURNING id, name, description, category, priority, due_date, status, is_new, created_at, updated_at
+        """), params)
+        db.commit()
+
+        row = result.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Condition not found")
+
+        updated_condition = {
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "category": row[3],
+            "priority": row[4],
+            "due_date": row[5].isoformat() if row[5] else None,
+            "status": row[6],
+            "is_new": row[7],
+            "created_at": row[8].isoformat() if row[8] else None,
+            "updated_at": row[9].isoformat() if row[9] else None
+        }
+
+        return {"condition": updated_condition, "message": "Condition updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating condition: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update condition: {str(e)}")
+
+@app.delete("/api/v1/leads/{lead_id}/conditions/{condition_id}")
+async def delete_lead_condition(lead_id: int, condition_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Delete a condition"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        result = db.execute(text("""
+            DELETE FROM lead_conditions WHERE id = :condition_id AND lead_id = :lead_id RETURNING id
+        """), {"condition_id": condition_id, "lead_id": lead_id})
+        db.commit()
+
+        if not result.fetchone():
+            raise HTTPException(status_code=404, detail="Condition not found")
+
+        return {"message": "Condition deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting condition: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete condition: {str(e)}")
+
+
 @app.get("/api/v1/loans/{loan_id}/stage-history")
 async def get_loan_stage_history(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get the complete stage history for a loan"""

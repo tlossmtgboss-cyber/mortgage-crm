@@ -127,6 +127,19 @@ function LeadDetail() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState(null);
 
+  // Conditions state
+  const [conditions, setConditions] = useState([]);
+  const [conditionsLoading, setConditionsLoading] = useState(false);
+  const [showAddConditionModal, setShowAddConditionModal] = useState(false);
+  const [newCondition, setNewCondition] = useState({
+    name: '',
+    description: '',
+    category: 'income_verification',
+    priority: 'required',
+    due_date: ''
+  });
+  const [addingCondition, setAddingCondition] = useState(false);
+
   // Status dropdown state
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
@@ -990,9 +1003,83 @@ function LeadDetail() {
   useEffect(() => {
     if (activeTab === 'documents' && id) {
       loadDocuments();
+      loadConditions();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id]);
+
+  // Load conditions for the lead
+  const loadConditions = async () => {
+    if (!id) return;
+    setConditionsLoading(true);
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/conditions`);
+      if (response.ok) {
+        const data = await response.json();
+        setConditions(data.conditions || []);
+      }
+    } catch (error) {
+      console.error('Failed to load conditions:', error);
+    } finally {
+      setConditionsLoading(false);
+    }
+  };
+
+  // Add a new condition
+  const handleAddCondition = async (e) => {
+    e.preventDefault();
+    if (!newCondition.name.trim()) return;
+
+    setAddingCondition(true);
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/conditions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newCondition,
+          lead_id: id,
+          status: 'pending',
+          notify_client: true
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConditions(prev => [...prev, data.condition]);
+        setShowAddConditionModal(false);
+        setNewCondition({
+          name: '',
+          description: '',
+          category: 'income_verification',
+          priority: 'required',
+          due_date: ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to add condition:', error);
+    } finally {
+      setAddingCondition(false);
+    }
+  };
+
+  // Update condition status
+  const updateConditionStatus = async (conditionId, newStatus) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/conditions/${conditionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (response.ok) {
+        setConditions(prev => prev.map(c =>
+          c.id === conditionId ? { ...c, status: newStatus } : c
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to update condition:', error);
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -1359,44 +1446,64 @@ function LeadDetail() {
 
     try {
       setClientPortalLoading(true);
+      console.log('[Client Portal] Starting for lead:', lead.id);
 
       // First check if a portal already exists for this lead
+      let existingWorkspace = null;
       try {
-        const existingWorkspace = await purlAPI.getWorkspaceByLead(lead.id);
-        if (existingWorkspace && existingWorkspace.workspace) {
-          // Portal exists - create a fresh token to get access
-          const workspaceId = existingWorkspace.workspace.workspace_id || existingWorkspace.workspace.id;
-          const slug = existingWorkspace.workspace.workspace_slug || existingWorkspace.workspace.slug;
-
-          // Create a new token so we have the full token string for the URL
-          const tokenResponse = await purlAPI.createToken(workspaceId, {
-            scope: 'full',
-            expires_in_days: 90
-          });
-          const fullToken = tokenResponse.token;
-
-          // Build portal URL with token
-          const baseUrl = `${window.location.origin}/portal/${slug}`;
-          const portalUrl = fullToken ? `${baseUrl}?token=${fullToken}` : baseUrl;
-
-          setClientPortalData({
-            workspace_id: workspaceId,
-            url: portalUrl,
-            borrower_name: existingWorkspace.workspace.display_name,
-            status: existingWorkspace.workspace.status,
-            exists: true
-          });
-          setShowClientPortalModal(true);
-          return;
-        }
+        console.log('[Client Portal] Checking for existing workspace...');
+        existingWorkspace = await purlAPI.getWorkspaceByLead(lead.id);
+        console.log('[Client Portal] Workspace check result:', existingWorkspace);
       } catch (err) {
         // 404 means no workspace exists - we'll create one
-        if (err.response?.status !== 404) {
+        // Network errors also mean we should try to create a new one
+        const isNotFound = err.response?.status === 404;
+        const isNetworkError = err.message === 'Network Error' || !err.response;
+
+        console.log('[Client Portal] Workspace check error:', {
+          status: err.response?.status,
+          message: err.message,
+          isNotFound,
+          isNetworkError
+        });
+
+        if (!isNotFound && !isNetworkError) {
+          // Unexpected error - throw it
           throw err;
         }
+        // Otherwise continue to create a new workspace
+      }
+
+      // If workspace exists, use it
+      if (existingWorkspace && existingWorkspace.workspace) {
+        console.log('[Client Portal] Using existing workspace');
+        const workspaceId = existingWorkspace.workspace.workspace_id || existingWorkspace.workspace.id;
+        const slug = existingWorkspace.workspace.workspace_slug || existingWorkspace.workspace.slug;
+
+        // Create a new token so we have the full token string for the URL
+        const tokenResponse = await purlAPI.createToken(workspaceId, {
+          scope: 'full',
+          expires_in_days: 90
+        });
+        const fullToken = tokenResponse.token;
+
+        // Build portal URL with token
+        const baseUrl = `${window.location.origin}/portal/${slug}`;
+        const portalUrl = fullToken ? `${baseUrl}?token=${fullToken}` : baseUrl;
+
+        setClientPortalData({
+          workspace_id: workspaceId,
+          url: portalUrl,
+          borrower_name: existingWorkspace.workspace.display_name,
+          status: existingWorkspace.workspace.status,
+          exists: true
+        });
+        setShowClientPortalModal(true);
+        return;
       }
 
       // Create new portal for this lead
+      console.log('[Client Portal] Creating new workspace...');
       const borrowerName = lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim();
       const createData = {
         lead_id: lead.id,
@@ -1407,7 +1514,9 @@ function LeadDetail() {
         phone: lead.phone
       };
 
+      console.log('[Client Portal] Create data:', createData);
       const response = await purlAPI.createWorkspace(createData);
+      console.log('[Client Portal] Workspace created:', response);
       const newWorkspace = response.workspace || response;
 
       // Create an access token for the workspace and capture the full token
@@ -1431,8 +1540,19 @@ function LeadDetail() {
       });
       setShowClientPortalModal(true);
     } catch (err) {
-      console.error('Error with client portal:', err);
-      alert(`Failed to access/create client portal: ${err.response?.data?.detail || err.message}`);
+      console.error('[Client Portal] Error:', err);
+
+      // Provide more helpful error messages
+      let errorMessage = 'Unknown error occurred';
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message === 'Network Error') {
+        errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      alert(`Failed to access/create client portal: ${errorMessage}`);
     } finally {
       setClientPortalLoading(false);
     }
@@ -1753,7 +1873,7 @@ function LeadDetail() {
           className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
           onClick={() => setActiveTab('documents')}
         >
-          Documents
+          Conditions
         </button>
         <button
           className={`tab-btn ${activeTab === 'important-dates' ? 'active' : ''}`}
@@ -2810,160 +2930,178 @@ function LeadDetail() {
           </div>
           )}
 
-          {/* Documents Tab */}
+          {/* Conditions Tab */}
           {activeTab === 'documents' && (
           <div className="info-section">
-            <h2>Documents</h2>
-            <div className="documents-content">
+            <h2>Conditions</h2>
+            <div className="conditions-content">
               <p className="circle-description">
-                Manage and organize all loan-related documents including income verification,
-                credit reports, property documents, and disclosures.
+                Track and manage loan conditions. Items added here will appear in the client portal's
+                Needs List. Clients will be notified when new conditions are requested.
               </p>
 
-              <div className="documents-upload-area">
-                <button className="btn-upload-document">
-                  📄 Upload Document
+              <div className="conditions-header-actions">
+                <button
+                  className="btn-add-condition"
+                  onClick={() => setShowAddConditionModal(true)}
+                >
+                  + Add Condition
                 </button>
+                <div className="conditions-summary">
+                  <span className="condition-count pending">
+                    {conditions.filter(c => c.status === 'pending').length} Pending
+                  </span>
+                  <span className="condition-count received">
+                    {conditions.filter(c => c.status === 'received').length} Received
+                  </span>
+                  <span className="condition-count approved">
+                    {conditions.filter(c => c.status === 'approved').length} Approved
+                  </span>
+                </div>
               </div>
 
-              {documentsLoading ? (
-                <div className="loading-state">Loading documents...</div>
-              ) : documentsError ? (
-                <div className="error-state">{documentsError}</div>
+              {conditionsLoading ? (
+                <div className="loading-state">Loading conditions...</div>
+              ) : conditions.length === 0 ? (
+                <div className="empty-conditions">
+                  <div className="empty-icon">📋</div>
+                  <h3>No Conditions Yet</h3>
+                  <p>When the applicant completes their application, the needs list will be populated automatically.</p>
+                  <p>You can also manually add conditions using the button above.</p>
+                </div>
               ) : (
-              <div className="documents-grid">
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>📋 Income Verification</h3>
-                    <span className="doc-count">{documents.income_verification?.length || 0} files</span>
+              <div className="conditions-list">
+                {conditions.map(condition => (
+                  <div key={condition.id} className={`condition-item status-${condition.status}`}>
+                    <div className="condition-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={condition.status === 'approved'}
+                        onChange={() => updateConditionStatus(
+                          condition.id,
+                          condition.status === 'approved' ? 'pending' : 'approved'
+                        )}
+                      />
+                    </div>
+                    <div className="condition-info">
+                      <div className="condition-name">
+                        {condition.name}
+                        {condition.is_new && <span className="new-badge">NEW</span>}
+                      </div>
+                      {condition.description && (
+                        <div className="condition-description">{condition.description}</div>
+                      )}
+                      <div className="condition-meta">
+                        <span className="condition-category">{condition.category?.replace(/_/g, ' ')}</span>
+                        {condition.due_date && (
+                          <span className="condition-due">Due: {new Date(condition.due_date).toLocaleDateString()}</span>
+                        )}
+                        <span className={`condition-priority priority-${condition.priority}`}>
+                          {condition.priority}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="condition-status">
+                      <select
+                        value={condition.status}
+                        onChange={(e) => updateConditionStatus(condition.id, e.target.value)}
+                        className={`status-select status-${condition.status}`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="requested">Requested</option>
+                        <option value="received">Received</option>
+                        <option value="approved">Approved</option>
+                        <option value="waived">Waived</option>
+                      </select>
+                    </div>
                   </div>
-                  <div className="document-list">
-                    {documents.income_verification?.length > 0 ? (
-                      documents.income_verification.map(doc => (
-                        <div key={doc.id} className="document-item">
-                          <span className="doc-icon">📄</span>
-                          <div className="doc-info">
-                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
-                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">No documents uploaded yet</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>💳 Credit Reports</h3>
-                    <span className="doc-count">{documents.credit_reports?.length || 0} files</span>
-                  </div>
-                  <div className="document-list">
-                    {documents.credit_reports?.length > 0 ? (
-                      documents.credit_reports.map(doc => (
-                        <div key={doc.id} className="document-item">
-                          <span className="doc-icon">📄</span>
-                          <div className="doc-info">
-                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
-                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">No documents uploaded yet</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>🏠 Property Documents</h3>
-                    <span className="doc-count">{documents.property_documents?.length || 0} files</span>
-                  </div>
-                  <div className="document-list">
-                    {documents.property_documents?.length > 0 ? (
-                      documents.property_documents.map(doc => (
-                        <div key={doc.id} className="document-item">
-                          <span className="doc-icon">📄</span>
-                          <div className="doc-info">
-                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
-                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">No documents uploaded yet</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>✍️ Disclosures & Forms</h3>
-                    <span className="doc-count">{documents.disclosures_forms?.length || 0} files</span>
-                  </div>
-                  <div className="document-list">
-                    {documents.disclosures_forms?.length > 0 ? (
-                      documents.disclosures_forms.map(doc => (
-                        <div key={doc.id} className="document-item">
-                          <span className="doc-icon">📄</span>
-                          <div className="doc-info">
-                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
-                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">No documents uploaded yet</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>🏦 Bank Statements</h3>
-                    <span className="doc-count">{documents.bank_statements?.length || 0} files</span>
-                  </div>
-                  <div className="document-list">
-                    {documents.bank_statements?.length > 0 ? (
-                      documents.bank_statements.map(doc => (
-                        <div key={doc.id} className="document-item">
-                          <span className="doc-icon">📄</span>
-                          <div className="doc-info">
-                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
-                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">No documents uploaded yet</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>📑 Other Documents</h3>
-                    <span className="doc-count">{documents.other?.length || 0} files</span>
-                  </div>
-                  <div className="document-list">
-                    {documents.other?.length > 0 ? (
-                      documents.other.map(doc => (
-                        <div key={doc.id} className="document-item">
-                          <span className="doc-icon">📄</span>
-                          <div className="doc-info">
-                            <span className="doc-name">{doc.original_filename || doc.filename}</span>
-                            <span className="doc-meta">{doc.doc_type} • {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ''}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">No documents uploaded yet</div>
-                    )}
-                  </div>
-                </div>
+                ))}
               </div>
+              )}
+
+              {/* Add Condition Modal */}
+              {showAddConditionModal && (
+                <div className="modal-overlay" onClick={() => setShowAddConditionModal(false)}>
+                  <div className="modal-content condition-modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <h3>Add Condition</h3>
+                      <button className="modal-close" onClick={() => setShowAddConditionModal(false)}>&times;</button>
+                    </div>
+                    <form onSubmit={handleAddCondition}>
+                      <div className="modal-body">
+                        <div className="form-group">
+                          <label>Condition Name *</label>
+                          <input
+                            type="text"
+                            value={newCondition.name}
+                            onChange={(e) => setNewCondition({...newCondition, name: e.target.value})}
+                            placeholder="e.g., Most Recent Pay Stub"
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Description</label>
+                          <textarea
+                            value={newCondition.description}
+                            onChange={(e) => setNewCondition({...newCondition, description: e.target.value})}
+                            placeholder="Additional details or instructions for the client"
+                            rows={3}
+                          />
+                        </div>
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label>Category</label>
+                            <select
+                              value={newCondition.category}
+                              onChange={(e) => setNewCondition({...newCondition, category: e.target.value})}
+                            >
+                              <option value="income_verification">Income Verification</option>
+                              <option value="asset_verification">Asset Verification</option>
+                              <option value="employment_verification">Employment Verification</option>
+                              <option value="credit_documentation">Credit Documentation</option>
+                              <option value="property_documentation">Property Documentation</option>
+                              <option value="identity_verification">Identity Verification</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Priority</label>
+                            <select
+                              value={newCondition.priority}
+                              onChange={(e) => setNewCondition({...newCondition, priority: e.target.value})}
+                            >
+                              <option value="required">Required</option>
+                              <option value="recommended">Recommended</option>
+                              <option value="optional">Optional</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="form-group">
+                          <label>Due Date</label>
+                          <input
+                            type="date"
+                            value={newCondition.due_date}
+                            onChange={(e) => setNewCondition({...newCondition, due_date: e.target.value})}
+                          />
+                        </div>
+                        <div className="form-group notification-toggle">
+                          <label className="toggle-label">
+                            <input type="checkbox" defaultChecked />
+                            <span>Notify client via email and portal</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <button type="button" className="btn-secondary" onClick={() => setShowAddConditionModal(false)}>
+                          Cancel
+                        </button>
+                        <button type="submit" className="btn-primary" disabled={addingCondition}>
+                          {addingCondition ? 'Adding...' : 'Add Condition'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
               )}
             </div>
           </div>
