@@ -90,6 +90,9 @@ function LoanDetail() {
   const [callArchive, setCallArchive] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
 
+  // Personal tab sub-tab state
+  const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info', 'employment', 'assets'
+
   // Circle of Cashflow state
   const [cashflowOpportunities, setCashflowOpportunities] = useState([]);
   const [cashflowReferrals, setCashflowReferrals] = useState([]);
@@ -451,6 +454,31 @@ function LoanDetail() {
     if (borrower && borrower.data) {
       setFormData({...formData, ...borrower.data});
     }
+  };
+
+  const handleAddBorrower = async () => {
+    const firstName = prompt('Enter first name:');
+    if (!firstName || !firstName.trim()) return;
+
+    const lastName = prompt('Enter last name:');
+    if (!lastName || !lastName.trim()) return;
+
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
+    const newBorrower = {
+      id: borrowers.length,
+      name: fullName,
+      type: borrowers.length === 1 ? 'co-borrower' : 'additional',
+      data: {
+        borrower_name: fullName,
+        borrower_first_name: firstName.trim(),
+        borrower_last_name: lastName.trim(),
+      }
+    };
+
+    const updatedBorrowers = [...borrowers, newBorrower];
+    setBorrowers(updatedBorrowers);
+    setActiveBorrower(updatedBorrowers.length - 1);
+    setFormData(newBorrower.data);
   };
 
   // ==================== TEAM MEMBER FUNCTIONS ====================
@@ -1049,6 +1077,80 @@ function LoanDetail() {
           {/* Personal Information Tab */}
           {activeTab === 'personal' && (
           <div className="info-section">
+            {/* Borrower Selector - moved inside Personal Information */}
+            <div className="borrower-selector" style={{ marginBottom: '1.5rem' }}>
+              <div className="borrower-buttons-group">
+                {borrowers.map((borrower, index) => (
+                  <button
+                    key={borrower.id}
+                    className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
+                    onClick={() => handleSwitchBorrower(index)}
+                  >
+                    {borrower.name}
+                    {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
+                  </button>
+                ))}
+              </div>
+              <button className="borrower-add-btn" onClick={handleAddBorrower} title="Add Borrower">
+                + Add Person
+              </button>
+            </div>
+
+            {/* Sub-tabs for Personal Information, Employment, and Assets */}
+            <div style={{ display: 'flex', gap: '0', marginBottom: '1.5rem', borderBottom: '1px solid #e0e0e0' }}>
+              <button
+                onClick={() => setPersonalSubTab('info')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'info' ? '600' : '400',
+                  color: personalSubTab === 'info' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'info' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Personal Information
+              </button>
+              <button
+                onClick={() => setPersonalSubTab('employment')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'employment' ? '600' : '400',
+                  color: personalSubTab === 'employment' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'employment' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Employment
+              </button>
+              <button
+                onClick={() => setPersonalSubTab('assets')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'assets' ? '600' : '400',
+                  color: personalSubTab === 'assets' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'assets' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Assets
+              </button>
+            </div>
+
+            {/* Personal Information Sub-tab Content */}
+            {personalSubTab === 'info' && (
+            <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ margin: 0 }}>Personal Information</h2>
               <button
@@ -1181,6 +1283,231 @@ function LoanDetail() {
                   </div>
                 </div>
               </div>
+            )}
+            </>
+            )}
+
+            {/* Employment Sub-tab Content */}
+            {personalSubTab === 'employment' && (
+              <EmploymentTab
+                leadId={id}
+                formData={formData}
+                onFieldChange={handleFieldChange}
+                entityType="loans"
+              />
+            )}
+
+            {/* Assets Sub-tab Content */}
+            {personalSubTab === 'assets' && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ margin: 0 }}>Assets</h2>
+                </div>
+
+                {/* Bank Accounts Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Bank Accounts</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Checking Account Balance</label>
+                      <input
+                        type="text"
+                        value={formData.checking_balance || ''}
+                        onChange={(e) => handleFieldChange('checking_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Savings Account Balance</label>
+                      <input
+                        type="text"
+                        value={formData.savings_balance || ''}
+                        onChange={(e) => handleFieldChange('savings_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Money Market Balance</label>
+                      <input
+                        type="text"
+                        value={formData.money_market_balance || ''}
+                        onChange={(e) => handleFieldChange('money_market_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>CD Balance</label>
+                      <input
+                        type="text"
+                        value={formData.cd_balance || ''}
+                        onChange={(e) => handleFieldChange('cd_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Investment Accounts Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Investment Accounts</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Stocks/Bonds Value</label>
+                      <input
+                        type="text"
+                        value={formData.stocks_bonds_value || ''}
+                        onChange={(e) => handleFieldChange('stocks_bonds_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Mutual Funds Value</label>
+                      <input
+                        type="text"
+                        value={formData.mutual_funds_value || ''}
+                        onChange={(e) => handleFieldChange('mutual_funds_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Brokerage Account Value</label>
+                      <input
+                        type="text"
+                        value={formData.brokerage_value || ''}
+                        onChange={(e) => handleFieldChange('brokerage_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Retirement Accounts Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Retirement Accounts</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>401(k) Balance</label>
+                      <input
+                        type="text"
+                        value={formData.retirement_401k || ''}
+                        onChange={(e) => handleFieldChange('retirement_401k', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>IRA Balance</label>
+                      <input
+                        type="text"
+                        value={formData.ira_balance || ''}
+                        onChange={(e) => handleFieldChange('ira_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Roth IRA Balance</label>
+                      <input
+                        type="text"
+                        value={formData.roth_ira_balance || ''}
+                        onChange={(e) => handleFieldChange('roth_ira_balance', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Pension Value</label>
+                      <input
+                        type="text"
+                        value={formData.pension_value || ''}
+                        onChange={(e) => handleFieldChange('pension_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Other Assets Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Other Assets</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Real Estate (Other Properties)</label>
+                      <input
+                        type="text"
+                        value={formData.other_real_estate_value || ''}
+                        onChange={(e) => handleFieldChange('other_real_estate_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Vehicle Value</label>
+                      <input
+                        type="text"
+                        value={formData.vehicle_value || ''}
+                        onChange={(e) => handleFieldChange('vehicle_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Life Insurance Cash Value</label>
+                      <input
+                        type="text"
+                        value={formData.life_insurance_value || ''}
+                        onChange={(e) => handleFieldChange('life_insurance_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Other Assets</label>
+                      <input
+                        type="text"
+                        value={formData.other_assets_value || ''}
+                        onChange={(e) => handleFieldChange('other_assets_value', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Gift Funds Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Gift Funds</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Gift Amount</label>
+                      <input
+                        type="text"
+                        value={formData.gift_amount || ''}
+                        onChange={(e) => handleFieldChange('gift_amount', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Gift Donor Name</label>
+                      <input
+                        type="text"
+                        value={formData.gift_donor_name || ''}
+                        onChange={(e) => handleFieldChange('gift_donor_name', e.target.value)}
+                        placeholder="Donor's full name"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Gift Donor Relationship</label>
+                      <select
+                        value={formData.gift_donor_relationship || ''}
+                        onChange={(e) => handleFieldChange('gift_donor_relationship', e.target.value)}
+                        style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                      >
+                        <option value="">-- Select Relationship --</option>
+                        <option value="parent">Parent</option>
+                        <option value="grandparent">Grandparent</option>
+                        <option value="sibling">Sibling</option>
+                        <option value="other_relative">Other Relative</option>
+                        <option value="employer">Employer</option>
+                        <option value="friend">Friend</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
           )}
