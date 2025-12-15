@@ -637,6 +637,7 @@ button.borrower-btn.add-borrower-btn:hover {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
 }
 
 /* Left Column - Now Full Width */
@@ -645,6 +646,7 @@ button.borrower-btn.add-borrower-btn:hover {
   flex-direction: column;
   gap: 20px;
   width: 100%;
+  flex: 1;
 }
 
 .info-section {
@@ -1167,14 +1169,6 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* Responsive Design */
 @media (max-width: 1200px) {
-  .detail-content {
-    grid-template-columns: 1fr;
-  }
-
-  .right-column {
-    order: -1;
-  }
-
   .loan-fields-grid {
     grid-template-columns: repeat(3, 1fr);
   }
