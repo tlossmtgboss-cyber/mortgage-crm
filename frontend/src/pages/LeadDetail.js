@@ -1804,16 +1804,18 @@ function LeadDetail() {
 
       {/* Borrower Selector */}
       <div className="borrower-selector">
-        {borrowers.map((borrower, index) => (
-          <button
-            key={borrower.id}
-            className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
-            onClick={() => handleSwitchBorrower(index)}
-          >
-            {borrower.name}
-            {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
-          </button>
-        ))}
+        <div className="borrower-buttons-group">
+          {borrowers.map((borrower, index) => (
+            <button
+              key={borrower.id}
+              className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
+              onClick={() => handleSwitchBorrower(index)}
+            >
+              {borrower.name}
+              {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
+            </button>
+          ))}
+        </div>
         <button className="borrower-add-btn" onClick={handleAddBorrower} title="Add Borrower">
           + Add Person
         </button>
