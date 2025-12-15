@@ -112,6 +112,7 @@ const AgentGym = lazy(() => import('./pages/AgentGym'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLPortal = lazy(() => import('./pages/PURLPortal'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
+const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
 
 // Portal Components - Real-time borrower and partner portals
@@ -1229,11 +1230,11 @@ function App() {
               </PrivateRoute>
             }
           />
-          {/* Public PURL Portal (no auth required) */}
+          {/* Public PURL Portal - Smart Container Routes to Lead/Active/MUM stages */}
           <Route
             path="/portal/:slug"
             element={
-              <LazyPage><PURLPortal /></LazyPage>
+              <LazyPage><PortalContainer /></LazyPage>
             }
           />
           <Route

@@ -1,0 +1,282 @@
+/**
+ * Portal Container Styles
+ * Shared styles for all portal stages
+ */
+
+/* Loading State */
+.portal-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-content .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+.loading-content p {
+  color: #64748b;
+  font-size: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error State */
+.portal-error {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  padding: 24px;
+}
+
+.portal-error .error-container {
+  text-align: center;
+  padding: 48px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  max-width: 450px;
+}
+
+.portal-error .error-icon {
+  font-size: 56px;
+  margin-bottom: 20px;
+}
+
+.portal-error h2 {
+  color: #1e293b;
+  font-size: 24px;
+  margin: 0 0 12px 0;
+}
+
+.portal-error p {
+  color: #64748b;
+  margin: 0 0 8px 0;
+  line-height: 1.6;
+}
+
+.portal-error .error-help {
+  font-size: 14px;
+  color: #94a3b8;
+  margin-top: 16px;
+}
+
+.portal-error .retry-btn {
+  margin-top: 24px;
+  padding: 12px 32px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.portal-error .retry-btn:hover {
+  background: #2563eb;
+}
+
+/* Funded Celebration */
+.funded-celebration {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.celebration-content {
+  text-align: center;
+  max-width: 600px;
+  z-index: 10;
+}
+
+.celebration-icon {
+  font-size: 80px;
+  margin-bottom: 16px;
+  animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+.funded-celebration h1 {
+  color: white;
+  font-size: 36px;
+  margin: 0 0 8px 0;
+}
+
+.funded-celebration h2 {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0 0 32px 0;
+}
+
+.celebration-details {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 32px;
+}
+
+.celebration-details p {
+  color: white;
+  font-size: 18px;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.whats-next h3 {
+  color: white;
+  font-size: 18px;
+  margin: 0 0 16px 0;
+  text-align: left;
+}
+
+.whats-next ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.whats-next li {
+  color: rgba(255, 255, 255, 0.9);
+  padding: 8px 0;
+  padding-left: 24px;
+  position: relative;
+}
+
+.whats-next li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #a7f3d0;
+}
+
+.whats-next strong {
+  color: white;
+}
+
+.continue-btn {
+  padding: 16px 40px;
+  background: white;
+  color: #059669;
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.continue-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Confetti Animation */
+.confetti-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fbbf24;
+  animation: confetti-fall 3s ease-in-out infinite;
+}
+
+.confetti:nth-child(1) {
+  left: 10%;
+  animation-delay: 0s;
+  background: #f472b6;
+}
+
+.confetti:nth-child(2) {
+  left: 30%;
+  animation-delay: 0.5s;
+  background: #60a5fa;
+}
+
+.confetti:nth-child(3) {
+  left: 50%;
+  animation-delay: 1s;
+  background: #fbbf24;
+}
+
+.confetti:nth-child(4) {
+  left: 70%;
+  animation-delay: 1.5s;
+  background: #34d399;
+}
+
+.confetti:nth-child(5) {
+  left: 90%;
+  animation-delay: 2s;
+  background: #a78bfa;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-100vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* Stage Transition Animation */
+.stage-transition-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.stage-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+
+.stage-transition-exit {
+  opacity: 1;
+}
+
+.stage-transition-exit-active {
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
