@@ -122,24 +122,14 @@ const detectPortalStage = (workspaceData) => {
   const { workspace, loan, application } = workspaceData;
   const status = workspace?.status?.toLowerCase();
 
+  console.log('[detectPortalStage] workspace status:', status, 'loan:', !!loan, 'application:', application?.status);
+
   // Check if explicitly set in workspace
   if (workspace?.portal_stage) {
     return workspace.portal_stage;
   }
 
-  // No loan record = Lead stage
-  if (!loan) {
-    // Check if application exists but not submitted
-    if (application && application.status !== 'submitted') {
-      return PortalStage.LEAD;
-    }
-    // No loan, no application = Lead
-    if (!application) {
-      return PortalStage.LEAD;
-    }
-  }
-
-  // Check for MUM/post-close stages
+  // Check for MUM/post-close stages first
   if (status === 'mum' || status === 'post_close' || status === 'annual_refresh') {
     return PortalStage.MUM;
   }
@@ -164,15 +154,25 @@ const detectPortalStage = (workspaceData) => {
     return PortalStage.MUM;
   }
 
-  // Active loan stages
+  // Active loan stages - check workspace status OR loan exists OR application submitted
+  // When application is completed, the client is in active loan stage
   if (status === 'active_loan' || status === 'application' ||
       status === 'processing' || status === 'closing' ||
-      loan?.status) {
+      status === 'active' || status === 'submitted' ||
+      loan?.status ||
+      (application && application.status === 'submitted')) {
     return PortalStage.ACTIVE_LOAN;
   }
 
-  // Default to lead if unclear
-  return PortalStage.LEAD;
+  // Only show Lead portal if:
+  // 1. No loan AND no submitted application AND status is lead/null
+  if (!loan && (!application || application.status !== 'submitted')) {
+    return PortalStage.LEAD;
+  }
+
+  // Default to active loan for any workspace that exists
+  // (portal is created when application is submitted, so default should be active)
+  return PortalStage.ACTIVE_LOAN;
 };
 
 // Determine sub-stage for active loans
