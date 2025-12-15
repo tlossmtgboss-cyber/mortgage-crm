@@ -3713,14 +3713,6 @@ function LeadDetail() {
             <span>UVIP Video Call</span>
           </button>
           <button
-            className="action-btn record"
-            onClick={() => handleAction('record')}
-            title="Record meeting with Recall.ai bot"
-          >
-            <span className="icon">🎥</span>
-            <span>Record Meeting</span>
-          </button>
-          <button
             className="action-btn voicemail"
             onClick={() => handleAction('voicemail')}
             disabled={!lead.phone}
@@ -3728,14 +3720,6 @@ function LeadDetail() {
           >
             <span className="icon">📞</span>
             <span>Voicemail Drop</span>
-          </button>
-          <button
-            className={`action-btn voice ${isListening ? 'listening' : ''}`}
-            onClick={() => handleAction('voice')}
-            title="Give voice command to AI assistant"
-          >
-            <span className="icon">🎤</span>
-            <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
           </button>
           <button
             className="action-btn application"
