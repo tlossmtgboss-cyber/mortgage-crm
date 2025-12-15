@@ -587,6 +587,7 @@ const DECLARATION_QUESTIONS = [
       { value: 'no', label: 'No other properties', icon: 'arrowRight' },
     ],
     hint: 'This includes properties you own, co-own, or have ownership interest in.',
+    showIf: { field: 'first_time_buyer', values: ['no'] },
   },
   {
     id: 'property_interest_address',
