@@ -88,6 +88,40 @@ async def get_email_service_status():
     }
 
 
+@router.post("/test-email")
+async def test_email_send(to_email: str = "tloss@me.com"):
+    """Test endpoint to send a test email and see actual SendGrid response"""
+    try:
+        result = notification_service.send_email(
+            to_email=to_email,
+            subject="Test Email from Perennia CRM",
+            html_content="""
+            <html>
+            <body style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2>Test Email</h2>
+                <p>This is a test email from Perennia CRM to verify SendGrid is working.</p>
+                <p>Time sent: """ + datetime.now().isoformat() + """</p>
+            </body>
+            </html>
+            """,
+            plain_content="Test email from Perennia CRM. Time: " + datetime.now().isoformat()
+        )
+
+        return {
+            "test_result": result,
+            "to_email": to_email,
+            "from_email": os.getenv("SENDGRID_FROM_EMAIL", "noreply@perennia.ai"),
+            "sendgrid_key_present": bool(os.getenv("SENDGRID_API_KEY")),
+            "sendgrid_key_length": len(os.getenv("SENDGRID_API_KEY", "")) if os.getenv("SENDGRID_API_KEY") else 0
+        }
+    except Exception as e:
+        return {
+            "test_result": {"success": False, "error": str(e)},
+            "exception_type": type(e).__name__,
+            "to_email": to_email
+        }
+
+
 # ============================================================================
 # APPOINTMENT NOTIFICATION HELPERS
 # ============================================================================
