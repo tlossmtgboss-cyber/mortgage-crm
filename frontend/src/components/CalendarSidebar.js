@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../services/api';
 import './CalendarSidebar.css';
 
-function CalendarSidebar({ leadId, loanId }) {
+function CalendarSidebar({ leadId, loanId, children }) {
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -386,6 +386,9 @@ function CalendarSidebar({ leadId, loanId }) {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Quick Actions (passed as children) */}
+      {children}
+
       {/* Drag overlay */}
       {isDragOver && (
         <div className="drag-overlay">

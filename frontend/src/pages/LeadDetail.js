@@ -3463,115 +3463,6 @@ function LeadDetail() {
           )}
 
         </div>
-
-        {/* Right Column - Actions & Email History */}
-        <div className="right-column">
-          {/* Action Buttons */}
-          <div className="actions-card">
-            <h3>Quick Actions</h3>
-            <div className="action-buttons">
-              <button
-                className="action-btn call"
-                onClick={() => handleAction('call')}
-                disabled={!lead.phone}
-                title="Click to call using your phone"
-              >
-                <span className="icon">📞</span>
-                <span>Call</span>
-              </button>
-              <button
-                className="action-btn sms"
-                onClick={() => handleAction('sms')}
-                disabled={!lead.phone}
-                title="Send SMS using your phone"
-              >
-                <span className="icon">💬</span>
-                <span>SMS Text</span>
-              </button>
-              <button
-                className="action-btn email"
-                onClick={() => handleAction('email')}
-                disabled={!lead.email}
-              >
-                <span className="icon">✉️</span>
-                <span>Send Email</span>
-              </button>
-              <button
-                className="action-btn task"
-                onClick={() => handleAction('task')}
-              >
-                <span className="icon">✓</span>
-                <span>Create Task</span>
-              </button>
-              <button
-                className="action-btn calendar"
-                onClick={() => handleAction('calendar')}
-              >
-                <span className="icon">📅</span>
-                <span>Set Appointment</span>
-              </button>
-              <button
-                className="action-btn video"
-                onClick={() => handleAction('video')}
-                title="Start UVIP video call"
-              >
-                <span className="icon">🎥</span>
-                <span>UVIP Video Call</span>
-              </button>
-              <button
-                className="action-btn record"
-                onClick={() => handleAction('record')}
-                title="Record meeting with Recall.ai bot"
-              >
-                <span className="icon">🎥</span>
-                <span>Record Meeting</span>
-              </button>
-              <button
-                className="action-btn voicemail"
-                onClick={() => handleAction('voicemail')}
-                disabled={!lead.phone}
-                title="Drop voicemail message"
-              >
-                <span className="icon">📞</span>
-                <span>Voicemail Drop</span>
-              </button>
-              <button
-                className={`action-btn voice ${isListening ? 'listening' : ''}`}
-                onClick={() => handleAction('voice')}
-                title="Give voice command to AI assistant"
-              >
-                <span className="icon">🎤</span>
-                <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
-              </button>
-              <button
-                className="action-btn application"
-                onClick={() => handleAction('send_application')}
-                title="Send borrower application link"
-                disabled={applicationLoading}
-              >
-                <span className="icon">📝</span>
-                <span>{applicationLoading ? 'Creating...' : 'Send Application'}</span>
-              </button>
-              <button
-                className="action-btn portal"
-                onClick={() => handleAction('client_portal')}
-                title="Open or create client portal"
-                disabled={clientPortalLoading}
-              >
-                <span className="icon">🌐</span>
-                <span>{clientPortalLoading ? 'Loading...' : 'Client Portal'}</span>
-              </button>
-              <button
-                className="action-btn escalation"
-                onClick={() => handleAction('escalation')}
-                title="Escalate issue to team member"
-              >
-                <span className="icon">🚨</span>
-                <span>Escalation</span>
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Client Portal Modal */}
@@ -4069,7 +3960,113 @@ function LeadDetail() {
         </div>
       )}
       </div>
-      <CalendarSidebar leadId={id} key={calendarRefreshKey} />
+      <CalendarSidebar leadId={id} key={calendarRefreshKey}>
+        {/* Quick Actions */}
+        <div className="actions-card">
+          <h3>QUICK ACTIONS</h3>
+          <div className="action-buttons">
+            <button
+              className="action-btn call"
+              onClick={() => handleAction('call')}
+              disabled={!lead.phone}
+              title="Click to call using your phone"
+            >
+              <span className="icon">📞</span>
+              <span>Call</span>
+            </button>
+            <button
+              className="action-btn sms"
+              onClick={() => handleAction('sms')}
+              disabled={!lead.phone}
+              title="Send SMS using your phone"
+            >
+              <span className="icon">💬</span>
+              <span>SMS Text</span>
+            </button>
+            <button
+              className="action-btn email"
+              onClick={() => handleAction('email')}
+              disabled={!lead.email}
+            >
+              <span className="icon">✉️</span>
+              <span>Send Email</span>
+            </button>
+            <button
+              className="action-btn task"
+              onClick={() => handleAction('task')}
+            >
+              <span className="icon">✓</span>
+              <span>Create Task</span>
+            </button>
+            <button
+              className="action-btn calendar"
+              onClick={() => handleAction('calendar')}
+            >
+              <span className="icon">📅</span>
+              <span>Set Appointment</span>
+            </button>
+            <button
+              className="action-btn video"
+              onClick={() => handleAction('video')}
+              title="Start UVIP video call"
+            >
+              <span className="icon">🎥</span>
+              <span>UVIP Video Call</span>
+            </button>
+            <button
+              className="action-btn record"
+              onClick={() => handleAction('record')}
+              title="Record meeting with Recall.ai bot"
+            >
+              <span className="icon">🎥</span>
+              <span>Record Meeting</span>
+            </button>
+            <button
+              className="action-btn voicemail"
+              onClick={() => handleAction('voicemail')}
+              disabled={!lead.phone}
+              title="Drop voicemail message"
+            >
+              <span className="icon">📞</span>
+              <span>Voicemail Drop</span>
+            </button>
+            <button
+              className={`action-btn voice ${isListening ? 'listening' : ''}`}
+              onClick={() => handleAction('voice')}
+              title="Give voice command to AI assistant"
+            >
+              <span className="icon">🎤</span>
+              <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
+            </button>
+            <button
+              className="action-btn application"
+              onClick={() => handleAction('send_application')}
+              title="Send borrower application link"
+              disabled={applicationLoading}
+            >
+              <span className="icon">📝</span>
+              <span>{applicationLoading ? 'Creating...' : 'Send Application'}</span>
+            </button>
+            <button
+              className="action-btn portal"
+              onClick={() => handleAction('client_portal')}
+              title="Open or create client portal"
+              disabled={clientPortalLoading}
+            >
+              <span className="icon">🌐</span>
+              <span>{clientPortalLoading ? 'Loading...' : 'Client Portal'}</span>
+            </button>
+            <button
+              className="action-btn escalation"
+              onClick={() => handleAction('escalation')}
+              title="Escalate issue to team member"
+            >
+              <span className="icon">🚨</span>
+              <span>Escalation</span>
+            </button>
+          </div>
+        </div>
+      </CalendarSidebar>
     </div>
   );
 }

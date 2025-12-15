@@ -2336,93 +2336,6 @@ function LoanDetail() {
         )}
 
         </div>
-
-        {/* Right Column - Actions & Email History */}
-        <div className="right-column">
-          {/* Quick Actions */}
-          <div className="actions-card">
-            <h3>Quick Actions</h3>
-            <div className="action-buttons">
-            <button
-              className="action-btn call"
-              onClick={() => handleAction('call')}
-              title="Click to call using your phone"
-            >
-              <span className="icon">📞</span>
-              <span>Call</span>
-            </button>
-            <button
-              className="action-btn sms"
-              onClick={() => handleAction('sms')}
-              title="Send SMS using your phone"
-            >
-              <span className="icon">💬</span>
-              <span>SMS Text</span>
-            </button>
-            <button
-              className="action-btn email"
-              onClick={() => handleAction('email')}
-            >
-              <span className="icon">✉️</span>
-              <span>Send Email</span>
-            </button>
-            <button
-              className="action-btn task"
-              onClick={() => handleAction('task')}
-            >
-              <span className="icon">✓</span>
-              <span>Create Task</span>
-            </button>
-            <button
-              className="action-btn calendar"
-              onClick={() => handleAction('calendar')}
-            >
-              <span className="icon">📅</span>
-              <span>Set Appointment</span>
-            </button>
-            <button
-              className="action-btn video"
-              onClick={() => handleAction('video')}
-              title="Start UVIP video call"
-            >
-              <span className="icon">🎥</span>
-              <span>UVIP Video Call</span>
-            </button>
-            <button
-              className="action-btn record"
-              onClick={() => handleAction('record')}
-              title="Record meeting with Recall.ai bot"
-            >
-              <span className="icon">🎥</span>
-              <span>Record Meeting</span>
-            </button>
-            <button
-              className="action-btn voicemail"
-              onClick={() => handleAction('voicemail')}
-              title="Drop voicemail message"
-            >
-              <span className="icon">📞</span>
-              <span>Voicemail Drop</span>
-            </button>
-            <button
-              className={`action-btn voice ${isListening ? 'listening' : ''}`}
-              onClick={() => handleAction('voice')}
-              title="Give voice command to AI assistant"
-            >
-              <span className="icon">🎤</span>
-              <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
-            </button>
-            <button
-              className="action-btn escalation"
-              onClick={() => handleAction('escalation')}
-              title="Escalate issue to team member"
-            >
-              <span className="icon">🚨</span>
-              <span>Escalation</span>
-            </button>
-          </div>
-        </div>
-        </div>
       </div>
 
       {/* Voicemail Drop */}
@@ -2667,7 +2580,91 @@ function LoanDetail() {
         }}
       />
       </div>
-      <CalendarSidebar loanId={id} key={calendarRefreshKey} />
+      <CalendarSidebar loanId={id} key={calendarRefreshKey}>
+        {/* Quick Actions */}
+        <div className="actions-card">
+          <h3>QUICK ACTIONS</h3>
+          <div className="action-buttons">
+            <button
+              className="action-btn call"
+              onClick={() => handleAction('call')}
+              title="Click to call using your phone"
+            >
+              <span className="icon">📞</span>
+              <span>Call</span>
+            </button>
+            <button
+              className="action-btn sms"
+              onClick={() => handleAction('sms')}
+              title="Send SMS using your phone"
+            >
+              <span className="icon">💬</span>
+              <span>SMS Text</span>
+            </button>
+            <button
+              className="action-btn email"
+              onClick={() => handleAction('email')}
+            >
+              <span className="icon">✉️</span>
+              <span>Send Email</span>
+            </button>
+            <button
+              className="action-btn task"
+              onClick={() => handleAction('task')}
+            >
+              <span className="icon">✓</span>
+              <span>Create Task</span>
+            </button>
+            <button
+              className="action-btn calendar"
+              onClick={() => handleAction('calendar')}
+            >
+              <span className="icon">📅</span>
+              <span>Set Appointment</span>
+            </button>
+            <button
+              className="action-btn video"
+              onClick={() => handleAction('video')}
+              title="Start UVIP video call"
+            >
+              <span className="icon">🎥</span>
+              <span>UVIP Video Call</span>
+            </button>
+            <button
+              className="action-btn record"
+              onClick={() => handleAction('record')}
+              title="Record meeting with Recall.ai bot"
+            >
+              <span className="icon">🎥</span>
+              <span>Record Meeting</span>
+            </button>
+            <button
+              className="action-btn voicemail"
+              onClick={() => handleAction('voicemail')}
+              title="Drop voicemail message"
+            >
+              <span className="icon">📞</span>
+              <span>Voicemail Drop</span>
+            </button>
+            <button
+              className={`action-btn voice ${isListening ? 'listening' : ''}`}
+              onClick={() => handleAction('voice')}
+              title="Give voice command to AI assistant"
+            >
+              <span className="icon">🎤</span>
+              <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
+            </button>
+            <button
+              className="action-btn escalation"
+              onClick={() => handleAction('escalation')}
+              title="Escalate issue to team member"
+            >
+              <span className="icon">🚨</span>
+              <span>Escalation</span>
+            </button>
+          </div>
+        </div>
+      </CalendarSidebar>
     </div>
   );
 }
