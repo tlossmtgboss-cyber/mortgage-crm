@@ -6,22 +6,33 @@ Provides API endpoints for the PURL borrower portal system:
 - Public endpoints (PURL token auth): workspace access, applications, documents, timeline
 - Internal endpoints (user auth): workspace management, token management
 """
+from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Path, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Path, UploadFile, File, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
 
-# IMPORTANT: Import User from main FIRST to ensure it's registered in SQLAlchemy metadata
-# before PURL models are loaded (they have ForeignKey references to users.id)
-from main import get_current_user, User
+# Use TYPE_CHECKING to avoid circular import - User is only needed for type hints
+if TYPE_CHECKING:
+    from main import User
 
-# Models and schemas (import AFTER User to ensure users table is registered)
+# Lazy import wrapper for get_current_user to avoid circular import
+# This function returns a dependency that can be used with Depends()
+def get_authenticated_user():
+    """
+    Lazy import wrapper for get_current_user to avoid circular import.
+    Returns the get_current_user dependency from main module.
+    """
+    from main import get_current_user
+    return get_current_user
+
+# Models and schemas
 from models.purl import (
     PURLWorkspace,
     PURLContact,
@@ -934,7 +945,7 @@ async def mark_message_read(
 async def search_contacts_for_workspace(
     q: str = Query(..., min_length=1, description="Search query (name)"),
     limit: int = Query(10, ge=1, le=50, description="Max results"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """
@@ -1019,7 +1030,7 @@ class WorkspaceCreateRequest(BaseModel):
 )
 async def create_workspace(
     request: WorkspaceCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Create a new PURL workspace with duplicate prevention."""
@@ -1120,7 +1131,7 @@ async def list_workspaces(
     search: Optional[str] = Query(None, description="Search by name or slug"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """List PURL workspaces for the organization."""
@@ -1191,7 +1202,7 @@ async def list_workspaces(
 )
 async def get_workspace_by_lead(
     lead_id: str = Path(..., description="Lead ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get workspace for a specific lead - used by PURLWidget in profile pages."""
@@ -1263,7 +1274,7 @@ async def get_workspace_by_lead(
 )
 async def get_workspace_by_loan(
     loan_id: str = Path(..., description="Loan ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get workspace for a specific loan - used by PURLWidget in loan profile pages."""
@@ -1282,7 +1293,7 @@ async def get_workspace_by_loan(
 )
 async def get_workspace(
     workspace_id: int = Path(..., description="Workspace ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get workspace details."""
@@ -1306,7 +1317,7 @@ async def get_workspace(
 async def update_workspace(
     workspace_id: int = Path(..., description="Workspace ID"),
     updates: Dict[str, Any] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Update workspace settings."""
@@ -1342,7 +1353,7 @@ async def update_workspace(
 async def create_token(
     workspace_id: int = Path(..., description="Workspace ID"),
     token_data: TokenCreate = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Create a new access token for a workspace."""
@@ -1402,7 +1413,7 @@ async def create_token(
 async def list_tokens(
     workspace_id: int = Path(..., description="Workspace ID"),
     include_revoked: bool = Query(False, description="Include revoked tokens"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """List access tokens for a workspace."""
@@ -1448,7 +1459,7 @@ async def list_tokens(
 async def revoke_token(
     workspace_id: int = Path(..., description="Workspace ID"),
     token_id: int = Path(..., description="Token ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Revoke an access token."""
@@ -1482,7 +1493,7 @@ async def revoke_token(
 async def add_contact(
     workspace_id: int = Path(..., description="Workspace ID"),
     contact: ContactCreate = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Add a contact to a workspace."""
@@ -1516,7 +1527,7 @@ async def add_contact(
 )
 async def list_contacts(
     workspace_id: int = Path(..., description="Workspace ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """List contacts for a workspace."""
@@ -1561,7 +1572,7 @@ async def list_contacts(
 async def create_document_request(
     workspace_id: int = Path(..., description="Workspace ID"),
     request_data: Dict[str, Any] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Create a document request for the borrower."""
@@ -1599,7 +1610,7 @@ async def create_document_request(
 )
 async def get_analytics_summary(
     days: int = Query(30, ge=1, le=365, description="Days to analyze"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get PURL analytics summary."""
@@ -1677,7 +1688,7 @@ async def get_analytics_summary(
 async def revoke_token_with_reason(
     token_id: int = Path(..., description="Token ID"),
     reason: Optional[str] = Query(None, description="Reason for revocation"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Revoke an access token with optional reason."""
@@ -1720,7 +1731,7 @@ async def revoke_token_with_reason(
 async def get_workspace_activity(
     workspace_id: int = Path(..., description="Workspace ID"),
     limit: int = Query(50, ge=1, le=200, description="Max activities"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get activity history for a workspace."""
@@ -1774,7 +1785,7 @@ async def get_workspace_activity(
 )
 async def get_purl_url(
     workspace_id: int = Path(..., description="Workspace ID"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get the full PURL URL for a workspace."""
@@ -1820,7 +1831,7 @@ async def get_purl_url(
     description="Get aggregate metrics for PURL dashboard"
 )
 async def get_purl_metrics(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Get aggregate metrics for the PURL dashboard."""
@@ -1892,7 +1903,7 @@ async def get_purl_metrics(
 async def resend_invite(
     workspace_id: int = Path(..., description="Workspace ID"),
     background_tasks: BackgroundTasks = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Resend portal invitation email to borrower."""
@@ -1970,7 +1981,7 @@ class BulkResendRequest(BaseModel):
 async def bulk_resend_invites(
     request: BulkResendRequest,
     background_tasks: BackgroundTasks = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Bulk resend portal invitations."""
@@ -2004,7 +2015,7 @@ async def bulk_resend_invites(
 async def revoke_token_by_id(
     token_id: int = Path(..., description="Token ID"),
     reason: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user()),
     db: Session = Depends(get_db)
 ):
     """Revoke a PURL access token by ID."""
