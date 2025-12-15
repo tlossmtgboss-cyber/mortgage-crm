@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
+// v2.0 - Fixed "Failed to fetch" error by removing call to non-existent endpoint
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
