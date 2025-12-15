@@ -98,54 +98,35 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     if (!borrower?.id) return;
 
     try {
-      // Try to fetch assigned team members for this lead/loan
-      const response = await fetch(`${API_BASE}/api/v1/leads/${borrower.id}/team-assignments`, {
+      // Fetch all team members directly (more reliable)
+      const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const assignments = data.assignments || data || [];
-        setTeamMembers(assignments);
-        // Auto-select first team member if available
-        if (assignments.length > 0) {
-          const firstMemberId = assignments[0].member_id || assignments[0].user_id || assignments[0].id || '';
-          setSelectedTeamMember(firstMemberId);
+      if (allMembersResponse.ok) {
+        const data = await allMembersResponse.json();
+        const members = data.team_members || data || [];
+        setTeamMembers(members);
+
+        // Auto-select first team member (usually current user) if available
+        if (members.length > 0) {
+          const firstMemberId = members[0].member_id || members[0].user_id || members[0].id || '';
+          setSelectedTeamMember(String(firstMemberId));
           // Fetch work hours for first team member
           if (firstMemberId) {
             fetchTeamMemberWorkHours(firstMemberId);
           }
         }
       } else {
-        // Fallback: fetch all team members
-        const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (allMembersResponse.ok) {
-          const data = await allMembersResponse.json();
-          setTeamMembers(data.team_members || data || []);
-        }
+        console.warn('Failed to fetch team members:', allMembersResponse.status);
+        // Don't set error - modal can still work without team members list
       }
     } catch (error) {
       console.error('Error fetching team members:', error);
-      // Try fetching all team members as fallback
-      try {
-        const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (allMembersResponse.ok) {
-          const data = await allMembersResponse.json();
-          setTeamMembers(data.team_members || data || []);
-        }
-      } catch (err) {
-        console.error('Error fetching all team members:', err);
-      }
+      // Don't set error for network issues - the modal can still function
+      // User can manually enter appointment details
     }
   }, [borrower?.id, fetchTeamMemberWorkHours]);
 
