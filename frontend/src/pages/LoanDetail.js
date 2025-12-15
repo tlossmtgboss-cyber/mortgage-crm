@@ -826,14 +826,14 @@ function LoanDetail() {
           Circle
         </button>
         <button
-          className={`tab-btn ${activeTab === 'conditions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('conditions')}
+          className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('documents')}
         >
           Conditions
         </button>
         <button
-          className={`tab-btn ${activeTab === 'sla-dates' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sla-dates')}
+          className={`tab-btn ${activeTab === 'important-dates' ? 'active' : ''}`}
+          onClick={() => setActiveTab('important-dates')}
         >
           SLA Dates
         </button>

@@ -393,11 +393,30 @@ class PURLWorkspaceService:
             PURLMessage.is_read_by_borrower == False
         ).scalar() or 0
 
+        # Get linked lead information if available
+        lead_data = None
+        lead_id = workspace.meta_data.get('lead_id') if workspace.meta_data else None
+        if lead_id:
+            try:
+                from main import Lead
+                lead = self.db.query(Lead).filter(Lead.id == int(lead_id)).first()
+                if lead:
+                    lead_data = {
+                        "id": lead.id,
+                        "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
+                        "name": lead.name,
+                        "first_name": lead.first_name,
+                        "last_name": lead.last_name
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to fetch linked lead {lead_id}: {e}")
+
         return {
             "workspace": self._workspace_to_dict(workspace),
             "contacts": [self._contact_to_dict(c) for c in contacts],
             "application": self._application_to_dict(application) if application else None,
             "loan": self._loan_to_dict(current_loan) if current_loan else None,
+            "lead": lead_data,  # Include linked lead data for milestone sync
             "documents": [self._document_to_dict(d) for d in documents],
             "tasks": [self._task_to_dict(t) for t in tasks],
             "milestones": milestones,

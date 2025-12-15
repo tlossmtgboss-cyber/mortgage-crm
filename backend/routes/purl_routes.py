@@ -187,6 +187,7 @@ class WorkspaceDataResponse(BaseModel):
     contacts: List[Dict[str, Any]]
     application: Optional[Dict[str, Any]] = None
     loan: Optional[Dict[str, Any]] = None
+    lead: Optional[Dict[str, Any]] = None  # Linked CRM lead data for milestone sync
     documents: List[Dict[str, Any]] = []
     tasks: List[Dict[str, Any]] = []
     milestones: List[Dict[str, Any]] = []

@@ -735,8 +735,8 @@ function MumClientDetail() {
           Circle
         </button>
         <button
-          className={`tab-btn ${activeTab === 'conditions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('conditions')}
+          className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('documents')}
         >
           Conditions
         </button>
