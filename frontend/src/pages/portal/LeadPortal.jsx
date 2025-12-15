@@ -228,7 +228,7 @@ export default function LeadPortal({ data, slug, onRefresh }) {
 
           <div className="hero-cta">
             <button className="cta-primary" onClick={() => setShowScheduleModal(true)}>
-              Talk to an Expert
+              Schedule a Call
             </button>
           </div>
 
