@@ -1492,7 +1492,7 @@ export default function PurchaseApplication() {
 
       // Agent info - combined form with autocomplete
       if (question.type === 'agent_info') {
-        const isComplete = agentInfo.name && agentInfo.phone && agentInfo.email;
+        const isComplete = agentInfo.name && (agentInfo.phone || agentInfo.email);
         return (
           <div className="declaration-input-container agent-info-form">
             {/* Agent Name with Autocomplete */}
