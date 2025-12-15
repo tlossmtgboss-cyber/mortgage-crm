@@ -63,6 +63,33 @@
   color: #fff;
 }
 
+/* View Portal Button */
+.btn-view-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-view-portal:hover {
+  background: linear-gradient(135deg, #2563eb, #1e3a8a);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-view-portal:active {
+  transform: translateY(0);
+}
+
 /* Partner Info Card */
 .partner-info-card {
   background: white;

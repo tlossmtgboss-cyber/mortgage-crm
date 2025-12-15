@@ -35902,20 +35902,24 @@ async def get_scorecard(
     Get comprehensive loan scorecard metrics matching the Loan Scorecard Report format.
     Includes conversion metrics, funding totals, and referral source breakdown.
     """
-    try:
-        from datetime import date, datetime as dt, timedelta, timezone
-        from sqlalchemy import func, extract, case
-        from decimal import Decimal
+    from datetime import date, datetime as dt, timedelta, timezone
+    from sqlalchemy import func, extract, case
+    from decimal import Decimal
 
-        # Date range setup
+    try:
+        # Date range setup - convert to datetime for proper comparison with DateTime columns
         if start_date and end_date:
-            start = dt.strptime(start_date, "%Y-%m-%d").date()
-            end = dt.strptime(end_date, "%Y-%m-%d").date()
+            start = dt.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, tzinfo=timezone.utc)
+            end = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
         else:
             # Default to current month
             today = date.today()
-            start = today.replace(day=1)
-            end = today
+            start = dt(today.year, today.month, 1, 0, 0, 0, tzinfo=timezone.utc)
+            end = dt(today.year, today.month, today.day, 23, 59, 59, tzinfo=timezone.utc)
+
+        # Store date-only versions for the response
+        start_date_str = start.strftime("%Y-%m-%d")
+        end_date_str = end.strftime("%Y-%m-%d")
     except Exception as e:
         logger.error(f"Error in scorecard endpoint (date setup): {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error processing scorecard data: {str(e)}")
@@ -36181,8 +36185,8 @@ async def get_scorecard(
 
         return {
             "period": {
-                "start_date": start.isoformat(),
-                "end_date": end.isoformat()
+                "start_date": start_date_str,
+                "end_date": end_date_str
             },
             "conversion_metrics": conversion_metrics,
             "conversion_upswing": conversion_upswing,

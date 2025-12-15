@@ -279,6 +279,13 @@ function ReferralPartnerDetail() {
           ← Back to Partners
         </button>
         <div className="partner-title-section">
+          <button
+            className="btn-view-portal"
+            onClick={() => navigate(`/partner-portal/${id}`)}
+            title="View as partner"
+          >
+            👁️ View Portal
+          </button>
           <h1>{partner.name}</h1>
           <span className={`tier-badge ${getTierBadgeClass(partner.loyalty_tier)}`}>
             {partner.loyalty_tier || 'Bronze'}

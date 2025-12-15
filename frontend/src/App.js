@@ -42,6 +42,7 @@ const Assistant = lazy(() => import('./pages/Assistant'));
 const ClientProfile = lazy(() => import('./pages/ClientProfile'));
 const ReferralPartners = lazy(() => import('./pages/ReferralPartners'));
 const ReferralPartnerDetail = lazy(() => import('./pages/ReferralPartnerDetail'));
+const PartnerDashboardPortal = lazy(() => import('./pages/PartnerDashboardPortal'));
 const AIUnderwriter = lazy(() => import('./pages/AIUnderwriter'));
 const GoalTracker = lazy(() => import('./pages/GoalTracker'));
 const Coach = lazy(() => import('./pages/Coach'));
@@ -1306,6 +1307,14 @@ function App() {
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/partner-portal/:id"
+            element={
+              <PrivateRoute>
+                <LazyPage><PartnerDashboardPortal /></LazyPage>
               </PrivateRoute>
             }
           />
