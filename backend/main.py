@@ -57835,6 +57835,68 @@ async def add_leads_import_columns_migration(
         }
 
 
+@app.post("/api/v1/migrations/assign-leads-to-partner", response_model=None)
+async def assign_leads_to_partner_migration(
+    partner_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Assign all leads without a referral partner to a specific partner.
+
+    Use this to populate the Partner Dashboard with existing leads.
+    """
+    try:
+        # Verify partner exists
+        partner = db.execute(
+            text("SELECT id, name FROM referral_partners WHERE id = :partner_id"),
+            {"partner_id": partner_id}
+        ).fetchone()
+
+        if not partner:
+            return {
+                "success": False,
+                "error": f"Referral partner with ID {partner_id} not found"
+            }
+
+        # Count leads to be assigned
+        count_result = db.execute(
+            text("SELECT COUNT(*) FROM leads WHERE referral_partner_id IS NULL")
+        ).fetchone()
+        leads_to_assign = count_result[0] if count_result else 0
+
+        if leads_to_assign == 0:
+            return {
+                "success": True,
+                "message": "No leads without a referral partner to assign",
+                "leads_assigned": 0,
+                "partner_name": partner[1]
+            }
+
+        # Assign all leads without a partner to this partner
+        db.execute(
+            text("UPDATE leads SET referral_partner_id = :partner_id WHERE referral_partner_id IS NULL"),
+            {"partner_id": partner_id}
+        )
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Assigned {leads_to_assign} leads to {partner[1]}",
+            "leads_assigned": leads_to_assign,
+            "partner_id": partner_id,
+            "partner_name": partner[1]
+        }
+
+    except Exception as e:
+        logger.error(f"Assign leads to partner migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # NATIVE ACTION DETECTION FOR MOBILE APP
 # ============================================================================
