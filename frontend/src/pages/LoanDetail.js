@@ -62,7 +62,7 @@ function LoanDetail() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(true);
   const [formData, setFormData] = useState({});
-  const [activeTab, setActiveTab] = useState('personal');
+  const [activeTab, setActiveTab] = useState('loan-details');
   const [borrowers, setBorrowers] = useState([]);
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);
@@ -802,34 +802,16 @@ function LoanDetail() {
           Personal
         </button>
         <button
-          className={`tab-btn ${activeTab === 'employment' ? 'active' : ''}`}
-          onClick={() => setActiveTab('employment')}
-        >
-          Employment
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
           Property
         </button>
         <button
-          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
-          onClick={() => setActiveTab('team')}
+          className={`tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tasks')}
         >
-          Team Members
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'marketing' ? 'active' : ''}`}
-          onClick={() => setActiveTab('marketing')}
-        >
-          Marketing
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'email' ? 'active' : ''}`}
-          onClick={() => setActiveTab('email')}
-        >
-          Email
+          Tasks
         </button>
         <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
@@ -844,16 +826,22 @@ function LoanDetail() {
           Circle
         </button>
         <button
-          className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
-          onClick={() => setActiveTab('documents')}
+          className={`tab-btn ${activeTab === 'conditions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('conditions')}
         >
-          Documents
+          Conditions
         </button>
         <button
-          className={`tab-btn ${activeTab === 'important-dates' ? 'active' : ''}`}
-          onClick={() => setActiveTab('important-dates')}
+          className={`tab-btn ${activeTab === 'sla-dates' ? 'active' : ''}`}
+          onClick={() => setActiveTab('sla-dates')}
         >
-          Important Dates
+          SLA Dates
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+          onClick={() => setActiveTab('team')}
+        >
+          Team Members
         </button>
       </div>
 

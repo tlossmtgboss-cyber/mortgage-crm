@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import NotificationBell from './NotificationBell';
@@ -8,26 +8,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   const location = useLocation();
   const navigate = useNavigate();
   const { userRole } = usePermissions();
-  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
-  const agentDropdownRef = useRef(null);
 
   const isActive = (path) => location.pathname === path;
-  const isAgentGovernanceActive = () => {
-    return ['/agent-dashboard', '/voice-os-dashboard', '/ai-receptionist-dashboard'].some(
-      path => location.pathname === path || location.pathname.startsWith(path)
-    );
-  };
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (agentDropdownRef.current && !agentDropdownRef.current.contains(event.target)) {
-        setAgentDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const renderBadge = (count) => {
     if (!count || count === 0) return null;
@@ -133,42 +115,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             AI Underwriter
           </Link>
-
-          {/* Agent Governance Dropdown */}
-          <div className="nav-dropdown" ref={agentDropdownRef}>
-            <button
-              className={`nav-link nav-dropdown-trigger ${isAgentGovernanceActive() ? 'active' : ''}`}
-              onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
-            >
-              Agent Governance
-              <span className={`dropdown-arrow ${agentDropdownOpen ? 'open' : ''}`}>▾</span>
-            </button>
-            {agentDropdownOpen && (
-              <div className="nav-dropdown-menu">
-                <Link
-                  to="/agent-dashboard"
-                  className={`nav-dropdown-item ${isActive('/agent-dashboard') ? 'active' : ''}`}
-                  onClick={() => setAgentDropdownOpen(false)}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/voice-os-dashboard"
-                  className={`nav-dropdown-item ${isActive('/voice-os-dashboard') ? 'active' : ''}`}
-                  onClick={() => setAgentDropdownOpen(false)}
-                >
-                  Voice OS
-                </Link>
-                <Link
-                  to="/ai-receptionist-dashboard"
-                  className={`nav-dropdown-item ${isActive('/ai-receptionist-dashboard') ? 'active' : ''}`}
-                  onClick={() => setAgentDropdownOpen(false)}
-                >
-                  AI Receptionist
-                </Link>
-              </div>
-            )}
-          </div>
           <Link
             to="/market"
             className={`nav-link ${isActive('/market') ? 'active' : ''}`}
