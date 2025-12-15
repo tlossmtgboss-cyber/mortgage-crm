@@ -37686,11 +37686,46 @@ def calculate_referral_scores(data: dict) -> dict:
 # ============================================================================
 
 @app.post("/api/v1/loans/", response_model=LoanResponse, status_code=201)
-async def create_loan(loan: LoanCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_loan(
+    loan: LoanCreate,
+    skip_duplicate_check: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     try:
+        # Check for duplicate loan number
         existing = db.query(Loan).filter(Loan.loan_number == loan.loan_number).first()
         if existing:
             raise HTTPException(status_code=400, detail="Loan number already exists")
+
+        # Check for duplicate borrower (unless explicitly skipped)
+        if not skip_duplicate_check and loan.borrower_name:
+            normalized_name = loan.borrower_name.strip().lower()
+            duplicate_borrower = db.execute(text("""
+                SELECT id, loan_number, borrower_name, stage, amount, created_at
+                FROM loans
+                WHERE LOWER(TRIM(borrower_name)) = :name
+                ORDER BY created_at DESC
+                LIMIT 1
+            """), {"name": normalized_name}).fetchone()
+
+            if duplicate_borrower:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "duplicate_borrower",
+                        "message": f"A loan for '{loan.borrower_name}' already exists",
+                        "existing_loan": {
+                            "id": duplicate_borrower[0],
+                            "loan_number": duplicate_borrower[1],
+                            "borrower_name": duplicate_borrower[2],
+                            "stage": duplicate_borrower[3],
+                            "amount": float(duplicate_borrower[4]) if duplicate_borrower[4] else 0,
+                            "created_at": duplicate_borrower[5].isoformat() if duplicate_borrower[5] else None
+                        },
+                        "action_required": "To create anyway, add ?skip_duplicate_check=true"
+                    }
+                )
 
         db_loan = Loan(**loan.model_dump(), loan_officer_id=current_user.id)
         db_loan.ai_insights = generate_ai_insights(db_loan)
