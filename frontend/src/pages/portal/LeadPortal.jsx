@@ -102,24 +102,6 @@ const ResourceCard = ({ icon, title, description, linkText, linkUrl, onClick }) 
   </div>
 );
 
-// Quick Stats Display
-const QuickStats = () => (
-  <div className="quick-stats">
-    <div className="stat-item">
-      <span className="stat-value">15 min</span>
-      <span className="stat-label">Average Application Time</span>
-    </div>
-    <div className="stat-item">
-      <span className="stat-value">24 hrs</span>
-      <span className="stat-label">Pre-Approval Turnaround</span>
-    </div>
-    <div className="stat-item">
-      <span className="stat-value">100%</span>
-      <span className="stat-label">Digital Process</span>
-    </div>
-  </div>
-);
-
 // Pre-Approval Milestone Progress Bar
 const PreApprovalProgress = ({ currentStep = 0 }) => {
   const steps = [
@@ -239,8 +221,6 @@ export default function LeadPortal({ data, slug, onRefresh }) {
           </div>
 
           <PreApprovalProgress currentStep={0} />
-
-          <QuickStats />
         </div>
       </header>
 
