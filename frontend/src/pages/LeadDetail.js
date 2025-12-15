@@ -1399,14 +1399,12 @@ function LeadDetail() {
       // Create new portal for this lead
       const borrowerName = lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim();
       const createData = {
-        display_name: borrowerName,
-        source: 'lead_profile',
-        metadata: {
-          lead_id: String(lead.id),
-          borrower_name: borrowerName,
-          borrower_email: lead.email,
-          borrower_phone: lead.phone
-        }
+        lead_id: lead.id,
+        borrower_name: borrowerName,
+        first_name: lead.first_name,
+        last_name: lead.last_name,
+        email: lead.email,
+        phone: lead.phone
       };
 
       const response = await purlAPI.createWorkspace(createData);
