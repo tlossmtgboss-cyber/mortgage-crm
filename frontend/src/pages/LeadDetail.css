@@ -2,7 +2,8 @@
 .lead-detail-page-wrapper {
   display: flex;
   width: 100%;
-  min-height: calc(100vh - 60px);
+  height: calc(100vh - 60px);
+  overflow: hidden;
 }
 
 .lead-detail-page {
@@ -11,9 +12,9 @@
   padding-right: 304px; /* Account for fixed sidebar (280px + 24px padding) */
   max-width: 100%;
   background: #ffffff;
-  min-height: calc(100vh - 60px);
+  height: calc(100vh - 60px);
   min-width: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .detail-header {
