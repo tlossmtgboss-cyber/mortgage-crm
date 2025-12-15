@@ -172,12 +172,6 @@ export default function LeadPortal({ data, slug, onRefresh }) {
   // Get borrower's first name for personalization
   const borrowerName = borrower?.first_name || 'there';
 
-  // Handle start application - navigate to application form
-  const handleStartApplication = () => {
-    // Redirect to application form within the portal
-    window.location.href = `/portal/${slug}/apply`;
-  };
-
   return (
     <div className="lead-portal">
       {/* Hero Section */}
@@ -189,11 +183,8 @@ export default function LeadPortal({ data, slug, onRefresh }) {
           </p>
 
           <div className="hero-cta">
-            <button className="cta-primary" onClick={handleStartApplication}>
-              Start Your Application
-            </button>
-            <button className="cta-secondary" onClick={() => setShowScheduleModal(true)}>
-              Talk to an Expert First
+            <button className="cta-primary" onClick={() => setShowScheduleModal(true)}>
+              Talk to an Expert
             </button>
           </div>
 
@@ -232,22 +223,6 @@ export default function LeadPortal({ data, slug, onRefresh }) {
               {/* Left Column - Steps & Info */}
               <div className="overview-main">
                 <ApplicationSteps />
-
-                {/* Ready to Apply Card */}
-                <div className="ready-card">
-                  <div className="ready-icon">🏠</div>
-                  <div className="ready-content">
-                    <h3>Ready to Get Started?</h3>
-                    <p>
-                      Our streamlined application takes about 15 minutes to complete.
-                      You'll need basic information about your income, assets, and the
-                      property you're interested in.
-                    </p>
-                    <button className="cta-primary" onClick={handleStartApplication}>
-                      Begin Application
-                    </button>
-                  </div>
-                </div>
 
                 {/* What You'll Need */}
                 <div className="checklist-preview">
@@ -343,8 +318,8 @@ export default function LeadPortal({ data, slug, onRefresh }) {
 
             <div className="calculator-cta">
               <p>Like what you see? Let's make it happen.</p>
-              <button className="cta-primary" onClick={handleStartApplication}>
-                Start Your Application
+              <button className="cta-primary" onClick={() => setShowScheduleModal(true)}>
+                Schedule a Consultation
               </button>
             </div>
           </div>
