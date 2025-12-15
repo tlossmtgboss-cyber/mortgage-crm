@@ -3637,6 +3637,8 @@ class LeadUpdate(BaseModel):
     preapproval_expiration_date: Optional[datetime] = None
     realtor_referral_date: Optional[datetime] = None
     rate_watch_enrollment_date: Optional[datetime] = None
+    # Referral Partner
+    referral_partner_id: Optional[int] = None
 
 class LeadResponse(BaseModel):
     id: int
@@ -3700,6 +3702,8 @@ class LeadResponse(BaseModel):
     preapproval_expiration_date: Optional[datetime] = None
     realtor_referral_date: Optional[datetime] = None
     rate_watch_enrollment_date: Optional[datetime] = None
+    # Referral Partner
+    referral_partner_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     class Config:
@@ -36282,6 +36286,10 @@ async def get_leads(
                 "credit_score": lead.credit_score,
                 "loan_type": lead.loan_type,
                 "notes": lead.notes,
+                "referral_partner_id": lead.referral_partner_id,
+                "loan_amount": getattr(lead, 'loan_amount', None),
+                "loan_purpose": getattr(lead, 'loan_purpose', None),
+                "property_type": getattr(lead, 'property_type', None),
                 "created_at": lead.created_at.isoformat() if lead.created_at else None,
                 "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
             }

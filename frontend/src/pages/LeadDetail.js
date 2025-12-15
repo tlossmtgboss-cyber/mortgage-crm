@@ -1144,8 +1144,11 @@ function LeadDetail() {
         setFormData(updatedBorrowers[1].data);
       }
 
-      setEditing(false);
-      alert('Lead updated successfully!');
+      // Keep editing mode active so user can continue making changes
+      // setEditing(false);  // Removed - stay in edit mode after save
+
+      // Show a brief success indicator instead of alert
+      console.log('Lead updated successfully!');
     } catch (error) {
       console.error('Failed to update lead:', error);
       alert('Failed to update lead');
@@ -1802,25 +1805,6 @@ function LeadDetail() {
         </div>
       </div>
 
-      {/* Borrower Selector */}
-      <div className="borrower-selector">
-        <div className="borrower-buttons-group">
-          {borrowers.map((borrower, index) => (
-            <button
-              key={borrower.id}
-              className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
-              onClick={() => handleSwitchBorrower(index)}
-            >
-              {borrower.name}
-              {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
-            </button>
-          ))}
-        </div>
-        <button className="borrower-add-btn" onClick={handleAddBorrower} title="Add Borrower">
-          + Add Person
-        </button>
-      </div>
-
       {/* Tab Navigation */}
       <div className="profile-tabs">
         <button
@@ -2072,6 +2056,25 @@ function LeadDetail() {
           {/* Personal Information Tab */}
           {activeTab === 'personal' && (
           <div className="info-section">
+            {/* Borrower Selector - moved inside Personal Information */}
+            <div className="borrower-selector" style={{ marginBottom: '1.5rem' }}>
+              <div className="borrower-buttons-group">
+                {borrowers.map((borrower, index) => (
+                  <button
+                    key={borrower.id}
+                    className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
+                    onClick={() => handleSwitchBorrower(index)}
+                  >
+                    {borrower.name}
+                    {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
+                  </button>
+                ))}
+              </div>
+              <button className="borrower-add-btn" onClick={handleAddBorrower} title="Add Borrower">
+                + Add Person
+              </button>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ margin: 0 }}>Personal Information</h2>
               <button
