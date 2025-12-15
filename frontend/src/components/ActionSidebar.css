@@ -146,17 +146,20 @@
   background: #f9fafb;
 }
 
-/* Split view when detail panel is shown */
+/* Split view when detail panel is shown - HORIZONTAL layout (side-by-side) */
 .action-content.with-detail {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
 }
 
 .action-content.with-detail .action-list {
-  flex: 0 0 auto;
-  max-height: 200px;
+  flex: 0 0 340px;
+  width: 340px;
+  max-height: none;
   overflow-y: auto;
-  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: none;
+  background: #f9fafb;
 }
 
 .action-content.with-detail .action-detail-panel,
@@ -164,6 +167,7 @@
   flex: 1;
   overflow-y: auto;
   background: white;
+  min-width: 0;
 }
 
 /* TaskDetailPanel overrides for sidebar context */
