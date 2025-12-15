@@ -102,6 +102,7 @@ const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
 const LOMicrosite = lazy(() => import('./pages/microsites/LOMicrosite'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
+const MicrositeWizard = lazy(() => import('./components/microsites/MicrositeWizard'));
 const LODashboard = lazy(() => import('./pages/LODashboard'));
 const RealtorDashboard = lazy(() => import('./pages/RealtorDashboard'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
@@ -1477,6 +1478,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Settings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/microsite/wizard"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MicrositeWizard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

@@ -213,6 +213,192 @@ const getTaskGuidance = (task) => {
   };
 };
 
+/**
+ * Generate a personalized draft message based on task context
+ * @param {Object} task - The task object
+ * @param {string} method - Communication method (Email, Text, Phone, Voicemail)
+ * @returns {string} - The generated draft message
+ */
+const generateDraftMessage = (task, method = 'Email') => {
+  const borrowerName = task.borrower?.split(' ')[0] || 'there'; // Get first name
+  const guidance = getTaskGuidance(task);
+  const dayMatch = (task.title || '').match(/day\s*(\d+)/i) || (task.workflow_name || '').match(/day\s*(\d+)/i);
+  const day = dayMatch ? parseInt(dayMatch[1]) : null;
+  const stage = (task.stage || '').toLowerCase();
+
+  // For Text/SMS - keep it short and conversational
+  if (method === 'Text') {
+    // Day 1 initial contact
+    if (day === 1 || day === 0) {
+      return `Hi ${borrowerName}! This is [Your Name] from [Company]. Thanks for your interest in exploring mortgage options. I'd love to help you find the best solution for your needs. Do you have a few minutes to chat this week?`;
+    }
+    // Day 2-5 follow-up
+    if (day >= 2 && day <= 5) {
+      return `Hi ${borrowerName}, just following up on my previous message. Have you had a chance to think about your mortgage options? I'm happy to answer any questions or send over some rate info. Let me know what works best for you!`;
+    }
+    // Day 6-14 value add
+    if (day >= 6 && day <= 14) {
+      return `Hi ${borrowerName}! Wanted to share a quick market update - rates have been moving recently. If you're still considering your options, I'd be happy to run some numbers for you. No pressure, just here to help when you're ready!`;
+    }
+    // Day 15-30 re-engage
+    if (day >= 15 && day <= 30) {
+      return `Hi ${borrowerName}, hope you're doing well! I wanted to check in and see if your home buying/refinance plans have changed. If you're still in the market, I'm here to help. Would you like me to send over current rates?`;
+    }
+    // Day 30+ long-term nurture
+    if (day > 30) {
+      return `Hi ${borrowerName}! Just checking in to see how things are going. If your homeownership plans have evolved, I'd love to catch up. No rush - I'm here whenever you're ready to explore your options.`;
+    }
+    // Pre-approval follow-up
+    if (stage.includes('pre-approved') || stage.includes('pre_approved')) {
+      return `Hi ${borrowerName}! How's the house hunt going? Just wanted to remind you that your pre-approval is still active. Found anything exciting? Let me know if you need any help!`;
+    }
+    // Document collection
+    if ((task.title || '').toLowerCase().includes('document')) {
+      return `Hi ${borrowerName}! Just a friendly reminder about the documents we need to keep your loan moving. Let me know if you have any questions or need help gathering anything. You can text me photos if that's easier!`;
+    }
+    // Default text
+    return `Hi ${borrowerName}, just wanted to check in and see how things are going. Let me know if you have any questions about your mortgage - I'm here to help!`;
+  }
+
+  // For Email - more detailed and professional
+  if (method === 'Email') {
+    const greeting = `Hi ${borrowerName},\n\n`;
+    let body = '';
+    let closing = `\n\nBest regards,\n[Your Name]\n[Your Phone]\n[Your Email]`;
+
+    // Day 1 initial contact
+    if (day === 1 || day === 0) {
+      body = `Thank you for your interest in exploring your mortgage options! I'm excited to help you on your journey to homeownership.
+
+I'd love to learn more about your goals and timeline. Here are a few things I can help you with:
+
+• Understanding your buying power and getting pre-approved
+• Comparing different loan programs to find the best fit
+• Answering any questions about the mortgage process
+
+Do you have 15-20 minutes this week for a quick call? I'm happy to work around your schedule.`;
+    }
+    // Day 2-5 follow-up
+    else if (day >= 2 && day <= 5) {
+      body = `I wanted to follow up on my previous message and see if you've had a chance to think about your mortgage options.
+
+I know this is a big decision, and I'm here to help make the process as smooth as possible. A few things I can assist with:
+
+• Providing current rate information based on your situation
+• Walking you through the pre-qualification process (it's quick and easy!)
+• Answering any questions you might have
+
+Would you like to schedule a brief call to discuss your options? I'm happy to work around your schedule.`;
+    }
+    // Day 6-14 value add
+    else if (day >= 6 && day <= 14) {
+      body = `I wanted to reach out with a quick market update. Interest rates have been fluctuating recently, and I thought you might find this information helpful as you consider your options.
+
+If you're still thinking about buying a home or refinancing, here are some things to keep in mind:
+
+• Current market conditions and what they mean for buyers
+• How to get the best rate when you're ready to move forward
+• Programs that might help with down payment or closing costs
+
+I'm always happy to run some numbers for you with no obligation. Just let me know if you'd like me to put together a personalized analysis.`;
+    }
+    // Day 15-30 re-engage
+    else if (day >= 15 && day <= 30) {
+      body = `I hope this message finds you well! I wanted to check in and see how your plans are progressing.
+
+I understand that timing is everything when it comes to a big decision like this. I'm here to be a resource for you, whether you're ready to move forward now or just gathering information for the future.
+
+A few updates since we last connected:
+• Current rate environment and trends
+• New loan programs that might benefit your situation
+• Market conditions in your area
+
+Would you like to catch up with a quick call? I'd love to hear where you are in your journey and how I can help.`;
+    }
+    // Day 30+ long-term nurture
+    else if (day > 30) {
+      body = `It's been a while since we connected, and I wanted to reach out to see how things are going.
+
+Life circumstances change, and I'm curious if your homeownership goals have evolved. Whether you're closer to making a move or your plans have shifted, I'm here as a resource.
+
+I'd love to catch up when you have a few minutes. No pressure - just want to make sure you have the information you need when the time is right.`;
+    }
+    // Pre-approval follow-up
+    else if (stage.includes('pre-approved') || stage.includes('pre_approved')) {
+      body = `Congratulations again on your pre-approval! I wanted to check in and see how your home search is going.
+
+Quick reminders about your pre-approval:
+• Your approval amount: [Amount]
+• Pre-approval expiration: [Date]
+• You're in a strong position to make offers
+
+Are you working with a real estate agent? If not, I'd be happy to connect you with some trusted professionals in your area.
+
+Let me know how I can support you in finding your perfect home!`;
+    }
+    // Document collection
+    else if ((task.title || '').toLowerCase().includes('document')) {
+      body = `I wanted to follow up on the documents we need to keep your loan moving forward smoothly.
+
+Outstanding items:
+${task.missing_documents?.map(doc => `• ${doc}`).join('\n') || '• Please refer to the document checklist I sent previously'}
+
+A few tips to make this easier:
+• Photos of documents are perfectly acceptable - just make sure they're clear and complete
+• You can upload directly to your secure portal
+• I'm happy to answer any questions about why specific documents are needed
+
+The sooner we receive these items, the faster we can move toward closing. Please let me know if you have any questions!`;
+    }
+    // Default email
+    else {
+      body = `I wanted to reach out and check in on your mortgage journey.
+
+${guidance.action}
+
+Here's what I'd like to discuss:
+${guidance.talkingPoints.slice(0, 3).map(point => `• ${point}`).join('\n')}
+
+Please let me know if you have any questions or if there's a convenient time to connect.`;
+    }
+
+    return greeting + body + closing;
+  }
+
+  // For Phone/Voicemail - talking points script
+  if (method === 'Phone' || method === 'Voicemail') {
+    const intro = `CALL SCRIPT for ${borrowerName}:\n\n`;
+    let script = '';
+
+    if (method === 'Voicemail') {
+      script = `"Hi ${borrowerName}, this is [Your Name] calling from [Company]. I wanted to follow up with you about your mortgage inquiry. `;
+
+      if (day === 1 || day === 0) {
+        script += `I'd love to chat about your home financing goals and see how I can help. `;
+      } else if (day >= 2 && day <= 5) {
+        script += `I wanted to see if you had any questions about your options or if there's anything I can help with. `;
+      } else {
+        script += `I wanted to check in and see how things are going. `;
+      }
+
+      script += `Give me a call back at [Your Phone] when you get a chance, or feel free to text me. I look forward to speaking with you!"`;
+    } else {
+      script = `OPENING:\n"Hi ${borrowerName}, this is [Your Name] from [Company]. Is this a good time to chat for a few minutes?"\n\n`;
+      script += `KEY TALKING POINTS:\n`;
+      guidance.talkingPoints.forEach((point, idx) => {
+        script += `${idx + 1}. ${point}\n`;
+      });
+      script += `\nGOAL: ${guidance.goal}\n`;
+      script += `\nCLOSING:\n"What questions do you have for me?" Then set clear next steps.`;
+    }
+
+    return intro + script;
+  }
+
+  // Fallback
+  return `Hi ${borrowerName},\n\nI wanted to reach out regarding your mortgage inquiry. Please let me know if you have any questions or if there's a convenient time to connect.\n\nBest regards`;
+};
+
 const TaskDetailPanel = ({
   task,
   onComplete,
@@ -250,9 +436,12 @@ const TaskDetailPanel = ({
   // Reset state when task changes
   useEffect(() => {
     if (task) {
-      setDraftMessage(task.ai_message || '');
+      const method = task.preferred_contact_method || 'Email';
+      setCommunicationMethod(method);
+      // Generate AI-drafted message based on task context
+      const generatedMessage = generateDraftMessage(task, method);
+      setDraftMessage(generatedMessage);
       setTaskOwner(task.owner || 'Loan Officer');
-      setCommunicationMethod(task.preferred_contact_method || 'Email');
       setAiInstructions('');
       setAiAcknowledgment(null);
       setEditingMessage(false);
@@ -260,7 +449,17 @@ const TaskDetailPanel = ({
       // Reset SLA date - use existing milestone_date if available
       setSlaMilestoneDate(task.milestone_date ? task.milestone_date.split('T')[0] : '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id]);
+
+  // Regenerate message when communication method changes (but not when editing)
+  useEffect(() => {
+    if (task && !editingMessage) {
+      const generatedMessage = generateDraftMessage(task, communicationMethod);
+      setDraftMessage(generatedMessage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communicationMethod]);
 
   if (!task) {
     return (
@@ -675,8 +874,8 @@ const TaskDetailPanel = ({
           </div>
         )}
 
-        {/* AI Training + AI Drafted Message Sections */}
-        {task.ai_message && (
+        {/* AI Training + AI Drafted Message Sections - Always show for workflow tasks */}
+        {(task.source === 'Workflow' || task.workflow_name || task.borrower) && (
           <>
             {/* AI Training Instructions Section */}
             <div className="detail-ai-training-section">

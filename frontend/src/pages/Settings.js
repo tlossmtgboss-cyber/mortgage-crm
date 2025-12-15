@@ -5005,6 +5005,31 @@ const API_BASE_URL = isProduction
                   </button>
                 </div>
 
+                <div style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)', borderRadius: '12px', padding: '24px', border: '1px solid #0d9488' }}>
+                  <h4 style={{ marginBottom: '12px', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '20px' }}>🎨</span> Customize Site
+                  </h4>
+                  <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '14px', marginBottom: '16px' }}>
+                    Use the wizard to customize your theme, colors, profile, and more.
+                  </p>
+                  <button
+                    onClick={() => navigate('/microsite/wizard')}
+                    style={{
+                      width: '100%',
+                      background: 'white',
+                      color: '#0d9488',
+                      border: 'none',
+                      padding: '10px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Open Wizard
+                  </button>
+                </div>
+
                 <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0' }}>
                   <h4 style={{ marginBottom: '12px', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '20px' }}>📊</span> Dashboard
