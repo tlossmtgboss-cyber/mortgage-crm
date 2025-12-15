@@ -154,24 +154,17 @@ const detectPortalStage = (workspaceData) => {
     return PortalStage.MUM;
   }
 
-  // Active loan stages - check workspace status OR loan exists OR application submitted
-  // When application is completed, the client is in active loan stage
-  if (status === 'active_loan' || status === 'application' ||
-      status === 'processing' || status === 'closing' ||
-      status === 'active' || status === 'submitted' ||
-      loan?.status ||
-      (application && application.status === 'submitted')) {
-    return PortalStage.ACTIVE_LOAN;
-  }
+  // IMPORTANT: Portals are created when applications are submitted
+  // So if a workspace/portal exists, it should ALWAYS show ActiveLoanPortal
+  // unless explicitly marked as 'lead' status AND no application exists
 
-  // Only show Lead portal if:
-  // 1. No loan AND no submitted application AND status is lead/null
-  if (!loan && (!application || application.status !== 'submitted')) {
+  // Only show Lead portal if explicitly marked as lead AND no application
+  if (status === 'lead' && !application) {
     return PortalStage.LEAD;
   }
 
   // Default to active loan for any workspace that exists
-  // (portal is created when application is submitted, so default should be active)
+  // Portals are created when application is submitted, so this is the correct default
   return PortalStage.ACTIVE_LOAN;
 };
 
