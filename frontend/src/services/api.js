@@ -138,14 +138,17 @@ export const loansAPI = {
     const response = await api.get(`/api/v1/loans/${id}`);
     return response.data;
   },
-  create: async (data, retryCount = 0) => {
+  create: async (data, skipDuplicateCheck = false, retryCount = 0) => {
     const maxRetries = 2;
     try {
       console.log('Creating loan with data:', data);
       console.log('API Base URL:', API_BASE_URL);
       console.log('Auth token exists:', !!localStorage.getItem('token'));
 
-      const response = await api.post('/api/v1/loans/', data);
+      const url = skipDuplicateCheck
+        ? '/api/v1/loans/?skip_duplicate_check=true'
+        : '/api/v1/loans/';
+      const response = await api.post(url, data);
       console.log('Loan created successfully:', response.data);
       return response.data;
     } catch (error) {
@@ -165,14 +168,17 @@ export const loansAPI = {
       if (error.message === 'Network Error' && retryCount < maxRetries) {
         console.log(`Network error, retrying (${retryCount + 1}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-        return loansAPI.create(data, retryCount + 1);
+        return loansAPI.create(data, skipDuplicateCheck, retryCount + 1);
       }
 
       // If 405 error, try without trailing slash as fallback
       if (error.response?.status === 405) {
         console.log('Retrying without trailing slash...');
         try {
-          const retryResponse = await api.post('/api/v1/loans', data);
+          const url = skipDuplicateCheck
+            ? '/api/v1/loans?skip_duplicate_check=true'
+            : '/api/v1/loans';
+          const retryResponse = await api.post(url, data);
           console.log('Retry successful:', retryResponse.data);
           return retryResponse.data;
         } catch (retryError) {

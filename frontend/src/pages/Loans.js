@@ -200,6 +200,35 @@ function Loans() {
       console.error('Error config:', err.config);
       console.error('Error message:', err.message);
 
+      // Handle duplicate borrower detection (409 Conflict)
+      if (err.response?.status === 409 && err.response?.data?.detail?.error === 'duplicate_borrower') {
+        const detail = err.response.data.detail;
+        const existingLoan = detail.existing_loan;
+
+        const confirmCreate = window.confirm(
+          `⚠️ Duplicate Borrower Detected\n\n` +
+          `A loan for "${existingLoan.borrower_name}" already exists:\n` +
+          `• Loan #: ${existingLoan.loan_number}\n` +
+          `• Status: ${existingLoan.stage}\n` +
+          `• Amount: $${existingLoan.amount?.toLocaleString()}\n\n` +
+          `Do you want to create a new loan anyway?`
+        );
+
+        if (confirmCreate) {
+          try {
+            // Retry with skip_duplicate_check=true
+            await loansAPI.create(submitData, true);
+            setShowModal(false);
+            resetForm();
+            loadLoans();
+          } catch (retryErr) {
+            console.error('Failed to create loan (retry):', retryErr);
+            alert(`Failed to create loan: ${retryErr.response?.data?.detail || retryErr.message}`);
+          }
+        }
+        return;
+      }
+
       let errorMessage = 'Failed to create loan';
 
       if (err.message === 'Network Error') {
