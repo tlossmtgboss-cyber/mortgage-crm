@@ -4,6 +4,7 @@
   width: 100%;
   min-height: calc(100vh - 60px);
   overflow: visible;
+  scrollbar-gutter: auto;
 }
 
 .lead-detail-page {
@@ -17,6 +18,25 @@
   min-width: 0;
   overflow: visible;
   box-sizing: border-box;
+}
+
+/* Hide scrollbar */
+.lead-detail-page-wrapper {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.lead-detail-page-wrapper::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+.lead-detail-page {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.lead-detail-page::-webkit-scrollbar {
+  display: none;
 }
 
 .detail-header {
