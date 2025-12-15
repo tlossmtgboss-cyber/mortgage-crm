@@ -1913,12 +1913,6 @@ function LeadDetail() {
           Tasks
         </button>
         <button
-          className={`tab-btn ${activeTab === 'email' ? 'active' : ''}`}
-          onClick={() => setActiveTab('email')}
-        >
-          Email
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >
@@ -2303,102 +2297,6 @@ function LeadDetail() {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-          )}
-
-          {/* Email Tab */}
-          {activeTab === 'email' && (
-          <div className="info-section">
-            <h2>Email</h2>
-            <div className="email-content">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <p className="section-description" style={{ color: '#666', margin: 0 }}>
-                  View all email communications with this lead.
-                </p>
-                <button
-                  className="btn-primary"
-                  style={{ padding: '8px 16px', fontSize: '14px' }}
-                  onClick={() => lead?.email && window.open(`mailto:${lead.email}`, '_blank')}
-                  disabled={!lead?.email}
-                >
-                  + Compose Email
-                </button>
-              </div>
-
-              {/* Email Drafts Section */}
-              {emailDrafts.length > 0 && (
-                <div className="email-drafts-section" style={{ marginBottom: '24px' }}>
-                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                    <span style={{
-                      backgroundColor: '#fef3c7',
-                      color: '#d97706',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      fontWeight: '600'
-                    }}>DRAFTS</span>
-                    Email Drafts ({emailDrafts.length})
-                  </h3>
-                  <div className="email-list">
-                    {emailDrafts.map((draft) => (
-                      <div
-                        key={draft.id}
-                        className="email-item draft-item"
-                        onClick={() => openDraft(draft)}
-                        style={{ cursor: 'pointer', borderLeft: '4px solid #f59e0b' }}
-                      >
-                        <div className="email-header">
-                          <span className="email-subject" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{
-                              backgroundColor: '#fef3c7',
-                              color: '#d97706',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              fontSize: '10px',
-                              fontWeight: '600'
-                            }}>DRAFT</span>
-                            {draft.subject || 'No subject'}
-                          </span>
-                          <span className="email-date">
-                            {new Date(draft.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className="email-preview">
-                          To: {draft.recipient_email}
-                          {draft.source_type === 'call_recording' && ' (Call Summary)'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Email History */}
-              <div className="email-history-section">
-                <h3>Email History</h3>
-                <div className="email-list">
-                  {emails.length > 0 ? (
-                    emails.map((email) => (
-                      <div key={email.id} className="email-item">
-                        <div className="email-header">
-                          <span className="email-subject">
-                            {(email.description || email.content || '').split('\n')[0] || 'No subject'}
-                          </span>
-                          <span className="email-date">
-                            {new Date(email.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className="email-preview">
-                          {(email.description || email.content || '').substring(0, 100)}...
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="empty-state">No emails yet</div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
           )}
