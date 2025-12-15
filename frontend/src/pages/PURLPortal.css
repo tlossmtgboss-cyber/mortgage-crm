@@ -1059,6 +1059,28 @@
 }
 
 /* ========================================
+   Needs List Section (Home Page Prominent Display)
+   ======================================== */
+.needs-list-section {
+  margin-bottom: 24px;
+}
+
+.needs-list-section .document-checklist-card {
+  border: 2px solid #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.needs-list-section .checklist-header h3 {
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.needs-list-section .completion-badge {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+/* ========================================
    Document Checklist Card
    ======================================== */
 .document-checklist-card {

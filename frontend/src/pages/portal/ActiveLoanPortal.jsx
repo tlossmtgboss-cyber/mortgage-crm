@@ -949,6 +949,23 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             {/* Loan Summary Card */}
             <LoanSummaryCard loan={loan} workspace={workspace} contacts={contacts} subStage={subStage} />
 
+            {/* Needs List - Full Width Prominent Section */}
+            <section className="needs-list-section">
+              {conditions.length > 0 ? (
+                <ConditionsNeedsListCard
+                  conditions={conditions}
+                  onViewAll={() => setActiveTab('tasks')}
+                  onUploadForCondition={handleUploadForCondition}
+                  uploading={conditionUploading}
+                />
+              ) : (
+                <NeedsListCard
+                  tasks={tasks}
+                  onViewAll={() => setActiveTab('tasks')}
+                />
+              )}
+            </section>
+
             {/* Quick Actions Bar */}
             <QuickActionsBar
               onSchedule={() => setShowScheduleModal(true)}
@@ -959,25 +976,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
 
             {/* Two Column Layout */}
             <div className="overview-columns">
-              {/* Left Column - Needs List (Conditions from application) */}
-              <div className="overview-column">
-                {/* Show conditions if available, otherwise fall back to tasks */}
-                {conditions.length > 0 ? (
-                  <ConditionsNeedsListCard
-                    conditions={conditions}
-                    onViewAll={() => setActiveTab('tasks')}
-                    onUploadForCondition={handleUploadForCondition}
-                    uploading={conditionUploading}
-                  />
-                ) : (
-                  <NeedsListCard
-                    tasks={tasks}
-                    onViewAll={() => setActiveTab('tasks')}
-                  />
-                )}
-              </div>
-
-              {/* Right Column - Progress & Tasks */}
+              {/* Left Column - Progress & Tasks */}
               <div className="overview-column">
                 <section className="overview-section">
                   <h2>Loan Progress</h2>
@@ -1010,7 +1009,10 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                     </>
                   )}
                 </section>
+              </div>
 
+              {/* Right Column - Recent Activity */}
+              <div className="overview-column">
                 <section className="overview-section">
                   <h2>Recent Activity</h2>
                   <div className="recent-timeline">
