@@ -853,6 +853,45 @@ function LoanDetail() {
           {activeTab === 'loan-details' && (
           <div className="info-section">
             <h2>Loan Details</h2>
+
+            {/* Transaction Type Toggle */}
+            <div className="transaction-type-toggle" style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', color: '#374151' }}>Transaction Type</label>
+              <div style={{ display: 'flex', gap: '0', borderRadius: '8px', overflow: 'hidden', border: '1px solid #d1d5db', width: 'fit-content' }}>
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange('loan_purpose', 'Purchase')}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    border: 'none',
+                    background: (formData.loan_purpose === 'Purchase' || !formData.loan_purpose) ? '#3b82f6' : '#f3f4f6',
+                    color: (formData.loan_purpose === 'Purchase' || !formData.loan_purpose) ? 'white' : '#374151',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Purchase
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange('loan_purpose', 'Refinance')}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    border: 'none',
+                    borderLeft: '1px solid #d1d5db',
+                    background: formData.loan_purpose === 'Refinance' ? '#3b82f6' : '#f3f4f6',
+                    color: formData.loan_purpose === 'Refinance' ? 'white' : '#374151',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Refinance
+                </button>
+              </div>
+            </div>
+
             <div className="info-grid">
               <div className="info-field">
                 <label>Loan Number</label>
@@ -864,51 +903,64 @@ function LoanDetail() {
                 />
               </div>
 
+              {/* Purchase Price - only show for Purchase transactions */}
+              {(formData.loan_purpose === 'Purchase' || !formData.loan_purpose) && (
+                <div className="info-field">
+                  <label>Purchase Price</label>
+                  <input
+                    type="number"
+                    value={formData.purchase_price || ''}
+                    onChange={(e) => handleFieldChange('purchase_price', e.target.value)}
+                    placeholder="$"
+                  />
+                </div>
+              )}
+
               <div className="info-field">
                 <label>Loan Amount</label>
                 <input
                   type="number"
-                  value={formData.amount || ''}
-                  onChange={(e) => handleFieldChange('amount', parseFloat(e.target.value))}
+                  value={formData.loan_amount || formData.amount || ''}
+                  onChange={(e) => handleFieldChange('loan_amount', e.target.value)}
                   placeholder="$"
                 />
               </div>
 
               <div className="info-field">
                 <label>Interest Rate</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={formData.rate ? (formData.rate * 100).toFixed(3).replace(/\.?0+$/, '') : ''}
-                    onChange={(e) => {
-                      const percentValue = parseFloat(e.target.value);
-                      handleFieldChange('rate', isNaN(percentValue) ? null : percentValue / 100);
-                    }}
-                    placeholder="e.g. 5.625"
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ color: '#6b7280', fontWeight: '500' }}>%</span>
-                </div>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={formData.interest_rate || ''}
+                  onChange={(e) => handleFieldChange('interest_rate', e.target.value)}
+                  placeholder="%"
+                />
               </div>
 
               <div className="info-field">
                 <label>Loan Term</label>
                 <input
                   type="number"
-                  value={formData.term || ''}
-                  onChange={(e) => handleFieldChange('term', parseInt(e.target.value))}
-                  placeholder="months"
+                  value={formData.loan_term || formData.term || ''}
+                  onChange={(e) => handleFieldChange('loan_term', e.target.value)}
+                  placeholder="Months"
                 />
               </div>
 
               <div className="info-field">
                 <label>Loan Type</label>
-                <input
-                  type="text"
-                  value={formData.program || formData.loan_type || ''}
-                  onChange={(e) => handleFieldChange('program', e.target.value)}
-                />
+                <select
+                  value={formData.loan_type || formData.program || ''}
+                  onChange={(e) => handleFieldChange('loan_type', e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  <option value="Conventional">Conventional</option>
+                  <option value="FHA">FHA</option>
+                  <option value="VA">VA</option>
+                  <option value="USDA">USDA</option>
+                  <option value="Jumbo">Jumbo</option>
+                  <option value="HELOC">HELOC</option>
+                </select>
               </div>
 
               <div className="info-field">
@@ -931,20 +983,13 @@ function LoanDetail() {
 
               <div className="info-field">
                 <label>APR</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={formData.apr ? (formData.apr * 100).toFixed(3).replace(/\.?0+$/, '') : ''}
-                    onChange={(e) => {
-                      const percentValue = parseFloat(e.target.value);
-                      handleFieldChange('apr', isNaN(percentValue) ? null : percentValue / 100);
-                    }}
-                    placeholder="e.g. 5.875"
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ color: '#6b7280', fontWeight: '500' }}>%</span>
-                </div>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={formData.apr || ''}
+                  onChange={(e) => handleFieldChange('apr', e.target.value)}
+                  placeholder="%"
+                />
               </div>
 
               <div className="info-field">
@@ -953,25 +998,7 @@ function LoanDetail() {
                   type="number"
                   step="0.125"
                   value={formData.points || ''}
-                  onChange={(e) => handleFieldChange('points', parseFloat(e.target.value))}
-                />
-              </div>
-
-              <div className="info-field">
-                <label>Lender</label>
-                <input
-                  type="text"
-                  value={formData.lender || ''}
-                  onChange={(e) => handleFieldChange('lender', e.target.value)}
-                />
-              </div>
-
-              <div className="info-field">
-                <label>Loan Officer</label>
-                <input
-                  type="text"
-                  value={formData.loan_officer || loan?.loan_officer || ''}
-                  onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
+                  onChange={(e) => handleFieldChange('points', e.target.value)}
                 />
               </div>
 
@@ -989,7 +1016,7 @@ function LoanDetail() {
                 <input
                   type="number"
                   value={formData.appraisal_value || ''}
-                  onChange={(e) => handleFieldChange('appraisal_value', parseFloat(e.target.value))}
+                  onChange={(e) => handleFieldChange('appraisal_value', e.target.value)}
                   placeholder="$"
                 />
               </div>
@@ -1000,7 +1027,7 @@ function LoanDetail() {
                   type="number"
                   step="0.01"
                   value={formData.ltv || ''}
-                  onChange={(e) => handleFieldChange('ltv', parseFloat(e.target.value))}
+                  onChange={(e) => handleFieldChange('ltv', e.target.value)}
                   placeholder="%"
                 />
               </div>
@@ -1011,7 +1038,7 @@ function LoanDetail() {
                   type="number"
                   step="0.01"
                   value={formData.dti || ''}
-                  onChange={(e) => handleFieldChange('dti', parseFloat(e.target.value))}
+                  onChange={(e) => handleFieldChange('dti', e.target.value)}
                   placeholder="%"
                 />
               </div>
