@@ -35708,6 +35708,7 @@ async def delete_user(
             # Conversation memory
             "DELETE FROM conversation_memory WHERE user_id = :user_id",
             "DELETE FROM conversation_message_vectors WHERE user_id = :user_id",
+            "DELETE FROM ai_conversation_memory WHERE user_id = :user_id",
             # VAPI
             "DELETE FROM vapi_user_settings WHERE user_id = :user_id",
             # Telephony/Dialer (NOT NULL agent_id)
