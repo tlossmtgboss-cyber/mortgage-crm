@@ -19911,6 +19911,21 @@ async def debug_user_delete_diagnosis(
         "can_delete": len(blocking_tables) == 0
     }
 
+@app.get("/api/v1/debug/list-test-users")
+async def debug_list_test_users(db: Session = Depends(get_db)):
+    """List users available for testing (non-admin only)"""
+    users = db.execute(text("""
+        SELECT id, email, full_name, is_active, role
+        FROM users
+        WHERE email NOT LIKE '%admin%'
+        ORDER BY id DESC
+        LIMIT 10
+    """)).fetchall()
+    return {
+        "users": [{"id": u[0], "email": u[1], "name": u[2], "active": u[3], "role": u[4]} for u in users],
+        "note": "Use these IDs with /api/v1/debug/user-delete-diagnosis?user_id=X"
+    }
+
 @app.get("/api/v1/debug/purl-token-verify")
 async def debug_purl_token_verify(
     token: str,
