@@ -347,7 +347,6 @@ function Settings() {
     { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
     { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
     { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
-    { id: 'integrations', label: 'Integrations', type: 'parent', section: 'integrations' },
     { id: 'api-keys', label: 'API Keys', type: 'standalone', section: 'api-keys' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
     { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
@@ -2502,61 +2501,6 @@ const API_BASE_URL = isProduction
               );
             }
 
-            // Render Integrations parent with conditional children
-            if (item.id === 'integrations') {
-              const hasConnectedApps = microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured;
-              return (
-                <div key={item.id}>
-                  {hasConnectedApps ? (
-                    <>
-                      <button
-                        className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
-                        onClick={() => toggleSection('integrations')}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, item)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(e) => handleDragOver(e, item)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, item)}
-                      >
-                        <span>{item.label}</span>
-                        <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
-                      </button>
-                      {expandedSections.integrations && (
-                        <div className="sidebar-children">
-                          {microsoftStatus.connected && (
-                            <>
-                              <button className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`} onClick={() => setActiveSection('outlook-email')}><span>Outlook Email</span></button>
-                              <button className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`} onClick={() => setActiveSection('outlook-calendar')}><span>Outlook Calendar</span></button>
-                            </>
-                          )}
-                          {calendlyEventTypes.length > 0 && (
-                            <button className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`} onClick={() => setActiveSection('calendly')}><span>Calendly</span></button>
-                          )}
-                          {twilioStatus.configured && (
-                            <button className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`} onClick={() => setActiveSection('twilio-sms')}><span>Twilio SMS</span></button>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <button
-                      className={`sidebar-btn ${activeSection === 'integration-marketplace' ? 'active' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
-                      onClick={() => setActiveSection('integration-marketplace')}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={(e) => handleDragOver(e, item)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, item)}
-                    >
-                      <span>{item.label}</span>
-                    </button>
-                  )}
-                </div>
-              );
-            }
-
             // Render Agent Governance parent with children
             if (item.id === 'agent-governance') {
               return (
@@ -2638,6 +2582,7 @@ const API_BASE_URL = isProduction
                   {expandedSections.masterAdmin && (
                     <div className="sidebar-children">
                       <button className={`sidebar-btn child ${activeSection === 'user-management' ? 'active' : ''}`} onClick={() => { setActiveSection('user-management'); loadUsers(); }}><span>User Management</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'integrations' ? 'active' : ''}`} onClick={() => setActiveSection('integrations')}><span>Integrations</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'clear-data' ? 'active' : ''}`} onClick={() => setActiveSection('clear-data')}><span>Clear Dummy Data</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`} onClick={() => setActiveSection('ai-feedback-log')}><span>AI Feedback Log</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`} onClick={() => setActiveSection('it-helpdesk-admin')}><span>IT Helpdesk Admin</span></button>

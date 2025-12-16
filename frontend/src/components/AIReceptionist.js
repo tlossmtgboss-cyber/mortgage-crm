@@ -1,6 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { voiceAPI, aiAPI } from '../services/api';
 import './AIReceptionist.css';
+
+// AI Capabilities with sample audio URLs
+const AI_CAPABILITIES = [
+  {
+    id: 'answer_calls',
+    icon: '✅',
+    name: 'Answer Calls',
+    desc: 'AI answers all inbound calls automatically',
+    audioUrl: '/audio/samples/answer-calls-sample.mp3'
+  },
+  {
+    id: 'lead_qualification',
+    icon: '✅',
+    name: 'Lead Qualification',
+    desc: 'Qualifies leads and extracts key information',
+    audioUrl: '/audio/samples/lead-qualification-sample.mp3'
+  },
+  {
+    id: 'schedule_appointments',
+    icon: '✅',
+    name: 'Schedule Appointments',
+    desc: 'Books appointments with your calendar',
+    audioUrl: '/audio/samples/schedule-appointments-sample.mp3'
+  },
+  {
+    id: 'transfer_calls',
+    icon: '✅',
+    name: 'Transfer Calls',
+    desc: 'Transfers to team members when needed',
+    audioUrl: '/audio/samples/transfer-calls-sample.mp3'
+  },
+  {
+    id: 'take_messages',
+    icon: '✅',
+    name: 'Take Messages',
+    desc: 'Creates tasks from voicemails and messages',
+    audioUrl: '/audio/samples/take-messages-sample.mp3'
+  },
+  {
+    id: 'outbound_calls',
+    icon: '✅',
+    name: 'Make Outbound Calls',
+    desc: 'AI can call leads for follow-ups',
+    audioUrl: '/audio/samples/outbound-calls-sample.mp3'
+  }
+];
 
 function AIReceptionist() {
   const [config, setConfig] = useState(null);
@@ -9,6 +55,11 @@ function AIReceptionist() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, make-call, history, settings
   const [memoryStats, setMemoryStats] = useState(null);
+
+  // Audio playback state
+  const [playingCapability, setPlayingCapability] = useState(null);
+  const [audioError, setAudioError] = useState(null);
+  const audioRef = useRef(null);
 
   // Make Call form
   const [callForm, setCallForm] = useState({
@@ -43,6 +94,58 @@ function AIReceptionist() {
       setLoading(false);
     }
   };
+
+  // Handle capability audio playback
+  const handleCapabilityClick = (capability) => {
+    setAudioError(null);
+
+    // If same capability is playing, stop it
+    if (playingCapability === capability.id) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setPlayingCapability(null);
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    // Create new audio element
+    const audio = new Audio(capability.audioUrl);
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      setPlayingCapability(null);
+    };
+
+    audio.onerror = () => {
+      setAudioError(`Sample recording not available for "${capability.name}"`);
+      setPlayingCapability(null);
+    };
+
+    audio.play()
+      .then(() => {
+        setPlayingCapability(capability.id);
+      })
+      .catch((err) => {
+        console.error('Audio playback error:', err);
+        setAudioError(`Could not play sample for "${capability.name}"`);
+        setPlayingCapability(null);
+      });
+  };
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
 
   const handleMakeCall = async (e) => {
     e.preventDefault();
@@ -187,37 +290,29 @@ function AIReceptionist() {
 
             <div className="features-section">
               <h3>AI Capabilities</h3>
+              <p className="features-subtitle">Click any capability to hear a sample recording</p>
+              {audioError && (
+                <div className="audio-error-message">{audioError}</div>
+              )}
               <div className="features-grid">
-                <div className="feature-card">
-                  <div className="feature-icon">✅</div>
-                  <div className="feature-name">Answer Calls</div>
-                  <div className="feature-desc">AI answers all inbound calls automatically</div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">✅</div>
-                  <div className="feature-name">Lead Qualification</div>
-                  <div className="feature-desc">Qualifies leads and extracts key information</div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">✅</div>
-                  <div className="feature-name">Schedule Appointments</div>
-                  <div className="feature-desc">Books appointments with your calendar</div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">✅</div>
-                  <div className="feature-name">Transfer Calls</div>
-                  <div className="feature-desc">Transfers to team members when needed</div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">✅</div>
-                  <div className="feature-name">Take Messages</div>
-                  <div className="feature-desc">Creates tasks from voicemails and messages</div>
-                </div>
-                <div className="feature-card">
-                  <div className="feature-icon">✅</div>
-                  <div className="feature-name">Make Outbound Calls</div>
-                  <div className="feature-desc">AI can call leads for follow-ups</div>
-                </div>
+                {AI_CAPABILITIES.map((capability) => (
+                  <div
+                    key={capability.id}
+                    className={`feature-card clickable ${playingCapability === capability.id ? 'playing' : ''}`}
+                    onClick={() => handleCapabilityClick(capability)}
+                  >
+                    <div className="feature-icon">
+                      {playingCapability === capability.id ? '🔊' : capability.icon}
+                    </div>
+                    <div className="feature-content">
+                      <div className="feature-name">{capability.name}</div>
+                      <div className="feature-desc">{capability.desc}</div>
+                    </div>
+                    <div className="play-indicator">
+                      {playingCapability === capability.id ? '⏹️ Stop' : '▶️ Play Sample'}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
