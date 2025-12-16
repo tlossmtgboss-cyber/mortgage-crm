@@ -35499,27 +35499,43 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
-        # Handle related records before deletion
-        # Nullify owner_id on leads
+        # Handle ALL related records before deletion
+        # Tables with nullable foreign keys - set to NULL
         db.execute(text("UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id"), {"user_id": user_id})
-
-        # Nullify loan_officer_id on loans
+        db.execute(text("UPDATE leads SET created_by_id = NULL WHERE created_by_id = :user_id"), {"user_id": user_id})
         db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id"), {"user_id": user_id})
-
-        # Nullify assigned_to_id on tasks
         db.execute(text("UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE tasks SET created_by_id = NULL WHERE created_by_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE contacts SET user_id = NULL WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE contacts SET created_by = NULL WHERE created_by = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE team_members SET user_id = NULL WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE team_members SET created_by = NULL WHERE created_by = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE documents SET classified_by_user_id = NULL WHERE classified_by_user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE document_processing_queue SET processed_by_user_id = NULL WHERE processed_by_user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE lead_status_changes SET changed_by_id = NULL WHERE changed_by_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE lead_conditions SET created_by_id = NULL WHERE created_by_id = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE alerts SET resolved_by = NULL WHERE resolved_by = :user_id"), {"user_id": user_id})
+        db.execute(text("UPDATE compliance_issues SET resolved_by = NULL WHERE resolved_by = :user_id"), {"user_id": user_id})
 
-        # Delete user's onboarding progress
+        # Tables that should be deleted (owned by user)
         db.execute(text("DELETE FROM onboarding_progress WHERE user_id = :user_id"), {"user_id": user_id})
-
-        # Delete user's subscriptions
         db.execute(text("DELETE FROM subscriptions WHERE user_id = :user_id"), {"user_id": user_id})
-
-        # Delete user's notifications
         db.execute(text("DELETE FROM notifications WHERE user_id = :user_id"), {"user_id": user_id})
-
-        # Delete user's calendar events
         db.execute(text("DELETE FROM calendar_events WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM calendar_availability WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM user_calendar_settings WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM email_inboxes WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM email_folder_subscriptions WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM user_profiles WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM user_permissions WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM activity_logs WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM ai_coaching_sessions WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM impersonation_sessions WHERE manager_id = :user_id OR impersonated_user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM user_kpis WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM user_goals WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM saved_filters WHERE user_id = :user_id"), {"user_id": user_id})
+        db.execute(text("DELETE FROM email_signatures WHERE user_id = :user_id"), {"user_id": user_id})
 
         # Now delete the user
         db.delete(user)

@@ -52,6 +52,7 @@
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 32px;
+  align-items: start;
 }
 
 /* Sidebar */
@@ -59,6 +60,30 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+/* Custom scrollbar for sidebar */
+.settings-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-sidebar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .sidebar-btn {
@@ -172,6 +197,8 @@
   border-radius: 12px;
   padding: 32px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  min-height: 400px;
+  overflow-x: auto;
 }
 
 .settings-main h2 {
@@ -1113,14 +1140,27 @@ textarea.text-input {
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .settings-content {
+    grid-template-columns: 240px 1fr;
+    gap: 24px;
+  }
+}
+
 @media (max-width: 1024px) {
   .settings-content {
-    grid-template-columns: 1fr;
+    grid-template-columns: 220px 1fr;
+    gap: 20px;
   }
 
   .settings-sidebar {
-    flex-direction: row;
-    overflow-x: auto;
+    position: sticky;
+    top: 16px;
+  }
+
+  .sidebar-btn {
+    padding: 10px;
+    font-size: 13px;
   }
 
   .marketplace-header {
@@ -1138,6 +1178,31 @@ textarea.text-input {
 }
 
 @media (max-width: 768px) {
+  .settings-content {
+    grid-template-columns: 180px 1fr;
+    gap: 16px;
+  }
+
+  .settings-sidebar {
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 120px);
+  }
+
+  .sidebar-btn {
+    padding: 8px;
+    font-size: 12px;
+    min-height: 38px;
+  }
+
+  .sidebar-btn.child {
+    padding: 6px 12px;
+  }
+
+  .settings-main {
+    padding: 20px;
+  }
+
   .featured-grid {
     grid-template-columns: 1fr;
   }
@@ -1161,8 +1226,34 @@ textarea.text-input {
 }
 
 @media (max-width: 640px) {
+  .settings-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .settings-sidebar {
+    position: relative;
+    top: 0;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 8px;
+  }
+
+  .settings-sidebar .sidebar-btn.parent {
+    flex: 0 0 auto;
+  }
+
+  .settings-sidebar .sidebar-children {
+    display: none;
+  }
+
   .settings-main {
-    padding: 20px;
+    padding: 16px;
+    min-height: auto;
   }
 
   .featured-card {

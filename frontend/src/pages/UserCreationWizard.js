@@ -877,7 +877,7 @@ function UserCreationWizard() {
     <div className="user-creation-wizard">
       <div className="wizard-header">
         <h1>Create New User</h1>
-        <p>Add a new team member to Pipeline 360</p>
+        <p>Add a new team member to your organization</p>
       </div>
 
       {renderStepIndicator()}
