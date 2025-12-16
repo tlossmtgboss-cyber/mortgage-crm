@@ -42,7 +42,8 @@ from models.purl import (
     ContactCreate,
     ContactResponse,
     PortalModuleResponse,
-    PURLWorkspaceData
+    PURLWorkspaceData,
+    ContactType
 )
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,9 @@ class PURLWorkspaceService:
         self,
         organization_id: int,
         data: WorkspaceCreate,
-        owner_user_id: Optional[int] = None
+        owner_user_id: Optional[int] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new workspace with initial setup.
@@ -128,14 +131,27 @@ class PURLWorkspaceService:
             organization_id: Organization ID
             data: Workspace creation data
             owner_user_id: Owner user ID (LO)
+            first_name: Borrower's first name for slug generation (firstname.lastname format)
+            last_name: Borrower's last name for slug generation (firstname.lastname format)
 
         Returns:
             Dict with workspace id, slug, and created_at
         """
-        # Generate slug if not provided
-        slug = data.slug or SlugGenerator.generate(data.display_name)
+        # Generate slug - prefer firstname.lastname format if names provided
+        if data.slug:
+            slug = data.slug
+        elif first_name and last_name:
+            # Get all existing slugs for this org to ensure uniqueness
+            existing_slugs = [
+                ws.slug for ws in self.db.query(PURLWorkspace.slug).filter(
+                    PURLWorkspace.organization_id == organization_id
+                ).all()
+            ]
+            slug = SlugGenerator.generate_unique_from_name(first_name, last_name, existing_slugs)
+        else:
+            slug = SlugGenerator.generate(data.display_name)
 
-        # Ensure slug is unique
+        # Ensure slug is unique (double-check for race conditions)
         existing = self.db.query(PURLWorkspace).filter(
             PURLWorkspace.organization_id == organization_id,
             PURLWorkspace.slug == slug

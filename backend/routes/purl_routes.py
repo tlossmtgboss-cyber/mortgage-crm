@@ -1095,6 +1095,12 @@ async def create_workspace(
     if request.loan_id:
         metadata['loan_id'] = str(request.loan_id)
 
+    # Extract borrower name components for PURL slug generation (firstname.lastname format)
+    borrower_email = lead.email if lead else request.email
+    borrower_phone = lead.phone if lead else request.phone
+    borrower_first = (lead.first_name if lead else request.first_name) or (display_name.split()[0] if display_name else None)
+    borrower_last = (lead.last_name if lead else request.last_name) or (display_name.split()[-1] if len(display_name.split()) > 1 else None)
+
     # Create workspace using service
     service = PURLWorkspaceService(db)
 
@@ -1110,16 +1116,14 @@ async def create_workspace(
         result = service.create_workspace(
             organization_id=current_user.organization_id,
             data=workspace_data,
-            owner_user_id=current_user.id
+            owner_user_id=current_user.id,
+            first_name=borrower_first,  # For firstname.lastname slug format
+            last_name=borrower_last      # For firstname.lastname slug format
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     # Add borrower as primary contact
-    borrower_email = lead.email if lead else request.email
-    borrower_phone = lead.phone if lead else request.phone
-    borrower_first = (lead.first_name if lead else request.first_name) or display_name.split()[0] if display_name else None
-    borrower_last = (lead.last_name if lead else request.last_name) or (display_name.split()[-1] if len(display_name.split()) > 1 else None)
 
     if borrower_email or borrower_phone:
         contact = PURLContact(

@@ -1206,3 +1206,62 @@ class SlugGenerator:
         # Add random suffix
         suffix = secrets.token_hex(suffix_length // 2)
         return f"{slug}-{suffix}"
+
+    @classmethod
+    def generate_from_name(cls, first_name: str, last_name: str) -> str:
+        """
+        Generate URL-safe slug from first and last name.
+        Format: firstname.lastname (e.g., timothy.loss)
+        """
+        # Clean first name - remove special chars, convert to lowercase
+        clean_first = re.sub(r'[^a-z0-9]', '', first_name.lower().strip())
+        # Clean last name - remove special chars, convert to lowercase
+        clean_last = re.sub(r'[^a-z0-9]', '', last_name.lower().strip())
+
+        # Handle empty names
+        if not clean_first and not clean_last:
+            # Fall back to random slug
+            return secrets.token_hex(8)
+        elif not clean_first:
+            return clean_last
+        elif not clean_last:
+            return clean_first
+
+        return f"{clean_first}.{clean_last}"
+
+    @classmethod
+    def generate_unique_from_name(
+        cls,
+        first_name: str,
+        last_name: str,
+        existing_slugs: List[str]
+    ) -> str:
+        """
+        Generate a unique slug from first and last name.
+        If firstname.lastname exists, adds a number suffix (e.g., timothy.loss2)
+
+        Args:
+            first_name: Borrower's first name
+            last_name: Borrower's last name
+            existing_slugs: List of existing slugs to check against
+
+        Returns:
+            A unique slug in format firstname.lastname or firstname.lastnameN
+        """
+        base_slug = cls.generate_from_name(first_name, last_name)
+
+        # If base slug doesn't exist, use it
+        if base_slug not in existing_slugs:
+            return base_slug
+
+        # Find the next available number
+        counter = 2
+        while True:
+            candidate = f"{base_slug}{counter}"
+            if candidate not in existing_slugs:
+                return candidate
+            counter += 1
+            # Safety limit to prevent infinite loop
+            if counter > 1000:
+                # Fall back to random suffix
+                return f"{base_slug}-{secrets.token_hex(4)}"
