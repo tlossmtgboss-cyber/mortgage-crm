@@ -192,6 +192,7 @@ class LeadStage(str, enum.Enum):
     PROSPECT = "Prospect"
     APPLICATION = "Application"
     APPLICATION_STARTED = "APPLICATION_STARTED"  # Legacy value - maps to Application stage
+    DOCUMENT_FULFILLMENT = "Document Fulfillment"  # Application submitted, collecting docs
     PRE_QUALIFIED = "Pre-Qualified"
     PRE_APPROVED = "Pre-Approved"
     UNDER_CONTRACT = "Under Contract"  # PRD: Executing a purchase
@@ -35497,10 +35498,40 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    db.delete(user)
-    db.commit()
+    try:
+        # Handle related records before deletion
+        # Nullify owner_id on leads
+        db.execute(text("UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id"), {"user_id": user_id})
 
-    return {"message": "User deleted successfully"}
+        # Nullify loan_officer_id on loans
+        db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id"), {"user_id": user_id})
+
+        # Nullify assigned_to_id on tasks
+        db.execute(text("UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = :user_id"), {"user_id": user_id})
+
+        # Delete user's onboarding progress
+        db.execute(text("DELETE FROM onboarding_progress WHERE user_id = :user_id"), {"user_id": user_id})
+
+        # Delete user's subscriptions
+        db.execute(text("DELETE FROM subscriptions WHERE user_id = :user_id"), {"user_id": user_id})
+
+        # Delete user's notifications
+        db.execute(text("DELETE FROM notifications WHERE user_id = :user_id"), {"user_id": user_id})
+
+        # Delete user's calendar events
+        db.execute(text("DELETE FROM calendar_events WHERE user_id = :user_id"), {"user_id": user_id})
+
+        # Now delete the user
+        db.delete(user)
+        db.commit()
+
+        logger.info(f"User {user_id} ({user.email}) deleted by {current_user.email}")
+        return {"message": "User deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
 # ============================================================================
 # DASHBOARD

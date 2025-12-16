@@ -472,6 +472,7 @@ class PURLApplicationService:
     ):
         """
         Initialize milestones and tasks for a new loan.
+        Also creates lead_conditions in CRM if workspace is linked to a lead.
         """
         # Get milestone definitions
         definitions = self.db.query(PURLMilestoneDefinition).filter(
@@ -496,61 +497,109 @@ class PURLApplicationService:
             )
             self.db.add(milestone)
 
-        # Create initial borrower tasks
-        initial_tasks = [
+        # Define initial borrower document requirements
+        initial_conditions = [
             {
-                "title": "Upload pay stubs (last 2 months)",
+                "name": "Pay Stubs (Last 2 Months)",
                 "description": "Please upload your most recent pay stubs showing year-to-date earnings.",
-                "priority": TaskPriority.HIGH.value,
+                "category": "income",
+                "priority": "required",
                 "due_days": 3
             },
             {
-                "title": "Upload bank statements (last 2 months)",
+                "name": "Bank Statements (Last 2 Months)",
                 "description": "Please upload statements for all accounts you'll use for closing.",
-                "priority": TaskPriority.HIGH.value,
+                "category": "assets",
+                "priority": "required",
                 "due_days": 3
             },
             {
-                "title": "Upload W-2s (last 2 years)",
+                "name": "W-2s (Last 2 Years)",
                 "description": "Please upload your W-2 forms from the last 2 years.",
-                "priority": TaskPriority.MEDIUM.value,
+                "category": "income",
+                "priority": "required",
                 "due_days": 5
             },
             {
-                "title": "Upload tax returns (last 2 years)",
+                "name": "Tax Returns (Last 2 Years)",
                 "description": "Please upload your complete tax returns including all schedules.",
-                "priority": TaskPriority.MEDIUM.value,
+                "category": "income",
+                "priority": "required",
                 "due_days": 7
             },
             {
-                "title": "Upload driver's license or ID",
+                "name": "Driver's License or Government ID",
                 "description": "Please upload a clear copy of your government-issued ID.",
-                "priority": TaskPriority.HIGH.value,
+                "category": "identity",
+                "priority": "required",
                 "due_days": 3
             }
         ]
 
-        for task_data in initial_tasks:
-            due_at = base_date + timedelta(days=task_data["due_days"])
+        # Create PURL tasks for portal
+        for condition in initial_conditions:
+            due_at = base_date + timedelta(days=condition["due_days"])
+            priority = TaskPriority.HIGH.value if condition["priority"] == "required" else TaskPriority.MEDIUM.value
 
             task = PURLTask(
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 loan_id=loan_id,
-                title=task_data["title"],
-                description=task_data["description"],
+                title=f"Upload {condition['name']}",
+                description=condition["description"],
                 task_type="document_upload",
                 status=TaskStatus.OPEN.value,
-                priority=task_data["priority"],
+                priority=priority,
                 due_at=due_at
             )
             self.db.add(task)
+
+        # Get linked lead_id from workspace and create lead_conditions in CRM
+        workspace = self.db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == workspace_id
+        ).first()
+
+        lead_id = None
+        if workspace and workspace.meta_data:
+            lead_id = workspace.meta_data.get('lead_id')
+
+        if lead_id:
+            try:
+                from sqlalchemy import text
+                # Create lead_conditions for CRM sync
+                for condition in initial_conditions:
+                    due_date = (base_date + timedelta(days=condition["due_days"])).date()
+
+                    self.db.execute(text("""
+                        INSERT INTO lead_conditions
+                        (lead_id, name, description, category, priority, due_date, status, is_new, created_at, updated_at)
+                        VALUES (:lead_id, :name, :description, :category, :priority, :due_date, 'pending', true, NOW(), NOW())
+                    """), {
+                        "lead_id": int(lead_id),
+                        "name": condition["name"],
+                        "description": condition["description"],
+                        "category": condition["category"],
+                        "priority": condition["priority"],
+                        "due_date": due_date
+                    })
+
+                # Update lead stage to Document Fulfillment
+                self.db.execute(text("""
+                    UPDATE leads
+                    SET stage = 'Document Fulfillment', updated_at = NOW()
+                    WHERE id = :lead_id
+                """), {"lead_id": int(lead_id)})
+
+                logger.info(f"Created {len(initial_conditions)} lead_conditions for lead {lead_id} and updated stage to Document Fulfillment")
+            except Exception as e:
+                # Log but don't fail if lead_conditions table doesn't exist
+                logger.warning(f"Failed to create lead_conditions for lead {lead_id}: {e}")
 
         self.db.commit()
 
         logger.info(
             f"Initialized workflow for loan {loan_id}: "
-            f"{len(definitions)} milestones, {len(initial_tasks)} tasks"
+            f"{len(definitions)} milestones, {len(initial_conditions)} tasks"
         )
 
     # =========================================================================
