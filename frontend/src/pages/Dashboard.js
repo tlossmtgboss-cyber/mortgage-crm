@@ -48,7 +48,7 @@ function Dashboard() {
     'referrals',
     'team'
   ]);
-  const [workflowScores, setWorkflowScores] = useState({});
+  const [workflowScores, setWorkflowScores] = useState({ statuses: [], overallScore: 0 });
 
   useEffect(() => {
     loadDashboard();
@@ -132,6 +132,17 @@ function Dashboard() {
       // OPTIMIZED: Check cache first (cache for 30 seconds)
       const cacheKey = 'dashboard_data';
       const cacheTimeKey = 'dashboard_data_time';
+      const cacheVersionKey = 'dashboard_cache_version';
+      const currentCacheVersion = '2'; // Increment when data structure changes
+
+      // Invalidate old cache if version changed
+      const cachedVersion = localStorage.getItem(cacheVersionKey);
+      if (cachedVersion !== currentCacheVersion) {
+        localStorage.removeItem(cacheKey);
+        localStorage.removeItem(cacheTimeKey);
+        localStorage.setItem(cacheVersionKey, currentCacheVersion);
+      }
+
       const cachedData = localStorage.getItem(cacheKey);
       const cachedTime = localStorage.getItem(cacheTimeKey);
       const now = Date.now();
@@ -149,7 +160,7 @@ function Dashboard() {
         setTeamStats(data.team_stats || {});
         setMessages(data.messages || []);
         setEfficiency(data.efficiency || {});
-        setWorkflowScores(data.workflow_scores || []);
+        setWorkflowScores(data.workflow_scores || { statuses: [], overallScore: 0 });
         setLoading(false);
         return;
       }
@@ -184,7 +195,7 @@ function Dashboard() {
       setTeamStats(data.team_stats || {});
       setMessages(data.messages || []);
       setEfficiency(data.efficiency || {});
-      setWorkflowScores(data.workflow_scores || []);
+      setWorkflowScores(data.workflow_scores || { statuses: [], overallScore: 0 });
 
     } catch (error) {
       console.error('Failed to load dashboard:', error);
@@ -200,7 +211,7 @@ function Dashboard() {
       setTeamStats({ total_members: 0, active_today: 0 });
       setMessages([]);
       setEfficiency({ overallScore: 0, stages: [], team: [], bottlenecks: [] });
-      setWorkflowScores([]);
+      setWorkflowScores({ statuses: [], overallScore: 0 });
     } finally {
       setLoading(false);
     }

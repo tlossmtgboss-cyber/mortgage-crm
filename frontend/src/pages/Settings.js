@@ -2483,7 +2483,6 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'security' ? 'active' : ''}`} onClick={() => setActiveSection('security')}><span>Security</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'email-signature' ? 'active' : ''}`} onClick={() => setActiveSection('email-signature')}><span>Email Signature</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'work-hours' ? 'active' : ''}`} onClick={() => setActiveSection('work-hours')}><span>Work Hours</span></button>
-                      <button className={`sidebar-btn child ${activeSection === 'my-microsite' ? 'active' : ''}`} onClick={() => setActiveSection('my-microsite')}><span>My Microsite</span></button>
                     </div>
                   )}
                 </div>
@@ -2866,6 +2865,126 @@ const API_BASE_URL = isProduction
               {/* Microsite Theme Tab */}
               {marketingTab === 'microsite' && (
                 <div className="marketing-section">
+                  {/* Microsite URL Banner */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
+                    borderRadius: '12px',
+                    padding: '24px 32px',
+                    color: 'white',
+                    marginBottom: '24px'
+                  }}>
+                    <h3 style={{ marginBottom: '8px', fontSize: '18px' }}>Your Microsite URL</h3>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      background: 'rgba(255,255,255,0.2)',
+                      borderRadius: '8px',
+                      padding: '12px 16px',
+                      marginTop: '12px'
+                    }}>
+                      <code style={{ flex: 1, fontSize: '14px', wordBreak: 'break-all' }}>
+                        {window.location.origin}/lo/{userProfile.slug || userProfile.id || 'your-name'}
+                      </code>
+                      <button
+                        onClick={() => {
+                          const url = `${window.location.origin}/lo/${userProfile.slug || userProfile.id || ''}`;
+                          navigator.clipboard.writeText(url);
+                          setProfileMessage({ type: 'success', text: 'URL copied to clipboard!' });
+                          setTimeout(() => setProfileMessage({ type: '', text: '' }), 3000);
+                        }}
+                        style={{
+                          background: 'white',
+                          color: '#0d9488',
+                          border: 'none',
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          fontSize: '13px'
+                        }}
+                      >
+                        Copy URL
+                      </button>
+                    </div>
+                  </div>
+
+                  {profileMessage.text && (
+                    <div className={`profile-message ${profileMessage.type}`} style={{ marginBottom: '20px' }}>
+                      {profileMessage.text}
+                    </div>
+                  )}
+
+                  {/* Quick Actions */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                    <button
+                      onClick={() => window.open(`/lo/${userProfile.slug || userProfile.id || ''}`, '_blank')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '14px 20px',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        fontSize: '14px',
+                        color: '#374151'
+                      }}
+                    >
+                      <span>👁️</span> Preview Microsite
+                    </button>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/lo/${userProfile.slug || userProfile.id || ''}`;
+                        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '14px 20px',
+                        background: '#0077b5',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        fontSize: '14px',
+                        color: 'white'
+                      }}
+                    >
+                      <span>🔗</span> Share on LinkedIn
+                    </button>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/lo/${userProfile.slug || userProfile.id || ''}`;
+                        const subject = encodeURIComponent('Your Trusted Loan Officer');
+                        const body = encodeURIComponent(`Hi,\n\nI wanted to share my loan officer page with you:\n\n${url}\n\nLooking forward to helping you!`);
+                        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '14px 20px',
+                        background: '#6b7280',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        fontSize: '14px',
+                        color: 'white'
+                      }}
+                    >
+                      <span>✉️</span> Share via Email
+                    </button>
+                  </div>
+
+                  {/* Theme Selector */}
                   <MicrositeThemeSelector />
                 </div>
               )}
@@ -5019,184 +5138,6 @@ const API_BASE_URL = isProduction
             </div>
           )}
 
-          {activeSection === 'my-microsite' && (
-            <div className="profile-section">
-              <h2>My Microsite</h2>
-              <p className="section-description">
-                Your personal microsite is a public page where clients can learn about you and submit loan inquiries.
-              </p>
-
-              <div className="microsite-preview-card" style={{
-                background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
-                borderRadius: '12px',
-                padding: '32px',
-                color: 'white',
-                marginBottom: '24px'
-              }}>
-                <h3 style={{ marginBottom: '8px', fontSize: '20px' }}>Your Microsite URL</h3>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  background: 'rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  padding: '12px 16px',
-                  marginTop: '16px'
-                }}>
-                  <code style={{ flex: 1, fontSize: '14px', wordBreak: 'break-all' }}>
-                    {window.location.origin}/lo/{userProfile.slug || userProfile.id || 'your-name'}
-                  </code>
-                  <button
-                    onClick={() => {
-                      const url = `${window.location.origin}/lo/${userProfile.slug || userProfile.id || ''}`;
-                      navigator.clipboard.writeText(url);
-                      setProfileMessage({ type: 'success', text: 'URL copied to clipboard!' });
-                      setTimeout(() => setProfileMessage({ type: '', text: '' }), 3000);
-                    }}
-                    style={{
-                      background: 'white',
-                      color: '#0d9488',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      fontSize: '13px'
-                    }}
-                  >
-                    Copy URL
-                  </button>
-                </div>
-              </div>
-
-              {profileMessage.text && (
-                <div className={`profile-message ${profileMessage.type}`} style={{ marginBottom: '20px' }}>
-                  {profileMessage.text}
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-                <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ marginBottom: '12px', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '20px' }}>👁️</span> Preview Site
-                  </h4>
-                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
-                    See what your clients will see when they visit your microsite.
-                  </p>
-                  <button
-                    onClick={() => window.open(`/lo/${userProfile.slug || userProfile.id || ''}`, '_blank')}
-                    className="btn-secondary"
-                    style={{ width: '100%' }}
-                  >
-                    Preview Microsite
-                  </button>
-                </div>
-
-                <div style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)', borderRadius: '12px', padding: '24px', border: '1px solid #0d9488' }}>
-                  <h4 style={{ marginBottom: '12px', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '20px' }}>🎨</span> Customize Site
-                  </h4>
-                  <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '14px', marginBottom: '16px' }}>
-                    Use the wizard to customize your theme, colors, profile, and more.
-                  </p>
-                  <button
-                    onClick={() => navigate('/microsite/wizard')}
-                    style={{
-                      width: '100%',
-                      background: 'white',
-                      color: '#0d9488',
-                      border: 'none',
-                      padding: '10px 16px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: '600',
-                      fontSize: '14px'
-                    }}
-                  >
-                    Open Wizard
-                  </button>
-                </div>
-
-                <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ marginBottom: '12px', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '20px' }}>📊</span> Dashboard
-                  </h4>
-                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
-                    Access your LO Dashboard to manage leads and view analytics.
-                  </p>
-                  <button
-                    onClick={() => navigate('/dashboard/loan-officer')}
-                    className="btn-secondary"
-                    style={{ width: '100%' }}
-                  >
-                    Go to Dashboard
-                  </button>
-                </div>
-
-                <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ marginBottom: '12px', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '20px' }}>🔗</span> Share Your Link
-                  </h4>
-                  <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
-                    Share your microsite on social media or via email to attract new clients.
-                  </p>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/lo/${userProfile.slug || userProfile.id || ''}`;
-                        const text = encodeURIComponent(`Check out my loan officer page: ${url}`);
-                        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank');
-                      }}
-                      style={{
-                        flex: 1,
-                        background: '#0077b5',
-                        color: 'white',
-                        border: 'none',
-                        padding: '10px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontWeight: '500'
-                      }}
-                    >
-                      LinkedIn
-                    </button>
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/lo/${userProfile.slug || userProfile.id || ''}`;
-                        const subject = encodeURIComponent('Your Trusted Loan Officer');
-                        const body = encodeURIComponent(`Hi,\n\nI wanted to share my loan officer page with you. Visit my site to learn more about my services and get started on your mortgage journey:\n\n${url}\n\nLooking forward to helping you!`);
-                        window.location.href = `mailto:?subject=${subject}&body=${body}`;
-                      }}
-                      style={{
-                        flex: 1,
-                        background: '#6b7280',
-                        color: 'white',
-                        border: 'none',
-                        padding: '10px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        fontWeight: '500'
-                      }}
-                    >
-                      Email
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ background: '#fef3c7', borderRadius: '12px', padding: '20px', border: '1px solid #fcd34d' }}>
-                <h4 style={{ marginBottom: '8px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>💡</span> Tips for Your Microsite
-                </h4>
-                <ul style={{ margin: 0, paddingLeft: '20px', color: '#92400e', fontSize: '14px' }}>
-                  <li style={{ marginBottom: '6px' }}>Complete your profile with a professional photo and bio</li>
-                  <li style={{ marginBottom: '6px' }}>Add your NMLS number to build trust</li>
-                  <li style={{ marginBottom: '6px' }}>Share your microsite link on your email signature</li>
-                  <li>Promote your link on social media to generate leads</li>
-                </ul>
-              </div>
-            </div>
-          )}
 
           {/* Organizational Settings Sections */}
           {activeSection === 'company-info' && (

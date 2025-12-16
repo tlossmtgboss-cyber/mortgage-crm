@@ -35516,9 +35516,13 @@ async def delete_user(
         """Execute query, ignoring errors if table doesn't exist"""
         try:
             db.execute(text(query), params)
+            return True
         except Exception as e:
-            if "does not exist" not in str(e).lower() and "no such table" not in str(e).lower():
-                logger.warning(f"Query warning: {query[:50]}... - {str(e)[:100]}")
+            error_str = str(e).lower()
+            if "does not exist" not in error_str and "no such table" not in error_str:
+                # Log the full error for debugging
+                logger.warning(f"User {user_id} cleanup query failed: {query[:80]}... - {str(e)[:200]}")
+            return False
 
     try:
         params = {"user_id": user_id}
@@ -35556,11 +35560,12 @@ async def delete_user(
             # PURL/Portal tables
             "UPDATE purl_workspaces SET owner_user_id = NULL WHERE owner_user_id = :user_id",
             "UPDATE purl_sessions SET auth_user_id = NULL WHERE auth_user_id = :user_id",
+            "UPDATE purl_contacts SET auth_user_id = NULL WHERE auth_user_id = :user_id",
             "UPDATE purl_access_tokens SET revoked_by = NULL WHERE revoked_by = :user_id",
             "UPDATE purl_access_tokens SET created_by = NULL WHERE created_by = :user_id",
             "UPDATE purl_documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
             "UPDATE purl_documents SET reviewed_by = NULL WHERE reviewed_by = :user_id",
-            "UPDATE purl_milestones SET assigned_to = NULL WHERE assigned_to = :user_id",
+            "UPDATE purl_loan_milestones SET assigned_to = NULL WHERE assigned_to = :user_id",
             "UPDATE purl_tasks SET assigned_to_user_id = NULL WHERE assigned_to_user_id = :user_id",
             "UPDATE purl_tasks SET completed_by_user_id = NULL WHERE completed_by_user_id = :user_id",
             "UPDATE purl_messages SET sender_user_id = NULL WHERE sender_user_id = :user_id",
@@ -35701,7 +35706,7 @@ async def delete_user(
             "DELETE FROM saved_filters WHERE user_id = :user_id",
             "DELETE FROM email_signatures WHERE user_id = :user_id",
             # Conversation memory
-            "DELETE FROM conversation_memories WHERE user_id = :user_id",
+            "DELETE FROM conversation_memory WHERE user_id = :user_id",
             "DELETE FROM conversation_message_vectors WHERE user_id = :user_id",
             # VAPI
             "DELETE FROM vapi_user_settings WHERE user_id = :user_id",
@@ -35717,8 +35722,8 @@ async def delete_user(
             # PURL user tokens and workspace members
             "DELETE FROM purl_user_tokens WHERE user_id = :user_id",
             "DELETE FROM purl_workspace_members WHERE user_id = :user_id",
-            "DELETE FROM purl_contacts WHERE auth_user_id = :user_id",
-            "DELETE FROM purl_loan_milestones WHERE assigned_to = :user_id",
+            # Note: purl_contacts.auth_user_id is nullable - handled in Phase 1 (UPDATE to NULL)
+            # Note: purl_loan_milestones.assigned_to is nullable - handled in Phase 1 (UPDATE to NULL)
             # Video clips (NOT NULL user_id)
             "DELETE FROM video_clip_notifications WHERE recipient_id = :user_id",
             "DELETE FROM video_clip_shares WHERE created_by_id = :user_id",
