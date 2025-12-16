@@ -344,7 +344,6 @@ function Settings() {
     { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational' },
     { id: 'workflow', label: 'Workflow', type: 'standalone', section: 'workflow', navigate: '/workflow' },
     { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
-    { id: 'mission-control', label: 'Mission Control', type: 'standalone', section: 'mission-control' },
     { id: 'ai-receptionist', label: 'AI Receptionist', type: 'standalone', section: 'ai-receptionist' },
     { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance' },
     { id: 'voice-os', label: 'Voice OS', type: 'standalone', section: 'voice-os', navigate: '/voice-os-dashboard' },
@@ -2673,10 +2672,6 @@ const API_BASE_URL = isProduction
 
         {/* Main Content */}
         <div className="settings-main">
-          {activeSection === 'mission-control' && (
-            <MissionControl />
-          )}
-
           {activeSection === 'ai-receptionist' && (
             <AIReceptionist />
           )}

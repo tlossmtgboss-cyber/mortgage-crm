@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { agentAPI, agentGymAPI, aiAPI } from '../services/api';
+import { agentAPI, agentGymAPI, agentChatAPI } from '../services/api';
 import './AgentGym.css';
 
 // Difficulty levels
@@ -235,18 +235,22 @@ function AgentGym() {
     setSendingMessage(true);
 
     try {
-      // Use the AI assistant API to get a response
-      const response = await aiAPI.chat({
-        message: userMessage,
-        context: selectedScenario ? `Training Scenario: ${selectedScenario.name}\n${selectedScenario.description}\nTest Prompt: ${selectedScenario.test_prompt}` : '',
-        agent_id: parseInt(selectedAgent),
-      });
+      // Use the agent chat API to get a response
+      const context = selectedScenario
+        ? { scenario: selectedScenario.name, description: selectedScenario.description, test_prompt: selectedScenario.test_prompt }
+        : null;
+
+      const response = await agentChatAPI.quickAction(
+        parseInt(selectedAgent),
+        userMessage,
+        context
+      );
 
       const agentMessage = {
         role: 'assistant',
         content: response.response || response.message || 'I understand. Let me help you with that.',
         timestamp: new Date().toISOString(),
-        agent: agents.find(a => a.id === parseInt(selectedAgent))?.display_name || 'Agent',
+        agent: response.agent_name || agents.find(a => a.id === parseInt(selectedAgent))?.display_name || 'Agent',
       };
 
       setConversationMessages(prev => [...prev, agentMessage]);
