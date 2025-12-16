@@ -462,6 +462,17 @@ function Settings() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addingUser, setAddingUser] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: '',
+    full_name: '',
+    password: '',
+    role: 'loan_officer',
+    is_active: true
+  });
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [deletingUsers, setDeletingUsers] = useState(false);
 
   // Gmail integration state
   const [gmailStatus, setGmailStatus] = useState({
@@ -1169,6 +1180,123 @@ const API_BASE_URL = isProduction
       setUsers([]);
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!newUser.email || !newUser.password) {
+      alert('Email and password are required');
+      return;
+    }
+
+    setAddingUser(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newUser)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to create user: ${response.status}`);
+      }
+
+      // Reset form and close modal
+      setNewUser({
+        email: '',
+        full_name: '',
+        password: '',
+        role: 'loan_officer',
+        is_active: true
+      });
+      setShowAddUserModal(false);
+
+      // Reload users list
+      await loadUsers();
+      alert('User created successfully!');
+    } catch (err) {
+      console.error('Failed to create user:', err);
+      alert(err.message || 'Failed to create user');
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const handleSelectUser = (userId) => {
+    setSelectedUsers(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const selectableUsers = users.filter(u => u.id !== currentUser.id).map(u => u.id);
+
+    if (selectedUsers.length === selectableUsers.length) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(selectableUsers);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedUsers.length === 0) {
+      alert('No users selected');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedUsers.length} user(s)? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    setDeletingUsers(true);
+    try {
+      const token = localStorage.getItem('token');
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const userId of selectedUsers) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      setSelectedUsers([]);
+      await loadUsers();
+
+      if (failCount === 0) {
+        alert(`Successfully deleted ${successCount} user(s)`);
+      } else {
+        alert(`Deleted ${successCount} user(s). Failed to delete ${failCount} user(s).`);
+      }
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      alert('Failed to delete users');
+    } finally {
+      setDeletingUsers(false);
     }
   };
 
@@ -5248,18 +5376,37 @@ const API_BASE_URL = isProduction
                     Manage all registered users and their permissions
                   </p>
                 </div>
-                <div className="header-stats">
-                  <div className="stat-box">
-                    <div className="stat-value">{users.length}</div>
-                    <div className="stat-label">Total Users</div>
-                  </div>
-                  <div className="stat-box">
-                    <div className="stat-value">{users.filter(u => u.is_active).length}</div>
-                    <div className="stat-label">Active</div>
-                  </div>
-                  <div className="stat-box">
-                    <div className="stat-value">{users.filter(u => u.email_verified).length}</div>
-                    <div className="stat-label">Verified</div>
+                <div className="header-actions" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <button
+                    className="btn-primary"
+                    onClick={() => setShowAddUserModal(true)}
+                    style={{ padding: '10px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                  >
+                    + Add User
+                  </button>
+                  {selectedUsers.length > 0 && (
+                    <button
+                      className="btn-danger"
+                      onClick={handleBulkDelete}
+                      disabled={deletingUsers}
+                      style={{ padding: '10px 20px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                    >
+                      {deletingUsers ? 'Deleting...' : `Delete Selected (${selectedUsers.length})`}
+                    </button>
+                  )}
+                  <div className="header-stats">
+                    <div className="stat-box">
+                      <div className="stat-value">{users.length}</div>
+                      <div className="stat-label">Total Users</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-value">{users.filter(u => u.is_active).length}</div>
+                      <div className="stat-label">Active</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-value">{users.filter(u => u.email_verified).length}</div>
+                      <div className="stat-label">Verified</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5273,6 +5420,14 @@ const API_BASE_URL = isProduction
                   <table className="users-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            onChange={handleSelectAll}
+                            checked={selectedUsers.length > 0 && selectedUsers.length === users.filter(u => u.id !== JSON.parse(localStorage.getItem('user') || '{}').id).length}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                        </th>
                         <th>User</th>
                         <th>Email</th>
                         <th>Role</th>
@@ -5290,10 +5445,20 @@ const API_BASE_URL = isProduction
                         return (
                           <tr
                             key={user.id}
-                            className={`clickable-user-row ${!user.is_active ? 'inactive-user' : ''}`}
+                            className={`clickable-user-row ${!user.is_active ? 'inactive-user' : ''} ${selectedUsers.includes(user.id) ? 'selected-row' : ''}`}
                             onClick={() => navigate(`/users/${user.id}`)}
                             style={{ cursor: 'pointer' }}
                           >
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={selectedUsers.includes(user.id)}
+                                onChange={() => handleSelectUser(user.id)}
+                                disabled={isCurrentUser}
+                                style={{ width: '18px', height: '18px', cursor: isCurrentUser ? 'not-allowed' : 'pointer' }}
+                                title={isCurrentUser ? "Cannot select yourself" : "Select user"}
+                              />
+                            </td>
                             <td>
                               <div className="user-info">
                                 <div className="user-avatar">{user.full_name?.charAt(0) || user.email.charAt(0)}</div>
@@ -5388,6 +5553,106 @@ const API_BASE_URL = isProduction
                                             <p>No users found</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Add User Modal */}
+              {showAddUserModal && (
+                <div className="modal-overlay" style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                  background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+                }}>
+                  <div className="modal-content" style={{
+                    background: 'white', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '500px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                      <h3 style={{ margin: 0 }}>Add New User</h3>
+                      <button onClick={() => setShowAddUserModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>&times;</button>
+                    </div>
+
+                    <form onSubmit={handleAddUser}>
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Full Name</label>
+                        <input
+                          type="text"
+                          value={newUser.full_name}
+                          onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                          placeholder="John Doe"
+                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Email *</label>
+                        <input
+                          type="email"
+                          value={newUser.email}
+                          onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                          placeholder="john@example.com"
+                          required
+                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Password *</label>
+                        <input
+                          type="password"
+                          value={newUser.password}
+                          onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                          placeholder="Enter password"
+                          required
+                          minLength={6}
+                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Role</label>
+                        <select
+                          value={newUser.role}
+                          onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                        >
+                          <option value="loan_officer">Loan Officer</option>
+                          <option value="admin">Admin</option>
+                          <option value="processor">Processor</option>
+                          <option value="underwriter">Underwriter</option>
+                          <option value="manager">Manager</option>
+                          <option value="application_analyst">Application Analyst</option>
+                        </select>
+                      </div>
+
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={newUser.is_active}
+                            onChange={(e) => setNewUser({ ...newUser, is_active: e.target.checked })}
+                            style={{ width: '18px', height: '18px' }}
+                          />
+                          <span>Set as Active User</span>
+                        </label>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddUserModal(false)}
+                          style={{ padding: '10px 20px', background: '#f3f4f6', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={addingUser}
+                          style={{ padding: '10px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', opacity: addingUser ? 0.7 : 1 }}
+                        >
+                          {addingUser ? 'Creating...' : 'Create User'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
             </div>

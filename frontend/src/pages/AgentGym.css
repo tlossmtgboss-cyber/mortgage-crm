@@ -2,7 +2,9 @@
 .agent-gym {
   padding: 24px;
   background: #f5f7fa;
-  min-height: 100vh;
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
 }
 
 .agent-gym.loading {
@@ -216,6 +218,8 @@
   display: grid;
   grid-template-columns: 400px 1fr;
   gap: 24px;
+  flex: 1;
+  min-height: 0;
 }
 
 .scenarios-list-panel {

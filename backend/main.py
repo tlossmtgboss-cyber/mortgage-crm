@@ -35427,6 +35427,60 @@ async def update_user(
         "created_at": user.created_at.isoformat() if user.created_at else None
     }
 
+@app.post("/api/v1/admin/users")
+async def create_user(
+    user_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new user (admin only)"""
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    email = user_data.get('email')
+    password = user_data.get('password')
+    full_name = user_data.get('full_name', '')
+    role = user_data.get('role', 'loan_officer')
+    is_active = user_data.get('is_active', True)
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    # Check if email already exists
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already in use")
+
+    # Hash the password
+    hashed_password = pwd_context.hash(password)
+
+    # Create the user
+    new_user = User(
+        email=email,
+        hashed_password=hashed_password,
+        full_name=full_name,
+        role=role,
+        is_active=is_active,
+        email_verified=False,
+        onboarding_completed=False,
+        organization_id=current_user.organization_id
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "id": new_user.id,
+        "email": new_user.email,
+        "full_name": new_user.full_name,
+        "role": new_user.role,
+        "is_active": new_user.is_active,
+        "email_verified": new_user.email_verified,
+        "onboarding_completed": new_user.onboarding_completed,
+        "created_at": new_user.created_at.isoformat() if new_user.created_at else None
+    }
+
 @app.delete("/api/v1/admin/users/{user_id}")
 async def delete_user(
     user_id: int,

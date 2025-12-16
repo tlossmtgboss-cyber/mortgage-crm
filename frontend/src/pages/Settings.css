@@ -1536,6 +1536,15 @@ textarea.text-input {
   opacity: 0.6;
 }
 
+.users-table tbody tr.selected-row {
+  background: #e0f2fe;
+  border-left: 3px solid #0ea5e9;
+}
+
+.users-table tbody tr.selected-row:hover {
+  background: #bae6fd;
+}
+
 .users-table tbody tr:last-child {
   border-bottom: none;
 }
