@@ -75,8 +75,22 @@ function UserProfile() {
     );
   }
 
-  const { user, roles_with_tasks } = memberData;
+  const { user, roles_with_tasks } = memberData || {};
   const isViewingAsUser = localStorage.getItem('viewAsUserId') !== null;
+
+  // If user data is missing, show error
+  if (!user) {
+    return (
+      <div className="user-profile-container">
+        <div className="error-state">
+          <p>User not found or has been deleted</p>
+          <button onClick={() => navigate('/settings')} className="btn-back">
+            ← Back to Settings
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="user-profile-container">

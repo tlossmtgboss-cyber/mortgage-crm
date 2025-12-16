@@ -94,10 +94,21 @@ def get_user_invitation_routes(
         # Check permission - allow admin, leadership, and management roles
         # Also allow the first user (master admin) regardless of role
         allowed_roles = ['admin', 'leadership', 'management']
-        user_role = (current_user.permission_role or '').lower()
+        user_role = (current_user.permission_role or '').lower().strip()
+        user_functional_role = (getattr(current_user, 'role', '') or '').lower().strip()
         is_master_user = current_user.id == 1
 
-        if not is_master_user and user_role not in allowed_roles:
+        # Also check if user has admin in their functional role field (some users have role vs permission_role)
+        has_admin_role = (
+            user_role in allowed_roles or
+            user_functional_role in allowed_roles or
+            'admin' in user_role or
+            'admin' in user_functional_role
+        )
+
+        logger.info(f"Invite permission check: user_id={current_user.id}, permission_role='{current_user.permission_role}', role='{getattr(current_user, 'role', None)}', is_master={is_master_user}, has_admin={has_admin_role}")
+
+        if not is_master_user and not has_admin_role:
             logger.warning(f"User {current_user.id} with role '{current_user.permission_role}' attempted to invite user")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

@@ -528,10 +528,10 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
                   onChange={(e) => setSelectedTeamMember(e.target.value)}
                 >
                   <option value="">Select team member...</option>
-                  {teamMembers.map((member, idx) => {
+                  {teamMembers.filter(member => member != null).map((member, idx) => {
                     const memberId = member.member_id || member.user_id || member.id;
-                    const memberName = member.full_name || member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Unknown';
-                    const memberRole = member.role || member.title || '';
+                    const memberName = member?.full_name || member?.name || `${member?.first_name || ''} ${member?.last_name || ''}`.trim() || 'Unknown';
+                    const memberRole = member?.role || member?.title || '';
                     return (
                       <option key={idx} value={memberId}>
                         {memberName}{memberRole ? ` - ${memberRole}` : ''}

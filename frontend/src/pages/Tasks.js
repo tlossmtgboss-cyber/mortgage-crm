@@ -7,6 +7,7 @@ import TaskDetailPanel from '../components/shared/TaskDetailPanel';
 import ReconciliationDetailPanel from '../components/shared/ReconciliationDetailPanel';
 import CallDetailPanel from '../components/shared/CallDetailPanel';
 import TasksSkeleton from '../components/shared/TasksSkeleton';
+import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './Tasks.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -687,6 +688,33 @@ function Tasks() {
   useEffect(() => {
     loadTasks();
     loadTeamMembers();
+
+    // Subscribe to task events from other components (e.g., ActionSidebar)
+    const unsubscribeCompleted = subscribeToTaskEvent(TASK_EVENTS.TASK_COMPLETED, (detail) => {
+      // If task was completed elsewhere, add to local completedTasks set
+      if (detail.source !== 'tasks-page') {
+        console.log('[Tasks] Task completed elsewhere, updating...', detail.taskId);
+        setCompletedTasks(prev => {
+          const newCompleted = new Set(prev);
+          newCompleted.add(detail.taskId);
+          return newCompleted;
+        });
+        // Also reload to get fresh data
+        loadTasks();
+      }
+    });
+
+    const unsubscribeRefresh = subscribeToTaskEvent(TASK_EVENTS.TASKS_REFRESH, (detail) => {
+      if (detail.source !== 'tasks-page') {
+        console.log('[Tasks] Refresh requested, reloading...');
+        loadTasks();
+      }
+    });
+
+    return () => {
+      unsubscribeCompleted();
+      unsubscribeRefresh();
+    };
   }, []);
 
   // Auto-select first task when tasks load or tab changes
@@ -1601,6 +1629,9 @@ function Tasks() {
         const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
         setSelectedTask(nextTask);
       }
+
+      // Emit event so other components (like ActionSidebar) can update
+      emitTaskCompleted(taskId, 'tasks-page');
     } catch (error) {
       console.error('Error completing task:', error);
       // Still mark as completed locally even if API fails
@@ -1609,6 +1640,8 @@ function Tasks() {
         newCompleted.add(taskId);
         return newCompleted;
       });
+      // Still emit event for local completion
+      emitTaskCompleted(taskId, 'tasks-page');
     } finally {
       setCompletingTask(false);
     }

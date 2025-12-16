@@ -59,11 +59,11 @@ function ImpersonationModal({ employee, onClose }) {
         <div className="modal-body">
           <div className="employee-info">
             <div className="employee-avatar">
-              {employee.photo_url ? (
-                <img src={employee.photo_url} alt={employee.full_name} />
+              {employee?.photo_url ? (
+                <img src={employee.photo_url} alt={employee?.full_name || 'Employee'} />
               ) : (
                 <span className="initials">
-                  {employee.first_name?.[0]}{employee.last_name?.[0]}
+                  {employee?.first_name?.[0]}{employee?.last_name?.[0]}
                 </span>
               )}
             </div>
