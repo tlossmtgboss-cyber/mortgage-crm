@@ -1072,6 +1072,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                 WHERE user_metadata IS NOT NULL
             """))
             users_data = result.fetchall()
+            logger.info(f"Found {len(users_data)} users with user_metadata")
 
             for row in users_data:
                 user_id, email, full_name, is_active, hashed_password, user_metadata = row
@@ -1083,6 +1084,9 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                         user_metadata = json.loads(user_metadata)
                     except:
                         continue
+
+                stored_token = user_metadata.get("invitation_token") if user_metadata else None
+                logger.info(f"Checking user {email}: has_token={stored_token is not None}, token_match={stored_token == token if stored_token else False}")
 
                 if user_metadata and user_metadata.get("invitation_token") == token:
                     # Check expiration
@@ -1118,6 +1122,48 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             logger.warning(f"Error querying invitation tokens: {e}")
 
         raise HTTPException(status_code=404, detail="Invalid activation token")
+
+    @router.get("/activate/debug-tokens")
+    async def debug_tokens(db = Depends(get_db)):
+        """Debug endpoint to check invitation tokens - TEMPORARY"""
+        from sqlalchemy import text
+        try:
+            result = db.execute(text("""
+                SELECT id, email, user_metadata, is_active
+                FROM users
+                WHERE user_metadata IS NOT NULL
+            """))
+            users_data = result.fetchall()
+
+            debug_info = []
+            for row in users_data:
+                user_id, email, user_metadata, is_active = row
+
+                # Parse user_metadata
+                if isinstance(user_metadata, str):
+                    import json
+                    try:
+                        user_metadata = json.loads(user_metadata)
+                    except:
+                        user_metadata = None
+
+                has_token = user_metadata.get("invitation_token") is not None if user_metadata else False
+                token_preview = user_metadata.get("invitation_token", "")[:20] + "..." if user_metadata and user_metadata.get("invitation_token") else None
+
+                debug_info.append({
+                    "email": email,
+                    "is_active": is_active,
+                    "has_invitation_token": has_token,
+                    "token_preview": token_preview,
+                    "metadata_keys": list(user_metadata.keys()) if user_metadata else []
+                })
+
+            return {
+                "total_users_with_metadata": len(debug_info),
+                "users": debug_info
+            }
+        except Exception as e:
+            return {"error": str(e)}
 
     @router.post("/activate/complete")
     async def complete_activation(

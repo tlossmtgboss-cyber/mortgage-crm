@@ -1855,6 +1855,14 @@ async def submit_application(
                                 "description": "Documentation of your IRS payment plan or balance owed"
                             })
 
+                        # New bank account documentation
+                        if submission.declarations.get("new_bank_account") == "yes":
+                            needs_tasks.append({
+                                "title": "New account opening statement",
+                                "category": "assets",
+                                "description": "Opening statement for any bank accounts opened in the past 60 days"
+                            })
+
                         # Standard documents for all applications
                         needs_tasks.append({
                             "title": "Bank statements (2 months)",

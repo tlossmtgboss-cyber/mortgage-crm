@@ -808,6 +808,16 @@ const DECLARATION_QUESTIONS = [
     showIf: { field: 'recent_credit_applications', values: ['yes'] },
   },
   {
+    id: 'new_bank_account',
+    question: 'Have you opened a new bank account in the past 60 days?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, I opened a new account', icon: 'bank' },
+      { value: 'no', label: 'No new accounts', icon: 'check' },
+    ],
+    hint: 'We\'ll need statements from any newly opened accounts.',
+  },
+  {
     id: 'current_loan_type',
     question: 'What type of loan do you currently have?',
     type: 'choice',
@@ -1084,6 +1094,11 @@ export default function RefinanceApplication() {
     // IRS payment plan documentation
     if (declarations.irs_balance_owed === 'yes' || declarations.irs_balance_owed === 'payment_plan') {
       newNeeds.push({ id: 'irs_docs', label: 'IRS payment arrangement documentation', category: 'legal' });
+    }
+
+    // New bank account statements
+    if (declarations.new_bank_account === 'yes') {
+      newNeeds.push({ id: 'new_account_statement', label: 'New account opening statement', category: 'assets' });
     }
 
     newNeeds.push({ id: 'mortgage_statement', label: 'Current mortgage statement', category: 'property' });
