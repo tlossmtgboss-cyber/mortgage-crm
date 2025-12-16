@@ -1182,6 +1182,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
 
         # Try invitation system (token stored in user_metadata JSON)
         # Use raw SQL to avoid ORM issues with missing columns
+        from sqlalchemy import text
         try:
             result = db.execute(text("""
                 SELECT id, email, full_name, is_active, hashed_password, user_metadata
