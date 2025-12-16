@@ -35741,13 +35741,71 @@ async def delete_user(
         for query in delete_queries:
             safe_execute(query, params)
 
-        # Now delete the user
-        db.delete(user)
-        db.commit()
+        # =========================================================================
+        # PHASE 3: Handle any remaining foreign key constraints dynamically
+        # =========================================================================
+        # Query PostgreSQL for all tables referencing users and clean them up
+        try:
+            fk_query = """
+                SELECT
+                    tc.table_name,
+                    kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = 'users'
+                    AND tc.table_schema = 'public'
+            """
+            result = db.execute(text(fk_query))
+            fk_refs = result.fetchall()
 
-        logger.info(f"User {user_id} ({user.email}) deleted by {current_user.email}")
-        return {"message": "User deleted successfully"}
+            for table_name, column_name in fk_refs:
+                # Skip the users table itself
+                if table_name == 'users':
+                    continue
+                # Try to either nullify or delete
+                try:
+                    # First try nullifying
+                    db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
+                except:
+                    # If that fails, try deleting
+                    try:
+                        db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                    except Exception as del_e:
+                        logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
+        except Exception as fk_e:
+            logger.warning(f"Could not query FK constraints: {fk_e}")
 
+        # Final attempt: direct SQL delete with explicit handling
+        try:
+            db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
+            db.commit()
+            logger.info(f"User {user_id} ({user.email}) deleted by {current_user.email}")
+            return {"message": "User deleted successfully"}
+        except Exception as final_e:
+            db.rollback()
+            # Log the actual constraint error
+            error_msg = str(final_e)
+            logger.error(f"Final delete failed for user {user_id}: {error_msg}")
+
+            # Try to extract the constraint name for better error message
+            if "violates foreign key constraint" in error_msg:
+                # Parse out the constraint and table info
+                import re
+                match = re.search(r'on table "(\w+)"', error_msg)
+                if match:
+                    blocking_table = match.group(1)
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Cannot delete user: Referenced by table '{blocking_table}'. Please delete related records first."
+                    )
+            raise HTTPException(status_code=500, detail=f"Failed to delete user: {error_msg}")
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to delete user {user_id}: {str(e)}")
