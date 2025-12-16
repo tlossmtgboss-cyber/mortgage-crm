@@ -1,0 +1,412 @@
+"""
+Pipeline Efficiency Routes - Real-time pipeline analytics from actual database data
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import func, case, and_, or_, extract
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from pydantic import BaseModel
+from enum import Enum
+
+router = APIRouter(prefix="/api/v1/pipeline", tags=["Pipeline Efficiency"])
+
+# Dependencies will be set from main.py
+_get_db = None
+_get_current_user = None
+
+def set_dependencies(get_db_func, get_current_user_func):
+    global _get_db, _get_current_user
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func
+
+def get_db():
+    if _get_db is None:
+        raise HTTPException(status_code=500, detail="Database dependency not configured")
+    return next(_get_db())
+
+def get_current_user():
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    return _get_current_user
+
+
+class TimeRange(str, Enum):
+    SEVEN_DAYS = "7days"
+    THIRTY_DAYS = "30days"
+    NINETY_DAYS = "90days"
+    YEAR = "year"
+
+
+def get_date_filter(time_range: TimeRange):
+    """Get the start date for filtering based on time range"""
+    now = datetime.now(timezone.utc)
+    if time_range == TimeRange.SEVEN_DAYS:
+        return now - timedelta(days=7)
+    elif time_range == TimeRange.THIRTY_DAYS:
+        return now - timedelta(days=30)
+    elif time_range == TimeRange.NINETY_DAYS:
+        return now - timedelta(days=90)
+    else:  # YEAR
+        return now - timedelta(days=365)
+
+
+@router.get("/efficiency")
+async def get_pipeline_efficiency(
+    time_range: TimeRange = TimeRange.THIRTY_DAYS,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get overall pipeline efficiency metrics from real data"""
+    from main import Lead, Loan, LeadStage, LoanStage, User
+
+    start_date = get_date_filter(time_range)
+    now = datetime.now(timezone.utc)
+
+    # Get total leads in period
+    total_leads = db.query(func.count(Lead.id)).filter(
+        Lead.created_at >= start_date,
+        Lead.owner_id == current_user.id
+    ).scalar() or 0
+
+    # Get total loans in period
+    total_loans = db.query(func.count(Loan.id)).filter(
+        Loan.created_at >= start_date,
+        Loan.loan_officer_id == current_user.id
+    ).scalar() or 0
+
+    # Calculate conversion rate (leads that became loans)
+    converted_leads = db.query(func.count(Lead.id)).filter(
+        Lead.created_at >= start_date,
+        Lead.owner_id == current_user.id,
+        Lead.stage == LeadStage.CONVERTED
+    ).scalar() or 0
+
+    pull_through_rate = round((converted_leads / total_leads * 100), 1) if total_leads > 0 else 0
+
+    # Calculate average time to close (for funded loans)
+    funded_loans = db.query(Loan).filter(
+        Loan.funded_date >= start_date,
+        Loan.loan_officer_id == current_user.id,
+        Loan.funded_date.isnot(None),
+        Loan.created_at.isnot(None)
+    ).all()
+
+    if funded_loans:
+        total_days = sum(
+            (loan.funded_date - loan.created_at).days
+            for loan in funded_loans
+            if loan.funded_date and loan.created_at
+        )
+        avg_time_to_close = round(total_days / len(funded_loans), 1) if funded_loans else 0
+    else:
+        avg_time_to_close = 0
+
+    # Get loans falling behind (in processing/underwriting for more than 14 days)
+    falling_behind_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING]
+    fourteen_days_ago = now - timedelta(days=14)
+
+    loans_falling_behind = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage.in_(falling_behind_stages),
+        Loan.created_at < fourteen_days_ago
+    ).scalar() or 0
+
+    # Calculate overall efficiency score (weighted average)
+    # Higher pull-through = better, Lower time to close = better, fewer falling behind = better
+    efficiency_components = []
+    if total_leads > 0:
+        efficiency_components.append(min(pull_through_rate, 100))
+    if avg_time_to_close > 0:
+        # Benchmark: 45 days is average, lower is better
+        time_efficiency = max(0, 100 - ((avg_time_to_close - 30) * 2))
+        efficiency_components.append(min(time_efficiency, 100))
+    if total_loans > 0:
+        behind_rate = (loans_falling_behind / total_loans) * 100 if total_loans > 0 else 0
+        behind_efficiency = max(0, 100 - (behind_rate * 5))
+        efficiency_components.append(behind_efficiency)
+
+    overall_score = round(sum(efficiency_components) / len(efficiency_components), 0) if efficiency_components else 0
+
+    return {
+        "overallScore": overall_score,
+        "trend": 0,  # Would need historical data to calculate
+        "lastUpdated": now.isoformat(),
+        "hasData": total_leads > 0 or total_loans > 0,
+        "keyMetrics": {
+            "avgTimeToClose": avg_time_to_close,
+            "avgTimeToCloseChange": 0,
+            "pullThroughRate": pull_through_rate,
+            "pullThroughRateChange": 0,
+            "loansFallingBehind": loans_falling_behind,
+            "loansFallingBehindChange": 0,
+            "automationRate": 0,  # Would need task tracking to calculate
+            "automationRateChange": 0,
+            "customerSatisfaction": 0,  # Would need feedback system
+            "customerSatisfactionChange": 0
+        },
+        "summary": {
+            "totalLeads": total_leads,
+            "totalLoans": total_loans,
+            "convertedLeads": converted_leads,
+            "fundedLoans": len(funded_loans) if funded_loans else 0
+        }
+    }
+
+
+@router.get("/stages")
+async def get_stage_metrics(
+    time_range: TimeRange = TimeRange.THIRTY_DAYS,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get stage-by-stage pipeline metrics"""
+    from main import Lead, Loan, LeadStage, LoanStage
+
+    start_date = get_date_filter(time_range)
+    now = datetime.now(timezone.utc)
+
+    # Define stages with their mappings
+    lead_stages = [
+        {"name": "New Lead", "stage": LeadStage.NEW, "type": "lead"},
+        {"name": "Contacted", "stage": LeadStage.CONTACTED, "type": "lead"},
+        {"name": "Qualified", "stage": LeadStage.QUALIFIED, "type": "lead"},
+        {"name": "Application", "stage": LeadStage.APPLICATION, "type": "lead"},
+        {"name": "Pre-Approved", "stage": LeadStage.PREAPPROVED, "type": "lead"},
+    ]
+
+    loan_stages = [
+        {"name": "Disclosed", "stage": LoanStage.DISCLOSED, "type": "loan"},
+        {"name": "Processing", "stage": LoanStage.PROCESSING, "type": "loan"},
+        {"name": "Submitted", "stage": LoanStage.SUBMITTED, "type": "loan"},
+        {"name": "Underwriting", "stage": LoanStage.UNDERWRITING, "type": "loan"},
+        {"name": "Approved", "stage": LoanStage.APPROVED, "type": "loan"},
+        {"name": "Clear to Close", "stage": LoanStage.CTC, "type": "loan"},
+        {"name": "Docs Out", "stage": LoanStage.DOCS_OUT, "type": "loan"},
+        {"name": "Funded", "stage": LoanStage.FUNDED, "type": "loan"},
+    ]
+
+    stage_metrics = []
+
+    # Process lead stages
+    for stage_info in lead_stages:
+        count = db.query(func.count(Lead.id)).filter(
+            Lead.owner_id == current_user.id,
+            Lead.stage == stage_info["stage"]
+        ).scalar() or 0
+
+        # Calculate average days in stage
+        leads_in_stage = db.query(Lead).filter(
+            Lead.owner_id == current_user.id,
+            Lead.stage == stage_info["stage"],
+            Lead.stage_changed_at.isnot(None)
+        ).all()
+
+        if leads_in_stage:
+            total_days = sum(
+                (now - lead.stage_changed_at).days
+                for lead in leads_in_stage
+                if lead.stage_changed_at
+            )
+            avg_days = round(total_days / len(leads_in_stage), 1)
+        else:
+            avg_days = 0
+
+        stage_metrics.append({
+            "name": stage_info["name"],
+            "type": stage_info["type"],
+            "volume": count,
+            "avgTime": f"{avg_days} days",
+            "avgDays": avg_days,
+            "efficiency": 100 if avg_days <= 3 else max(0, 100 - (avg_days - 3) * 10),
+            "conversionRate": 0,  # Would need stage transition tracking
+            "bottlenecks": 1 if avg_days > 7 else 0,
+            "trend": 0
+        })
+
+    # Process loan stages
+    for stage_info in loan_stages:
+        count = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == stage_info["stage"]
+        ).scalar() or 0
+
+        # For loans, use created_at as proxy for stage entry (simplified)
+        avg_days = 0  # Would need stage history tracking for accurate calculation
+
+        stage_metrics.append({
+            "name": stage_info["name"],
+            "type": stage_info["type"],
+            "volume": count,
+            "avgTime": f"{avg_days} days",
+            "avgDays": avg_days,
+            "efficiency": 80,  # Default efficiency
+            "conversionRate": 0,
+            "bottlenecks": 0,
+            "trend": 0
+        })
+
+    # Check if there's any data
+    has_data = any(s["volume"] > 0 for s in stage_metrics)
+
+    return {
+        "hasData": has_data,
+        "stageMetrics": stage_metrics
+    }
+
+
+@router.get("/team")
+async def get_team_metrics(
+    time_range: TimeRange = TimeRange.THIRTY_DAYS,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get team performance metrics"""
+    from main import Lead, Loan, User, LoanTeamMember
+
+    start_date = get_date_filter(time_range)
+
+    # For now, return empty team metrics since we need proper team structure
+    # This would be populated based on the organization's team setup
+
+    team_metrics = []
+
+    # Check if user is a manager with team members
+    # This is simplified - real implementation would check org structure
+
+    return {
+        "hasData": len(team_metrics) > 0,
+        "teamMetrics": team_metrics
+    }
+
+
+@router.get("/bottlenecks")
+async def get_bottlenecks(
+    time_range: TimeRange = TimeRange.THIRTY_DAYS,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get current pipeline bottlenecks"""
+    from main import Lead, Loan, LeadStage, LoanStage
+
+    now = datetime.now(timezone.utc)
+    bottlenecks = []
+
+    # Check for leads stuck in each stage too long
+    stage_thresholds = {
+        LeadStage.NEW: 2,
+        LeadStage.CONTACTED: 5,
+        LeadStage.QUALIFIED: 7,
+        LeadStage.APPLICATION: 10,
+    }
+
+    for stage, threshold_days in stage_thresholds.items():
+        threshold_date = now - timedelta(days=threshold_days)
+
+        stuck_leads = db.query(Lead).filter(
+            Lead.owner_id == current_user.id,
+            Lead.stage == stage,
+            or_(
+                Lead.stage_changed_at < threshold_date,
+                and_(Lead.stage_changed_at.is_(None), Lead.created_at < threshold_date)
+            )
+        ).all()
+
+        if stuck_leads:
+            avg_days = sum(
+                (now - (lead.stage_changed_at or lead.created_at)).days
+                for lead in stuck_leads
+            ) / len(stuck_leads)
+
+            bottlenecks.append({
+                "id": len(bottlenecks) + 1,
+                "stage": stage.value,
+                "issue": f"Leads stuck in {stage.value}",
+                "affectedCount": len(stuck_leads),
+                "avgDelay": f"{round(avg_days, 1)} days",
+                "severity": "high" if avg_days > threshold_days * 2 else "medium",
+                "type": "lead"
+            })
+
+    # Check for loans in processing too long
+    loan_thresholds = {
+        LoanStage.PROCESSING: 14,
+        LoanStage.UNDERWRITING: 10,
+        LoanStage.SUBMITTED: 7,
+    }
+
+    for stage, threshold_days in loan_thresholds.items():
+        threshold_date = now - timedelta(days=threshold_days)
+
+        stuck_loans = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == stage,
+            Loan.created_at < threshold_date
+        ).scalar() or 0
+
+        if stuck_loans > 0:
+            bottlenecks.append({
+                "id": len(bottlenecks) + 1,
+                "stage": stage.value,
+                "issue": f"Loans delayed in {stage.value}",
+                "affectedCount": stuck_loans,
+                "avgDelay": f">{threshold_days} days",
+                "severity": "high" if stuck_loans > 3 else "medium",
+                "type": "loan"
+            })
+
+    return {
+        "hasData": len(bottlenecks) > 0,
+        "bottlenecks": bottlenecks
+    }
+
+
+@router.get("/trends")
+async def get_trends(
+    weeks: int = 12,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get efficiency trends over time"""
+    from main import Lead, Loan
+
+    now = datetime.now(timezone.utc)
+    trends = []
+
+    for i in range(weeks - 1, -1, -1):
+        week_end = now - timedelta(weeks=i)
+        week_start = week_end - timedelta(weeks=1)
+
+        # Count leads created in this week
+        lead_count = db.query(func.count(Lead.id)).filter(
+            Lead.owner_id == current_user.id,
+            Lead.created_at >= week_start,
+            Lead.created_at < week_end
+        ).scalar() or 0
+
+        # Count loans created in this week
+        loan_count = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.created_at >= week_start,
+            Loan.created_at < week_end
+        ).scalar() or 0
+
+        total_volume = lead_count + loan_count
+        # Simple efficiency score based on volume (would be more sophisticated in production)
+        score = min(100, 50 + total_volume * 5) if total_volume > 0 else 0
+
+        trends.append({
+            "week": f"Week {weeks - i}",
+            "score": score,
+            "volume": total_volume,
+            "leads": lead_count,
+            "loans": loan_count
+        })
+
+    has_data = any(t["volume"] > 0 for t in trends)
+
+    return {
+        "hasData": has_data,
+        "trends": trends
+    }

@@ -19791,6 +19791,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Agent WebSocket routes not loaded: {e}")
 
+# Pipeline Efficiency routes (Real-time pipeline analytics)
+try:
+    from pipeline_efficiency_routes import router as pipeline_efficiency_router, set_dependencies as set_pipeline_deps
+    set_pipeline_deps(get_db, get_current_user)
+    app.include_router(pipeline_efficiency_router, tags=["Pipeline Efficiency"])
+    logger.info("✅ Pipeline Efficiency routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Pipeline Efficiency routes not loaded: {e}")
+
 # PURL (Persistent URL) Borrower Portal routes
 purl_routes_error = None
 try:
@@ -19845,6 +19854,61 @@ async def debug_purl_tables_status(db: Session = Depends(get_db)):
         "existing_purl_tables": existing_purl_tables,
         "missing_purl_tables": missing_purl_tables,
         "all_table_count": len(all_tables)
+    }
+
+@app.get("/api/v1/debug/user-delete-diagnosis")
+async def debug_user_delete_diagnosis(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to diagnose user deletion blockers (no actual deletion)"""
+    # Check if user exists
+    user = db.execute(text("SELECT id, email, full_name FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
+    if not user:
+        return {"error": "User not found", "user_id": user_id}
+
+    # Get all FK constraints referencing users table
+    fk_query = """
+        SELECT tc.table_name, kcu.column_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+        WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'users' AND tc.table_schema = 'public'
+        ORDER BY tc.table_name
+    """
+    fks = db.execute(text(fk_query)).fetchall()
+
+    # Check which tables reference this user
+    blocking_tables = []
+    for table_name, column_name, constraint_name in fks:
+        if table_name == 'users':
+            continue
+        try:
+            count = db.execute(
+                text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :uid"),
+                {"uid": user_id}
+            ).scalar()
+            if count > 0:
+                blocking_tables.append({
+                    "table": table_name,
+                    "column": column_name,
+                    "references": count
+                })
+        except Exception as e:
+            if "does not exist" not in str(e).lower():
+                blocking_tables.append({
+                    "table": table_name,
+                    "column": column_name,
+                    "error": str(e)[:100]
+                })
+
+    return {
+        "user_id": user_id,
+        "user_email": user[1],
+        "user_name": user[2],
+        "total_fk_constraints": len(fks),
+        "blocking_references": blocking_tables,
+        "can_delete": len(blocking_tables) == 0
     }
 
 @app.get("/api/v1/debug/purl-token-verify")
