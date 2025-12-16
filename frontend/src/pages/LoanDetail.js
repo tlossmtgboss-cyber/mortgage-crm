@@ -17,6 +17,7 @@ import RateLockRecommendation from '../components/RateLockRecommendation';
 import VideoMeetings from '../components/VideoMeetings';
 import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
+import AddressAutocomplete from '../components/AddressAutocomplete';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -1620,11 +1621,14 @@ function LoanDetail() {
                   <div className="info-grid compact">
                     <div className="info-field">
                       <label>Insurance Company</label>
-                      <input
-                        type="text"
+                      <AddressAutocomplete
                         value={formData.homeowner_insurance_company || ''}
-                        onChange={(e) => handleFieldChange('homeowner_insurance_company', e.target.value)}
+                        onChange={(value) => handleFieldChange('homeowner_insurance_company', value)}
+                        onAddressSelect={(place) => {
+                          handleFieldChange('homeowner_insurance_company', place.formatted || place.name || '');
+                        }}
                         placeholder="Company name"
+                        types={['establishment']}
                       />
                     </div>
                     <div className="info-field">
@@ -1721,11 +1725,14 @@ function LoanDetail() {
                     <div className="info-grid compact">
                       <div className="info-field">
                         <label>Insurance Company</label>
-                        <input
-                          type="text"
+                        <AddressAutocomplete
                           value={formData.flood_insurance_company || ''}
-                          onChange={(e) => handleFieldChange('flood_insurance_company', e.target.value)}
+                          onChange={(value) => handleFieldChange('flood_insurance_company', value)}
+                          onAddressSelect={(place) => {
+                            handleFieldChange('flood_insurance_company', place.formatted || place.name || '');
+                          }}
                           placeholder="Company name"
+                          types={['establishment']}
                         />
                       </div>
                       <div className="info-field">
@@ -1911,11 +1918,18 @@ function LoanDetail() {
                   <div className="info-grid compact">
                     <div className="info-field" style={{ gridColumn: 'span 2' }}>
                       <label>Street Address</label>
-                      <input
-                        type="text"
+                      <AddressAutocomplete
                         value={formData.closing_address || ''}
-                        onChange={(e) => handleFieldChange('closing_address', e.target.value)}
+                        onChange={(value) => handleFieldChange('closing_address', value)}
+                        onAddressSelect={(addressData) => {
+                          // Auto-fill address components
+                          handleFieldChange('closing_address', addressData.street || addressData.formatted || '');
+                          if (addressData.city) handleFieldChange('closing_city', addressData.city);
+                          if (addressData.state_code) handleFieldChange('closing_state', addressData.state_code);
+                          if (addressData.zip) handleFieldChange('closing_zip', addressData.zip);
+                        }}
                         placeholder="Street address"
+                        types={['address']}
                       />
                     </div>
                     <div className="info-field">
@@ -2519,25 +2533,6 @@ function LoanDetail() {
                       </div>
                     )}
 
-                    {/* Available Partners */}
-                    {cashflowPartners.length > 0 && (
-                      <div>
-                        <h4 style={{ marginBottom: '10px' }}>Partner Network ({cashflowPartners.length})</h4>
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          {cashflowPartners.slice(0, 6).map(partner => (
-                            <div key={partner.id} style={{
-                              padding: '8px 12px',
-                              backgroundColor: '#f5f5f5',
-                              borderRadius: '6px',
-                              fontSize: '13px'
-                            }}>
-                              <strong>{partner.business_name}</strong>
-                              <span style={{ color: '#666', marginLeft: '8px' }}>{partner.category.replace('_', ' ')}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </>
                 )}
               </div>

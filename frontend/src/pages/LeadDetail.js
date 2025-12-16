@@ -3490,25 +3490,6 @@ function LeadDetail() {
                       </div>
                     )}
 
-                    {/* Available Partners */}
-                    {cashflowPartners.length > 0 && (
-                      <div>
-                        <h4 style={{ marginBottom: '10px' }}>Partner Network ({cashflowPartners.length})</h4>
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          {cashflowPartners.slice(0, 6).map(partner => (
-                            <div key={partner.id} style={{
-                              padding: '8px 12px',
-                              backgroundColor: '#f5f5f5',
-                              borderRadius: '6px',
-                              fontSize: '13px'
-                            }}>
-                              <strong>{partner.business_name}</strong>
-                              <span style={{ color: '#666', marginLeft: '8px' }}>{partner.category.replace('_', ' ')}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </>
                 )}
               </div>

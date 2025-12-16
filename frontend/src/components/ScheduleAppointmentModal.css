@@ -104,8 +104,19 @@
   display: flex;
   gap: 8px;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-x: auto;
+  padding: 4px 8px;
+  scroll-padding: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure all date cards are visible - prevent clipping */
+.schedule-week-dates::before,
+.schedule-week-dates::after {
+  content: '';
+  min-width: 1px;
+  flex-shrink: 0;
 }
 
 .schedule-date-card {

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.6 - Fixed calendar to always show today as first visible date - build 20251216
-// Fixed: Calendar now resets to today whenever modal opens
-console.log('[ScheduleAppointmentModal] v3.6 loaded - build 20251216');
+// v3.7 - Fixed date picker to show today fully visible - build 20251216b
+// Fixed: First date card was being cut off due to overflow styling
+console.log('[ScheduleAppointmentModal] v3.7 loaded - build 20251216b');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -31,6 +31,9 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     work_hours_end: '17:00',
     work_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
   });
+
+  // Ref for scrolling to today's date
+  const weekDatesRef = useRef(null);
 
   // Generate week dates starting from weekStart
   const getWeekDates = useCallback(() => {
@@ -149,6 +152,13 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       // Always start from today when modal opens
       setWeekStart(today);
       setSelectedDate(today);
+
+      // Scroll week dates container to the start after render
+      setTimeout(() => {
+        if (weekDatesRef.current) {
+          weekDatesRef.current.scrollLeft = 0;
+        }
+      }, 50);
     }
   }, [isOpen]);
 
@@ -438,7 +448,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
                 </svg>
               </button>
 
-              <div className="schedule-week-dates">
+              <div className="schedule-week-dates" ref={weekDatesRef}>
                 {weekDates.map((date, idx) => {
                   const dayName = getDayName(date);
                   const isWorkDay = teamMemberWorkHours.work_days.includes(dayName);
