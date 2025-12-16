@@ -1148,13 +1148,15 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                         user_metadata = None
 
                 has_token = user_metadata.get("invitation_token") is not None if user_metadata else False
-                token_preview = user_metadata.get("invitation_token", "")[:20] + "..." if user_metadata and user_metadata.get("invitation_token") else None
+                token_full = user_metadata.get("invitation_token") if user_metadata else None
+                expires = user_metadata.get("invitation_expires_at") if user_metadata else None
 
                 debug_info.append({
                     "email": email,
                     "is_active": is_active,
                     "has_invitation_token": has_token,
-                    "token_preview": token_preview,
+                    "token": token_full,  # Full token for debugging
+                    "expires_at": expires,
                     "metadata_keys": list(user_metadata.keys()) if user_metadata else []
                 })
 
