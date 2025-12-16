@@ -533,6 +533,205 @@ A calendar invite is attached to this email.
         return False
 
 
+def send_appointment_cancellation_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    team_member_name: str = None,
+    cancellation_reason: str = None
+):
+    """Send appointment cancellation email to attendee"""
+    try:
+        logger.info(f"Sending cancellation email to {attendee_email}")
+
+        reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {cancellation_reason}</p>" if cancellation_reason else ""
+        team_member_section = f" with {team_member_name}" if team_member_name else ""
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Cancelled</h1>
+                    </div>
+
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">Your appointment{team_member_section} has been cancelled.</p>
+
+                        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #991b1b;"><strong>Cancelled Appointment:</strong></p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {appointment_title}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            {reason_section}
+                        </div>
+
+                        <p style="font-size: 14px; color: #6b7280;">
+                            If you would like to reschedule, please contact us or book a new appointment.
+                        </p>
+
+                        <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+                            We apologize for any inconvenience.
+                        </p>
+                    </div>
+                </div>
+
+                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+                    Sent from Perennia AI - Pipeline 360
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+Appointment Cancelled
+
+Hi {attendee_name},
+
+Your appointment{team_member_section} has been cancelled.
+
+Cancelled Appointment:
+Title: {appointment_title}
+Date: {appointment_date}
+Time: {appointment_time}
+{f'Reason: {cancellation_reason}' if cancellation_reason else ''}
+
+If you would like to reschedule, please contact us or book a new appointment.
+
+We apologize for any inconvenience.
+
+- Perennia AI Team
+        """
+
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"Appointment Cancelled: {appointment_title}",
+            html_content=html_content,
+            text_content=text_content
+        )
+
+        if result.get("success"):
+            logger.info(f"Cancellation email sent successfully to {attendee_email}")
+            return True
+        else:
+            logger.warning(f"Failed to send cancellation email: {result.get('error', 'Unknown error')}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to send cancellation email: {e}", exc_info=True)
+        return False
+
+
+def send_team_member_cancellation_email(
+    team_member_email: str,
+    team_member_name: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    cancellation_reason: str = None,
+    cancelled_by: str = None
+):
+    """Send cancellation notification to team member"""
+    try:
+        logger.info(f"Sending cancellation notification to team member {team_member_email}")
+
+        reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {cancellation_reason}</p>" if cancellation_reason else ""
+        cancelled_by_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Cancelled by:</strong> {cancelled_by}</p>" if cancelled_by else ""
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Cancelled</h1>
+                    </div>
+
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi {team_member_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">An appointment with <strong>{attendee_name}</strong> has been cancelled.</p>
+
+                        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #991b1b;"><strong>Cancelled Appointment:</strong></p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Client:</strong> {attendee_name}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {appointment_title}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            {reason_section}
+                            {cancelled_by_section}
+                        </div>
+
+                        <p style="font-size: 14px; color: #6b7280;">
+                            This time slot is now available in your calendar.
+                        </p>
+                    </div>
+                </div>
+
+                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+                    Sent from Perennia AI - Pipeline 360
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+Appointment Cancelled
+
+Hi {team_member_name},
+
+An appointment with {attendee_name} has been cancelled.
+
+Cancelled Appointment:
+Client: {attendee_name}
+Title: {appointment_title}
+Date: {appointment_date}
+Time: {appointment_time}
+{f'Reason: {cancellation_reason}' if cancellation_reason else ''}
+{f'Cancelled by: {cancelled_by}' if cancelled_by else ''}
+
+This time slot is now available in your calendar.
+
+- Perennia AI Team
+        """
+
+        result = notification_service.send_email(
+            to_email=team_member_email,
+            subject=f"Appointment Cancelled: {attendee_name} - {appointment_title}",
+            html_content=html_content,
+            text_content=text_content
+        )
+
+        if result.get("success"):
+            logger.info(f"Team member cancellation notification sent to {team_member_email}")
+            return True
+        else:
+            logger.warning(f"Failed to send team member cancellation: {result.get('error', 'Unknown error')}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to send team member cancellation email: {e}", exc_info=True)
+        return False
+
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -1715,6 +1914,7 @@ async def update_appointment(
     user = await get_current_user(request, db)
 
     Appointment = _models['Appointment']
+    User = _models['User']
 
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id,
@@ -1728,6 +1928,7 @@ async def update_appointment(
         raise HTTPException(status_code=404, detail="Appointment not found")
 
     update_fields = appt_data.dict(exclude_unset=True)
+    is_cancellation = False
 
     # Handle status changes
     if "status" in update_fields:
@@ -1743,6 +1944,7 @@ async def update_appointment(
                 update_fields["no_show_at"] = datetime.utcnow()
             elif new_status == AppointmentStatus.CANCELLED:
                 update_fields["cancelled_at"] = datetime.utcnow()
+                is_cancellation = True
         except ValueError:
             del update_fields["status"]
 
@@ -1760,12 +1962,77 @@ async def update_appointment(
         update_fields["scheduled_end"] = new_start + timedelta(minutes=duration)
         update_fields["reschedule_count"] = appointment.reschedule_count + 1
 
+    # Store appointment details before update for cancellation emails
+    attendee_email = getattr(appointment, 'attendee_email', None)
+    attendee_name = getattr(appointment, 'attendee_name', None) or 'Valued Client'
+    appointment_title = appointment.title or 'Appointment'
+
+    # Format date and time for emails
+    if appointment.scheduled_start:
+        tz = pytz.timezone('America/Chicago')
+        local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        appointment_date = local_start.strftime('%B %d, %Y')
+        appointment_time = local_start.strftime('%I:%M %p %Z')
+    else:
+        appointment_date = 'TBD'
+        appointment_time = 'TBD'
+
+    # Get assigned team member info
+    team_member = None
+    team_member_name = None
+    team_member_email = None
+    if appointment.assigned_user_id:
+        team_member = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+        if team_member:
+            team_member_name = team_member.full_name or team_member.email
+            team_member_email = team_member.email
+
     for field, value in update_fields.items():
         setattr(appointment, field, value)
 
     db.commit()
 
-    return {"message": "Appointment updated"}
+    # Send cancellation emails if status changed to CANCELLED
+    emails_sent = []
+    if is_cancellation:
+        logger.info(f"Appointment {appointment_id} cancelled via PUT, sending notifications")
+
+        # Send to attendee if they have an email
+        if attendee_email:
+            try:
+                success = send_appointment_cancellation_email(
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    appointment_title=appointment_title,
+                    appointment_date=appointment_date,
+                    appointment_time=appointment_time,
+                    team_member_name=team_member_name,
+                    cancellation_reason=None
+                )
+                if success:
+                    emails_sent.append(attendee_email)
+            except Exception as e:
+                logger.error(f"Failed to send attendee cancellation email: {e}")
+
+        # Send to assigned team member if different from canceller
+        if team_member_email and team_member and team_member.id != user.id:
+            try:
+                success = send_team_member_cancellation_email(
+                    team_member_email=team_member_email,
+                    team_member_name=team_member_name,
+                    attendee_name=attendee_name,
+                    appointment_title=appointment_title,
+                    appointment_date=appointment_date,
+                    appointment_time=appointment_time,
+                    cancellation_reason=None,
+                    cancelled_by=user.full_name or user.email
+                )
+                if success:
+                    emails_sent.append(team_member_email)
+            except Exception as e:
+                logger.error(f"Failed to send team member cancellation email: {e}")
+
+    return {"message": "Appointment updated", "emails_sent": emails_sent}
 
 
 @router.post("/appointments/{appointment_id}/cancel")
@@ -1773,12 +2040,14 @@ async def cancel_appointment(
     appointment_id: int,
     reason: Optional[str] = None,
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
-    """Cancel an appointment"""
+    """Cancel an appointment and send cancellation notifications"""
     user = await get_current_user(request, db)
 
     Appointment = _models['Appointment']
+    User = _models['User']
 
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id,
@@ -1791,6 +2060,32 @@ async def cancel_appointment(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
+    # Store appointment details before cancellation for email notifications
+    attendee_email = getattr(appointment, 'attendee_email', None)
+    attendee_name = getattr(appointment, 'attendee_name', None) or 'Valued Client'
+    appointment_title = appointment.title or 'Appointment'
+
+    # Format date and time for emails
+    if appointment.scheduled_start:
+        tz = pytz.timezone('America/Chicago')
+        local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        appointment_date = local_start.strftime('%B %d, %Y')
+        appointment_time = local_start.strftime('%I:%M %p %Z')
+    else:
+        appointment_date = 'TBD'
+        appointment_time = 'TBD'
+
+    # Get assigned team member info
+    team_member = None
+    team_member_name = None
+    team_member_email = None
+    if appointment.assigned_user_id:
+        team_member = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+        if team_member:
+            team_member_name = team_member.full_name or team_member.email
+            team_member_email = team_member.email
+
+    # Cancel the appointment
     appointment.status = AppointmentStatus.CANCELLED
     appointment.cancelled_at = datetime.utcnow()
     appointment.cancellation_reason = reason
@@ -1801,7 +2096,48 @@ async def cancel_appointment(
 
     logger.info(f"Appointment {appointment_id} cancelled by user {user.id}")
 
-    return {"message": "Appointment cancelled"}
+    # Send cancellation emails
+    emails_sent = []
+
+    # Send to attendee if they have an email
+    if attendee_email:
+        try:
+            success = send_appointment_cancellation_email(
+                attendee_email=attendee_email,
+                attendee_name=attendee_name,
+                appointment_title=appointment_title,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                team_member_name=team_member_name,
+                cancellation_reason=reason
+            )
+            if success:
+                emails_sent.append(attendee_email)
+        except Exception as e:
+            logger.error(f"Failed to send attendee cancellation email: {e}")
+
+    # Send to assigned team member if different from canceller
+    if team_member_email and team_member and team_member.id != user.id:
+        try:
+            success = send_team_member_cancellation_email(
+                team_member_email=team_member_email,
+                team_member_name=team_member_name,
+                attendee_name=attendee_name,
+                appointment_title=appointment_title,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                cancellation_reason=reason,
+                cancelled_by=user.full_name or user.email
+            )
+            if success:
+                emails_sent.append(team_member_email)
+        except Exception as e:
+            logger.error(f"Failed to send team member cancellation email: {e}")
+
+    return {
+        "message": "Appointment cancelled",
+        "emails_sent": emails_sent
+    }
 
 
 # ============================================================================

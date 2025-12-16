@@ -88,14 +88,20 @@ def get_user_invitation_routes(
         """
         Invite a new user to the system.
 
-        Only admins and leadership can invite new users.
+        Admins, leadership, and management can invite new users.
         Creates a pending user account and sends an activation email.
         """
-        # Check permission
-        if current_user.permission_role not in ['admin', 'leadership']:
+        # Check permission - allow admin, leadership, and management roles
+        # Also allow the first user (master admin) regardless of role
+        allowed_roles = ['admin', 'leadership', 'management']
+        user_role = (current_user.permission_role or '').lower()
+        is_master_user = current_user.id == 1
+
+        if not is_master_user and user_role not in allowed_roles:
+            logger.warning(f"User {current_user.id} with role '{current_user.permission_role}' attempted to invite user")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins and leadership can invite users"
+                detail="Only admins, leadership, and management can invite users"
             )
 
         # Check if email already exists

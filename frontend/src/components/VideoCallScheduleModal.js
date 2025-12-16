@@ -7,7 +7,12 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
 const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall }) => {
-  const [weekStart, setWeekStart] = useState(new Date());
+  // Initialize weekStart to today - will be reset when modal opens
+  const [weekStart, setWeekStart] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [availableSlots, setAvailableSlots] = useState([]);

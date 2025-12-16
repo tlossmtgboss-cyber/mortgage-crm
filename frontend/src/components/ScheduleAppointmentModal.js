@@ -9,7 +9,12 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
 const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
-  const [weekStart, setWeekStart] = useState(new Date());
+  // Initialize weekStart to null - will be set to today when modal opens
+  const [weekStart, setWeekStart] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [meetingMode, setMeetingMode] = useState('phone');
@@ -134,15 +139,22 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     }
   }, [borrower?.id, fetchTeamMemberWorkHours]);
 
-  // Initialize selected date when modal opens
+  // Reset calendar to today whenever modal opens
+  // This is a separate effect to ensure it always runs when isOpen changes
   useEffect(() => {
     if (isOpen) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Start week from today
+      // Always start from today when modal opens
       setWeekStart(today);
       setSelectedDate(today);
+    }
+  }, [isOpen]);
+
+  // Initialize other state and fetch team members when modal opens
+  useEffect(() => {
+    if (isOpen) {
       setSelectedTime('');
       setSelectedTeamMember('');
       setError(null);
