@@ -35556,48 +35556,37 @@ async def delete_user(
             "UPDATE purl_tasks SET completed_by_user_id = NULL WHERE completed_by_user_id = :user_id",
             "UPDATE purl_messages SET sender_user_id = NULL WHERE sender_user_id = :user_id",
             "UPDATE purl_document_requests SET requested_by = NULL WHERE requested_by = :user_id",
-            # Video/Meeting tables
-            "UPDATE video_clips SET user_id = NULL WHERE user_id = :user_id",
+            # Video/Meeting tables (nullable columns only - NOT NULL ones handled in DELETE phase)
             "UPDATE video_clip_templates SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE video_clip_shares SET created_by_id = NULL WHERE created_by_id = :user_id",
             "UPDATE video_clip_views SET viewer_user_id = NULL WHERE viewer_user_id = :user_id",
             "UPDATE video_clip_analytics SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE video_clip_notifications SET recipient_id = NULL WHERE recipient_id = :user_id",
-            "UPDATE video_meeting_recordings SET host_user_id = NULL WHERE host_user_id = :user_id",
             "UPDATE video_meeting_recordings SET created_by = NULL WHERE created_by = :user_id",
             "UPDATE video_meeting_participants SET user_id = NULL WHERE user_id = :user_id",
             "UPDATE video_meeting_invites SET created_by = NULL WHERE created_by = :user_id",
             "UPDATE video_meeting_transcripts SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE video_meeting_recordings SET created_by = NULL WHERE created_by = :user_id",
             # AB Testing
             "UPDATE ab_tests SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
             "UPDATE ab_test_assignments SET user_id = NULL WHERE user_id = :user_id",
             "UPDATE ab_test_conversions SET user_id = NULL WHERE user_id = :user_id",
-            # Scheduler tables
-            "UPDATE scheduler_user_configs SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE scheduler_notification_preferences SET user_id = NULL WHERE user_id = :user_id",
+            # Scheduler tables (nullable columns only - NOT NULL ones handled in DELETE phase)
             "UPDATE smart_appointment_slots SET assigned_user_id = NULL WHERE assigned_user_id = :user_id",
             "UPDATE smart_appointment_slots SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
             "UPDATE smart_appointment_slots SET status_changed_by = NULL WHERE status_changed_by = :user_id",
             "UPDATE scheduler_analytics SET user_id = NULL WHERE user_id = :user_id",
             "UPDATE scheduler_slot_exceptions SET created_by_id = NULL WHERE created_by_id = :user_id",
             "UPDATE scheduler_calendar_sync SET user_id = NULL WHERE user_id = :user_id",
-            # Subscription/billing
+            # Subscription/billing (NOT NULL admin_user_id handled in DELETE phase)
             "UPDATE subscription_usage_alerts SET acknowledged_by = NULL WHERE acknowledged_by = :user_id",
-            "UPDATE subscription_admin_overrides SET admin_user_id = NULL WHERE admin_user_id = :user_id",
             # Profitability
             "UPDATE lo_compensation_plans SET user_id = NULL WHERE user_id = :user_id",
             "UPDATE commission_adjustments SET created_by = NULL WHERE created_by = :user_id",
             "UPDATE margin_alerts SET acknowledged_by = NULL WHERE acknowledged_by = :user_id",
             "UPDATE profitability_goals SET user_id = NULL WHERE user_id = :user_id",
-            # Onboarding
+            # Onboarding (NOT NULL columns handled in DELETE phase)
             "UPDATE onboarding_checklists SET created_by = NULL WHERE created_by = :user_id",
             "UPDATE onboarding_steps SET created_by = NULL WHERE created_by = :user_id",
-            "UPDATE onboarding_documents SET uploaded_by = NULL WHERE uploaded_by = :user_id",
-            "UPDATE onboarding_audit_log SET performed_by = NULL WHERE performed_by = :user_id",
             "UPDATE onboarding_audit_log SET user_id = NULL WHERE user_id = :user_id",
             "UPDATE user_creation_requests SET user_id = NULL WHERE user_id = :user_id",
-            "UPDATE user_creation_requests SET created_by = NULL WHERE created_by = :user_id",
             # VAPI/Telephony
             "UPDATE vapi_calls SET assigned_to = NULL WHERE assigned_to = :user_id",
             "UPDATE vapi_call_routes SET routed_to_user_id = NULL WHERE routed_to_user_id = :user_id",
@@ -35670,11 +35659,16 @@ async def delete_user(
             safe_execute(query, params)
 
         # =========================================================================
-        # PHASE 2: DELETE user-owned records
+        # PHASE 2: DELETE user-owned records (tables with NOT NULL foreign keys)
         # =========================================================================
         delete_queries = [
+            # API keys and settings
+            "DELETE FROM api_keys WHERE user_id = :user_id",
+            "DELETE FROM user_settings WHERE user_id = :user_id",
             # Core user data
             "DELETE FROM onboarding_progress WHERE user_id = :user_id",
+            "DELETE FROM onboarding_errors WHERE user_id = :user_id",
+            "DELETE FROM verification_tokens WHERE user_id = :user_id",
             "DELETE FROM subscriptions WHERE user_id = :user_id",
             "DELETE FROM notifications WHERE user_id = :user_id",
             "DELETE FROM calendar_events WHERE user_id = :user_id",
@@ -35696,11 +35690,24 @@ async def delete_user(
             "DELETE FROM conversation_message_vectors WHERE user_id = :user_id",
             # VAPI
             "DELETE FROM vapi_user_settings WHERE user_id = :user_id",
+            # Telephony/Dialer (NOT NULL agent_id)
+            "DELETE FROM agent_telephony_settings WHERE user_id = :user_id",
+            "DELETE FROM dialer_session_tasks WHERE session_id IN (SELECT id FROM dialer_sessions WHERE agent_id = :user_id)",
+            "DELETE FROM dialer_sessions WHERE agent_id = :user_id",
+            "DELETE FROM call_logs WHERE agent_id = :user_id",
+            "DELETE FROM active_calls WHERE agent_id = :user_id",
             # Workflow SLA assignments (with CASCADE)
             "DELETE FROM user_task_assignments WHERE assigned_user_id = :user_id",
             "DELETE FROM user_escalation_assignments WHERE assigned_user_id = :user_id",
             # PURL user tokens
             "DELETE FROM purl_user_tokens WHERE user_id = :user_id",
+            # Video clips (NOT NULL user_id)
+            "DELETE FROM video_clip_notifications WHERE recipient_id = :user_id",
+            "DELETE FROM video_clip_shares WHERE created_by_id = :user_id",
+            "DELETE FROM video_clips WHERE user_id = :user_id",
+            # Video meetings (NOT NULL host_user_id)
+            "DELETE FROM video_meeting_participants WHERE meeting_id IN (SELECT id FROM video_meeting_recordings WHERE host_user_id = :user_id)",
+            "DELETE FROM video_meeting_recordings WHERE host_user_id = :user_id",
             # Role/compliance
             "DELETE FROM role_change_history WHERE user_id = :user_id",
             "DELETE FROM user_api_tokens WHERE user_id = :user_id",
@@ -35714,6 +35721,13 @@ async def delete_user(
             "DELETE FROM calendar_sync_settings WHERE user_id = :user_id",
             # Scheduler
             "DELETE FROM scheduler_user_configs WHERE user_id = :user_id",
+            "DELETE FROM scheduler_notification_preferences WHERE user_id = :user_id",
+            # Subscription admin overrides (NOT NULL admin_user_id)
+            "DELETE FROM subscription_admin_overrides WHERE admin_user_id = :user_id",
+            # Onboarding tables with NOT NULL foreign keys
+            "DELETE FROM onboarding_audit_log WHERE performed_by = :user_id",
+            "DELETE FROM onboarding_documents WHERE uploaded_by = :user_id",
+            "DELETE FROM user_creation_requests WHERE created_by = :user_id",
         ]
 
         for query in delete_queries:
