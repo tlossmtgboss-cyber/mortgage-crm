@@ -35494,7 +35494,7 @@ async def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete user (admin only)"""
+    """Delete user (admin only) - handles all foreign key constraints"""
     # Prevent self-deletion
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
@@ -35503,44 +35503,221 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    try:
-        # Handle ALL related records before deletion
-        # Tables with nullable foreign keys - set to NULL
-        db.execute(text("UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE leads SET created_by_id = NULL WHERE created_by_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE tasks SET created_by_id = NULL WHERE created_by_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE contacts SET user_id = NULL WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE contacts SET created_by = NULL WHERE created_by = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE team_members SET user_id = NULL WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE team_members SET created_by = NULL WHERE created_by = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE documents SET classified_by_user_id = NULL WHERE classified_by_user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE document_processing_queue SET processed_by_user_id = NULL WHERE processed_by_user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE lead_status_changes SET changed_by_id = NULL WHERE changed_by_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE lead_conditions SET created_by_id = NULL WHERE created_by_id = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE alerts SET resolved_by = NULL WHERE resolved_by = :user_id"), {"user_id": user_id})
-        db.execute(text("UPDATE compliance_issues SET resolved_by = NULL WHERE resolved_by = :user_id"), {"user_id": user_id})
+    def safe_execute(query, params):
+        """Execute query, ignoring errors if table doesn't exist"""
+        try:
+            db.execute(text(query), params)
+        except Exception as e:
+            if "does not exist" not in str(e).lower() and "no such table" not in str(e).lower():
+                logger.warning(f"Query warning: {query[:50]}... - {str(e)[:100]}")
 
-        # Tables that should be deleted (owned by user)
-        db.execute(text("DELETE FROM onboarding_progress WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM subscriptions WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM notifications WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM calendar_events WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM calendar_availability WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM user_calendar_settings WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM email_inboxes WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM email_folder_subscriptions WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM user_profiles WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM user_permissions WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM activity_logs WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM ai_coaching_sessions WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM impersonation_sessions WHERE manager_id = :user_id OR impersonated_user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM user_kpis WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM user_goals WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM saved_filters WHERE user_id = :user_id"), {"user_id": user_id})
-        db.execute(text("DELETE FROM email_signatures WHERE user_id = :user_id"), {"user_id": user_id})
+    try:
+        params = {"user_id": user_id}
+
+        # =========================================================================
+        # PHASE 1: SET NULL on nullable foreign key columns
+        # =========================================================================
+        nullify_queries = [
+            # Core CRM tables
+            "UPDATE leads SET owner_id = NULL WHERE owner_id = :user_id",
+            "UPDATE leads SET created_by_id = NULL WHERE created_by_id = :user_id",
+            "UPDATE loans SET loan_officer_id = NULL WHERE loan_officer_id = :user_id",
+            "UPDATE tasks SET assigned_to_id = NULL WHERE assigned_to_id = :user_id",
+            "UPDATE tasks SET created_by_id = NULL WHERE created_by_id = :user_id",
+            "UPDATE contacts SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE contacts SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE team_members SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE team_members SET created_by = NULL WHERE created_by = :user_id",
+            # Documents
+            "UPDATE documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
+            "UPDATE documents SET classified_by_user_id = NULL WHERE classified_by_user_id = :user_id",
+            "UPDATE document_processing_queue SET processed_by_user_id = NULL WHERE processed_by_user_id = :user_id",
+            # Status tracking
+            "UPDATE lead_status_changes SET changed_by_id = NULL WHERE changed_by_id = :user_id",
+            "UPDATE lead_conditions SET created_by_id = NULL WHERE created_by_id = :user_id",
+            "UPDATE alerts SET resolved_by = NULL WHERE resolved_by = :user_id",
+            "UPDATE compliance_issues SET resolved_by = NULL WHERE resolved_by = :user_id",
+            # Workflow tables
+            "UPDATE workflow_templates SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE workflow_tasks SET assigned_to = NULL WHERE assigned_to = :user_id",
+            "UPDATE workflow_steps SET assigned_to = NULL WHERE assigned_to = :user_id",
+            "UPDATE workflow_config_tasks SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE workflow_config_tasks SET assigned_user_id = NULL WHERE assigned_user_id = :user_id",
+            "UPDATE workflow_config_escalations SET resolved_by_id = NULL WHERE resolved_by_id = :user_id",
+            # PURL/Portal tables
+            "UPDATE purl_workspaces SET owner_user_id = NULL WHERE owner_user_id = :user_id",
+            "UPDATE purl_sessions SET auth_user_id = NULL WHERE auth_user_id = :user_id",
+            "UPDATE purl_access_tokens SET revoked_by = NULL WHERE revoked_by = :user_id",
+            "UPDATE purl_access_tokens SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE purl_documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
+            "UPDATE purl_documents SET reviewed_by = NULL WHERE reviewed_by = :user_id",
+            "UPDATE purl_milestones SET assigned_to = NULL WHERE assigned_to = :user_id",
+            "UPDATE purl_tasks SET assigned_to_user_id = NULL WHERE assigned_to_user_id = :user_id",
+            "UPDATE purl_tasks SET completed_by_user_id = NULL WHERE completed_by_user_id = :user_id",
+            "UPDATE purl_messages SET sender_user_id = NULL WHERE sender_user_id = :user_id",
+            "UPDATE purl_document_requests SET requested_by = NULL WHERE requested_by = :user_id",
+            # Video/Meeting tables
+            "UPDATE video_clips SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE video_clip_templates SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE video_clip_shares SET created_by_id = NULL WHERE created_by_id = :user_id",
+            "UPDATE video_clip_views SET viewer_user_id = NULL WHERE viewer_user_id = :user_id",
+            "UPDATE video_clip_analytics SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE video_clip_notifications SET recipient_id = NULL WHERE recipient_id = :user_id",
+            "UPDATE video_meeting_recordings SET host_user_id = NULL WHERE host_user_id = :user_id",
+            "UPDATE video_meeting_recordings SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE video_meeting_participants SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE video_meeting_invites SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE video_meeting_transcripts SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE video_meeting_recordings SET created_by = NULL WHERE created_by = :user_id",
+            # AB Testing
+            "UPDATE ab_tests SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
+            "UPDATE ab_test_assignments SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE ab_test_conversions SET user_id = NULL WHERE user_id = :user_id",
+            # Scheduler tables
+            "UPDATE scheduler_user_configs SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE scheduler_notification_preferences SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE smart_appointment_slots SET assigned_user_id = NULL WHERE assigned_user_id = :user_id",
+            "UPDATE smart_appointment_slots SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
+            "UPDATE smart_appointment_slots SET status_changed_by = NULL WHERE status_changed_by = :user_id",
+            "UPDATE scheduler_analytics SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE scheduler_slot_exceptions SET created_by_id = NULL WHERE created_by_id = :user_id",
+            "UPDATE scheduler_calendar_sync SET user_id = NULL WHERE user_id = :user_id",
+            # Subscription/billing
+            "UPDATE subscription_usage_alerts SET acknowledged_by = NULL WHERE acknowledged_by = :user_id",
+            "UPDATE subscription_admin_overrides SET admin_user_id = NULL WHERE admin_user_id = :user_id",
+            # Profitability
+            "UPDATE lo_compensation_plans SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE commission_adjustments SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE margin_alerts SET acknowledged_by = NULL WHERE acknowledged_by = :user_id",
+            "UPDATE profitability_goals SET user_id = NULL WHERE user_id = :user_id",
+            # Onboarding
+            "UPDATE onboarding_checklists SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE onboarding_steps SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE onboarding_documents SET uploaded_by = NULL WHERE uploaded_by = :user_id",
+            "UPDATE onboarding_audit_log SET performed_by = NULL WHERE performed_by = :user_id",
+            "UPDATE onboarding_audit_log SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE user_creation_requests SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE user_creation_requests SET created_by = NULL WHERE created_by = :user_id",
+            # VAPI/Telephony
+            "UPDATE vapi_calls SET assigned_to = NULL WHERE assigned_to = :user_id",
+            "UPDATE vapi_call_routes SET routed_to_user_id = NULL WHERE routed_to_user_id = :user_id",
+            "UPDATE telephony_user_settings SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE call_recordings SET agent_id = NULL WHERE agent_id = :user_id",
+            "UPDATE call_transcripts SET agent_id = NULL WHERE agent_id = :user_id",
+            "UPDATE phone_number_assignments SET agent_id = NULL WHERE agent_id = :user_id",
+            "UPDATE call_analytics SET agent_id = NULL WHERE agent_id = :user_id",
+            "UPDATE blocklist_entries SET added_by_id = NULL WHERE added_by_id = :user_id",
+            # Workflow SLA
+            "UPDATE workflow_sla_pauses SET cancelled_by_id = NULL WHERE cancelled_by_id = :user_id",
+            "UPDATE user_task_assignments SET assigned_by_id = NULL WHERE assigned_by_id = :user_id",
+            "UPDATE user_escalation_assignments SET assigned_by_id = NULL WHERE assigned_by_id = :user_id",
+            # Perennia docs
+            "UPDATE perennia_documents SET uploaded_by_user_id = NULL WHERE uploaded_by_user_id = :user_id",
+            "UPDATE perennia_share_links SET recipient_user_id = NULL WHERE recipient_user_id = :user_id",
+            # Other tables
+            "UPDATE email_templates SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE sms_templates SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE rate_locks SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE rate_lock_reversals SET reversed_by = NULL WHERE reversed_by = :user_id",
+            "UPDATE marketing_templates SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE integration_credentials SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE google_credentials SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE outlook_credentials SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE los_sync_mappings SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE sms_conversations SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE reporting_schedules SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE custom_dashboards SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE dashboard_widgets SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE saved_reports SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE email_campaigns SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE referral_partners SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE borrower_document_reviews SET reviewed_by = NULL WHERE reviewed_by = :user_id",
+            "UPDATE borrower_condition_waivers SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE loan_team_members SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE loan_team_members SET merged_by = NULL WHERE merged_by = :user_id",
+            "UPDATE user_availability SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE api_usage_logs SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE compliance_certifications SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE compliance_certifications SET approved_by_user_id = NULL WHERE approved_by_user_id = :user_id",
+            "UPDATE workspace_templates SET created_by = NULL WHERE created_by = :user_id",
+            "UPDATE lead_import_jobs SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE external_connections SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE webhook_subscriptions SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE pipeline_roles SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE pipeline_roles SET backup_user_id = NULL WHERE backup_user_id = :user_id",
+            "UPDATE pricing_exceptions SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE pricing_approval_history SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE compensation_adjustments SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE document_versions SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE role_change_history SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE role_change_history SET changed_by_id = NULL WHERE changed_by_id = :user_id",
+            "UPDATE user_api_tokens SET revoked_by_id = NULL WHERE revoked_by_id = :user_id",
+            "UPDATE user_compliance_training SET assessed_by_id = NULL WHERE assessed_by_id = :user_id",
+            "UPDATE user_license_certifications SET granted_by = NULL WHERE granted_by = :user_id",
+            "UPDATE user_background_checks SET decided_by_id = NULL WHERE decided_by_id = :user_id",
+            "UPDATE user_employment_history SET certified_by_id = NULL WHERE certified_by_id = :user_id",
+            "UPDATE workspace_access_grants SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE workspace_access_grants SET owner_id = NULL WHERE owner_id = :user_id",
+            "UPDATE lead_capture_submissions SET owner_id = NULL WHERE owner_id = :user_id",
+            "UPDATE lead_capture_submissions SET reviewed_by_id = NULL WHERE reviewed_by_id = :user_id",
+            "UPDATE purl_verification_requests SET verified_by_id = NULL WHERE verified_by_id = :user_id",
+            "UPDATE workspace_settings SET updated_by_id = NULL WHERE updated_by_id = :user_id",
+            "UPDATE team_invitations SET invited_by_user_id = NULL WHERE invited_by_user_id = :user_id",
+            "UPDATE team_invitations SET user_id = NULL WHERE user_id = :user_id",
+        ]
+
+        for query in nullify_queries:
+            safe_execute(query, params)
+
+        # =========================================================================
+        # PHASE 2: DELETE user-owned records
+        # =========================================================================
+        delete_queries = [
+            # Core user data
+            "DELETE FROM onboarding_progress WHERE user_id = :user_id",
+            "DELETE FROM subscriptions WHERE user_id = :user_id",
+            "DELETE FROM notifications WHERE user_id = :user_id",
+            "DELETE FROM calendar_events WHERE user_id = :user_id",
+            "DELETE FROM calendar_availability WHERE user_id = :user_id",
+            "DELETE FROM user_calendar_settings WHERE user_id = :user_id",
+            "DELETE FROM email_inboxes WHERE user_id = :user_id",
+            "DELETE FROM email_folder_subscriptions WHERE user_id = :user_id",
+            "DELETE FROM user_profiles WHERE user_id = :user_id",
+            "DELETE FROM user_permissions WHERE user_id = :user_id",
+            "DELETE FROM activity_logs WHERE user_id = :user_id",
+            "DELETE FROM ai_coaching_sessions WHERE user_id = :user_id",
+            "DELETE FROM impersonation_sessions WHERE manager_id = :user_id OR impersonated_user_id = :user_id",
+            "DELETE FROM user_kpis WHERE user_id = :user_id",
+            "DELETE FROM user_goals WHERE user_id = :user_id",
+            "DELETE FROM saved_filters WHERE user_id = :user_id",
+            "DELETE FROM email_signatures WHERE user_id = :user_id",
+            # Conversation memory
+            "DELETE FROM conversation_memories WHERE user_id = :user_id",
+            "DELETE FROM conversation_message_vectors WHERE user_id = :user_id",
+            # VAPI
+            "DELETE FROM vapi_user_settings WHERE user_id = :user_id",
+            # Workflow SLA assignments (with CASCADE)
+            "DELETE FROM user_task_assignments WHERE assigned_user_id = :user_id",
+            "DELETE FROM user_escalation_assignments WHERE assigned_user_id = :user_id",
+            # PURL user tokens
+            "DELETE FROM purl_user_tokens WHERE user_id = :user_id",
+            # Role/compliance
+            "DELETE FROM role_change_history WHERE user_id = :user_id",
+            "DELETE FROM user_api_tokens WHERE user_id = :user_id",
+            "DELETE FROM user_api_key_revocations WHERE user_id = :user_id",
+            "DELETE FROM user_compliance_training WHERE user_id = :user_id",
+            "DELETE FROM user_license_certifications WHERE user_id = :user_id",
+            "DELETE FROM user_background_checks WHERE employee_id = :user_id",
+            "DELETE FROM user_compliance_acknowledgements WHERE user_id = :user_id",
+            "DELETE FROM user_employment_history WHERE employee_id = :user_id",
+            # Calendar sync
+            "DELETE FROM calendar_sync_settings WHERE user_id = :user_id",
+            # Scheduler
+            "DELETE FROM scheduler_user_configs WHERE user_id = :user_id",
+        ]
+
+        for query in delete_queries:
+            safe_execute(query, params)
 
         # Now delete the user
         db.delete(user)
