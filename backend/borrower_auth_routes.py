@@ -1435,10 +1435,15 @@ async def submit_application(
         # CREATE LEAD IN CRM
         # =================================================================
 
-        # Calculate loan details
-        purchase_price = float(submission.propertyData.get("purchasePrice", 0) or 0)
-        down_payment = float(submission.propertyData.get("downPayment", 0) or 0)
-        loan_amount = purchase_price - down_payment
+        # Calculate loan details - use paymentEstimate if available (from budget calculator)
+        if submission.paymentEstimate:
+            purchase_price = float(submission.paymentEstimate.get("homeValue", 0) or 0)
+            down_payment = float(submission.paymentEstimate.get("downPaymentAmount", 0) or 0)
+            loan_amount = float(submission.paymentEstimate.get("loanAmount", 0) or 0)
+        else:
+            purchase_price = float(submission.propertyData.get("purchasePrice", 0) or 0)
+            down_payment = float(submission.propertyData.get("downPayment", 0) or 0)
+            loan_amount = purchase_price - down_payment
         ltv = (loan_amount / purchase_price * 100) if purchase_price > 0 else 0
         annual_income = float(submission.incomeData.get("annualSalary", 0) or 0)
 
@@ -1738,6 +1743,168 @@ async def submit_application(
                     except Exception as token_error:
                         logger.warning(f"Failed to generate portal token: {token_error}")
                         portal_token = None
+
+                    # =================================================================
+                    # CREATE PURL LOAN RECORD FOR PORTAL
+                    # =================================================================
+                    try:
+                        # Get property address components
+                        property_address = {
+                            "street": submission.propertyData.get("address", ""),
+                            "city": submission.propertyData.get("city", ""),
+                            "state": submission.propertyData.get("state", ""),
+                            "zip": submission.propertyData.get("zip", ""),
+                        }
+
+                        db.execute(text("""
+                            INSERT INTO purl_loans (
+                                organization_id, workspace_id, loan_number, status,
+                                loan_purpose, product_type, loan_amount,
+                                property_address, property_type, meta_data,
+                                created_at, updated_at
+                            )
+                            VALUES (
+                                :org_id, :workspace_id, :loan_number, 'processing',
+                                'purchase', :product_type, :loan_amount,
+                                :property_address, :property_type, :meta_data,
+                                :created_at, :updated_at
+                            )
+                        """), {
+                            "org_id": org_id,
+                            "workspace_id": workspace_id,
+                            "loan_number": f"APP-{lead_id}" if lead_id else f"APP-{workspace_id}",
+                            "product_type": submission.propertyData.get("loanProgram", "Conventional"),
+                            "loan_amount": loan_amount,
+                            "property_address": json.dumps(property_address),
+                            "property_type": submission.propertyData.get("propertyType", "Single Family"),
+                            "meta_data": json.dumps({
+                                "purchase_price": purchase_price,
+                                "down_payment": down_payment,
+                                "ltv": round(ltv, 2),
+                                "lead_id": lead_id,
+                            }),
+                            "created_at": submission_date,
+                            "updated_at": submission_date,
+                        })
+                        db.commit()
+                        logger.info(f"Created PURL loan record for workspace {workspace_id}")
+                    except Exception as loan_error:
+                        logger.warning(f"Failed to create PURL loan: {loan_error}")
+
+                    # =================================================================
+                    # CREATE NEEDS LIST TASKS BASED ON DECLARATIONS
+                    # =================================================================
+                    try:
+                        needs_tasks = []
+
+                        # Self-employed documentation
+                        if submission.declarations.get("self_employed") in ["yes", "side_business"]:
+                            needs_tasks.append({
+                                "title": "Business tax returns (2 years)",
+                                "category": "income",
+                                "description": "Personal and business tax returns from the past 2 years"
+                            })
+                            needs_tasks.append({
+                                "title": "Profit & loss statement (YTD)",
+                                "category": "income",
+                                "description": "Current year-to-date profit and loss statement"
+                            })
+                            needs_tasks.append({
+                                "title": "Business bank statements (3 months)",
+                                "category": "income",
+                                "description": "Most recent 3 months of business bank statements"
+                            })
+                        else:
+                            needs_tasks.append({
+                                "title": "Recent pay stubs (30 days)",
+                                "category": "income",
+                                "description": "Pay stubs covering the most recent 30-day period"
+                            })
+                            needs_tasks.append({
+                                "title": "W-2s (last 2 years)",
+                                "category": "income",
+                                "description": "W-2 forms from your employer for the past 2 years"
+                            })
+
+                        # Gift funds documentation
+                        if submission.declarations.get("gift_funds") == "yes":
+                            needs_tasks.append({
+                                "title": "Gift letter from donor",
+                                "category": "assets",
+                                "description": "Signed letter from the gift donor confirming the gift"
+                            })
+                            needs_tasks.append({
+                                "title": "Donor bank statements",
+                                "category": "assets",
+                                "description": "Bank statements showing the source of gift funds"
+                            })
+
+                        # Veteran documentation
+                        if submission.declarations.get("veteran") and submission.declarations.get("veteran") != "no":
+                            needs_tasks.append({
+                                "title": "DD-214 or Certificate of Eligibility",
+                                "category": "military",
+                                "description": "Military discharge papers or VA Certificate of Eligibility"
+                            })
+
+                        # IRS payment plan documentation
+                        if submission.declarations.get("irs_balance_owed") in ["yes", "payment_plan"]:
+                            needs_tasks.append({
+                                "title": "IRS payment arrangement documentation",
+                                "category": "legal",
+                                "description": "Documentation of your IRS payment plan or balance owed"
+                            })
+
+                        # Standard documents for all applications
+                        needs_tasks.append({
+                            "title": "Bank statements (2 months)",
+                            "category": "assets",
+                            "description": "Most recent 2 months of all bank account statements"
+                        })
+                        needs_tasks.append({
+                            "title": "Government-issued ID",
+                            "category": "identity",
+                            "description": "Driver's license or passport"
+                        })
+
+                        # Property-specific documents
+                        if submission.declarations.get("found_property") == "yes":
+                            needs_tasks.append({
+                                "title": "Purchase contract",
+                                "category": "property",
+                                "description": "Signed purchase agreement for the property"
+                            })
+
+                        # Insert tasks
+                        for idx, task in enumerate(needs_tasks):
+                            db.execute(text("""
+                                INSERT INTO purl_tasks (
+                                    organization_id, workspace_id, task_type, title,
+                                    description, status, priority, category, order_index,
+                                    created_at, updated_at
+                                )
+                                VALUES (
+                                    :org_id, :workspace_id, 'document', :title,
+                                    :description, 'pending', 'medium', :category, :order_index,
+                                    :created_at, :updated_at
+                                )
+                            """), {
+                                "org_id": org_id,
+                                "workspace_id": workspace_id,
+                                "title": task["title"],
+                                "description": task["description"],
+                                "category": task["category"],
+                                "order_index": idx,
+                                "created_at": submission_date,
+                                "updated_at": submission_date,
+                            })
+
+                        db.commit()
+                        logger.info(f"Created {len(needs_tasks)} needs list tasks for workspace {workspace_id}")
+                    except Exception as task_error:
+                        logger.warning(f"Failed to create needs list tasks: {task_error}")
+                        import traceback
+                        logger.warning(traceback.format_exc())
 
             except Exception as ws_error:
                 logger.warning(f"Workspace creation failed (non-critical): {ws_error}")
