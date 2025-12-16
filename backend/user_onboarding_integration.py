@@ -1062,42 +1062,60 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             }
 
         # Try invitation system (token stored in user_metadata JSON)
-        from sqlalchemy import cast, String
-        from sqlalchemy.dialects.postgresql import JSONB
+        # Use raw SQL to avoid ORM issues with missing columns
+        from sqlalchemy import text
+        try:
+            # Query users with matching invitation token using raw SQL
+            result = db.execute(text("""
+                SELECT id, email, full_name, is_active, hashed_password, user_metadata
+                FROM users
+                WHERE user_metadata IS NOT NULL
+            """))
+            users_data = result.fetchall()
 
-        # Query users with matching invitation token in user_metadata
-        users = db.query(User).filter(User.user_metadata.isnot(None)).all()
-        for user in users:
-            if user.user_metadata and user.user_metadata.get("invitation_token") == token:
-                # Check expiration
-                expires_at_str = user.user_metadata.get("invitation_expires_at")
-                if expires_at_str:
-                    expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
-                    if expires_at < datetime.now(timezone.utc):
-                        raise HTTPException(status_code=400, detail="Activation token has expired. Please contact your administrator for a new link.")
+            for row in users_data:
+                user_id, email, full_name, is_active, hashed_password, user_metadata = row
 
-                # Check if already activated
-                if user.is_active and user.hashed_password and user.hashed_password != "":
-                    raise HTTPException(status_code=400, detail="Account has already been activated")
+                # Parse user_metadata - it might be a string or dict
+                if isinstance(user_metadata, str):
+                    import json
+                    try:
+                        user_metadata = json.loads(user_metadata)
+                    except:
+                        continue
 
-                # Parse name
-                first_name = ""
-                last_name = ""
-                if user.full_name:
-                    parts = user.full_name.split(" ", 1)
-                    first_name = parts[0]
-                    last_name = parts[1] if len(parts) > 1 else ""
+                if user_metadata and user_metadata.get("invitation_token") == token:
+                    # Check expiration
+                    expires_at_str = user_metadata.get("invitation_expires_at")
+                    if expires_at_str:
+                        expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+                        if expires_at < datetime.now(timezone.utc):
+                            raise HTTPException(status_code=400, detail="Activation token has expired. Please contact your administrator for a new link.")
 
-                return {
-                    "success": True,
-                    "data": {
-                        "user_id": user.id,
-                        "email": user.email,
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "source": "invitation"
+                    # Check if already activated
+                    if is_active and hashed_password and hashed_password != "":
+                        raise HTTPException(status_code=400, detail="Account has already been activated")
+
+                    # Parse name
+                    first_name = ""
+                    last_name = ""
+                    if full_name:
+                        parts = full_name.split(" ", 1)
+                        first_name = parts[0]
+                        last_name = parts[1] if len(parts) > 1 else ""
+
+                    return {
+                        "success": True,
+                        "data": {
+                            "user_id": user_id,
+                            "email": email,
+                            "first_name": first_name,
+                            "last_name": last_name,
+                            "source": "invitation"
+                        }
                     }
-                }
+        except Exception as e:
+            logger.warning(f"Error querying invitation tokens: {e}")
 
         raise HTTPException(status_code=404, detail="Invalid activation token")
 
@@ -1163,54 +1181,90 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                 raise HTTPException(status_code=500, detail=str(e))
 
         # Try invitation system (token stored in user_metadata JSON)
-        users = db.query(User).filter(User.user_metadata.isnot(None)).all()
-        for user in users:
-            if user.user_metadata and user.user_metadata.get("invitation_token") == token:
-                # Check expiration
-                expires_at_str = user.user_metadata.get("invitation_expires_at")
-                if expires_at_str:
-                    expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
-                    if expires_at < datetime.now(timezone.utc):
-                        raise HTTPException(status_code=400, detail="Activation token has expired")
+        # Use raw SQL to avoid ORM issues with missing columns
+        try:
+            result = db.execute(text("""
+                SELECT id, email, full_name, is_active, hashed_password, user_metadata
+                FROM users
+                WHERE user_metadata IS NOT NULL
+            """))
+            users_data = result.fetchall()
 
-                # Check if already activated
-                if user.is_active and user.hashed_password and user.hashed_password != "":
-                    raise HTTPException(status_code=400, detail="Account has already been activated")
+            for row in users_data:
+                user_id, email, full_name, is_active, hashed_password, user_metadata_raw = row
 
-                try:
-                    # Update user password and activate
-                    user.hashed_password = pwd_context.hash(password)
-                    user.is_active = True
+                # Parse user_metadata - it might be a string or dict
+                if isinstance(user_metadata_raw, str):
+                    import json
+                    try:
+                        user_metadata = json.loads(user_metadata_raw)
+                    except:
+                        continue
+                else:
+                    user_metadata = user_metadata_raw
 
-                    # Update user_metadata to mark as activated
-                    metadata = user.user_metadata.copy() if user.user_metadata else {}
-                    metadata["status"] = "active"
-                    metadata["activated_at"] = datetime.now(timezone.utc).isoformat()
-                    metadata["invitation_token"] = None  # Clear token
-                    user.user_metadata = metadata
+                if user_metadata and user_metadata.get("invitation_token") == token:
+                    # Check expiration
+                    expires_at_str = user_metadata.get("invitation_expires_at")
+                    if expires_at_str:
+                        expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+                        if expires_at < datetime.now(timezone.utc):
+                            raise HTTPException(status_code=400, detail="Activation token has expired")
 
-                    # Create audit log
-                    audit = AuditLog(
-                        user_id=user.id,
-                        action="account_activated",
-                        performed_by=user.id,
-                        details={"activated_via": "email_token", "source": "invitation"}
-                    )
-                    db.add(audit)
-                    db.commit()
+                    # Check if already activated
+                    if is_active and hashed_password and hashed_password != "":
+                        raise HTTPException(status_code=400, detail="Account has already been activated")
 
-                    return {
-                        "success": True,
-                        "data": {
-                            "user_id": user.id,
-                            "email": user.email,
-                            "status": "active",
-                            "message": "Account activated successfully. You can now log in."
+                    try:
+                        # Update user password and activate using raw SQL
+                        import json
+                        hashed_pw = pwd_context.hash(password)
+
+                        # Update user_metadata
+                        metadata = user_metadata.copy() if user_metadata else {}
+                        metadata["status"] = "active"
+                        metadata["activated_at"] = datetime.now(timezone.utc).isoformat()
+                        metadata["invitation_token"] = None  # Clear token
+
+                        db.execute(text("""
+                            UPDATE users
+                            SET hashed_password = :hashed_password,
+                                is_active = :is_active,
+                                user_metadata = :user_metadata
+                            WHERE id = :user_id
+                        """), {
+                            "hashed_password": hashed_pw,
+                            "is_active": True,
+                            "user_metadata": json.dumps(metadata),
+                            "user_id": user_id
+                        })
+
+                        # Create audit log
+                        audit = AuditLog(
+                            user_id=user_id,
+                            action="account_activated",
+                            performed_by=user_id,
+                            details={"activated_via": "email_token", "source": "invitation"}
+                        )
+                        db.add(audit)
+                        db.commit()
+
+                        return {
+                            "success": True,
+                            "data": {
+                                "user_id": user_id,
+                                "email": email,
+                                "status": "active",
+                                "message": "Account activated successfully. You can now log in."
+                            }
                         }
-                    }
-                except Exception as e:
-                    db.rollback()
-                    raise HTTPException(status_code=500, detail=str(e))
+                    except Exception as e:
+                        db.rollback()
+                        raise HTTPException(status_code=500, detail=str(e))
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Error querying invitation tokens for completion: {e}")
 
         raise HTTPException(status_code=404, detail="Invalid activation token")
 
