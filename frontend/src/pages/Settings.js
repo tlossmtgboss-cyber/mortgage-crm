@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI, agentAPI } from '../services/api';
-import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
