@@ -597,10 +597,9 @@ function CalendarSidebar({ leadId, loanId, children }) {
           setEmailData(null);
           setShowAppointmentModal(true);
         }}
-        title="Click to create a new appointment, or drag an email here"
+        title="Click to create a new appointment"
       >
-        <span>📧 Drag email here to schedule</span>
-        <span className="click-hint">(or click to create)</span>
+        <span>📅 Click here to schedule</span>
       </div>
 
       {/* Appointments List */}
