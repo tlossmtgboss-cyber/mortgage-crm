@@ -1674,6 +1674,12 @@ textarea.text-input {
   gap: 8px;
 }
 
+.user-email-small {
+  font-size: 12px;
+  color: #718096;
+  margin-top: 2px;
+}
+
 .user-id {
   font-size: 11px;
   color: #a0aec0;

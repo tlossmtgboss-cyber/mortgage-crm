@@ -755,9 +755,9 @@ const DECLARATION_QUESTIONS = [
   },
   {
     id: 'irs_amount_owed',
-    question: 'Approximately how much do you owe the IRS?',
+    question: "What's the monthly payment?",
     type: 'currency',
-    placeholder: 'Amount owed',
+    placeholder: '0',
     hint: 'This helps us understand your full financial picture.',
     showIf: { field: 'irs_balance_owed', values: ['yes', 'payment_plan'] },
   },
@@ -1213,17 +1213,38 @@ export default function RefinanceApplication() {
       if (question.type === 'currency') {
         return (
           <div className="declaration-input-container">
-            <div className="currency-input-wrapper">
-              <span className="currency-prefix">$</span>
+            <div className="currency-input-wrapper" style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              maxWidth: '300px',
+              margin: '0 auto'
+            }}>
+              <span style={{
+                fontSize: '24px',
+                fontWeight: '500',
+                color: '#374151'
+              }}>$</span>
               <input
                 type="number"
                 className="declaration-currency-input fun-input"
-                placeholder={question.placeholder || 'Enter amount'}
+                placeholder={question.placeholder || '0'}
                 value={declarations[question.id] || ''}
                 onChange={(e) => handleInputAnswer(question.id, e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && submitInputAnswer(question.id)}
+                style={{
+                  textAlign: 'center',
+                  fontSize: '20px',
+                  fontWeight: '500',
+                  flex: 1
+                }}
               />
-              <span className="currency-suffix">/month</span>
+              <span style={{
+                fontSize: '16px',
+                fontWeight: '500',
+                color: '#6b7280'
+              }}>/month</span>
             </div>
             <button
               className="btn-continue declaration-continue"

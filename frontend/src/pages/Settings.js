@@ -5370,7 +5370,6 @@ const API_BASE_URL = isProduction
                           />
                         </th>
                         <th>User</th>
-                        <th>Email</th>
                         <th>Role</th>
                         <th>Status</th>
                         <th>Verified</th>
@@ -5408,11 +5407,11 @@ const API_BASE_URL = isProduction
                                     {user.full_name || 'Unnamed User'}
                                     {isCurrentUser && <span className="current-user-badge">You</span>}
                                   </div>
+                                  <div className="user-email-small">{user.email}</div>
                                   <div className="user-id">ID: {user.id}</div>
                                 </div>
                               </div>
                             </td>
-                            <td>{user.email}</td>
                             <td>
                               {editingUser === user.id ? (
                                 <select
