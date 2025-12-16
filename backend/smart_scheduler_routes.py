@@ -381,6 +381,200 @@ def send_appointment_confirmation_sms(
         return False
 
 
+def send_appointment_update_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    duration: str,
+    meeting_mode: str = "Phone Call",
+    team_member_name: str = None,
+    team_member_email: str = None,
+    video_link: str = None,
+    scheduled_start: datetime = None,
+    duration_minutes: int = 30,
+    old_date: str = None,
+    old_time: str = None
+):
+    """Send appointment update/reschedule email with updated calendar invite using SendGrid"""
+    try:
+        logger.info(f"Attempting to send appointment update email to {attendee_email}")
+
+        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+
+        # Show what changed if we have old date/time
+        change_section = ""
+        if old_date and old_time:
+            change_section = f"""
+                        <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                            <p style="margin: 0 0 8px 0; color: #92400e; font-weight: bold;">📅 Appointment Rescheduled</p>
+                            <p style="margin: 0; color: #92400e; font-size: 14px;">
+                                <s>Previous: {old_date} at {old_time}</s><br>
+                                <strong>New: {appointment_date} at {appointment_time}</strong>
+                            </p>
+                        </div>
+            """
+
+        video_button_section = ""
+        if video_link:
+            video_button_section = f"""
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                            Join Video Call
+                        </a>
+                    </div>
+            """
+
+        calendar_section = """
+                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
+                                📅 An updated calendar invite is attached. Please add it to replace the previous appointment.
+                            </p>
+                        </div>
+        """
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Updated!</h1>
+                    </div>
+
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">Your appointment has been updated. Here are the new details:</p>
+                        {change_section}
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            {team_member_section}
+                        </div>
+                        {video_button_section}
+                        {calendar_section}
+                        <p style="font-size: 14px; color: #6b7280;">
+                            If you have any questions about this change, please contact us.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+Appointment Updated!
+
+Hi {attendee_name},
+
+Your appointment has been updated. Here are the new details:
+
+Date: {appointment_date}
+Time: {appointment_time}
+Duration: {duration}
+Meeting Type: {meeting_mode}
+{f'Meeting with: {team_member_name}' if team_member_name else ''}
+
+An updated calendar invite is attached to this email.
+
+- Perennia AI Team
+        """
+
+        # Generate ICS attachment
+        attachments = []
+        if scheduled_start:
+            try:
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "admin@perenniaai.com")
+                organizer_name = team_member_name or "Perennia AI"
+
+                ics_content = generate_ics_content(
+                    appointment_title=appointment_title,
+                    start_datetime=scheduled_start,
+                    duration_minutes=duration_minutes,
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    organizer_email=organizer_email,
+                    organizer_name=organizer_name,
+                    description=f"Updated Appointment: {appointment_title}",
+                    video_link=video_link
+                )
+
+                attachments.append({
+                    'content': base64.b64encode(ics_content.encode('utf-8')).decode('utf-8'),
+                    'filename': 'appointment_updated.ics',
+                    'type': 'text/calendar'
+                })
+            except Exception as ics_error:
+                logger.error(f"Failed to generate ICS attachment for update: {ics_error}")
+
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"Appointment Updated: {appointment_title}",
+            html_content=html_content,
+            plain_content=text_content,
+            attachments=attachments if attachments else None
+        )
+
+        if result.get("success"):
+            logger.info(f"Appointment update email sent successfully to {attendee_email}")
+            return {"success": True, "error": None}
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to send appointment update email: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+    except Exception as e:
+        logger.error(f"Exception in send_appointment_update_email: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+def send_appointment_update_sms(
+    attendee_phone: str,
+    attendee_name: str,
+    appointment_date: str,
+    appointment_time: str,
+    team_member_name: str = None
+):
+    """Send appointment update SMS via Twilio"""
+    try:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not account_sid or not auth_token or not from_number:
+            logger.warning("Twilio credentials not configured - skipping SMS update")
+            return False
+
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+
+        team_member_text = f" with {team_member_name}" if team_member_name else ""
+        message_body = f"Hi {attendee_name}! Your appointment{team_member_text} has been UPDATED to {appointment_date} at {appointment_time}. Please check your email for the updated calendar invite."
+
+        message = client.messages.create(
+            body=message_body,
+            from_=from_number,
+            to=attendee_phone
+        )
+
+        logger.info(f"Appointment update SMS sent to {attendee_phone}, SID: {message.sid}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to send appointment update SMS: {e}")
+        return False
+
+
 def send_team_member_notification_email(
     team_member_email: str,
     team_member_name: str,
@@ -1916,25 +2110,43 @@ async def update_appointment(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Update an appointment"""
+    """Update an appointment and send notification emails/SMS"""
     user = await get_current_user(request, db)
 
     Appointment = _models['Appointment']
     User = _models['User']
 
-    appointment = db.query(Appointment).filter(
-        Appointment.id == appointment_id,
-        or_(
-            Appointment.assigned_user_id == user.id,
-            Appointment.created_by_user_id == user.id
-        )
-    ).first()
+    # First try to find the appointment
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
+    # Check permission - allow if user is admin, assigned to the appointment, or created it
+    user_role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
+    is_admin = user_role.lower() in ['admin', 'leadership', 'management'] or user.id == 1
+    is_owner = (
+        appointment.assigned_user_id == user.id or
+        appointment.created_by_user_id == user.id
+    )
+
+    if not is_admin and not is_owner:
+        logger.warning(f"User {user.id} attempted to update appointment {appointment_id} without permission")
+        raise HTTPException(status_code=403, detail="You don't have permission to update this appointment")
+
     update_fields = appt_data.dict(exclude_unset=True)
     is_cancellation = False
+    is_reschedule = False
+    send_notification = update_fields.pop('send_notification', True)  # Remove from fields, default to True
+
+    # Store OLD date/time before any updates for comparison
+    old_date = None
+    old_time = None
+    tz = pytz.timezone('America/Chicago')
+    if appointment.scheduled_start:
+        old_local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        old_date = old_local_start.strftime('%B %d, %Y')
+        old_time = old_local_start.strftime('%I:%M %p %Z')
 
     # Handle status changes
     if "status" in update_fields:
@@ -1961,27 +2173,45 @@ async def update_appointment(
         except ValueError:
             del update_fields["meeting_mode"]
 
-    # Handle rescheduling
+    # Handle rescheduling - check if date/time changed
     if "scheduled_start" in update_fields:
         new_start = update_fields["scheduled_start"]
-        duration = appt_data.duration_minutes or appointment.duration_minutes
-        update_fields["scheduled_end"] = new_start + timedelta(minutes=duration)
-        update_fields["reschedule_count"] = appointment.reschedule_count + 1
+        # Check if scheduled_end was also provided, otherwise calculate it
+        if "scheduled_end" in update_fields:
+            # Use the provided scheduled_end
+            pass
+        else:
+            # Calculate from duration
+            duration = appt_data.duration_minutes or appointment.duration_minutes or 30
+            update_fields["scheduled_end"] = new_start + timedelta(minutes=duration)
+        update_fields["reschedule_count"] = (appointment.reschedule_count or 0) + 1
+        is_reschedule = True
 
-    # Store appointment details before update for cancellation emails
-    attendee_email = getattr(appointment, 'attendee_email', None)
-    attendee_name = getattr(appointment, 'attendee_name', None) or 'Valued Client'
+    # Apply all updates
+    for field, value in update_fields.items():
+        if hasattr(appointment, field):
+            setattr(appointment, field, value)
+
+    db.commit()
+    db.refresh(appointment)
+
+    # Get updated appointment details for notifications
+    attendee_email = appointment.attendee_email
+    attendee_name = appointment.attendee_name or 'Valued Client'
+    attendee_phone = getattr(appointment, 'attendee_phone', None)
     appointment_title = appointment.title or 'Appointment'
+    duration_minutes = appointment.duration_minutes or 30
+    duration_str = f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hour{'s' if duration_minutes >= 120 else ''}"
+    meeting_mode = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode or 'PHONE')
+    video_link = getattr(appointment, 'video_link', None)
 
-    # Format date and time for emails
+    # Format NEW date and time for emails
+    new_date = 'TBD'
+    new_time = 'TBD'
     if appointment.scheduled_start:
-        tz = pytz.timezone('America/Chicago')
-        local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
-        appointment_date = local_start.strftime('%B %d, %Y')
-        appointment_time = local_start.strftime('%I:%M %p %Z')
-    else:
-        appointment_date = 'TBD'
-        appointment_time = 'TBD'
+        new_local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        new_date = new_local_start.strftime('%B %d, %Y')
+        new_time = new_local_start.strftime('%I:%M %p %Z')
 
     # Get assigned team member info
     team_member = None
@@ -1993,25 +2223,21 @@ async def update_appointment(
             team_member_name = team_member.full_name or team_member.email
             team_member_email = team_member.email
 
-    for field, value in update_fields.items():
-        setattr(appointment, field, value)
-
-    db.commit()
-
-    # Send cancellation emails if status changed to CANCELLED
+    # Send notifications
     emails_sent = []
-    if is_cancellation:
-        logger.info(f"Appointment {appointment_id} cancelled via PUT, sending notifications")
+    sms_sent = []
 
-        # Send to attendee if they have an email
+    if is_cancellation and send_notification:
+        logger.info(f"Appointment {appointment_id} cancelled via PUT, sending cancellation notifications")
+
         if attendee_email:
             try:
                 success = send_appointment_cancellation_email(
                     attendee_email=attendee_email,
                     attendee_name=attendee_name,
                     appointment_title=appointment_title,
-                    appointment_date=appointment_date,
-                    appointment_time=appointment_time,
+                    appointment_date=old_date or new_date,
+                    appointment_time=old_time or new_time,
                     team_member_name=team_member_name,
                     cancellation_reason=None
                 )
@@ -2020,7 +2246,6 @@ async def update_appointment(
             except Exception as e:
                 logger.error(f"Failed to send attendee cancellation email: {e}")
 
-        # Send to assigned team member if different from canceller
         if team_member_email and team_member and team_member.id != user.id:
             try:
                 success = send_team_member_cancellation_email(
@@ -2028,8 +2253,8 @@ async def update_appointment(
                     team_member_name=team_member_name,
                     attendee_name=attendee_name,
                     appointment_title=appointment_title,
-                    appointment_date=appointment_date,
-                    appointment_time=appointment_time,
+                    appointment_date=old_date or new_date,
+                    appointment_time=old_time or new_time,
                     cancellation_reason=None,
                     cancelled_by=user.full_name or user.email
                 )
@@ -2038,7 +2263,58 @@ async def update_appointment(
             except Exception as e:
                 logger.error(f"Failed to send team member cancellation email: {e}")
 
-    return {"message": "Appointment updated", "emails_sent": emails_sent}
+    elif send_notification and (is_reschedule or update_fields):
+        # Send update notifications for reschedule or other updates
+        logger.info(f"Appointment {appointment_id} updated, sending update notifications")
+
+        # Send update email to attendee
+        if attendee_email:
+            try:
+                result = send_appointment_update_email(
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    appointment_title=appointment_title,
+                    appointment_date=new_date,
+                    appointment_time=new_time,
+                    duration=duration_str,
+                    meeting_mode=meeting_mode.replace('_', ' ').title(),
+                    team_member_name=team_member_name,
+                    team_member_email=team_member_email,
+                    video_link=video_link,
+                    scheduled_start=appointment.scheduled_start,
+                    duration_minutes=duration_minutes,
+                    old_date=old_date if is_reschedule else None,
+                    old_time=old_time if is_reschedule else None
+                )
+                if result.get("success"):
+                    emails_sent.append(attendee_email)
+            except Exception as e:
+                logger.error(f"Failed to send attendee update email: {e}")
+
+        # Send update SMS to attendee
+        if attendee_phone:
+            try:
+                success = send_appointment_update_sms(
+                    attendee_phone=attendee_phone,
+                    attendee_name=attendee_name,
+                    appointment_date=new_date,
+                    appointment_time=new_time,
+                    team_member_name=team_member_name
+                )
+                if success:
+                    sms_sent.append(attendee_phone)
+            except Exception as e:
+                logger.error(f"Failed to send attendee update SMS: {e}")
+
+    return {
+        "message": "Appointment updated",
+        "appointment_id": appointment_id,
+        "emails_sent": emails_sent,
+        "sms_sent": sms_sent,
+        "is_reschedule": is_reschedule,
+        "new_date": new_date,
+        "new_time": new_time
+    }
 
 
 @router.post("/appointments/{appointment_id}/cancel")

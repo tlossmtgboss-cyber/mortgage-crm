@@ -323,7 +323,7 @@ const DialerSettingsSection = () => {
 
 function Settings() {
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState('integration-marketplace');
+  const [activeSection, setActiveSection] = useState('profile-info');
   const [marketingTab, setMarketingTab] = useState('landing-pages');
   const [expandedSections, setExpandedSections] = useState({
     userProfile: false,

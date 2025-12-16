@@ -758,21 +758,7 @@ function LoanDetail() {
           </button>
         </div>
 
-        {/* Rate Lock Recommendation - Inline in header */}
-        <div className="header-rate-lock">
-          <RateLockRecommendation loan={loan} compact={true} />
-        </div>
-
         <div className="header-actions">
-          {loan?.borrower_phone && (
-            <button
-              className="btn-voicemail-drop"
-              onClick={() => setShowVoicemailDrop(true)}
-              title="Drop voicemail to borrower"
-            >
-              📞 Voicemail Drop
-            </button>
-          )}
           {editing ? (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>

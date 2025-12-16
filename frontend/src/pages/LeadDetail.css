@@ -1940,61 +1940,93 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* SLA Dates Tab - Ultra Compact Full-Page Layout (No Scroll) */
 .tab-content.sla-dates-tab {
-  padding: 4px 0 0 0;
+  padding: 0;
   overflow: visible;
+}
+
+.sla-dates-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sla-dates-compact .info-section {
+  margin: 0;
+  padding: 0;
+}
+
+.sla-dates-compact .info-section h2 {
+  display: none;
+}
+
+.sla-dates-compact .section-subtitle {
+  display: none;
+}
+
+.sla-section-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: #218D8D;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #218D8D;
+  display: inline-block;
 }
 
 .dates-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px 8px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px 6px;
 }
 
 @media (max-width: 1400px) {
   .dates-grid {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
 @media (max-width: 1100px) {
   .dates-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .dates-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
 .date-field {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 .date-field label {
   font-weight: 500;
-  font-size: 10px;
+  font-size: 9px;
   color: #555;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2;
+  line-height: 1.1;
+  margin-bottom: 1px;
 }
 
 .date-field input[type="date"],
 .date-field input[type="datetime-local"] {
-  padding: 3px 4px;
+  padding: 2px 3px;
   border: 1px solid #ddd;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 10px;
   transition: all 0.2s;
   background: white;
   width: 100%;
   box-sizing: border-box;
-  height: 26px;
+  height: 22px;
 }
 
 .date-field input[type="date"]:focus,
@@ -2010,23 +2042,20 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .field-hint {
-  font-size: 9px;
-  color: #999;
-  font-style: italic;
-  line-height: 1.1;
+  display: none;
 }
 
 .section-subtitle {
-  font-size: 11px;
+  font-size: 10px;
   color: #777;
-  margin-top: 2px;
-  margin-bottom: 6px;
+  margin-top: 1px;
+  margin-bottom: 4px;
 }
 
 /* Important Dates - Section Styles */
 .dates-section {
-  margin-bottom: 8px;
-  padding-bottom: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
   border-bottom: 1px solid #eee;
 }
 
@@ -2037,15 +2066,37 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .dates-section-title {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: #218D8D;
-  margin-bottom: 5px;
-  padding-bottom: 3px;
-  border-bottom: 2px solid #218D8D;
+  margin-bottom: 3px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #218D8D;
   display: inline-block;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Status Timeline - Compact */
+.status-timeline-compact {
+  margin-top: 4px;
+}
+
+.status-timeline-compact .timeline-entry {
+  padding: 3px 0;
+}
+
+.empty-timeline {
+  font-size: 11px;
+  color: #888;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.empty-timeline p {
+  margin: 0;
 }
 
 /* Smart AI Chat Card */

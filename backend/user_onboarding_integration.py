@@ -1039,27 +1039,67 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         if not token:
             raise HTTPException(status_code=400, detail="Token is required")
 
+        # First try UserProfile (onboarding system)
         profile = db.query(UserProfile).filter(UserProfile.activation_token == token).first()
-        if not profile:
-            raise HTTPException(status_code=404, detail="Invalid activation token")
+        if profile:
+            if profile.activation_token_expires_at and profile.activation_token_expires_at < datetime.now(timezone.utc):
+                raise HTTPException(status_code=400, detail="Activation token has expired. Please contact your administrator for a new link.")
 
-        if profile.activation_token_expires_at and profile.activation_token_expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="Activation token has expired. Please contact your administrator for a new link.")
+            if profile.status == 'active':
+                raise HTTPException(status_code=400, detail="Account has already been activated")
 
-        if profile.status == 'active':
-            raise HTTPException(status_code=400, detail="Account has already been activated")
+            user = db.query(User).filter(User.id == profile.user_id).first()
 
-        user = db.query(User).filter(User.id == profile.user_id).first()
-
-        return {
-            "success": True,
-            "data": {
-                "user_id": user.id,
-                "email": user.email,
-                "first_name": profile.first_name,
-                "last_name": profile.last_name
+            return {
+                "success": True,
+                "data": {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "first_name": profile.first_name,
+                    "last_name": profile.last_name,
+                    "source": "onboarding"
+                }
             }
-        }
+
+        # Try invitation system (token stored in user_metadata JSON)
+        from sqlalchemy import cast, String
+        from sqlalchemy.dialects.postgresql import JSONB
+
+        # Query users with matching invitation token in user_metadata
+        users = db.query(User).filter(User.user_metadata.isnot(None)).all()
+        for user in users:
+            if user.user_metadata and user.user_metadata.get("invitation_token") == token:
+                # Check expiration
+                expires_at_str = user.user_metadata.get("invitation_expires_at")
+                if expires_at_str:
+                    expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+                    if expires_at < datetime.now(timezone.utc):
+                        raise HTTPException(status_code=400, detail="Activation token has expired. Please contact your administrator for a new link.")
+
+                # Check if already activated
+                if user.is_active and user.hashed_password and user.hashed_password != "":
+                    raise HTTPException(status_code=400, detail="Account has already been activated")
+
+                # Parse name
+                first_name = ""
+                last_name = ""
+                if user.full_name:
+                    parts = user.full_name.split(" ", 1)
+                    first_name = parts[0]
+                    last_name = parts[1] if len(parts) > 1 else ""
+
+                return {
+                    "success": True,
+                    "data": {
+                        "user_id": user.id,
+                        "email": user.email,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "source": "invitation"
+                    }
+                }
+
+        raise HTTPException(status_code=404, detail="Invalid activation token")
 
     @router.post("/activate/complete")
     async def complete_activation(
@@ -1076,52 +1116,103 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         if len(password) < 8:
             raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
+        # First try UserProfile (onboarding system)
         profile = db.query(UserProfile).filter(UserProfile.activation_token == token).first()
-        if not profile:
-            raise HTTPException(status_code=404, detail="Invalid activation token")
+        if profile:
+            if profile.activation_token_expires_at and profile.activation_token_expires_at < datetime.now(timezone.utc):
+                raise HTTPException(status_code=400, detail="Activation token has expired")
 
-        if profile.activation_token_expires_at and profile.activation_token_expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="Activation token has expired")
+            if profile.status == 'active':
+                raise HTTPException(status_code=400, detail="Account has already been activated")
 
-        if profile.status == 'active':
-            raise HTTPException(status_code=400, detail="Account has already been activated")
+            user = db.query(User).filter(User.id == profile.user_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
 
-        user = db.query(User).filter(User.id == profile.user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            try:
+                # Update user password
+                user.hashed_password = pwd_context.hash(password)
 
-        try:
-            # Update user password
-            user.hashed_password = pwd_context.hash(password)
+                # Update profile status
+                profile.status = 'active'
+                profile.activation_token = None
+                profile.activation_token_expires_at = None
+                profile.activated_at = datetime.now(timezone.utc)
 
-            # Update profile status
-            profile.status = 'active'
-            profile.activation_token = None
-            profile.activation_token_expires_at = None
-            profile.activated_at = datetime.now(timezone.utc)
+                # Create audit log
+                audit = AuditLog(
+                    user_id=user.id,
+                    action="account_activated",
+                    performed_by=user.id,
+                    details={"activated_via": "email_token", "source": "onboarding"}
+                )
+                db.add(audit)
+                db.commit()
 
-            # Create audit log
-            audit = AuditLog(
-                user_id=user.id,
-                action="account_activated",
-                performed_by=user.id,
-                details={"activated_via": "email_token"}
-            )
-            db.add(audit)
-            db.commit()
-
-            return {
-                "success": True,
-                "data": {
-                    "user_id": user.id,
-                    "email": user.email,
-                    "status": "active",
-                    "message": "Account activated successfully. You can now log in."
+                return {
+                    "success": True,
+                    "data": {
+                        "user_id": user.id,
+                        "email": user.email,
+                        "status": "active",
+                        "message": "Account activated successfully. You can now log in."
+                    }
                 }
-            }
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # Try invitation system (token stored in user_metadata JSON)
+        users = db.query(User).filter(User.user_metadata.isnot(None)).all()
+        for user in users:
+            if user.user_metadata and user.user_metadata.get("invitation_token") == token:
+                # Check expiration
+                expires_at_str = user.user_metadata.get("invitation_expires_at")
+                if expires_at_str:
+                    expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+                    if expires_at < datetime.now(timezone.utc):
+                        raise HTTPException(status_code=400, detail="Activation token has expired")
+
+                # Check if already activated
+                if user.is_active and user.hashed_password and user.hashed_password != "":
+                    raise HTTPException(status_code=400, detail="Account has already been activated")
+
+                try:
+                    # Update user password and activate
+                    user.hashed_password = pwd_context.hash(password)
+                    user.is_active = True
+
+                    # Update user_metadata to mark as activated
+                    metadata = user.user_metadata.copy() if user.user_metadata else {}
+                    metadata["status"] = "active"
+                    metadata["activated_at"] = datetime.now(timezone.utc).isoformat()
+                    metadata["invitation_token"] = None  # Clear token
+                    user.user_metadata = metadata
+
+                    # Create audit log
+                    audit = AuditLog(
+                        user_id=user.id,
+                        action="account_activated",
+                        performed_by=user.id,
+                        details={"activated_via": "email_token", "source": "invitation"}
+                    )
+                    db.add(audit)
+                    db.commit()
+
+                    return {
+                        "success": True,
+                        "data": {
+                            "user_id": user.id,
+                            "email": user.email,
+                            "status": "active",
+                            "message": "Account activated successfully. You can now log in."
+                        }
+                    }
+                except Exception as e:
+                    db.rollback()
+                    raise HTTPException(status_code=500, detail=str(e))
+
+        raise HTTPException(status_code=404, detail="Invalid activation token")
 
     # Reference data endpoints
     @router.get("/roles")

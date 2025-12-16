@@ -3886,77 +3886,66 @@ function LeadDetail() {
 
           {/* SLA Dates Tab */}
           {activeTab === 'important-dates' && (
-          <div className="tab-content">
-            <div className="info-section">
-              <h2>SLA Milestone Dates</h2>
-              <p className="section-subtitle">Track key milestone dates for SLA measurement</p>
-
+          <div className="tab-content sla-dates-tab">
+            <div className="sla-dates-compact">
+              <div className="sla-section-header">SLA Milestone Dates</div>
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Lead Received Date</label>
+                  <label>Lead Received</label>
                   <input
                     type="datetime-local"
                     value={formData.lead_received_date ? formData.lead_received_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('lead_received_date', e.target.value)}
                   />
-                  <small className="field-hint">When lead entered the system (auto-set on import)</small>
                 </div>
-
                 <div className="date-field">
-                  <label>First Contact Attempt</label>
+                  <label>First Contact</label>
                   <input
                     type="datetime-local"
                     value={formData.first_contact_attempt_date ? formData.first_contact_attempt_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('first_contact_attempt_date', e.target.value)}
                   />
-                  <small className="field-hint">SLA: Speed to Lead measurement</small>
                 </div>
-
                 <div className="date-field">
-                  <label>First Successful Contact</label>
+                  <label>Successful Contact</label>
                   <input
                     type="datetime-local"
                     value={formData.first_contact_successful_date ? formData.first_contact_successful_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('first_contact_successful_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Lead Qualified Date</label>
+                  <label>Lead Qualified</label>
                   <input
                     type="date"
                     value={formData.lead_qualification_date || ''}
                     onChange={(e) => handleFieldChange('lead_qualification_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Application Link Sent</label>
+                  <label>App Link Sent</label>
                   <input
                     type="date"
                     value={formData.application_link_sent_date || ''}
                     onChange={(e) => handleFieldChange('application_link_sent_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Application Started</label>
+                  <label>App Started</label>
                   <input
                     type="date"
                     value={formData.application_started_date || ''}
                     onChange={(e) => handleFieldChange('application_started_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Application Completed</label>
+                  <label>App Completed</label>
                   <input
                     type="date"
                     value={formData.application_completed_date || ''}
                     onChange={(e) => handleFieldChange('application_completed_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
                   <label>Credit Pulled</label>
                   <input
@@ -3965,16 +3954,14 @@ function LeadDetail() {
                     onChange={(e) => handleFieldChange('credit_pulled_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Pre-Approval Submitted</label>
+                  <label>Pre-Approval Sub</label>
                   <input
                     type="date"
                     value={formData.preapproval_submission_date || ''}
                     onChange={(e) => handleFieldChange('preapproval_submission_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
                   <label>Pre-Approval Issued</label>
                   <input
@@ -3983,89 +3970,53 @@ function LeadDetail() {
                     onChange={(e) => handleFieldChange('preapproval_issued_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Realtor Referral Date</label>
+                  <label>Realtor Referral</label>
                   <input
                     type="date"
                     value={formData.realtor_referral_date || ''}
                     onChange={(e) => handleFieldChange('realtor_referral_date', e.target.value)}
                   />
                 </div>
-
                 <div className="date-field">
-                  <label>Pre-Approval Expiration</label>
+                  <label>Pre-Approval Exp</label>
                   <input
                     type="date"
                     value={formData.preapproval_expiration_date || ''}
                     onChange={(e) => handleFieldChange('preapproval_expiration_date', e.target.value)}
                   />
-                  <small className="field-hint">Typically 90 days from credit pull</small>
                 </div>
-
                 <div className="date-field">
-                  <label>Rate Watch Enrollment</label>
+                  <label>Rate Watch</label>
                   <input
                     type="date"
                     value={formData.rate_watch_enrollment_date || ''}
                     onChange={(e) => handleFieldChange('rate_watch_enrollment_date', e.target.value)}
                   />
-                  <small className="field-hint">For shopping-phase automation</small>
                 </div>
               </div>
-            </div>
 
-            {/* Status History Timeline */}
-            <div className="info-section">
-              <h2>Status History Timeline</h2>
-              <p className="section-subtitle">Automatic tracking of all status changes</p>
-
+              <div className="sla-section-header" style={{ marginTop: '8px' }}>Status History</div>
               {stageHistoryLoading ? (
-                <div className="loading-state">Loading status history...</div>
+                <div className="loading-state" style={{ fontSize: '11px', padding: '6px' }}>Loading...</div>
               ) : stageHistory.length === 0 ? (
                 <div className="empty-timeline">
-                  <p>No status changes recorded yet. Changes will be tracked automatically when the lead stage is updated.</p>
+                  <p>No status changes recorded yet.</p>
                 </div>
               ) : (
-                <div className="status-timeline">
-                  {stageHistory.map((entry, index) => (
-                    <div key={entry.id || index} className="timeline-entry">
-                      <div className="timeline-marker">
-                        <div className="marker-dot"></div>
-                        {index < stageHistory.length - 1 && <div className="marker-line"></div>}
-                      </div>
-                      <div className="timeline-content">
-                        <div className="timeline-header">
-                          <span className="stage-change">
-                            {entry.from_stage ? (
-                              <>
-                                <span className="from-stage">{entry.from_stage}</span>
-                                <span className="arrow">→</span>
-                                <span className="to-stage">{entry.to_stage}</span>
-                              </>
-                            ) : (
-                              <span className="to-stage">Started at: {entry.to_stage}</span>
-                            )}
-                          </span>
-                          <span className="timeline-date">
-                            {new Date(entry.changed_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </span>
-                        </div>
-                        {entry.duration_in_previous_stage && (
-                          <div className="duration-info">
-                            Time in previous stage: {Math.floor(entry.duration_in_previous_stage / 86400)} days
-                          </div>
+                <div className="status-timeline status-timeline-compact">
+                  {stageHistory.slice(0, 5).map((entry, index) => (
+                    <div key={entry.id || index} className="timeline-entry" style={{ padding: '2px 0', fontSize: '11px' }}>
+                      <span className="stage-change" style={{ marginRight: '8px' }}>
+                        {entry.from_stage ? (
+                          <>{entry.from_stage} → {entry.to_stage}</>
+                        ) : (
+                          <>Started: {entry.to_stage}</>
                         )}
-                        {entry.notes && (
-                          <div className="timeline-notes">{entry.notes}</div>
-                        )}
-                      </div>
+                      </span>
+                      <span style={{ color: '#888', fontSize: '10px' }}>
+                        {new Date(entry.changed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
                     </div>
                   ))}
                 </div>
