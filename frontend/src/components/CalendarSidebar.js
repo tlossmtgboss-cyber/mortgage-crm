@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../services/api';
 import './CalendarSidebar.css';
 
-// v1.2 - Fixed date format for API calls - build 20251215-1750
-console.log('[CalendarSidebar] v1.2 loaded - build 20251215-1750');
+// v1.3 - Clickable appointments with edit modal and client name display
+console.log('[CalendarSidebar] v1.3 loaded - clickable appointments');
 
 function CalendarSidebar({ leadId, loanId, children }) {
   console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
@@ -16,6 +16,11 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [emailData, setEmailData] = useState(null);
+
+  // Edit appointment state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -403,6 +408,83 @@ function CalendarSidebar({ leadId, loanId, children }) {
     }
   };
 
+  // Handle clicking on an appointment to edit
+  const handleAppointmentClick = (appt) => {
+    const startDate = new Date(appt.scheduled_start);
+    const endDate = new Date(appt.scheduled_end);
+    const durationMs = endDate - startDate;
+    const durationMins = Math.round(durationMs / 60000);
+
+    setEditingAppointment({
+      id: appt.id,
+      title: appt.title || '',
+      attendee_name: appt.attendee_name || '',
+      attendee_email: appt.attendee_email || '',
+      date: startDate.toISOString().split('T')[0],
+      time: startDate.toTimeString().slice(0, 5),
+      duration: String(durationMins),
+      meeting_mode: appt.meeting_mode || 'PHONE',
+      notes: appt.attendee_notes || '',
+      status: appt.status || 'SCHEDULED',
+      lead_id: appt.lead_id,
+      loan_id: appt.loan_id
+    });
+    setShowEditModal(true);
+  };
+
+  // Handle saving edited appointment
+  const handleSaveAppointment = async (e) => {
+    e.preventDefault();
+    if (!editingAppointment) return;
+
+    setSaving(true);
+    try {
+      const startDateTime = new Date(`${editingAppointment.date}T${editingAppointment.time}`);
+      const endDateTime = new Date(startDateTime.getTime() + parseInt(editingAppointment.duration) * 60000);
+
+      const updateData = {
+        title: editingAppointment.title,
+        attendee_name: editingAppointment.attendee_name,
+        attendee_email: editingAppointment.attendee_email,
+        scheduled_start: startDateTime.toISOString(),
+        scheduled_end: endDateTime.toISOString(),
+        meeting_mode: editingAppointment.meeting_mode,
+        attendee_notes: editingAppointment.notes,
+        status: editingAppointment.status
+      };
+
+      await schedulerAPI.updateAppointment(editingAppointment.id, updateData);
+
+      setShowEditModal(false);
+      setEditingAppointment(null);
+      loadAppointments();
+    } catch (error) {
+      console.error('Failed to update appointment:', error);
+      alert('Failed to update appointment: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle cancelling appointment
+  const handleCancelAppointment = async () => {
+    if (!editingAppointment || !window.confirm('Are you sure you want to cancel this appointment?')) return;
+
+    setSaving(true);
+    try {
+      await schedulerAPI.updateAppointment(editingAppointment.id, { status: 'CANCELLED' });
+
+      setShowEditModal(false);
+      setEditingAppointment(null);
+      loadAppointments();
+    } catch (error) {
+      console.error('Failed to cancel appointment:', error);
+      alert('Failed to cancel appointment: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const days = getDaysInMonth();
   const selectedDateAppointments = getAppointmentsForSelectedDate();
   const upcomingAppointments = getUpcomingAppointments();
@@ -485,25 +567,25 @@ function CalendarSidebar({ leadId, loanId, children }) {
             {selectedDateAppointments.map((appt) => (
               <div
                 key={appt.id}
-                className="appointment-item"
+                className="appointment-item clickable"
                 style={{ borderLeftColor: getMeetingModeColor(appt.meeting_mode) }}
+                onClick={() => handleAppointmentClick(appt)}
+                title="Click to edit appointment"
               >
                 <div className="appointment-time">
                   {formatTime(appt.scheduled_start)}
                 </div>
                 <div className="appointment-details">
                   <div className="appointment-title">
-                    {getMeetingModeIcon(appt.meeting_mode)} {appt.title || `Meeting with ${appt.attendee_name || 'Client'}`}
+                    {getMeetingModeIcon(appt.meeting_mode)} {appt.title || 'Appointment'}
                   </div>
                   <div className="appointment-meta">
                     <span className="appointment-duration">
                       {formatDuration(appt.scheduled_start, appt.scheduled_end)}
                     </span>
-                    {appt.attendee_name && (
-                      <span className="appointment-attendee">
-                        {appt.attendee_name}
-                      </span>
-                    )}
+                    <span className="appointment-client">
+                      {appt.attendee_name || 'No client assigned'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -523,8 +605,10 @@ function CalendarSidebar({ leadId, loanId, children }) {
               {upcomingAppointments.map((appt) => (
                 <div
                   key={appt.id}
-                  className="appointment-item compact"
+                  className="appointment-item compact clickable"
                   style={{ borderLeftColor: getMeetingModeColor(appt.meeting_mode) }}
+                  onClick={() => handleAppointmentClick(appt)}
+                  title="Click to edit appointment"
                 >
                   <div className="appointment-date-time">
                     <span className="appointment-date">
@@ -536,7 +620,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
                   </div>
                   <div className="appointment-details">
                     <div className="appointment-title">
-                      {getMeetingModeIcon(appt.meeting_mode)} {appt.title || appt.attendee_name || 'Meeting'}
+                      {getMeetingModeIcon(appt.meeting_mode)} {appt.attendee_name || appt.title || 'Appointment'}
                     </div>
                   </div>
                 </div>
@@ -674,6 +758,143 @@ function CalendarSidebar({ leadId, loanId, children }) {
                 <button type="submit" className="btn-create">
                   Create Appointment
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Appointment Modal */}
+      {showEditModal && editingAppointment && (
+        <div className="appointment-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="appointment-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="appointment-modal-header">
+              <h3>Edit Appointment</h3>
+              <button className="close-btn" onClick={() => setShowEditModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleSaveAppointment}>
+              <div className="form-group">
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={editingAppointment.title}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, title: e.target.value})}
+                  placeholder="Appointment title"
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Client Name *</label>
+                  <input
+                    type="text"
+                    value={editingAppointment.attendee_name}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_name: e.target.value})}
+                    placeholder="Client name"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Client Email</label>
+                  <input
+                    type="email"
+                    value={editingAppointment.attendee_email}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_email: e.target.value})}
+                    placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={editingAppointment.date}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, date: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Time</label>
+                  <input
+                    type="time"
+                    value={editingAppointment.time}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, time: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Duration</label>
+                  <select
+                    value={editingAppointment.duration}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, duration: e.target.value})}
+                  >
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Meeting Type</label>
+                  <select
+                    value={editingAppointment.meeting_mode}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, meeting_mode: e.target.value})}
+                  >
+                    <option value="PHONE">📞 Phone Call</option>
+                    <option value="VIDEO">📹 Video Call</option>
+                    <option value="IN_PERSON">👤 In Person</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Status</label>
+                <select
+                  value={editingAppointment.status}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, status: e.target.value})}
+                >
+                  <option value="SCHEDULED">Scheduled</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="NO_SHOW">No Show</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea
+                  value={editingAppointment.notes}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, notes: e.target.value})}
+                  placeholder="Additional notes..."
+                  rows="3"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={handleCancelAppointment}
+                  disabled={saving}
+                >
+                  Cancel Appointment
+                </button>
+                <div className="modal-actions-right">
+                  <button type="button" className="btn-cancel" onClick={() => setShowEditModal(false)}>
+                    Close
+                  </button>
+                  <button type="submit" className="btn-create" disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

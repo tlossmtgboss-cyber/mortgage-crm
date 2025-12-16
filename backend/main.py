@@ -35408,7 +35408,7 @@ async def update_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Update allowed fields
-    allowed_fields = ['is_active', 'role', 'email_verified', 'onboarding_completed', 'full_name']
+    allowed_fields = ['is_active', 'role', 'permission_role', 'email_verified', 'onboarding_completed', 'full_name']
     for field, value in updates.items():
         if field in allowed_fields:
             setattr(user, field, value)
@@ -35421,6 +35421,7 @@ async def update_user(
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role,
+        "permission_role": user.permission_role,
         "is_active": user.is_active,
         "email_verified": user.email_verified,
         "onboarding_completed": user.onboarding_completed,
@@ -53416,6 +53417,34 @@ async def bootstrap_admin_user(
         raise
     except Exception as e:
         logger.error(f"Bootstrap error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/admin/set-admin-role")
+async def set_admin_role(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Set the current user's permission_role to admin.
+    This allows the first user to become an admin and then invite other users.
+    """
+    try:
+        current_user.permission_role = "admin"
+        current_user.role = "admin"
+        db.commit()
+        db.refresh(current_user)
+
+        return {
+            "success": True,
+            "message": f"User {current_user.email} is now an admin",
+            "user_id": current_user.id,
+            "email": current_user.email,
+            "permission_role": current_user.permission_role
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to set admin role: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

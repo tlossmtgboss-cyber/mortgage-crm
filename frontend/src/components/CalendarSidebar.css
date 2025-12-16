@@ -515,3 +515,71 @@
 .appointment-modal .btn-create:hover {
   background: #106ebe;
 }
+
+.appointment-modal .btn-create:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Clickable Appointment Items */
+.appointment-item.clickable {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.appointment-item.clickable:hover {
+  background: #e5f3ff;
+  transform: translateX(2px);
+}
+
+.appointment-item.clickable:active {
+  transform: translateX(0);
+}
+
+/* Client name styling */
+.appointment-client {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0078d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Edit Modal Specific Styles */
+.appointment-modal .modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 8px;
+}
+
+.appointment-modal .modal-actions-right {
+  display: flex;
+  gap: 12px;
+}
+
+.appointment-modal .btn-danger {
+  padding: 10px 16px;
+  background: #fff;
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.appointment-modal .btn-danger:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.appointment-modal .btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
