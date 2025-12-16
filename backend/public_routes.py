@@ -1159,3 +1159,184 @@ async def get_realtors_public(
     except Exception as e:
         logger.error(f"Error searching realtors: {str(e)}")
         return []
+
+
+# ============================================================================
+# ACCOUNT VERIFICATION ENDPOINTS
+# ============================================================================
+
+class ResendEmailRequest(BaseModel):
+    email: EmailStr
+    user_id: Optional[int] = None
+
+
+class SendPhoneCodeRequest(BaseModel):
+    phone: str
+    method: str = "text"  # "text" or "email"
+    user_id: Optional[int] = None
+
+
+class VerifyPhoneRequest(BaseModel):
+    phone: str
+    code: str
+    user_id: Optional[int] = None
+
+
+# Store verification codes in memory (in production, use Redis or database)
+verification_codes: Dict[str, Dict] = {}
+
+
+@router.post("/api/v1/verification/resend-email")
+async def resend_email_verification(
+    request: ResendEmailRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Resend email verification link
+    """
+    try:
+        import random
+        import string
+
+        # Generate verification token
+        token = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+
+        # Store token (expires in 24 hours)
+        verification_codes[f"email_{request.email}"] = {
+            "token": token,
+            "expires": datetime.utcnow() + timedelta(hours=24),
+            "type": "email"
+        }
+
+        # TODO: Send actual email with verification link
+        # For now, log the token
+        logger.info(f"Email verification token for {request.email}: {token}")
+
+        return {
+            "success": True,
+            "message": "Verification email sent",
+            "token": token  # REMOVE IN PRODUCTION
+        }
+
+    except Exception as e:
+        logger.error(f"Error resending email verification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send verification email")
+
+
+@router.post("/api/v1/verification/send-phone-code")
+async def send_phone_verification_code(
+    request: SendPhoneCodeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Send phone verification code via SMS or email
+    """
+    try:
+        import random
+
+        # Generate 6-digit code
+        code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+
+        # Store code (expires in 10 minutes)
+        verification_codes[f"phone_{request.phone}"] = {
+            "code": code,
+            "expires": datetime.utcnow() + timedelta(minutes=10),
+            "method": request.method
+        }
+
+        # TODO: Send actual SMS or email with code
+        # For now, log the code
+        logger.info(f"Phone verification code for {request.phone}: {code}")
+
+        return {
+            "success": True,
+            "message": f"Verification code sent via {request.method}",
+            "code": code  # REMOVE IN PRODUCTION
+        }
+
+    except Exception as e:
+        logger.error(f"Error sending phone verification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send verification code")
+
+
+@router.post("/api/v1/verification/verify-phone")
+async def verify_phone_code(
+    request: VerifyPhoneRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify phone with the submitted code
+    """
+    try:
+        stored = verification_codes.get(f"phone_{request.phone}")
+
+        if not stored:
+            raise HTTPException(status_code=400, detail="No verification code found. Please request a new code.")
+
+        if datetime.utcnow() > stored["expires"]:
+            # Clean up expired code
+            del verification_codes[f"phone_{request.phone}"]
+            raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new code.")
+
+        if stored["code"] != request.code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+
+        # Code verified - clean up
+        del verification_codes[f"phone_{request.phone}"]
+
+        # Update user's phone verification status if user_id provided
+        if request.user_id:
+            from models import User
+            user = db.query(User).filter(User.id == request.user_id).first()
+            if user:
+                user.phone_verified = True
+                user.phone_verified_at = datetime.utcnow()
+                db.commit()
+
+        return {
+            "success": True,
+            "message": "Phone verified successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying phone: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to verify phone")
+
+
+@router.get("/api/v1/verification/check-email/{token}")
+async def check_email_verification(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Check if email verification token is valid (called when user clicks email link)
+    """
+    try:
+        # Find token in verification_codes
+        for key, data in verification_codes.items():
+            if key.startswith("email_") and data.get("token") == token:
+                if datetime.utcnow() > data["expires"]:
+                    del verification_codes[key]
+                    return {"valid": False, "message": "Token expired"}
+
+                # Mark email as verified
+                email = key.replace("email_", "")
+                del verification_codes[key]
+
+                # Update user if found
+                from models import User
+                user = db.query(User).filter(User.email == email).first()
+                if user:
+                    user.email_verified = True
+                    user.email_verified_at = datetime.utcnow()
+                    db.commit()
+
+                return {"valid": True, "email": email, "message": "Email verified"}
+
+        return {"valid": False, "message": "Invalid token"}
+
+    except Exception as e:
+        logger.error(f"Error checking email verification: {str(e)}")
+        return {"valid": False, "message": "Verification failed"}
