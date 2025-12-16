@@ -149,7 +149,7 @@ function Dashboard() {
         setTeamStats(data.team_stats || {});
         setMessages(data.messages || []);
         setEfficiency(data.efficiency || {});
-        setWorkflowScores(data.workflow_scores || mockWorkflowScores());
+        setWorkflowScores(data.workflow_scores || []);
         setLoading(false);
         return;
       }
@@ -184,23 +184,23 @@ function Dashboard() {
       setTeamStats(data.team_stats || {});
       setMessages(data.messages || []);
       setEfficiency(data.efficiency || {});
-      setWorkflowScores(data.workflow_scores || mockWorkflowScores());
+      setWorkflowScores(data.workflow_scores || []);
 
     } catch (error) {
       console.error('Failed to load dashboard:', error);
-      // Fallback to mock data on error
+      // Show empty states on error - no mock data for new users
       const goals = loadGoalTrackerData();
-      setPrioritizedTasks(mockPrioritizedTasks());
-      setPipelineStats(mockPipelineStats());
-      setProduction(mockProduction(goals));
-      setLeadMetrics(mockLeadMetrics());
-      setLoanIssues(mockLoanIssues());
-      setAiTasks(mockAiTasks());
-      setReferralStats(mockReferralStats());
-      setTeamStats(mockTeamStats());
-      setMessages(mockMessages());
-      setEfficiency(mockEfficiency());
-      setWorkflowScores(mockWorkflowScores());
+      setPrioritizedTasks([]);
+      setPipelineStats([]);
+      setProduction({ annualGoal: goals.annualGoal || 0, monthlyGoal: goals.monthlyGoal || 0, weeklyGoal: goals.weeklyGoal || 0, dailyGoal: goals.dailyGoal || 0, annualActual: 0, monthlyActual: 0, weeklyActual: 0, dailyActual: 0 });
+      setLeadMetrics({ total: 0, new: 0, hot: 0, conversion_rate: 0 });
+      setLoanIssues([]);
+      setAiTasks({ pending: [], waiting: [] });
+      setReferralStats({ total_partners: 0, active_partners: 0, total_referrals: 0 });
+      setTeamStats({ total_members: 0, active_today: 0 });
+      setMessages([]);
+      setEfficiency({ overallScore: 0, stages: [], team: [], bottlenecks: [] });
+      setWorkflowScores([]);
     } finally {
       setLoading(false);
     }
@@ -453,40 +453,37 @@ function Dashboard() {
                 onClick={() => navigate('/profitability?metric=gain_on_sale')}
               >
                 <div className="metric-label">Gain on Sale</div>
-                <div className="metric-value">285 bps</div>
-                <div className="metric-change positive">↑ 12 bps</div>
+                <div className="metric-value">--</div>
+                <div className="metric-change neutral">No data yet</div>
               </div>
               <div
                 className="profitability-metric clickable"
                 onClick={() => navigate('/profitability?metric=cost_per_loan')}
               >
                 <div className="metric-label">Cost per Loan</div>
-                <div className="metric-value">$8,450</div>
-                <div className="metric-change positive">↓ $320</div>
+                <div className="metric-value">--</div>
+                <div className="metric-change neutral">No data yet</div>
               </div>
               <div
                 className="profitability-metric clickable"
                 onClick={() => navigate('/profitability?metric=net_margin')}
               >
                 <div className="metric-label">Net Margin</div>
-                <div className="metric-value">$2,850</div>
-                <div className="metric-change positive">↑ $180</div>
+                <div className="metric-value">--</div>
+                <div className="metric-change neutral">No data yet</div>
               </div>
               <div
                 className="profitability-metric clickable"
                 onClick={() => navigate('/profitability?metric=cash_runway')}
               >
                 <div className="metric-label">Cash Runway</div>
-                <div className="metric-value">8.2 mo</div>
-                <div className="metric-change neutral">→ stable</div>
+                <div className="metric-value">--</div>
+                <div className="metric-change neutral">No data yet</div>
               </div>
             </div>
             <div className="profitability-insights">
               <div className="insight-item">
-                <span>FHA loans showing 15% higher margins than conventional this month</span>
-              </div>
-              <div className="insight-item">
-                <span>Warehouse utilization at 78% - consider additional capacity</span>
+                <span>Add loans to see profitability insights</span>
               </div>
             </div>
             <button
