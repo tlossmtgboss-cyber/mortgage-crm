@@ -509,7 +509,8 @@ function Settings() {
   const [userProfile, setUserProfile] = useState({
     id: null,
     slug: '',
-    full_name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     nmls_number: '',
@@ -672,10 +673,15 @@ function Settings() {
       });
       if (response.ok) {
         const data = await response.json();
+        // Split full_name into first_name and last_name
+        const nameParts = (data.full_name || '').trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
         setUserProfile({
           id: data.id || null,
           slug: data.slug || '',
-          full_name: data.full_name || '',
+          first_name: firstName,
+          last_name: lastName,
           email: data.email || '',
           phone: data.phone || '',
           nmls_number: data.nmls_number || '',
@@ -698,6 +704,8 @@ function Settings() {
     setProfileMessage({ type: '', text: '' });
     try {
       const token = localStorage.getItem('token');
+      // Combine first_name and last_name into full_name for the API
+      const fullName = `${userProfile.first_name} ${userProfile.last_name}`.trim();
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
@@ -705,7 +713,7 @@ function Settings() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          full_name: userProfile.full_name,
+          full_name: fullName,
           phone: userProfile.phone,
           nmls_number: userProfile.nmls_number,
           job_title: userProfile.job_title,
@@ -718,7 +726,7 @@ function Settings() {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
         // Update localStorage user data
         const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-        localStorage.setItem('user', JSON.stringify({ ...storedUser, full_name: userProfile.full_name }));
+        localStorage.setItem('user', JSON.stringify({ ...storedUser, full_name: fullName }));
       } else {
         const error = await response.json();
         setProfileMessage({ type: 'error', text: error.detail || 'Failed to update profile' });
@@ -4704,12 +4712,22 @@ const API_BASE_URL = isProduction
               ) : (
                 <div className="profile-form">
                   <div className="form-group">
-                    <label>Full Name</label>
+                    <label>First Name</label>
                     <input
                       type="text"
-                      value={userProfile.full_name}
-                      onChange={(e) => setUserProfile({ ...userProfile, full_name: e.target.value })}
-                      placeholder="Enter your full name"
+                      value={userProfile.first_name}
+                      onChange={(e) => setUserProfile({ ...userProfile, first_name: e.target.value })}
+                      placeholder="Enter your first name"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Last Name</label>
+                    <input
+                      type="text"
+                      value={userProfile.last_name}
+                      onChange={(e) => setUserProfile({ ...userProfile, last_name: e.target.value })}
+                      placeholder="Enter your last name"
                     />
                   </div>
 
