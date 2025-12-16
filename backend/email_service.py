@@ -43,8 +43,8 @@ class EmailService:
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
 
         # Common configuration
-        self.from_email = os.getenv('FROM_EMAIL', 'noreply@pipeline360.com')
-        self.from_name = os.getenv('FROM_NAME', 'Pipeline 360 CRM')
+        self.from_email = os.getenv('FROM_EMAIL', 'admin@perenniaai.com')
+        self.from_name = os.getenv('FROM_NAME', 'Perennia AI')
 
         if self.use_sendgrid:
             logger.info("Email service initialized with SendGrid")
