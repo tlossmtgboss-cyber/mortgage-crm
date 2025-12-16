@@ -2317,16 +2317,20 @@ async def update_appointment(
     }
 
 
+class CancelAppointmentRequest(BaseModel):
+    reason: Optional[str] = None
+
 @router.post("/appointments/{appointment_id}/cancel")
 async def cancel_appointment(
     appointment_id: int,
-    reason: Optional[str] = None,
+    cancel_data: Optional[CancelAppointmentRequest] = None,
     request: Request = None,
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None
 ):
     """Cancel an appointment and send cancellation notifications"""
     user = await get_current_user(request, db)
+    reason = cancel_data.reason if cancel_data else None
 
     Appointment = _models['Appointment']
     User = _models['User']

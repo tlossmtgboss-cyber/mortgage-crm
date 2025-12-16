@@ -509,7 +509,8 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
     setSaving(true);
     try {
-      await schedulerAPI.updateAppointment(editingAppointment.id, { status: 'CANCELLED' });
+      // Use the dedicated cancel endpoint instead of update with status
+      await schedulerAPI.cancelAppointment(editingAppointment.id, 'Cancelled by user');
 
       setShowEditModal(false);
       setEditingAppointment(null);
