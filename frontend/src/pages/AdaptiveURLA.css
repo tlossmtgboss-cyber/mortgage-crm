@@ -166,11 +166,182 @@
   }
 }
 
+/* Main Layout with Sidebar */
+.urla-main-layout {
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  gap: 24px;
+  padding: 0 24px;
+}
+
 /* Main Content */
 .urla-content {
+  flex: 1;
   max-width: 800px;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: 40px 0;
+}
+
+/* Documents Sidebar */
+.documents-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 40px;
+  height: fit-content;
+  position: sticky;
+  top: 140px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e5e7eb;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.sidebar-header svg {
+  color: #218D8D;
+}
+
+.sidebar-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 20px 0;
+}
+
+.documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.doc-category {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.doc-category:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.doc-category.current {
+  background: #f0fdfa;
+  margin: -8px;
+  padding: 8px;
+  border-radius: 8px;
+  border-bottom: none;
+}
+
+.doc-category.current .doc-category-title {
+  color: #218D8D;
+}
+
+.doc-category.upcoming {
+  opacity: 0.6;
+}
+
+.doc-category-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.doc-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.doc-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.doc-checkbox svg {
+  color: #9ca3af;
+}
+
+.doc-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doc-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.doc-desc {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.sidebar-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.sidebar-tip svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Hide sidebar on smaller screens */
+@media (max-width: 1024px) {
+  .urla-main-layout {
+    flex-direction: column;
+  }
+
+  .documents-sidebar {
+    display: none;
+  }
+
+  .urla-content {
+    max-width: 800px;
+    padding: 40px 0;
+  }
 }
 
 /* Declaration Screen */

@@ -28,6 +28,20 @@ const STAGES = [
   { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
 ];
 
+// Documents needed for mortgage application
+const REQUIRED_DOCUMENTS = [
+  { id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' },
+  { id: 'ssn', name: 'Social Security Card', description: 'Or other SSN verification', category: 'identity', stage: 'profile' },
+  { id: 'paystubs', name: 'Pay Stubs', description: 'Last 2 months (most recent)', category: 'income', stage: 'income' },
+  { id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' },
+  { id: 'tax_returns', name: 'Tax Returns', description: 'Last 2 years (if self-employed)', category: 'income', stage: 'income' },
+  { id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'assets' },
+  { id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'assets' },
+  { id: 'gift_letter', name: 'Gift Letter', description: 'If receiving gift funds', category: 'assets', stage: 'assets' },
+  { id: 'purchase_contract', name: 'Purchase Contract', description: 'Signed purchase agreement', category: 'property', stage: 'property' },
+  { id: 'homeowners_insurance', name: 'Homeowners Insurance', description: 'Quote or declaration page', category: 'property', stage: 'property' },
+];
+
 // Professional SVG Icon component
 const Icon = ({ name, size = 24, className = '' }) => {
   const icons = {
@@ -2441,6 +2455,35 @@ export default function PurchaseApplication() {
             <div className="budget-summary-header">
               <Icon name="calculator" size={24} />
               <h3>Your Budget Summary</h3>
+              <button
+                className="edit-button"
+                onClick={() => setCurrentStage('goals')}
+                style={{
+                  marginLeft: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#f3f4f6';
+                  e.target.style.borderColor = '#d1d5db';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'transparent';
+                  e.target.style.borderColor = '#e5e7eb';
+                }}
+              >
+                <Icon name="edit" size={16} />
+                Edit
+              </button>
             </div>
             <div className="budget-summary-grid">
               <div className="budget-item">
@@ -2580,10 +2623,11 @@ export default function PurchaseApplication() {
       (parseFloat(assetData.savings) || 0) +
       (parseFloat(assetData.investments) || 0) +
       (parseFloat(assetData.giftAmount) || 0);
-    const purchasePrice = parseFloat(propertyData.purchasePrice || 0);
-    const downPaymentAmount = parseFloat(propertyData.downPayment || 0);
-    const loanAmount = purchasePrice - downPaymentAmount;
-    const downPaymentPercent = purchasePrice > 0 ? ((downPaymentAmount / purchasePrice) * 100).toFixed(1) : 0;
+    // Use paymentEstimate data if available (from Budget Calculator), otherwise fall back to propertyData
+    const purchasePrice = paymentEstimate?.homeValue || parseFloat(propertyData.purchasePrice || 0);
+    const downPaymentAmount = paymentEstimate?.downPaymentAmount || parseFloat(propertyData.downPayment || 0);
+    const loanAmount = paymentEstimate?.loanAmount || (purchasePrice - downPaymentAmount);
+    const downPaymentPercent = paymentEstimate?.downPaymentPercent || (purchasePrice > 0 ? ((downPaymentAmount / purchasePrice) * 100).toFixed(1) : 0);
 
     return (
       <div className="stage-content review-stage">
@@ -3646,9 +3690,60 @@ export default function PurchaseApplication() {
         </div>
       )}
 
-      <main className="urla-content">
-        {renderStage()}
-      </main>
+      <div className="urla-main-layout">
+        <main className="urla-content">
+          {renderStage()}
+        </main>
+
+        {/* Documents Sidebar */}
+        <aside className="documents-sidebar">
+          <div className="sidebar-header">
+            <Icon name="document" size={20} />
+            <h3>Documents Needed</h3>
+          </div>
+          <p className="sidebar-subtitle">Gather these documents to speed up your application</p>
+
+          <div className="documents-list">
+            {['identity', 'income', 'assets', 'property'].map(category => {
+              const categoryDocs = REQUIRED_DOCUMENTS.filter(d => d.category === category);
+              const categoryLabels = {
+                identity: 'Identity Verification',
+                income: 'Income Documents',
+                assets: 'Asset Documents',
+                property: 'Property Documents'
+              };
+              const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+              const categoryStageIndex = STAGES.findIndex(s => s.id === categoryDocs[0]?.stage);
+              const isCurrent = categoryDocs.some(d => d.stage === currentStage);
+              const isUpcoming = categoryStageIndex > currentIndex;
+
+              return (
+                <div key={category} className={`doc-category ${isCurrent ? 'current' : ''} ${isUpcoming ? 'upcoming' : ''}`}>
+                  <h4 className="doc-category-title">{categoryLabels[category]}</h4>
+                  <ul className="doc-items">
+                    {categoryDocs.map(doc => (
+                      <li key={doc.id} className="doc-item">
+                        <span className="doc-checkbox">
+                          <Icon name="document" size={14} />
+                        </span>
+                        <div className="doc-info">
+                          <span className="doc-name">{doc.name}</span>
+                          <span className="doc-desc">{doc.description}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="sidebar-tip">
+            <Icon name="info" size={16} />
+            <span>You can upload documents after submitting your application</span>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
