@@ -3,8 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../services/api';
 import './CalendarSidebar.css';
 
-// v1.4 - Improved drag-drop + click-to-schedule fallback
-console.log('[CalendarSidebar] v1.4 loaded - improved scheduling');
+// v1.5 - Fixed timezone handling for appointments
+console.log('[CalendarSidebar] v1.5 loaded - fixed timezone handling');
+
+// Helper to normalize UTC date strings from backend
+// Backend returns UTC times without Z suffix, so we need to add it
+const normalizeUTCDate = (dateString) => {
+  if (!dateString) return dateString;
+  // If no timezone indicator, assume UTC and add Z
+  if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+    return dateString + 'Z';
+  }
+  return dateString;
+};
 
 function CalendarSidebar({ leadId, loanId, children }) {
   console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
@@ -70,7 +81,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       // Filter out cancelled appointments and sort by date
       const filteredAppointments = (data || [])
         .filter(appt => appt.status !== 'CANCELLED')
-        .sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start));
+        .sort((a, b) => new Date(normalizeUTCDate(a.scheduled_start)) - new Date(normalizeUTCDate(b.scheduled_start)));
 
       console.log('[CalendarSidebar] Filtered appointments:', filteredAppointments.length);
       if (filteredAppointments.length > 0) {
@@ -129,7 +140,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const hasAppointmentsOnDate = (date) => {
     if (!date) return false;
     return appointments.some(appt => {
-      const apptDate = new Date(appt.scheduled_start);
+      const apptDate = new Date(normalizeUTCDate(appt.scheduled_start));
       return apptDate.toDateString() === date.toDateString();
     });
   };
@@ -153,13 +164,13 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
   const getAppointmentsForSelectedDate = () => {
     return appointments.filter(appt => {
-      const apptDate = new Date(appt.scheduled_start);
+      const apptDate = new Date(normalizeUTCDate(appt.scheduled_start));
       return apptDate.toDateString() === selectedDate.toDateString();
     });
   };
 
   const formatTime = (dateString) => {
-    const date = new Date(dateString);
+    const date = new Date(normalizeUTCDate(dateString));
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -168,8 +179,8 @@ function CalendarSidebar({ leadId, loanId, children }) {
   };
 
   const formatDuration = (start, end) => {
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const startDate = new Date(normalizeUTCDate(start));
+    const endDate = new Date(normalizeUTCDate(end));
     const diffMs = endDate - startDate;
     const diffMins = Math.round(diffMs / 60000);
 
@@ -210,7 +221,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const getUpcomingAppointments = () => {
     const now = new Date();
     return appointments
-      .filter(appt => new Date(appt.scheduled_start) >= now)
+      .filter(appt => new Date(normalizeUTCDate(appt.scheduled_start)) >= now)
       .slice(0, 5);
   };
 
@@ -436,8 +447,8 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
   // Handle clicking on an appointment to edit
   const handleAppointmentClick = (appt) => {
-    const startDate = new Date(appt.scheduled_start);
-    const endDate = new Date(appt.scheduled_end);
+    const startDate = new Date(normalizeUTCDate(appt.scheduled_start));
+    const endDate = new Date(normalizeUTCDate(appt.scheduled_end));
     const durationMs = endDate - startDate;
     const durationMins = Math.round(durationMs / 60000);
 
@@ -654,7 +665,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
                 >
                   <div className="appointment-date-time">
                     <span className="appointment-date">
-                      {new Date(appt.scheduled_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {new Date(normalizeUTCDate(appt.scheduled_start)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                     <span className="appointment-time">
                       {formatTime(appt.scheduled_start)}

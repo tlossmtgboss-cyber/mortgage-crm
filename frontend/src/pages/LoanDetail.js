@@ -85,6 +85,7 @@ function LoanDetail() {
 
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
+  const [propertySubTab, setPropertySubTab] = useState('property'); // 'property', 'insurance', 'legal'
   const [emailArchive, setEmailArchive] = useState([]);
   const [smsArchive, setSmsArchive] = useState([]);
   const [callArchive, setCallArchive] = useState([]);
@@ -2376,16 +2377,13 @@ function LoanDetail() {
 
         {/* Important Dates Tab */}
         {activeTab === 'important-dates' && (
-          <div className="tab-content">
-            <h2>Contract-to-Close Milestone Dates</h2>
-            <p className="section-subtitle">Track key milestone dates to manage the file, chase conditions, and prevent last-minute emergencies</p>
-
+          <div className="tab-content sla-dates-tab">
             {/* Contract & Property Dates */}
             <div className="dates-section">
-              <h3 className="dates-section-title">Contract & Property Dates</h3>
+              <h3 className="dates-section-title">Contract & Property</h3>
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Contract Received Date</label>
+                  <label>Contract Received</label>
                   <input
                     type="date"
                     value={formData.contract_received_date || ''}
@@ -2394,7 +2392,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Appraisal Ordered Date</label>
+                  <label>Appraisal Ordered</label>
                   <input
                     type="date"
                     value={formData.appraisal_ordered_date || ''}
@@ -2403,7 +2401,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Appraisal Scheduled Date</label>
+                  <label>Appraisal Scheduled</label>
                   <input
                     type="date"
                     value={formData.appraisal_scheduled_date || ''}
@@ -2412,7 +2410,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Appraisal Completed Date</label>
+                  <label>Appraisal Completed</label>
                   <input
                     type="date"
                     value={formData.appraisal_completed_date || ''}
@@ -2421,7 +2419,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Appraisal Received Date</label>
+                  <label>Appraisal Received</label>
                   <input
                     type="date"
                     value={formData.appraisal_received_date || ''}
@@ -2430,7 +2428,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Title Ordered Date</label>
+                  <label>Title Ordered</label>
                   <input
                     type="date"
                     value={formData.title_ordered_date || ''}
@@ -2439,7 +2437,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Title Received Date</label>
+                  <label>Title Received</label>
                   <input
                     type="date"
                     value={formData.title_received_date || ''}
@@ -2448,7 +2446,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Insurance Ordered Date</label>
+                  <label>Insurance Ordered</label>
                   <input
                     type="date"
                     value={formData.insurance_ordered_date || ''}
@@ -2457,7 +2455,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Insurance Received Date</label>
+                  <label>Insurance Received</label>
                   <input
                     type="date"
                     value={formData.insurance_received_date || ''}
@@ -2469,10 +2467,10 @@ function LoanDetail() {
 
             {/* Loan Processing Milestones */}
             <div className="dates-section">
-              <h3 className="dates-section-title">Loan Processing Milestones</h3>
+              <h3 className="dates-section-title">Loan Processing</h3>
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Initial Disclosures Sent Date</label>
+                  <label>Disclosures Sent</label>
                   <input
                     type="date"
                     value={formData.initial_disclosures_sent_date || ''}
@@ -2481,7 +2479,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Initial Disclosures Signed Date</label>
+                  <label>Disclosures Signed</label>
                   <input
                     type="date"
                     value={formData.initial_disclosures_signed_date || ''}
@@ -2490,7 +2488,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Processor Submission Date</label>
+                  <label>Processor Submit</label>
                   <input
                     type="date"
                     value={formData.processor_submission_date || ''}
@@ -2499,7 +2497,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Underwriting Submission Date</label>
+                  <label>UW Submission</label>
                   <input
                     type="date"
                     value={formData.underwriting_submission_date || ''}
@@ -2508,17 +2506,16 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Conditional Approval Date</label>
+                  <label>Conditional Approval</label>
                   <input
                     type="date"
                     value={formData.conditional_approval_date || ''}
                     onChange={(e) => handleFieldChange('conditional_approval_date', e.target.value)}
                   />
-                  <small className="field-hint">UW Decision Date</small>
                 </div>
 
                 <div className="date-field">
-                  <label>Conditions Sent to Borrower</label>
+                  <label>Conditions Sent</label>
                   <input
                     type="date"
                     value={formData.conditions_sent_date || ''}
@@ -2527,7 +2524,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Conditions Received from Borrower</label>
+                  <label>Conditions Received</label>
                   <input
                     type="date"
                     value={formData.conditions_received_date || ''}
@@ -2536,7 +2533,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Resubmission to Underwriting Date</label>
+                  <label>Resubmission</label>
                   <input
                     type="date"
                     value={formData.resubmission_date || ''}
@@ -2545,7 +2542,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Final Approval / Clear-to-Close Date</label>
+                  <label>Clear to Close</label>
                   <input
                     type="date"
                     value={formData.clear_to_close_date || ''}
@@ -2557,10 +2554,10 @@ function LoanDetail() {
 
             {/* Rate Lock Dates */}
             <div className="dates-section">
-              <h3 className="dates-section-title">Rate Lock Dates</h3>
+              <h3 className="dates-section-title">Rate Lock</h3>
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Rate Lock Date</label>
+                  <label>Lock Date</label>
                   <input
                     type="date"
                     value={formData.rate_lock_date || ''}
@@ -2569,7 +2566,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Rate Lock Expiration Date</label>
+                  <label>Lock Expiration</label>
                   <input
                     type="date"
                     value={formData.rate_lock_expiration_date || ''}
@@ -2578,7 +2575,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Rate Lock Extension Date</label>
+                  <label>Lock Extension</label>
                   <input
                     type="date"
                     value={formData.rate_lock_extension_date || ''}
@@ -2587,23 +2584,22 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Float-down Trigger Date</label>
+                  <label>Float-down Trigger</label>
                   <input
                     type="date"
                     value={formData.float_down_trigger_date || ''}
                     onChange={(e) => handleFieldChange('float_down_trigger_date', e.target.value)}
                   />
-                  <small className="field-hint">If applicable</small>
                 </div>
               </div>
             </div>
 
             {/* Closing Process Dates */}
             <div className="dates-section">
-              <h3 className="dates-section-title">Closing Process Dates</h3>
+              <h3 className="dates-section-title">Closing</h3>
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Closing Disclosure Sent Date</label>
+                  <label>CD Sent</label>
                   <input
                     type="date"
                     value={formData.closing_disclosure_sent_date || ''}
@@ -2612,7 +2608,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>CD Received/Signed Date</label>
+                  <label>CD Signed</label>
                   <input
                     type="date"
                     value={formData.cd_received_signed_date || ''}
@@ -2621,17 +2617,16 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>CD Delivered Date</label>
+                  <label>CD Delivered</label>
                   <input
                     type="date"
                     value={formData.cd_delivered_date || ''}
                     onChange={(e) => handleFieldChange('cd_delivered_date', e.target.value)}
                   />
-                  <small className="field-hint">3-day timing rule</small>
                 </div>
 
                 <div className="date-field">
-                  <label>Final CD Issue Date</label>
+                  <label>Final CD Issued</label>
                   <input
                     type="date"
                     value={formData.final_cd_issue_date || ''}
@@ -2640,7 +2635,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Final Closing Package Sent Date</label>
+                  <label>Package Sent</label>
                   <input
                     type="date"
                     value={formData.final_closing_package_sent_date || ''}
@@ -2649,7 +2644,7 @@ function LoanDetail() {
                 </div>
 
                 <div className="date-field">
-                  <label>Closing Scheduled Date</label>
+                  <label>Closing Scheduled</label>
                   <input
                     type="date"
                     value={formData.closing_scheduled_date || ''}

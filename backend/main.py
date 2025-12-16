@@ -11669,7 +11669,7 @@ You ALWAYS look for:
 
 You never hedge. You identify the opportunity.
 
-# PIPELINE 360 WORKFLOW AUTOMATION
+# PERENNIA AI WORKFLOW AUTOMATION
 You create, manage, and assign tasks automatically based on:
 - Email triggers
 - Text triggers
@@ -19380,7 +19380,7 @@ app.include_router(workflow_router, tags=["Workflow"])
 # Include Workflow Configuration routes (editable workflow definitions)
 try:
     from workflow_config_models import create_workflow_config_models
-    from workflow_config_routes import router as workflow_config_router, set_dependencies as set_workflow_config_deps
+    from workflow_config_routes import router as workflow_config_router, set_dependencies as set_workflow_config_deps, get_all_workflow_tasks_logic
 
     # Create workflow config models using our Base
     workflow_config_models = create_workflow_config_models(Base)
@@ -37294,6 +37294,53 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - approvals error: {e}")
+        db.rollback()
+
+    # 10. WORKFLOW TASKS - Dynamic tasks from workflow configurations
+    try:
+        # Import the workflow tasks logic function
+        try:
+            workflow_tasks = get_all_workflow_tasks_logic(db, current_user, days_ahead=14)
+        except NameError:
+            # Function not imported (workflow config routes not loaded)
+            workflow_tasks = []
+
+        for task in workflow_tasks:
+            # Skip phone-only tasks (those go to Power Dialer)
+            comm_methods = task.get("communication_methods", [])
+            if comm_methods == ["phone"]:
+                continue
+
+            priority = task.get("urgency", "medium")
+            is_overdue = task.get("days_until_due", 0) < 0
+
+            workflow_item = {
+                "id": task.get("id", f"workflow_{task.get('client_id')}"),
+                "type": "workflow_task",
+                "priority": "critical" if is_overdue else priority,
+                "title": task.get("title", "Workflow Task"),
+                "description": task.get("description", ""),
+                "entity_type": task.get("client_type", "lead"),
+                "entity_id": task.get("client_id"),
+                "entity_name": task.get("client_name"),
+                "workflow_name": task.get("workflow_name"),
+                "workflow_color": task.get("workflow_color"),
+                "due_date": task.get("due_date"),
+                "url": f"/{'leads' if task.get('client_type') == 'lead' else 'loans'}/{task.get('client_id')}",
+                "days_until_due": task.get("days_until_due"),
+                "communication_methods": comm_methods,
+                "source": "Workflow"
+            }
+
+            # Add to appropriate category based on client type and urgency
+            if is_overdue:
+                action_items["urgent"].append(workflow_item)
+            elif task.get("client_type") == "lead":
+                action_items["leads"].append(workflow_item)
+            else:
+                action_items["loans"].append(workflow_item)
+    except Exception as e:
+        logger.warning(f"Command center - workflow tasks error: {e}")
         db.rollback()
 
     # Calculate summary counts
