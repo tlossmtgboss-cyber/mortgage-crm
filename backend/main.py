@@ -41060,14 +41060,12 @@ async def get_unified_tasks(
             })
 
         # 3. Get pending reconciliation items (batch fetch events separately to avoid N+1)
+        # Only show items assigned to current user - don't show unassigned items to everyone
         pending_reconciliation = db.query(ExtractedData).join(
             IncomingDataEvent,
             ExtractedData.event_id == IncomingDataEvent.id
         ).filter(
-            or_(
-                IncomingDataEvent.user_id == current_user.id,
-                IncomingDataEvent.user_id == None
-            ),
+            IncomingDataEvent.user_id == current_user.id,
             ExtractedData.status.in_(["pending_review", "needs_review"])
         ).order_by(ExtractedData.created_at.desc()).limit(50).all()
 
