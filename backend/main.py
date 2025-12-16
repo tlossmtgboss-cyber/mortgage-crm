@@ -35666,6 +35666,12 @@ async def delete_user(
         for query in nullify_queries:
             safe_execute(query, params)
 
+        # Commit Phase 1 changes
+        try:
+            db.commit()
+        except:
+            pass  # Ignore commit errors, continue with cleanup
+
         # =========================================================================
         # PHASE 2: DELETE user-owned records (tables with NOT NULL foreign keys)
         # =========================================================================
@@ -35707,8 +35713,11 @@ async def delete_user(
             # Workflow SLA assignments (with CASCADE)
             "DELETE FROM user_task_assignments WHERE assigned_user_id = :user_id",
             "DELETE FROM user_escalation_assignments WHERE assigned_user_id = :user_id",
-            # PURL user tokens
+            # PURL user tokens and workspace members
             "DELETE FROM purl_user_tokens WHERE user_id = :user_id",
+            "DELETE FROM purl_workspace_members WHERE user_id = :user_id",
+            "DELETE FROM purl_contacts WHERE auth_user_id = :user_id",
+            "DELETE FROM purl_loan_milestones WHERE assigned_to = :user_id",
             # Video clips (NOT NULL user_id)
             "DELETE FROM video_clip_notifications WHERE recipient_id = :user_id",
             "DELETE FROM video_clip_shares WHERE created_by_id = :user_id",
@@ -35730,6 +35739,14 @@ async def delete_user(
             # Scheduler
             "DELETE FROM scheduler_user_configs WHERE user_id = :user_id",
             "DELETE FROM scheduler_notification_preferences WHERE user_id = :user_id",
+            "DELETE FROM smart_scheduler_configs WHERE user_id = :user_id",
+            "DELETE FROM smart_availability_slots WHERE user_id = :user_id",
+            "DELETE FROM smart_appointment_slots WHERE assigned_user_id = :user_id",
+            "DELETE FROM smart_appointment_slots WHERE created_by_user_id = :user_id",
+            "DELETE FROM smart_booking_links WHERE user_id = :user_id",
+            "DELETE FROM blocked_times WHERE user_id = :user_id",
+            "DELETE FROM smart_blocked_times WHERE user_id = :user_id",
+            "DELETE FROM smart_appointment_types WHERE user_id = :user_id",
             # Subscription admin overrides (NOT NULL admin_user_id)
             "DELETE FROM subscription_admin_overrides WHERE admin_user_id = :user_id",
             # Onboarding tables with NOT NULL foreign keys
@@ -35740,6 +35757,12 @@ async def delete_user(
 
         for query in delete_queries:
             safe_execute(query, params)
+
+        # Commit Phase 2 changes
+        try:
+            db.commit()
+        except:
+            pass  # Ignore commit errors, continue with cleanup
 
         # =========================================================================
         # PHASE 3: Handle any remaining foreign key constraints dynamically
@@ -35762,6 +35785,7 @@ async def delete_user(
             result = db.execute(text(fk_query))
             fk_refs = result.fetchall()
 
+            cleaned_tables = []
             for table_name, column_name in fk_refs:
                 # Skip the users table itself
                 if table_name == 'users':
@@ -35770,12 +35794,23 @@ async def delete_user(
                 try:
                     # First try nullifying
                     db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
+                    cleaned_tables.append(f"{table_name}.{column_name} (nullified)")
                 except:
                     # If that fails, try deleting
                     try:
                         db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
+                        cleaned_tables.append(f"{table_name}.{column_name} (deleted)")
                     except Exception as del_e:
                         logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
+
+            if cleaned_tables:
+                logger.info(f"Dynamic FK cleanup for user {user_id}: {', '.join(cleaned_tables)}")
+
+            # Commit Phase 3 changes
+            try:
+                db.commit()
+            except:
+                pass
         except Exception as fk_e:
             logger.warning(f"Could not query FK constraints: {fk_e}")
 
