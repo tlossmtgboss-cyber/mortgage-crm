@@ -36149,6 +36149,9 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # EFFICIENCY METRICS
     # ============================================================================
 
+    # Get total loan count for this user (to determine if they have any data)
+    total_loan_count = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).count()
+
     # Calculate average time to close from funded loans
     thirty_days_ago = today - timedelta(days=30)
     funded_loans_recent = db.query(Loan).filter(
@@ -36236,8 +36239,8 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "customerSatisfaction": customer_satisfaction,
         "customerSatisfactionChange": 0,  # Placeholder
 
-        # Stage Performance (simplified)
-        "stages": [
+        # Stage Performance - show empty for users with no data
+        "stages": [] if total_loan_count == 0 else [
             {"name": "Lead Generation", "efficiency": 85, "status": "on-track"},
             {"name": "Pre-Qualification", "efficiency": 72, "status": "slightly-delayed"},
             {"name": "Application", "efficiency": 81, "status": "on-track"},
@@ -36247,17 +36250,17 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
             {"name": "Closing", "efficiency": 92, "status": "on-track"}
         ],
 
-        # Team Performance
-        "team": [
+        # Team Performance - show empty for users with no data
+        "team": [] if total_loan_count == 0 else [
             {"role": "Loan Officers", "performance": 82},
             {"role": "Processors", "performance": 68},
             {"role": "Underwriters", "performance": 75},
             {"role": "Closers", "performance": 91}
         ],
 
-        # Bottlenecks
-        "bottleneckCount": 3,
-        "bottlenecks": [
+        # Bottlenecks - show empty for users with no loans falling behind
+        "bottleneckCount": 0 if loans_behind == 0 else 3,
+        "bottlenecks": [] if loans_behind == 0 else [
             {
                 "issue": "Missing Documents",
                 "stage": "Processing",
