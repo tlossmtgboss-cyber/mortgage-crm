@@ -119,24 +119,27 @@ function Registration() {
 
       // Check for successful registration response
       if (response.data && response.data.access_token) {
-        // Store authentication token and user info
+        // Store authentication token temporarily (will be saved after verification)
         const token = response.data.access_token;
-        const user = {
-          id: response.data.user_id,
-          email: response.data.email,
-          full_name: response.data.full_name || formData.full_name
-        };
+        const userId = response.data.user_id;
 
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
-
-        // Redirect to dashboard (onboarding wizard will show automatically)
-        navigate('/dashboard');
-      } else if (response.data && response.data.message) {
-        // Fallback: Email verification required (future production mode)
-        navigate('/verify-email-sent', {
+        // Redirect to account verification flow
+        navigate('/verify-account', {
           state: {
             email: formData.email,
+            phone: formData.phone,
+            full_name: formData.full_name,
+            userId: userId,
+            token: token
+          }
+        });
+      } else if (response.data && response.data.message) {
+        // Fallback: Email verification required (future production mode)
+        navigate('/verify-account', {
+          state: {
+            email: formData.email,
+            phone: formData.phone,
+            full_name: formData.full_name,
             message: response.data.message
           }
         });

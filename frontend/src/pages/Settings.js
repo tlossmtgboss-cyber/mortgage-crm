@@ -363,22 +363,20 @@ function Settings() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Validate saved order has all items (in case new items were added)
         const savedIds = new Set(parsed.map(item => item.id));
         const defaultIds = new Set(defaultSidebarItems.map(item => item.id));
 
-        // If all default items exist in saved, use saved order
-        if (defaultSidebarItems.every(item => savedIds.has(item.id))) {
-          return parsed;
-        }
-        // Otherwise, merge: keep saved order for existing items, append new ones
-        const merged = parsed.filter(item => defaultIds.has(item.id));
+        // Filter out any removed/deprecated items that are no longer in defaults
+        const filtered = parsed.filter(item => defaultIds.has(item.id));
+
+        // Add any new default items that weren't in saved
         defaultSidebarItems.forEach(item => {
           if (!savedIds.has(item.id)) {
-            merged.push(item);
+            filtered.push(item);
           }
         });
-        return merged;
+
+        return filtered;
       } catch (e) {
         return defaultSidebarItems;
       }
@@ -1185,10 +1183,23 @@ const API_BASE_URL = isProduction
       return;
     }
 
+    // Map frontend roles to backend permission_role values
+    const roleMapping = {
+      'loan_officer': 'sales',
+      'admin': 'admin',
+      'processor': 'processing',
+      'underwriter': 'operations',
+      'manager': 'management',
+      'application_analyst': 'operations'
+    };
+
     setAddingUser(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/invite`, {
+      const fullName = `${newUser.first_name} ${newUser.last_name}`.trim();
+      const permissionRole = roleMapping[newUser.role] || 'sales';
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/invitations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1196,10 +1207,9 @@ const API_BASE_URL = isProduction
         },
         body: JSON.stringify({
           email: newUser.email,
-          first_name: newUser.first_name,
-          last_name: newUser.last_name,
-          role: newUser.role,
-          is_active: newUser.is_active
+          full_name: fullName,
+          role: permissionRole,
+          send_email: true
         })
       });
 

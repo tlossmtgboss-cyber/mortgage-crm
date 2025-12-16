@@ -19,6 +19,7 @@ import './App.css';
 // Landing/Auth pages (keep these as regular imports for faster initial load)
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
+import AccountVerification from './pages/AccountVerification';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
@@ -298,6 +299,7 @@ function App() {
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
+          <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
 
