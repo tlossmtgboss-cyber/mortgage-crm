@@ -1013,6 +1013,7 @@ class ReferralPartner(Base):
     last_interaction = Column(DateTime)
     notes = Column(Text)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner of this referral partner
     leads = relationship("Lead", back_populates="referral_partner")
 
 
@@ -41434,6 +41435,7 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
         partner_data['business_name'] = partner_data.get('company') or partner_data.get('name') or ""
         partner_data['contact_name'] = partner_data.get('name') or ""
         partner_data['category'] = partner_data.get('type') or "realtor"
+        partner_data['owner_id'] = current_user.id  # Set owner to current user
         db_partner = ReferralPartner(**partner_data)
         db.add(db_partner)
         db.commit()
@@ -41448,7 +41450,10 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
 
 @app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
 async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    partners = db.query(ReferralPartner).order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
+    # Filter referral partners by owner - each user sees only their own partners
+    partners = db.query(ReferralPartner).filter(
+        ReferralPartner.owner_id == current_user.id
+    ).order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
     return partners
 
 @app.get("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)
@@ -51787,6 +51792,22 @@ async def startup_event():
                 db_temp.close()
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
+
+            # Add owner_id column to referral_partners table (for user isolation)
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name = 'referral_partners' AND column_name = 'owner_id'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("ALTER TABLE referral_partners ADD COLUMN owner_id INTEGER REFERENCES users(id)"))
+                    db_temp.execute(text("CREATE INDEX IF NOT EXISTS ix_referral_partners_owner_id ON referral_partners(owner_id)"))
+                    db_temp.commit()
+                    logger.info("✅ Added 'owner_id' column to referral_partners table")
+                db_temp.close()
+            except Exception as rp_e:
+                logger.warning(f"⚠️ Referral partners owner_id migration skipped: {rp_e}")
 
             # Add landing_page_settings column to scheduler_configs (for booking page customization)
             try:
