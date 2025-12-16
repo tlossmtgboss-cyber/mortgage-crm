@@ -347,10 +347,8 @@ function Settings() {
     { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
     { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
     { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
-    { id: 'api-keys', label: 'API Keys', type: 'standalone', section: 'api-keys' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
     { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
-    { id: 'notifications', label: 'Notifications', type: 'standalone', section: 'notifications' },
     { id: 'client-portals', label: 'Client Portals', type: 'standalone', section: 'client-portals' },
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
     { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' }
@@ -2599,28 +2597,10 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'clear-data' ? 'active' : ''}`} onClick={() => setActiveSection('clear-data')}><span>Clear Dummy Data</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`} onClick={() => setActiveSection('ai-feedback-log')}><span>AI Feedback Log</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`} onClick={() => setActiveSection('it-helpdesk-admin')}><span>IT Helpdesk Admin</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'api-keys' ? 'active' : ''}`} onClick={() => { setActiveSection('api-keys'); fetchApiKeys(); }}><span>API Keys</span></button>
                     </div>
                   )}
                 </div>
-              );
-            }
-
-            // Render standalone items (API Keys has special handler)
-            if (item.id === 'api-keys') {
-              return (
-                <button
-                  key={item.id}
-                  className={`sidebar-btn ${activeSection === item.section ? 'active' : ''} ${dragOverItem?.id === item.id ? 'drag-over' : ''}`}
-                  onClick={() => { setActiveSection('api-keys'); fetchApiKeys(); }}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, item)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={(e) => handleDragOver(e, item)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, item)}
-                >
-                  <span>{item.label}</span>
-                </button>
               );
             }
 
@@ -4694,13 +4674,6 @@ const API_BASE_URL = isProduction
                   )}
                 </div>
               )}
-            </div>
-          )}
-
-          {activeSection === 'notifications' && (
-            <div className="notifications-section">
-              <h2>Notification Preferences</h2>
-              <p>Coming soon...</p>
             </div>
           )}
 

@@ -11,6 +11,8 @@ function TeamMembers() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [deletingMembers, setDeletingMembers] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -65,6 +67,7 @@ function TeamMembers() {
   const loadMembers = async () => {
     try {
       setLoading(true);
+      setSelectedMembers([]); // Clear selection when reloading
       const data = await teamAPI.getMembers();
 
       console.log('Team API response:', data);
@@ -201,6 +204,63 @@ function TeamMembers() {
     }
   };
 
+  // Handle checkbox selection for a single member
+  const handleSelectMember = (memberId, e) => {
+    e.stopPropagation();
+    setSelectedMembers(prev => {
+      if (prev.includes(memberId)) {
+        return prev.filter(id => id !== memberId);
+      } else {
+        return [...prev, memberId];
+      }
+    });
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = (e) => {
+    e.stopPropagation();
+    const safeMembers = Array.isArray(members) ? members : [];
+    if (selectedMembers.length === safeMembers.length) {
+      // Deselect all
+      setSelectedMembers([]);
+    } else {
+      // Select all
+      setSelectedMembers(safeMembers.map(m => m.id));
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedMembers.length === 0) return;
+
+    const confirmMessage = `Are you sure you want to delete ${selectedMembers.length} team member${selectedMembers.length > 1 ? 's' : ''}? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    setDeletingMembers(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const memberId of selectedMembers) {
+      try {
+        await teamAPI.deleteMember(memberId);
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to delete member ${memberId}:`, error);
+        failCount++;
+      }
+    }
+
+    setDeletingMembers(false);
+    setSelectedMembers([]);
+    loadMembers();
+
+    if (failCount === 0) {
+      alert(`Successfully deleted ${successCount} team member${successCount > 1 ? 's' : ''}`);
+    } else {
+      alert(`Deleted ${successCount} member${successCount !== 1 ? 's' : ''}, failed to delete ${failCount}`);
+    }
+  };
+
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
   };
@@ -234,9 +294,30 @@ function TeamMembers() {
           <h1>Team Members</h1>
           <p>{String(safeMembers.length)} total team members</p>
         </div>
-        <button className="btn-primary" onClick={handleAddMember}>
-          + Add Team Member
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {selectedMembers.length > 0 && (
+            <button
+              className="btn-danger"
+              onClick={handleBulkDelete}
+              disabled={deletingMembers}
+              style={{
+                padding: '10px 20px',
+                background: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: deletingMembers ? 'not-allowed' : 'pointer',
+                fontWeight: '500',
+                opacity: deletingMembers ? 0.7 : 1
+              }}
+            >
+              {deletingMembers ? 'Deleting...' : `Delete Selected (${selectedMembers.length})`}
+            </button>
+          )}
+          <button className="btn-primary" onClick={handleAddMember}>
+            + Add Team Member
+          </button>
+        </div>
       </div>
 
       <div className="search-bar-container">
@@ -269,6 +350,15 @@ function TeamMembers() {
           <table className="leads-table">
             <thead>
               <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAll}
+                    checked={safeMembers.length > 0 && selectedMembers.length === safeMembers.length}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    title="Select all"
+                  />
+                </th>
                 <th>NAME</th>
                 <th>EMAIL</th>
                 <th>PHONE</th>
@@ -280,12 +370,24 @@ function TeamMembers() {
             <tbody>
               {filteredMembers.map((member) => {
                 if (!member || !member.id) return null;
+                const isSelected = selectedMembers.includes(member.id);
                 return (
                   <tr
                     key={member.id}
                     onClick={() => navigate(`/team-members/${member.id}`)}
-                    style={{ cursor: 'pointer' }}
+                    style={{
+                      cursor: 'pointer',
+                      backgroundColor: isSelected ? '#e0f2fe' : undefined
+                    }}
                   >
+                    <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleSelectMember(member.id, e)}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                    </td>
                     <td className="lead-name">
                       <strong>
                         {`${member.first_name || ''} ${member.last_name || ''}`.trim() || 'No Name'}
