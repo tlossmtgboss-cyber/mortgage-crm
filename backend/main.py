@@ -33604,6 +33604,27 @@ async def debug_routers():
     }
 
 
+@app.post("/api/v1/debug/complete-onboarding-by-email")
+async def debug_complete_onboarding_by_email(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to mark a user's onboarding as complete by email"""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {email} not found")
+
+    user.onboarding_completed = True
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Onboarding marked complete for {email}",
+        "user_id": user.id,
+        "email": user.email
+    }
+
+
 @app.get("/debug/test-import")
 async def debug_test_import():
     """Test importing the smart scheduler modules"""
@@ -35927,6 +35948,28 @@ async def delete_user(
             "DELETE FROM onboarding_audit_log WHERE performed_by = :user_id",
             "DELETE FROM onboarding_documents WHERE uploaded_by = :user_id",
             "DELETE FROM user_creation_requests WHERE created_by = :user_id",
+            # Email response training tables (NOT NULL user_id)
+            "DELETE FROM email_response_learning WHERE user_id = :user_id",
+            "DELETE FROM email_response_patterns WHERE user_id = :user_id",
+            "DELETE FROM email_response_history WHERE user_id = :user_id",
+            # User job descriptions
+            "DELETE FROM user_job_descriptions WHERE user_id = :user_id",
+            # User stage access
+            "DELETE FROM user_stage_access WHERE user_id = :user_id",
+            # Morning checkin tables
+            "DELETE FROM morning_checkin_responses WHERE user_id = :user_id",
+            "DELETE FROM morning_checkin_followups WHERE user_id = :user_id",
+            "DELETE FROM morning_checkin_insights WHERE user_id = :user_id",
+            "DELETE FROM morning_checkin_goals WHERE user_id = :user_id",
+            "DELETE FROM morning_checkin_settings WHERE user_id = :user_id",
+            # Email identity tokens
+            "DELETE FROM email_identity_tokens WHERE user_id = :user_id",
+            "DELETE FROM email_thread_assignments WHERE user_id = :user_id",
+            # Permission requests
+            "DELETE FROM permission_requests WHERE employee_id = :user_id",
+            "DELETE FROM user_permission_overrides WHERE user_id = :user_id",
+            # Microsite themes
+            "DELETE FROM microsite_user_settings WHERE user_id = :user_id",
         ]
 
         for query in delete_queries:
@@ -35964,13 +36007,21 @@ async def delete_user(
                 # Skip the users table itself
                 if table_name == 'users':
                     continue
-                # Try to either nullify or delete
+                # Try to either nullify or delete using savepoints
                 try:
+                    # Create a savepoint before attempting the UPDATE
+                    db.execute(text("SAVEPOINT fk_cleanup_sp"))
                     # First try nullifying
                     db.execute(text(f"UPDATE {table_name} SET {column_name} = NULL WHERE {column_name} = :user_id"), params)
+                    db.execute(text("RELEASE SAVEPOINT fk_cleanup_sp"))
                     cleaned_tables.append(f"{table_name}.{column_name} (nullified)")
-                except:
-                    # If that fails, try deleting
+                except Exception as update_e:
+                    # Rollback to savepoint to recover transaction state
+                    try:
+                        db.execute(text("ROLLBACK TO SAVEPOINT fk_cleanup_sp"))
+                    except:
+                        pass
+                    # If UPDATE fails (e.g., NOT NULL constraint), try deleting
                     try:
                         db.execute(text(f"DELETE FROM {table_name} WHERE {column_name} = :user_id"), params)
                         cleaned_tables.append(f"{table_name}.{column_name} (deleted)")

@@ -29,16 +29,16 @@ const STEP_INFO = {
 
 // Available roles
 const ROLES = [
-  { id: 'loan_officer', name: 'Loan Officer', description: 'Originate loans, manage borrower relationships, handle rate locks', icon: '🏠' },
-  { id: 'jr_loan_officer', name: 'Jr. Loan Officer', description: 'Entry-level originator, learning sales and building relationships', icon: '📚' },
-  { id: 'loan_officer_assistant', name: 'Loan Officer Assistant', description: 'Support LOs with admin tasks, documents, and communication', icon: '📋' },
-  { id: 'processor', name: 'Processor', description: 'Manage loan processing, document verification, and UW submission', icon: '⚙️' },
-  { id: 'processing_assistant', name: 'Processing Assistant', description: 'Assist with documentation, condition tracking, file prep', icon: '📁' },
-  { id: 'closer', name: 'Closer', description: 'Manage closing coordination, final docs, and funding', icon: '✅' },
-  { id: 'underwriter', name: 'Underwriter', description: 'Review applications, assess risk, issue approvals', icon: '🔍' },
-  { id: 'team_lead', name: 'Team Lead', description: 'Supervise team members, monitor performance', icon: '👥' },
-  { id: 'branch_manager', name: 'Branch Manager', description: 'Oversee branch operations, manage staff', icon: '🏢' },
-  { id: 'other', name: 'Other', description: 'Different role not listed above', icon: '💼' }
+  { id: 'loan_officer', name: 'Loan Officer', description: 'Originate loans, manage borrower relationships, handle rate locks' },
+  { id: 'jr_loan_officer', name: 'Jr. Loan Officer', description: 'Entry-level originator, learning sales and building relationships' },
+  { id: 'loan_officer_assistant', name: 'Loan Officer Assistant', description: 'Support LOs with admin tasks, documents, and communication' },
+  { id: 'processor', name: 'Processor', description: 'Manage loan processing, document verification, and UW submission' },
+  { id: 'processing_assistant', name: 'Processing Assistant', description: 'Assist with documentation, condition tracking, file prep' },
+  { id: 'closer', name: 'Closer', description: 'Manage closing coordination, final docs, and funding' },
+  { id: 'underwriter', name: 'Underwriter', description: 'Review applications, assess risk, issue approvals' },
+  { id: 'team_lead', name: 'Team Lead', description: 'Supervise team members, monitor performance' },
+  { id: 'branch_manager', name: 'Branch Manager', description: 'Oversee branch operations, manage staff' },
+  { id: 'other', name: 'Other', description: 'Different role not listed above' }
 ];
 
 // Departments
@@ -260,26 +260,21 @@ function FirstTimeOnboarding() {
   // Render Welcome Step
   const renderWelcome = () => (
     <div className="onboarding-step welcome-step">
-      <div className="welcome-icon">🚀</div>
       <h1>Welcome to Perennia AI!</h1>
       <p className="welcome-subtitle">
         Let's get your account set up in just a few minutes.
       </p>
       <div className="welcome-features">
         <div className="feature-item">
-          <span className="feature-icon">📊</span>
           <span>Track your pipeline and production</span>
         </div>
         <div className="feature-item">
-          <span className="feature-icon">🤖</span>
           <span>AI-powered task management</span>
         </div>
         <div className="feature-item">
-          <span className="feature-icon">📈</span>
           <span>Set and monitor your goals</span>
         </div>
         <div className="feature-item">
-          <span className="feature-icon">💬</span>
           <span>Smart client communication</span>
         </div>
       </div>
@@ -361,7 +356,6 @@ function FirstTimeOnboarding() {
             className={`role-card ${formData.role === role.id ? 'selected' : ''}`}
             onClick={() => handleInputChange('role', role.id)}
           >
-            <div className="role-icon">{role.icon}</div>
             <div className="role-name">{role.name}</div>
             <div className="role-description">{role.description}</div>
           </div>
@@ -485,7 +479,6 @@ function FirstTimeOnboarding() {
   // Render Complete Step
   const renderComplete = () => (
     <div className="onboarding-step complete-step">
-      <div className="complete-icon">🎉</div>
       <h1>You're all set!</h1>
       <p className="complete-subtitle">
         Welcome to Perennia AI, {formData.first_name}!
