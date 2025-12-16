@@ -75,6 +75,25 @@ const MeetingRoom = () => {
   const localVideoRef = useRef(null);
   const recordingTimerRef = useRef(null);
 
+  // WebRTC refs
+  const wsRef = useRef(null);
+  const peerConnectionsRef = useRef({}); // {participantId: RTCPeerConnection}
+  const remoteStreamsRef = useRef({}); // {participantId: MediaStream}
+  const remoteVideoRefs = useRef({}); // {participantId: HTMLVideoElement ref}
+  const localParticipantIdRef = useRef(null);
+
+  // Remote streams state (for rendering)
+  const [remoteStreams, setRemoteStreams] = useState({}); // {participantId: {stream, displayName, audioEnabled, videoEnabled}}
+
+  // WebRTC configuration
+  const rtcConfig = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ]
+  };
+
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
     return {
@@ -156,6 +175,7 @@ const MeetingRoom = () => {
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
+      return stream;
     } catch (err) {
       console.error('Error accessing media devices:', err);
       // Try audio only
@@ -163,11 +183,335 @@ const MeetingRoom = () => {
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setLocalStream(audioStream);
         setVideoEnabled(false);
+        return audioStream;
       } catch (audioErr) {
         console.error('Error accessing audio:', audioErr);
+        return null;
       }
     }
   };
+
+  // ============================================================================
+  // WEBRTC SIGNALING FUNCTIONS
+  // ============================================================================
+
+  // Connect to WebSocket signaling server
+  const connectSignaling = useCallback((stream) => {
+    // Generate unique participant ID
+    const participantId = `p-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    localParticipantIdRef.current = participantId;
+
+    // Determine WebSocket URL
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = isProduction
+      ? 'mortgage-crm-production-7a9a.up.railway.app'
+      : (process.env.REACT_APP_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000');
+    const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}&host=${isHost}`;
+
+    console.log('Connecting to signaling server:', wsUrl);
+
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('Connected to signaling server');
+      // Start ping to keep connection alive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000);
+      ws._pingInterval = pingInterval;
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('Signaling message:', message.type);
+
+        switch (message.type) {
+          case 'participants_list':
+            // When we join, we receive the current participant list
+            // Create offers to connect to existing participants
+            for (const participant of message.participants) {
+              if (participant.id !== participantId) {
+                console.log('Creating offer for existing participant:', participant.id);
+                await createPeerConnection(participant.id, participant.display_name, stream, true);
+              }
+            }
+            break;
+
+          case 'participant_joined':
+            // New participant joined - they will send us an offer
+            console.log('New participant joined:', message.participant_id);
+            break;
+
+          case 'participant_left':
+            // Participant left - cleanup their connection
+            console.log('Participant left:', message.participant_id);
+            closePeerConnection(message.participant_id);
+            break;
+
+          case 'request_offer':
+            // Another participant is requesting an offer from us
+            console.log('Offer requested by:', message.from);
+            await createPeerConnection(message.from, null, stream, true);
+            break;
+
+          case 'offer':
+            // Received an offer - create answer
+            console.log('Received offer from:', message.from);
+            await handleOffer(message.from, message.sdp, stream);
+            break;
+
+          case 'answer':
+            // Received an answer to our offer
+            console.log('Received answer from:', message.from);
+            await handleAnswer(message.from, message.sdp);
+            break;
+
+          case 'ice_candidate':
+            // Received ICE candidate
+            await handleIceCandidate(message.from, message.candidate);
+            break;
+
+          case 'participant_media_state':
+            // Update participant's media state
+            setRemoteStreams(prev => {
+              if (prev[message.participant_id]) {
+                return {
+                  ...prev,
+                  [message.participant_id]: {
+                    ...prev[message.participant_id],
+                    audioEnabled: message.audio ?? prev[message.participant_id].audioEnabled,
+                    videoEnabled: message.video ?? prev[message.participant_id].videoEnabled
+                  }
+                };
+              }
+              return prev;
+            });
+            break;
+
+          case 'chat':
+            // Chat message received
+            setChatMessages(prev => [...prev, {
+              id: Date.now(),
+              sender: message.sender_name,
+              text: message.message,
+              timestamp: new Date(message.timestamp)
+            }]);
+            break;
+
+          case 'pong':
+            // Ping response - ignore
+            break;
+
+          default:
+            console.log('Unknown message type:', message.type);
+        }
+      } catch (err) {
+        console.error('Error handling signaling message:', err);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      if (ws._pingInterval) {
+        clearInterval(ws._pingInterval);
+      }
+    };
+
+    return ws;
+  }, [roomCode, displayName, isHost]);
+
+  // Create a peer connection to another participant
+  const createPeerConnection = async (remoteParticipantId, remoteName, stream, createOffer = false) => {
+    // Check if connection already exists
+    if (peerConnectionsRef.current[remoteParticipantId]) {
+      console.log('Peer connection already exists for:', remoteParticipantId);
+      return peerConnectionsRef.current[remoteParticipantId];
+    }
+
+    console.log('Creating peer connection for:', remoteParticipantId);
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnectionsRef.current[remoteParticipantId] = pc;
+
+    // Add local tracks to the connection
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+    }
+
+    // Handle incoming tracks (remote video/audio)
+    pc.ontrack = (event) => {
+      console.log('Received remote track from:', remoteParticipantId);
+      const remoteStream = event.streams[0];
+      remoteStreamsRef.current[remoteParticipantId] = remoteStream;
+
+      setRemoteStreams(prev => ({
+        ...prev,
+        [remoteParticipantId]: {
+          stream: remoteStream,
+          displayName: remoteName || `Participant`,
+          audioEnabled: true,
+          videoEnabled: true
+        }
+      }));
+
+      // Attach stream to video element if it exists
+      setTimeout(() => {
+        const videoEl = document.getElementById(`remote-video-${remoteParticipantId}`);
+        if (videoEl && remoteStream) {
+          videoEl.srcObject = remoteStream;
+        }
+      }, 100);
+    };
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'ice_candidate',
+          target: remoteParticipantId,
+          candidate: event.candidate
+        }));
+      }
+    };
+
+    // Handle connection state changes
+    pc.onconnectionstatechange = () => {
+      console.log(`Connection state with ${remoteParticipantId}:`, pc.connectionState);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        // Connection failed - cleanup
+        closePeerConnection(remoteParticipantId);
+      }
+    };
+
+    // Create and send offer if we're initiating
+    if (createOffer) {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'offer',
+            target: remoteParticipantId,
+            sdp: pc.localDescription
+          }));
+        }
+      } catch (err) {
+        console.error('Error creating offer:', err);
+      }
+    }
+
+    return pc;
+  };
+
+  // Handle incoming offer
+  const handleOffer = async (fromParticipantId, sdp, stream) => {
+    let pc = peerConnectionsRef.current[fromParticipantId];
+
+    if (!pc) {
+      pc = await createPeerConnection(fromParticipantId, null, stream, false);
+    }
+
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'answer',
+          target: fromParticipantId,
+          sdp: pc.localDescription
+        }));
+      }
+    } catch (err) {
+      console.error('Error handling offer:', err);
+    }
+  };
+
+  // Handle incoming answer
+  const handleAnswer = async (fromParticipantId, sdp) => {
+    const pc = peerConnectionsRef.current[fromParticipantId];
+    if (pc) {
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      } catch (err) {
+        console.error('Error handling answer:', err);
+      }
+    }
+  };
+
+  // Handle incoming ICE candidate
+  const handleIceCandidate = async (fromParticipantId, candidate) => {
+    const pc = peerConnectionsRef.current[fromParticipantId];
+    if (pc && candidate) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.error('Error adding ICE candidate:', err);
+      }
+    }
+  };
+
+  // Close peer connection
+  const closePeerConnection = (participantId) => {
+    const pc = peerConnectionsRef.current[participantId];
+    if (pc) {
+      pc.close();
+      delete peerConnectionsRef.current[participantId];
+    }
+
+    if (remoteStreamsRef.current[participantId]) {
+      delete remoteStreamsRef.current[participantId];
+    }
+
+    setRemoteStreams(prev => {
+      const newStreams = { ...prev };
+      delete newStreams[participantId];
+      return newStreams;
+    });
+  };
+
+  // Send media state update via WebSocket
+  const sendMediaState = (audio, video) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'media_state',
+        audio,
+        video
+      }));
+    }
+  };
+
+  // Cleanup WebRTC connections
+  const cleanupWebRTC = useCallback(() => {
+    // Close all peer connections
+    Object.keys(peerConnectionsRef.current).forEach(participantId => {
+      closePeerConnection(participantId);
+    });
+
+    // Close WebSocket
+    if (wsRef.current) {
+      if (wsRef.current._pingInterval) {
+        clearInterval(wsRef.current._pingInterval);
+      }
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  // ============================================================================
+  // END WEBRTC FUNCTIONS
+  // ============================================================================
 
   // Join meeting
   const handleJoin = async () => {
@@ -182,7 +526,7 @@ const MeetingRoom = () => {
     }
 
     // Initialize media
-    await initializeMedia();
+    const stream = await initializeMedia();
     setJoined(true);
     setInWaitingRoom(false);
 
@@ -208,6 +552,11 @@ const MeetingRoom = () => {
         console.warn('Could not notify backend of join:', err);
       }
     }
+
+    // Connect to WebRTC signaling server
+    if (stream) {
+      connectSignaling(stream);
+    }
   };
 
   // Toggle audio
@@ -217,6 +566,8 @@ const MeetingRoom = () => {
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setAudioEnabled(audioTrack.enabled);
+        // Notify other participants of state change
+        sendMediaState(audioTrack.enabled, videoEnabled);
       }
     }
   };
@@ -228,6 +579,8 @@ const MeetingRoom = () => {
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setVideoEnabled(videoTrack.enabled);
+        // Notify other participants of state change
+        sendMediaState(audioEnabled, videoTrack.enabled);
       }
     }
   };

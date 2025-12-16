@@ -19459,6 +19459,11 @@ try:
     # Include the router
     app.include_router(video_meeting_router, tags=["Video Meetings"])
     logger.info("✅ Video Meeting (UVIP) routes loaded")
+
+    # Load Video Meeting WebRTC Signaling
+    from video_meeting_signaling import router as video_signaling_router
+    app.include_router(video_signaling_router, tags=["Video Meeting Signaling"])
+    logger.info("✅ Video Meeting Signaling (WebRTC) routes loaded")
 except Exception as e:
     import traceback
     _video_meeting_error = f"{e}\n{traceback.format_exc()}"

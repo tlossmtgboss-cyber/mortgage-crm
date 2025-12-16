@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../services/api';
 import './CalendarSidebar.css';
 
-// v1.3 - Clickable appointments with edit modal and client name display
-console.log('[CalendarSidebar] v1.3 loaded - clickable appointments');
+// v1.4 - Improved drag-drop + click-to-schedule fallback
+console.log('[CalendarSidebar] v1.4 loaded - improved scheduling');
 
 function CalendarSidebar({ leadId, loanId, children }) {
   console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
@@ -313,6 +313,15 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    // Set drop effect to copy
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[CalendarSidebar] Drag enter - data types:', e.dataTransfer.types);
     setIsDragOver(true);
   };
 
@@ -330,8 +339,25 @@ function CalendarSidebar({ leadId, loanId, children }) {
     e.stopPropagation();
     setIsDragOver(false);
 
+    console.log('[CalendarSidebar] Drop event received');
+    console.log('[CalendarSidebar] Data transfer types:', Array.from(e.dataTransfer.types));
+    console.log('[CalendarSidebar] Files:', e.dataTransfer.files?.length || 0);
+
     const emailInfo = parseEmailData(e.dataTransfer);
-    console.log('Parsed email info:', emailInfo);
+    console.log('[CalendarSidebar] Parsed email info:', emailInfo);
+
+    // Default date to selected date
+    const defaultDate = selectedDate.toISOString().split('T')[0];
+
+    // Pre-fill form with email data
+    setAppointmentForm(prev => ({
+      ...prev,
+      title: emailInfo.subject ? `Follow-up: ${emailInfo.subject}` : 'New Appointment',
+      attendee_name: emailInfo.from || '',
+      attendee_email: emailInfo.fromEmail || '',
+      date: defaultDate,
+      notes: emailInfo.body ? `From email:\n${emailInfo.body.substring(0, 500)}` : ''
+    }));
 
     // Open the appointment modal with extracted email data
     setEmailData(emailInfo);
@@ -493,6 +519,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
     <div
       className={`calendar-sidebar ${isDragOver ? 'drag-over' : ''}`}
       onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
@@ -545,9 +572,24 @@ function CalendarSidebar({ leadId, loanId, children }) {
         </div>
       </div>
 
-      {/* Drop zone hint */}
-      <div className="drop-zone-hint">
+      {/* Drop zone hint - now clickable as fallback */}
+      <div
+        className="drop-zone-hint clickable"
+        onClick={() => {
+          // Open modal for manual appointment creation
+          const defaultDate = selectedDate.toISOString().split('T')[0];
+          setAppointmentForm(prev => ({
+            ...prev,
+            title: 'New Appointment',
+            date: defaultDate,
+          }));
+          setEmailData(null);
+          setShowAppointmentModal(true);
+        }}
+        title="Click to create a new appointment, or drag an email here"
+      >
         <span>📧 Drag email here to schedule</span>
+        <span className="click-hint">(or click to create)</span>
       </div>
 
       {/* Appointments List */}
