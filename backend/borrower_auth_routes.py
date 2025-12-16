@@ -1855,12 +1855,12 @@ async def submit_application(
                                 "description": "Documentation of your IRS payment plan or balance owed"
                             })
 
-                        # New bank account documentation
-                        if submission.declarations.get("new_bank_account") == "yes":
+                        # New credit account statement (if approved)
+                        if submission.declarations.get("credit_application_approved") == "yes":
                             needs_tasks.append({
-                                "title": "New account opening statement",
+                                "title": "New account statement (loan/credit card)",
                                 "category": "assets",
-                                "description": "Opening statement for any bank accounts opened in the past 60 days"
+                                "description": "Most recent statement for any newly opened loan or credit card account"
                             })
 
                         # Standard documents for all applications
