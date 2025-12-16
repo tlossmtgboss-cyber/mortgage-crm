@@ -128,6 +128,11 @@ function Calendar() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [calendarOffset, setCalendarOffset] = useState(0); // Month offset for mini calendar scrolling
 
+  // Edit/reschedule appointment state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     loadEvents();
     loadAllEvents();
@@ -240,13 +245,102 @@ function Calendar() {
     }
   };
 
-  const handleDeleteEvent = async (eventId) => {
+  const handleDeleteEvent = async (event) => {
     try {
-      await calendarAPI.delete(eventId);
+      if (event.isAppointment && event.appointmentId) {
+        // This is a scheduler appointment - use cancel endpoint
+        if (!window.confirm('Are you sure you want to cancel this appointment? The attendee will be notified.')) {
+          return;
+        }
+        await schedulerAPI.cancelAppointment(event.appointmentId, 'Cancelled by user');
+      } else {
+        // This is a regular calendar event - use delete endpoint
+        if (!window.confirm('Are you sure you want to delete this event?')) {
+          return;
+        }
+        await calendarAPI.delete(event.id);
+      }
       loadEvents();
       loadAllEvents();
     } catch (error) {
-      console.error('Failed to delete event:', error);
+      console.error('Failed to delete/cancel event:', error);
+      alert('Failed to cancel: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  // Handle clicking on an appointment to edit/reschedule
+  const handleEditAppointment = (event) => {
+    if (!event.isAppointment) return;
+
+    const startDate = new Date(event.start_time);
+    const endDate = new Date(event.end_time);
+    const durationMs = endDate - startDate;
+    const durationMins = Math.round(durationMs / 60000);
+
+    setEditingAppointment({
+      id: event.appointmentId,
+      title: event.title || '',
+      attendee_name: event.attendee_name || '',
+      attendee_email: event.attendee_email || '',
+      date: startDate.toISOString().split('T')[0],
+      time: startDate.toTimeString().slice(0, 5),
+      duration: String(durationMins),
+      description: event.description || '',
+      status: event.status || 'BOOKED',
+    });
+    setShowEditModal(true);
+  };
+
+  // Handle saving edited appointment (reschedule)
+  const handleSaveAppointment = async (e) => {
+    e.preventDefault();
+    if (!editingAppointment) return;
+
+    setSaving(true);
+    try {
+      const startDateTime = new Date(`${editingAppointment.date}T${editingAppointment.time}`);
+      const endDateTime = new Date(startDateTime.getTime() + parseInt(editingAppointment.duration) * 60000);
+
+      const updateData = {
+        title: editingAppointment.title,
+        scheduled_start: startDateTime.toISOString(),
+        scheduled_end: endDateTime.toISOString(),
+        duration_minutes: parseInt(editingAppointment.duration),
+        attendee_notes: editingAppointment.description,
+      };
+
+      await schedulerAPI.updateAppointment(editingAppointment.id, updateData);
+
+      setShowEditModal(false);
+      setEditingAppointment(null);
+      loadEvents();
+      loadAllEvents();
+    } catch (error) {
+      console.error('Failed to update appointment:', error);
+      alert('Failed to reschedule: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle cancelling from edit modal
+  const handleCancelFromModal = async () => {
+    if (!editingAppointment || !window.confirm('Are you sure you want to cancel this appointment? The attendee will be notified.')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await schedulerAPI.cancelAppointment(editingAppointment.id, 'Cancelled by user');
+      setShowEditModal(false);
+      setEditingAppointment(null);
+      loadEvents();
+      loadAllEvents();
+    } catch (error) {
+      console.error('Failed to cancel appointment:', error);
+      alert('Failed to cancel: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -469,24 +563,34 @@ function Calendar() {
                     {showDateHeader && (
                       <div className="appointment-date-header">{dateLabel}</div>
                     )}
-                    <div className={`appointment-item appointment-${event.event_type || 'meeting'}`}>
+                    <div
+                      className={`appointment-item appointment-${event.event_type || 'meeting'} ${event.isAppointment ? 'clickable' : ''}`}
+                      onClick={() => event.isAppointment && handleEditAppointment(event)}
+                      style={{ cursor: event.isAppointment ? 'pointer' : 'default' }}
+                    >
                       <div className="appointment-time">
                         <div className="time-start">{startStr}</div>
                         <div className="time-duration">{duration}m</div>
                       </div>
                       <div className="appointment-details">
                         <div className="appointment-title">{event.title}</div>
+                        {event.attendee_name && (
+                          <div className="appointment-attendee">{event.attendee_name}</div>
+                        )}
                         {event.location && (
                           <div className="appointment-location">{event.location}</div>
                         )}
                         {event.description && (
                           <div className="appointment-description">{event.description}</div>
                         )}
+                        {event.isAppointment && (
+                          <div className="appointment-edit-hint">Click to edit/reschedule</div>
+                        )}
                       </div>
                       <button
                         className="delete-appointment"
-                        onClick={() => handleDeleteEvent(event.id)}
-                        title="Delete event"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event); }}
+                        title={event.isAppointment ? "Cancel appointment" : "Delete event"}
                       >
                         ×
                       </button>
@@ -542,6 +646,102 @@ function Calendar() {
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddEvent}
         />
+      )}
+
+      {showEditModal && editingAppointment && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content edit-appointment-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Edit Appointment</h3>
+            <form onSubmit={handleSaveAppointment}>
+              <div className="form-group">
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={editingAppointment.title}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, title: e.target.value})}
+                  required
+                />
+              </div>
+
+              {editingAppointment.attendee_name && (
+                <div className="form-group">
+                  <label>Attendee</label>
+                  <input
+                    type="text"
+                    value={editingAppointment.attendee_name}
+                    disabled
+                    className="disabled-input"
+                  />
+                </div>
+              )}
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={editingAppointment.date}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, date: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Time</label>
+                  <input
+                    type="time"
+                    value={editingAppointment.time}
+                    onChange={(e) => setEditingAppointment({...editingAppointment, time: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Duration</label>
+                <select
+                  value={editingAppointment.duration}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, duration: e.target.value})}
+                >
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">1 hour</option>
+                  <option value="90">1.5 hours</option>
+                  <option value="120">2 hours</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea
+                  value={editingAppointment.description}
+                  onChange={(e) => setEditingAppointment({...editingAppointment, description: e.target.value})}
+                  placeholder="Additional notes..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="form-actions modal-actions-split">
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={handleCancelFromModal}
+                  disabled={saving}
+                >
+                  Cancel Appointment
+                </button>
+                <div className="modal-actions-right">
+                  <button type="button" onClick={() => setShowEditModal(false)} disabled={saving}>
+                    Close
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
