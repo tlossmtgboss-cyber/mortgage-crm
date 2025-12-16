@@ -99,3 +99,93 @@
 .phone-action-btn.sms-btn:hover {
   background: #dbeafe;
 }
+
+/* Click-to-dial states */
+.clickable-phone {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.clickable-phone.calling {
+  color: #f59e0b;
+  cursor: wait;
+}
+
+.clickable-phone.calling::before {
+  content: '';
+  opacity: 0;
+}
+
+.clickable-phone.success {
+  color: #10b981;
+}
+
+.clickable-phone.success::before {
+  content: '';
+  opacity: 0;
+}
+
+.clickable-phone:disabled {
+  cursor: wait;
+}
+
+/* Call button states */
+.phone-action-btn.call-btn.calling {
+  background: #fef3c7;
+  animation: pulse-calling 1s infinite;
+}
+
+.phone-action-btn.call-btn.success {
+  background: #dcfce7;
+  color: #10b981;
+}
+
+.phone-action-btn.call-btn.error {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.phone-action-btn.call-btn:disabled {
+  cursor: wait;
+}
+
+@keyframes pulse-calling {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
+  }
+}
+
+/* Error tooltip for phone actions */
+.call-error-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ef4444;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  margin-top: 4px;
+  z-index: 10;
+}
+
+.phone-with-actions {
+  position: relative;
+}
+
+/* Inline error message */
+.call-error-inline {
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: normal;
+}

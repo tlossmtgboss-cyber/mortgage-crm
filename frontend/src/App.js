@@ -88,6 +88,7 @@ const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
 const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
+const FirstTimeOnboarding = lazy(() => import('./pages/FirstTimeOnboarding'));
 const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
@@ -146,8 +147,33 @@ const API_BASE_URL = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
-function PrivateRoute({ children }) {
-  return isAuthenticated() ? children : <Navigate to="/login" />;
+function PrivateRoute({ children, skipOnboardingCheck = false }) {
+  const location = useLocation();
+
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" />;
+  }
+
+  // Skip onboarding check for certain routes or when explicitly skipped
+  if (skipOnboardingCheck || location.pathname === '/first-time-setup') {
+    return children;
+  }
+
+  // Check if user has completed onboarding
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      if (user.onboarding_completed === false || user.onboarding_completed === undefined) {
+        // Redirect to first-time setup
+        return <Navigate to="/first-time-setup" replace />;
+      }
+    }
+  } catch (e) {
+    console.warn('Error checking onboarding status:', e);
+  }
+
+  return children;
 }
 
 // Wrapper to handle lazy-loaded pages with suspense
@@ -367,12 +393,24 @@ function App() {
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />
 
+          {/* First Time User Onboarding - Required for new accounts */}
+          <Route
+            path="/first-time-setup"
+            element={
+              <PrivateRoute skipOnboardingCheck={true}>
+                <LazyPage>
+                  <FirstTimeOnboarding />
+                </LazyPage>
+              </PrivateRoute>
+            }
+          />
+
           {/* Onboarding Page (old) */}
           <Route
             path="/onboarding"
             element={
               <PrivateRoute>
-                <Onboarding />
+                <Navigate to="/first-time-setup" replace />
               </PrivateRoute>
             }
           />

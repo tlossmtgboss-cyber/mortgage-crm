@@ -34508,6 +34508,94 @@ async def update_user_goals(
     logger.info(f"Goals updated for user {current_user.email}")
     return {"success": True, "goals": goals}
 
+
+# ============================================================================
+# FIRST-TIME USER ONBOARDING
+# ============================================================================
+
+class OnboardingData(BaseModel):
+    """Schema for completing first-time user onboarding"""
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    timezone: Optional[str] = 'America/New_York'
+    role: Optional[str] = None
+    department: Optional[str] = None
+    job_title: Optional[str] = None
+    nmls_id: Optional[str] = None
+    annual_goal: Optional[float] = None
+    monthly_goal: Optional[float] = None
+    avg_loan_amount: Optional[float] = 350000
+    pull_through_rate: Optional[float] = 75
+
+
+@app.post("/api/v1/users/complete-onboarding")
+async def complete_user_onboarding(
+    data: OnboardingData,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Complete first-time user onboarding and save profile data"""
+    try:
+        # Update user profile
+        current_user.full_name = f"{data.first_name} {data.last_name}"
+
+        # Update additional fields if they exist
+        if hasattr(current_user, 'phone'):
+            current_user.phone = data.phone
+        if hasattr(current_user, 'timezone'):
+            current_user.timezone = data.timezone
+        if hasattr(current_user, 'job_title'):
+            current_user.job_title = data.job_title
+        if hasattr(current_user, 'nmls_number'):
+            current_user.nmls_number = data.nmls_id
+        if hasattr(current_user, 'department'):
+            current_user.department = data.department
+
+        # Store role and goals in user_metadata
+        user_metadata = current_user.user_metadata or {}
+        user_metadata['role_type'] = data.role
+        user_metadata['department'] = data.department
+        user_metadata['goals'] = {
+            'annual_goal': data.annual_goal,
+            'monthly_goal': data.monthly_goal,
+            'avg_loan_amount': data.avg_loan_amount,
+            'pull_through_rate': data.pull_through_rate
+        }
+        user_metadata['onboarding_data'] = {
+            'first_name': data.first_name,
+            'last_name': data.last_name,
+            'completed_at': datetime.now(timezone.utc).isoformat()
+        }
+        current_user.user_metadata = user_metadata
+
+        # Mark onboarding as completed
+        current_user.onboarding_completed = True
+
+        db.commit()
+        db.refresh(current_user)
+
+        logger.info(f"Onboarding completed for user {current_user.email}")
+
+        return {
+            "success": True,
+            "message": "Onboarding completed successfully",
+            "user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "full_name": current_user.full_name,
+                "onboarding_completed": True,
+                "role": data.role,
+                "department": data.department
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error completing onboarding: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # EMAIL SIGNATURE MANAGEMENT
 # ============================================================================

@@ -506,6 +506,8 @@ function Leads() {
                   <ClickablePhone
                     phone={lead.phone}
                     showActions={true}
+                    contactName={lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim()}
+                    leadId={lead.id}
                     onSMSClick={() => {
                       setSelectedLeadForSMS(lead);
                       setShowSMSModal(true);

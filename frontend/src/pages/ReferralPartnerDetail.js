@@ -310,7 +310,7 @@ function ReferralPartnerDetail() {
           </div>
           <div className="info-item">
             <span className="label">Phone</span>
-            <span className="value"><ClickablePhone phone={partner.phone} /></span>
+            <span className="value"><ClickablePhone phone={partner.phone} contactName={partner.name} /></span>
           </div>
         </div>
 
