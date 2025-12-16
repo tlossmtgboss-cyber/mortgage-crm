@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.5 - Added email error display - build 20251215-1755
-// Fixed: Show detailed email error messages from backend
-console.log('[ScheduleAppointmentModal] v3.5 loaded - build 20251215-1755');
+// v3.6 - Fixed calendar to always show today as first visible date - build 20251216
+// Fixed: Calendar now resets to today whenever modal opens
+console.log('[ScheduleAppointmentModal] v3.6 loaded - build 20251216');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')

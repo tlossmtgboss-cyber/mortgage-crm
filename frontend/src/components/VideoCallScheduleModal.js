@@ -135,14 +135,22 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
     }
   }, [borrower?.id, fetchTeamMemberWorkHours]);
 
-  // Initialize when modal opens
+  // Reset calendar to today whenever modal opens
+  // This is a separate effect to ensure it always runs when isOpen changes
   useEffect(() => {
     if (isOpen) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      // Always start from today when modal opens
       setWeekStart(today);
       setSelectedDate(today);
+    }
+  }, [isOpen]);
+
+  // Initialize other state and fetch team members when modal opens
+  useEffect(() => {
+    if (isOpen) {
       setSelectedTime('');
       setSelectedTeamMember('');
       setError(null);

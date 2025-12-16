@@ -15,7 +15,12 @@ const PublicBooking = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
   const [meetingMode, setMeetingMode] = useState('video'); // 'video' or 'in_person'
-  const [weekStart, setWeekStart] = useState(new Date());
+  // Initialize weekStart to today with time set to midnight
+  const [weekStart, setWeekStart] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [step, setStep] = useState('datetime'); // datetime, form, confirmation, manage
   const [submitting, setSubmitting] = useState(false);
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
@@ -251,6 +256,15 @@ const PublicBooking = () => {
     newStart.setDate(weekStart.getDate() + 7);
     setWeekStart(newStart);
   };
+
+  // Reset calendar to today when step changes to datetime (e.g., when going back)
+  useEffect(() => {
+    if (step === 'datetime') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      setWeekStart(today);
+    }
+  }, [step]);
 
   // Loading state
   if (loading) {
