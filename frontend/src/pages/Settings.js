@@ -343,18 +343,15 @@ function Settings() {
     { id: 'organizational', label: 'Organizational Settings', type: 'parent', section: 'organizational' },
     { id: 'workflow', label: 'Workflow', type: 'standalone', section: 'workflow', navigate: '/workflow' },
     { id: 'sla-tracking', label: 'SLA Tracking', type: 'standalone', section: 'sla-tracking', navigate: '/sla-tracking' },
-    { id: 'ai-receptionist', label: 'AI Receptionist', type: 'standalone', section: 'ai-receptionist' },
     { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance' },
-    { id: 'voice-os', label: 'Voice OS', type: 'standalone', section: 'voice-os', navigate: '/voice-os-dashboard' },
     { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
     { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
     { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
     { id: 'integrations', label: 'Integrations', type: 'parent', section: 'integrations' },
     { id: 'api-keys', label: 'API Keys', type: 'standalone', section: 'api-keys' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
-    { id: 'production', label: 'Production', type: 'parent', section: 'production' },
+    { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
     { id: 'notifications', label: 'Notifications', type: 'standalone', section: 'notifications' },
-    { id: 'power-dialer', label: 'Power Dialer', type: 'standalone', section: 'dialer-settings' },
     { id: 'client-portals', label: 'Client Portals', type: 'standalone', section: 'client-portals' },
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
     { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' }
@@ -464,8 +461,8 @@ function Settings() {
   const [addingUser, setAddingUser] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
-    full_name: '',
-    password: '',
+    first_name: '',
+    last_name: '',
     role: 'loan_officer',
     is_active: true
   });
@@ -1183,33 +1180,39 @@ const API_BASE_URL = isProduction
 
   const handleAddUser = async (e) => {
     e.preventDefault();
-    if (!newUser.email || !newUser.password) {
-      alert('Email and password are required');
+    if (!newUser.email || !newUser.first_name || !newUser.last_name) {
+      alert('First name, last name, and email are required');
       return;
     }
 
     setAddingUser(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/invite`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(newUser)
+        body: JSON.stringify({
+          email: newUser.email,
+          first_name: newUser.first_name,
+          last_name: newUser.last_name,
+          role: newUser.role,
+          is_active: newUser.is_active
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to create user: ${response.status}`);
+        throw new Error(errorData.detail || `Failed to invite user: ${response.status}`);
       }
 
       // Reset form and close modal
       setNewUser({
         email: '',
-        full_name: '',
-        password: '',
+        first_name: '',
+        last_name: '',
         role: 'loan_officer',
         is_active: true
       });
@@ -1217,10 +1220,10 @@ const API_BASE_URL = isProduction
 
       // Reload users list
       await loadUsers();
-      alert('User created successfully!');
+      alert('Invitation sent! The user will receive an email to set up their account.');
     } catch (err) {
-      console.error('Failed to create user:', err);
-      alert(err.message || 'Failed to create user');
+      console.error('Failed to invite user:', err);
+      alert(err.message || 'Failed to invite user');
     } finally {
       setAddingUser(false);
     }
@@ -2596,6 +2599,9 @@ const API_BASE_URL = isProduction
                     <div className="sidebar-children">
                       <button className={`sidebar-btn child ${activeSection === 'smart-scheduler' ? 'active' : ''}`} onClick={() => setActiveSection('smart-scheduler')}><span>Smart Scheduler</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'video-meetings' ? 'active' : ''}`} onClick={() => setActiveSection('video-meetings')}><span>Video Meetings</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'dialer-settings' ? 'active' : ''}`} onClick={() => setActiveSection('dialer-settings')}><span>Power Dialer</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'voice-os' ? 'active' : ''}`} onClick={() => navigate('/voice-os-dashboard')}><span>Voice OS</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'ai-receptionist' ? 'active' : ''}`} onClick={() => setActiveSection('ai-receptionist')}><span>AI Receptionist</span></button>
                     </div>
                   )}
                 </div>
@@ -5560,20 +5566,38 @@ const API_BASE_URL = isProduction
                     background: 'white', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '500px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                      <h3 style={{ margin: 0 }}>Add New User</h3>
+                      <h3 style={{ margin: 0 }}>Invite New User</h3>
                       <button onClick={() => setShowAddUserModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>&times;</button>
                     </div>
 
+                    <div style={{ background: '#eff6ff', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontSize: '13px', color: '#1d4ed8' }}>
+                      <strong>Note:</strong> An invitation email will be sent to the user to create their account and set their password.
+                    </div>
+
                     <form onSubmit={handleAddUser}>
-                      <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Full Name</label>
-                        <input
-                          type="text"
-                          value={newUser.full_name}
-                          onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
-                          placeholder="John Doe"
-                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
-                        />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>First Name *</label>
+                          <input
+                            type="text"
+                            value={newUser.first_name}
+                            onChange={(e) => setNewUser({ ...newUser, first_name: e.target.value })}
+                            placeholder="John"
+                            required
+                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Last Name *</label>
+                          <input
+                            type="text"
+                            value={newUser.last_name}
+                            onChange={(e) => setNewUser({ ...newUser, last_name: e.target.value })}
+                            placeholder="Doe"
+                            required
+                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                          />
+                        </div>
                       </div>
 
                       <div style={{ marginBottom: '16px' }}>
@@ -5584,19 +5608,6 @@ const API_BASE_URL = isProduction
                           onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                           placeholder="john@example.com"
                           required
-                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
-                        />
-                      </div>
-
-                      <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Password *</label>
-                        <input
-                          type="password"
-                          value={newUser.password}
-                          onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                          placeholder="Enter password"
-                          required
-                          minLength={6}
                           style={{ width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
                         />
                       </div>
@@ -5642,7 +5653,7 @@ const API_BASE_URL = isProduction
                           disabled={addingUser}
                           style={{ padding: '10px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', opacity: addingUser ? 0.7 : 1 }}
                         >
-                          {addingUser ? 'Creating...' : 'Create User'}
+                          {addingUser ? 'Sending Invite...' : 'Send Invitation'}
                         </button>
                       </div>
                     </form>
