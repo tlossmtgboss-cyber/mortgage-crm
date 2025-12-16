@@ -192,6 +192,22 @@
   margin-bottom: 12px;
 }
 
+.section-header-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-header-with-action .section-label {
+  margin-bottom: 0;
+}
+
+.ai-generate-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
 .form-input {
   width: 100%;
   padding: 12px 16px;

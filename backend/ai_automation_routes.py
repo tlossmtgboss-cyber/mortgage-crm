@@ -1080,3 +1080,74 @@ Loan Officer"""
         "client_name": client_name,
         "training_applied": bool(training_instruction)
     }
+
+
+# =============================================================================
+# BIO GENERATION
+# =============================================================================
+
+@router.post("/generate-bio")
+async def generate_bio(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Generate a professional bio using AI based on user profile data."""
+    try:
+        import anthropic
+
+        name = request.get("name", "")
+        headline = request.get("headline", "")
+        tagline = request.get("tagline", "")
+        specialties = request.get("specialties", [])
+        years_experience = request.get("yearsExperience", "")
+        certifications = request.get("certifications", [])
+
+        # Build context for the AI
+        context_parts = []
+        if name:
+            context_parts.append(f"Name: {name}")
+        if headline:
+            context_parts.append(f"Headline: {headline}")
+        if tagline:
+            context_parts.append(f"Tagline: {tagline}")
+        if specialties:
+            context_parts.append(f"Specialties: {', '.join(specialties)}")
+        if years_experience:
+            context_parts.append(f"Years of Experience: {years_experience}")
+        if certifications:
+            context_parts.append(f"Certifications: {', '.join(certifications)}")
+
+        context = "\n".join(context_parts) if context_parts else "A mortgage loan officer"
+
+        prompt = f"""Write a professional, engaging bio for a mortgage loan officer's website. The bio should be warm, trustworthy, and highlight their expertise in helping clients achieve homeownership.
+
+Profile Information:
+{context}
+
+Requirements:
+- Write 2-3 paragraphs (150-200 words total)
+- Use first person ("I" statements)
+- Be warm and personable while maintaining professionalism
+- Focus on the value they bring to clients
+- If years of experience is provided, mention it naturally
+- If specialties are provided, weave them in naturally
+- End with something that invites the reader to reach out
+
+Write only the bio text, no headers or labels."""
+
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        bio = response.content[0].text.strip()
+
+        return {"status": "success", "bio": bio}
+
+    except Exception as e:
+        logger.error(f"Error generating bio: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate bio: {str(e)}")

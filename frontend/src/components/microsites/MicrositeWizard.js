@@ -615,6 +615,8 @@ const StepBrandColors = ({ data, onUpdate }) => (
 
 // Step 3: Profile Setup
 const StepProfile = ({ data, onUpdate }) => {
+  const [generatingBio, setGeneratingBio] = useState(false);
+
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -623,6 +625,41 @@ const StepProfile = ({ data, onUpdate }) => {
     // In production, this would upload to your storage
     const previewUrl = URL.createObjectURL(file);
     onUpdate({ heroImageUrl: previewUrl, photoFile: file });
+  };
+
+  const generateBioWithAI = async () => {
+    setGeneratingBio(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/ai/generate-bio`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: data.displayName || '',
+          headline: data.headline || '',
+          tagline: data.tagline || '',
+          specialties: data.specialties || [],
+          yearsExperience: data.yearsExperience || '',
+          certifications: data.certifications || []
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.bio) {
+          onUpdate({ bioExtended: result.bio });
+        }
+      } else {
+        console.error('Failed to generate bio');
+      }
+    } catch (error) {
+      console.error('Error generating bio:', error);
+    } finally {
+      setGeneratingBio(false);
+    }
   };
 
   return (
@@ -690,7 +727,34 @@ const StepProfile = ({ data, onUpdate }) => {
 
       {/* Bio */}
       <div className="form-section">
-        <label className="section-label">About You</label>
+        <div className="section-header-with-action">
+          <label className="section-label">About You</label>
+          <button
+            type="button"
+            className="ai-generate-btn"
+            onClick={generateBioWithAI}
+            disabled={generatingBio}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              fontSize: '13px',
+              background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: generatingBio ? 'wait' : 'pointer',
+              opacity: generatingBio ? 0.7 : 1
+            }}
+          >
+            {generatingBio ? (
+              <>⏳ Generating...</>
+            ) : (
+              <>✨ Generate with AI</>
+            )}
+          </button>
+        </div>
         <textarea
           className="form-textarea"
           value={data.bioExtended}
