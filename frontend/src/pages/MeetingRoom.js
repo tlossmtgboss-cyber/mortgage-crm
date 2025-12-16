@@ -647,6 +647,15 @@ const MeetingRoom = () => {
   const sendChatMessage = () => {
     if (!chatInput.trim()) return;
 
+    // Send via WebSocket if connected
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'chat',
+        message: chatInput
+      }));
+    }
+
+    // Also add to local state immediately for responsiveness
     setChatMessages(prev => [...prev, {
       id: Date.now(),
       sender: displayName,
@@ -768,7 +777,7 @@ const MeetingRoom = () => {
           if (data.admitted) {
             // Admitted! Join the meeting
             clearInterval(admissionPollRef.current);
-            await initializeMedia();
+            const stream = await initializeMedia();
             setJoined(true);
             setInWaitingRoom(false);
             setParticipants([{
@@ -778,6 +787,10 @@ const MeetingRoom = () => {
               audioEnabled: true,
               videoEnabled: true
             }]);
+            // Connect to WebRTC signaling server
+            if (stream) {
+              connectSignaling(stream);
+            }
           } else if (data.rejected) {
             clearInterval(admissionPollRef.current);
             setAdmissionRejected(true);
@@ -1161,6 +1174,9 @@ const MeetingRoom = () => {
 
   // Leave meeting
   const leaveMeeting = () => {
+    // Cleanup WebRTC connections
+    cleanupWebRTC();
+
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
@@ -1208,6 +1224,9 @@ const MeetingRoom = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Cleanup WebRTC
+      cleanupWebRTC();
+
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
       }
@@ -1215,7 +1234,7 @@ const MeetingRoom = () => {
         clearInterval(recordingTimerRef.current);
       }
     };
-  }, [localStream]);
+  }, [localStream, cleanupWebRTC]);
 
   // Loading state
   if (loading) {
@@ -1418,7 +1437,7 @@ const MeetingRoom = () => {
         </div>
         <div className="header-right">
           <span className="participant-count">
-            👥 {participants.length}
+            👥 {1 + Object.keys(remoteStreams).length}
           </span>
         </div>
       </div>
@@ -1443,15 +1462,29 @@ const MeetingRoom = () => {
           </div>
         </div>
 
-        {/* Other participants would go here */}
-        {participants.filter(p => !p.isLocal).map(participant => (
-          <div key={participant.id} className="video-container">
-            <div className="video-placeholder">
-              <span className="avatar large">{participant.name?.[0]?.toUpperCase()}</span>
-            </div>
+        {/* Remote participants with WebRTC video streams */}
+        {Object.entries(remoteStreams).map(([participantId, participantData]) => (
+          <div key={participantId} className="video-container remote">
+            <video
+              id={`remote-video-${participantId}`}
+              autoPlay
+              playsInline
+              ref={el => {
+                if (el && participantData.stream) {
+                  el.srcObject = participantData.stream;
+                }
+              }}
+            />
+            {!participantData.videoEnabled && (
+              <div className="video-off-overlay">
+                <span className="avatar large">
+                  {participantData.displayName?.[0]?.toUpperCase() || '?'}
+                </span>
+              </div>
+            )}
             <div className="video-label">
-              <span>{sanitizeText(participant.name)}</span>
-              {!participant.audioEnabled && <span className="muted-icon">🔇</span>}
+              <span>{sanitizeText(participantData.displayName || 'Participant')}</span>
+              {!participantData.audioEnabled && <span className="muted-icon">🔇</span>}
             </div>
           </div>
         ))}

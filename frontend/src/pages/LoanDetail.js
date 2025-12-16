@@ -785,36 +785,6 @@ function LoanDetail() {
         </div>
       </div>
 
-      {/* Borrower Selector */}
-      <div className="borrower-selector">
-        {borrowers.map((borrower, index) => (
-          <button
-            key={borrower.id}
-            className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
-            onClick={() => handleSwitchBorrower(index)}
-          >
-            {borrower.name}
-            {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
-          </button>
-        ))}
-        <button
-          className="borrower-btn add-borrower-btn"
-          onClick={() => {
-            const newBorrower = {
-              id: Date.now(),
-              name: 'New Borrower',
-              type: 'co_borrower',
-              email: '',
-              phone: ''
-            };
-            setBorrowers([...borrowers, newBorrower]);
-            setActiveBorrower(borrowers.length);
-          }}
-        >
-          + Add Borrower
-        </button>
-      </div>
-
       {/* Tab Navigation */}
       <div className="profile-tabs">
         <button

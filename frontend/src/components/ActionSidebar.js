@@ -4,6 +4,7 @@ import { commandCenterAPI, tasksAPI, reconciliationAPI } from '../services/api';
 import TaskDetailPanel from './shared/TaskDetailPanel';
 import ReconciliationDetailPanel from './shared/ReconciliationDetailPanel';
 import CallDetailPanel from './shared/CallDetailPanel';
+import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './ActionSidebar.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -43,7 +44,28 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 120000);
-    return () => clearInterval(interval);
+
+    // Subscribe to task events from other components (e.g., Tasks page)
+    const unsubscribeCompleted = subscribeToTaskEvent(TASK_EVENTS.TASK_COMPLETED, (detail) => {
+      // Only refresh if the event came from somewhere else
+      if (detail.source !== 'action-sidebar') {
+        console.log('[ActionSidebar] Task completed elsewhere, refreshing...');
+        fetchData();
+      }
+    });
+
+    const unsubscribeRefresh = subscribeToTaskEvent(TASK_EVENTS.TASKS_REFRESH, (detail) => {
+      if (detail.source !== 'action-sidebar') {
+        console.log('[ActionSidebar] Refresh requested, refreshing...');
+        fetchData();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribeCompleted();
+      unsubscribeRefresh();
+    };
   }, [fetchData]);
 
   const handleRefresh = () => {
@@ -263,6 +285,9 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       // Remove from selected and refresh
       setSelectedItem(null);
       fetchData();
+
+      // Emit event so other components (like Tasks page) can update
+      emitTaskCompleted(itemId, 'action-sidebar');
     } catch (err) {
       console.error('Complete task error:', err);
       alert('Failed to complete task. Please try again.');
