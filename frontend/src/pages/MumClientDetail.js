@@ -66,6 +66,7 @@ function MumClientDetail() {
 
   // Personal tab sub-tabs state
   const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info', 'employment', 'assets'
+  const [propertySubTab, setPropertySubTab] = useState('property'); // 'property', 'insurance', 'legal'
 
   const [borrowers, setBorrowers] = useState([]);
   const [activeBorrower, setActiveBorrower] = useState(0);
@@ -1337,76 +1338,532 @@ function MumClientDetail() {
           </div>
           )}
 
-          {/* Loan Information Tab */}
+          {/* Property Tab with Sub-tabs */}
           {activeTab === 'loan' && (
           <div className="info-section">
-            <h2>Loan Information</h2>
-            <div className="info-grid compact">
-              <div className="info-field">
-                <label>Property Address</label>
-                <input
-                  type="text"
-                  value={formData.address || ''}
-                  onChange={(e) => handleFieldChange('address', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>City</label>
-                <input
-                  type="text"
-                  value={formData.city || ''}
-                  onChange={(e) => handleFieldChange('city', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>State</label>
-                <input
-                  type="text"
-                  value={formData.state || ''}
-                  onChange={(e) => handleFieldChange('state', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>Zip Code</label>
-                <input
-                  type="text"
-                  value={formData.zip_code || ''}
-                  onChange={(e) => handleFieldChange('zip_code', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>Property Type</label>
-                <input
-                  type="text"
-                  value={formData.property_type || ''}
-                  onChange={(e) => handleFieldChange('property_type', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>Property Value</label>
-                <input
-                  type="number"
-                  value={formData.property_value || ''}
-                  onChange={(e) => handleFieldChange('property_value', parseFloat(e.target.value))}
-                />
-              </div>
-              <div className="info-field">
-                <label>Down Payment</label>
-                <input
-                  type="number"
-                  value={formData.down_payment || ''}
-                  onChange={(e) => handleFieldChange('down_payment', parseFloat(e.target.value))}
-                />
-              </div>
-              <div className="info-field">
-                <label>Credit Score</label>
-                <input
-                  type="number"
-                  value={formData.credit_score || ''}
-                  onChange={(e) => handleFieldChange('credit_score', parseInt(e.target.value))}
-                />
-              </div>
+            {/* Sub-tabs for Property, Insurance, and Legal */}
+            <div style={{ display: 'flex', gap: '0', marginBottom: '1.5rem', borderBottom: '1px solid #e0e0e0' }}>
+              <button
+                onClick={() => setPropertySubTab('property')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: propertySubTab === 'property' ? '600' : '400',
+                  color: propertySubTab === 'property' ? '#1a73e8' : '#5f6368',
+                  borderBottom: propertySubTab === 'property' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Property
+              </button>
+              <button
+                onClick={() => setPropertySubTab('insurance')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: propertySubTab === 'insurance' ? '600' : '400',
+                  color: propertySubTab === 'insurance' ? '#1a73e8' : '#5f6368',
+                  borderBottom: propertySubTab === 'insurance' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Insurance
+              </button>
+              <button
+                onClick={() => setPropertySubTab('legal')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: propertySubTab === 'legal' ? '600' : '400',
+                  color: propertySubTab === 'legal' ? '#1a73e8' : '#5f6368',
+                  borderBottom: propertySubTab === 'legal' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Legal
+              </button>
             </div>
+
+            {/* Property Sub-tab Content */}
+            {propertySubTab === 'property' && (
+              <>
+                <h2 style={{ margin: '0 0 1rem 0' }}>Property</h2>
+                <div className="info-grid compact">
+                  <div className="info-field">
+                    <label>Property Address</label>
+                    <input
+                      type="text"
+                      value={formData.address || ''}
+                      onChange={(e) => handleFieldChange('address', e.target.value)}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      value={formData.city || ''}
+                      onChange={(e) => handleFieldChange('city', e.target.value)}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>State</label>
+                    <input
+                      type="text"
+                      value={formData.state || ''}
+                      onChange={(e) => handleFieldChange('state', e.target.value)}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Zip Code</label>
+                    <input
+                      type="text"
+                      value={formData.zip_code || ''}
+                      onChange={(e) => handleFieldChange('zip_code', e.target.value)}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Property Type</label>
+                    <input
+                      type="text"
+                      value={formData.property_type || ''}
+                      onChange={(e) => handleFieldChange('property_type', e.target.value)}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Property Value</label>
+                    <input
+                      type="number"
+                      value={formData.property_value || ''}
+                      onChange={(e) => handleFieldChange('property_value', parseFloat(e.target.value))}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Down Payment</label>
+                    <input
+                      type="number"
+                      value={formData.down_payment || ''}
+                      onChange={(e) => handleFieldChange('down_payment', parseFloat(e.target.value))}
+                    />
+                  </div>
+                  <div className="info-field">
+                    <label>Credit Score</label>
+                    <input
+                      type="number"
+                      value={formData.credit_score || ''}
+                      onChange={(e) => handleFieldChange('credit_score', parseInt(e.target.value))}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Insurance Sub-tab Content */}
+            {propertySubTab === 'insurance' && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ margin: 0 }}>Insurance</h2>
+                </div>
+
+                {/* Homeowner's Insurance Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Homeowner's Insurance</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Insurance Company</label>
+                      <input
+                        type="text"
+                        value={formData.homeowner_insurance_company || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_company', e.target.value)}
+                        placeholder="Company name"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Agent Name</label>
+                      <input
+                        type="text"
+                        value={formData.homeowner_insurance_agent || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_agent', e.target.value)}
+                        placeholder="Agent name"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Agent Phone</label>
+                      <input
+                        type="tel"
+                        value={formData.homeowner_insurance_phone || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_phone', e.target.value)}
+                        placeholder="(555) 555-5555"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Agent Email</label>
+                      <input
+                        type="email"
+                        value={formData.homeowner_insurance_email || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_email', e.target.value)}
+                        placeholder="agent@insurance.com"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Policy Number</label>
+                      <input
+                        type="text"
+                        value={formData.homeowner_insurance_policy || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_policy', e.target.value)}
+                        placeholder="Policy number"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Annual Premium</label>
+                      <input
+                        type="text"
+                        value={formData.homeowner_insurance_premium || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_premium', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Coverage Amount</label>
+                      <input
+                        type="text"
+                        value={formData.homeowner_insurance_coverage || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_coverage', e.target.value)}
+                        placeholder="$0.00"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Effective Date</label>
+                      <input
+                        type="date"
+                        value={formData.homeowner_insurance_effective_date || ''}
+                        onChange={(e) => handleFieldChange('homeowner_insurance_effective_date', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Flood Insurance Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#333' }}>Flood Insurance</h3>
+                    {!formData.has_flood_insurance && (
+                      <button
+                        onClick={() => handleFieldChange('has_flood_insurance', true)}
+                        style={{
+                          background: '#1a73e8',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '8px 16px',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        + Add Flood Insurance
+                      </button>
+                    )}
+                  </div>
+
+                  {formData.has_flood_insurance ? (
+                    <div className="info-grid compact">
+                      <div className="info-field">
+                        <label>Insurance Company</label>
+                        <input
+                          type="text"
+                          value={formData.flood_insurance_company || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_company', e.target.value)}
+                          placeholder="Company name"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Agent Name</label>
+                        <input
+                          type="text"
+                          value={formData.flood_insurance_agent || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_agent', e.target.value)}
+                          placeholder="Agent name"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Agent Phone</label>
+                        <input
+                          type="tel"
+                          value={formData.flood_insurance_phone || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_phone', e.target.value)}
+                          placeholder="(555) 555-5555"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Agent Email</label>
+                        <input
+                          type="email"
+                          value={formData.flood_insurance_email || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_email', e.target.value)}
+                          placeholder="agent@insurance.com"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Policy Number</label>
+                        <input
+                          type="text"
+                          value={formData.flood_insurance_policy || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_policy', e.target.value)}
+                          placeholder="Policy number"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Annual Premium</label>
+                        <input
+                          type="text"
+                          value={formData.flood_insurance_premium || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_premium', e.target.value)}
+                          placeholder="$0.00"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Coverage Amount</label>
+                        <input
+                          type="text"
+                          value={formData.flood_insurance_coverage || ''}
+                          onChange={(e) => handleFieldChange('flood_insurance_coverage', e.target.value)}
+                          placeholder="$0.00"
+                        />
+                      </div>
+                      <div className="info-field">
+                        <label>Flood Zone</label>
+                        <select
+                          value={formData.flood_zone || ''}
+                          onChange={(e) => handleFieldChange('flood_zone', e.target.value)}
+                          style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                        >
+                          <option value="">-- Select Zone --</option>
+                          <option value="A">Zone A (High Risk)</option>
+                          <option value="AE">Zone AE (High Risk)</option>
+                          <option value="AH">Zone AH (High Risk)</option>
+                          <option value="AO">Zone AO (High Risk)</option>
+                          <option value="V">Zone V (Coastal High Risk)</option>
+                          <option value="VE">Zone VE (Coastal High Risk)</option>
+                          <option value="X">Zone X (Moderate/Low Risk)</option>
+                          <option value="B">Zone B (Moderate Risk)</option>
+                          <option value="C">Zone C (Low Risk)</option>
+                        </select>
+                      </div>
+                      <div className="info-field" style={{ gridColumn: 'span 2' }}>
+                        <button
+                          onClick={() => handleFieldChange('has_flood_insurance', false)}
+                          style={{
+                            background: 'none',
+                            color: '#dc3545',
+                            border: '1px solid #dc3545',
+                            borderRadius: '6px',
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            marginTop: '8px'
+                          }}
+                        >
+                          Remove Flood Insurance
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: '#f8f9fa',
+                      padding: '1.5rem',
+                      borderRadius: '8px',
+                      textAlign: 'center',
+                      color: '#666'
+                    }}>
+                      <p style={{ margin: 0 }}>No flood insurance added. Click "Add Flood Insurance" if required.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Legal Sub-tab Content */}
+            {propertySubTab === 'legal' && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ margin: 0 }}>Legal</h2>
+                </div>
+
+                {/* Title Company / Closing Attorney Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Title Company / Closing Attorney</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Company/Firm Type</label>
+                      <select
+                        value={formData.closing_entity_type || ''}
+                        onChange={(e) => handleFieldChange('closing_entity_type', e.target.value)}
+                        style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                      >
+                        <option value="">-- Select Type --</option>
+                        <option value="title_company">Title Company</option>
+                        <option value="closing_attorney">Closing Attorney</option>
+                      </select>
+                    </div>
+                    <div className="info-field">
+                      <label>Company/Firm Name</label>
+                      <input
+                        type="text"
+                        value={formData.closing_company_name || ''}
+                        onChange={(e) => handleFieldChange('closing_company_name', e.target.value)}
+                        placeholder="Company or firm name"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Contact Name</label>
+                      <input
+                        type="text"
+                        value={formData.closing_contact_name || ''}
+                        onChange={(e) => handleFieldChange('closing_contact_name', e.target.value)}
+                        placeholder="Primary contact name"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Phone</label>
+                      <input
+                        type="tel"
+                        value={formData.closing_phone || ''}
+                        onChange={(e) => handleFieldChange('closing_phone', e.target.value)}
+                        placeholder="(555) 555-5555"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Email</label>
+                      <input
+                        type="email"
+                        value={formData.closing_email || ''}
+                        onChange={(e) => handleFieldChange('closing_email', e.target.value)}
+                        placeholder="contact@company.com"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Fax</label>
+                      <input
+                        type="tel"
+                        value={formData.closing_fax || ''}
+                        onChange={(e) => handleFieldChange('closing_fax', e.target.value)}
+                        placeholder="(555) 555-5555"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Address</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field" style={{ gridColumn: 'span 2' }}>
+                      <label>Street Address</label>
+                      <input
+                        type="text"
+                        value={formData.closing_address || ''}
+                        onChange={(e) => handleFieldChange('closing_address', e.target.value)}
+                        placeholder="Street address"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>City</label>
+                      <input
+                        type="text"
+                        value={formData.closing_city || ''}
+                        onChange={(e) => handleFieldChange('closing_city', e.target.value)}
+                        placeholder="City"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>State</label>
+                      <input
+                        type="text"
+                        value={formData.closing_state || ''}
+                        onChange={(e) => handleFieldChange('closing_state', e.target.value)}
+                        placeholder="State"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Zip Code</label>
+                      <input
+                        type="text"
+                        value={formData.closing_zip || ''}
+                        onChange={(e) => handleFieldChange('closing_zip', e.target.value)}
+                        placeholder="Zip code"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Title/Closing Details Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '1rem', color: '#333' }}>Title & Closing Details</h3>
+                  <div className="info-grid compact">
+                    <div className="info-field">
+                      <label>Title Order Number</label>
+                      <input
+                        type="text"
+                        value={formData.title_order_number || ''}
+                        onChange={(e) => handleFieldChange('title_order_number', e.target.value)}
+                        placeholder="Order number"
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Title Order Date</label>
+                      <input
+                        type="date"
+                        value={formData.title_order_date || ''}
+                        onChange={(e) => handleFieldChange('title_order_date', e.target.value)}
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Preliminary Title Received</label>
+                      <input
+                        type="date"
+                        value={formData.preliminary_title_date || ''}
+                        onChange={(e) => handleFieldChange('preliminary_title_date', e.target.value)}
+                      />
+                    </div>
+                    <div className="info-field">
+                      <label>Closing Scheduled</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.closing_scheduled || ''}
+                        onChange={(e) => handleFieldChange('closing_scheduled', e.target.value)}
+                      />
+                    </div>
+                    <div className="info-field" style={{ gridColumn: 'span 2' }}>
+                      <label>Notes</label>
+                      <textarea
+                        value={formData.closing_notes || ''}
+                        onChange={(e) => handleFieldChange('closing_notes', e.target.value)}
+                        placeholder="Additional notes about title or closing..."
+                        style={{
+                          padding: '10px',
+                          borderRadius: '6px',
+                          border: '1px solid #ddd',
+                          fontSize: '14px',
+                          minHeight: '80px',
+                          resize: 'vertical'
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           )}
 

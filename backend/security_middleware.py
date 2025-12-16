@@ -164,6 +164,16 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
         # Production mode: IP whitelist enforcement only for admin paths
         # Note: Full enforcement disabled until admin IPs are properly configured
         if ENVIRONMENT == "production":
+            # Public paths that should NOT require admin auth (even under /admin/)
+            public_paths = [
+                "/api/v1/admin/users/activate/",  # Account activation (user not logged in yet)
+                "/api/v1/invitations/accept/",    # Accept invitation (user not logged in yet)
+            ]
+
+            # Skip whitelist check for public activation/invitation paths
+            if any(path.startswith(p) for p in public_paths):
+                return await call_next(request)
+
             # Only enforce whitelist for admin-level endpoints
             admin_paths = ["/api/v1/admin/", "/api/v1/migrations/"]
             is_admin_path = any(path.startswith(p) for p in admin_paths)

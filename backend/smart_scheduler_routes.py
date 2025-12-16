@@ -875,6 +875,7 @@ class AppointmentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     scheduled_start: Optional[datetime] = None
+    scheduled_end: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     meeting_mode: Optional[str] = None
     location: Optional[str] = None
@@ -883,6 +884,11 @@ class AppointmentUpdate(BaseModel):
     cancellation_reason: Optional[str] = None
     internal_notes: Optional[str] = None
     meeting_notes: Optional[str] = None
+    attendee_name: Optional[str] = None
+    attendee_email: Optional[str] = None
+    attendee_phone: Optional[str] = None
+    attendee_notes: Optional[str] = None
+    send_notification: Optional[bool] = True  # Send email/SMS on update
 
 
 class BlockedTimeCreate(BaseModel):
