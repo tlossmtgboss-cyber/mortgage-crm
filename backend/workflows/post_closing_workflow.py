@@ -1,5 +1,5 @@
 """
-Post-Closing Referral Workflow Engine - Pipeline 360
+Post-Closing Referral Workflow Engine - Perennia AI
 TL Development, LLC
 
 Automatically processes loans when they close and triggers:

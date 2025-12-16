@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Pipeline 360 QA Test Suite v2
+# Perennia AI QA Test Suite v2
 # Tests all critical API endpoints with correct paths
 
 BASE_URL="https://mortgage-crm-production-7a9a.up.railway.app"

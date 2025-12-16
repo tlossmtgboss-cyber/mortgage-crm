@@ -1,5 +1,5 @@
 """
-Pipeline 360 - Active Loan Workflow Engine
+Perennia AI - Active Loan Workflow Engine
 Handles automated task creation, theme days, and last mile processes
 """
 

@@ -7757,7 +7757,7 @@ The Team menu item appears for managers and management roles.
                         <h2>{subject}</h2>
                         <pre style="white-space: pre-wrap;">{content}</pre>
                         <hr>
-                        <p style="color: #666; font-size: 12px;">Sent from Pipeline 360 CRM</p>
+                        <p style="color: #666; font-size: 12px;">Sent from Perennia AI CRM</p>
                     </body>
                     </html>
                     """
@@ -11193,7 +11193,7 @@ Adapt your responses based on this profile. {'Keep responses concise and bullet-
 """
 
         system_prompt = f"""# IDENTITY
-You are the Agentic AI powering the Pipeline 360 Mortgage CRM Ecosystem.
+You are the Agentic AI powering the Perennia AI Mortgage CRM Ecosystem.
 You operate as the brain of the entire platform: decision-making, orchestration, reasoning, communication, and workflow execution.
 
 {"" if not selected_agent and not coaching_mode else f"**Active Agent: {agent_name}**"}
@@ -11229,7 +11229,7 @@ You run every major system inside the CRM:
 - Email Intelligence Engine
 - Teams Texting + Click-to-Dial Intelligence
 - Referral Pattern Engine + Circle of Cash Flow
-- Pipeline 360 Workflow Automation
+- Perennia AI Workflow Automation
 - Mortgages Under Management Retention Engine
 - AI Concierge + Production Assistant
 - Multi-agent orchestration (LangChain/AutoGen/CrewAI compatible)
@@ -16524,7 +16524,7 @@ I'd suggest starting with Sarah's appraisal review since it directly impacts her
 
     # Build comprehensive system prompt
     system_prompt = f"""# IDENTITY
-You are the AI Assistant for Pipeline 360 Mortgage CRM - a confident, expert mortgage industry copilot.
+You are the AI Assistant for Perennia AI Mortgage CRM - a confident, expert mortgage industry copilot.
 User: {current_user.full_name or current_user.email}
 Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({user_timezone})
 
@@ -19365,11 +19365,11 @@ app.include_router(migrations_router, tags=["Migrations"])
 from circle_of_cashflow_routes import router as circle_of_cashflow_router
 app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
 
-# Include AI Command routes for Pipeline 360 Landing Page
+# Include AI Command routes for Perennia AI Landing Page
 from ai_command_routes import router as ai_command_router
 app.include_router(ai_command_router, tags=["AI Commands"])
 
-# Include Subscription routes for Pipeline 360
+# Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
 app.include_router(subscription_router, tags=["Subscriptions"])
 
@@ -19629,6 +19629,14 @@ try:
     logger.info("✅ User Invitation routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ User Invitation routes not loaded: {e}")
+
+# Include Google Places API routes
+try:
+    from routes.places_routes import router as places_router
+    app.include_router(places_router, tags=["Places API"])
+    logger.info("✅ Google Places API routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Google Places API routes not loaded: {e}")
 
 # Include Beta Application routes
 try:

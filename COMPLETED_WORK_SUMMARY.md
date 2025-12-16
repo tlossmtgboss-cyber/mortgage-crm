@@ -174,7 +174,7 @@ SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=xxxx-xxxx-xxxx-xxxx  # App password
 FROM_EMAIL=your-email@gmail.com
-FROM_NAME=Pipeline 360 CRM
+FROM_NAME=Perennia AI CRM
 ```
 
 **Gmail Setup:**

@@ -1,5 +1,5 @@
 """
-Rate Lock Intelligence Engine - Pipeline 360
+Rate Lock Intelligence Engine - Perennia AI
 TL Development, LLC
 
 PRD Section 3.4 & Power Play 5 Implementation

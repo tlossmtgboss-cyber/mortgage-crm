@@ -1,4 +1,4 @@
-# Pipeline 360 Voice OS - Optimized for Maximum Realism
+# Perennia AI Voice OS - Optimized for Maximum Realism
 
 ## Executive Summary
 
@@ -340,8 +340,8 @@ export class VoiceOrchestrator {
 
     // Welcome message with personalization
     const welcomeMessage = contact
-      ? `Hi ${contact.first_name}, this is ${agent.name} calling from Pipeline 360. How can I help you today?`
-      : `Hi, this is ${agent.name} from Pipeline 360. How can I help you today?`;
+      ? `Hi ${contact.first_name}, this is ${agent.name} calling from Perennia AI. How can I help you today?`
+      : `Hi, this is ${agent.name} from Perennia AI. How can I help you today?`;
 
     await this.speak(ws, ttsStream, welcomeMessage, state);
 

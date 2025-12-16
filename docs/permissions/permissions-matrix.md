@@ -1,4 +1,4 @@
-# Pipeline 360 - Stage-Based Permissions Matrix
+# Perennia AI - Stage-Based Permissions Matrix
 
 ## Overview
 

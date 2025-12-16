@@ -1,4 +1,4 @@
-# Pipeline 360 - Stage-Based Permissions Architecture
+# Perennia AI - Stage-Based Permissions Architecture
 
 ## System Overview
 

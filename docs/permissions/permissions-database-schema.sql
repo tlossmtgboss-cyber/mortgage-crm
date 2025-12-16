@@ -1,5 +1,5 @@
 -- ============================================================================
--- Pipeline 360 - Stage-Based Permissions Database Schema
+-- Perennia AI - Stage-Based Permissions Database Schema
 -- ============================================================================
 -- This schema supports:
 -- 1. Subscription-based licensing (Lead, Active Loan, Portfolio stages)

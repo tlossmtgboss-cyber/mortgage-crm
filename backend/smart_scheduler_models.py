@@ -1,5 +1,5 @@
 """
-Smart Scheduler Models - Pipeline 360 AI-Native Appointment Scheduling
+Smart Scheduler Models - Perennia AI AI-Native Appointment Scheduling
 
 Database models for the intelligent scheduling system that replaces third-party
 tools like Calendly with AI-native appointment management.

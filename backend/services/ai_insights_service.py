@@ -239,7 +239,7 @@ Create a professional executive digest email."""
         )
 
         return {
-            "subject": f"Pipeline 360 Profitability Insights - Week of {month.strftime('%b %d')}",
+            "subject": f"Perennia AI Profitability Insights - Week of {month.strftime('%b %d')}",
             "content": response.content[0].text,
             "summary": context["summary"],
             "generated_at": datetime.utcnow().isoformat()

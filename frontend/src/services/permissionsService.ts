@@ -1,5 +1,5 @@
 /**
- * Pipeline 360 - Stage-Based Permissions Service
+ * Perennia AI - Stage-Based Permissions Service
  *
  * This service handles all permission-related operations including:
  * - Stage access management (Lead, Active Loan, Portfolio)

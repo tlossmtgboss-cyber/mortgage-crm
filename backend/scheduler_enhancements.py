@@ -822,7 +822,7 @@ def generate_ics_content(appointment: dict) -> str:
 
     ics = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Pipeline 360//Smart Scheduler//EN
+PRODID:-//Perennia AI//Smart Scheduler//EN
 BEGIN:VEVENT
 UID:{uid}
 DTSTAMP:{dtstamp}

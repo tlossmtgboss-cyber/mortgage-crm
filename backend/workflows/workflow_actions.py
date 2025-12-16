@@ -1,5 +1,5 @@
 """
-Workflow Action Executor - Pipeline 360
+Workflow Action Executor - Perennia AI
 TL Development, LLC
 
 Executes workflow actions: emails, SMS, tasks, alerts, drip campaigns
@@ -164,7 +164,7 @@ class WorkflowActionExecutor:
             "welcome_new_lead": f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <h2 style="color: #18a0a6;">Welcome to Pipeline 360!</h2>
+                <h2 style="color: #18a0a6;">Welcome to Perennia AI!</h2>
                 <p>Hi {first_name},</p>
                 <p>Thank you for reaching out about your mortgage needs! I'm {lo_name}, and I'll be your dedicated loan officer.</p>
                 <p>I'll be in touch within the hour to discuss your goals and answer any questions.</p>

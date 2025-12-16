@@ -350,7 +350,7 @@ const OnboardingWizard = () => {
   return (
     <div className="onboarding-wizard">
       <div className="wizard-header">
-        <h1>Welcome to Pipeline 360</h1>
+        <h1>Welcome to Perennia AI</h1>
         <p className="wizard-subtitle">
           {inviteData
             ? `Hi ${inviteData.first_name}! Let's get you set up in just ${TOTAL_STEPS} simple steps`

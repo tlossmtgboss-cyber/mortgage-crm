@@ -1,6 +1,6 @@
 """
 Email Intelligence & Reconciliation System Routes
-Pipeline 360 - Advanced Email Processing Engine
+Perennia AI - Advanced Email Processing Engine
 
 This system provides enterprise-grade email intelligence:
 1. Email scraping & import from Gmail/Outlook

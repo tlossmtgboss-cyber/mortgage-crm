@@ -1,5 +1,5 @@
 """
-Pipeline 360 Subscription & Permission Models
+Perennia AI Subscription & Permission Models
 Database models for subscription tiers, features, and usage tracking
 """
 
@@ -161,7 +161,7 @@ SUBSCRIPTION_TIERS = {
         }
     },
     'full_pipeline': {
-        'name': 'Full Pipeline 360',
+        'name': 'Full Perennia AI',
         'price_monthly': 499,
         'price_annual': 4999,
         'stages': 'all',

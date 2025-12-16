@@ -102,7 +102,7 @@ SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 FROM_EMAIL=your-email@gmail.com
-FROM_NAME=Pipeline 360 CRM
+FROM_NAME=Perennia AI CRM
 ```
 
 **Gmail Setup:**
@@ -118,7 +118,7 @@ SMTP_PORT=587
 SMTP_USER=tloss@cmgfi.com
 SMTP_PASSWORD=your-password
 FROM_EMAIL=tloss@cmgfi.com
-FROM_NAME=Pipeline 360 CRM
+FROM_NAME=Perennia AI CRM
 ```
 
 ### Option 3: SendGrid (Recommended for Production)
@@ -129,7 +129,7 @@ SMTP_PORT=587
 SMTP_USER=apikey
 SMTP_PASSWORD=your-sendgrid-api-key
 FROM_EMAIL=noreply@yourcompany.com
-FROM_NAME=Pipeline 360 CRM
+FROM_NAME=Perennia AI CRM
 ```
 
 ## 🧪 Testing After SMTP Setup

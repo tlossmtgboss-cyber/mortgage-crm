@@ -3,7 +3,7 @@ Beta Application API Routes
 Perennia AI - IBMA
 
 Handles beta program applications, tracking, and user onboarding
-for the Pipeline 360 UVIP beta program.
+for the Perennia AI UVIP beta program.
 """
 
 import enum
@@ -155,7 +155,7 @@ class BetaApplicationCreate(BaseModel):
     use_cases: Optional[str] = Field(
         None,
         max_length=2000,
-        description="Intended use cases for Pipeline 360"
+        description="Intended use cases for Perennia AI"
     )
     referral_source: Optional[str] = Field(
         None,
@@ -226,7 +226,7 @@ async def send_application_confirmation(email: str, contact_name: str, company_n
         html_body = f"""
         <h2>Hi {contact_name},</h2>
 
-        <p>Thank you for applying to the Pipeline 360 UVIP beta program!</p>
+        <p>Thank you for applying to the Perennia AI UVIP beta program!</p>
 
         <p>We've received your application for <strong>{company_name}</strong> and will review it within 2 business days.</p>
 
@@ -240,12 +240,12 @@ async def send_application_confirmation(email: str, contact_name: str, company_n
 
         <p>Questions? Reply to this email or contact beta@pipeline360.com</p>
 
-        <p>Best regards,<br>The Pipeline 360 Team</p>
+        <p>Best regards,<br>The Perennia AI Team</p>
         """
 
         await send_email(
             to_email=email,
-            subject="Thank you for applying to Pipeline 360 UVIP Beta",
+            subject="Thank you for applying to Perennia AI UVIP Beta",
             html_body=html_body
         )
         logger.info(f"Sent beta confirmation email to {email}")

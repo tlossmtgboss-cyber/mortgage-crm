@@ -6,7 +6,7 @@ const OnboardingWizard = ({ user, onComplete }) => {
 
   const steps = [
     {
-      title: "Welcome to Pipeline 360 UVIP",
+      title: "Welcome to Perennia AI UVIP",
       icon: "🎉",
       content: (
         <div className="welcome-step">
@@ -53,7 +53,7 @@ const OnboardingWizard = ({ user, onComplete }) => {
       content: (
         <div className="call-step">
           <h2>Make Your First Call</h2>
-          <p>All calls through Pipeline 360 are automatically recorded.</p>
+          <p>All calls through Perennia AI are automatically recorded.</p>
 
           <div className="demo-placeholder">
             <div className="demo-icon">📱</div>
@@ -167,7 +167,7 @@ const OnboardingWizard = ({ user, onComplete }) => {
       content: (
         <div className="complete-step">
           <h2>Ready to Close More Loans</h2>
-          <p>You're all set to use Pipeline 360 UVIP. Here's what to do next:</p>
+          <p>You're all set to use Perennia AI UVIP. Here's what to do next:</p>
 
           <div className="next-steps">
             <div className="next-step">

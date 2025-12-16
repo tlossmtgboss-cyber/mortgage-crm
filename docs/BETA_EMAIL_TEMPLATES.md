@@ -1,4 +1,4 @@
-# Pipeline 360 UVIP Beta Email Templates
+# Perennia AI UVIP Beta Email Templates
 
 ## 1. Application Confirmation (Auto-sent)
 > Already configured in the system - sent automatically on application submit
@@ -7,12 +7,12 @@
 
 ## 2. Manual Acceptance Email
 
-**Subject:** Welcome to Pipeline 360 UVIP Beta!
+**Subject:** Welcome to Perennia AI UVIP Beta!
 
 ```
 Hi [Name],
 
-Great news - you're in! Welcome to the Pipeline 360 UVIP beta program.
+Great news - you're in! Welcome to the Perennia AI UVIP beta program.
 
 Let's get you started with a quick 15-minute demo call. I'll show you the platform, answer questions, and get you access.
 
@@ -39,7 +39,7 @@ P.S. You're one of only 10 teams in this beta - excited to have you!
 
 ## 3. Welcome Email (After Onboarding Call)
 
-**Subject:** Your Pipeline 360 UVIP Access
+**Subject:** Your Perennia AI UVIP Access
 
 ```
 Hi [Name],
@@ -174,11 +174,11 @@ P.S. This shipped because of YOUR feedback. Keep it coming!
 ```
 Hi [Name],
 
-You've been using Pipeline 360 UVIP for a month now - thank you!
+You've been using Perennia AI UVIP for a month now - thank you!
 
 One quick question:
 
-On a scale of 0-10, how likely are you to recommend Pipeline 360 UVIP to a colleague?
+On a scale of 0-10, how likely are you to recommend Perennia AI UVIP to a colleague?
 
 Just reply with a number (0-10).
 
@@ -232,7 +232,7 @@ Tim
 ```
 Exciting news for mortgage professionals!
 
-We're launching the Pipeline 360 UVIP beta program - the first AI-powered video intelligence platform built specifically for mortgage.
+We're launching the Perennia AI UVIP beta program - the first AI-powered video intelligence platform built specifically for mortgage.
 
 What you get:
 - Automatic call recording & AI analysis
@@ -255,14 +255,14 @@ https://mortgage-crm-production-7a9a.up.railway.app/beta
 
 ## Email to Existing Contacts
 
-**Subject:** You're invited: Pipeline 360 UVIP Beta
+**Subject:** You're invited: Perennia AI UVIP Beta
 
 ```
 Hi [Name],
 
 I wanted to give you first access to something we've been building.
 
-Pipeline 360 UVIP is the first AI-powered video intelligence platform for mortgage professionals. It automatically:
+Perennia AI UVIP is the first AI-powered video intelligence platform for mortgage professionals. It automatically:
 
 - Records and transcribes every call
 - Provides AI coaching on your conversations

@@ -1,5 +1,5 @@
 """
-Lead Workflow Automation Engine - Pipeline 360
+Lead Workflow Automation Engine - Perennia AI
 TL Development, LLC
 
 Automatically processes lead status changes and triggers:
@@ -158,7 +158,7 @@ class LeadWorkflowEngine:
                 "template": "welcome_new_lead",
                 "data": {
                     "to": sc.lead_email,
-                    "subject": f"Welcome to Pipeline 360 - {sc.loan_officer_name} Will Be In Touch",
+                    "subject": f"Welcome to Perennia AI - {sc.loan_officer_name} Will Be In Touch",
                     "lead_name": sc.lead_name,
                     "loan_officer_name": sc.loan_officer_name
                 },

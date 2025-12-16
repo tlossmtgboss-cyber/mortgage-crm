@@ -2,7 +2,7 @@
 
 ## Summary
 
-Successfully fixed the Daily Briefing query and implemented email functionality for your Pipeline 360 CRM.
+Successfully fixed the Daily Briefing query and implemented email functionality for your Perennia AI CRM.
 
 ---
 
@@ -60,7 +60,7 @@ SMTP_PORT=587
 SMTP_USER=tlossmtgboss@gmail.com
 SMTP_PASSWORD=dwpe htze chvz xbft  (Gmail App Password)
 FROM_EMAIL=tlossmtgboss@gmail.com
-FROM_NAME=Pipeline 360 CRM
+FROM_NAME=Perennia AI CRM
 ```
 
 ---
@@ -230,7 +230,7 @@ SMTP_PASSWORD=dwpe htze chvz xbft
 SMTP_PORT=587
 SMTP_USER=tlossmtgboss@gmail.com
 FROM_EMAIL=tlossmtgboss@gmail.com
-FROM_NAME=Pipeline 360 CRM
+FROM_NAME=Perennia AI CRM
 ```
 
 ### If App Shows 502:

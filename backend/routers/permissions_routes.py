@@ -1,5 +1,5 @@
 """
-Pipeline 360 - Stage-Based Permissions API Routes
+Perennia AI - Stage-Based Permissions API Routes
 
 This module provides API endpoints for the stage-based permission system including:
 - Stage access management (Lead, Active Loan, Portfolio)

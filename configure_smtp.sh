@@ -48,7 +48,7 @@ railway variables set SMTP_HOST="smtp.gmail.com" \
     SMTP_USER="tlossmtgboss@gmail.com" \
     SMTP_PASSWORD="$APP_PASSWORD_CLEAN" \
     FROM_EMAIL="tlossmtgboss@gmail.com" \
-    FROM_NAME="Pipeline 360 CRM"
+    FROM_NAME="Perennia AI CRM"
 
 if [ $? -eq 0 ]; then
     echo ""

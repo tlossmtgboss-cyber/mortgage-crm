@@ -1,4 +1,4 @@
-# Pipeline 360 UVIP Beta Launch Checklist
+# Perennia AI UVIP Beta Launch Checklist
 
 ## Pre-Launch (Complete Before Go-Live)
 

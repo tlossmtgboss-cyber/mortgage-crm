@@ -1,5 +1,5 @@
 """
-AI Command Routes for Pipeline 360 AI Landing Page
+AI Command Routes for Perennia AI AI Landing Page
 
 This module provides endpoints for processing natural language commands
 and executing CRM actions through Claude AI.
@@ -2079,7 +2079,7 @@ class ActionExecuteResponse(BaseModel):
 # System Prompt
 # ============================================================================
 
-SYSTEM_PROMPT = """You are a decisive, authoritative, no-disclaimer AI assistant for Pipeline 360's mortgage CRM.
+SYSTEM_PROMPT = """You are a decisive, authoritative, no-disclaimer AI assistant for Perennia AI's mortgage CRM.
 
 === YOUR PERSONALITY AND COMMUNICATION STYLE ===
 
@@ -2419,13 +2419,13 @@ Determine the audience from context clues:
 | Partner | Professional, collaborative | Moderate detail | Expand first use |
 
 
-## Pipeline 360 Workflow Terminology
+## Perennia AI Workflow Terminology
 
-These terms are specific to Pipeline 360's workflow automation and should be understood in all contexts:
+These terms are specific to Perennia AI's workflow automation and should be understood in all contexts:
 
 ### Theme Days Communication System
 
-Theme Days is Pipeline 360's structured borrower communication cadence during active loan processing. Each day of the week has a designated communication focus:
+Theme Days is Perennia AI's structured borrower communication cadence during active loan processing. Each day of the week has a designated communication focus:
 
 - **Monday - Milestone Monday**: Weekly status update summarizing loan progress, current stage, and what's ahead. Sets expectations for the week.
 - **Tuesday - Task Tuesday**: Request day for outstanding items, documents, or borrower actions needed. Clear task lists with deadlines.
@@ -2440,7 +2440,7 @@ Theme Days is Pipeline 360's structured borrower communication cadence during ac
 
 ### Last Mile Pre-Closing Process
 
-Last Mile refers to Pipeline 360's structured workflow for the final phase of loan processing, from Clear to Close through funding. It ensures nothing falls through the cracks in the critical final days.
+Last Mile refers to Perennia AI's structured workflow for the final phase of loan processing, from Clear to Close through funding. It ensures nothing falls through the cracks in the critical final days.
 
 **Last Mile Stages:**
 
@@ -2485,7 +2485,7 @@ Automated relationship nurturing after loan closes to generate referrals and rep
 
 ### Rate Lock Intelligence
 
-Pipeline 360's system for managing rate lock decisions and expirations:
+Perennia AI's system for managing rate lock decisions and expirations:
 
 - **Lock Status**: Locked, Floating, Expired, Extended
 - **Lock Expiration**: Date the current lock expires
@@ -2503,7 +2503,7 @@ Pipeline 360's system for managing rate lock decisions and expirations:
 
 ### Loan Pipeline Stages
 
-Pipeline 360's standard loan lifecycle stages:
+Perennia AI's standard loan lifecycle stages:
 
 1. **Lead**: Initial inquiry, not yet application
 2. **Pre-Qual**: Quick assessment completed, no full application
@@ -2521,7 +2521,7 @@ Pipeline 360's standard loan lifecycle stages:
 
 ### AI Task Automation Terminology
 
-Terms related to Pipeline 360's AI learning and task automation system:
+Terms related to Perennia AI's AI learning and task automation system:
 
 - **Task Template**: Predefined task structure the AI can learn to complete
 - **Training Example**: Human-completed instance used to teach AI the task
@@ -2533,7 +2533,7 @@ Terms related to Pipeline 360's AI learning and task automation system:
 
 ### Circle of Cashflow / Referral Ecosystem
 
-Pipeline 360's referral network model:
+Perennia AI's referral network model:
 
 - **Referral Source**: Person or entity that sends business (agent, past client, partner)
 - **Referral Score**: Weighted rating of referral source quality and volume
@@ -2549,8 +2549,8 @@ When generating communications, the AI should:
 
 1. Detect the audience (internal/borrower/partner)
 2. Apply appropriate acronym expansion rules
-3. Reference Pipeline 360 workflows by name when relevant to internal users
-4. Translate Pipeline 360 concepts to plain language for borrowers
+3. Reference Perennia AI workflows by name when relevant to internal users
+4. Translate Perennia AI concepts to plain language for borrowers
 5. Match Theme Day tone when generating scheduled communications
 6. Flag Last Mile alerts proactively when loan data indicates risk
 
@@ -4903,12 +4903,12 @@ async def send_composed_email(
         demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
         current_user = {
             "id": demo_user.id if demo_user else 1,
-            "name": demo_user.full_name if demo_user else "Pipeline 360",
+            "name": demo_user.full_name if demo_user else "Perennia AI",
             "email": demo_user.email if demo_user else "admin@perenniaai.com"
         }
 
         # Get sender info
-        sender_name = current_user.get("name", current_user.get("email", "Pipeline 360"))
+        sender_name = current_user.get("name", current_user.get("email", "Perennia AI"))
         sender_email = current_user.get("email", "")
 
         # Format the email body as HTML
@@ -4941,7 +4941,7 @@ async def send_composed_email(
 <body>
     <div class="email-content">{request.body.replace(chr(10), '<br>')}</div>
     <div class="footer">
-        <p>Sent via Pipeline 360 CRM</p>
+        <p>Sent via Perennia AI CRM</p>
     </div>
 </body>
 </html>

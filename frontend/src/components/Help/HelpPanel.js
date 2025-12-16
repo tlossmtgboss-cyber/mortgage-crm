@@ -18,7 +18,7 @@ const HelpPanel = ({ isOpen, onClose }) => {
         {
           id: 'first-call',
           title: 'Your First Call',
-          content: `All Twilio calls through Pipeline 360 are automatically recorded.
+          content: `All Twilio calls through Perennia AI are automatically recorded.
 
 **How it works:**
 1. Click "Make Call" in the top navigation

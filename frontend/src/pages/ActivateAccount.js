@@ -215,7 +215,7 @@ function ActivateAccount() {
     <div className="activate-content centered success">
       <div className="success-icon">✓</div>
       <h2>Account Activated!</h2>
-      <p>Your account has been successfully activated. You can now log in to Pipeline 360.</p>
+      <p>Your account has been successfully activated. You can now log in to Perennia AI.</p>
 
       <div className="next-steps">
         <h4>What's Next?</h4>
@@ -285,7 +285,7 @@ function ActivateAccount() {
     <div className="activate-account-page">
       <div className="activate-container">
         <div className="logo">
-          <h1>Pipeline 360</h1>
+          <h1>Perennia AI</h1>
         </div>
         {renderCurrentStage()}
       </div>

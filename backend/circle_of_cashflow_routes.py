@@ -1,6 +1,6 @@
 """
 Circle of Cashflow - API Routes
-Referral ecosystem management for Pipeline 360 CRM
+Referral ecosystem management for Perennia AI CRM
 """
 
 from fastapi import APIRouter, Depends, HTTPException

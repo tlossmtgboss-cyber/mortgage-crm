@@ -1,6 +1,6 @@
-# Pipeline 360 UVIP Quick Start Guide
+# Perennia AI UVIP Quick Start Guide
 
-## Welcome to Pipeline 360 UVIP!
+## Welcome to Perennia AI UVIP!
 
 This guide will get you up and running in under 10 minutes.
 
@@ -163,6 +163,6 @@ We ship new features every Friday based on beta feedback!
 
 ---
 
-**Thank you for being a Pipeline 360 beta tester!**
+**Thank you for being a Perennia AI beta tester!**
 
 Your feedback shapes the future of mortgage technology.

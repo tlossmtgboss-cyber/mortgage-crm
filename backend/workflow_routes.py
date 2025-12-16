@@ -1,5 +1,5 @@
 """
-Pipeline 360 - Workflow System API Routes
+Perennia AI - Workflow System API Routes
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query

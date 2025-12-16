@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Pipeline 360 UVIP Beta Launch Checklist
+# Perennia AI UVIP Beta Launch Checklist
 # =============================================================================
 # Run this script to verify system readiness for beta launch
 # Usage: ./scripts/beta_launch_checklist.sh [API_URL]
@@ -13,7 +13,7 @@ FAIL_COUNT=0
 WARN_COUNT=0
 
 echo "=============================================="
-echo "  Pipeline 360 UVIP Beta Launch Checklist"
+echo "  Perennia AI UVIP Beta Launch Checklist"
 echo "=============================================="
 echo "API URL: $API_URL"
 echo "Time: $(date)"

@@ -1,6 +1,6 @@
 """
 SMS Intelligence System Routes
-Pipeline 360 - Advanced SMS/Text Message Processing Engine
+Perennia AI - Advanced SMS/Text Message Processing Engine
 
 This system provides enterprise-grade SMS intelligence:
 1. SMS import from Twilio/other providers

@@ -1,5 +1,5 @@
 // voice-orchestrator/src/crm/client.ts
-// CRM API Client for integrating with Pipeline 360
+// CRM API Client for integrating with Perennia AI
 
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../utils/logger';

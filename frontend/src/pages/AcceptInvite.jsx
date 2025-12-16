@@ -205,7 +205,7 @@ const AcceptInvite = () => {
               <path d="M12 28V12h4l4 10 4-10h4v16h-3V17l-3.5 9h-3L15 17v11h-3z" fill="white"/>
             </svg>
           </div>
-          <h1>Welcome to Pipeline 360</h1>
+          <h1>Welcome to Perennia AI</h1>
           <p>You've been invited to join the team</p>
         </div>
 

@@ -1,4 +1,4 @@
-# Pipeline 360 Voice OS - Backend
+# Perennia AI Voice OS - Backend
 
 AI-powered voice orchestrator for mortgage CRM with real-time STT, LLM, and TTS pipeline.
 

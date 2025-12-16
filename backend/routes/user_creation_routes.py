@@ -3,7 +3,7 @@ User Creation & Onboarding API Routes
 Perennia AI - IBMA
 
 Handles single user creation and bulk upload workflows for
-the Pipeline 360 platform. Includes user activation, role assignment,
+the Perennia AI platform. Includes user activation, role assignment,
 permission configuration, and KPI scorecard generation.
 """
 

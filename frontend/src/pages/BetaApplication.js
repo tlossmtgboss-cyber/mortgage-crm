@@ -52,7 +52,7 @@ const BetaApplication = () => {
           <div className="success-icon">✅</div>
           <h1>Application Received!</h1>
           <p className="success-subtitle">
-            Thank you for your interest in Pipeline 360 UVIP beta.
+            Thank you for your interest in Perennia AI UVIP beta.
           </p>
           <p>We'll review your application and reach out within 2 business days.</p>
 
@@ -92,8 +92,8 @@ const BetaApplication = () => {
   return (
     <div className="beta-application-page">
       <div className="beta-header">
-        <div className="logo">Pipeline 360</div>
-        <h1>Join Pipeline 360 UVIP Beta</h1>
+        <div className="logo">Perennia AI</div>
+        <h1>Join Perennia AI UVIP Beta</h1>
         <p className="subtitle">
           Help shape the future of mortgage conversation intelligence
         </p>
@@ -311,7 +311,7 @@ const BetaApplication = () => {
 
       <footer className="beta-footer">
         <p>
-          &copy; {new Date().getFullYear()} Pipeline 360. All rights reserved.
+          &copy; {new Date().getFullYear()} Perennia AI. All rights reserved.
         </p>
         <div className="footer-links">
           <a href="/privacy">Privacy Policy</a>

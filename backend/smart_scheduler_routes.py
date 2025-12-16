@@ -1,5 +1,5 @@
 """
-Smart Scheduler API Routes - Pipeline 360 AI-Native Appointment Scheduling
+Smart Scheduler API Routes - Perennia AI AI-Native Appointment Scheduling
 
 Comprehensive API endpoints for:
 - Scheduler configuration management
@@ -157,7 +157,7 @@ def generate_ics_content(
 
     ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Perennia AI//Pipeline 360//EN
+PRODID:-//Perennia AI//Perennia AI//EN
 CALSCALE:GREGORIAN
 METHOD:REQUEST
 BEGIN:VEVENT
@@ -261,7 +261,7 @@ def send_appointment_confirmation_email(
                 </div>
 
                 <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Pipeline 360
+                    Sent from Perennia AI - Perennia AI
                 </p>
             </div>
         </body>
@@ -457,7 +457,7 @@ def send_team_member_notification_email(
                 </div>
 
                 <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Pipeline 360
+                    Sent from Perennia AI - Perennia AI
                 </p>
             </div>
         </body>
@@ -587,7 +587,7 @@ def send_appointment_cancellation_email(
                 </div>
 
                 <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Pipeline 360
+                    Sent from Perennia AI - Perennia AI
                 </p>
             </div>
         </body>
@@ -686,7 +686,7 @@ def send_team_member_cancellation_email(
                 </div>
 
                 <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Pipeline 360
+                    Sent from Perennia AI - Perennia AI
                 </p>
             </div>
         </body>
