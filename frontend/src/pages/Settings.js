@@ -2602,7 +2602,7 @@ const API_BASE_URL = isProduction
                   {expandedSections.masterAdmin && (
                     <div className="sidebar-children">
                       <button className={`sidebar-btn child ${activeSection === 'user-management' ? 'active' : ''}`} onClick={() => { setActiveSection('user-management'); loadUsers(); }}><span>User Management</span></button>
-                      <button className={`sidebar-btn child ${activeSection === 'integrations' ? 'active' : ''}`} onClick={() => setActiveSection('integrations')}><span>Integrations</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'integration-marketplace' ? 'active' : ''}`} onClick={() => setActiveSection('integration-marketplace')}><span>Integrations</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'clear-data' ? 'active' : ''}`} onClick={() => setActiveSection('clear-data')}><span>Clear Dummy Data</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`} onClick={() => setActiveSection('ai-feedback-log')}><span>AI Feedback Log</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`} onClick={() => setActiveSection('it-helpdesk-admin')}><span>IT Helpdesk Admin</span></button>
