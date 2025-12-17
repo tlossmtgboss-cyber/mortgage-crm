@@ -350,14 +350,14 @@ async def _send_email_outreach(email: str, first_name: str, subject: str, messag
 async def _send_sms_outreach(phone: str, first_name: str, message: str, db: Session):
     """Send SMS outreach"""
     try:
-        from services.twilio_client import TwilioClient
+        from services.notification_service import notification_service
         from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
 
         # Clean phone number
         clean_phone = ''.join(filter(str.isdigit, phone))
         if len(clean_phone) == 10:
-            clean_phone = '1' + clean_phone
-        if not clean_phone.startswith('+'):
+            clean_phone = '+1' + clean_phone
+        elif not clean_phone.startswith('+'):
             clean_phone = '+' + clean_phone
 
         # Create conversation ID
@@ -375,14 +375,13 @@ async def _send_sms_outreach(phone: str, first_name: str, message: str, db: Sess
         })
         state.stage = ConversationStage.QUALIFICATION
 
-        # Send SMS
-        twilio_client = TwilioClient()
-        sms_result = await twilio_client.send_sms(
-            to_number=clean_phone,
+        # Send SMS using notification service
+        sms_result = notification_service.send_sms(
+            to_phone=clean_phone,
             message=message
         )
 
-        success = sms_result is not None
+        success = sms_result is not None and sms_result.get("success", False)
 
         # Log to database
         try:
