@@ -112,6 +112,17 @@ def is_websocket_request(request: Request) -> bool:
     return is_ws_path or is_ws_upgrade
 
 
+def is_mobile_app_request(request: Request) -> bool:
+    """
+    Check if the request is from a mobile app (Capacitor iOS/Android).
+    Mobile apps send the X-Mobile-App header to identify themselves.
+    This allows them to bypass IP-based blocking since mobile IPs change frequently.
+    """
+    mobile_app_header = request.headers.get("X-Mobile-App", "")
+    valid_mobile_apps = ["capacitor-ios", "capacitor-android", "react-native"]
+    return mobile_app_header in valid_mobile_apps
+
+
 # ============================================================================
 # IP ACCESS CONTROL MIDDLEWARE (Environment-Aware)
 # ============================================================================
@@ -135,6 +146,11 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
 
         # Always allow WebSocket connections
         if is_websocket_request(request):
+            return await call_next(request)
+
+        # Always allow mobile app requests (they authenticate via JWT token)
+        if is_mobile_app_request(request):
+            logger.info(f"Access granted for mobile app: {path}")
             return await call_next(request)
 
         # Always allow public paths
@@ -258,6 +274,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             logger.info(f"Bypassing rate limit for WebSocket: {request.url.path}")
             return await call_next(request)
 
+        # Mobile apps get higher rate limits (they share IPs via carrier NAT)
+        is_mobile = is_mobile_app_request(request)
+        per_minute_limit = self.requests_per_minute * 3 if is_mobile else self.requests_per_minute
+        per_hour_limit = self.requests_per_hour * 3 if is_mobile else self.requests_per_hour
+
         client_ip = self._get_client_ip(request)
         current_time = time.time()
 
@@ -274,7 +295,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         minute_ago = current_time - 60
         requests_last_minute = sum(1 for ts, _ in recent_requests if ts > minute_ago)
 
-        if requests_last_minute >= self.requests_per_minute:
+        if requests_last_minute >= per_minute_limit:
             logger.warning(f"Rate limit exceeded for IP {client_ip}: {requests_last_minute} requests/min")
             return JSONResponse(
                 status_code=429,
@@ -288,7 +309,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         hour_ago = current_time - 3600
         requests_last_hour = sum(1 for ts, _ in recent_requests if ts > hour_ago)
 
-        if requests_last_hour >= self.requests_per_hour:
+        if requests_last_hour >= per_hour_limit:
             logger.warning(f"Hourly rate limit exceeded for IP {client_ip}: {requests_last_hour} requests/hour")
             return JSONResponse(
                 status_code=429,
@@ -391,9 +412,14 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         self.blocked_ips: set = set()
 
     async def dispatch(self, request: Request, call_next):
-        # Skip IP blocking for WebSocket connections (but still check for blocked IPs)
+        # Skip IP blocking for WebSocket connections
         if is_websocket_request(request):
             logger.info(f"Bypassing IP blocking checks for WebSocket: {request.url.path}")
+            return await call_next(request)
+
+        # Skip IP blocking for mobile app requests (they have dynamic IPs)
+        if is_mobile_app_request(request):
+            logger.info(f"Bypassing IP blocking for mobile app: {request.url.path}")
             return await call_next(request)
 
         client_ip = self._get_client_ip(request)

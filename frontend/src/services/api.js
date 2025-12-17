@@ -11,11 +11,13 @@ export const API_BASE_URL = (isProduction || isNativeApp)
   ? 'https://mortgage-crm-production-7a9a.up.railway.app' // Direct Railway URL
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
-// Create axios instance
+// Create axios instance with mobile app identification
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    // Identify mobile app requests to bypass IP blocking middleware
+    ...(isNativeApp && { 'X-Mobile-App': 'capacitor-ios' }),
   },
 });
 
