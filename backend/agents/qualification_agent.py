@@ -628,7 +628,7 @@ class QualificationAgent:
         try:
             # Try to use Smart Scheduler for LO assignment
             from services.smart_scheduler_service import get_scheduler_service
-            scheduler = get_scheduler_service(self.db_session)
+            scheduler = get_scheduler_service(self.db)
 
             # Book through smart scheduler (handles LO assignment automatically)
             result = scheduler.book_appointment(
