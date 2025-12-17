@@ -559,18 +559,22 @@ class QualificationAgent:
 
         if time_match:
             hour = int(time_match.group(1))
-            if time_match.group(2):
-                minute = int(time_match.group(2))
-            am_pm = time_match.group(3)
+            # Skip if hour looks like a price/amount (e.g., "450k")
+            if hour > 12:
+                hour = None
+            else:
+                if time_match.group(2):
+                    minute = int(time_match.group(2))
+                am_pm = time_match.group(3)
 
-            if am_pm and ('pm' in am_pm or 'p.m' in am_pm):
-                if hour < 12:
+                if am_pm and ('pm' in am_pm or 'p.m' in am_pm):
+                    if hour != 12:  # 12pm stays as 12, not 24
+                        hour += 12
+                elif am_pm and ('am' in am_pm or 'a.m' in am_pm):
+                    if hour == 12:
+                        hour = 0
+                elif hour < 8:  # Assume PM for business hours (8am would be unusual)
                     hour += 12
-            elif am_pm and ('am' in am_pm or 'a.m' in am_pm):
-                if hour == 12:
-                    hour = 0
-            elif hour < 8:  # Assume PM for business hours
-                hour += 12
 
         if hour is None:
             # Check for relative times
