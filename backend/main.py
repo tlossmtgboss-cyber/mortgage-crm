@@ -34051,15 +34051,49 @@ Subject: {subject}
 {thread_plain}
 """
 
-            # Send the response
+            # Check if there's an appointment booking - prepare ICS attachment
+            attachments = None
+            calendar_invite_sent = False
+            booking_result = result.get("booking_result")
+
+            if booking_result and booking_result.get("success"):
+                try:
+                    from utils.calendar_invite import generate_appointment_ics
+                    from datetime import datetime as dt
+
+                    appt_time = dt.fromisoformat(booking_result["datetime"])
+
+                    ics_content = generate_appointment_ics(
+                        appointment_id=booking_result["appointment_id"],
+                        contact_name=booking_result.get("contact_name", sender_name),
+                        contact_email=sender_email,
+                        start_time=appt_time,
+                        duration_minutes=booking_result.get("duration_minutes", 30),
+                        appointment_type=booking_result.get("type", "consultation"),
+                    )
+
+                    # Prepare attachment for main email
+                    attachments = [{
+                        'content': ics_content.encode('utf-8'),
+                        'filename': 'appointment.ics',
+                        'type': 'text/calendar; method=REQUEST'
+                    }]
+                    calendar_invite_sent = True
+                    logger.info(f"ICS attachment prepared for {sender_email}")
+
+                except Exception as ics_err:
+                    logger.warning(f"Could not generate ICS: {ics_err}")
+
+            # Send the response (with ICS attachment if booking)
             email_sent = email_service.send_html_email(
                 to_email=sender_email,
                 subject=reply_subject,
                 html_body=html_response,
-                plain_text_body=plain_text_response
+                plain_text_body=plain_text_response,
+                attachments=attachments
             )
 
-            logger.info(f"AI response sent to {sender_email}: {email_sent}")
+            logger.info(f"AI response sent to {sender_email}: {email_sent} (with_ics={calendar_invite_sent})")
 
             # Log for training review
             try:
@@ -34086,90 +34120,7 @@ Subject: {subject}
                 logger.warning(f"Could not log email for training: {train_err}")
                 training_log_id = None
 
-            # Check if an appointment was booked - send calendar invite
-            calendar_invite_sent = False
-            booking_result = result.get("booking_result")
-            if booking_result and booking_result.get("success"):
-                try:
-                    from utils.calendar_invite import generate_appointment_ics
-                    from datetime import datetime as dt
-
-                    # Parse the appointment time
-                    appt_time = dt.fromisoformat(booking_result["datetime"])
-
-                    # Generate ICS content
-                    ics_content = generate_appointment_ics(
-                        appointment_id=booking_result["appointment_id"],
-                        contact_name=booking_result.get("contact_name", sender_name),
-                        contact_email=sender_email,
-                        start_time=appt_time,
-                        duration_minutes=booking_result.get("duration_minutes", 30),
-                        appointment_type=booking_result.get("type", "consultation"),
-                    )
-
-                    # Send calendar invite email with ICS attachment
-                    import sendgrid
-                    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
-                    import base64
-
-                    sg = sendgrid.SendGridAPIClient(api_key=os.getenv("SENDGRID_API_KEY"))
-
-                    # Build calendar invite email
-                    invite_subject = f"Calendar Invitation: {booking_result['title']}"
-                    invite_html = f"""
-                    <html>
-                    <body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
-                    <p>Hi {sender_name},</p>
-
-                    <p>Your mortgage consultation has been scheduled!</p>
-
-                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
-                        <p style="margin: 5px 0;"><strong>Date & Time:</strong> {booking_result['display_time']}</p>
-                        <p style="margin: 5px 0;"><strong>Duration:</strong> {booking_result.get('duration_minutes', 30)} minutes</p>
-                        <p style="margin: 5px 0;"><strong>Reference:</strong> {booking_result['appointment_id']}</p>
-                    </div>
-
-                    <p>Please add this event to your calendar using the attached invitation.</p>
-
-                    <p><strong>What to prepare:</strong></p>
-                    <ul>
-                        <li>Recent pay stubs (last 30 days)</li>
-                        <li>Bank statements (last 2 months)</li>
-                        <li>Any questions about the mortgage process</li>
-                    </ul>
-
-                    <p>If you need to reschedule, just reply to this email.</p>
-
-                    <p>Best regards,<br>
-                    <b>Sarah</b><br>
-                    <span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
-                    </body>
-                    </html>
-                    """
-
-                    message = Mail(
-                        from_email=(os.getenv("FROM_EMAIL", "sarah@perenniaai.com"), "Sarah - Perennia AI"),
-                        to_emails=sender_email,
-                        subject=invite_subject,
-                        html_content=invite_html
-                    )
-
-                    # Add ICS attachment
-                    encoded_ics = base64.b64encode(ics_content.encode()).decode()
-                    attachment = Attachment(
-                        FileContent(encoded_ics),
-                        FileName("appointment.ics"),
-                        FileType("text/calendar"),
-                        Disposition("attachment")
-                    )
-                    message.attachment = attachment
-
-                    response = sg.send(message)
-                    calendar_invite_sent = response.status_code in [200, 201, 202]
-                    logger.info(f"Calendar invite sent to {sender_email}: {calendar_invite_sent}")
-
-                except Exception as cal_err:
-                    logger.warning(f"Could not send calendar invite: {cal_err}")
+            # Note: Calendar invite (ICS) is now attached to main response email above
 
             return {
                 "status": "processed",
