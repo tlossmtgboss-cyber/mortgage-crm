@@ -36,6 +36,85 @@ const AIOutreach = () => {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [campaignDetail, setCampaignDetail] = useState(null);
 
+  // Speech recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  // Check for speech recognition support
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    setSpeechSupported(!!SpeechRecognition);
+  }, []);
+
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessage({ type: 'error', text: 'Speech recognition not supported in this browser' });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setCustomMessage(prev => prev + (prev ? ' ' : '') + finalTranscript);
+        setSelectedTemplate(null);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'not-allowed') {
+        setMessage({ type: 'error', text: 'Microphone access denied. Please allow microphone access.' });
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+
+    // Store recognition instance for stopping
+    window.currentRecognition = recognition;
+  };
+
+  const stopListening = () => {
+    if (window.currentRecognition) {
+      window.currentRecognition.stop();
+      window.currentRecognition = null;
+    }
+    setIsListening(false);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('token')}`,
     'Content-Type': 'application/json'
@@ -463,15 +542,32 @@ const AIOutreach = () => {
                     className="subject-input"
                   />
                 )}
-                <textarea
-                  placeholder="Enter your message here... Use {first_name} to personalize."
-                  value={customMessage}
-                  onChange={(e) => {
-                    setCustomMessage(e.target.value);
-                    if (e.target.value) setSelectedTemplate(null);
-                  }}
-                  rows={5}
-                />
+                <div className="textarea-wrapper">
+                  <textarea
+                    placeholder="Enter your message here... Use {first_name} to personalize. Click the mic to speak."
+                    value={customMessage}
+                    onChange={(e) => {
+                      setCustomMessage(e.target.value);
+                      if (e.target.value) setSelectedTemplate(null);
+                    }}
+                    rows={5}
+                  />
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      className={`voice-btn ${isListening ? 'listening' : ''}`}
+                      onClick={toggleListening}
+                      title={isListening ? 'Stop listening' : 'Click to speak'}
+                    >
+                      {isListening ? '🔴' : '🎤'}
+                    </button>
+                  )}
+                </div>
+                {isListening && (
+                  <div className="listening-indicator">
+                    Listening... Speak now
+                  </div>
+                )}
               </div>
             </div>
 
