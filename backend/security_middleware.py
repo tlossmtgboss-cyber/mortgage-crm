@@ -57,6 +57,7 @@ PUBLIC_PATHS = [
     "/openapi.json",
     "/api/v1/migrations/convert-lead-stage-to-enum-names",  # Key-protected migration
     "/api/v1/migrations/fix-lead-stage-values",  # Key-protected migration
+    "/api/v1/webhook/",  # Webhooks must be accessible from external services (SendGrid, Twilio, etc.)
 ]
 
 # ============================================================================
