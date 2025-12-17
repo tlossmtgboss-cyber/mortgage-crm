@@ -19374,6 +19374,14 @@ app.include_router(ai_command_router, tags=["AI Commands"])
 from subscription_routes import router as subscription_router
 app.include_router(subscription_router, tags=["Subscriptions"])
 
+# Include Conversation Intelligence routes (unified AI for email + SMS)
+try:
+    from routes.conversation_intelligence_routes import router as conversation_intelligence_router
+    app.include_router(conversation_intelligence_router, tags=["Conversation Intelligence"])
+    logger.info("Conversation Intelligence routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Conversation Intelligence routes: {e}")
+
 # Include Workflow System routes
 from workflow_routes import router as workflow_router
 app.include_router(workflow_router, tags=["Workflow"])
@@ -19790,6 +19798,14 @@ try:
     logger.info("✅ Agent WebSocket routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Agent WebSocket routes not loaded: {e}")
+
+# Agent Orchestration routes (Token-optimized AI Agent Execution)
+try:
+    from api.v1.agents import router as agent_orchestration_router
+    app.include_router(agent_orchestration_router, tags=["Agent Orchestration"])
+    logger.info("✅ Agent Orchestration routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Agent Orchestration routes not loaded: {e}")
 
 # Pipeline Efficiency routes (Real-time pipeline analytics)
 try:
@@ -20334,6 +20350,18 @@ except Exception as e:
     import traceback
     portal_websocket_error = traceback.format_exc()
     logger.warning(f"⚠️ Portal WebSocket routes not loaded: {e}")
+
+# Email Training routes (for reviewing and correcting AI responses)
+email_training_error = None
+try:
+    from routes.email_training_routes import router as email_training_router
+    app.include_router(email_training_router, prefix="/api/v1/email-training", tags=["Email Training"])
+    logger.info("✅ Email Training routes loaded")
+except Exception as e:
+    email_training_error = str(e)
+    import traceback
+    email_training_error = traceback.format_exc()
+    logger.warning(f"⚠️ Email Training routes not loaded: {e}")
 
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
@@ -33623,6 +33651,801 @@ async def debug_complete_onboarding_by_email(
         "user_id": user.id,
         "email": user.email
     }
+
+
+@app.post("/api/v1/debug/test-two-way-email")
+async def debug_test_two_way_email(
+    to_email: str = "tloss@me.com",
+    message: str = "Hi, I am interested in refinancing my home worth $500,000"
+):
+    """
+    Debug endpoint to test the two-way email conversation system.
+    Simulates receiving an email and generating an AI response.
+    """
+    try:
+        from agents.qualification_agent import process_qualification_message
+        from datetime import datetime
+
+        # Generate unique conversation ID
+        conv_id = f"test_email_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # Process through the qualification agent
+        result = process_qualification_message(
+            conversation_id=conv_id,
+            message=message,
+            channel="email",
+            sender_info={"email": to_email, "first_name": to_email.split("@")[0].title()}
+        )
+
+        return {
+            "status": "success",
+            "conversation_id": conv_id,
+            "simulated_inbound": {
+                "from": to_email,
+                "message": message
+            },
+            "ai_response": {
+                "text": result["response"],
+                "type": result["response_type"],
+                "should_send": result["should_send"]
+            },
+            "qualification": {
+                "status": result["qualification"]["status"],
+                "completion": f"{result['qualification']['completion_percentage']:.0f}%",
+                "missing_fields": result["qualification"]["missing_fields"]
+            },
+            "tone_analysis": {
+                "emotion": result["tone_analysis"]["emotional_state"]["primary_emotion"],
+                "sentiment": result["tone_analysis"]["sentiment"]["sentiment_category"],
+                "urgency": result["tone_analysis"]["urgency"]["urgency_level"]
+            },
+            "next_action": result["next_action"],
+            "note": "To send actual emails, configure SENDGRID_API_KEY or authenticate via Microsoft at /auth/microsoft/login"
+        }
+
+    except Exception as e:
+        logger.error(f"Two-way email test error: {e}")
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/api/v1/debug/send-real-email")
+async def debug_send_real_email(
+    to_email: str = "tloss@me.com",
+    message: str = "Hi, I am interested in refinancing my home worth $500,000"
+):
+    """
+    Actually send a real email via SendGrid demonstrating the two-way AI conversation.
+    This processes the message through the AI agent and sends a real response.
+    """
+    try:
+        from agents.qualification_agent import process_qualification_message
+        from email_service import email_service
+        from datetime import datetime
+
+        # Generate unique conversation ID
+        conv_id = f"email_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        sender_name = to_email.split("@")[0].replace(".", " ").title()
+
+        # Process through the qualification agent
+        result = process_qualification_message(
+            conversation_id=conv_id,
+            message=message,
+            channel="email",
+            sender_info={"email": to_email, "first_name": sender_name}
+        )
+
+        # Format the email HTML
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #c9a227 0%, #f4d03f 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }}
+        .content {{ background: #f9fafb; padding: 24px; border: 1px solid #e5e7eb; }}
+        .message-box {{ background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #c9a227; margin-bottom: 20px; }}
+        .ai-response {{ background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #3b82f6; }}
+        .footer {{ text-align: center; padding: 16px; color: #6b7280; font-size: 12px; }}
+        .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }}
+        .badge-emotion {{ background: #fef3c7; color: #92400e; }}
+        .badge-urgency {{ background: #dbeafe; color: #1e40af; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Perennia AI Mortgage Assistant</h1>
+        <p>Your AI-Powered Loan Qualification Helper</p>
+    </div>
+    <div class="content">
+        <h3>Hello {sender_name}!</h3>
+
+        <p><strong>Your message:</strong></p>
+        <div class="message-box">
+            {message}
+        </div>
+
+        <p><strong>AI Assistant Response:</strong></p>
+        <div class="ai-response">
+            {result['response'].replace(chr(10), '<br>')}
+        </div>
+
+        <p style="margin-top: 20px;">
+            <span class="badge badge-emotion">Tone: {result['tone_analysis']['emotional_state']['primary_emotion']}</span>
+            <span class="badge badge-urgency">Urgency: {result['tone_analysis']['urgency']['urgency_level']}</span>
+        </p>
+
+        <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+            <strong>Qualification Progress:</strong> {result['qualification']['completion_percentage']:.0f}%<br>
+            <strong>Conversation ID:</strong> {conv_id}
+        </p>
+    </div>
+    <div class="footer">
+        <p>This is a demonstration of Perennia AI's two-way email conversation system.</p>
+        <p>Reply to this email to continue the conversation!</p>
+    </div>
+</body>
+</html>
+"""
+
+        # Send the email
+        email_sent = email_service.send_html_email(
+            to_email=to_email,
+            subject=f"RE: Your Mortgage Inquiry - Perennia AI Assistant",
+            html_body=html_body,
+            plain_text_body=f"Hello {sender_name}!\n\nYour message: {message}\n\nAI Response:\n{result['response']}\n\nReply to continue the conversation.\n\n- Perennia AI"
+        )
+
+        return {
+            "status": "success" if email_sent else "failed",
+            "email_sent": email_sent,
+            "to": to_email,
+            "conversation_id": conv_id,
+            "simulated_inbound_message": message,
+            "ai_response": result["response"],
+            "qualification_progress": f"{result['qualification']['completion_percentage']:.0f}%",
+            "tone": {
+                "emotion": result["tone_analysis"]["emotional_state"]["primary_emotion"],
+                "sentiment": result["tone_analysis"]["sentiment"]["sentiment_category"],
+                "urgency": result["tone_analysis"]["urgency"]["urgency_level"]
+            },
+            "sendgrid_configured": bool(email_service.sendgrid_api_key)
+        }
+
+    except Exception as e:
+        logger.error(f"Send real email error: {e}")
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/api/v1/webhook/sendgrid-inbound")
+async def sendgrid_inbound_webhook(request: Request):
+    """
+    SendGrid Inbound Parse webhook - receives incoming emails and responds with AI.
+
+    To set up:
+    1. Go to SendGrid Settings > Inbound Parse
+    2. Add your domain (e.g., reply.perenniaai.com)
+    3. Set the webhook URL to: https://your-server.com/api/v1/webhook/sendgrid-inbound
+    4. Enable "POST the raw, full MIME message"
+    """
+    try:
+        from agents.qualification_agent import process_qualification_message
+        from email_service import email_service
+        import re
+
+        # Parse form data from SendGrid
+        form_data = await request.form()
+
+        # Log all form fields for debugging
+        all_fields = {key: str(value)[:200] for key, value in form_data.items()}
+        logger.info(f"SendGrid form fields: {list(all_fields.keys())}")
+        logger.info(f"SendGrid form data: {all_fields}")
+
+        # Extract email details
+        from_email = form_data.get("from", "")
+        to_email = form_data.get("to", "")
+        subject = form_data.get("subject", "")
+        text_body = form_data.get("text", "")
+        html_body = form_data.get("html", "")
+
+        # Also try 'email' field (raw MIME)
+        raw_email = form_data.get("email", "")
+
+        logger.info(f"from={from_email}, to={to_email}, subject={subject}")
+        logger.info(f"text_body length={len(text_body)}, html_body length={len(html_body)}, raw_email length={len(raw_email)}")
+
+        # If text/html are empty, parse from raw MIME email
+        if not text_body and not html_body and raw_email:
+            import email
+            from email import policy
+            msg = email.message_from_string(raw_email, policy=policy.default)
+
+            # Extract body from MIME message
+            if msg.is_multipart():
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if content_type == "text/plain":
+                        text_body = part.get_content()
+                        logger.info(f"Extracted text/plain from MIME: {len(text_body)} chars")
+                    elif content_type == "text/html" and not text_body:
+                        html_body = part.get_content()
+                        logger.info(f"Extracted text/html from MIME: {len(html_body)} chars")
+            else:
+                text_body = msg.get_content()
+                logger.info(f"Extracted single part content: {len(text_body)} chars")
+
+        # Extract sender email address (SendGrid sends "Name <email@example.com>")
+        email_match = re.search(r'<([^>]+)>', from_email)
+        sender_email = email_match.group(1) if email_match else from_email
+        sender_name = from_email.split('<')[0].strip().strip('"') if '<' in from_email else sender_email.split('@')[0]
+
+        # Use text body, or strip HTML
+        message_body = text_body or html_body
+        if not text_body and html_body:
+            # Simple HTML strip
+            message_body = re.sub(r'<[^>]+>', ' ', html_body)
+            message_body = re.sub(r'\s+', ' ', message_body)
+
+        logger.info(f"Raw message body from {sender_email}: {message_body[:500]}...")
+
+        # Clean up the message (remove quoted replies)
+        lines = message_body.split('\n')
+        clean_lines = []
+        found_quote_start = False
+        for line in lines:
+            line_lower = line.lower().strip()
+            # Stop at quoted content markers
+            if line.strip().startswith('>'):
+                found_quote_start = True
+                break
+            if 'wrote:' in line_lower and ('@' in line_lower or 'on ' in line_lower):
+                found_quote_start = True
+                break
+            if line_lower.startswith('from:') and '@' in line_lower:
+                found_quote_start = True
+                break
+            if '-------- original message --------' in line_lower:
+                found_quote_start = True
+                break
+            if 'sent from my iphone' in line_lower or 'sent from my ipad' in line_lower:
+                break
+            clean_lines.append(line)
+
+        clean_message = '\n'.join(clean_lines).strip()
+
+        # If still empty, just use the first 500 chars of raw message
+        if not clean_message and message_body:
+            clean_message = message_body[:500].strip()
+            logger.info(f"Using raw message as fallback: {clean_message[:100]}...")
+
+        if not clean_message:
+            logger.warning(f"Empty message received from {sender_email}")
+            return {"status": "ignored", "reason": "empty message"}
+
+        # Generate conversation ID from sender email
+        conv_id = f"email_{sender_email.replace('@', '_').replace('.', '_')}"
+
+        logger.info(f"Inbound email from {sender_email}: {clean_message[:100]}...")
+
+        # Process through AI qualification agent
+        result = process_qualification_message(
+            conversation_id=conv_id,
+            message=clean_message,
+            channel="email",
+            sender_info={"email": sender_email, "first_name": sender_name}
+        )
+
+        # Only send response if AI has one
+        if result["should_send"] and result.get("response"):
+            # Get conversation history for the email thread
+            from services.conversation_intelligence import get_conversation_service, Channel
+            conv_service = get_conversation_service()
+            state = conv_service.get_or_create_conversation(conv_id, Channel.EMAIL)
+
+            # Record user message in history
+            state.message_history.append({
+                "role": "user",
+                "content": clean_message,
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # Record AI response in history
+            state.message_history.append({
+                "role": "assistant",
+                "content": result['response'],
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # Build Outlook-style email thread
+            thread_html = ""
+            thread_plain = ""
+
+            # Build thread from message history (oldest to newest, excluding current)
+            if state.message_history and len(state.message_history) > 2:
+                thread_html = '<div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #cccccc;">'
+                thread_plain = "\n\n"
+
+                # Show previous messages in reverse chronological order (like Outlook)
+                prev_messages = state.message_history[:-2]  # Exclude current exchange
+                for i, msg in enumerate(reversed(prev_messages)):
+                    sender_name_thread = "Sarah - Perennia AI" if msg["role"] == "assistant" else sender_name
+                    sender_email_thread = "admin@perenniaai.com" if msg["role"] == "assistant" else sender_email
+                    msg_time = msg.get("timestamp", "")[:16].replace("T", " ") if msg.get("timestamp") else ""
+
+                    thread_html += f'''
+<div style="color: #1f497d; font-family: Calibri, sans-serif; font-size: 11pt;">
+<p style="margin: 0;"><b>From:</b> {sender_name_thread} &lt;{sender_email_thread}&gt;</p>
+<p style="margin: 0;"><b>Sent:</b> {msg_time}</p>
+<p style="margin: 0 0 10px 0;"><b>Subject:</b> Re: Quick question about your mortgage goals</p>
+<div style="margin: 10px 0; padding-left: 10px; border-left: 2px solid #1f497d;">
+{msg["content"].replace(chr(10), '<br>')}
+</div>
+</div>
+<hr style="border: none; border-top: 1px solid #cccccc; margin: 15px 0;">
+'''
+                    thread_plain += f"\n________________________________________\nFrom: {sender_name_thread} <{sender_email_thread}>\nSent: {msg_time}\nSubject: Re: Quick question about your mortgage goals\n\n{msg['content']}\n"
+
+                thread_html += '</div>'
+
+            # Format response email in Outlook style
+            html_response = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px; }}
+    </style>
+</head>
+<body>
+<div style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000;">
+<p>Hi {sender_name},</p>
+
+<p>{result['response'].replace(chr(10), '<br>')}</p>
+
+<p>Best regards,<br>
+<b>Sarah</b><br>
+<span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+</div>
+
+{thread_html}
+
+<div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #cccccc; color: #1f497d; font-family: Calibri, sans-serif; font-size: 11pt;">
+<p style="margin: 0;"><b>From:</b> {sender_name} &lt;{sender_email}&gt;</p>
+<p style="margin: 0;"><b>Sent:</b> {datetime.now().strftime('%A, %B %d, %Y %I:%M %p')}</p>
+<p style="margin: 0 0 10px 0;"><b>Subject:</b> {subject}</p>
+<div style="margin: 10px 0; padding-left: 10px; border-left: 2px solid #c9a227;">
+{clean_message[:500]}{"..." if len(clean_message) > 500 else ""}
+</div>
+</div>
+</body>
+</html>
+"""
+
+            # Determine reply subject
+            reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
+
+            # Build plain text version
+            plain_text_response = f"""Hi {sender_name},
+
+{result['response']}
+
+Best regards,
+Sarah
+AI Mortgage Assistant | Perennia AI
+
+________________________________________
+From: {sender_name} <{sender_email}>
+Sent: {datetime.now().strftime('%A, %B %d, %Y %I:%M %p')}
+Subject: {subject}
+
+{clean_message[:500]}
+{thread_plain}
+"""
+
+            # Send the response
+            email_sent = email_service.send_html_email(
+                to_email=sender_email,
+                subject=reply_subject,
+                html_body=html_response,
+                plain_text_body=plain_text_response
+            )
+
+            logger.info(f"AI response sent to {sender_email}: {email_sent}")
+
+            # Log for training review
+            try:
+                from routes.email_training_routes import EmailTrainingLog
+                from database import SessionLocal
+                training_db = SessionLocal()
+                training_log = EmailTrainingLog(
+                    conversation_id=conv_id,
+                    from_email=sender_email,
+                    to_email="sarah@reply.perenniaai.com",
+                    subject=subject,
+                    user_message=clean_message,
+                    ai_response=result["response"],
+                    detected_topics=result.get("metadata", {}).get("topics_addressed"),
+                    conversation_stage=result.get("conversation_state", {}).get("stage"),
+                    qualification_data=result.get("qualification", {}).get("data")
+                )
+                training_db.add(training_log)
+                training_db.commit()
+                training_log_id = training_log.id
+                training_db.close()
+                logger.info(f"Email logged for training: id={training_log_id}")
+            except Exception as train_err:
+                logger.warning(f"Could not log email for training: {train_err}")
+                training_log_id = None
+
+            # Check if an appointment was booked - send calendar invite
+            calendar_invite_sent = False
+            booking_result = result.get("booking_result")
+            if booking_result and booking_result.get("success"):
+                try:
+                    from utils.calendar_invite import generate_appointment_ics
+                    from datetime import datetime as dt
+
+                    # Parse the appointment time
+                    appt_time = dt.fromisoformat(booking_result["datetime"])
+
+                    # Generate ICS content
+                    ics_content = generate_appointment_ics(
+                        appointment_id=booking_result["appointment_id"],
+                        contact_name=booking_result.get("contact_name", sender_name),
+                        contact_email=sender_email,
+                        start_time=appt_time,
+                        duration_minutes=booking_result.get("duration_minutes", 30),
+                        appointment_type=booking_result.get("type", "consultation"),
+                    )
+
+                    # Send calendar invite email with ICS attachment
+                    import sendgrid
+                    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+                    import base64
+
+                    sg = sendgrid.SendGridAPIClient(api_key=os.getenv("SENDGRID_API_KEY"))
+
+                    # Build calendar invite email
+                    invite_subject = f"Calendar Invitation: {booking_result['title']}"
+                    invite_html = f"""
+                    <html>
+                    <body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
+                    <p>Hi {sender_name},</p>
+
+                    <p>Your mortgage consultation has been scheduled!</p>
+
+                    <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                        <p style="margin: 5px 0;"><strong>Date & Time:</strong> {booking_result['display_time']}</p>
+                        <p style="margin: 5px 0;"><strong>Duration:</strong> {booking_result.get('duration_minutes', 30)} minutes</p>
+                        <p style="margin: 5px 0;"><strong>Reference:</strong> {booking_result['appointment_id']}</p>
+                    </div>
+
+                    <p>Please add this event to your calendar using the attached invitation.</p>
+
+                    <p><strong>What to prepare:</strong></p>
+                    <ul>
+                        <li>Recent pay stubs (last 30 days)</li>
+                        <li>Bank statements (last 2 months)</li>
+                        <li>Any questions about the mortgage process</li>
+                    </ul>
+
+                    <p>If you need to reschedule, just reply to this email.</p>
+
+                    <p>Best regards,<br>
+                    <b>Sarah</b><br>
+                    <span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+                    </body>
+                    </html>
+                    """
+
+                    message = Mail(
+                        from_email=(os.getenv("FROM_EMAIL", "sarah@perenniaai.com"), "Sarah - Perennia AI"),
+                        to_emails=sender_email,
+                        subject=invite_subject,
+                        html_content=invite_html
+                    )
+
+                    # Add ICS attachment
+                    encoded_ics = base64.b64encode(ics_content.encode()).decode()
+                    attachment = Attachment(
+                        FileContent(encoded_ics),
+                        FileName("appointment.ics"),
+                        FileType("text/calendar"),
+                        Disposition("attachment")
+                    )
+                    message.attachment = attachment
+
+                    response = sg.send(message)
+                    calendar_invite_sent = response.status_code in [200, 201, 202]
+                    logger.info(f"Calendar invite sent to {sender_email}: {calendar_invite_sent}")
+
+                except Exception as cal_err:
+                    logger.warning(f"Could not send calendar invite: {cal_err}")
+
+            return {
+                "status": "processed",
+                "email_sent": email_sent,
+                "conversation_id": conv_id,
+                "from": sender_email,
+                "ai_response": result["response"][:100] + "...",
+                "qualification_progress": f"{result['qualification']['completion_percentage']:.0f}%",
+                "should_escalate": result["should_escalate"],
+                "training_log_id": training_log_id,
+                "appointment_booked": booking_result is not None,
+                "calendar_invite_sent": calendar_invite_sent
+            }
+        else:
+            return {
+                "status": "no_response_needed",
+                "conversation_id": conv_id,
+                "reason": "AI determined no response needed or escalated"
+            }
+
+    except Exception as e:
+        logger.error(f"SendGrid inbound webhook error: {e}")
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+@app.post("/api/v1/debug/simulate-email-reply")
+async def simulate_email_reply(
+    conversation_id: str,
+    reply_message: str,
+    sender_email: str = "tloss@me.com"
+):
+    """
+    Simulate receiving an email reply to test two-way conversation.
+    Uses an existing conversation_id to continue the conversation.
+    """
+    try:
+        from agents.qualification_agent import process_qualification_message
+        from email_service import email_service
+
+        sender_name = sender_email.split("@")[0].replace(".", " ").title()
+
+        # Process the reply through AI
+        result = process_qualification_message(
+            conversation_id=conversation_id,
+            message=reply_message,
+            channel="email",
+            sender_info={"email": sender_email, "first_name": sender_name}
+        )
+
+        # Send AI response
+        if result["should_send"] and result.get("response"):
+            html_response = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .response {{ background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; }}
+        .your-message {{ background: #f9fafb; padding: 16px; border-radius: 8px; border-left: 4px solid #c9a227; margin-bottom: 16px; }}
+        .footer {{ margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; }}
+        .progress {{ background: #ecfdf5; padding: 12px; border-radius: 6px; margin-top: 16px; }}
+    </style>
+</head>
+<body>
+    <p>Hi {sender_name},</p>
+
+    <p><strong>You said:</strong></p>
+    <div class="your-message">{reply_message}</div>
+
+    <p><strong>AI Response:</strong></p>
+    <div class="response">
+        {result['response'].replace(chr(10), '<br>')}
+    </div>
+
+    <div class="progress">
+        <strong>Qualification Progress:</strong> {result['qualification']['completion_percentage']:.0f}%
+        {f"<br><strong>Missing:</strong> {', '.join(result['qualification']['missing_fields'][:3])}" if result['qualification']['missing_fields'] else ""}
+    </div>
+
+    <div class="footer">
+        <p>Reply to continue the conversation.</p>
+        <p style="color: #9ca3af;">Conversation ID: {conversation_id}</p>
+    </div>
+</body>
+</html>
+"""
+
+            email_sent = email_service.send_html_email(
+                to_email=sender_email,
+                subject=f"Re: Your Mortgage Inquiry - Perennia AI",
+                html_body=html_response,
+                plain_text_body=f"Hi {sender_name},\n\nYou said: {reply_message}\n\nAI Response:\n{result['response']}\n\nQualification: {result['qualification']['completion_percentage']:.0f}%\n\n- Perennia AI"
+            )
+
+            return {
+                "status": "success",
+                "email_sent": email_sent,
+                "conversation_id": conversation_id,
+                "your_message": reply_message,
+                "ai_response": result["response"],
+                "qualification": {
+                    "progress": f"{result['qualification']['completion_percentage']:.0f}%",
+                    "status": result["qualification"]["status"],
+                    "missing_fields": result["qualification"]["missing_fields"][:5]
+                },
+                "tone": {
+                    "emotion": result["tone_analysis"]["emotional_state"]["primary_emotion"],
+                    "urgency": result["tone_analysis"]["urgency"]["urgency_level"]
+                },
+                "conversation_state": result["conversation_state"]["stage"],
+                "should_escalate": result["should_escalate"]
+            }
+        else:
+            return {
+                "status": "escalated",
+                "conversation_id": conversation_id,
+                "message": "Conversation escalated to human agent",
+                "escalation_reason": result.get("escalation_reason")
+            }
+
+    except Exception as e:
+        logger.error(f"Simulate reply error: {e}")
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+@app.post("/api/v1/debug/start-ai-conversation")
+async def start_ai_conversation(to_email: str = "tloss@me.com"):
+    """
+    Send an initial AI outreach email to start a two-way conversation.
+    The user can reply to this email to continue the conversation.
+    """
+    try:
+        from email_service import email_service
+        from datetime import datetime
+        from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
+
+        # Use consistent conversation ID format based on email (matches webhook)
+        conv_id = f"email_{to_email.replace('@', '_').replace('.', '_')}"
+
+        # Initialize conversation state and record the AI's first message
+        conv_service = get_conversation_service()
+        state = conv_service.get_or_create_conversation(conv_id, Channel.EMAIL)
+
+        # Record AI's initial question in conversation history
+        initial_ai_message = "Hi! I'm Sarah, your AI mortgage assistant. Are you looking to purchase a new home or refinance your current one?"
+        state.message_history.append({
+            "role": "assistant",
+            "content": initial_ai_message,
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Advance state past initial contact since we've sent the first question
+        state.stage = ConversationStage.QUALIFICATION
+
+        logger.info(f"Initialized conversation {conv_id} with {len(state.message_history)} messages, stage: {state.stage}")
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px;">
+<p>Hi there,</p>
+
+<p>I'm Sarah, a mortgage assistant at Perennia AI. I help people find the best mortgage options for their situation.</p>
+
+<p>Are you looking to purchase a new home or refinance your current mortgage?</p>
+
+<p>Just reply to this email and I'll guide you through the process.</p>
+
+<p>Best regards,<br>
+<b>Sarah</b><br>
+<span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+</body>
+</html>"""
+
+        plain_text = f"""Hi there,
+
+I'm Sarah, a mortgage assistant at Perennia AI. I help people find the best mortgage options for their situation.
+
+Are you looking to purchase a new home or refinance your current mortgage?
+
+Just reply to this email and I'll guide you through the process.
+
+Best regards,
+Sarah
+AI Mortgage Assistant | Perennia AI"""
+
+        # Get reply-to email from env
+        import os
+        reply_to = os.getenv("REPLY_TO_EMAIL", "sarah@reply.perenniaai.com")
+
+        email_sent = email_service.send_html_email(
+            to_email=to_email,
+            subject="Quick question about your mortgage goals - Perennia AI",
+            html_body=html_body,
+            plain_text_body=plain_text,
+            reply_to=reply_to
+        )
+
+        return {
+            "status": "success" if email_sent else "failed",
+            "email_sent": email_sent,
+            "to": to_email,
+            "from": email_service.from_email,
+            "reply_to": reply_to,
+            "conversation_id": conv_id,
+            "message": "Initial AI question sent! Reply to the email to continue.",
+            "instruction": "Reply to this email and SendGrid will forward it to our webhook for AI response"
+        }
+
+    except Exception as e:
+        logger.error(f"Start AI conversation error: {e}")
+        import traceback
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/api/v1/debug/test-email-delivery")
+async def test_email_delivery(to_email: str, test_subject: str = "Email Delivery Test"):
+    """
+    Send a simple test email to diagnose delivery issues.
+    Uses minimal formatting to avoid spam filters.
+    """
+    try:
+        from email_service import email_service
+        from datetime import datetime
+        import os
+
+        # Very simple plain text email
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        test_id = datetime.now().strftime('%H%M%S')
+
+        html_body = f"""<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; padding: 20px;">
+<p>This is a test email from Perennia AI.</p>
+<p><strong>Test ID:</strong> {test_id}</p>
+<p><strong>Timestamp:</strong> {timestamp}</p>
+<p><strong>Sent from:</strong> {email_service.from_email}</p>
+<p>If you received this, email delivery is working!</p>
+<p>- Perennia AI Team</p>
+</body>
+</html>"""
+
+        plain_text = f"""This is a test email from Perennia AI.
+
+Test ID: {test_id}
+Timestamp: {timestamp}
+Sent from: {email_service.from_email}
+
+If you received this, email delivery is working!
+
+- Perennia AI Team"""
+
+        email_sent = email_service.send_html_email(
+            to_email=to_email,
+            subject=f"{test_subject} - ID:{test_id}",
+            html_body=html_body,
+            plain_text_body=plain_text
+        )
+
+        return {
+            "status": "success" if email_sent else "failed",
+            "email_sent": email_sent,
+            "to_email": to_email,
+            "from_email": email_service.from_email,
+            "from_name": email_service.from_name,
+            "test_id": test_id,
+            "timestamp": timestamp,
+            "subject": f"{test_subject} - ID:{test_id}",
+            "note": "Check inbox, spam, junk, and all other folders"
+        }
+
+    except Exception as e:
+        logger.error(f"Test email error: {e}")
+        import traceback
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
 
 
 @app.get("/debug/test-import")
