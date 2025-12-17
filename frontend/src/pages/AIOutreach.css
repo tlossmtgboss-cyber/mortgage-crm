@@ -589,13 +589,15 @@
   max-width: 85%;
 }
 
-.message.assistant {
+.message.assistant,
+.message.outbound {
   background: #eff6ff;
   border-left: 3px solid #2563eb;
   margin-right: auto;
 }
 
-.message.user {
+.message.user,
+.message.inbound {
   background: #f0f4f8;
   border-left: 3px solid #64748b;
   margin-left: auto;
@@ -606,6 +608,71 @@
   justify-content: space-between;
   margin-bottom: 6px;
   font-size: 12px;
+}
+
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.message-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f0f0f0;
+  color: #666;
+}
+
+.message-status.sent {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.message-status.received {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.message-status.failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.message-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.approve-btn,
+.feedback-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.approve-btn {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.approve-btn:hover {
+  background: #bbf7d0;
+}
+
+.feedback-btn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.feedback-btn:hover {
+  background: #fde68a;
 }
 
 .message-role {
@@ -631,6 +698,67 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Reply Box */
+.reply-box {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid #e0e0e0;
+  background: #f8fafc;
+}
+
+.reply-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.reply-input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.send-reply-btn {
+  padding: 12px 24px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.send-reply-btn:hover {
+  background: #1d4ed8;
+}
+
+/* AI Badge */
+.conv-ai-badge,
+.ai-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e0e7ff;
+  color: #3730a3;
+  margin-top: 4px;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detail-phone {
+  font-size: 13px;
+  color: #666;
 }
 
 .collected-info {

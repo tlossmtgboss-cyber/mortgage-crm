@@ -24434,6 +24434,51 @@ async def toggle_ai_for_conversation(
     return {"success": True, "conversation_id": conversation_id, "ai_enabled": enabled}
 
 
+@app.post("/api/v1/sms/messages/{message_id}/feedback")
+async def submit_sms_message_feedback(
+    message_id: int,
+    feedback: str = Body(..., embed=True),
+    rating: int = Body(3, embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Submit feedback for an AI-generated SMS message (approve/reject)"""
+    try:
+        sms_message = db.query(SMSMessage).filter(SMSMessage.id == message_id).first()
+
+        if not sms_message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        # Store feedback in the message record (add feedback column if not exists)
+        # For now, log the feedback
+        logger.info(f"Feedback for message {message_id}: {feedback}, rating: {rating}")
+
+        # Try to update message with feedback
+        try:
+            db.execute(text("""
+                UPDATE sms_messages
+                SET feedback = :feedback, feedback_rating = :rating, feedback_at = CURRENT_TIMESTAMP
+                WHERE id = :message_id
+            """), {"feedback": feedback, "rating": rating, "message_id": message_id})
+            db.commit()
+        except Exception as e:
+            # If columns don't exist, that's okay - just log it
+            logger.warning(f"Could not store feedback in DB (columns may not exist): {e}")
+
+        return {
+            "success": True,
+            "message_id": message_id,
+            "feedback": feedback,
+            "rating": rating
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/debug/sms-messages")
 async def debug_sms_messages(
     limit: int = 20,

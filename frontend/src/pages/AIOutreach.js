@@ -154,7 +154,8 @@ const AIOutreach = () => {
 
   const fetchConversations = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-outreach/conversations?limit=50`, {
+      // Use SMS conversations endpoint which has proper two-way conversation data
+      const response = await fetch(`${API_BASE}/api/v1/sms/conversations`, {
         headers: getAuthHeaders()
       });
       if (response.ok) {
@@ -182,7 +183,7 @@ const AIOutreach = () => {
 
   const fetchConversationDetail = async (convId) => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-outreach/conversations/${convId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/sms/conversations/${convId}/messages`, {
         headers: getAuthHeaders()
       });
       if (response.ok) {
@@ -191,6 +192,65 @@ const AIOutreach = () => {
       }
     } catch (err) {
       console.error('Error fetching conversation detail:', err);
+    }
+  };
+
+  // Send reply in conversation
+  const sendConversationReply = async (message) => {
+    if (!selectedConversation || !message.trim()) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/sms/conversations/${selectedConversation}/send`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ message: message.trim() })
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Reply sent!' });
+        fetchConversationDetail(selectedConversation);
+      } else {
+        const error = await response.json();
+        setMessage({ type: 'error', text: error.detail || 'Failed to send reply' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Error sending reply' });
+    }
+  };
+
+  // Approve an AI message (mark as good)
+  const approveMessage = async (messageId) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/sms/messages/${messageId}/feedback`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ feedback: 'approved', rating: 5 })
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Message approved!' });
+        fetchConversationDetail(selectedConversation);
+      }
+    } catch (err) {
+      console.error('Error approving message:', err);
+    }
+  };
+
+  // Reject/give feedback on AI message
+  const rejectMessage = async (messageId, feedback) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/sms/messages/${messageId}/feedback`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ feedback: feedback || 'needs_improvement', rating: 2 })
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Feedback submitted!' });
+        fetchConversationDetail(selectedConversation);
+      }
+    } catch (err) {
+      console.error('Error submitting feedback:', err);
     }
   };
 
@@ -623,16 +683,19 @@ const AIOutreach = () => {
                   }}
                 >
                   <div className="conv-header">
-                    <span className="conv-name">{conv.contact_name}</span>
-                    <span className={`conv-channel ${conv.channel}`}>{conv.channel}</span>
+                    <span className="conv-name">{conv.contact_name || 'Unknown'}</span>
+                    <span className="conv-channel sms">SMS</span>
                   </div>
                   <div className="conv-contact">
-                    {conv.contact_email || conv.contact_phone}
+                    {conv.phone_number}
                   </div>
                   <div className="conv-meta">
                     <span className="conv-messages">{conv.message_count} messages</span>
-                    <span className="conv-date">{formatDate(conv.created_at)}</span>
+                    <span className="conv-date">{formatDate(conv.last_message_at)}</span>
                   </div>
+                  {conv.ai_enabled && (
+                    <div className="conv-ai-badge">AI Enabled</div>
+                  )}
                 </div>
               ))
             )}
@@ -642,38 +705,79 @@ const AIOutreach = () => {
             {selectedConversation && conversationDetail ? (
               <>
                 <div className="detail-header">
-                  <h3>Conversation History</h3>
-                  <span className={`stage-badge ${conversationDetail.stage}`}>
-                    {conversationDetail.stage}
-                  </span>
+                  <h3>{conversationDetail.conversation?.contact_name || 'Conversation'}</h3>
+                  <div className="detail-meta">
+                    <span className="detail-phone">{conversationDetail.conversation?.phone_number}</span>
+                    {conversationDetail.conversation?.ai_enabled && (
+                      <span className="ai-badge">AI Enabled</span>
+                    )}
+                  </div>
                 </div>
                 <div className="messages-list">
                   {conversationDetail.messages && conversationDetail.messages.length > 0 ? (
-                    conversationDetail.messages.map((msg, idx) => (
-                      <div key={idx} className={`message ${msg.role}`}>
+                    conversationDetail.messages.map((msg) => (
+                      <div key={msg.id} className={`message ${msg.direction}`}>
                         <div className="message-header">
                           <span className="message-role">
-                            {msg.role === 'assistant' ? 'Sarah (AI)' : 'Customer'}
+                            {msg.direction === 'outbound' ? (msg.ai_generated ? 'Sarah (AI)' : 'You') : 'Customer'}
                           </span>
-                          <span className="message-time">{formatDate(msg.timestamp)}</span>
+                          <span className="message-time">{formatDate(msg.created_at)}</span>
                         </div>
-                        <div className="message-content">{msg.content}</div>
+                        <div className="message-content">{msg.message}</div>
+                        <div className="message-footer">
+                          <span className={`message-status ${msg.status}`}>{msg.status}</span>
+                          {msg.ai_generated && (
+                            <div className="message-actions">
+                              <button
+                                className="approve-btn"
+                                onClick={(e) => { e.stopPropagation(); approveMessage(msg.id); }}
+                                title="Approve this response"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                className="feedback-btn"
+                                onClick={(e) => { e.stopPropagation(); rejectMessage(msg.id); }}
+                                title="This needs improvement"
+                              >
+                                Needs Work
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))
                   ) : (
                     <div className="no-messages">No messages yet</div>
                   )}
                 </div>
-                {conversationDetail.collected_info && Object.keys(conversationDetail.collected_info).length > 0 && (
-                  <div className="collected-info">
-                    <h4>Collected Information</h4>
-                    <ul>
-                      {Object.entries(conversationDetail.collected_info).map(([key, value]) => (
-                        <li key={key}><strong>{key}:</strong> {String(value)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+
+                {/* Reply Box */}
+                <div className="reply-box">
+                  <input
+                    type="text"
+                    placeholder="Type a reply..."
+                    className="reply-input"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && e.target.value.trim()) {
+                        sendConversationReply(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    className="send-reply-btn"
+                    onClick={(e) => {
+                      const input = e.target.previousSibling;
+                      if (input.value.trim()) {
+                        sendConversationReply(input.value);
+                        input.value = '';
+                      }
+                    }}
+                  >
+                    Send
+                  </button>
+                </div>
               </>
             ) : (
               <div className="no-selection">
