@@ -382,7 +382,7 @@ const AIOutreach = () => {
                   )}
                   <p><strong>Message:</strong></p>
                   <div className="preview-message">
-                    {(customMessage || selectedTemplate?.message || '(select template or write message)')
+                    {(customMessage || selectedTemplate?.message || selectedTemplate?.body || '(select template or write message)')
                       .replace(/{first_name}/g, manualName || selectedContact?.name?.split(' ')[0] || 'there')}
                   </div>
                 </div>

@@ -337,6 +337,8 @@
   line-height: 1.5;
   max-height: 200px;
   overflow-y: auto;
+  color: #333;
+  min-height: 60px;
 }
 
 .send-btn {
