@@ -34218,7 +34218,7 @@ Subject: {subject}
                 "calendar_invite_sent": calendar_invite_sent,
                 "lo_invite_sent": lo_invite_sent,
                 "lo_email_sent": lo_email_sent,
-                "assigned_lo": booking_result.get("loan_officer", {}).get("name") if booking_result else None
+                "assigned_lo": (booking_result.get("loan_officer") or {}).get("name") if booking_result else None
             }
         else:
             return {
