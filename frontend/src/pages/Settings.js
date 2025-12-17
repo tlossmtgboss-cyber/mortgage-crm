@@ -12,6 +12,7 @@ import AIFeedbackLog from '../components/AIFeedbackLog';
 import ITHelpdeskAdmin from '../components/ITHelpdeskAdmin';
 import PURLManager from '../components/admin/PURLManager';
 import MicrositeThemeSelector from '../components/MicrositeThemeSelector';
+import AIEmailTraining from '../components/AIEmailTraining';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -346,6 +347,7 @@ function Settings() {
     { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance' },
     { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
     { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
+    { id: 'ai-email-training', label: 'AI Email Training', type: 'standalone', section: 'ai-email-training' },
     { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
     { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
@@ -2638,6 +2640,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'email-monitor' && (
             <EmailMonitorDashboard />
+          )}
+
+          {activeSection === 'ai-email-training' && (
+            <AIEmailTraining />
           )}
 
           {activeSection === 'email-signature' && (
