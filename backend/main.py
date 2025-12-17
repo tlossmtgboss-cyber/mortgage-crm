@@ -24532,6 +24532,8 @@ async def debug_twilio_config():
 async def debug_twilio_message_status(message_sid: str):
     """Check the delivery status of a specific Twilio message by SID"""
     try:
+        from twilio.rest import Client as TwilioClient
+
         twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
         twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
 
@@ -24564,6 +24566,8 @@ async def debug_twilio_message_status(message_sid: str):
 async def debug_twilio_recent_messages(limit: int = 10):
     """Get recent messages directly from Twilio API"""
     try:
+        from twilio.rest import Client as TwilioClient
+
         twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
         twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
 
@@ -24601,6 +24605,8 @@ async def debug_send_test_sms(
 ):
     """Send a direct test SMS to verify Twilio is working"""
     try:
+        from twilio.rest import Client as TwilioClient
+
         data = await request.json()
         to_number = data.get("to_number")
         message = data.get("message", "Test from Perennia AI - If you received this, SMS is working!")
