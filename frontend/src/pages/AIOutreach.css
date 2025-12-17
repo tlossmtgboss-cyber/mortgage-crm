@@ -664,6 +664,429 @@
   padding: 24px;
 }
 
+/* Automation */
+.automation-container {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.automation-section {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.section-header {
+  margin-bottom: 20px;
+}
+
+.section-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.section-desc {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.setup-btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.setup-btn:hover {
+  background: #1d4ed8;
+}
+
+.no-items {
+  padding: 40px 20px;
+  text-align: center;
+  color: #888;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+/* Triggers */
+.triggers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trigger-item {
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.trigger-item.active {
+  border-left: 3px solid #22c55e;
+}
+
+.trigger-item.inactive {
+  border-left: 3px solid #94a3b8;
+  opacity: 0.7;
+}
+
+.trigger-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.trigger-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #333;
+}
+
+.trigger-badges {
+  display: flex;
+  gap: 8px;
+}
+
+.trigger-channel {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.trigger-channel.email {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.trigger-channel.sms {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.trigger-type {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f3e8ff;
+  color: #7c3aed;
+  text-transform: capitalize;
+}
+
+.trigger-message {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.trigger-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: #22c55e;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.toggle-label {
+  font-size: 13px;
+  color: #666;
+}
+
+/* Campaigns */
+.campaigns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.campaign-item {
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.campaign-item:hover {
+  border-color: #2563eb;
+}
+
+.campaign-item.active {
+  border-left: 3px solid #22c55e;
+}
+
+.campaign-item.paused {
+  border-left: 3px solid #f59e0b;
+}
+
+.campaign-item.draft {
+  border-left: 3px solid #94a3b8;
+}
+
+.campaign-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.campaign-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #333;
+}
+
+.campaign-status {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.campaign-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.campaign-status.paused {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.campaign-status.draft {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.campaign-desc {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.campaign-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.campaign-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.action-btn.activate {
+  background: #22c55e;
+  color: #fff;
+}
+
+.action-btn.pause {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.action-btn.resume {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* Campaign Detail */
+.campaign-detail {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.campaign-detail h4 {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  color: #333;
+}
+
+.steps-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.step-item {
+  display: flex;
+  gap: 12px;
+}
+
+.step-number {
+  width: 28px;
+  height: 28px;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+  padding: 12px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.step-timing {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.step-channel {
+  font-size: 11px;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #e0e7ff;
+  color: #3730a3;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.step-subject {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.step-message {
+  font-size: 13px;
+  color: #666;
+}
+
+.assigned-leads {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.leads-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lead-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.lead-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.lead-step {
+  color: #666;
+}
+
+.lead-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.lead-status.active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.lead-status.completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.lead-status.paused {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .conversations-container {

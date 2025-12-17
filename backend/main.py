@@ -20478,6 +20478,19 @@ except Exception as e:
     ai_outreach_error = traceback.format_exc()
     logger.warning(f"⚠️ AI Outreach routes not loaded: {e}")
 
+# Automated Outreach routes (drip campaigns + triggers)
+automated_outreach_error = None
+try:
+    from routes.automated_outreach_routes import router as automated_outreach_router, create_automated_outreach_tables
+    app.include_router(automated_outreach_router, tags=["Automated Outreach"])
+    create_automated_outreach_tables(engine)
+    logger.info("✅ Automated Outreach routes loaded")
+except Exception as e:
+    automated_outreach_error = str(e)
+    import traceback
+    automated_outreach_error = traceback.format_exc()
+    logger.warning(f"⚠️ Automated Outreach routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""
@@ -37837,6 +37850,19 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
         logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
         # Re-fetch the lead after rollback to return a valid response
         db_lead = db.query(Lead).filter(Lead.id == lead_id).first()
+
+    # Fire new_lead triggers for automated outreach
+    try:
+        from routes.automated_outreach_routes import execute_trigger, TriggerType
+        import asyncio
+        asyncio.create_task(execute_trigger(
+            trigger_type=TriggerType.NEW_LEAD,
+            lead_id=lead_id,
+            db=db
+        ))
+        logger.info(f"New lead trigger fired for lead {lead_id}")
+    except Exception as e:
+        logger.warning(f"Failed to fire new lead trigger: {e}")
 
     logger.info(f"Lead created: {lead_name} (Score: {lead_score})")
     return db_lead
