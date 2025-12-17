@@ -77,6 +77,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Communication
           </Link>
           <Link
+            to="/ai-outreach"
+            className={`nav-link ${isActive('/ai-outreach') ? 'active' : ''}`}
+          >
+            AI Outreach
+          </Link>
+          <Link
             to="/calendar"
             className={`nav-link ${isActive('/calendar') ? 'active' : ''}`}
           >

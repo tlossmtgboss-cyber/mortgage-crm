@@ -20464,6 +20464,20 @@ except Exception as e:
     ai_email_settings_error = traceback.format_exc()
     logger.warning(f"⚠️ AI Email Settings routes not loaded: {e}")
 
+# AI Outreach routes (send AI-powered emails/SMS to leads)
+ai_outreach_error = None
+try:
+    from routes.ai_outreach_routes import router as ai_outreach_router, create_outreach_table
+    app.include_router(ai_outreach_router, tags=["AI Outreach"])
+    # Create outreach log table
+    create_outreach_table(engine)
+    logger.info("✅ AI Outreach routes loaded")
+except Exception as e:
+    ai_outreach_error = str(e)
+    import traceback
+    ai_outreach_error = traceback.format_exc()
+    logger.warning(f"⚠️ AI Outreach routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""

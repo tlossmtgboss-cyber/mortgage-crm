@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { isAuthenticated } from './utils/auth';
+import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
 import Navigation from './components/Navigation';
@@ -92,6 +92,7 @@ const FirstTimeOnboarding = lazy(() => import('./pages/FirstTimeOnboarding'));
 const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
+const AIOutreach = lazy(() => import('./pages/AIOutreach'));
 const PublicBooking = lazy(() => import('./pages/PublicBooking'));
 const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazy(() => import('./pages/AdaptiveURLA'));
@@ -1508,6 +1509,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><CommunicationIntelligence /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/ai-outreach"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AIOutreach /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
