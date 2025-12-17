@@ -7485,12 +7485,12 @@ The Team menu item appears for managers and management roles.
                 "type": "function",
                 "function": {
                     "name": "send_email_to_contact",
-                    "description": "Send an email to a borrower, lead, or referral partner. For status updates, document requests, or general communication.",
+                    "description": "Send an email to anyone by name. Will search CRM contacts, leads, your email history, and Microsoft contacts/messages to find their email address. Just provide the name and message content.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "recipient_email": {"type": "string", "description": "Email address to send to"},
-                            "recipient_name": {"type": "string", "description": "Recipient name (used to look up email if not provided)"},
+                            "recipient_email": {"type": "string", "description": "Email address to send to (optional - will be looked up by name if not provided)"},
+                            "recipient_name": {"type": "string", "description": "Recipient name - will search CRM, email history, and Microsoft contacts to find their email"},
                             "lead_id": {"type": "integer", "description": "Lead ID to email"},
                             "loan_id": {"type": "integer", "description": "Loan ID (will email borrower)"},
                             "subject": {"type": "string", "description": "Email subject line"},
@@ -9474,6 +9474,7 @@ The Team menu item appears for managers and management roles.
 
             # Look up email if not provided
             if not recipient_email and recipient_name:
+                # Step 1: Search leads/contacts in CRM
                 lead = db.query(Lead).filter(
                     Lead.owner_id == current_user.id,
                     Lead.name.ilike(f"%{recipient_name}%")
@@ -9481,9 +9482,85 @@ The Team menu item appears for managers and management roles.
                 if lead and lead.email:
                     recipient_email = lead.email
                     lead_id = lead.id
+                    logger.info(f"Found email for {recipient_name} in leads: {recipient_email}")
+
+                # Step 2: If not in CRM, search user's email history
+                if not recipient_email:
+                    # Search emails table for sender/recipient matching the name
+                    email_search = db.execute(
+                        text("""
+                            SELECT DISTINCT sender_email, sender_name
+                            FROM emails
+                            WHERE user_id = :user_id
+                            AND (
+                                LOWER(sender_name) LIKE LOWER(:name_pattern)
+                                OR LOWER(sender_email) LIKE LOWER(:name_pattern)
+                            )
+                            AND sender_email IS NOT NULL
+                            AND sender_email != ''
+                            ORDER BY received_date DESC
+                            LIMIT 1
+                        """),
+                        {"user_id": current_user.id, "name_pattern": f"%{recipient_name}%"}
+                    ).fetchone()
+
+                    if email_search and email_search[0]:
+                        recipient_email = email_search[0]
+                        logger.info(f"Found email for {recipient_name} in email history: {recipient_email}")
+
+                # Step 3: Also check Microsoft OAuth tokens and search Graph API if needed
+                if not recipient_email:
+                    # Try to search Microsoft contacts via Graph API
+                    try:
+                        ms_oauth = db.query(MicrosoftOAuthToken).filter(
+                            MicrosoftOAuthToken.user_id == current_user.id
+                        ).first()
+
+                        if ms_oauth and ms_oauth.access_token:
+                            import httpx
+                            access_token = decrypt_token(ms_oauth.access_token)
+                            async with httpx.AsyncClient() as client:
+                                # Search Microsoft contacts
+                                search_response = await client.get(
+                                    f"https://graph.microsoft.com/v1.0/me/contacts",
+                                    headers={"Authorization": f"Bearer {access_token}"},
+                                    params={"$filter": f"contains(displayName, '{recipient_name}')"}
+                                )
+                                if search_response.status_code == 200:
+                                    contacts = search_response.json().get("value", [])
+                                    if contacts:
+                                        for contact in contacts:
+                                            emails = contact.get("emailAddresses", [])
+                                            if emails:
+                                                recipient_email = emails[0].get("address")
+                                                logger.info(f"Found email for {recipient_name} in Microsoft contacts: {recipient_email}")
+                                                break
+
+                                # Also search recent messages for that person
+                                if not recipient_email:
+                                    msg_response = await client.get(
+                                        f"https://graph.microsoft.com/v1.0/me/messages",
+                                        headers={"Authorization": f"Bearer {access_token}"},
+                                        params={
+                                            "$filter": f"contains(from/emailAddress/name, '{recipient_name}')",
+                                            "$select": "from",
+                                            "$top": 1
+                                        }
+                                    )
+                                    if msg_response.status_code == 200:
+                                        messages = msg_response.json().get("value", [])
+                                        if messages:
+                                            from_info = messages[0].get("from", {}).get("emailAddress", {})
+                                            recipient_email = from_info.get("address")
+                                            logger.info(f"Found email for {recipient_name} in Microsoft messages: {recipient_email}")
+                    except Exception as e:
+                        logger.warning(f"Error searching Microsoft for contact: {e}")
 
             if not recipient_email:
-                return {"success": False, "message": "Recipient email required"}
+                return {
+                    "success": False,
+                    "message": f"Email failed - {recipient_name}'s email address is needed. I don't see {recipient_name} in your contacts or leads, and couldn't find their email in your email history. Please provide their email address to send the message."
+                }
 
             try:
                 # Check if user has email configured
@@ -35184,9 +35261,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             "access_token": access_token,
             "token_type": "bearer",
             "user": {
+                "id": user.id,
                 "email": user.email,
                 "full_name": user.full_name,
-                "role": user.role
+                "role": user.role,
+                "onboarding_completed": user.onboarding_completed
             }
         }
     except HTTPException:

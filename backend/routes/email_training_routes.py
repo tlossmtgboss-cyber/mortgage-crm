@@ -176,55 +176,120 @@ def get_training_emails(
     status: Optional[str] = Query(None, description="Filter: 'pending', 'reviewed', 'correct', 'incorrect'"),
     from_email: Optional[str] = Query(None, description="Filter by sender email"),
     topic: Optional[str] = Query(None, description="Filter by detected topic"),
+    source: Optional[str] = Query("all", description="Source: 'all', 'ai_conversations', 'inbox'"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
 ):
     """
     Get email exchanges for training review.
+    Combines AI conversation logs with real inbox emails.
     """
+    from sqlalchemy import text
     try:
-        query = db.query(EmailTrainingLog)
+        results = []
 
-        # Apply filters
-        if status == "pending":
-            query = query.filter(EmailTrainingLog.is_correct == None)
-        elif status == "reviewed":
-            query = query.filter(EmailTrainingLog.is_correct != None)
-        elif status == "correct":
-            query = query.filter(EmailTrainingLog.is_correct == True)
-        elif status == "incorrect":
-            query = query.filter(EmailTrainingLog.is_correct == False)
+        # Get AI conversation logs (existing behavior)
+        if source in ["all", "ai_conversations"]:
+            query = db.query(EmailTrainingLog)
 
-        if from_email:
-            query = query.filter(EmailTrainingLog.from_email.ilike(f"%{from_email}%"))
+            # Apply filters
+            if status == "pending":
+                query = query.filter(EmailTrainingLog.is_correct == None)
+            elif status == "reviewed":
+                query = query.filter(EmailTrainingLog.is_correct != None)
+            elif status == "correct":
+                query = query.filter(EmailTrainingLog.is_correct == True)
+            elif status == "incorrect":
+                query = query.filter(EmailTrainingLog.is_correct == False)
 
-        # Order by newest first, prioritizing unreviewed
-        query = query.order_by(
-            EmailTrainingLog.is_correct.is_(None).desc(),  # Unreviewed first
-            desc(EmailTrainingLog.created_at)
-        )
+            if from_email:
+                query = query.filter(EmailTrainingLog.from_email.ilike(f"%{from_email}%"))
 
-        logs = query.offset(offset).limit(limit).all()
+            # Order by newest first, prioritizing unreviewed
+            query = query.order_by(
+                EmailTrainingLog.is_correct.is_(None).desc(),
+                desc(EmailTrainingLog.created_at)
+            )
 
-        return [EmailTrainingResponse(
-            id=log.id,
-            conversation_id=log.conversation_id,
-            from_email=log.from_email,
-            to_email=log.to_email,
-            subject=log.subject,
-            user_message=log.user_message,
-            ai_response=log.ai_response,
-            is_correct=log.is_correct,
-            feedback_type=log.feedback_type,
-            correct_response=log.correct_response,
-            feedback_notes=log.feedback_notes,
-            reviewed_by=log.reviewed_by,
-            reviewed_at=log.reviewed_at,
-            detected_topics=log.detected_topics,
-            conversation_stage=log.conversation_stage,
-            created_at=log.created_at
-        ) for log in logs]
+            logs = query.offset(offset).limit(limit).all()
+
+            for log in logs:
+                results.append(EmailTrainingResponse(
+                    id=log.id,
+                    conversation_id=log.conversation_id,
+                    from_email=log.from_email,
+                    to_email=log.to_email,
+                    subject=log.subject,
+                    user_message=log.user_message,
+                    ai_response=log.ai_response,
+                    is_correct=log.is_correct,
+                    feedback_type=log.feedback_type,
+                    correct_response=log.correct_response,
+                    feedback_notes=log.feedback_notes,
+                    reviewed_by=log.reviewed_by,
+                    reviewed_at=log.reviewed_at,
+                    detected_topics=log.detected_topics,
+                    conversation_stage=log.conversation_stage,
+                    created_at=log.created_at
+                ))
+
+        # Also get real inbox emails (processed by AI)
+        if source in ["all", "inbox"]:
+            try:
+                # Query real emails from the emails table that have AI processing
+                inbox_emails = db.execute(text("""
+                    SELECT
+                        e.id,
+                        e.message_id as conversation_id,
+                        e.sender_email as from_email,
+                        e.sender_name,
+                        e.recipient_emails,
+                        e.subject,
+                        e.body_text as user_message,
+                        e.received_date as created_at,
+                        e.ai_extracted_data,
+                        e.processed,
+                        e.folder_name
+                    FROM emails e
+                    WHERE e.processed = true
+                    AND e.folder_name = 'Inbox'
+                    ORDER BY e.received_date DESC
+                    LIMIT :limit OFFSET :offset
+                """), {"limit": limit, "offset": offset}).fetchall()
+
+                for email in inbox_emails:
+                    ai_data = email.ai_extracted_data or {}
+                    ai_response = ai_data.get('ai_response', ai_data.get('summary', 'No AI response recorded'))
+
+                    # Check if this email already exists in training logs (by message_id)
+                    existing = any(r.conversation_id == email.conversation_id for r in results)
+                    if not existing:
+                        results.append(EmailTrainingResponse(
+                            id=email.id + 100000,  # Offset to avoid ID conflicts
+                            conversation_id=email.conversation_id or f"inbox_{email.id}",
+                            from_email=email.from_email,
+                            to_email=str(email.recipient_emails[0]) if email.recipient_emails else None,
+                            subject=email.subject,
+                            user_message=email.user_message or "(No body)",
+                            ai_response=ai_response if isinstance(ai_response, str) else str(ai_response),
+                            is_correct=None,  # Not yet reviewed
+                            feedback_type=None,
+                            correct_response=None,
+                            feedback_notes=None,
+                            reviewed_by=None,
+                            reviewed_at=None,
+                            detected_topics=ai_data.get('topics', []),
+                            conversation_stage=ai_data.get('stage', 'inbox'),
+                            created_at=email.created_at
+                        ))
+            except Exception as inbox_err:
+                logger.warning(f"Could not fetch inbox emails: {inbox_err}")
+
+        # Sort combined results by date
+        results.sort(key=lambda x: x.created_at if x.created_at else datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+        return results[:limit]
 
     except Exception as e:
         logger.error(f"Error fetching training emails: {e}")

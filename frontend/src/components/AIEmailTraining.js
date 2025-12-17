@@ -11,6 +11,7 @@ const AIEmailTraining = () => {
   const [loading, setLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [filter, setFilter] = useState('all'); // all, pending, correct, incorrect
+  const [source, setSource] = useState('all'); // all, ai_conversations, inbox
   const [feedbackForm, setFeedbackForm] = useState({
     is_correct: null,
     feedback_type: '',
@@ -27,8 +28,12 @@ const AIEmailTraining = () => {
 
   const fetchEmails = useCallback(async () => {
     try {
-      const statusParam = filter === 'all' ? '' : `?status=${filter}`;
-      const response = await fetch(`${API_BASE}/api/v1/email-training/emails${statusParam}`, {
+      const params = new URLSearchParams();
+      if (filter !== 'all') params.append('status', filter);
+      if (source !== 'all') params.append('source', source);
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+
+      const response = await fetch(`${API_BASE}/api/v1/email-training/emails${queryString}`, {
         headers: getAuthHeaders()
       });
       if (response.ok) {
@@ -38,7 +43,7 @@ const AIEmailTraining = () => {
     } catch (err) {
       console.error('Error fetching emails:', err);
     }
-  }, [filter]);
+  }, [filter, source]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -158,8 +163,13 @@ const AIEmailTraining = () => {
         {/* Email List */}
         <div className="email-list-panel">
           <div className="filter-bar">
+            <select value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="all">All Sources</option>
+              <option value="inbox">Real Inbox Emails</option>
+              <option value="ai_conversations">AI Conversations</option>
+            </select>
             <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-              <option value="all">All Conversations</option>
+              <option value="all">All Status</option>
               <option value="pending">Pending Review</option>
               <option value="correct">Marked Correct</option>
               <option value="incorrect">Needs Improvement</option>
@@ -200,21 +210,28 @@ const AIEmailTraining = () => {
             <>
               <div className="conversation-view">
                 <h3>Conversation</h3>
+                {selectedEmail.subject && (
+                  <div className="email-subject-header" style={{ marginBottom: '16px', padding: '8px 12px', background: '#f8f9fa', borderRadius: '6px' }}>
+                    <strong>Subject:</strong> {selectedEmail.subject}
+                  </div>
+                )}
 
                 <div className="message user-message">
                   <div className="message-header">
                     <span className="sender">{selectedEmail.from_email}</span>
                     <span className="date">{formatDate(selectedEmail.created_at)}</span>
                   </div>
-                  <div className="message-content">{selectedEmail.user_message}</div>
+                  <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>{selectedEmail.user_message}</div>
                 </div>
 
-                <div className="message ai-message">
-                  <div className="message-header">
-                    <span className="sender">Sarah (AI)</span>
+                {selectedEmail.ai_response && selectedEmail.ai_response !== 'No AI response recorded' && (
+                  <div className="message ai-message">
+                    <div className="message-header">
+                      <span className="sender">Sarah (AI)</span>
+                    </div>
+                    <div className="message-content" style={{ whiteSpace: 'pre-wrap' }}>{selectedEmail.ai_response}</div>
                   </div>
-                  <div className="message-content">{selectedEmail.ai_response}</div>
-                </div>
+                )}
 
                 {selectedEmail.detected_topics && selectedEmail.detected_topics.length > 0 && (
                   <div className="detected-topics">
