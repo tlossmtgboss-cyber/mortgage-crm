@@ -116,6 +116,8 @@ def generate_appointment_ics(
     duration_minutes: int = 30,
     appointment_type: str = "consultation",
     meeting_link: Optional[str] = None,
+    loan_officer_name: Optional[str] = None,
+    loan_officer_email: Optional[str] = None,
 ) -> str:
     """
     Generate ICS content for a mortgage appointment.
@@ -128,6 +130,8 @@ def generate_appointment_ics(
         duration_minutes: Appointment duration
         appointment_type: Type of appointment
         meeting_link: Optional video meeting link
+        loan_officer_name: Assigned loan officer's name
+        loan_officer_email: Assigned loan officer's email
 
     Returns:
         ICS file content as string
@@ -144,11 +148,17 @@ def generate_appointment_ics(
         "closing_prep": "Closing Preparation",
     }
     title = type_titles.get(appointment_type, "Mortgage Consultation")
-    title = f"{title} with {contact_name}"
+
+    # Include loan officer name in title if available
+    if loan_officer_name:
+        title = f"{title} with {loan_officer_name}"
+    else:
+        title = f"{title} with {contact_name}"
 
     # Build description
+    lo_info = f"\nYour Loan Officer: {loan_officer_name}" if loan_officer_name else ""
     description = f"""Thank you for scheduling your mortgage consultation with Perennia AI!
-
+{lo_info}
 Appointment Details:
 - Date: {start_time.strftime('%A, %B %d, %Y')}
 - Time: {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}
@@ -168,9 +178,86 @@ Reference: {appointment_id}"""
         start_time=start_time,
         end_time=end_time,
         description=description,
-        organizer_email="sarah@perenniaai.com",
-        organizer_name="Sarah - Perennia AI",
+        organizer_email=loan_officer_email or "sarah@perenniaai.com",
+        organizer_name=loan_officer_name or "Sarah - Perennia AI",
         attendee_email=contact_email,
         attendee_name=contact_name,
+        meeting_link=meeting_link,
+    )
+
+
+def generate_lo_appointment_ics(
+    appointment_id: str,
+    contact_name: str,
+    contact_email: str,
+    contact_phone: Optional[str],
+    start_time: datetime,
+    duration_minutes: int = 30,
+    appointment_type: str = "consultation",
+    meeting_link: Optional[str] = None,
+    loan_officer_name: str = "",
+    loan_officer_email: str = "",
+    notes: Optional[str] = None,
+) -> str:
+    """
+    Generate ICS content for a loan officer's calendar.
+
+    Args:
+        appointment_id: Unique appointment ID
+        contact_name: Client's name
+        contact_email: Client's email
+        contact_phone: Client's phone number
+        start_time: Appointment start time
+        duration_minutes: Appointment duration
+        appointment_type: Type of appointment
+        meeting_link: Optional video meeting link
+        loan_officer_name: Loan officer's name
+        loan_officer_email: Loan officer's email
+        notes: Additional notes about the appointment
+
+    Returns:
+        ICS file content as string
+    """
+    end_time = start_time + timedelta(minutes=duration_minutes)
+
+    # Build title
+    type_titles = {
+        "consultation": "Mortgage Consultation",
+        "discovery": "Discovery Call",
+        "pre_approval": "Pre-Approval Review",
+        "document_review": "Document Review",
+        "rate_lock": "Rate Lock Discussion",
+        "closing_prep": "Closing Preparation",
+    }
+    title = type_titles.get(appointment_type, "Mortgage Consultation")
+    title = f"{title} - {contact_name}"
+
+    # Build description for loan officer (includes contact details)
+    phone_info = f"\n- Phone: {contact_phone}" if contact_phone else ""
+    notes_info = f"\n\nNotes:\n{notes}" if notes else ""
+
+    description = f"""New appointment scheduled via AI Assistant
+
+Client Information:
+- Name: {contact_name}
+- Email: {contact_email}{phone_info}
+
+Appointment Details:
+- Date: {start_time.strftime('%A, %B %d, %Y')}
+- Time: {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}
+- Duration: {duration_minutes} minutes
+- Type: {appointment_type.replace('_', ' ').title()}
+{notes_info}
+Reference: {appointment_id}"""
+
+    return generate_ics_content(
+        title=title,
+        start_time=start_time,
+        end_time=end_time,
+        description=description,
+        organizer_email="sarah@perenniaai.com",
+        organizer_name="Sarah - Perennia AI",
+        attendee_email=loan_officer_email,
+        attendee_name=loan_officer_name,
         meeting_link=meeting_link,
     )

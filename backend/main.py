@@ -19434,6 +19434,16 @@ except Exception as e:
     logger.error(f"⚠️ Could not load Smart Scheduler routes: {e}")
     logger.error(f"Smart Scheduler traceback: {traceback.format_exc()}")
 
+# Include AI Smart Scheduler Setup routes (LO assignment configuration)
+try:
+    from routes.smart_scheduler_routes import router as ai_scheduler_setup_router
+    app.include_router(ai_scheduler_setup_router, prefix="/api/v1/scheduler-setup", tags=["AI Scheduler Setup"])
+    logger.info("✅ AI Scheduler Setup routes loaded (LO assignment, scheduling methods)")
+except Exception as e:
+    import traceback
+    logger.warning(f"⚠️ Could not load AI Scheduler Setup routes: {e}")
+    logger.warning(f"Traceback: {traceback.format_exc()}")
+
 # Include Enhanced Scheduler routes (Advanced features)
 try:
     from scheduler_enhancements import create_scheduler_enhancement_models
@@ -34054,15 +34064,24 @@ Subject: {subject}
             # Check if there's an appointment booking - prepare ICS attachment
             attachments = None
             calendar_invite_sent = False
+            lo_invite_sent = False
+            lo_email_sent = False
             booking_result = result.get("booking_result")
 
             if booking_result and booking_result.get("success"):
                 try:
-                    from utils.calendar_invite import generate_appointment_ics
+                    from utils.calendar_invite import generate_appointment_ics, generate_lo_appointment_ics
                     from datetime import datetime as dt
 
                     appt_time = dt.fromisoformat(booking_result["datetime"])
 
+                    # Get loan officer info from booking result
+                    lo_info = booking_result.get("loan_officer") or {}
+                    lo_name = lo_info.get("name")
+                    lo_email = lo_info.get("email")
+                    lo_phone = lo_info.get("phone")
+
+                    # Generate customer calendar invite (with LO info)
                     ics_content = generate_appointment_ics(
                         appointment_id=booking_result["appointment_id"],
                         contact_name=booking_result.get("contact_name", sender_name),
@@ -34070,16 +34089,80 @@ Subject: {subject}
                         start_time=appt_time,
                         duration_minutes=booking_result.get("duration_minutes", 30),
                         appointment_type=booking_result.get("type", "consultation"),
+                        loan_officer_name=lo_name,
+                        loan_officer_email=lo_email,
                     )
 
-                    # Prepare attachment for main email
+                    # Prepare attachment for main email to customer
                     attachments = [{
                         'content': ics_content.encode('utf-8'),
                         'filename': 'appointment.ics',
                         'type': 'text/calendar; method=REQUEST'
                     }]
                     calendar_invite_sent = True
-                    logger.info(f"ICS attachment prepared for {sender_email}")
+                    logger.info(f"Customer ICS attachment prepared for {sender_email} (with LO: {lo_name})")
+
+                    # Send calendar invite and email to loan officer
+                    if lo_email:
+                        try:
+                            # Generate LO calendar invite
+                            lo_ics_content = generate_lo_appointment_ics(
+                                appointment_id=booking_result["appointment_id"],
+                                contact_name=booking_result.get("contact_name", sender_name),
+                                contact_email=sender_email,
+                                contact_phone=None,  # May not have phone yet
+                                start_time=appt_time,
+                                duration_minutes=booking_result.get("duration_minutes", 30),
+                                appointment_type=booking_result.get("type", "consultation"),
+                                loan_officer_name=lo_name,
+                                loan_officer_email=lo_email,
+                                notes=f"New appointment booked via AI assistant. Contact: {sender_email}",
+                            )
+
+                            # Prepare LO email content
+                            lo_subject = f"New Appointment: {booking_result.get('contact_name', sender_name)} - {appt_time.strftime('%b %d at %I:%M %p')}"
+                            lo_html = f"""
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                <h2 style="color: #1e3a5f;">New Appointment Scheduled</h2>
+                                <p>A new consultation has been booked via AI assistant.</p>
+
+                                <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                    <h3 style="margin-top: 0; color: #333;">Appointment Details</h3>
+                                    <p><strong>Client:</strong> {booking_result.get('contact_name', sender_name)}</p>
+                                    <p><strong>Email:</strong> {sender_email}</p>
+                                    <p><strong>Date:</strong> {appt_time.strftime('%A, %B %d, %Y')}</p>
+                                    <p><strong>Time:</strong> {appt_time.strftime('%I:%M %p')}</p>
+                                    <p><strong>Duration:</strong> {booking_result.get('duration_minutes', 30)} minutes</p>
+                                    <p><strong>Type:</strong> {booking_result.get('type', 'Consultation').replace('_', ' ').title()}</p>
+                                    <p><strong>Reference:</strong> {booking_result['appointment_id']}</p>
+                                </div>
+
+                                <p>A calendar invitation is attached. Please add it to your calendar.</p>
+
+                                <p style="color: #666; font-size: 12px; margin-top: 30px;">
+                                    This appointment was scheduled by Sarah, your AI assistant.
+                                </p>
+                            </div>
+                            """
+
+                            lo_attachments = [{
+                                'content': lo_ics_content.encode('utf-8'),
+                                'filename': 'appointment.ics',
+                                'type': 'text/calendar; method=REQUEST'
+                            }]
+
+                            # Send email to loan officer
+                            lo_email_sent = email_service.send_html_email(
+                                to_email=lo_email,
+                                subject=lo_subject,
+                                html_body=lo_html,
+                                attachments=lo_attachments
+                            )
+                            lo_invite_sent = lo_email_sent
+                            logger.info(f"LO notification sent to {lo_email}: {lo_email_sent}")
+
+                        except Exception as lo_err:
+                            logger.warning(f"Could not send LO notification: {lo_err}")
 
                 except Exception as ics_err:
                     logger.warning(f"Could not generate ICS: {ics_err}")
@@ -34132,7 +34215,10 @@ Subject: {subject}
                 "should_escalate": result["should_escalate"],
                 "training_log_id": training_log_id,
                 "appointment_booked": booking_result is not None,
-                "calendar_invite_sent": calendar_invite_sent
+                "calendar_invite_sent": calendar_invite_sent,
+                "lo_invite_sent": lo_invite_sent,
+                "lo_email_sent": lo_email_sent,
+                "assigned_lo": booking_result.get("loan_officer", {}).get("name") if booking_result else None
             }
         else:
             return {

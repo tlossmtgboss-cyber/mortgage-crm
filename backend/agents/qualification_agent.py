@@ -621,15 +621,57 @@ class QualificationAgent:
         return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
     def _book_appointment_for_email(self, email: str, name: str, appointment_time: datetime) -> Dict[str, Any]:
-        """Book an appointment and return booking details."""
+        """Book an appointment using Smart Scheduler for LO assignment and return booking details."""
         import uuid
         from datetime import timedelta
 
+        try:
+            # Try to use Smart Scheduler for LO assignment
+            from services.smart_scheduler_service import get_scheduler_service
+            scheduler = get_scheduler_service(self.db_session)
+
+            # Book through smart scheduler (handles LO assignment automatically)
+            result = scheduler.book_appointment(
+                contact_name=name,
+                contact_email=email,
+                appointment_time=appointment_time,
+                appointment_type="consultation",
+                duration_minutes=30,
+            )
+
+            if result.get("success"):
+                lo_info = result.get("loan_officer", {})
+                appt_info = result.get("appointment", {})
+
+                return {
+                    "success": True,
+                    "appointment_id": result["appointment_id"],
+                    "contact_email": email,
+                    "contact_name": name,
+                    "datetime": appt_info.get("start_time", appointment_time.isoformat()),
+                    "end_time": appt_info.get("end_time"),
+                    "display_time": appt_info.get("display_time", appointment_time.strftime("%A, %B %d at %I:%M %p")),
+                    "duration_minutes": appt_info.get("duration_minutes", 30),
+                    "type": "consultation",
+                    "title": result.get("title", f"Mortgage Consultation - {name}"),
+                    # Include loan officer info for calendar invite
+                    "loan_officer": {
+                        "id": lo_info.get("id"),
+                        "name": lo_info.get("name"),
+                        "email": lo_info.get("email"),
+                        "phone": lo_info.get("phone"),
+                    }
+                }
+            else:
+                logger.warning(f"Smart scheduler booking failed: {result.get('error')}")
+                # Fall through to basic booking
+        except Exception as e:
+            logger.warning(f"Could not use Smart Scheduler, using basic booking: {e}")
+
+        # Fallback: Basic booking without LO assignment
         appt_id = f"APPT-{str(uuid.uuid4())[:8].upper()}"
         duration_minutes = 30
         appt_end = appointment_time + timedelta(minutes=duration_minutes)
-
-        # Format for display
         display_time = appointment_time.strftime("%A, %B %d at %I:%M %p")
 
         return {
@@ -643,6 +685,7 @@ class QualificationAgent:
             "duration_minutes": duration_minutes,
             "type": "consultation",
             "title": f"Mortgage Consultation - {name}",
+            "loan_officer": None,  # No LO assigned in fallback
         }
 
     def _check_for_user_question(self, analysis: Dict) -> Optional[Dict[str, Any]]:
