@@ -24227,18 +24227,31 @@ Be concise - you're texting!"""
         twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
         twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
         twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+        messaging_service_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
 
-        if not all([twilio_sid, twilio_token, twilio_phone]):
+        if not twilio_sid or not twilio_token:
             logger.error("Twilio credentials not configured")
+            return
+
+        if not messaging_service_sid and not twilio_phone:
+            logger.error("No Twilio phone number or messaging service configured")
             return
 
         twilio_client = TwilioClient(twilio_sid, twilio_token)
 
-        sent_message = twilio_client.messages.create(
-            body=ai_response,
-            from_=twilio_phone,
-            to=from_number
-        )
+        # Use Messaging Service SID if available (better deliverability with A2P 10DLC)
+        if messaging_service_sid:
+            sent_message = twilio_client.messages.create(
+                body=ai_response,
+                messaging_service_sid=messaging_service_sid,
+                to=from_number
+            )
+        else:
+            sent_message = twilio_client.messages.create(
+                body=ai_response,
+                from_=twilio_phone,
+                to=from_number
+            )
 
         # Store outbound message
         outbound_sms = SMSMessage(
@@ -24373,17 +24386,30 @@ async def send_sms_in_conversation(
         twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
         twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
         twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+        messaging_service_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
 
-        if not all([twilio_sid, twilio_token, twilio_phone]):
+        if not twilio_sid or not twilio_token:
             raise HTTPException(status_code=500, detail="SMS service not configured")
+
+        if not messaging_service_sid and not twilio_phone:
+            raise HTTPException(status_code=500, detail="No Twilio phone number or messaging service configured")
 
         twilio_client = TwilioClient(twilio_sid, twilio_token)
 
-        sent_message = twilio_client.messages.create(
-            body=message,
-            from_=twilio_phone,
-            to=conversation.phone_number
-        )
+        # Use Messaging Service SID if available (better deliverability with A2P 10DLC)
+        # Otherwise fall back to phone number
+        if messaging_service_sid:
+            sent_message = twilio_client.messages.create(
+                body=message,
+                messaging_service_sid=messaging_service_sid,
+                to=conversation.phone_number
+            )
+        else:
+            sent_message = twilio_client.messages.create(
+                body=message,
+                from_=twilio_phone,
+                to=conversation.phone_number
+            )
 
         sms_message = SMSMessage(
             user_id=current_user.id,
@@ -24517,14 +24543,17 @@ async def debug_twilio_config():
     twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
     twilio_from = os.getenv("TWILIO_FROM_NUMBER")
+    twilio_messaging_service = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
 
     return {
         "account_sid": twilio_sid[:10] + "..." if twilio_sid else None,
         "auth_token": "***configured***" if twilio_token else None,
         "TWILIO_PHONE_NUMBER": twilio_phone,
         "TWILIO_FROM_NUMBER": twilio_from,
+        "TWILIO_MESSAGING_SERVICE_SID": twilio_messaging_service,
         "using_phone": twilio_phone or twilio_from,
-        "configured": bool(twilio_sid and twilio_token and (twilio_phone or twilio_from))
+        "configured": bool(twilio_sid and twilio_token and (twilio_phone or twilio_from or twilio_messaging_service)),
+        "note": "Error 30034 means carrier filtering - requires A2P 10DLC registration. Set TWILIO_MESSAGING_SERVICE_SID for better deliverability."
     }
 
 
