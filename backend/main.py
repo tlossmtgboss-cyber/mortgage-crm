@@ -20450,6 +20450,20 @@ except Exception as e:
     email_training_error = traceback.format_exc()
     logger.warning(f"⚠️ Email Training routes not loaded: {e}")
 
+# AI Email Settings routes (configure AI assistant email identity)
+ai_email_settings_error = None
+try:
+    from routes.ai_email_settings_routes import router as ai_email_settings_router, AIEmailSettings
+    app.include_router(ai_email_settings_router, tags=["AI Email Settings"])
+    # Create table if not exists
+    AIEmailSettings.__table__.create(bind=engine, checkfirst=True)
+    logger.info("✅ AI Email Settings routes loaded")
+except Exception as e:
+    ai_email_settings_error = str(e)
+    import traceback
+    ai_email_settings_error = traceback.format_exc()
+    logger.warning(f"⚠️ AI Email Settings routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""
