@@ -151,56 +151,120 @@ async def get_contacts_for_outreach(
 ):
     """Get contacts/leads available for outreach"""
     try:
-        # Search in both leads and contacts tables
-        query = """
-            SELECT
-                'lead' as type,
-                l.id,
-                COALESCE(l.first_name, '') || ' ' || COALESCE(l.last_name, '') as name,
-                l.email,
-                l.phone,
-                l.status,
-                l.created_at,
-                l.last_contacted_at
-            FROM leads l
-            WHERE l.email IS NOT NULL OR l.phone IS NOT NULL
-        """
-
+        contacts = []
         params = {"limit": limit, "offset": offset}
 
+        # Build search condition
+        search_condition = ""
         if search:
-            query += """ AND (
-                LOWER(l.first_name) LIKE LOWER(:search) OR
-                LOWER(l.last_name) LIKE LOWER(:search) OR
-                LOWER(l.email) LIKE LOWER(:search) OR
-                l.phone LIKE :search
-            )"""
             params["search"] = f"%{search}%"
-
-        query += " ORDER BY l.created_at DESC LIMIT :limit OFFSET :offset"
-
-        result = db.execute(text(query), params)
-        contacts = [dict(row._mapping) for row in result.fetchall()]
-
-        # Get total count
-        count_query = """
-            SELECT COUNT(*) as total FROM leads l
-            WHERE l.email IS NOT NULL OR l.phone IS NOT NULL
-        """
-        if search:
-            count_query += """ AND (
-                LOWER(l.first_name) LIKE LOWER(:search) OR
-                LOWER(l.last_name) LIKE LOWER(:search) OR
-                LOWER(l.email) LIKE LOWER(:search) OR
-                l.phone LIKE :search
+            search_condition = """ AND (
+                LOWER(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) LIKE LOWER(:search) OR
+                LOWER(first_name) LIKE LOWER(:search) OR
+                LOWER(last_name) LIKE LOWER(:search) OR
+                LOWER(email) LIKE LOWER(:search) OR
+                phone LIKE :search OR
+                LOWER(name) LIKE LOWER(:search)
             )"""
 
-        total_result = db.execute(text(count_query), {"search": f"%{search}%" if search else ""})
-        total = total_result.scalar() or 0
+        # Search leads
+        try:
+            lead_query = f"""
+                SELECT
+                    'lead' as type,
+                    id,
+                    COALESCE(name, COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) as name,
+                    email,
+                    phone,
+                    stage as status
+                FROM leads
+                WHERE (email IS NOT NULL AND email != '') OR (phone IS NOT NULL AND phone != '')
+                {search_condition.replace('name', 'COALESCE(name, first_name)')}
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """
+            result = db.execute(text(lead_query), params)
+            for row in result.fetchall():
+                contacts.append({
+                    "type": "lead",
+                    "id": row[1],
+                    "name": row[2] or "Unknown",
+                    "email": row[3],
+                    "phone": row[4],
+                    "status": row[5]
+                })
+        except Exception as e:
+            logger.warning(f"Error searching leads: {e}")
+
+        # Search loan borrowers
+        try:
+            loan_query = f"""
+                SELECT
+                    'borrower' as type,
+                    id,
+                    borrower_name as name,
+                    borrower_email as email,
+                    borrower_phone as phone,
+                    status
+                FROM loans
+                WHERE (borrower_email IS NOT NULL AND borrower_email != '')
+                   OR (borrower_phone IS NOT NULL AND borrower_phone != '')
+                {"AND LOWER(borrower_name) LIKE LOWER(:search)" if search else ""}
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """
+            result = db.execute(text(loan_query), params)
+            for row in result.fetchall():
+                # Avoid duplicates by email
+                if not any(c.get('email') == row[3] for c in contacts if row[3]):
+                    contacts.append({
+                        "type": "borrower",
+                        "id": row[1],
+                        "name": row[2] or "Unknown",
+                        "email": row[3],
+                        "phone": row[4],
+                        "status": row[5]
+                    })
+        except Exception as e:
+            logger.warning(f"Error searching loans: {e}")
+
+        # Search users (for internal notifications)
+        try:
+            user_query = f"""
+                SELECT
+                    'user' as type,
+                    id,
+                    COALESCE(first_name, '') || ' ' || COALESCE(last_name, '') as name,
+                    email,
+                    phone,
+                    role as status
+                FROM users
+                WHERE email IS NOT NULL AND email != ''
+                {"AND (LOWER(first_name) LIKE LOWER(:search) OR LOWER(last_name) LIKE LOWER(:search) OR LOWER(email) LIKE LOWER(:search))" if search else ""}
+                ORDER BY first_name
+                LIMIT 20
+            """
+            result = db.execute(text(user_query), params)
+            for row in result.fetchall():
+                if not any(c.get('email') == row[3] for c in contacts if row[3]):
+                    contacts.append({
+                        "type": "user",
+                        "id": row[1],
+                        "name": row[2] or "Unknown",
+                        "email": row[3],
+                        "phone": row[4],
+                        "status": row[5]
+                    })
+        except Exception as e:
+            logger.warning(f"Error searching users: {e}")
+
+        # Sort by name and limit
+        contacts.sort(key=lambda x: x.get('name', '').lower())
+        contacts = contacts[:limit]
 
         return {
             "contacts": contacts,
-            "total": total,
+            "total": len(contacts),
             "limit": limit,
             "offset": offset
         }

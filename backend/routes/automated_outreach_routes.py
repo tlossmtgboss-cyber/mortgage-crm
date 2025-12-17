@@ -37,6 +37,7 @@ class TriggerType(str, Enum):
     APPOINTMENT_BOOKED = "appointment_booked"
     APPLICATION_STARTED = "application_started"
     APPLICATION_ABANDONED = "application_abandoned"
+    LOAN_STATUS_CHANGE = "loan_status_change"
 
 
 class ChannelType(str, Enum):
@@ -558,6 +559,151 @@ AI Mortgage Assistant | Perennia AI"""
         "trigger_type": "appointment_booked",
         "channel": "sms",
         "message": "Hi {first_name}! Your appointment is confirmed. Looking forward to speaking with you soon! Reply if you have any questions."
+    },
+    # Nurture Status Triggers
+    {
+        "name": "Nurture Follow-up - Email",
+        "trigger_type": "lead_status_change",
+        "trigger_config": {"new_status": "nurture"},
+        "channel": "email",
+        "subject": "Keeping in touch - Your mortgage journey",
+        "message": """Hi {first_name},
+
+I wanted to check in and see how things are going! I know timing is everything when it comes to buying a home or refinancing.
+
+Even if you're not ready right now, I'm here to help when the time is right. Here are a few things I can help with:
+
+- Current rate information
+- Pre-qualification (no impact to your credit)
+- Answering any mortgage questions
+
+Feel free to reply anytime - I'm always happy to help!
+
+Sarah
+AI Mortgage Assistant | Perennia AI"""
+    },
+    {
+        "name": "Nurture Follow-up - SMS",
+        "trigger_type": "lead_status_change",
+        "trigger_config": {"new_status": "nurture"},
+        "channel": "sms",
+        "message": "Hi {first_name}! Just wanted to check in. Still thinking about your mortgage options? I'm here whenever you're ready - no pressure! Feel free to text back anytime."
+    },
+    # Loan Status Change Notifications
+    {
+        "name": "Loan Status - Application Received",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "application"},
+        "channel": "email",
+        "subject": "Application Received - Next Steps",
+        "message": """Hi {first_name},
+
+Great news! We've received your loan application. Here's what happens next:
+
+1. Our team will review your documents
+2. We'll reach out if we need any additional information
+3. You'll receive updates as your loan progresses
+
+Your loan officer will be in touch soon with more details.
+
+Thank you for choosing us!
+
+Perennia AI Team"""
+    },
+    {
+        "name": "Loan Status - In Processing",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "processing"},
+        "channel": "email",
+        "subject": "Your Loan is Now in Processing",
+        "message": """Hi {first_name},
+
+Your loan is now in processing! This is an exciting step forward.
+
+During this phase, we're:
+- Verifying your documentation
+- Ordering the appraisal
+- Running title searches
+
+We'll keep you updated on any developments. If we need anything from you, we'll reach out right away.
+
+Perennia AI Team"""
+    },
+    {
+        "name": "Loan Status - Submitted to Underwriting",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "submitted"},
+        "channel": "email",
+        "subject": "Your Loan Has Been Submitted to Underwriting",
+        "message": """Hi {first_name},
+
+Great progress! Your loan has been submitted to underwriting for review.
+
+The underwriter will review all your documentation and make a decision. This typically takes a few business days.
+
+We'll notify you immediately once we have an update.
+
+Perennia AI Team"""
+    },
+    {
+        "name": "Loan Status - Approved",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "approved"},
+        "channel": "email",
+        "subject": "Congratulations! Your Loan is Approved!",
+        "message": """Hi {first_name},
+
+CONGRATULATIONS! Your loan has been APPROVED!
+
+This is fantastic news! Here's what's next:
+1. We'll finalize the closing date
+2. You'll receive your Closing Disclosure
+3. We'll schedule the closing
+
+Your loan officer will be in touch with specific details soon.
+
+Congratulations again on this exciting milestone!
+
+Perennia AI Team"""
+    },
+    {
+        "name": "Loan Status - Approved SMS",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "approved"},
+        "channel": "sms",
+        "message": "Congratulations {first_name}! Your loan has been APPROVED! Your loan officer will be in touch soon with next steps."
+    },
+    {
+        "name": "Loan Status - Clear to Close",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "clear_to_close"},
+        "channel": "email",
+        "subject": "Clear to Close - Almost There!",
+        "message": """Hi {first_name},
+
+Exciting news! You're CLEAR TO CLOSE!
+
+This means all conditions have been satisfied and we can schedule your closing. Your loan officer or closing coordinator will reach out to finalize the date and time.
+
+You're almost at the finish line!
+
+Perennia AI Team"""
+    },
+    {
+        "name": "Loan Status - Funded",
+        "trigger_type": "loan_status_change",
+        "trigger_config": {"new_status": "funded"},
+        "channel": "email",
+        "subject": "Congratulations! Your Loan Has Funded!",
+        "message": """Hi {first_name},
+
+Your loan has officially FUNDED! Congratulations!
+
+Thank you for trusting us with this important milestone. If you have any questions going forward, please don't hesitate to reach out.
+
+We wish you all the best in your new home!
+
+Perennia AI Team"""
     }
 ]
 
@@ -638,26 +784,64 @@ async def execute_trigger(
         if not triggers:
             return {"executed": 0}
 
-        # Get lead/contact info
+        # Get contact info based on lead or loan
+        first_name = "there"
+        email = None
+        phone = None
+
         if lead_id:
             lead_result = db.execute(text("""
                 SELECT first_name, last_name, email, phone FROM leads WHERE id = :id
             """), {"id": lead_id})
             lead = lead_result.fetchone()
-            if not lead:
-                return {"executed": 0, "error": "Lead not found"}
+            if lead:
+                first_name = lead.first_name or "there"
+                email = lead.email
+                phone = lead.phone
 
-            first_name = lead.first_name or "there"
-            email = lead.email
-            phone = lead.phone
-        else:
-            first_name = context.get("first_name", "there") if context else "there"
-            email = context.get("email") if context else None
-            phone = context.get("phone") if context else None
+        if loan_id:
+            # Get borrower info from loan
+            loan_result = db.execute(text("""
+                SELECT borrower_name, borrower_email, borrower_phone FROM loans WHERE id = :id
+            """), {"id": loan_id})
+            loan = loan_result.fetchone()
+            if loan:
+                first_name = (loan.borrower_name or "").split()[0] if loan.borrower_name else "there"
+                email = loan.borrower_email or email
+                phone = loan.borrower_phone or phone
+
+        # Override with context if provided
+        if context:
+            first_name = context.get("first_name", first_name)
+            email = context.get("email", email)
+            phone = context.get("phone", phone)
+
+        if not email and not phone:
+            return {"executed": 0, "error": "No contact info available"}
 
         executed = 0
+        new_status = context.get("new_status") if context else None
+        old_status = context.get("old_status") if context else None
+
         for trigger in triggers:
             try:
+                # Check if trigger config matches the status change
+                if trigger.get("trigger_config"):
+                    try:
+                        config = json.loads(trigger["trigger_config"]) if isinstance(trigger["trigger_config"], str) else trigger["trigger_config"]
+
+                        # Check new_status filter
+                        if "new_status" in config and new_status:
+                            if config["new_status"].lower() != new_status.lower():
+                                continue  # Skip this trigger, status doesn't match
+
+                        # Check old_status filter (optional)
+                        if "old_status" in config and old_status:
+                            if config["old_status"].lower() != old_status.lower():
+                                continue
+                    except (json.JSONDecodeError, TypeError):
+                        pass  # No valid config, execute anyway
+
                 # Personalize message
                 message = trigger["message"].replace("{first_name}", first_name)
                 subject = trigger.get("subject", "").replace("{first_name}", first_name) if trigger.get("subject") else None
@@ -679,10 +863,12 @@ async def execute_trigger(
                         plain_text_body=message
                     )
                     executed += 1
+                    logger.info(f"Trigger {trigger['id']} sent email to {email}")
 
                 elif trigger["channel"] == "sms" and phone:
                     notification_service.send_sms(to_phone=phone, message=message)
                     executed += 1
+                    logger.info(f"Trigger {trigger['id']} sent SMS to {phone}")
 
                 # Log execution
                 db.execute(text("""

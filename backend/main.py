@@ -38915,6 +38915,19 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
         except Exception as e:
             logger.warning(f"Failed to track SLA milestone for lead {lead.id}: {e}")
 
+        # Fire lead status change triggers for automated outreach (nurture, etc.)
+        try:
+            from routes.automated_outreach_routes import execute_trigger, TriggerType
+            asyncio.create_task(execute_trigger(
+                trigger_type=TriggerType.LEAD_STATUS_CHANGE,
+                lead_id=lead.id,
+                context={"old_status": old_status, "new_status": new_status},
+                db=db
+            ))
+            logger.info(f"Lead status change trigger fired for lead {lead.id}: {old_status} → {new_status}")
+        except Exception as trigger_error:
+            logger.error(f"Error firing lead status trigger: {trigger_error}")
+
     # Handle stage value - it might be an enum or a string depending on DB content
     stage_value = None
     if lead.stage:
@@ -39992,6 +40005,21 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
         db.commit()
         db.refresh(loan)
         logger.info(f"Loan updated: {loan.loan_number}")
+
+        # Fire loan status change triggers for automated notifications
+        if old_stage_str != new_stage_str and new_stage_str:
+            try:
+                from routes.automated_outreach_routes import execute_trigger, TriggerType
+                asyncio.create_task(execute_trigger(
+                    trigger_type=TriggerType.LOAN_STATUS_CHANGE,
+                    loan_id=loan.id,
+                    context={"old_status": old_stage_str, "new_status": new_stage_str},
+                    db=db
+                ))
+                logger.info(f"Loan status change trigger fired for loan {loan.id}: {old_stage_str} → {new_stage_str}")
+            except Exception as trigger_error:
+                logger.error(f"Error firing loan status trigger: {trigger_error}")
+
         return loan
     except HTTPException:
         raise
