@@ -24510,6 +24510,147 @@ async def debug_sms_messages(
         return {"error": str(e)}
 
 
+@app.get("/api/v1/debug/twilio-config")
+async def debug_twilio_config():
+    """Debug endpoint to check Twilio configuration"""
+    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+    twilio_from = os.getenv("TWILIO_FROM_NUMBER")
+
+    return {
+        "account_sid": twilio_sid[:10] + "..." if twilio_sid else None,
+        "auth_token": "***configured***" if twilio_token else None,
+        "TWILIO_PHONE_NUMBER": twilio_phone,
+        "TWILIO_FROM_NUMBER": twilio_from,
+        "using_phone": twilio_phone or twilio_from,
+        "configured": bool(twilio_sid and twilio_token and (twilio_phone or twilio_from))
+    }
+
+
+@app.get("/api/v1/debug/twilio-message/{message_sid}")
+async def debug_twilio_message_status(message_sid: str):
+    """Check the delivery status of a specific Twilio message by SID"""
+    try:
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+        if not twilio_sid or not twilio_token:
+            return {"error": "Twilio not configured"}
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
+        message = twilio_client.messages(message_sid).fetch()
+
+        return {
+            "sid": message.sid,
+            "status": message.status,
+            "error_code": message.error_code,
+            "error_message": message.error_message,
+            "from": message.from_,
+            "to": message.to,
+            "body": message.body[:100] + "..." if len(message.body) > 100 else message.body,
+            "date_sent": str(message.date_sent),
+            "date_created": str(message.date_created),
+            "direction": message.direction,
+            "num_segments": message.num_segments,
+            "price": message.price,
+            "price_unit": message.price_unit
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/v1/debug/twilio-recent-messages")
+async def debug_twilio_recent_messages(limit: int = 10):
+    """Get recent messages directly from Twilio API"""
+    try:
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+        if not twilio_sid or not twilio_token:
+            return {"error": "Twilio not configured"}
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
+        messages = twilio_client.messages.list(limit=limit)
+
+        return {
+            "messages": [
+                {
+                    "sid": m.sid,
+                    "status": m.status,
+                    "error_code": m.error_code,
+                    "error_message": m.error_message,
+                    "from": m.from_,
+                    "to": m.to,
+                    "body": m.body[:50] + "..." if len(m.body) > 50 else m.body,
+                    "direction": m.direction,
+                    "date_sent": str(m.date_sent)
+                }
+                for m in messages
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/v1/debug/send-test-sms")
+async def debug_send_test_sms(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send a direct test SMS to verify Twilio is working"""
+    try:
+        data = await request.json()
+        to_number = data.get("to_number")
+        message = data.get("message", "Test from Perennia AI - If you received this, SMS is working!")
+
+        if not to_number:
+            return {"error": "to_number is required"}
+
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not all([twilio_sid, twilio_token, twilio_phone]):
+            return {"error": "Twilio not configured", "config": {
+                "sid": bool(twilio_sid),
+                "token": bool(twilio_token),
+                "phone": twilio_phone
+            }}
+
+        # Format number
+        clean_number = ''.join(filter(str.isdigit, to_number))
+        if len(clean_number) == 10:
+            to_number = f"+1{clean_number}"
+        elif len(clean_number) == 11 and clean_number.startswith('1'):
+            to_number = f"+{clean_number}"
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
+        sent_msg = twilio_client.messages.create(
+            body=message,
+            from_=twilio_phone,
+            to=to_number
+        )
+
+        # Immediately fetch status to see delivery progress
+        fetched_msg = twilio_client.messages(sent_msg.sid).fetch()
+
+        return {
+            "success": True,
+            "message_sid": sent_msg.sid,
+            "from_number": twilio_phone,
+            "to_number": to_number,
+            "initial_status": sent_msg.status,
+            "fetched_status": fetched_msg.status,
+            "error_code": fetched_msg.error_code,
+            "error_message": fetched_msg.error_message
+        }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
 @app.post("/api/v1/voice/amd-callback")
 async def amd_callback(request: Request):
     """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
