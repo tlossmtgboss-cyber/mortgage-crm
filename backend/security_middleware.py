@@ -413,14 +413,20 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         self.blocked_ips: set = set()
 
     async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Skip IP blocking for public paths (webhooks, health checks, etc.)
+        if is_public_path(path):
+            return await call_next(request)
+
         # Skip IP blocking for WebSocket connections
         if is_websocket_request(request):
-            logger.info(f"Bypassing IP blocking checks for WebSocket: {request.url.path}")
+            logger.info(f"Bypassing IP blocking checks for WebSocket: {path}")
             return await call_next(request)
 
         # Skip IP blocking for mobile app requests (they have dynamic IPs)
         if is_mobile_app_request(request):
-            logger.info(f"Bypassing IP blocking for mobile app: {request.url.path}")
+            logger.info(f"Bypassing IP blocking for mobile app: {path}")
             return await call_next(request)
 
         client_ip = self._get_client_ip(request)
