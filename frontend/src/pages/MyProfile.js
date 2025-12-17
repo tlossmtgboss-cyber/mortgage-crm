@@ -24,11 +24,14 @@ function MyProfile() {
   const [activeTab, setActiveTab] = useState('roles'); // 'roles' or 'permissions'
 
   useEffect(() => {
-    const { user } = getAuth();
-    if (user) {
-      setCurrentUser(user);
-    }
-    setLoading(false);
+    const loadUser = async () => {
+      const { user } = await getAuth();
+      if (user) {
+        setCurrentUser(user);
+      }
+      setLoading(false);
+    };
+    loadUser();
   }, []);
 
   if (loading) {

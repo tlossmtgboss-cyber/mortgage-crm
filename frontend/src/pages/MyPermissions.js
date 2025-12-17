@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getAuth } from '../utils/auth';
 import { permissionsApi } from '../services/api';
 import PermissionRequestModal from '../components/PermissionRequestModal';
 import './MyPermissions.css';
 
 const MyPermissions = () => {
-  const { user } = getAuth();
+  const [user, setUser] = useState(null);
   const [myPermissions, setMyPermissions] = useState({});
   const [allPermissions, setAllPermissions] = useState({});
   const [requests, setRequests] = useState([]);
@@ -13,18 +13,16 @@ const MyPermissions = () => {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loadData = useCallback(async (currentUser) => {
+    if (!currentUser) return;
 
-  const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
       // Load current permissions, all available permissions, and my requests
       const [permsRes, allPermsRes, requestsRes] = await Promise.all([
-        permissionsApi.getUserPermissions(user.id),
+        permissionsApi.getUserPermissions(currentUser.id),
         permissionsApi.getAvailablePermissions(),
         permissionsApi.getMyPermissionRequests()
       ]);
@@ -38,11 +36,20 @@ const MyPermissions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const initializeData = async () => {
+      const { user: authUser } = await getAuth();
+      setUser(authUser);
+      await loadData(authUser);
+    };
+    initializeData();
+  }, [loadData]);
 
   const handleRequestSubmitted = () => {
     setShowRequestModal(false);
-    loadData(); // Refresh to show new request
+    loadData(user); // Refresh to show new request
   };
 
   const getPermissionsByCategory = () => {

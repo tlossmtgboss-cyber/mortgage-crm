@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { getJSON, setJSON, removeItem, STORAGE_KEYS } from '../utils/storage';
 
 const ImpersonationContext = createContext();
 
@@ -13,59 +14,66 @@ export const useImpersonation = () => {
 export const ImpersonationProvider = ({ children }) => {
   const [impersonationData, setImpersonationData] = useState(null);
   const [isImpersonating, setIsImpersonating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load impersonation state from localStorage on mount
+  // Load impersonation state from storage on mount
   useEffect(() => {
-    const savedData = localStorage.getItem('impersonation');
-    if (savedData) {
+    const loadImpersonationData = async () => {
       try {
-        const data = JSON.parse(savedData);
-        // Check if session is still valid
-        const expiresAt = new Date(data.expires_at);
-        if (expiresAt > new Date()) {
-          setImpersonationData(data);
-          setIsImpersonating(true);
-        } else {
-          // Session expired, clear it
-          localStorage.removeItem('impersonation');
+        const data = await getJSON(STORAGE_KEYS.IMPERSONATION);
+        if (data) {
+          // Check if session is still valid
+          const expiresAt = new Date(data.expires_at);
+          if (expiresAt > new Date()) {
+            setImpersonationData(data);
+            setIsImpersonating(true);
+          } else {
+            // Session expired, clear it
+            await removeItem(STORAGE_KEYS.IMPERSONATION);
+          }
         }
       } catch (error) {
         console.error('Error loading impersonation data:', error);
-        localStorage.removeItem('impersonation');
+        await removeItem(STORAGE_KEYS.IMPERSONATION);
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+
+    loadImpersonationData();
   }, []);
 
-  const startImpersonation = (sessionData) => {
+  const startImpersonation = useCallback(async (sessionData) => {
     setImpersonationData(sessionData);
     setIsImpersonating(true);
-    localStorage.setItem('impersonation', JSON.stringify(sessionData));
-  };
+    await setJSON(STORAGE_KEYS.IMPERSONATION, sessionData);
+  }, []);
 
-  const endImpersonation = () => {
+  const endImpersonation = useCallback(async () => {
     setImpersonationData(null);
     setIsImpersonating(false);
-    localStorage.removeItem('impersonation');
-  };
+    await removeItem(STORAGE_KEYS.IMPERSONATION);
+  }, []);
 
-  const getSessionToken = () => {
+  const getSessionToken = useCallback(() => {
     return impersonationData?.session_token || null;
-  };
+  }, [impersonationData]);
 
-  const getImpersonatedUser = () => {
+  const getImpersonatedUser = useCallback(() => {
     return impersonationData?.impersonated_user || null;
-  };
+  }, [impersonationData]);
 
-  const getTimeRemaining = () => {
+  const getTimeRemaining = useCallback(() => {
     if (!impersonationData?.expires_at) return 0;
     const expiresAt = new Date(impersonationData.expires_at);
     const now = new Date();
     const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
     return remaining;
-  };
+  }, [impersonationData]);
 
   const value = {
     isImpersonating,
+    isLoading,
     impersonationData,
     startImpersonation,
     endImpersonation,
