@@ -992,14 +992,6 @@ function EstimateComparison() {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="results-actions">
-              <button className="btn-download" onClick={handleDownloadPDF}>
-                <span className="download-icon">📄</span>
-                Download PDF Report
-              </button>
-            </div>
-
             {/* CTA */}
             <div className="cta-section-enhanced">
               <div className="cta-badge">
@@ -1007,7 +999,7 @@ function EstimateComparison() {
               </div>
 
               <h2 className="cta-headline">
-                We Can Beat {comparison.winner === 'A' ? 'This' : 'Both'} Rate
+                We Can Beat These Terms
               </h2>
 
               <p className="cta-subheadline">
