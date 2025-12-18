@@ -26,6 +26,19 @@ function EmailDropZone({ children }) {
 
   // Set up global drag listeners on mount - ONLY ONCE
   useEffect(() => {
+    // Check if the target or any of its parents has a local drop handler
+    const hasLocalDropZone = (element) => {
+      while (element) {
+        if (element.classList?.contains('upload-zone') ||
+            element.classList?.contains('local-drop-zone') ||
+            element.dataset?.localDrop === 'true') {
+          return true;
+        }
+        element = element.parentElement;
+      }
+      return false;
+    };
+
     const handleDragEnter = (e) => {
       // Check if this is an internal drag (element being dragged within the page)
       // Internal drags typically have 'text/html' without 'Files'
@@ -39,6 +52,12 @@ function EmailDropZone({ children }) {
       // If it's an internal drag (like reordering rows), don't intercept
       if (isInternalDrag) {
         console.log('[EmailDropZone] Ignoring internal drag - types:', types);
+        return;
+      }
+
+      // Don't intercept if target has its own drop handler (like estimate upload zones)
+      if (hasLocalDropZone(e.target)) {
+        console.log('[EmailDropZone] Ignoring - target has local drop zone');
         return;
       }
 
@@ -92,6 +111,14 @@ function EmailDropZone({ children }) {
     };
 
     const handleDrop = (e) => {
+      // Don't intercept if target has its own drop handler
+      if (hasLocalDropZone(e.target)) {
+        console.log('[EmailDropZone] Drop ignored - target has local drop zone');
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+        return; // Let the local handler process it
+      }
+
       // Only handle if we're tracking this drag (counter > 0)
       if (dragCounterRef.current === 0) {
         return; // This was an internal drag we didn't intercept
