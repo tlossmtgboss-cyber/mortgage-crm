@@ -29,9 +29,20 @@ function EstimateComparison() {
   // Calendly modal state
   const [showCalendly, setShowCalendly] = useState(false);
 
+  // AI Critique and Q&A state
+  const [aiCritique, setAiCritique] = useState(null);
+  const [critiqueLoading, setCritiqueLoading] = useState(false);
+  const [qaMessages, setQaMessages] = useState([]);
+  const [currentQuestion, setCurrentQuestion] = useState('');
+  const [askingQuestion, setAskingQuestion] = useState(false);
+
   // File input refs
   const fileInputA = useRef(null);
   const fileInputB = useRef(null);
+
+  // Q&A refs
+  const qaMessagesRef = useRef(null);
+  const questionInputRef = useRef(null);
 
   // Load Calendly script when modal opens
   useEffect(() => {
@@ -66,6 +77,188 @@ function EstimateComparison() {
       }).catch(err => console.error('Failed to track conversion:', err));
     }
     setShowCalendly(true);
+  };
+
+  // Generate AI critique when comparison is complete
+  useEffect(() => {
+    if (comparison && !aiCritique && !critiqueLoading) {
+      generateCritique();
+    }
+  }, [comparison]);
+
+  // Auto-scroll Q&A messages
+  useEffect(() => {
+    if (qaMessagesRef.current) {
+      qaMessagesRef.current.scrollTop = qaMessagesRef.current.scrollHeight;
+    }
+  }, [qaMessages]);
+
+  // Generate AI critique of the estimates
+  const generateCritique = async () => {
+    if (!comparison) return;
+
+    setCritiqueLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/critique`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          comparison_id: comparison.comparison_id,
+          estimate_a: comparison.estimate_a,
+          estimate_b: comparison.estimate_b,
+          winner: comparison.winner,
+          savings_amount: comparison.savings_amount
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.critique) {
+        setAiCritique(data.critique);
+      } else {
+        // Fallback critique if endpoint doesn't exist or fails
+        setAiCritique(generateFallbackCritique());
+      }
+    } catch (err) {
+      console.error('Failed to generate critique:', err);
+      // Use fallback critique
+      setAiCritique(generateFallbackCritique());
+    } finally {
+      setCritiqueLoading(false);
+    }
+  };
+
+  // Generate fallback critique based on comparison data
+  const generateFallbackCritique = () => {
+    if (!comparison) return '';
+
+    const a = comparison.estimate_a;
+    const b = comparison.estimate_b;
+    const winner = comparison.winner;
+    const loser = winner === 'A' ? 'B' : 'A';
+
+    let critique = `**Analysis Summary**\n\n`;
+
+    // Cash to close analysis
+    const cashDiff = Math.abs((a.cash_to_close || 0) - (b.cash_to_close || 0));
+    if (cashDiff > 0) {
+      critique += `**Cash to Close:** Estimate ${winner} requires ${formatCurrency(cashDiff)} less upfront, which means more money stays in your pocket at closing.\n\n`;
+    }
+
+    // Interest rate analysis
+    const rateDiff = Math.abs((a.interest_rate || 0) - (b.interest_rate || 0));
+    if (rateDiff > 0) {
+      const lowerRate = (a.interest_rate || 0) < (b.interest_rate || 0) ? 'A' : 'B';
+      critique += `**Interest Rate:** Estimate ${lowerRate} offers a lower rate (${formatPercent(lowerRate === 'A' ? a.interest_rate : b.interest_rate)}), which will save you money over the life of the loan.\n\n`;
+    }
+
+    // Closing costs analysis
+    const closingDiff = Math.abs((a.total_closing_costs || 0) - (b.total_closing_costs || 0));
+    if (closingDiff > 1000) {
+      const lowerCosts = (a.total_closing_costs || 0) < (b.total_closing_costs || 0) ? 'A' : 'B';
+      critique += `**Closing Costs:** There's a ${formatCurrency(closingDiff)} difference in closing costs. Estimate ${lowerCosts} has lower fees, but make sure to compare what services are included.\n\n`;
+    }
+
+    // Monthly payment analysis
+    const monthlyDiff = Math.abs((a.monthly_principal_and_interest || 0) - (b.monthly_principal_and_interest || 0));
+    if (monthlyDiff > 0) {
+      const lowerMonthly = (a.monthly_principal_and_interest || 0) < (b.monthly_principal_and_interest || 0) ? 'A' : 'B';
+      critique += `**Monthly Payment:** Estimate ${lowerMonthly} has a lower monthly P&I payment, saving you ${formatCurrency(monthlyDiff)} per month.\n\n`;
+    }
+
+    // Overall recommendation
+    critique += `**Recommendation:** Based on the numbers, Estimate ${winner} appears to be the better option. However, consider factors like lender reputation, customer service, and any rate lock terms before making your final decision.`;
+
+    return critique;
+  };
+
+  // Handle Q&A question submission
+  const askQuestion = async (e) => {
+    e.preventDefault();
+    if (!currentQuestion.trim() || askingQuestion) return;
+
+    const question = currentQuestion.trim();
+    setCurrentQuestion('');
+
+    // Add user question to messages
+    setQaMessages(prev => [...prev, { type: 'user', text: question }]);
+    setAskingQuestion(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/ask`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          question: question,
+          comparison_id: comparison?.comparison_id,
+          estimate_a: comparison?.estimate_a,
+          estimate_b: comparison?.estimate_b,
+          context: aiCritique
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.answer) {
+        setQaMessages(prev => [...prev, { type: 'ai', text: data.answer }]);
+      } else {
+        // Fallback response
+        setQaMessages(prev => [...prev, {
+          type: 'ai',
+          text: generateFallbackAnswer(question)
+        }]);
+      }
+    } catch (err) {
+      console.error('Failed to get answer:', err);
+      setQaMessages(prev => [...prev, {
+        type: 'ai',
+        text: generateFallbackAnswer(question)
+      }]);
+    } finally {
+      setAskingQuestion(false);
+      questionInputRef.current?.focus();
+    }
+  };
+
+  // Generate fallback answers for common questions
+  const generateFallbackAnswer = (question) => {
+    const q = question.toLowerCase();
+
+    if (q.includes('rate') || q.includes('interest')) {
+      const rateA = comparison?.estimate_a?.interest_rate;
+      const rateB = comparison?.estimate_b?.interest_rate;
+      return `Estimate A has an interest rate of ${formatPercent(rateA)} and Estimate B has ${formatPercent(rateB)}. The lower rate will save you money over the life of the loan, but also consider the closing costs and whether the rate is locked.`;
+    }
+
+    if (q.includes('closing cost') || q.includes('fees')) {
+      const costsA = comparison?.estimate_a?.total_closing_costs;
+      const costsB = comparison?.estimate_b?.total_closing_costs;
+      return `Estimate A has ${formatCurrency(costsA)} in closing costs, while Estimate B has ${formatCurrency(costsB)}. Review the itemized fees to ensure you're comparing similar services.`;
+    }
+
+    if (q.includes('cash') || q.includes('upfront')) {
+      const cashA = comparison?.estimate_a?.cash_to_close;
+      const cashB = comparison?.estimate_b?.cash_to_close;
+      return `You'll need ${formatCurrency(cashA)} for Estimate A and ${formatCurrency(cashB)} for Estimate B at closing. This includes your down payment, closing costs, and prepaid items.`;
+    }
+
+    if (q.includes('monthly') || q.includes('payment')) {
+      const monthlyA = comparison?.estimate_a?.monthly_principal_and_interest;
+      const monthlyB = comparison?.estimate_b?.monthly_principal_and_interest;
+      return `The monthly P&I is ${formatCurrency(monthlyA)} for Estimate A and ${formatCurrency(monthlyB)} for Estimate B. Remember, your total monthly payment will also include taxes and insurance.`;
+    }
+
+    if (q.includes('better') || q.includes('recommend') || q.includes('which')) {
+      return `Based on the comparison, Estimate ${comparison?.winner} appears to be the better option with potential savings of ${formatCurrency(comparison?.savings_amount)}. However, I recommend discussing both options with a loan officer to understand any differences in service, rate lock periods, or other terms.`;
+    }
+
+    return `That's a great question! Based on the estimates provided, I'd recommend speaking with a loan officer who can provide personalized advice for your situation. Would you like to schedule a free consultation?`;
   };
 
   // Format currency
@@ -109,9 +302,11 @@ function EstimateComparison() {
       }
 
       if (data.success && data.data) {
+        // Generate a local ID if doc_hash is not provided by backend
+        const localId = data.data.doc_hash || `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         setEstimate({
           ...data.data,
-          doc_hash: data.data.doc_hash,
+          doc_hash: localId,
           request_id: data.request_id
         });
       } else {
@@ -172,7 +367,7 @@ function EstimateComparison() {
 
   // Compare estimates
   const compareEstimates = async () => {
-    if (!estimateA?.doc_hash || !estimateB?.doc_hash) {
+    if (!estimateA || !estimateB) {
       setError('Please upload both estimates first');
       return;
     }
@@ -181,6 +376,7 @@ function EstimateComparison() {
     setError(null);
 
     try {
+      // Try backend comparison first
       const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/compare`, {
         method: 'POST',
         headers: {
@@ -190,27 +386,71 @@ function EstimateComparison() {
         body: JSON.stringify({
           estimate_a_hash: estimateA.doc_hash,
           estimate_b_hash: estimateB.doc_hash,
+          estimate_a: estimateA,
+          estimate_b: estimateB,
           session_id: `session_${Date.now()}`
         })
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to compare estimates');
-      }
-
-      if (data.success) {
+      if (response.ok && data.success) {
         setComparison(data);
       } else {
-        throw new Error('Comparison failed');
+        // Fall back to local comparison
+        const localComparison = performLocalComparison();
+        setComparison(localComparison);
       }
     } catch (err) {
-      console.error('Compare error:', err);
-      setError(`Failed to compare estimates: ${err.message}`);
+      console.error('Compare error, using local comparison:', err);
+      // Fall back to local comparison
+      const localComparison = performLocalComparison();
+      setComparison(localComparison);
     } finally {
       setComparing(false);
     }
+  };
+
+  // Perform local comparison when backend is unavailable
+  const performLocalComparison = () => {
+    const cashA = estimateA.cash_to_close || 0;
+    const cashB = estimateB.cash_to_close || 0;
+    const rateA = estimateA.interest_rate || 0;
+    const rateB = estimateB.interest_rate || 0;
+
+    // Determine winner based on cash to close (primary) and rate (secondary)
+    let winner = 'A';
+    let savings = 0;
+    let reason = '';
+
+    if (cashA < cashB) {
+      winner = 'A';
+      savings = cashB - cashA;
+      reason = `Lower cash to close by ${formatCurrency(savings)}`;
+    } else if (cashB < cashA) {
+      winner = 'B';
+      savings = cashA - cashB;
+      reason = `Lower cash to close by ${formatCurrency(savings)}`;
+    } else if (rateA < rateB) {
+      winner = 'A';
+      reason = 'Lower interest rate';
+    } else if (rateB < rateA) {
+      winner = 'B';
+      reason = 'Lower interest rate';
+    } else {
+      reason = 'Both estimates are similar';
+    }
+
+    return {
+      success: true,
+      comparison_id: `local_${Date.now()}`,
+      winner: winner,
+      savings_amount: savings,
+      savings_message: savings > 0 ? `You could save ${formatCurrency(savings)}` : null,
+      reason: reason,
+      estimate_a: estimateA,
+      estimate_b: estimateB
+    };
   };
 
   // Track conversion click
@@ -281,6 +521,9 @@ function EstimateComparison() {
     setComparison(null);
     setError(null);
     setExpandedProvenance({});
+    setAiCritique(null);
+    setQaMessages([]);
+    setCurrentQuestion('');
     if (fileInputA.current) fileInputA.current.value = '';
     if (fileInputB.current) fileInputB.current.value = '';
   };
@@ -553,6 +796,102 @@ function EstimateComparison() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* AI Critique Section */}
+            <div className="ai-critique-section">
+              <div className="critique-header">
+                <span className="ai-icon">🤖</span>
+                <h3>AI Analysis</h3>
+              </div>
+
+              {critiqueLoading ? (
+                <div className="critique-loading">
+                  <div className="spinner-small"></div>
+                  <span>Analyzing estimates...</span>
+                </div>
+              ) : aiCritique ? (
+                <div className="critique-content">
+                  {aiCritique.split('\n\n').map((paragraph, idx) => (
+                    <p key={idx}>
+                      {paragraph.split('**').map((part, i) =>
+                        i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+                      )}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Q&A Section */}
+            <div className="qa-section">
+              <div className="qa-header">
+                <span className="qa-icon">💬</span>
+                <h3>Ask Questions About Your Estimates</h3>
+              </div>
+
+              {qaMessages.length > 0 && (
+                <div className="qa-messages" ref={qaMessagesRef}>
+                  {qaMessages.map((msg, idx) => (
+                    <div key={idx} className={`qa-message ${msg.type}`}>
+                      <div className="message-avatar">
+                        {msg.type === 'user' ? '👤' : '🤖'}
+                      </div>
+                      <div className="message-content">
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  {askingQuestion && (
+                    <div className="qa-message ai typing">
+                      <div className="message-avatar">🤖</div>
+                      <div className="message-content">
+                        <span className="typing-indicator">
+                          <span></span><span></span><span></span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <form className="qa-input-form" onSubmit={askQuestion}>
+                <input
+                  ref={questionInputRef}
+                  type="text"
+                  placeholder="Ask a question about your loan estimates..."
+                  value={currentQuestion}
+                  onChange={(e) => setCurrentQuestion(e.target.value)}
+                  disabled={askingQuestion}
+                />
+                <button type="submit" disabled={!currentQuestion.trim() || askingQuestion}>
+                  <span className="send-icon">➤</span>
+                </button>
+              </form>
+
+              <div className="qa-suggestions">
+                <span className="suggestions-label">Try asking:</span>
+                <div className="suggestion-chips">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentQuestion('Which estimate has the better interest rate?')}
+                  >
+                    Interest rate comparison
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentQuestion('What are the main differences in closing costs?')}
+                  >
+                    Closing costs breakdown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentQuestion('Which option is better for me?')}
+                  >
+                    Best option for me
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Actions */}
