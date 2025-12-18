@@ -36,11 +36,21 @@ function OAuthCallback() {
       const errorDescription = params.get('error_description');
 
       // Determine provider from state or URL
-      const providerName = state?.includes('gmail') ? 'Gmail' : 'Microsoft 365';
+      // Calendly state format: "user_id:random_string"
+      // Gmail state includes 'gmail', Microsoft is the default
+      let providerName = 'Microsoft 365';
+      if (state?.includes('gmail')) {
+        providerName = 'Gmail';
+      } else if (state?.match(/^\d+:/)) {
+        // Calendly state starts with user_id followed by colon
+        providerName = 'Calendly';
+      }
       setProvider(providerName);
 
-      const errorType = providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR';
-      const successType = providerName === 'Gmail' ? 'GMAIL_OAUTH_SUCCESS' : 'MICROSOFT_OAUTH_SUCCESS';
+      const errorType = providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' :
+                        providerName === 'Calendly' ? 'CALENDLY_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR';
+      const successType = providerName === 'Gmail' ? 'GMAIL_OAUTH_SUCCESS' :
+                          providerName === 'Calendly' ? 'CALENDLY_OAUTH_SUCCESS' : 'MICROSOFT_OAUTH_SUCCESS';
 
       if (error) {
         setStatus('error');
@@ -62,33 +72,54 @@ function OAuthCallback() {
         const token = localStorage.getItem('token');
 
         // Determine the correct endpoint based on provider
-        const endpoint = providerName === 'Gmail'
-          ? `${API_BASE_URL}/api/v1/gmail/callback`
-          : `${API_BASE_URL}/api/v1/microsoft/connect`;
+        let endpoint;
+        let requestBody;
 
-        // Build request body - Microsoft expects authorization_code, Gmail expects code
-        const requestBody = providerName === 'Gmail'
-          ? { code, redirect_uri: `${window.location.origin}/oauth/callback` }
-          : { authorization_code: code, redirect_uri: `${window.location.origin}/oauth/callback` };
+        if (providerName === 'Gmail') {
+          endpoint = `${API_BASE_URL}/api/v1/gmail/callback`;
+          requestBody = { code, redirect_uri: `${window.location.origin}/oauth/callback` };
+        } else if (providerName === 'Calendly') {
+          // Calendly uses GET request with query params
+          endpoint = `${API_BASE_URL}/api/v1/calendly/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+          requestBody = null; // Will use GET request
+        } else {
+          endpoint = `${API_BASE_URL}/api/v1/microsoft/connect`;
+          requestBody = { authorization_code: code, redirect_uri: `${window.location.origin}/oauth/callback` };
+        }
 
-        const response = await fetch(endpoint, {
+        // Use GET for Calendly, POST for others
+        const fetchOptions = providerName === 'Calendly' ? {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        } : {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(requestBody)
-        });
+        };
+
+        const response = await fetch(endpoint, fetchOptions);
 
         if (response.ok) {
           setStatus('success');
           setMessage(`${providerName} connected successfully!`);
           notifyParent(successType, { provider: providerName.toLowerCase() });
 
-          // Auto-close after a brief delay to show success message
-          setTimeout(() => {
-            window.close();
-          }, 1500);
+          // For Calendly, redirect to settings page; for others, close the window
+          if (providerName === 'Calendly') {
+            setTimeout(() => {
+              window.location.href = '/settings?section=calendly&connected=true';
+            }, 1500);
+          } else {
+            // Auto-close after a brief delay to show success message
+            setTimeout(() => {
+              window.close();
+            }, 1500);
+          }
         } else {
           const errorData = await response.json();
           setStatus('error');

@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './EstimateComparison.css';
+import { getCalendlySchedulingUrl } from '../services/schedulingService';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-const CALENDLY_URL = "https://calendly.com/timlossteam/client-reengagement-clone?hide_event_type_details=1&hide_gdpr_banner=1";
+// Default fallback URL if no Calendly integration is configured
+const DEFAULT_CALENDLY_URL = "https://calendly.com/timlossteam/client-reengagement-clone?hide_event_type_details=1&hide_gdpr_banner=1";
 const CUSTOM_QUOTE_URL = "https://mortgage-crm-nine.vercel.app/apply/purchase";
 
 function EstimateComparison() {
@@ -29,6 +31,8 @@ function EstimateComparison() {
 
   // Calendly modal state
   const [showCalendly, setShowCalendly] = useState(false);
+  const [calendlyUrl, setCalendlyUrl] = useState(DEFAULT_CALENDLY_URL);
+  const [calendlyLoading, setCalendlyLoading] = useState(false);
 
   // AI Critique and Q&A state
   const [aiCritique, setAiCritique] = useState(null);
@@ -55,17 +59,82 @@ function EstimateComparison() {
     }
   }, []);
 
-  // Handle body scroll when modal is open
+  // Fetch dynamic Calendly URL from backend integration
+  useEffect(() => {
+    const fetchCalendlyUrl = async () => {
+      try {
+        // Try to get the user ID from localStorage or use a default
+        const token = localStorage.getItem('token');
+        if (token) {
+          // Parse the user ID from the JWT token (basic parsing)
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const userId = payload.sub || payload.user_id;
+
+          if (userId) {
+            const result = await getCalendlySchedulingUrl(userId);
+            if (result.success && result.schedulingUrl) {
+              // Add params to hide event type details and GDPR banner
+              const url = new URL(result.schedulingUrl);
+              url.searchParams.set('hide_event_type_details', '1');
+              url.searchParams.set('hide_gdpr_banner', '1');
+              setCalendlyUrl(url.toString());
+              console.log('[EstimateComparison] Using dynamic Calendly URL:', url.toString());
+            }
+          }
+        }
+      } catch (error) {
+        console.log('[EstimateComparison] Using default Calendly URL (no integration found)');
+        // Keep using the default URL
+      }
+    };
+
+    fetchCalendlyUrl();
+  }, []);
+
+  // Handle body scroll when modal is open and initialize Calendly widget
   useEffect(() => {
     if (showCalendly) {
       document.body.style.overflow = 'hidden';
+
+      // Initialize Calendly widget when modal opens
+      const initCalendly = () => {
+        if (window.Calendly) {
+          // Clear any existing widget content first
+          const widgetContainer = document.querySelector('.calendly-inline-widget');
+          if (widgetContainer) {
+            widgetContainer.innerHTML = '';
+            window.Calendly.initInlineWidget({
+              url: calendlyUrl,
+              parentElement: widgetContainer,
+              prefill: {},
+              utm: {}
+            });
+          }
+        }
+      };
+
+      // Check if Calendly script is loaded, if not wait for it
+      if (window.Calendly) {
+        initCalendly();
+      } else {
+        // Wait for script to load
+        const checkCalendly = setInterval(() => {
+          if (window.Calendly) {
+            clearInterval(checkCalendly);
+            initCalendly();
+          }
+        }, 100);
+
+        // Clean up interval after 10 seconds
+        setTimeout(() => clearInterval(checkCalendly), 10000);
+      }
     } else {
       document.body.style.overflow = 'unset';
     }
     return () => {
       document.body.style.overflow = 'unset';
     };
-  }, [showCalendly]);
+  }, [showCalendly, calendlyUrl]);
 
   // Handle schedule call button click
   const handleScheduleCall = () => {
@@ -988,7 +1057,7 @@ function EstimateComparison() {
                   <div className="spinner"></div>
                   <p>Loading calendar...</p>
                   <a
-                    href={CALENDLY_URL}
+                    href={calendlyUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="calendly-direct-link"
@@ -998,7 +1067,7 @@ function EstimateComparison() {
                 </div>
                 <div
                   className="calendly-inline-widget"
-                  data-url={CALENDLY_URL}
+                  data-url={calendlyUrl}
                   style={{ minWidth: '320px', height: '630px' }}
                 />
               </div>

@@ -536,6 +536,20 @@ function Settings() {
   // Calendly integration state
   const [calendlyApiKey, setCalendlyApiKey] = useState('');
   const [showCalendlyModal, setShowCalendlyModal] = useState(false);
+  const [calendlyStatus, setCalendlyStatus] = useState({
+    isConnected: false,
+    userName: null,
+    userEmail: null,
+    selectedEventTypeName: null,
+    connectedAt: null,
+    syncToSmartScheduler: true,
+    autoCreateContacts: true
+  });
+  const [calendlySettings, setCalendlySettings] = useState({
+    selectedEventTypeUri: '',
+    syncToSmartScheduler: true,
+    autoCreateContacts: true
+  });
 
   // Phone Integration state
   const [twilioStatus, setTwilioStatus] = useState({
@@ -864,61 +878,158 @@ function Settings() {
     { value: 'lost', label: 'Lost/Withdrawn' }
   ];
 
-  const connectCalendly = () => {
-    console.log('Connect Calendly button clicked!');
-    console.log('Current showCalendlyModal state:', showCalendlyModal);
-    setShowCalendlyModal(true);
-    console.log('Modal should now be visible');
-  };
-
-  const saveCalendlyConnection = async () => {
-    if (!calendlyApiKey.trim()) {
-      alert('Please enter your Calendly API key');
-      return;
-    }
-
-    console.log('[Calendly] Saving API key...');
-    setLoadingCalendly(true);
+  // Fetch Calendly connection status
+  const fetchCalendlyStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/connect`, {
-        method: 'POST',
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/status?user_id=${currentUser?.id}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ api_key: calendlyApiKey })
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
 
-      console.log('[Calendly] Save response status:', response.status);
-
       if (response.ok) {
-        const result = await response.json();
-        console.log('[Calendly] Save result:', result);
-        alert('Calendly connected successfully! Fetching your event types...');
-        setShowCalendlyModal(false);
-        setCalendlyApiKey('');
+        const data = await response.json();
+        console.log('[Calendly] Status:', data);
+        setCalendlyStatus({
+          isConnected: data.is_connected,
+          userName: data.calendly_user_name,
+          userEmail: data.calendly_user_email,
+          selectedEventTypeName: data.selected_event_type_name,
+          connectedAt: data.connected_at,
+          syncToSmartScheduler: data.sync_to_smart_scheduler,
+          autoCreateContacts: data.auto_create_contacts
+        });
 
-        console.log('[Calendly] Now fetching event types...');
-        await fetchCalendlyEventTypes();
-        console.log('[Calendly] Done fetching event types');
-      } else {
-        const error = await response.json();
-        console.error('[Calendly] Save failed:', error);
-        alert(`Failed to connect Calendly: ${error.detail || 'Please check your API key'}`);
+        if (data.is_connected) {
+          const newConnected = new Set(connectedIntegrations);
+          newConnected.add('calendly');
+          setConnectedIntegrations(newConnected);
+          // Also fetch event types if connected
+          await fetchCalendlyEventTypes();
+        }
       }
     } catch (error) {
-      console.error('[Calendly] Error connecting:', error);
+      console.error('[Calendly] Error fetching status:', error);
+    }
+  };
+
+  const connectCalendly = async () => {
+    console.log('Connect Calendly button clicked - initiating OAuth flow');
+    setLoadingCalendly(true);
+
+    try {
+      // Get OAuth authorization URL from backend
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/connect?user_id=${currentUser?.id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Store state in localStorage for callback verification
+        localStorage.setItem('calendly_oauth_state', data.state);
+        // Redirect to Calendly OAuth
+        window.location.href = data.authorization_url;
+      } else {
+        const error = await response.json();
+        console.error('[Calendly] OAuth init failed:', error);
+        alert('Failed to initiate Calendly connection. Please try again.');
+      }
+    } catch (error) {
+      console.error('[Calendly] Error initiating OAuth:', error);
       alert('Error connecting to Calendly: ' + error.message);
     } finally {
       setLoadingCalendly(false);
     }
   };
 
+  const disconnectCalendly = async () => {
+    if (!window.confirm('Are you sure you want to disconnect Calendly? This will remove your calendar sync.')) {
+      return;
+    }
+
+    setLoadingCalendly(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/disconnect?user_id=${currentUser?.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        setCalendlyStatus({
+          isConnected: false,
+          userName: null,
+          userEmail: null,
+          selectedEventTypeName: null,
+          connectedAt: null,
+          syncToSmartScheduler: true,
+          autoCreateContacts: true
+        });
+        setCalendlyEventTypes([]);
+
+        const newConnected = new Set(connectedIntegrations);
+        newConnected.delete('calendly');
+        setConnectedIntegrations(newConnected);
+
+        alert('Calendly disconnected successfully');
+      } else {
+        const error = await response.json();
+        alert(`Failed to disconnect: ${error.detail || 'Please try again'}`);
+      }
+    } catch (error) {
+      console.error('[Calendly] Error disconnecting:', error);
+      alert('Error disconnecting Calendly: ' + error.message);
+    } finally {
+      setLoadingCalendly(false);
+    }
+  };
+
+  const updateCalendlySettings = async (updates) => {
+    setLoadingCalendly(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/settings?user_id=${currentUser?.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCalendlyStatus(prev => ({
+          ...prev,
+          selectedEventTypeName: data.selected_event_type_name,
+          syncToSmartScheduler: data.sync_to_smart_scheduler,
+          autoCreateContacts: data.auto_create_contacts
+        }));
+        alert('Settings updated successfully');
+      } else {
+        const error = await response.json();
+        alert(`Failed to update settings: ${error.detail || 'Please try again'}`);
+      }
+    } catch (error) {
+      console.error('[Calendly] Error updating settings:', error);
+      alert('Error updating settings: ' + error.message);
+    } finally {
+      setLoadingCalendly(false);
+    }
+  };
+
+  const saveCalendlyConnection = async () => {
+    // Legacy function for API key - redirect to OAuth
+    connectCalendly();
+  };
+
   const fetchCalendlyEventTypes = async () => {
     setLoadingCalendly(true);
     try {
       console.log('[Calendly] Fetching event types...');
-      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/event-types`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/event-types?user_id=${currentUser?.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -2419,7 +2530,7 @@ const API_BASE_URL = isProduction
       fetchEmailProcessingSettings();
     }
     if (activeSection === 'calendly') {
-      fetchCalendlyEventTypes();
+      fetchCalendlyStatus();
       fetchCalendarMappings();
     }
     if (activeSection === 'twilio-sms') {
@@ -3376,10 +3487,14 @@ const API_BASE_URL = isProduction
                   </div>
                   <div className="connection-info">
                     <h3>Calendly Connection</h3>
-                    <p>Connect your Calendly account to sync event types</p>
+                    {calendlyStatus.isConnected ? (
+                      <p>Connected as <strong>{calendlyStatus.userName}</strong> ({calendlyStatus.userEmail})</p>
+                    ) : (
+                      <p>Connect your Calendly account to sync calendars and manage appointments</p>
+                    )}
                   </div>
                   <div className="connection-status">
-                    {calendlyEventTypes.length > 0 ? (
+                    {calendlyStatus.isConnected ? (
                       <span className="status-badge connected">Connected</span>
                     ) : (
                       <span className="status-badge disconnected">Not Connected</span>
@@ -3388,17 +3503,25 @@ const API_BASE_URL = isProduction
                 </div>
 
                 <div className="connection-actions">
-                  {calendlyEventTypes.length > 0 ? (
+                  {calendlyStatus.isConnected ? (
                     <>
                       <button
                         className="btn-refresh"
-                        onClick={fetchCalendlyEventTypes}
+                        onClick={fetchCalendlyStatus}
                         disabled={loadingCalendly}
                       >
-                        {loadingCalendly ? 'Refreshing...' : 'Refresh Event Types'}
+                        {loadingCalendly ? 'Refreshing...' : 'Refresh'}
                       </button>
-                      <span className="connection-detail">
-                        {calendlyEventTypes.length} event types loaded
+                      <button
+                        className="btn-disconnect"
+                        onClick={disconnectCalendly}
+                        disabled={loadingCalendly}
+                        style={{ marginLeft: '8px', background: '#dc3545', color: '#fff' }}
+                      >
+                        Disconnect
+                      </button>
+                      <span className="connection-detail" style={{ marginLeft: '12px' }}>
+                        {calendlyEventTypes.length} event types available
                       </span>
                     </>
                   ) : (
@@ -3407,11 +3530,79 @@ const API_BASE_URL = isProduction
                       onClick={connectCalendly}
                       disabled={loadingCalendly}
                     >
-                      {loadingCalendly ? 'Connecting...' : 'Connect Calendly'}
+                      {loadingCalendly ? 'Connecting...' : 'Connect with Calendly'}
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* Calendly Settings - Only show when connected */}
+              {calendlyStatus.isConnected && (
+                <div className="calendly-settings-card" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '8px', marginBottom: '24px' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Integration Settings</h3>
+
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label>Default Event Type for AI Scheduling</label>
+                    <select
+                      value={calendlySettings.selectedEventTypeUri || ''}
+                      onChange={(e) => {
+                        setCalendlySettings(prev => ({ ...prev, selectedEventTypeUri: e.target.value }));
+                        updateCalendlySettings({ selected_event_type_uri: e.target.value });
+                      }}
+                      className="form-select"
+                      disabled={loadingCalendly || calendlyEventTypes.length === 0}
+                      style={{ width: '100%', padding: '10px', marginTop: '8px' }}
+                    >
+                      <option value="">Select default event type...</option>
+                      {calendlyEventTypes.map(eventType => {
+                        const uuid = eventType.uri.split('/').pop();
+                        return (
+                          <option key={uuid} value={eventType.uri}>
+                            {eventType.name} ({eventType.duration} min)
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                      This event type will be used when the AI schedules appointments
+                    </p>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={calendlyStatus.syncToSmartScheduler}
+                        onChange={(e) => {
+                          updateCalendlySettings({ sync_to_smart_scheduler: e.target.checked });
+                        }}
+                        style={{ marginRight: '8px' }}
+                      />
+                      Sync Calendly bookings to Smart Scheduler
+                    </label>
+                    <p style={{ fontSize: '12px', color: '#666', marginTop: '4px', marginLeft: '24px' }}>
+                      Automatically create appointments in Smart Scheduler when bookings are made through Calendly
+                    </p>
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={calendlyStatus.autoCreateContacts}
+                        onChange={(e) => {
+                          updateCalendlySettings({ auto_create_contacts: e.target.checked });
+                        }}
+                        style={{ marginRight: '8px' }}
+                      />
+                      Auto-create contacts from Calendly bookings
+                    </label>
+                    <p style={{ fontSize: '12px', color: '#666', marginTop: '4px', marginLeft: '24px' }}>
+                      Create new contact records when someone books through Calendly
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* How AI Scheduling Works */}
               <div className="info-card">

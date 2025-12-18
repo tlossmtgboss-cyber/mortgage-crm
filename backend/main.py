@@ -19598,6 +19598,16 @@ except Exception as e:
     logger.warning(f"⚠️ Could not load Enhanced Scheduler routes: {e}")
     logger.warning(f"Traceback: {traceback.format_exc()}")
 
+# Include Calendly Integration routes
+try:
+    from routes.calendly_routes import router as calendly_router
+    app.include_router(calendly_router, prefix="/api/v1/calendly", tags=["Calendly Integration"])
+    logger.info("✅ Calendly Integration routes loaded")
+except Exception as e:
+    import traceback
+    logger.warning(f"⚠️ Could not load Calendly routes: {e}")
+    logger.warning(f"Traceback: {traceback.format_exc()}")
+
 # Include Video Meeting routes (UVIP - Ultimate Video Intelligence Platform)
 _video_meeting_error = None
 try:
