@@ -54834,6 +54834,125 @@ async def fix_vapi_metadata_column(request: dict, db: Session = Depends(get_db))
             "error": str(e)
         }
 
+@app.post("/admin/run-estimate-parser-migration")
+async def run_estimate_parser_migration(request: dict, db: Session = Depends(get_db)):
+    """
+    Run Estimate Parser Cache migration remotely.
+    Creates tables for caching parsed loan estimates and tracking comparisons.
+    Usage: POST /admin/run-estimate-parser-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        results = []
+
+        # Check if estimate_parse_cache table already exists
+        check_result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'estimate_parse_cache'
+            )
+        """))
+        if check_result.scalar():
+            results.append("✓ estimate_parse_cache already exists")
+        else:
+            # Create estimate_parse_cache table
+            db.execute(text("""
+                CREATE TABLE estimate_parse_cache (
+                    doc_hash VARCHAR(64) PRIMARY KEY,
+                    parsed_json JSONB NOT NULL,
+                    confidence_score NUMERIC(3, 2),
+                    needs_review BOOLEAN DEFAULT FALSE,
+                    source_type VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    accessed_at TIMESTAMP DEFAULT NOW(),
+                    access_count INTEGER DEFAULT 1
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_estimate_cache_created ON estimate_parse_cache (created_at)"))
+            db.execute(text("CREATE INDEX idx_estimate_cache_needs_review ON estimate_parse_cache (needs_review) WHERE needs_review = true"))
+            db.execute(text("CREATE INDEX idx_estimate_cache_source_type ON estimate_parse_cache (source_type)"))
+            results.append("✓ Created estimate_parse_cache table")
+
+        # Check if estimate_parse_failures table exists
+        check_result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'estimate_parse_failures'
+            )
+        """))
+        if check_result.scalar():
+            results.append("✓ estimate_parse_failures already exists")
+        else:
+            # Create estimate_parse_failures table
+            db.execute(text("""
+                CREATE TABLE estimate_parse_failures (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    request_id UUID NOT NULL,
+                    doc_hash VARCHAR(64) NOT NULL,
+                    error_stage VARCHAR(50) NOT NULL,
+                    error_message TEXT,
+                    raw_text TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_failures_created ON estimate_parse_failures (created_at)"))
+            db.execute(text("CREATE INDEX idx_failures_stage ON estimate_parse_failures (error_stage)"))
+            db.execute(text("CREATE INDEX idx_failures_doc_hash ON estimate_parse_failures (doc_hash)"))
+            results.append("✓ Created estimate_parse_failures table")
+
+        # Check if estimate_comparisons table exists
+        check_result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'estimate_comparisons'
+            )
+        """))
+        if check_result.scalar():
+            results.append("✓ estimate_comparisons already exists")
+        else:
+            # Create estimate_comparisons table
+            db.execute(text("""
+                CREATE TABLE estimate_comparisons (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id INTEGER,
+                    session_id VARCHAR(100),
+                    estimate_a_hash VARCHAR(64) NOT NULL,
+                    estimate_b_hash VARCHAR(64) NOT NULL,
+                    winner VARCHAR(1),
+                    winner_reason VARCHAR(200),
+                    savings_amount NUMERIC(12, 2),
+                    comparison_data JSONB,
+                    converted BOOLEAN DEFAULT FALSE,
+                    converted_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                    CONSTRAINT fk_estimate_a FOREIGN KEY (estimate_a_hash) REFERENCES estimate_parse_cache(doc_hash) ON DELETE CASCADE,
+                    CONSTRAINT fk_estimate_b FOREIGN KEY (estimate_b_hash) REFERENCES estimate_parse_cache(doc_hash) ON DELETE CASCADE
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_comparisons_user ON estimate_comparisons (user_id)"))
+            db.execute(text("CREATE INDEX idx_comparisons_created ON estimate_comparisons (created_at)"))
+            db.execute(text("CREATE INDEX idx_comparisons_converted ON estimate_comparisons (converted)"))
+            results.append("✓ Created estimate_comparisons table")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Estimate parser migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/admin/setup-demo-impersonation")
 async def setup_demo_impersonation(request: dict, db: Session = Depends(get_db)):
     """
