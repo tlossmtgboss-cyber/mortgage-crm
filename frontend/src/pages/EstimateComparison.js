@@ -99,37 +99,64 @@ function EstimateComparison() {
       // Initialize Calendly widget when modal opens
       const initCalendly = () => {
         if (window.Calendly) {
-          // Clear any existing widget content first
           const widgetContainer = document.querySelector('.calendly-inline-widget');
           if (widgetContainer) {
+            // Clear any existing widget content
             widgetContainer.innerHTML = '';
-            window.Calendly.initInlineWidget({
-              url: calendlyUrl,
-              parentElement: widgetContainer,
-              prefill: {},
-              utm: {}
-            });
+
+            // Small delay to ensure container has proper dimensions
+            setTimeout(() => {
+              try {
+                window.Calendly.initInlineWidget({
+                  url: calendlyUrl,
+                  parentElement: widgetContainer,
+                  prefill: {},
+                  utm: {}
+                });
+                console.log('[EstimateComparison] Calendly widget initialized with URL:', calendlyUrl);
+
+                // Hide loading fallback after widget starts loading
+                const fallback = document.querySelector('.calendly-loading-fallback');
+                if (fallback) {
+                  setTimeout(() => {
+                    fallback.style.display = 'none';
+                  }, 2000);
+                }
+              } catch (err) {
+                console.error('[EstimateComparison] Calendly init error:', err);
+              }
+            }, 100);
           }
         }
       };
 
-      // Check if Calendly script is loaded, if not wait for it
-      if (window.Calendly) {
-        initCalendly();
-      } else {
-        // Wait for script to load
-        const checkCalendly = setInterval(() => {
-          if (window.Calendly) {
-            clearInterval(checkCalendly);
-            initCalendly();
+      // Wait for both script and DOM to be ready
+      const attemptInit = () => {
+        if (window.Calendly && document.querySelector('.calendly-inline-widget')) {
+          initCalendly();
+          return true;
+        }
+        return false;
+      };
+
+      // Try immediately, then poll if needed
+      if (!attemptInit()) {
+        const checkReady = setInterval(() => {
+          if (attemptInit()) {
+            clearInterval(checkReady);
           }
-        }, 100);
+        }, 200);
 
         // Clean up interval after 10 seconds
-        setTimeout(() => clearInterval(checkCalendly), 10000);
+        setTimeout(() => clearInterval(checkReady), 10000);
       }
     } else {
       document.body.style.overflow = 'unset';
+      // Show loading fallback again when modal closes (for next open)
+      const fallback = document.querySelector('.calendly-loading-fallback');
+      if (fallback) {
+        fallback.style.display = '';
+      }
     }
     return () => {
       document.body.style.overflow = 'unset';
