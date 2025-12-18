@@ -996,7 +996,8 @@ const PLANNING_QUESTIONS = {
 export default function RefinanceApplication() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const isDemoMode = !token || token === 'start';
+  // Only show demo mode for explicit /apply/start - /apply/refinance is a real application entry point
+  const isDemoMode = token === 'start';
 
   // State
   const [currentStage, setCurrentStage] = useState('declarations');
