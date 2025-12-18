@@ -531,6 +531,233 @@ async def get_cached_estimate(
         raise HTTPException(status_code=500, detail='Internal server error')
 
 
+# ============================================================================
+# AI CRITIQUE & Q&A ENDPOINTS (Connected to Agent Orchestration)
+# ============================================================================
+
+class CritiqueRequest(BaseModel):
+    comparison_id: Optional[str] = None
+    estimate_a: dict
+    estimate_b: dict
+    winner: Optional[str] = None
+    savings_amount: Optional[float] = None
+
+
+class CritiqueResponse(BaseModel):
+    success: bool
+    critique: Optional[str] = None
+    error: Optional[str] = None
+
+
+class AskRequest(BaseModel):
+    question: str
+    comparison_id: Optional[str] = None
+    estimate_a: Optional[dict] = None
+    estimate_b: Optional[dict] = None
+    context: Optional[str] = None
+    conversation_history: Optional[list] = None
+
+
+class AskResponse(BaseModel):
+    success: bool
+    answer: Optional[str] = None
+    error: Optional[str] = None
+    suggested_action: Optional[str] = None
+
+
+def format_currency(amount):
+    """Format amount as currency string"""
+    if amount is None:
+        return "N/A"
+    return f"${amount:,.0f}"
+
+
+def format_rate(rate):
+    """Format rate as percentage string"""
+    if rate is None:
+        return "N/A"
+    return f"{rate:.3f}%"
+
+
+@router.post("/critique", response_model=CritiqueResponse)
+async def generate_critique(
+    request: Request,
+    data: CritiqueRequest,
+):
+    """
+    Generate AI critique of two loan estimates.
+
+    Uses the Estimate Advisor agent (Sarah - Senior Loan Officer) to provide
+    expert analysis and guide users toward scheduling a consultation.
+    """
+    import os
+    import anthropic
+
+    try:
+        # Build context for AI
+        estimate_a = data.estimate_a
+        estimate_b = data.estimate_b
+        winner = data.winner or "A"
+        savings = data.savings_amount or 0
+
+        # Create system prompt as a Loan Officer
+        system_prompt = """You are Sarah, a Senior Loan Officer with 15 years of experience. You're analyzing two loan estimates for a potential client.
+
+Your personality:
+- Expert and knowledgeable, but approachable
+- You explain things clearly without jargon
+- You're consultative - you help them understand their options
+- You genuinely want to help them save money
+- You're confident you can often beat the rates they're seeing
+
+Your goal: Help them understand the estimates AND guide them toward scheduling a free consultation call where you can find them an even better deal.
+
+Important rules:
+- Be concise (under 150 words)
+- Use specific numbers from the estimates
+- End with a soft call-to-action about scheduling a call
+- Don't be pushy, be helpful
+- Use "I" and speak as yourself (Sarah)"""
+
+        # Build the comparison context
+        user_message = f"""Please analyze these two loan estimates and provide your expert critique:
+
+**Estimate A:**
+- Loan Amount: {format_currency(estimate_a.get('loan_amount'))}
+- Interest Rate: {format_rate(estimate_a.get('interest_rate'))}
+- APR: {format_rate(estimate_a.get('apr'))}
+- Monthly P&I: {format_currency(estimate_a.get('monthly_principal_and_interest'))}
+- Total Closing Costs: {format_currency(estimate_a.get('total_closing_costs'))}
+- Cash to Close: {format_currency(estimate_a.get('cash_to_close'))}
+
+**Estimate B:**
+- Loan Amount: {format_currency(estimate_b.get('loan_amount'))}
+- Interest Rate: {format_rate(estimate_b.get('interest_rate'))}
+- APR: {format_rate(estimate_b.get('apr'))}
+- Monthly P&I: {format_currency(estimate_b.get('monthly_principal_and_interest'))}
+- Total Closing Costs: {format_currency(estimate_b.get('total_closing_costs'))}
+- Cash to Close: {format_currency(estimate_b.get('cash_to_close'))}
+
+**Analysis shows:** Estimate {winner} is better{f', saving approximately {format_currency(savings)}' if savings > 0 else ''}.
+
+Provide your expert analysis as Sarah the Loan Officer. Help them understand the key differences and what they mean for their wallet. End by offering to see if you can find them something even better."""
+
+        # Call Claude API
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}]
+        )
+
+        critique = response.content[0].text
+
+        return CritiqueResponse(
+            success=True,
+            critique=critique
+        )
+
+    except Exception as e:
+        logger.exception(f"Critique generation error: {e}")
+        return CritiqueResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask_question(
+    request: Request,
+    data: AskRequest,
+):
+    """
+    Answer questions about loan estimates using AI.
+
+    Uses the Estimate Advisor agent (Sarah - Senior Loan Officer) to provide
+    expert answers and guide users toward scheduling a consultation.
+    """
+    import os
+    import anthropic
+
+    try:
+        # Build context
+        estimate_a = data.estimate_a or {}
+        estimate_b = data.estimate_b or {}
+
+        # Create system prompt as a Loan Officer
+        system_prompt = """You are Sarah, a Senior Loan Officer with 15 years of experience helping people find the best mortgage rates.
+
+Your personality:
+- Expert and knowledgeable, but friendly and approachable
+- You explain mortgage concepts clearly without jargon
+- You're genuinely helpful and want them to get the best deal
+- You're confident you can often find better rates than what they're seeing
+
+Your goal: Answer their question helpfully AND when appropriate, suggest scheduling a free consultation call where you can help them further.
+
+Important rules:
+- Keep answers concise (under 100 words)
+- Use specific numbers when relevant
+- Be helpful first, promotional second
+- If they ask about rates/deals, mention you might be able to find something better
+- Sign off as "- Sarah" occasionally to feel personal
+- Don't be pushy, be genuinely helpful"""
+
+        # Build context message
+        context_parts = []
+
+        if estimate_a:
+            context_parts.append(f"""Estimate A: {format_currency(estimate_a.get('loan_amount'))} loan at {format_rate(estimate_a.get('interest_rate'))}, {format_currency(estimate_a.get('cash_to_close'))} cash to close""")
+
+        if estimate_b:
+            context_parts.append(f"""Estimate B: {format_currency(estimate_b.get('loan_amount'))} loan at {format_rate(estimate_b.get('interest_rate'))}, {format_currency(estimate_b.get('cash_to_close'))} cash to close""")
+
+        if data.context:
+            context_parts.append(f"Previous analysis: {data.context[:500]}")
+
+        context_str = "\n".join(context_parts) if context_parts else "No specific estimate context provided."
+
+        user_message = f"""Context about the loan estimates being compared:
+{context_str}
+
+The user asks: "{data.question}"
+
+Please answer as Sarah the Loan Officer. Be helpful and specific. If relevant, mention that a quick call could help them explore better options."""
+
+        # Call Claude API
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}]
+        )
+
+        answer = response.content[0].text
+
+        # Determine if we should suggest scheduling
+        suggested_action = None
+        question_lower = data.question.lower()
+        if any(word in question_lower for word in ['better', 'best', 'recommend', 'should', 'help', 'what do you think']):
+            suggested_action = "schedule_call"
+
+        return AskResponse(
+            success=True,
+            answer=answer,
+            suggested_action=suggested_action
+        )
+
+    except Exception as e:
+        logger.exception(f"Ask endpoint error: {e}")
+        return AskResponse(
+            success=False,
+            error=str(e)
+        )
+
+
 @router.get("/failures")
 async def get_parse_failures(
     limit: int = Query(50, ge=1, le=200),
