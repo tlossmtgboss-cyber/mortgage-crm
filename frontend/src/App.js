@@ -57,6 +57,7 @@ const MyPermissions = lazy(() => import('./pages/MyPermissions'));
 const ComplianceDashboard = lazy(() => import('./pages/ComplianceDashboard'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 const DataUpload = lazy(() => import('./pages/DataUpload'));
+const EstimateComparison = lazy(() => import('./pages/EstimateComparison'));
 const Users = lazy(() => import('./pages/Users'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const ProcessTemplates = lazy(() => import('./pages/ProcessTemplates'));
@@ -326,6 +327,7 @@ function App() {
           <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
+          <Route path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
@@ -1817,6 +1819,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><DataUpload /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/compare-estimates"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><EstimateComparison /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
