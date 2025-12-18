@@ -17,6 +17,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
 from pydantic import BaseModel
@@ -276,31 +277,56 @@ def initiate_calendly_connect(
 async def calendly_oauth_callback(
     code: str = Query(..., description="Authorization code"),
     state: str = Query(..., description="State parameter"),
+    error: Optional[str] = Query(None, description="OAuth error"),
+    error_description: Optional[str] = Query(None, description="Error description"),
     db: Session = Depends(get_db)
 ):
     """
     Handle Calendly OAuth callback.
     Exchange code for tokens and store integration.
     """
+    frontend_url = os.getenv("FRONTEND_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+
+    # Handle OAuth errors from Calendly
+    if error:
+        error_msg = error_description or error
+        logger.error(f"Calendly OAuth error: {error_msg}")
+        return RedirectResponse(
+            url=f"{frontend_url}/settings?section=calendly&error={error_msg}",
+            status_code=302
+        )
+
     # Parse user_id from state
     try:
         user_id = int(state.split(":")[0])
     except (ValueError, IndexError):
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+        return RedirectResponse(
+            url=f"{frontend_url}/settings?section=calendly&error=Invalid+state+parameter",
+            status_code=302
+        )
 
     service = get_calendly_service()
 
     # Exchange code for token
     token_result = await service.exchange_code_for_token(code)
     if not token_result.get("success"):
-        raise HTTPException(status_code=400, detail=f"Failed to exchange code: {token_result.get('error')}")
+        error_msg = token_result.get('error', 'Failed to exchange code')
+        logger.error(f"Calendly token exchange failed: {error_msg}")
+        return RedirectResponse(
+            url=f"{frontend_url}/settings?section=calendly&error=Token+exchange+failed",
+            status_code=302
+        )
 
     access_token = token_result["access_token"]
 
     # Get user info
     user_result = await service.get_current_user(access_token)
     if not user_result.get("success"):
-        raise HTTPException(status_code=400, detail="Failed to get Calendly user info")
+        logger.error(f"Failed to get Calendly user info")
+        return RedirectResponse(
+            url=f"{frontend_url}/settings?section=calendly&error=Failed+to+get+user+info",
+            status_code=302
+        )
 
     # Store integration
     integration = get_or_create_integration(db, user_id)
@@ -319,16 +345,11 @@ async def calendly_oauth_callback(
 
     logger.info(f"Calendly connected for user {user_id}: {user_result['email']}")
 
-    # Return redirect URL or success response
-    return {
-        "success": True,
-        "message": "Calendly connected successfully",
-        "user": {
-            "name": user_result["name"],
-            "email": user_result["email"],
-        },
-        "redirect_url": "/settings/integrations/calendly"
-    }
+    # Redirect to frontend settings page
+    return RedirectResponse(
+        url=f"{frontend_url}/settings?section=calendly&connected=true",
+        status_code=302
+    )
 
 
 @router.post("/disconnect")
