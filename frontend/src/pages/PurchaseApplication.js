@@ -137,6 +137,11 @@ const Icon = ({ name, size = 24, className = '' }) => {
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
     ),
+    globe: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+    ),
     briefcase: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
@@ -418,6 +423,18 @@ const DECLARATION_QUESTIONS = [
     type: 'phone',
     placeholder: '(555) 555-5555',
     showIf: { field: 'borrower_count', values: ['2', '3', '4+'] },
+  },
+  {
+    id: 'citizenship_status',
+    question: 'What is your citizenship status?',
+    type: 'choice',
+    options: [
+      { value: 'us_citizen', label: 'U.S. Citizen', icon: 'check' },
+      { value: 'permanent_resident', label: 'Permanent Resident (Green Card)', icon: 'document' },
+      { value: 'non_permanent_resident', label: 'Non-Permanent Resident (Visa)', icon: 'globe' },
+      { value: 'non_resident', label: 'Non-Resident Alien', icon: 'globe' },
+    ],
+    hint: 'This helps determine which loan programs you qualify for.',
   },
   {
     id: 'first_time_buyer',
@@ -1163,7 +1180,19 @@ export default function PurchaseApplication() {
   // Update needs list
   useEffect(() => {
     const newNeeds = [];
-    newNeeds.push({ id: 'id', label: 'Government-issued ID', category: 'identity' });
+
+    // Government ID is always required
+    newNeeds.push({ id: 'id', label: "Driver's license or passport", category: 'identity' });
+
+    // Green Card required for non-US citizens
+    if (declarations.citizenship_status && declarations.citizenship_status !== 'us_citizen') {
+      newNeeds.push({ id: 'green_card', label: 'Unexpired Green Card (front & back)', category: 'identity' });
+
+      // For visa holders, also need work authorization
+      if (declarations.citizenship_status === 'non_permanent_resident') {
+        newNeeds.push({ id: 'visa_docs', label: 'Visa documentation (I-94, EAD, etc.)', category: 'identity' });
+      }
+    }
 
     if (declarations.self_employed === 'yes' || declarations.self_employed === 'side_business') {
       newNeeds.push({ id: 'tax_returns', label: '2 years tax returns', category: 'income' });
