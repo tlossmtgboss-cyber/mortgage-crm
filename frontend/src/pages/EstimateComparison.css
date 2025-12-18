@@ -614,71 +614,270 @@
   font-size: 16px;
 }
 
-/* CTA Section */
-.cta-section {
-  display: flex;
+/* Enhanced CTA Section */
+.cta-section-enhanced {
+  background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-section-enhanced::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.cta-badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-}
-
-.cta-content h3 {
-  font-size: 18px;
+  gap: 6px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+  animation: pulse 2s infinite;
 }
 
-.cta-content p {
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(245, 158, 11, 0);
+  }
+}
+
+.cta-headline {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 12px 0;
+  position: relative;
+}
+
+.cta-subheadline {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+  position: relative;
+}
+
+.cta-subheadline strong {
+  color: #10b981;
+}
+
+.cta-savings-highlight {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 16px 32px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.cta-savings-highlight .savings-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cta-savings-highlight .savings-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #10b981;
+  line-height: 1.2;
+}
+
+.cta-savings-highlight .savings-extra {
   font-size: 14px;
-  color: #64748b;
-  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 4px;
 }
 
-.btn-cta {
+.cta-trust-signals {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.trust-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 28px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.trust-item .trust-icon {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.cta-buttons-enhanced {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.btn-cta-primary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 32px;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: #fff;
   border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
+  border-radius: 12px;
+  font-size: 16px;
   cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: all 0.3s;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+  min-width: 320px;
 }
 
-.btn-cta:hover {
+.btn-cta-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5);
+}
+
+.btn-cta-secondary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 320px;
+}
+
+.btn-cta-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
 }
 
-.btn-cta .arrow {
-  font-size: 18px;
-  transition: transform 0.2s;
+.btn-cta-primary .btn-icon,
+.btn-cta-secondary .btn-icon {
+  font-size: 24px;
 }
 
-.btn-cta:hover .arrow {
-  transform: translateX(4px);
+.btn-cta-primary .btn-text,
+.btn-cta-secondary .btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
 }
 
+.btn-cta-primary .btn-main,
+.btn-cta-secondary .btn-main {
+  font-weight: 600;
+}
+
+.btn-cta-primary .btn-sub,
+.btn-cta-secondary .btn-sub {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+.cta-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cta-or-divider::before,
+.cta-or-divider::after {
+  content: '';
+  width: 60px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.cta-urgency {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  position: relative;
+}
+
+.cta-urgency .urgency-icon {
+  font-size: 16px;
+}
+
+/* Mobile adjustments for enhanced CTA */
 @media (max-width: 600px) {
-  .cta-section {
-    flex-direction: column;
-    text-align: center;
+  .cta-section-enhanced {
+    padding: 24px 16px;
   }
 
-  .btn-cta {
+  .cta-headline {
+    font-size: 22px;
+  }
+
+  .cta-subheadline {
+    font-size: 14px;
+  }
+
+  .cta-trust-signals {
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn-cta-primary,
+  .btn-cta-secondary {
+    min-width: 100%;
     width: 100%;
-    justify-content: center;
+  }
+
+  .cta-savings-highlight {
+    padding: 12px 20px;
+  }
+
+  .cta-savings-highlight .savings-value {
+    font-size: 26px;
   }
 }
 

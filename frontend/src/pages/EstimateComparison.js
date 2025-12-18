@@ -903,21 +903,69 @@ function EstimateComparison() {
             </div>
 
             {/* CTA */}
-            <div className="cta-section">
-              <div className="cta-content">
-                <h3>Want to get an even better deal?</h3>
-                <p>Let our experts review your situation and find you the best rate.</p>
+            <div className="cta-section-enhanced">
+              <div className="cta-badge">
+                <span>🎯</span> Limited Time Offer
               </div>
-              <div className="cta-buttons">
-                <button className="btn-schedule" onClick={handleScheduleCall}>
-                  <span className="calendar-icon">📅</span>
-                  Schedule a Free Call
+
+              <h2 className="cta-headline">
+                We Can Beat {comparison.winner === 'A' ? 'This' : 'Both'} Rate
+              </h2>
+
+              <p className="cta-subheadline">
+                Our mortgage experts have access to <strong>50+ lenders</strong> and can often find rates
+                <strong> 0.25% - 0.5% lower</strong> than what you're seeing here.
+              </p>
+
+              {comparison.savings_amount > 0 && (
+                <div className="cta-savings-highlight">
+                  <span className="savings-label">You're already saving</span>
+                  <span className="savings-value">{formatCurrency(comparison.savings_amount)}</span>
+                  <span className="savings-extra">Let us find you even more.</span>
+                </div>
+              )}
+
+              <div className="cta-trust-signals">
+                <div className="trust-item">
+                  <span className="trust-icon">✓</span>
+                  <span>100% Free Consultation</span>
+                </div>
+                <div className="trust-item">
+                  <span className="trust-icon">✓</span>
+                  <span>No Credit Check Required</span>
+                </div>
+                <div className="trust-item">
+                  <span className="trust-icon">✓</span>
+                  <span>No Obligation to Proceed</span>
+                </div>
+              </div>
+
+              <div className="cta-buttons-enhanced">
+                <button className="btn-cta-primary" onClick={handleScheduleCall}>
+                  <span className="btn-icon">📅</span>
+                  <span className="btn-text">
+                    <span className="btn-main">Schedule My Free Consultation</span>
+                    <span className="btn-sub">Pick a time that works for you</span>
+                  </span>
                 </button>
-                <button className="btn-cta" onClick={handleCTAClick}>
-                  Get My Custom Quote
-                  <span className="arrow">→</span>
+
+                <div className="cta-or-divider">
+                  <span>or</span>
+                </div>
+
+                <button className="btn-cta-secondary" onClick={handleCTAClick}>
+                  <span className="btn-icon">⚡</span>
+                  <span className="btn-text">
+                    <span className="btn-main">Get Instant Rate Quote</span>
+                    <span className="btn-sub">See your personalized rate in 60 seconds</span>
+                  </span>
                 </button>
               </div>
+
+              <p className="cta-urgency">
+                <span className="urgency-icon">⏰</span>
+                Rates change daily. Lock in your savings before they increase.
+              </p>
             </div>
           </div>
         )}
