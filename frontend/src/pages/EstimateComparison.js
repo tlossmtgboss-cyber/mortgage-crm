@@ -934,7 +934,7 @@ function EstimateComparison() {
                 </div>
                 <div className="trust-item">
                   <span className="trust-icon">✓</span>
-                  <span>No Credit Check Required</span>
+                  <span>Soft Credit Pull Only</span>
                 </div>
                 <div className="trust-item">
                   <span className="trust-icon">✓</span>
