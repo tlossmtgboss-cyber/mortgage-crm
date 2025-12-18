@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import './EstimateComparison.css';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
+
+const CALENDLY_URL = "https://calendly.com/timlossteam/client-reengagement-clone?hide_event_type_details=1&hide_gdpr_banner=1";
 
 function EstimateComparison() {
   // State for estimates A and B
@@ -24,9 +26,47 @@ function EstimateComparison() {
   // Provenance accordion state
   const [expandedProvenance, setExpandedProvenance] = useState({});
 
+  // Calendly modal state
+  const [showCalendly, setShowCalendly] = useState(false);
+
   // File input refs
   const fileInputA = useRef(null);
   const fileInputB = useRef(null);
+
+  // Load Calendly script when modal opens
+  useEffect(() => {
+    if (showCalendly) {
+      // Check if script already exists
+      if (!document.querySelector('script[src="https://assets.calendly.com/assets/external/widget.js"]')) {
+        const script = document.createElement('script');
+        script.src = 'https://assets.calendly.com/assets/external/widget.js';
+        script.async = true;
+        document.body.appendChild(script);
+      }
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showCalendly]);
+
+  // Handle schedule call button click
+  const handleScheduleCall = () => {
+    if (comparison?.comparison_id) {
+      // Track conversion
+      fetch(`${API_BASE_URL}/api/v1/estimate-parser/compare/convert?comparison_id=${comparison.comparison_id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }).catch(err => console.error('Failed to track conversion:', err));
+    }
+    setShowCalendly(true);
+  };
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -529,10 +569,38 @@ function EstimateComparison() {
                 <h3>Want to get an even better deal?</h3>
                 <p>Let our experts review your situation and find you the best rate.</p>
               </div>
-              <button className="btn-cta" onClick={handleCTAClick}>
-                Get My Custom Quote
-                <span className="arrow">→</span>
-              </button>
+              <div className="cta-buttons">
+                <button className="btn-schedule" onClick={handleScheduleCall}>
+                  <span className="calendar-icon">📅</span>
+                  Schedule a Free Call
+                </button>
+                <button className="btn-cta" onClick={handleCTAClick}>
+                  Get My Custom Quote
+                  <span className="arrow">→</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Calendly Modal */}
+        {showCalendly && (
+          <div className="calendly-modal-overlay" onClick={() => setShowCalendly(false)}>
+            <div className="calendly-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="calendly-modal-header">
+                <h3>Schedule Your Free Consultation</h3>
+                <p>No cost, no obligation - just expert advice on your loan options</p>
+                <button className="btn-close-modal" onClick={() => setShowCalendly(false)}>
+                  ✕
+                </button>
+              </div>
+              <div className="calendly-modal-body">
+                <div
+                  className="calendly-inline-widget"
+                  data-url={CALENDLY_URL}
+                  style={{ minWidth: '320px', height: '630px' }}
+                />
+              </div>
             </div>
           </div>
         )}
