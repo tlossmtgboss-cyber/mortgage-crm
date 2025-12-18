@@ -44,22 +44,23 @@ function EstimateComparison() {
   const qaMessagesRef = useRef(null);
   const questionInputRef = useRef(null);
 
-  // Load Calendly script when modal opens
+  // Preload Calendly script on component mount for faster loading
+  useEffect(() => {
+    if (!document.querySelector('script[src="https://assets.calendly.com/assets/external/widget.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://assets.calendly.com/assets/external/widget.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  // Handle body scroll when modal is open
   useEffect(() => {
     if (showCalendly) {
-      // Check if script already exists
-      if (!document.querySelector('script[src="https://assets.calendly.com/assets/external/widget.js"]')) {
-        const script = document.createElement('script');
-        script.src = 'https://assets.calendly.com/assets/external/widget.js';
-        script.async = true;
-        document.body.appendChild(script);
-      }
-      // Prevent body scroll when modal is open
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
-
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -982,6 +983,18 @@ function EstimateComparison() {
                 </button>
               </div>
               <div className="calendly-modal-body">
+                <div className="calendly-loading-fallback">
+                  <div className="spinner"></div>
+                  <p>Loading calendar...</p>
+                  <a
+                    href={CALENDLY_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="calendly-direct-link"
+                  >
+                    Click here if calendar doesn't load
+                  </a>
+                </div>
                 <div
                   className="calendly-inline-widget"
                   data-url={CALENDLY_URL}
