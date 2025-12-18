@@ -6,6 +6,7 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
 const CALENDLY_URL = "https://calendly.com/timlossteam/client-reengagement-clone?hide_event_type_details=1&hide_gdpr_banner=1";
+const CUSTOM_QUOTE_URL = "https://mortgage-crm-nine.vercel.app/apply/purchase";
 
 function EstimateComparison() {
   // State for estimates A and B
@@ -256,10 +257,10 @@ function EstimateComparison() {
     }
 
     if (q.includes('better') || q.includes('recommend') || q.includes('which')) {
-      return `Based on the comparison, Estimate ${comparison?.winner} appears to be the better option with potential savings of ${formatCurrency(comparison?.savings_amount)}. However, I recommend discussing both options with a loan officer to understand any differences in service, rate lock periods, or other terms.`;
+      return `Based on the comparison, Estimate ${comparison?.winner} appears to be the better option with potential savings of ${formatCurrency(comparison?.savings_amount)}. But here's the thing - we can likely beat both of these rates. Click "Get Instant Rate Quote" below to get a custom quote, or schedule a free consultation to see how much more we can save you.`;
     }
 
-    return `That's a great question! Based on the estimates provided, I'd recommend speaking with a loan officer who can provide personalized advice for your situation. Would you like to schedule a free consultation?`;
+    return `That's a great question! Based on the estimates provided, I'd recommend getting a custom quote from our team. We can often beat these rates by 0.25-0.5%. Click "Get Instant Rate Quote" below or schedule a free consultation to discuss your options.`;
   };
 
   // Format currency
@@ -454,7 +455,7 @@ function EstimateComparison() {
     };
   };
 
-  // Track conversion click
+  // Track conversion click - directs to custom quote application
   const handleCTAClick = async () => {
     if (comparison?.comparison_id) {
       try {
@@ -468,8 +469,8 @@ function EstimateComparison() {
         console.error('Failed to track conversion:', err);
       }
     }
-    // Open contact form or redirect
-    window.open('/apply', '_blank');
+    // Direct to custom quote application
+    window.open(CUSTOM_QUOTE_URL, '_blank');
   };
 
   // Download PDF
