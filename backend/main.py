@@ -19517,6 +19517,15 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Conversation Intelligence routes: {e}")
 
+# Include Conversation Intelligence Voice routes (call analysis, QA scoring, real-time coaching)
+try:
+    from routes.ci_voice_routes import router as ci_voice_router, set_dependencies as set_ci_voice_deps
+    set_ci_voice_deps(get_current_user)
+    app.include_router(ci_voice_router, tags=["Conversation Intelligence - Voice"])
+    logger.info("✅ CI Voice routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load CI Voice routes: {e}")
+
 # Include Workflow System routes
 from workflow_routes import router as workflow_router
 app.include_router(workflow_router, tags=["Workflow"])

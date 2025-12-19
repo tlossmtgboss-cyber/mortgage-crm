@@ -325,6 +325,10 @@ const DialerSettingsSection = () => {
 
 function Settings() {
   const navigate = useNavigate();
+
+  // Get current user from localStorage
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
   const [activeSection, setActiveSection] = useState('profile-info');
   const [marketingTab, setMarketingTab] = useState('landing-pages');
   const [expandedSections, setExpandedSections] = useState({

@@ -94,6 +94,8 @@ const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
 const AIOutreach = lazy(() => import('./pages/AIOutreach'));
+const ConversationIntelligence = lazy(() => import('./pages/ConversationIntelligence'));
+const ConversationIntelligenceRecordingDetail = lazy(() => import('./pages/ConversationIntelligenceRecordingDetail'));
 const PublicBooking = lazy(() => import('./pages/PublicBooking'));
 const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazy(() => import('./pages/AdaptiveURLA'));
@@ -1533,6 +1535,50 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AIOutreach /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/conversation-intelligence"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ConversationIntelligence /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/conversation-intelligence/recording/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ConversationIntelligenceRecordingDetail /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
