@@ -156,7 +156,6 @@ class TestEstimateParserRoutes:
         data = response.json()
         assert data["success"] is True
 
-    @pytest.mark.skip(reason="Requires PostgreSQL - uses NOW() and INTERVAL syntax")
     def test_stats_endpoint(self, client, db_session):
         """Test GET /api/v1/estimate-parser/stats endpoint"""
         response = client.get("/api/v1/estimate-parser/stats")

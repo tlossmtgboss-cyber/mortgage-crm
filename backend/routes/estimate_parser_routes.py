@@ -446,6 +446,10 @@ async def get_parse_stats(
     Get parsing statistics for monitoring.
     """
     try:
+        # Calculate cutoff date in Python for database portability
+        from datetime import datetime, timedelta
+        cutoff_date = datetime.now() - timedelta(days=days)
+
         # Cache stats
         cache_stats = db.execute(text("""
             SELECT
@@ -454,8 +458,8 @@ async def get_parse_stats(
                 AVG(confidence_score) as avg_confidence,
                 SUM(access_count) as total_accesses
             FROM estimate_parse_cache
-            WHERE created_at >= NOW() - :days * INTERVAL '1 day'
-        """), {'days': days}).fetchone()
+            WHERE created_at >= :cutoff
+        """), {'cutoff': cutoff_date}).fetchone()
 
         # Failure stats
         failure_stats = db.execute(text("""
@@ -463,10 +467,10 @@ async def get_parse_stats(
                 error_stage,
                 COUNT(*) as count
             FROM estimate_parse_failures
-            WHERE created_at >= NOW() - :days * INTERVAL '1 day'
+            WHERE created_at >= :cutoff
             GROUP BY error_stage
             ORDER BY count DESC
-        """), {'days': days}).fetchall()
+        """), {'cutoff': cutoff_date}).fetchall()
 
         # Comparison stats
         comparison_stats = db.execute(text("""
@@ -477,8 +481,8 @@ async def get_parse_stats(
                 COUNT(CASE WHEN winner = 'B' THEN 1 END) as estimate_b_wins,
                 AVG(savings_amount) as avg_savings
             FROM estimate_comparisons
-            WHERE created_at >= NOW() - :days * INTERVAL '1 day'
-        """), {'days': days}).fetchone()
+            WHERE created_at >= :cutoff
+        """), {'cutoff': cutoff_date}).fetchone()
 
         return {
             'period_days': days,
