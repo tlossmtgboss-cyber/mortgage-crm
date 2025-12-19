@@ -156,6 +156,22 @@ def db_engine():
             )
         """))
 
+        # Create estimate_comparisons table for estimate parser tests
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS estimate_comparisons (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                session_id TEXT,
+                estimate_a_hash TEXT,
+                estimate_b_hash TEXT,
+                winner TEXT,
+                winner_reason TEXT,
+                savings_amount REAL,
+                converted INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
         conn.commit()
 
     yield test_engine

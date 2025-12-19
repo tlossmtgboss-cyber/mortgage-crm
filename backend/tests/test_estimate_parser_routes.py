@@ -124,7 +124,6 @@ class TestEstimateParserRoutes:
 
         assert response.status_code == 404
 
-    @pytest.mark.skip(reason="Requires estimate_comparisons table - database not setup")
     def test_conversion_tracking_endpoint(self, client, db_session):
         """Test POST /api/v1/estimate-parser/compare/convert endpoint"""
         from sqlalchemy import text
