@@ -74,9 +74,18 @@ pytz>=2024.1
 aiohttp>=3.9.0
 httpx>=0.25.0
 
-# Development
+# Development & Testing
 pytest>=7.4.0
-pytest-asyncio>=0.21.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-timeout>=2.2.0
+pytest-mock>=3.12.0
+pytest-xdist>=3.5.0
+coverage>=7.3.0
+factory-boy>=3.3.0
+faker>=22.0.0
+responses>=0.24.0
+freezegun>=1.2.0
 
 # Production Monitoring
 sentry-sdk[fastapi]>=1.38.0

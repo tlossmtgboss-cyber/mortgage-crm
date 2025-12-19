@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perennia-crm"
+version = "1.0.0"
+description = "Perennia AI Mortgage CRM Backend"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+# Test markers for layered testing strategy
+markers = [
+    "unit: Fast isolated tests with no external dependencies",
+    "integration: Tests that require external services (APIs, databases)",
+    "e2e: End-to-end conversation flow tests",
+    "regression: Golden response comparison tests",
+    "slow: Tests that take longer than 5 seconds",
+    "agents: Tests for AI agents",
+    "tools: Tests for agent tools",
+    "orchestrator: Tests for agent orchestration/routing",
+]
+
+# Default options
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "-ra",
+]
+
+# Filter warnings
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# Timeout for tests (requires pytest-timeout)
+timeout = 30
+
+[tool.coverage.run]
+source = ["agents", "services", "routes"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+fail_under = 70
+
+[tool.coverage.html]
+directory = "htmlcov"

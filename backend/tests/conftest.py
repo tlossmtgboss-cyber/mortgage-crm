@@ -1,14 +1,25 @@
 """
-Test Configuration & Fixtures for Estimate Parser Tests
+Perennia AI - Comprehensive Test Configuration & Fixtures
+
+Layered Testing Strategy:
+- unit: Fast isolated tests with mocked dependencies
+- integration: Tests with real external services
+- e2e: Full conversation flow tests
+- regression: Golden response comparisons
 """
 import pytest
 import os
+import json
+import asyncio
 from pathlib import Path
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from dataclasses import dataclass
+
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
-import base64
 from io import BytesIO
 
 import sys
@@ -17,91 +28,28 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from main import app
 from database import get_db
 
-# Test database setup - use SQLite for testing
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///./test_estimate_parser.db")
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in TEST_DATABASE_URL else {})
+
+# =============================================================================
+# DATABASE FIXTURES
+# =============================================================================
+
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///./test_perennia.db")
+test_engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in TEST_DATABASE_URL else {}
+)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
-
-
-def create_test_tables(engine):
-    """Create only the tables needed for estimate parser tests"""
-    with engine.connect() as conn:
-        # Create users table (minimal - needed for foreign key)
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email VARCHAR(255),
-                name VARCHAR(255)
-            )
-        """))
-
-        # Create estimate_parse_cache table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS estimate_parse_cache (
-                doc_hash VARCHAR(64) PRIMARY KEY,
-                parsed_json JSON NOT NULL,
-                confidence_score NUMERIC(3, 2),
-                needs_review BOOLEAN DEFAULT FALSE,
-                source_type VARCHAR(50) DEFAULT 'loan_estimate',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                access_count INTEGER DEFAULT 0
-            )
-        """))
-
-        # Create estimate_parse_failures table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS estimate_parse_failures (
-                id VARCHAR(36) PRIMARY KEY,
-                request_id VARCHAR(36) NOT NULL,
-                doc_hash VARCHAR(64) NOT NULL,
-                error_stage VARCHAR(50) NOT NULL,
-                error_message TEXT,
-                raw_text TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-
-        # Create estimate_comparisons table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS estimate_comparisons (
-                id VARCHAR(36) PRIMARY KEY,
-                user_id INTEGER,
-                session_id VARCHAR(100),
-                estimate_a_hash VARCHAR(64) NOT NULL,
-                estimate_b_hash VARCHAR(64) NOT NULL,
-                winner VARCHAR(1),
-                winner_reason TEXT,
-                savings_amount NUMERIC(12, 2),
-                converted BOOLEAN DEFAULT FALSE,
-                converted_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-        conn.commit()
-
-
-def drop_test_tables(engine):
-    """Drop test tables"""
-    with engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS estimate_comparisons"))
-        conn.execute(text("DROP TABLE IF EXISTS estimate_parse_failures"))
-        conn.execute(text("DROP TABLE IF EXISTS estimate_parse_cache"))
-        conn.execute(text("DROP TABLE IF EXISTS users"))
-        conn.commit()
 
 
 @pytest.fixture(scope="session")
 def db_engine():
-    """Create test database tables"""
-    create_test_tables(test_engine)
+    """Create test database engine for the session"""
     yield test_engine
-    drop_test_tables(test_engine)
 
 
 @pytest.fixture(scope="function")
 def db_session(db_engine):
-    """Create a new database session for each test"""
+    """Create a new database session for each test with rollback"""
     connection = db_engine.connect()
     transaction = connection.begin()
     session = TestSessionLocal(bind=connection)
@@ -128,11 +76,324 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
+# =============================================================================
+# MOCK TOOL RESULTS
+# =============================================================================
+
+@dataclass
+class MockToolResult:
+    """Standard mock result for tool calls"""
+    status: str = "success"
+    data: Dict[str, Any] = None
+    message: str = ""
+    error: Optional[str] = None
+
+    def __post_init__(self):
+        if self.data is None:
+            self.data = {}
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status,
+            "data": self.data,
+            "message": self.message,
+            "error": self.error,
+        }
+
+
+@pytest.fixture
+def mock_tool_success():
+    """Factory for successful tool results"""
+    def _create(data: Dict[str, Any], message: str = "Success"):
+        return MockToolResult(status="success", data=data, message=message)
+    return _create
+
+
+@pytest.fixture
+def mock_tool_error():
+    """Factory for error tool results"""
+    def _create(error: str, message: str = ""):
+        return MockToolResult(status="error", error=error, message=message or error)
+    return _create
+
+
+# =============================================================================
+# AGENT FIXTURES
+# =============================================================================
+
+@pytest.fixture
+def mock_openai_client():
+    """Mock OpenAI client for agent tests"""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "Mock AI response"
+    mock_response.choices[0].message.tool_calls = None
+    mock_response.usage.total_tokens = 500
+    mock_response.usage.prompt_tokens = 400
+    mock_response.usage.completion_tokens = 100
+
+    mock_client.chat.completions.create = MagicMock(return_value=mock_response)
+    return mock_client
+
+
+@pytest.fixture
+def mock_anthropic_client():
+    """Mock Anthropic client for agent tests"""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock()]
+    mock_response.content[0].text = "Mock Claude response"
+    mock_response.usage.input_tokens = 400
+    mock_response.usage.output_tokens = 100
+
+    mock_client.messages.create = MagicMock(return_value=mock_response)
+    return mock_client
+
+
+@pytest.fixture
+def agent_context():
+    """Standard agent context for tests"""
+    return {
+        "user_id": "test-user-123",
+        "session_id": "test-session-456",
+        "loan_id": "test-loan-789",
+        "timestamp": datetime.now().isoformat(),
+        "metadata": {},
+    }
+
+
+# =============================================================================
+# LEAD & LOAN FIXTURES
+# =============================================================================
+
+@pytest.fixture
+def sample_lead():
+    """Sample lead data for tests"""
+    return {
+        "id": "lead-123",
+        "first_name": "John",
+        "last_name": "Smith",
+        "email": "john.smith@example.com",
+        "phone": "+15551234567",
+        "status": "new",
+        "source": "website",
+        "loan_purpose": "purchase",
+        "estimated_amount": 400000,
+        "estimated_credit_score": 740,
+        "property_type": "single_family",
+        "created_at": datetime.now().isoformat(),
+    }
+
+
+@pytest.fixture
+def sample_loan():
+    """Sample loan data for tests"""
+    return {
+        "id": "loan-456",
+        "loan_number": "2024-001234",
+        "borrower_name": "John Smith",
+        "loan_amount": 400000,
+        "interest_rate": 6.875,
+        "loan_type": "conventional",
+        "property_address": "123 Main St, Austin, TX 78701",
+        "status": "processing",
+        "loan_officer_id": "lo-789",
+        "created_at": datetime.now().isoformat(),
+    }
+
+
+@pytest.fixture
+def sample_pipeline_metrics():
+    """Sample pipeline metrics response"""
+    return {
+        "total_count": 45,
+        "total_volume": 18500000,
+        "total_volume_formatted": "$18,500,000.00",
+        "closing_soon": 8,
+        "avg_days_in_status": 4.2,
+        "velocity": {
+            "period_days": 30,
+            "funded_count": 12,
+            "funded_volume": 5200000,
+        },
+    }
+
+
+# =============================================================================
+# QUALIFICATION AGENT FIXTURES
+# =============================================================================
+
+@pytest.fixture
+def qualification_conversation():
+    """Sample qualification conversation history"""
+    return [
+        {"role": "user", "content": "Hi, I'm interested in getting a mortgage"},
+        {"role": "assistant", "content": "Hello! I'd be happy to help you explore your mortgage options. To get started, could you tell me a bit about what you're looking for - is this for purchasing a new home or refinancing?"},
+        {"role": "user", "content": "I want to buy a house"},
+        {"role": "assistant", "content": "That's exciting! What price range are you considering for your new home?"},
+        {"role": "user", "content": "Around $450,000"},
+    ]
+
+
+@pytest.fixture
+def mock_qualification_tools():
+    """Mock tools for qualification agent tests"""
+    return {
+        "check_lead_status": AsyncMock(return_value=MockToolResult(
+            status="success",
+            data={"status": "new", "score": 0},
+        )),
+        "update_lead_info": AsyncMock(return_value=MockToolResult(
+            status="success",
+            data={"updated": True},
+        )),
+        "calculate_qualification": AsyncMock(return_value=MockToolResult(
+            status="success",
+            data={
+                "qualified": True,
+                "max_loan_amount": 450000,
+                "estimated_rate": 6.875,
+            },
+        )),
+        "schedule_callback": AsyncMock(return_value=MockToolResult(
+            status="success",
+            data={"scheduled": True, "time": "2024-01-15T10:00:00"},
+        )),
+    }
+
+
+# =============================================================================
+# ORCHESTRATOR FIXTURES
+# =============================================================================
+
+@pytest.fixture
+def sample_intents():
+    """Sample user intents for orchestrator routing tests"""
+    return {
+        "rate_inquiry": "What's the best rate for a 740 FICO conventional loan?",
+        "scheduling": "Can you set up a call with my client tomorrow at 2pm?",
+        "pipeline": "Show me my current pipeline status",
+        "compliance": "Check TRID compliance for loan 2024-001234",
+        "lead_status": "What's the status of my lead from John Smith?",
+        "document": "What documents are missing for loan 2024-001234?",
+        "greeting": "Hello, how are you?",
+        "unclear": "Can you help me with something?",
+    }
+
+
+@pytest.fixture
+def expected_agent_routing():
+    """Expected agent routing for sample intents"""
+    return {
+        "rate_inquiry": "rate_analysis_agent",
+        "scheduling": "scheduling_agent",
+        "pipeline": "pipeline_analyst",
+        "compliance": "compliance_checker",
+        "lead_status": "lead_nurturer",
+        "document": "document_tracker",
+        "greeting": "general_assistant",
+        "unclear": "clarification_needed",
+    }
+
+
+# =============================================================================
+# GOLDEN RESPONSE FIXTURES
+# =============================================================================
+
+@pytest.fixture
+def golden_responses_path():
+    """Path to golden responses fixture file"""
+    return Path(__file__).parent / "fixtures" / "golden_responses.json"
+
+
+@pytest.fixture
+def load_golden_responses(golden_responses_path):
+    """Load golden responses from fixture file"""
+    if golden_responses_path.exists():
+        with open(golden_responses_path) as f:
+            return json.load(f)
+    return []
+
+
+# =============================================================================
+# ASYNC TEST HELPERS
+# =============================================================================
+
+@pytest.fixture
+def event_loop():
+    """Create event loop for async tests"""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture
+def async_mock():
+    """Factory for creating async mocks"""
+    def _create(return_value=None):
+        mock = AsyncMock()
+        mock.return_value = return_value
+        return mock
+    return _create
+
+
+# =============================================================================
+# TOKEN USAGE TRACKING
+# =============================================================================
+
+@dataclass
+class TokenUsage:
+    """Track token usage for efficiency tests"""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+    def add(self, prompt: int, completion: int):
+        self.prompt_tokens += prompt
+        self.completion_tokens += completion
+        self.total_tokens = self.prompt_tokens + self.completion_tokens
+
+
+@pytest.fixture
+def token_tracker():
+    """Track token usage across test runs"""
+    return TokenUsage()
+
+
+# =============================================================================
+# TEST UTILITIES
+# =============================================================================
+
+def compute_similarity(text1: str, text2: str) -> float:
+    """Compute simple similarity between two texts (for regression tests)"""
+    words1 = set(text1.lower().split())
+    words2 = set(text2.lower().split())
+    if not words1 or not words2:
+        return 0.0
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    return len(intersection) / len(union)
+
+
+@pytest.fixture
+def similarity_checker():
+    """Provide similarity computation for tests"""
+    return compute_similarity
+
+
+# =============================================================================
+# ESTIMATE PARSER FIXTURES (preserved from original)
+# =============================================================================
+
 @pytest.fixture
 def sample_text_pdf():
     """Create a sample text-based PDF for testing"""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        pytest.skip("reportlab not installed")
 
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
@@ -151,87 +412,6 @@ def sample_text_pdf():
 
 
 @pytest.fixture
-def sample_scanned_pdf():
-    """Create a minimal PDF (simulating scanned - low text content)"""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
-
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    c.drawString(100, 750, "Scanned Document")  # Minimal text
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-
-@pytest.fixture
-def sample_image():
-    """Create a sample image for testing"""
-    # Create a simple 1x1 white JPEG
-    from PIL import Image
-    buffer = BytesIO()
-    img = Image.new('RGB', (100, 100), color='white')
-    img.save(buffer, format='JPEG')
-    buffer.seek(0)
-    return buffer
-
-
-@pytest.fixture
-def sample_le_with_pii():
-    """Sample text containing PII for redaction testing"""
-    return """
-    LOAN ESTIMATE
-
-    Borrower: John Smith
-    Email: john.smith@email.com
-    Phone: (555) 123-4567
-    SSN: 123-45-6789
-    Property: 123 Main Street, Anytown, CA 12345
-
-    Loan Amount: $400,000
-    Interest Rate: 6.875%
-    APR: 7.125%
-    Monthly P&I: $2,632.45
-    Total Closing Costs: $12,500
-    Cash to Close: $65,000
-
-    Account Number: 9876543210
-    """
-
-
-@pytest.fixture
-def mock_textract_response():
-    """Mock AWS Textract response"""
-    return {
-        'Blocks': [
-            {'BlockType': 'LINE', 'Text': 'LOAN ESTIMATE'},
-            {'BlockType': 'LINE', 'Text': 'Loan Amount $400,000'},
-            {'BlockType': 'LINE', 'Text': 'Interest Rate 6.875%'},
-            {'BlockType': 'LINE', 'Text': 'APR 7.125%'},
-            {'BlockType': 'LINE', 'Text': 'Monthly Principal & Interest $2,632.45'},
-            {'BlockType': 'LINE', 'Text': 'Total Closing Costs $12,500'},
-            {'BlockType': 'LINE', 'Text': 'Cash to Close $65,000'},
-        ]
-    }
-
-
-@pytest.fixture
-def mock_llm_response():
-    """Mock LLM normalized response"""
-    return """{
-      "loan_amount": 400000,
-      "interest_rate": 6.875,
-      "apr": 7.125,
-      "monthly_principal_and_interest": 2632.45,
-      "estimated_total_monthly_payment": 3450.00,
-      "total_closing_costs": 12500,
-      "cash_to_close": 65000,
-      "loan_term": 30,
-      "loan_type": "Conventional"
-    }"""
-
-
-@pytest.fixture
 def sample_parsed_estimate_a():
     """Sample parsed estimate A for comparison tests"""
     return {
@@ -245,19 +425,12 @@ def sample_parsed_estimate_a():
         "loan_type": "Conventional",
         "doc_hash": "hash_a_12345",
         "confidence_score": 0.95,
-        "needs_review": False,
-        "provenance": {
-            "cash_to_close": "...Cash to Close $65,000...",
-            "total_closing_costs": "...Total Closing Costs $12,500...",
-            "interest_rate": "...Interest Rate 6.875%...",
-            "apr": "...Annual Percentage Rate 7.125%..."
-        }
     }
 
 
 @pytest.fixture
 def sample_parsed_estimate_b():
-    """Sample parsed estimate B for comparison tests (slightly worse terms)"""
+    """Sample parsed estimate B for comparison tests (worse terms)"""
     return {
         "loan_amount": 400000,
         "interest_rate": 7.000,
@@ -269,11 +442,4 @@ def sample_parsed_estimate_b():
         "loan_type": "Conventional",
         "doc_hash": "hash_b_67890",
         "confidence_score": 0.92,
-        "needs_review": False,
-        "provenance": {
-            "cash_to_close": "...Cash to Close $67,500...",
-            "total_closing_costs": "...Total Closing Costs $14,000...",
-            "interest_rate": "...Interest Rate 7.000%...",
-            "apr": "...Annual Percentage Rate 7.250%..."
-        }
     }
