@@ -301,21 +301,28 @@ class TestTaskGeneratorService:
 class TestWorkflowAIEvaluator:
     """Test Suite: AI Confidence Evaluator"""
 
-    @pytest.mark.skip(reason="Mock setup needs to match actual service implementation")
     def test_evaluate_task_high_confidence(self, mock_db):
         """Test evaluation returning high confidence score."""
         from services.workflow_ai_evaluator import WorkflowAIEvaluator
+        from datetime import datetime, timezone
 
-        # Mock task with good data
+        # The service makes these queries in order:
+        # 1. _get_task_instance: 10 columns (id, workflow_instance_id, workflow_id, lead_id, loan_id, task_name, task_type, ai_eligible, scheduled_date, status)
+        # 2. _get_entity_data: 7 columns (first_name, last_name, email, phone, property_type, loan_purpose, estimated_amount)
+        # 3. _score_engagement_history: 3 columns (total, positive, negative)
+        # 4. _score_historical_success: 2 columns (total, success)
+        # 5. _record_evaluation ID: 1 column (id)
         mock_db.execute.return_value.fetchone.side_effect = [
-            # Task details
-            (1, "Morning Text", "text_am", "scheduled", 1, None, 1, "ai_autonomous"),
-            # Contact data
-            ("John", "Doe", "+15551234567", "john@example.com"),
-            # Engagement history
-            (5, 3, 2),  # total, responses, opens
-            # Historical success
-            (0.85,)
+            # 1. Task instance (10 columns)
+            (1, 100, 1, 1, None, "Morning Text", "text_am", True, datetime.now(timezone.utc), "scheduled"),
+            # 2. Lead data (7 columns)
+            ("John", "Doe", "john@example.com", "+15551234567", "single_family", "purchase", 450000),
+            # 3. Engagement history (3 columns: total, positive, negative)
+            (5, 3, 1),
+            # 4. Historical success (2 columns: total, success)
+            (20, 17),
+            # 5. Record evaluation ID
+            (1,)
         ]
 
         evaluator = WorkflowAIEvaluator(mock_db)
@@ -323,21 +330,25 @@ class TestWorkflowAIEvaluator:
 
         assert result.get("success") is True
         assert "confidence_score" in result
+        assert result["confidence_score"] > 0.5  # Should have decent confidence with good data
 
     def test_evaluate_task_low_confidence_missing_phone(self, mock_db):
         """Test evaluation with missing phone returns lower confidence."""
         from services.workflow_ai_evaluator import WorkflowAIEvaluator
+        from datetime import datetime, timezone
 
-        # Mock task with missing phone
+        # Mock task with missing phone - same structure as high confidence test
         mock_db.execute.return_value.fetchone.side_effect = [
-            # Task details
-            (1, "Morning Text", "text_am", "scheduled", 1, None, 1, "ai_autonomous"),
-            # Contact data - missing phone
-            ("John", "Doe", None, "john@example.com"),
-            # Engagement history
+            # 1. Task instance (10 columns)
+            (1, 100, 1, 1, None, "Morning Text", "text_am", True, datetime.now(timezone.utc), "scheduled"),
+            # 2. Lead data (7 columns) - missing phone
+            ("John", "Doe", "john@example.com", None, None, None, None),
+            # 3. Engagement history (3 columns: total, positive, negative)
             (0, 0, 0),
-            # Historical success
-            (0.0,)
+            # 4. Historical success (2 columns: total, success) - low sample size
+            (5, 2),
+            # 5. Record evaluation ID
+            (1,)
         ]
 
         evaluator = WorkflowAIEvaluator(mock_db)
