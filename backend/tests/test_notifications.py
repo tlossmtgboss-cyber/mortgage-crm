@@ -485,22 +485,14 @@ class TestEmailDelivery:
             assert result.get("error") or result.get("status_code") == 400 or True
 
 
-# Fixtures
+# Fixtures - using authenticated_client from conftest.py
 @pytest.fixture
-def client():
-    from main import app
-    from fastapi.testclient import TestClient
-    return TestClient(app)
+def client(authenticated_client):
+    """Use authenticated client for all tests in this file."""
+    return authenticated_client
 
 
-@pytest.fixture
-def auth_headers():
-    return {"Authorization": "Bearer test_token_123"}
-
-
-@pytest.fixture
-def application_id():
-    return 1
+# auth_headers, application_id are now imported from conftest.py
 
 
 if __name__ == "__main__":

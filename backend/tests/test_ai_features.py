@@ -609,12 +609,11 @@ HASHTAGS:
         assert any(word in fallback.lower() for word in ["tip", "home", "loan", "mortgage", "buy"])
 
 
-# Fixtures
+# Fixtures - using authenticated_client from conftest.py
 @pytest.fixture
-def client():
-    from main import app
-    from fastapi.testclient import TestClient
-    return TestClient(app)
+def client(authenticated_client):
+    """Use authenticated client for all tests in this file."""
+    return authenticated_client
 
 
 if __name__ == "__main__":

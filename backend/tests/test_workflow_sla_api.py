@@ -20,16 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # FIXTURES
 # =============================================================================
 
-@pytest.fixture
-def mock_user():
-    """Mock authenticated user."""
-    user = MagicMock()
-    user.id = 1
-    user.email = "test@example.com"
-    user.organization_id = 1
-    user.role = "loan_officer"
-    return user
-
+# Import fixtures from conftest.py:
+# - mock_user: Mock authenticated user
+# - authenticated_client: Test client with mocked authentication
+# - db_session: Database session
 
 @pytest.fixture
 def mock_db():
@@ -39,19 +33,9 @@ def mock_db():
 
 
 @pytest.fixture
-def client(mock_user, mock_db):
-    """Create test client with mocked dependencies."""
-    from main import app, get_db, get_current_user
-
-    # Override dependencies
-    app.dependency_overrides[get_db] = lambda: mock_db
-    app.dependency_overrides[get_current_user] = lambda: mock_user
-
-    client = TestClient(app)
-    yield client
-
-    # Clean up
-    app.dependency_overrides.clear()
+def client(authenticated_client):
+    """Use authenticated client for all tests in this file."""
+    return authenticated_client
 
 
 # =============================================================================

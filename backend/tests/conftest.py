@@ -165,6 +165,122 @@ def client(db_session):
 
 
 # =============================================================================
+# AUTHENTICATION FIXTURES
+# =============================================================================
+
+class MockUser:
+    """Mock user for authenticated tests"""
+    def __init__(
+        self,
+        id: int = 1,
+        email: str = "test@example.com",
+        organization_id: int = 1,
+        role: str = "loan_officer",
+        is_active: bool = True,
+        **kwargs
+    ):
+        self.id = id
+        self.email = email
+        self.organization_id = organization_id
+        self.role = role
+        self.is_active = is_active
+        # Add any additional attributes
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+@pytest.fixture
+def mock_user():
+    """Create a mock authenticated user"""
+    return MockUser()
+
+
+@pytest.fixture
+def mock_admin_user():
+    """Create a mock admin user"""
+    return MockUser(id=2, email="admin@example.com", role="admin")
+
+
+@pytest.fixture
+def auth_headers():
+    """Generate auth headers for testing"""
+    return {"Authorization": "Bearer test_token_123"}
+
+
+@pytest.fixture
+def lo_auth_headers():
+    """Generate LO auth headers for testing (used by legacy tests)"""
+    return {"Authorization": "Bearer lo_test_token_123"}
+
+
+@pytest.fixture
+def application_id():
+    """Return test application ID"""
+    return 1
+
+
+@pytest.fixture(scope="function")
+def authenticated_client(db_session, mock_user):
+    """Create test client with authentication mocked"""
+    from main import get_current_user, get_current_user_flexible
+
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    async def override_get_current_user(*args, **kwargs):
+        return mock_user
+
+    async def override_get_current_user_flexible(*args, **kwargs):
+        return mock_user
+
+    # Override all auth-related dependencies
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_current_user_flexible] = override_get_current_user_flexible
+
+    # Also override route-specific auth wrappers
+    try:
+        from routes import workflow_sla_routes
+        # Store original values
+        original_get_current_user = workflow_sla_routes._get_current_user
+        original_get_db = workflow_sla_routes._get_db
+
+        # Override the internal auth function
+        async def mock_auth(*args, **kwargs):
+            return mock_user
+
+        workflow_sla_routes._get_current_user = mock_auth
+        workflow_sla_routes._get_db = lambda: (yield db_session)
+    except ImportError:
+        original_get_current_user = None
+        original_get_db = None
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    # Restore original values
+    if original_get_current_user is not None:
+        try:
+            workflow_sla_routes._get_current_user = original_get_current_user
+            workflow_sla_routes._get_db = original_get_db
+        except:
+            pass
+
+    app.dependency_overrides.clear()
+
+
+# Alias for backward compatibility with tests using 'client' fixture
+# Tests that need auth should use 'authenticated_client' instead
+@pytest.fixture(scope="function")
+def auth_client(authenticated_client):
+    """Alias for authenticated_client"""
+    return authenticated_client
+
+
+# =============================================================================
 # MOCK TOOL RESULTS
 # =============================================================================
 

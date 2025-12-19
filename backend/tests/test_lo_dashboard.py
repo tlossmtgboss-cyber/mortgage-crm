@@ -437,24 +437,18 @@ class TestApplicationDetailView:
         assert response.status_code in [200, 201]
 
 
-# Pytest fixtures
+# Pytest fixtures are now imported from conftest.py:
+# - client: Basic test client without auth
+# - authenticated_client: Test client with mocked authentication
+# - lo_auth_headers: Auth headers for legacy compatibility
+# - application_id: Test application ID
+# - mock_user: Mock authenticated user
+
+# Override client fixture to use authenticated_client for this test file
 @pytest.fixture
-def client():
-    """Create test client"""
-    from main import app
-    return TestClient(app)
-
-
-@pytest.fixture
-def lo_auth_headers():
-    """Generate LO auth headers for testing"""
-    return {"Authorization": "Bearer lo_test_token_123"}
-
-
-@pytest.fixture
-def application_id():
-    """Return test application ID"""
-    return 1
+def client(authenticated_client):
+    """Use authenticated client for all tests in this file"""
+    return authenticated_client
 
 
 if __name__ == "__main__":

@@ -536,14 +536,14 @@ class TestConfirmationNotifications:
             assert mock_sms.called
 
 
-# Pytest fixtures
+# Pytest fixtures - using authenticated_client from conftest.py
 @pytest.fixture
-def client():
-    """Create test client"""
-    from main import app
-    return TestClient(app)
+def client(authenticated_client):
+    """Use authenticated client for all tests in this file."""
+    return authenticated_client
 
 
+# These fixtures extend conftest.py fixtures
 @pytest.fixture
 def auth_headers():
     """Generate auth headers for testing"""
@@ -554,12 +554,6 @@ def auth_headers():
 def coborrower_auth_headers():
     """Generate co-borrower auth headers"""
     return {"Authorization": "Bearer coborrower_token_123"}
-
-
-@pytest.fixture
-def application_id():
-    """Return test application ID"""
-    return 1
 
 
 @pytest.fixture
