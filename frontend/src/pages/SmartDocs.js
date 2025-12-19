@@ -3,8 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   NeedsListView,
   SmartDocumentUpload,
-  DocumentStatusCard,
-  FreshnessIndicator
+  DocumentStatusCard
 } from '../components/smart-docs';
 import { smartDocsAPI } from '../services/smartDocsApi';
 import './SmartDocs.css';
@@ -46,7 +45,7 @@ function SmartDocs() {
     if (!selectedLoanId) return;
     setLoading(true);
     try {
-      const docs = await smartDocsAPI.getDocuments(selectedLoanId);
+      const docs = await smartDocsAPI.getLoanDocuments(selectedLoanId);
       setDocuments(docs.documents || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
