@@ -438,7 +438,6 @@ class TestMemoryUsage:
         assert final_objects < initial_objects * 2
 
 
-@pytest.mark.skip(reason="redis module not installed")
 class TestCaching:
     """Test Suite: Caching effectiveness"""
 
