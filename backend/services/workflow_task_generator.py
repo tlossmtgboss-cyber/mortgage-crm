@@ -275,6 +275,72 @@ class TaskGeneratorService:
 
         return tasks_created
 
+    def _calculate_scheduled_date(
+        self,
+        enrollment_date: datetime,
+        day_value: int,
+        time_of_day: str = None
+    ) -> datetime:
+        """
+        Calculate the scheduled date for a task based on enrollment date and day value.
+
+        Args:
+            enrollment_date: The date the workflow was started/enrolled
+            day_value: The number of days from enrollment (1 = next day)
+            time_of_day: Optional time indicator ('morning', 'afternoon', 'am', 'pm')
+
+        Returns:
+            datetime: The calculated scheduled date with appropriate time
+        """
+        from datetime import date as date_type
+
+        # Handle date vs datetime
+        if isinstance(enrollment_date, date_type) and not isinstance(enrollment_date, datetime):
+            enrollment_date = datetime.combine(enrollment_date, datetime.min.time())
+
+        # Ensure timezone aware
+        if enrollment_date.tzinfo is None:
+            enrollment_date = enrollment_date.replace(tzinfo=timezone.utc)
+
+        # Calculate base date (day_value days from enrollment)
+        scheduled = enrollment_date + timedelta(days=day_value)
+
+        # Apply time of day
+        if time_of_day:
+            time_lower = time_of_day.lower()
+            if time_lower in ('morning', 'am'):
+                scheduled = scheduled.replace(hour=9, minute=0, second=0, microsecond=0)
+            elif time_lower in ('afternoon', 'pm'):
+                scheduled = scheduled.replace(hour=14, minute=0, second=0, microsecond=0)
+
+        return scheduled
+
+    def _generate_task_group_key(
+        self,
+        instance_id: int,
+        sibling_group: str = None,
+        day_order: int = None
+    ) -> str:
+        """
+        Generate a unique task group key for sibling cancellation.
+
+        Tasks with the same group key can be cancelled together when one is completed.
+
+        Args:
+            instance_id: The workflow instance ID
+            sibling_group: Optional sibling group identifier (e.g., 'day1_contact')
+            day_order: Optional day order for the workflow
+
+        Returns:
+            str: A unique task group key
+        """
+        if sibling_group:
+            return f"wf_{instance_id}_{sibling_group}_{uuid.uuid4().hex[:8]}"
+        elif day_order is not None:
+            return f"wf_{instance_id}_day_{day_order}_{uuid.uuid4().hex[:8]}"
+        else:
+            return f"wf_{instance_id}_{uuid.uuid4().hex[:8]}"
+
     def _get_enabled_task_types(self, day_config: Dict) -> List[str]:
         """Determine which task types are enabled for a day config."""
         types = []

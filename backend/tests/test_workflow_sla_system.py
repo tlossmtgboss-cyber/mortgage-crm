@@ -240,7 +240,6 @@ class TestTaskGeneratorService:
 
         assert mock_db.execute.called
 
-    @pytest.mark.skip(reason="TaskGeneratorService._calculate_scheduled_date method not exposed")
     def test_calculate_scheduled_date(self, mock_db):
         """Test scheduled date calculation with business days."""
         from services.workflow_task_generator import TaskGeneratorService
@@ -254,7 +253,6 @@ class TestTaskGeneratorService:
         # Day 1 should be Tuesday
         assert result.date() == date(2024, 1, 9)
 
-    @pytest.mark.skip(reason="TaskGeneratorService._generate_task_group_key method not exposed")
     def test_task_group_key_generation(self, mock_db):
         """Test task group key generation for sibling cancellation."""
         from services.workflow_task_generator import TaskGeneratorService
