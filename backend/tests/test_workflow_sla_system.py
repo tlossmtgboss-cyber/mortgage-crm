@@ -742,25 +742,25 @@ class TestWorkflowIntegration:
                 gen_result = task_generator.generate_tasks_for_instance(instance_id=100)
                 assert gen_result.get("success")
 
-    @pytest.mark.skip(reason="Mock setup needs to match actual service implementation - service uses different db call pattern")
     def test_sibling_cancellation_flow(self, mock_db):
         """Test that completing one sibling task cancels others."""
         from services.workflow_sla_service import WorkflowSLAService
+        from datetime import datetime, timezone
+
+        # Create mock task instance object (service uses ORM queries)
+        mock_task_instance = MagicMock()
+        mock_task_instance.id = 1
+        mock_task_instance.status = "pending"
+        mock_task_instance.task_group_key = "day1_contact_grp"
+        mock_task_instance.linked_task_id = None
+
+        # Setup ORM query chain mock
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_task_instance
 
         service = WorkflowSLAService(mock_db)
 
-        # Mock task with siblings
-        mock_db.execute.return_value.fetchone.return_value = (
-            1, "pending", "day1_contact_grp", 100, 1, None
-        )
-
-        # Mock sibling lookup
-        mock_db.execute.return_value.fetchall.return_value = [
-            (2,), (3,)  # Sibling task IDs
-        ]
-
         with patch.object(service, '_cancel_sibling_tasks') as mock_cancel:
-            mock_cancel.return_value = 2
+            mock_cancel.return_value = 2  # 2 siblings cancelled
 
             result = service.complete_task(
                 task_instance_id=1,
@@ -769,8 +769,17 @@ class TestWorkflowIntegration:
             )
 
             # Should have triggered sibling cancellation
-            # (verify via mock or db.execute calls)
-            assert mock_db.execute.called
+            mock_cancel.assert_called_once_with(
+                task_group_key="day1_contact_grp",
+                exclude_task_id=1,
+                reason="Contact made via sibling task"
+            )
+
+            # Verify task was marked completed
+            assert mock_task_instance.status == "completed"
+            assert mock_task_instance.completion_source == "user"
+            assert result.get("success") is True
+            assert result.get("siblings_cancelled") == 2
 
 
 # =============================================================================
