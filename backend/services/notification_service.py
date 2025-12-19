@@ -710,6 +710,452 @@ class NotificationService:
 
         return self.send_sms(borrower_phone, message)
 
+    # =========================================================================
+    # TEMPLATE BUILDER METHODS
+    # These methods return content dictionaries for testing and customization
+    # =========================================================================
+
+    def _build_welcome_email(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build welcome email content.
+
+        Args:
+            data: Dict with 'first_name', 'application_id', optional 'lo_name'
+
+        Returns:
+            Dict with 'subject', 'body', 'html_body'
+        """
+        first_name = data.get("first_name", "there")
+        application_id = data.get("application_id", "")
+        lo_name = data.get("lo_name", "your loan officer")
+
+        subject = "Welcome to Your Mortgage Application"
+
+        body = f"""Hi {first_name},
+
+Thank you for starting your mortgage application with us! We're excited to help you on your journey to homeownership.
+
+Your application reference: {application_id}
+
+Next Steps:
+1. Complete your application if you haven't already
+2. Upload any required documents
+3. {lo_name} will review and reach out within 24 hours
+
+We're here to make this process as smooth as possible.
+
+Best regards,
+The Perennia Team"""
+
+        html_body = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #218D8D;">Welcome, {first_name}!</h1>
+            <p>Thank you for starting your mortgage application with us! We're excited to help you on your journey to homeownership.</p>
+            <p><strong>Application Reference:</strong> {application_id}</p>
+            <h2>Next Steps:</h2>
+            <ol>
+                <li>Complete your application if you haven't already</li>
+                <li>Upload any required documents</li>
+                <li>{lo_name} will review and reach out within 24 hours</li>
+            </ol>
+            <p>We're here to make this process as smooth as possible.</p>
+        </div>
+        """
+
+        return {
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+        }
+
+    def _build_document_confirmation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build document upload confirmation content.
+
+        Args:
+            data: Dict with 'first_name', 'document_type', 'document_name',
+                  optional 'remaining_documents'
+
+        Returns:
+            Dict with 'subject', 'body', 'html_body'
+        """
+        first_name = data.get("first_name", "there")
+        document_type = data.get("document_type", "document")
+        document_name = data.get("document_name", "your document")
+        remaining = data.get("remaining_documents", [])
+
+        subject = f"Document Received: {document_type.replace('_', ' ').title()}"
+
+        remaining_text = ""
+        if remaining:
+            remaining_text = f"\n\nStill needed:\n" + "\n".join(f"- {doc}" for doc in remaining)
+        elif remaining is not None:
+            remaining_text = "\n\nAll required documents have been received!"
+
+        body = f"""Hi {first_name},
+
+We've received your {document_type.replace('_', ' ')}: {document_name}
+
+Thank you for submitting this document. Our team will review it shortly.{remaining_text}
+
+Best regards,
+The Perennia Team"""
+
+        html_body = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #10b981;">✓ Document Received</h1>
+            <p>Hi {first_name},</p>
+            <p>We've received your <strong>{document_type.replace('_', ' ')}</strong>: {document_name}</p>
+            <p>Thank you for submitting this document. Our team will review it shortly.</p>
+            {"<h3>Still needed:</h3><ul>" + "".join(f"<li>{doc}</li>" for doc in remaining) + "</ul>" if remaining else "<p style='color: #10b981;'><strong>All required documents have been received!</strong></p>" if remaining is not None else ""}
+        </div>
+        """
+
+        return {
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+        }
+
+    def _build_reminder_email(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build application reminder email content.
+
+        Args:
+            data: Dict with 'first_name', 'completion_percentage', 'application_id',
+                  'resume_link', optional 'missing_sections'
+
+        Returns:
+            Dict with 'subject', 'body', 'html_body'
+        """
+        first_name = data.get("first_name", "there")
+        completion = data.get("completion_percentage", 0)
+        app_id = data.get("application_id", "")
+        resume_link = data.get("resume_link", FRONTEND_URL)
+        missing = data.get("missing_sections", [])
+
+        subject = "Continue Your Mortgage Application"
+
+        missing_text = ""
+        if missing:
+            missing_text = f"\n\nSections to complete:\n" + "\n".join(f"- {section}" for section in missing)
+
+        body = f"""Hi {first_name},
+
+Your mortgage application is {completion}% complete! You're making great progress.
+
+Continue where you left off: {resume_link}{missing_text}
+
+Your application has been saved, so you can pick up right where you left off.
+
+Questions? Just reply to this email.
+
+Best regards,
+The Perennia Team"""
+
+        html_body = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #218D8D;">You're {completion}% There!</h1>
+            <p>Hi {first_name},</p>
+            <p>Your mortgage application is almost complete. Just a few more steps!</p>
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <div style="background: #e5e7eb; border-radius: 9999px; height: 10px;">
+                    <div style="background: #218D8D; height: 10px; width: {completion}%; border-radius: 9999px;"></div>
+                </div>
+                <p style="text-align: center; margin-top: 10px;"><strong>{completion}% Complete</strong></p>
+            </div>
+            {"<h3>Sections to complete:</h3><ul>" + "".join(f"<li>{s}</li>" for s in missing) + "</ul>" if missing else ""}
+            <p style="text-align: center;">
+                <a href="{resume_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Continue Application</a>
+            </p>
+        </div>
+        """
+
+        return {
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+            "resume_link": resume_link,
+        }
+
+    def _build_submission_confirmation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build submission confirmation email content.
+
+        Args:
+            data: Dict with 'first_name', 'application_id', 'submission_date',
+                  optional 'estimated_review_days', 'lo_name'
+
+        Returns:
+            Dict with 'subject', 'body', 'html_body'
+        """
+        first_name = data.get("first_name", "there")
+        app_id = data.get("application_id", "")
+        submission_date = data.get("submission_date", datetime.now())
+        review_days = data.get("estimated_review_days", 1)
+        lo_name = data.get("lo_name", "Your loan officer")
+
+        if isinstance(submission_date, datetime):
+            date_str = submission_date.strftime("%B %d, %Y")
+        else:
+            date_str = str(submission_date)
+
+        subject = "Application Submitted Successfully!"
+
+        body = f"""Hi {first_name},
+
+Congratulations! Your mortgage application has been successfully submitted.
+
+Application Reference: {app_id}
+Submitted: {date_str}
+
+What happens next:
+- {lo_name} will review your application within {review_days} business day(s)
+- You'll receive updates as your application progresses
+- We may reach out if we need any additional information
+
+Thank you for choosing us for your mortgage needs!
+
+Best regards,
+The Perennia Team"""
+
+        html_body = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="width: 64px; height: 64px; background: #10b981; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-size: 32px;">✓</span>
+                </div>
+            </div>
+            <h1 style="color: #111827; text-align: center;">Application Submitted!</h1>
+            <p>Hi {first_name},</p>
+            <p>Congratulations! Your mortgage application has been successfully submitted.</p>
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; color: #6b7280;">Application Reference</p>
+                <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold; color: #111827;">{app_id}</p>
+            </div>
+            <h3>What happens next:</h3>
+            <ul>
+                <li>{lo_name} will review your application within {review_days} business day(s)</li>
+                <li>You'll receive updates as your application progresses</li>
+                <li>We may reach out if we need any additional information</li>
+            </ul>
+        </div>
+        """
+
+        return {
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+            "reference": app_id,
+        }
+
+    def _build_lo_alert(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build new application alert for loan officer.
+
+        Args:
+            data: Dict with 'borrower_name', 'loan_amount', 'loan_purpose',
+                  'application_id', 'dashboard_link', optional 'property_address',
+                  'estimated_credit_score', 'property_type'
+
+        Returns:
+            Dict with 'subject', 'body', 'html_body'
+        """
+        borrower_name = data.get("borrower_name", "New Borrower")
+        loan_amount = data.get("loan_amount", 0)
+        loan_purpose = data.get("loan_purpose", "")
+        app_id = data.get("application_id", "")
+        dashboard_link = data.get("dashboard_link", FRONTEND_URL)
+        property_address = data.get("property_address", "")
+        credit_score = data.get("estimated_credit_score", "")
+        property_type = data.get("property_type", "")
+
+        subject = f"New Application: {borrower_name}"
+
+        details = []
+        if loan_purpose:
+            details.append(f"- Purpose: {loan_purpose.replace('_', ' ').title()}")
+        if loan_amount:
+            details.append(f"- Loan Amount: ${loan_amount:,.0f}")
+        if property_type:
+            details.append(f"- Property Type: {property_type}")
+        if property_address:
+            details.append(f"- Property: {property_address}")
+        if credit_score:
+            details.append(f"- Est. Credit Score: {credit_score}")
+
+        details_text = "\n".join(details) if details else "Details in dashboard"
+
+        body = f"""New Application Received!
+
+Borrower: {borrower_name}
+
+{details_text}
+
+View application: {dashboard_link}"""
+
+        html_body = f"""
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #218D8D; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
+                <h1 style="margin: 0; font-size: 18px;">🎉 New Application Received</h1>
+            </div>
+            <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
+                <h2 style="margin: 0 0 16px; color: #111827;">{borrower_name}</h2>
+                <table style="width: 100%;">
+                    {"".join(f'<tr><td style="padding: 8px 0; color: #6b7280;">{d.split(":")[0].replace("- ", "")}</td><td style="padding: 8px 0; text-align: right; color: #111827;">{d.split(":")[1].strip() if ":" in d else ""}</td></tr>' for d in details)}
+                </table>
+                <p style="text-align: center; margin-top: 24px;">
+                    <a href="{dashboard_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Application</a>
+                </p>
+            </div>
+        </div>
+        """
+
+        return {
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+            "link": dashboard_link,
+        }
+
+    def _build_html_email(self, data: Dict[str, Any]) -> str:
+        """
+        Build a generic HTML email from content data.
+
+        Args:
+            data: Dict with 'subject', 'body', optional 'cta_text', 'cta_link'
+
+        Returns:
+            HTML string
+        """
+        subject = data.get("subject", "")
+        body = data.get("body", "")
+        cta_text = data.get("cta_text", "")
+        cta_link = data.get("cta_link", "")
+
+        cta_html = ""
+        if cta_text and cta_link:
+            cta_html = f'''
+            <p style="text-align: center; margin: 24px 0;">
+                <a href="{cta_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">{cta_text}</a>
+            </p>
+            '''
+
+        # Convert body newlines to HTML paragraphs
+        body_html = "".join(f"<p>{line}</p>" for line in body.split("\n\n") if line.strip())
+
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{subject}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+        <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
+            {body_html}
+            {cta_html}
+        </div>
+        <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
+            <a href="#" style="color: #9ca3af;">Unsubscribe</a> from these emails
+        </p>
+    </div>
+</body>
+</html>"""
+
+    def _calculate_reminder_time(self, last_activity: datetime) -> datetime:
+        """
+        Calculate when a reminder should be sent based on last activity.
+
+        Args:
+            last_activity: Datetime of last user activity
+
+        Returns:
+            Datetime when reminder should be sent (24 hours after last activity)
+        """
+        from datetime import timedelta
+        return last_activity + timedelta(hours=24)
+
+    # =========================================================================
+    # SMS HELPER METHODS
+    # =========================================================================
+
+    def _format_sms_message(self, template_name: str, data: Dict[str, Any]) -> str:
+        """
+        Format an SMS message from a template.
+
+        Args:
+            template_name: Name of the template (welcome, submission_confirmation, reminder)
+            data: Template variables
+
+        Returns:
+            Formatted SMS message string
+        """
+        templates = {
+            "welcome": "Hi {name}! Welcome to Perennia Mortgage. We've received your application and will be in touch soon.",
+            "submission_confirmation": "Your mortgage application ({ref}) has been submitted! We'll review it within 24 hours.",
+            "reminder": "Hi {name}, your mortgage application is waiting. Continue where you left off at {link}",
+            "document_received": "Thanks {name}! We received your {doc_type}. We'll let you know if we need anything else.",
+            "appointment": "Reminder: Your call with {lo_name} is at {time}. {link}",
+        }
+
+        template = templates.get(template_name, "")
+        if not template:
+            return ""
+
+        try:
+            return template.format(**data)
+        except KeyError:
+            # Return template with available data
+            for key, value in data.items():
+                template = template.replace(f"{{{key}}}", str(value))
+            return template
+
+    def _format_phone_number(self, phone: str) -> str:
+        """
+        Format a phone number to E.164 format.
+
+        Args:
+            phone: Phone number in various formats
+
+        Returns:
+            Phone number in E.164 format (+1XXXXXXXXXX)
+        """
+        # Remove all non-digit characters
+        digits = "".join(c for c in phone if c.isdigit())
+
+        # Handle different lengths
+        if len(digits) == 10:
+            # US number without country code
+            return f"+1{digits}"
+        elif len(digits) == 11 and digits.startswith("1"):
+            # US number with country code
+            return f"+{digits}"
+        elif phone.startswith("+"):
+            # Already has country code
+            return f"+{digits}"
+        else:
+            # Default to US
+            return f"+1{digits[-10:]}" if len(digits) >= 10 else f"+1{digits}"
+
+    def _is_opted_out(self, phone: str) -> bool:
+        """
+        Check if a phone number has opted out of SMS.
+
+        Args:
+            phone: Phone number to check
+
+        Returns:
+            True if opted out, False otherwise
+
+        Note: In production, this would check a database table.
+        For now, returns False (not opted out).
+        """
+        # TODO: Implement opt-out checking against database
+        # For now, assume no one is opted out
+        return False
+
 
 # Create singleton instance
 notification_service = NotificationService()
