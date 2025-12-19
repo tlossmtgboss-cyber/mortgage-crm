@@ -1,0 +1,222 @@
+/**
+ * RejectionExplainer Styles
+ */
+
+.rejection-explainer {
+  position: relative;
+  border: 1px solid;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dismiss-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.dismiss-btn:hover {
+  color: #374151;
+}
+
+/* Header */
+.explainer-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.category-icon {
+  font-size: 1.5rem;
+}
+
+.category-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Body */
+.explainer-body {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.rejection-reason {
+  margin-bottom: 16px;
+}
+
+.rejection-reason strong {
+  display: block;
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.rejection-reason p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.fix-instructions {
+  background: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+.fix-instructions strong {
+  display: block;
+  font-size: 0.8rem;
+  color: #059669;
+  margin-bottom: 4px;
+}
+
+.fix-instructions p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+/* Category Tips */
+.category-tips {
+  background: #f9fafb;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.category-tips h5 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.category-tips ul {
+  margin: 0;
+  padding: 0 0 0 20px;
+}
+
+.category-tips li {
+  font-size: 0.825rem;
+  color: #4b5563;
+  padding: 3px 0;
+  line-height: 1.4;
+}
+
+/* Footer */
+.explainer-footer {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.03);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.help-text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Badge Version */
+.rejection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #fee2e2;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: #991b1b;
+}
+
+.rejection-badge .badge-icon {
+  font-size: 0.875rem;
+}
+
+.rejection-badge .badge-text {
+  font-weight: 500;
+}
+
+/* Alert Version */
+.rejection-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+}
+
+.rejection-alert .alert-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.rejection-alert .alert-content {
+  flex: 1;
+}
+
+.rejection-alert .alert-content strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #991b1b;
+  margin-bottom: 4px;
+}
+
+.rejection-alert .alert-content p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #7f1d1d;
+}
+
+.rejection-alert .alert-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rejection-alert .retry-btn,
+.rejection-alert .contact-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rejection-alert .retry-btn {
+  background: #dc3545;
+  border: none;
+  color: #fff;
+}
+
+.rejection-alert .retry-btn:hover {
+  background: #b91c1c;
+}
+
+.rejection-alert .contact-btn {
+  background: #fff;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+.rejection-alert .contact-btn:hover {
+  background: #fef2f2;
+}

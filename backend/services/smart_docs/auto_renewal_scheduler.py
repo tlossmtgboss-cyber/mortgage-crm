@@ -1,0 +1,505 @@
+"""
+Smart Document Collection - Auto Renewal Scheduler
+
+Manages automatic document renewal requests for time-sensitive documents.
+Features:
+- Infers payroll frequency from historical data
+- Calculates next expected document dates
+- Creates renewal requests before expiration
+- Sends notifications to borrowers
+"""
+
+import logging
+from datetime import datetime, date, timedelta
+from typing import Dict, Any, List, Optional, Tuple
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+
+from models.smart_docs_models import (
+    DocumentRequest, SmartDocument, DocPolicyEvent,
+    DocType, RequestStatus, PayrollFrequency, DocPolicyEventType
+)
+from services.smart_docs.freshness_validator import FreshnessValidator
+
+logger = logging.getLogger(__name__)
+
+
+class AutoRenewalScheduler:
+    """
+    Schedules automatic renewal requests for expiring documents.
+
+    Works with documents marked as auto_renew=True in the needs list.
+    Calculates optimal timing based on:
+    - Document freshness requirements
+    - Inferred payroll frequency (for paystubs)
+    - Historical document submission patterns
+    """
+
+    # Days before expiration to create renewal request
+    RENEWAL_BUFFER_DAYS = 5
+
+    # Days to wait after expected availability before sending reminder
+    REMINDER_DELAY_DAYS = 3
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.freshness_validator = FreshnessValidator()
+
+    def process_pending_renewals(self) -> Dict[str, Any]:
+        """
+        Process all documents that need renewal requests.
+
+        Called periodically (e.g., daily via cron job).
+
+        Returns:
+            Summary of renewal actions taken
+        """
+        logger.info("Processing pending document renewals")
+
+        today = date.today()
+        created_requests = []
+        sent_reminders = []
+        errors = []
+
+        # Find all document requests with auto_renew enabled
+        # that have at least one accepted document
+        auto_renew_requests = self.db.query(DocumentRequest).filter(
+            and_(
+                DocumentRequest.auto_renew == True,
+                DocumentRequest.status == RequestStatus.ACCEPTED,
+            )
+        ).all()
+
+        for request in auto_renew_requests:
+            try:
+                result = self._process_single_request(request, today)
+                if result.get("renewal_created"):
+                    created_requests.append(result)
+                if result.get("reminder_sent"):
+                    sent_reminders.append(result)
+            except Exception as e:
+                logger.error(f"Error processing renewal for request {request.id}: {e}")
+                errors.append({
+                    "request_id": request.id,
+                    "error": str(e),
+                })
+
+        logger.info(
+            f"Renewal processing complete: {len(created_requests)} created, "
+            f"{len(sent_reminders)} reminders, {len(errors)} errors"
+        )
+
+        return {
+            "processed_date": today.isoformat(),
+            "requests_processed": len(auto_renew_requests),
+            "renewals_created": len(created_requests),
+            "reminders_sent": len(sent_reminders),
+            "errors": errors,
+            "details": {
+                "created": created_requests,
+                "reminders": sent_reminders,
+            },
+        }
+
+    def _process_single_request(
+        self,
+        request: DocumentRequest,
+        today: date
+    ) -> Dict[str, Any]:
+        """Process a single document request for renewal."""
+        result = {
+            "request_id": request.id,
+            "loan_id": request.loan_id,
+            "doc_type": request.doc_type.value,
+            "renewal_created": False,
+            "reminder_sent": False,
+        }
+
+        # Get the most recent accepted document for this request
+        latest_doc = self.db.query(SmartDocument).filter(
+            and_(
+                SmartDocument.request_id == request.id,
+                SmartDocument.decision == "ACCEPT",
+            )
+        ).order_by(SmartDocument.doc_date.desc()).first()
+
+        if not latest_doc or not latest_doc.doc_date:
+            return result
+
+        doc_date = latest_doc.doc_date
+        if isinstance(doc_date, datetime):
+            doc_date = doc_date.date()
+
+        # Calculate expiration
+        expires_at = self.freshness_validator.get_expiration_date(
+            request.doc_type,
+            doc_date,
+            request.freshness_days,
+        )
+
+        if expires_at is None:
+            return result
+
+        days_until_expiry = (expires_at - today).days
+
+        # Check if we need to create a renewal request
+        if days_until_expiry <= self.RENEWAL_BUFFER_DAYS:
+            # Check if there's already a pending renewal
+            existing_renewal = self.db.query(DocumentRequest).filter(
+                and_(
+                    DocumentRequest.loan_id == request.loan_id,
+                    DocumentRequest.doc_type == request.doc_type,
+                    DocumentRequest.status == RequestStatus.OPEN,
+                    DocumentRequest.created_at >= datetime.now() - timedelta(days=30),
+                )
+            ).first()
+
+            if not existing_renewal:
+                renewal = self._create_renewal_request(request, today)
+                result["renewal_created"] = True
+                result["new_request_id"] = renewal.id
+
+        # Check if we should send a reminder
+        if request.next_expected_available_at:
+            expected_date = request.next_expected_available_at
+            if isinstance(expected_date, datetime):
+                expected_date = expected_date.date()
+
+            days_since_expected = (today - expected_date).days
+
+            if days_since_expected >= self.REMINDER_DELAY_DAYS:
+                self._send_renewal_reminder(request, today)
+                result["reminder_sent"] = True
+
+        return result
+
+    def _create_renewal_request(
+        self,
+        original_request: DocumentRequest,
+        today: date,
+    ) -> DocumentRequest:
+        """Create a new renewal request based on an existing one."""
+        # Calculate next expected date
+        next_expected = self._calculate_next_expected(
+            original_request.doc_type,
+            original_request.payroll_frequency,
+            today,
+        )
+
+        renewal = DocumentRequest(
+            loan_id=original_request.loan_id,
+            borrower_id=original_request.borrower_id,
+            doc_type=original_request.doc_type,
+            title=f"Updated {original_request.title}",
+            description=f"Please upload updated {original_request.title}. Previous document is expiring soon.",
+            instructions=original_request.instructions,
+            required_count=original_request.required_count,
+            applies_to=original_request.applies_to,
+            priority=original_request.priority,
+            freshness_days=original_request.freshness_days,
+            auto_renew=True,
+            payroll_frequency=original_request.payroll_frequency,
+            next_expected_available_at=next_expected,
+            status=RequestStatus.OPEN,
+        )
+
+        self.db.add(renewal)
+        self.db.flush()
+
+        # Log the event
+        event = DocPolicyEvent(
+            loan_id=original_request.loan_id,
+            request_id=renewal.id,
+            event_type=DocPolicyEventType.AUTO_REQUEST_CREATED,
+            payload={
+                "original_request_id": original_request.id,
+                "doc_type": original_request.doc_type.value,
+                "reason": "auto_renewal",
+            },
+        )
+        self.db.add(event)
+        self.db.commit()
+
+        logger.info(
+            f"Created renewal request {renewal.id} for loan {original_request.loan_id}, "
+            f"doc_type={original_request.doc_type.value}"
+        )
+
+        return renewal
+
+    def _calculate_next_expected(
+        self,
+        doc_type: DocType,
+        payroll_frequency: Optional[PayrollFrequency],
+        reference_date: date,
+    ) -> Optional[datetime]:
+        """Calculate when the next document should be available."""
+        if doc_type == DocType.PAYSTUB and payroll_frequency:
+            freq_days = {
+                PayrollFrequency.WEEKLY: 7,
+                PayrollFrequency.BIWEEKLY: 14,
+                PayrollFrequency.SEMIMONTHLY: 15,
+                PayrollFrequency.MONTHLY: 30,
+            }
+            days = freq_days.get(payroll_frequency, 14)
+            return datetime.combine(
+                reference_date + timedelta(days=days),
+                datetime.min.time()
+            )
+
+        elif doc_type == DocType.BANK_STATEMENT:
+            # Statements typically available after month end
+            next_month = reference_date.replace(day=1) + timedelta(days=32)
+            statement_date = next_month.replace(day=5)  # Usually available by 5th
+            return datetime.combine(statement_date, datetime.min.time())
+
+        elif doc_type in [DocType.PROFIT_LOSS, DocType.BALANCE_SHEET]:
+            # Monthly financial statements
+            next_month = reference_date.replace(day=1) + timedelta(days=32)
+            return datetime.combine(next_month.replace(day=10), datetime.min.time())
+
+        return None
+
+    def _send_renewal_reminder(
+        self,
+        request: DocumentRequest,
+        today: date,
+    ) -> None:
+        """Send a reminder for pending document renewal."""
+        # Log the reminder event
+        event = DocPolicyEvent(
+            loan_id=request.loan_id,
+            request_id=request.id,
+            event_type=DocPolicyEventType.EXPIRATION_REMINDER_SENT,
+            payload={
+                "doc_type": request.doc_type.value,
+                "reminder_date": today.isoformat(),
+            },
+        )
+        self.db.add(event)
+        self.db.commit()
+
+        logger.info(
+            f"Sent renewal reminder for request {request.id}, "
+            f"loan {request.loan_id}, doc_type={request.doc_type.value}"
+        )
+
+        # TODO: Integration with notification service
+        # notification_service.send_document_renewal_reminder(
+        #     loan_id=request.loan_id,
+        #     borrower_id=request.borrower_id,
+        #     doc_type=request.doc_type,
+        #     request_id=request.id,
+        # )
+
+    def infer_payroll_frequency(
+        self,
+        borrower_id: int,
+        recent_paystubs: int = 5,
+    ) -> Optional[PayrollFrequency]:
+        """
+        Infer payroll frequency from historical paystub submissions.
+
+        Analyzes the dates of recent paystubs to determine frequency.
+
+        Args:
+            borrower_id: Borrower ID to analyze
+            recent_paystubs: Number of recent paystubs to consider
+
+        Returns:
+            Inferred PayrollFrequency or None
+        """
+        # Get recent paystubs with dates
+        paystubs = self.db.query(SmartDocument).filter(
+            and_(
+                SmartDocument.borrower_id == borrower_id,
+                SmartDocument.doc_type == DocType.PAYSTUB,
+                SmartDocument.doc_date.isnot(None),
+            )
+        ).order_by(
+            SmartDocument.doc_date.desc()
+        ).limit(recent_paystubs).all()
+
+        if len(paystubs) < 2:
+            return None
+
+        # Calculate intervals between pay dates
+        dates = [p.doc_date for p in paystubs if p.doc_date]
+        if isinstance(dates[0], datetime):
+            dates = [d.date() for d in dates]
+
+        dates = sorted(dates, reverse=True)
+        intervals = []
+
+        for i in range(len(dates) - 1):
+            interval = (dates[i] - dates[i + 1]).days
+            intervals.append(interval)
+
+        if not intervals:
+            return None
+
+        avg_interval = sum(intervals) / len(intervals)
+
+        # Classify based on average interval
+        if 5 <= avg_interval <= 9:
+            return PayrollFrequency.WEEKLY
+        elif 12 <= avg_interval <= 16:
+            return PayrollFrequency.BIWEEKLY
+        elif 14 <= avg_interval <= 17:
+            # Could be biweekly or semimonthly, check for consistency
+            if all(12 <= i <= 16 for i in intervals):
+                return PayrollFrequency.BIWEEKLY
+            return PayrollFrequency.SEMIMONTHLY
+        elif 28 <= avg_interval <= 33:
+            return PayrollFrequency.MONTHLY
+
+        # Can't determine confidently
+        return None
+
+    def update_payroll_frequency(
+        self,
+        loan_id: int,
+        borrower_id: int,
+        frequency: PayrollFrequency,
+    ) -> int:
+        """
+        Update payroll frequency for all paystub requests.
+
+        Args:
+            loan_id: Loan ID
+            borrower_id: Borrower ID
+            frequency: Payroll frequency to set
+
+        Returns:
+            Number of requests updated
+        """
+        updated = self.db.query(DocumentRequest).filter(
+            and_(
+                DocumentRequest.loan_id == loan_id,
+                DocumentRequest.borrower_id == borrower_id,
+                DocumentRequest.doc_type == DocType.PAYSTUB,
+            )
+        ).update({
+            DocumentRequest.payroll_frequency: frequency,
+            DocumentRequest.updated_at: datetime.utcnow(),
+        })
+
+        self.db.commit()
+        logger.info(f"Updated payroll frequency to {frequency.value} for {updated} requests")
+
+        return updated
+
+    def get_upcoming_expirations(
+        self,
+        loan_id: Optional[int] = None,
+        days_ahead: int = 14,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get documents expiring within the specified window.
+
+        Args:
+            loan_id: Optional loan ID filter
+            days_ahead: Number of days to look ahead
+
+        Returns:
+            List of expiring documents with details
+        """
+        today = date.today()
+        cutoff = today + timedelta(days=days_ahead)
+
+        query = self.db.query(SmartDocument).filter(
+            and_(
+                SmartDocument.is_expired == False,
+                SmartDocument.doc_expires_at.isnot(None),
+                SmartDocument.doc_expires_at <= cutoff,
+                SmartDocument.doc_expires_at >= today,
+            )
+        )
+
+        if loan_id:
+            query = query.filter(SmartDocument.loan_id == loan_id)
+
+        expiring = query.order_by(SmartDocument.doc_expires_at).all()
+
+        return [
+            {
+                "document_id": doc.id,
+                "loan_id": doc.loan_id,
+                "borrower_id": doc.borrower_id,
+                "doc_type": doc.doc_type.value if doc.doc_type else None,
+                "file_name": doc.file_name,
+                "doc_date": doc.doc_date.isoformat() if doc.doc_date else None,
+                "expires_at": doc.doc_expires_at.isoformat() if doc.doc_expires_at else None,
+                "days_until_expiry": (doc.doc_expires_at.date() - today).days if doc.doc_expires_at else None,
+            }
+            for doc in expiring
+        ]
+
+    def mark_document_expired(self, document_id: int) -> bool:
+        """
+        Mark a document as expired.
+
+        Args:
+            document_id: Document ID to mark
+
+        Returns:
+            True if updated, False if not found
+        """
+        doc = self.db.query(SmartDocument).filter(
+            SmartDocument.id == document_id
+        ).first()
+
+        if not doc:
+            return False
+
+        doc.is_expired = True
+        doc.updated_at = datetime.utcnow()
+
+        # Log the event
+        event = DocPolicyEvent(
+            loan_id=doc.loan_id,
+            document_id=doc.id,
+            event_type=DocPolicyEventType.EXPIRED,
+            payload={
+                "doc_type": doc.doc_type.value if doc.doc_type else None,
+                "expired_at": datetime.utcnow().isoformat(),
+            },
+        )
+        self.db.add(event)
+        self.db.commit()
+
+        logger.info(f"Marked document {document_id} as expired")
+
+        return True
+
+    def run_expiration_check(self) -> Dict[str, Any]:
+        """
+        Check for and mark expired documents.
+
+        Called periodically to update expiration status.
+
+        Returns:
+            Summary of expiration updates
+        """
+        today = date.today()
+
+        # Find documents that have passed their expiration date
+        expired_docs = self.db.query(SmartDocument).filter(
+            and_(
+                SmartDocument.is_expired == False,
+                SmartDocument.doc_expires_at.isnot(None),
+                SmartDocument.doc_expires_at < today,
+            )
+        ).all()
+
+        expired_count = 0
+        for doc in expired_docs:
+            self.mark_document_expired(doc.id)
+            expired_count += 1
+
+        logger.info(f"Expiration check: marked {expired_count} documents as expired")
+
+        return {
+            "check_date": today.isoformat(),
+            "documents_expired": expired_count,
+        }

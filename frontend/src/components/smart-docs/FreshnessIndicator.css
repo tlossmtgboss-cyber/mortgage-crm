@@ -1,0 +1,205 @@
+/**
+ * FreshnessIndicator Styles
+ */
+
+/* Compact Version */
+.freshness-indicator.compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.freshness-indicator.compact .indicator-icon {
+  font-size: 0.875rem;
+}
+
+.freshness-indicator.compact .days-badge {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+}
+
+/* Full Version */
+.freshness-indicator {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.indicator-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.indicator-icon {
+  font-size: 1.125rem;
+}
+
+.indicator-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.indicator-details {
+  padding: 14px;
+  background: #fff;
+}
+
+/* Countdown */
+.expiration-countdown {
+  text-align: center;
+  padding: 12px;
+  background: #f0fdf4;
+  border-radius: 8px;
+}
+
+.expiration-countdown.warning {
+  background: #fefce8;
+}
+
+.countdown-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #059669;
+}
+
+.expiration-countdown.warning .countdown-value {
+  color: #d97706;
+}
+
+.countdown-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.countdown-action {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #d97706;
+  font-weight: 500;
+}
+
+/* Progress Bar */
+.expiration-countdown .progress-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.expiration-countdown .progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.expiration-countdown .progress-fill.fresh {
+  background: linear-gradient(to right, #22c55e, #16a34a);
+}
+
+/* Expired Notice */
+.expired-notice {
+  padding: 12px;
+  background: #fef2f2;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.expired-notice p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #991b1b;
+}
+
+.expired-notice .action-required {
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+/* Expiration Date */
+.expiration-date {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  margin-top: 12px;
+  font-size: 0.875rem;
+}
+
+.expiration-date .date-label {
+  color: #6b7280;
+}
+
+.expiration-date .date-value {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+/* Badge Version */
+.freshness-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-icon {
+  font-size: 0.75rem;
+}
+
+.badge-days {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+
+/* Timeline Version */
+.freshness-timeline {
+  padding: 8px 0;
+}
+
+.timeline-bar {
+  position: relative;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.timeline-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.timeline-marker {
+  position: absolute;
+  top: -3px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 3px solid #2563eb;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: #6b7280;
+}

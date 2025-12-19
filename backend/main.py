@@ -20479,6 +20479,18 @@ except Exception as e:
     portal_document_error = traceback.format_exc()
     logger.warning(f"⚠️ Portal Document routes not loaded: {e}")
 
+# Smart Document Collection Routes (needs list, screenshot detection, freshness validation)
+smart_docs_error = None
+try:
+    from routes.smart_docs_routes import router as smart_docs_router
+    app.include_router(smart_docs_router, tags=["Smart Documents"])
+    logger.info("✅ Smart Documents routes loaded")
+except Exception as e:
+    smart_docs_error = str(e)
+    import traceback
+    smart_docs_error = traceback.format_exc()
+    logger.warning(f"⚠️ Smart Documents routes not loaded: {e}")
+
 # Portal Authentication Routes (magic links, sessions)
 portal_auth_error = None
 try:

@@ -1,0 +1,310 @@
+"""
+Smart Document Collection Models
+
+SQLAlchemy models for the intelligent document collection system:
+- DocumentRequest: Tracks document requirements and needs list
+- SmartDocument: Enhanced document with detection and freshness
+- DocPolicyEvent: Event tracking for auto-renewal and compliance
+- NeedsListTemplate: Configurable templates for document requirements
+"""
+
+import enum
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional, List
+
+from sqlalchemy import (
+    Column, Integer, String, Float, Boolean, DateTime, Date,
+    Text, JSON, Enum as SQLEnum, Numeric, Index
+)
+# Note: relationship import removed - using ID-based queries instead of ORM relationships
+
+from database import Base
+
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+class DocType(str, enum.Enum):
+    """Document types for needs list"""
+    DRIVERS_LICENSE = "DRIVERS_LICENSE"
+    PAYSTUB = "PAYSTUB"
+    W2 = "W2"
+    TAX_RETURN = "TAX_RETURN"
+    BUSINESS_TAX_RETURN = "BUSINESS_TAX_RETURN"
+    PROFIT_LOSS = "PROFIT_LOSS"
+    BALANCE_SHEET = "BALANCE_SHEET"
+    BANK_STATEMENT = "BANK_STATEMENT"
+    INVESTMENT_STATEMENT = "INVESTMENT_STATEMENT"
+    GIFT_LETTER = "GIFT_LETTER"
+    LOE = "LOE"  # Letter of Explanation
+    LEASE_AGREEMENT = "LEASE_AGREEMENT"
+    FHA_CERT = "FHA_CERT"
+    VA_COE = "VA_COE"
+    DD214 = "DD214"
+    BANKRUPTCY_DISCHARGE = "BANKRUPTCY_DISCHARGE"
+    PURCHASE_CONTRACT = "PURCHASE_CONTRACT"
+    APPRAISAL = "APPRAISAL"
+    TITLE_REPORT = "TITLE_REPORT"
+    HOMEOWNERS_INSURANCE = "HOMEOWNERS_INSURANCE"
+    OTHER = "OTHER"
+
+
+class RequestStatus(str, enum.Enum):
+    """Status of a document request"""
+    OPEN = "OPEN"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    WAIVED = "WAIVED"
+
+
+class RequestPriority(str, enum.Enum):
+    """Priority level for document requests"""
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    NORMAL = "NORMAL"
+    LOW = "LOW"
+
+
+class AppliesTo(str, enum.Enum):
+    """Who the document request applies to"""
+    BORROWER = "BORROWER"
+    CO_BORROWER = "CO_BORROWER"
+    BOTH = "BOTH"
+
+
+class PayrollFrequency(str, enum.Enum):
+    """Payroll frequency for auto-renewal calculation"""
+    WEEKLY = "WEEKLY"
+    BIWEEKLY = "BIWEEKLY"
+    SEMIMONTHLY = "SEMIMONTHLY"
+    MONTHLY = "MONTHLY"
+
+
+class DocumentDecision(str, enum.Enum):
+    """Automated review decision"""
+    ACCEPT = "ACCEPT"
+    REJECT = "REJECT"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+
+
+class RejectionCategory(str, enum.Enum):
+    """Category of document rejection"""
+    SCREENSHOT = "SCREENSHOT"
+    EXPIRED = "EXPIRED"
+    POOR_QUALITY = "POOR_QUALITY"
+    INCOMPLETE = "INCOMPLETE"
+    WRONG_TYPE = "WRONG_TYPE"
+    OTHER = "OTHER"
+
+
+class DocPolicyEventType(str, enum.Enum):
+    """Types of policy events"""
+    NEEDS_LIST_GENERATED = "NEEDS_LIST_GENERATED"
+    DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
+    AUTO_REQUEST_CREATED = "AUTO_REQUEST_CREATED"
+    EXPIRED = "EXPIRED"
+    EXPIRATION_REMINDER_SENT = "EXPIRATION_REMINDER_SENT"
+    SCREENSHOT_REJECTED = "SCREENSHOT_REJECTED"
+    FRESHNESS_REJECTED = "FRESHNESS_REJECTED"
+
+
+# =============================================================================
+# MODELS
+# =============================================================================
+
+class DocumentRequest(Base):
+    """
+    Document request in needs list.
+    Generated from application data and tracked through fulfillment.
+    """
+    __tablename__ = "smart_document_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Relationships (foreign keys omitted to allow isolated table creation)
+    loan_id = Column(Integer, nullable=False)  # References loans.id - indexed in __table_args__
+    borrower_id = Column(Integer, nullable=True)  # References borrower_profiles.id
+
+    # Request details
+    doc_type = Column(SQLEnum(DocType), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    instructions = Column(Text, nullable=True)
+
+    # Requirements
+    required_count = Column(Integer, default=1)
+    applies_to = Column(SQLEnum(AppliesTo), default=AppliesTo.BORROWER)
+    priority = Column(SQLEnum(RequestPriority), default=RequestPriority.NORMAL)
+
+    # Freshness policy
+    freshness_days = Column(Integer, nullable=True)  # 30 for paystubs, 90 for bank statements
+    auto_renew = Column(Boolean, default=False)
+    next_expected_available_at = Column(DateTime, nullable=True)
+    payroll_frequency = Column(SQLEnum(PayrollFrequency), nullable=True)
+
+    # Status
+    status = Column(SQLEnum(RequestStatus), default=RequestStatus.OPEN)
+    due_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Note: Documents relationship accessed via SmartDocument.request_id queries
+
+    # Indexes
+    __table_args__ = (
+        Index("ix_smart_doc_requests_loan_id", "loan_id"),
+        Index("ix_smart_doc_requests_status", "status"),
+        Index("ix_smart_doc_requests_auto_renew", "auto_renew"),
+        Index("ix_smart_doc_requests_next_expected", "next_expected_available_at"),
+    )
+
+
+class SmartDocument(Base):
+    """
+    Enhanced document with detection results and freshness tracking.
+    Extends basic document with screenshot detection, date extraction, and expiration.
+    """
+    __tablename__ = "smart_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Relationships (foreign keys omitted to allow isolated table creation)
+    request_id = Column(Integer, nullable=True)  # References smart_document_requests.id - indexed in __table_args__
+    loan_id = Column(Integer, nullable=True)  # References loans.id - indexed in __table_args__
+    borrower_id = Column(Integer, nullable=False)  # References borrower_profiles.id - indexed in __table_args__
+
+    # File info
+    file_name = Column(String(512), nullable=False)
+    mime_type = Column(String(128), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    storage_key = Column(String(1024), nullable=False)  # S3 key
+    page_count = Column(Integer, nullable=True)
+
+    # Document type
+    doc_type = Column(SQLEnum(DocType), nullable=True)
+    detected_doc_type = Column(String(64), nullable=True)  # AI-detected type
+
+    # Screenshot detection
+    detected_is_screenshot = Column(Boolean, default=False)
+    screenshot_confidence = Column(Float, nullable=True)
+    screenshot_reasons = Column(JSON, nullable=True)  # Array of detection layer results
+
+    # Extracted data
+    extracted_dates = Column(JSON, nullable=True)  # { payDate, periodEnd, statementEnd }
+    extracted_names = Column(JSON, nullable=True)
+    extracted_employer = Column(String(255), nullable=True)
+    extracted_account_number = Column(String(64), nullable=True)
+    extracted_amount = Column(Numeric(15, 2), nullable=True)
+    extraction_confidence = Column(Float, nullable=True)
+    ocr_text = Column(Text, nullable=True)
+
+    # Freshness validation
+    doc_date = Column(DateTime, nullable=True)  # Primary date on document
+    doc_expires_at = Column(DateTime, nullable=True)
+    is_expired = Column(Boolean, default=False)
+    days_until_expiration = Column(Integer, nullable=True)
+
+    # Review decision
+    status = Column(String(32), default="UPLOADED")  # UPLOADED, SCANNING, PROCESSING, APPROVED, REJECTED, EXPIRED
+    decision = Column(SQLEnum(DocumentDecision), nullable=True)
+    decision_reasons = Column(JSON, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    rejection_category = Column(SQLEnum(RejectionCategory), nullable=True)
+    fix_instructions = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    reviewed_by = Column(String(64), nullable=True)  # 'SYSTEM' or user ID
+
+    # Upload metadata
+    upload_source = Column(String(32), nullable=True)  # WEB, MOBILE, EMAIL
+    user_agent = Column(String(512), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Note: Request relationship accessed via request_id column
+
+    # Indexes
+    __table_args__ = (
+        Index("ix_smart_documents_request_id", "request_id"),
+        Index("ix_smart_documents_loan_id", "loan_id"),
+        Index("ix_smart_documents_borrower_id", "borrower_id"),
+        Index("ix_smart_documents_status", "status"),
+        Index("ix_smart_documents_decision", "decision"),
+        Index("ix_smart_documents_is_expired", "is_expired"),
+        Index("ix_smart_documents_doc_expires_at", "doc_expires_at"),
+        Index("ix_smart_documents_is_screenshot", "detected_is_screenshot"),
+    )
+
+
+class DocPolicyEvent(Base):
+    """
+    Event tracking for document policy actions.
+    Used for audit trail and analytics.
+    """
+    __tablename__ = "doc_policy_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Relationships (foreign keys omitted to allow isolated table creation)
+    loan_id = Column(Integer, nullable=False)  # References loans.id
+    request_id = Column(Integer, nullable=True)  # References smart_document_requests.id
+    document_id = Column(Integer, nullable=True)  # References smart_documents.id
+
+    # Event details
+    event_type = Column(SQLEnum(DocPolicyEventType), nullable=False)
+    payload = Column(JSON, nullable=True)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Indexes
+    __table_args__ = (
+        Index("ix_doc_policy_events_loan_id", "loan_id"),
+        Index("ix_doc_policy_events_event_type", "event_type"),
+        Index("ix_doc_policy_events_created_at", "created_at"),
+    )
+
+
+class NeedsListTemplate(Base):
+    """
+    Configurable templates for document needs lists.
+    Allows customization of requirements by loan program, occupancy, income type.
+    """
+    __tablename__ = "needs_list_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Template identification
+    name = Column(String(255), nullable=False)
+    slug = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Conditions (when to use this template)
+    loan_programs = Column(JSON, nullable=True)  # ['CONVENTIONAL', 'FHA', 'VA', 'USDA']
+    occupancy_types = Column(JSON, nullable=True)  # ['PRIMARY', 'SECOND_HOME', 'INVESTMENT']
+    income_types = Column(JSON, nullable=True)  # ['W2', 'SELF_EMPLOYED', 'RETIREMENT']
+
+    # Template structure
+    request_templates = Column(JSON, nullable=False)  # Array of request template objects
+
+    # Status
+    is_active = Column(Boolean, default=True)
+    version = Column(String(16), default="1")
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Indexes
+    __table_args__ = (
+        Index("ix_needs_list_templates_slug", "slug"),
+        Index("ix_needs_list_templates_is_active", "is_active"),
+    )
