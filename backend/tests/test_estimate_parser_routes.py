@@ -113,7 +113,6 @@ class TestEstimateParserRoutes:
         assert data["winner"] == "A"
         assert data["savings_amount"] == 2500
 
-    @pytest.mark.skip(reason="Route returns 500 instead of 404 - needs error handling fix")
     def test_compare_endpoint_missing_estimate(self, client):
         """Test compare endpoint with missing estimate"""
         payload = {
@@ -195,7 +194,6 @@ class TestEstimateParserRoutes:
         assert data["doc_hash"] == "test_cache_hash"
         assert data["confidence_score"] == 0.95
 
-    @pytest.mark.skip(reason="Route returns 500 instead of 404 - needs error handling fix")
     def test_get_cached_estimate_not_found(self, client):
         """Test cache endpoint with non-existent hash"""
         response = client.get("/api/v1/estimate-parser/cache/nonexistent_hash")

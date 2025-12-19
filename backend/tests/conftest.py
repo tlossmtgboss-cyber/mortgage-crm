@@ -130,6 +130,20 @@ def db_engine():
             )
         """))
 
+        # Create estimate_parse_cache table for estimate parser tests
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS estimate_parse_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doc_hash TEXT UNIQUE NOT NULL,
+                parsed_json TEXT,
+                confidence_score REAL,
+                needs_review INTEGER DEFAULT 0,
+                source_type TEXT,
+                access_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
         conn.commit()
 
     yield test_engine
