@@ -243,30 +243,32 @@ async def create_recording(
         result = db.execute(text("""
             INSERT INTO ci_call_recordings (
                 id, loan_id, lead_id, agent_user_id, direction,
-                caller_number, callee_number, external_call_id,
-                telephony_provider, status, metadata
+                phone_from, phone_to, external_call_id,
+                status, metadata, started_at
             ) VALUES (
                 :id, :loan_id, :lead_id, :agent_user_id, :direction,
-                :caller_number, :callee_number, :external_call_id,
-                :telephony_provider, 'pending', :metadata
+                :phone_from, :phone_to, :external_call_id,
+                'pending', :metadata, CURRENT_TIMESTAMP
             )
-            RETURNING id, loan_id, lead_id, agent_user_id, direction, status,
-                      duration_seconds, audio_url, created_at
         """), {
             "id": recording_id,
             "loan_id": request.loan_id,
             "lead_id": request.lead_id,
             "agent_user_id": request.agent_id,
             "direction": request.direction,
-            "caller_number": request.caller_number,
-            "callee_number": request.callee_number,
+            "phone_from": request.caller_number,
+            "phone_to": request.callee_number,
             "external_call_id": request.external_call_id,
-            "telephony_provider": request.telephony_provider,
             "metadata": json.dumps(request.metadata) if request.metadata else None
         })
-
-        row = result.fetchone()
         db.commit()
+
+        # Fetch the created record
+        row = db.execute(text("""
+            SELECT id, loan_id, lead_id, agent_user_id, direction, status,
+                   duration_seconds, recording_url, created_at
+            FROM ci_call_recordings WHERE id = :id
+        """), {"id": recording_id}).fetchone()
 
         return RecordingResponse(
             id=str(row[0]),
@@ -295,7 +297,7 @@ async def get_recording(
     try:
         result = db.execute(text("""
             SELECT id, loan_id, lead_id, agent_user_id, direction, status,
-                   duration_seconds, audio_url, created_at
+                   duration_seconds, recording_url, created_at
             FROM ci_call_recordings
             WHERE id = :id
         """), {"id": recording_id})
@@ -303,6 +305,10 @@ async def get_recording(
         row = result.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Recording not found")
+
+        created_at = row[8]
+        if created_at and hasattr(created_at, 'isoformat'):
+            created_at = created_at.isoformat()
 
         return RecordingResponse(
             id=str(row[0]),
@@ -313,7 +319,7 @@ async def get_recording(
             status=row[5],
             duration_seconds=row[6],
             audio_url=row[7],
-            created_at=row[8]
+            created_at=created_at
         )
 
     except HTTPException:
@@ -1152,17 +1158,17 @@ async def create_realtime_session(
         db.execute(text("""
             INSERT INTO ci_call_recordings (
                 id, loan_id, lead_id, agent_user_id, direction,
-                caller_number, status
+                phone_from, status, started_at
             ) VALUES (
                 :id, :loan_id, :lead_id, :agent_user_id, 'outbound',
-                :caller_number, 'in_progress'
+                :phone_from, 'in_progress', CURRENT_TIMESTAMP
             )
         """), {
             "id": recording_id,
             "loan_id": request.loan_id,
             "lead_id": request.lead_id,
             "agent_user_id": request.agent_id,
-            "caller_number": request.caller_number
+            "phone_from": request.caller_number
         })
 
         # Create session
