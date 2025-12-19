@@ -524,19 +524,25 @@ class TestFullResolve:
         assert result["match_method"] == "known_client_email"
         assert result["is_priority"] is True
 
-    @pytest.mark.skip(reason="Mock setup needs to match actual service implementation - multiple queries expected")
     def test_waterfall_to_lead(self, resolver, mock_db, sample_email_data):
         """Should fall through to lead match if no known client."""
-        # First call (known client) returns None
-        # Second call (lead) returns match
+        # The waterfall makes multiple queries:
+        # - _match_known_clients iterates through addresses (2) × variants (2) = 4 queries
+        # - Then _match_leads queries for each address until match found
+        # For sample_email_data: from_email + to_emails = 2 addresses
         mock_db.execute.return_value.fetchone.side_effect = [
-            None,  # known_client query
-            (123, "John Smith", "555-1234"),  # lead query
+            None,  # known_client: "johnsmith@gmail.com" variant 1
+            None,  # known_client: "johnsmith@gmail.com" variant 2
+            None,  # known_client: "loan.officer@company.com" variant 1
+            None,  # known_client: "loan.officer@company.com" variant 2
+            (123, "John Smith", "555-1234"),  # lead match for first address
         ]
 
         result = resolver.resolve(sample_email_data, user_id=1)
 
         assert result["match_method"] == "lead_email_match"
+        assert result["matched_lead_id"] == 123
+        assert result["match_client_name"] == "John Smith"
 
     def test_no_match_returns_empty(self, resolver, mock_db, sample_email_data):
         """Should return empty match when nothing found."""
