@@ -398,9 +398,16 @@ async def download_comparison_pdf(
         if not comp:
             raise HTTPException(status_code=404, detail='Comparison not found')
 
-        # Reconstruct LoanEstimate objects
-        estimate_a = LoanEstimate(**comp[6]) if comp[6] else None
-        estimate_b = LoanEstimate(**comp[7]) if comp[7] else None
+        # Reconstruct LoanEstimate objects - parse JSON if stored as string
+        import json as json_module
+        estimate_a_data = comp[6]
+        estimate_b_data = comp[7]
+        if isinstance(estimate_a_data, str):
+            estimate_a_data = json_module.loads(estimate_a_data)
+        if isinstance(estimate_b_data, str):
+            estimate_b_data = json_module.loads(estimate_b_data)
+        estimate_a = LoanEstimate(**estimate_a_data) if estimate_a_data else None
+        estimate_b = LoanEstimate(**estimate_b_data) if estimate_b_data else None
 
         from services.estimate_parser_service import ComparisonResult
         comparison = ComparisonResult(
