@@ -816,6 +816,208 @@
   border-top: 1px solid #e5e7eb;
 }
 
+/* AI Metrics Section */
+.ai-metrics-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.ai-metrics-section .section-header {
+  margin-bottom: 24px;
+}
+
+.days-select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.metrics-section {
+  margin-bottom: 32px;
+}
+
+.metrics-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.metric-card:hover {
+  border-color: #0d9488;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.08);
+}
+
+.metric-card.faithfulness {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #bbf7d0;
+}
+
+.metric-card.hallucination {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fecaca;
+}
+
+.metric-card.responses {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #bfdbfe;
+}
+
+.metric-card.claims {
+  background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+  border-color: #fde68a;
+}
+
+.metric-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+
+.metric-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #0d9488;
+}
+
+.metric-card.hallucination .metric-icon svg {
+  color: #ef4444;
+}
+
+.metric-card.responses .metric-icon svg {
+  color: #3b82f6;
+}
+
+.metric-card.claims .metric-icon svg {
+  color: #f59e0b;
+}
+
+.metric-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.metric-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.metric-sublabel {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Breakdown Card */
+.breakdown-card {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.breakdown-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 16px;
+}
+
+.breakdown-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.breakdown-label {
+  width: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  text-transform: capitalize;
+}
+
+.breakdown-bar-container {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.breakdown-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.breakdown-value {
+  width: 50px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  text-align: right;
+}
+
+/* Loading Metrics */
+.loading-metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 16px;
+}
+
+.loading-metrics p {
+  font-size: 14px;
+  color: #6b7280;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .admin-panel {

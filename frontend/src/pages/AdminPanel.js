@@ -26,6 +26,8 @@ const AdminPanel = () => {
   const [realtors, setRealtors] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [aiMetrics, setAiMetrics] = useState(null);
+  const [aiMetricsDays, setAiMetricsDays] = useState(7);
 
   // Modal state
   const [showUserModal, setShowUserModal] = useState(false);
@@ -84,6 +86,24 @@ const AdminPanel = () => {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  // Load AI Metrics
+  const loadAiMetrics = useCallback(async () => {
+    try {
+      const response = await api.get(`/api/v1/ai-metrics/dashboard?days=${aiMetricsDays}`);
+      setAiMetrics(response.data);
+    } catch (err) {
+      console.error('Error loading AI metrics:', err);
+      setAiMetrics(null);
+    }
+  }, [aiMetricsDays]);
+
+  // Load AI metrics when tab is active or days change
+  useEffect(() => {
+    if (activeTab === 'ai_metrics') {
+      loadAiMetrics();
+    }
+  }, [activeTab, aiMetricsDays, loadAiMetrics]);
 
   // Filter users
   const filteredUsers = users.filter(user => {
@@ -249,6 +269,12 @@ const AdminPanel = () => {
           onClick={() => setActiveTab('realtors')}
         >
           Realtors
+        </button>
+        <button
+          className={`tab ${activeTab === 'ai_metrics' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai_metrics')}
+        >
+          AI Metrics
         </button>
         <button
           className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
@@ -653,6 +679,270 @@ const AdminPanel = () => {
                 >
                   Add First Realtor
                 </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'ai_metrics' && (
+          <section className="ai-metrics-section">
+            <div className="section-header">
+              <h2>AI Agent Metrics</h2>
+              <div className="section-actions">
+                <select
+                  value={aiMetricsDays}
+                  onChange={(e) => setAiMetricsDays(parseInt(e.target.value))}
+                  className="days-select"
+                >
+                  <option value="7">Last 7 days</option>
+                  <option value="14">Last 14 days</option>
+                  <option value="30">Last 30 days</option>
+                  <option value="90">Last 90 days</option>
+                </select>
+                <button className="btn-secondary" onClick={loadAiMetrics}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {aiMetrics ? (
+              <>
+                {/* Hallucination Metrics */}
+                <div className="metrics-section">
+                  <h3>Hallucination Tracking</h3>
+                  <div className="metrics-grid">
+                    <div className="metric-card faithfulness">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                          <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.hallucination_metrics?.avg_faithfulness_score || 1) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Faithfulness Score</span>
+                        <span className="metric-sublabel">Claims verified by source data</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card hallucination">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="12" y1="8" x2="12" y2="12"/>
+                          <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.hallucination_metrics?.avg_hallucination_rate || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Hallucination Rate</span>
+                        <span className="metric-sublabel">Claims contradicting source</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card responses">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {aiMetrics.hallucination_metrics?.total_responses_analyzed || 0}
+                        </span>
+                        <span className="metric-label">Responses Analyzed</span>
+                        <span className="metric-sublabel">
+                          {aiMetrics.hallucination_metrics?.clean_responses || 0} clean,{' '}
+                          {aiMetrics.hallucination_metrics?.responses_with_hallucinations || 0} with issues
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card claims">
+                      <div className="metric-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <line x1="16" y1="13" x2="8" y2="13"/>
+                          <line x1="16" y1="17" x2="8" y2="17"/>
+                          <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                      </div>
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {aiMetrics.hallucination_metrics?.total_claims_extracted || 0}
+                        </span>
+                        <span className="metric-label">Claims Extracted</span>
+                        <span className="metric-sublabel">
+                          {aiMetrics.hallucination_metrics?.verified_claims_count || 0} verified,{' '}
+                          {aiMetrics.hallucination_metrics?.contradicted_claims_count || 0} contradicted
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Hallucination by Type */}
+                  {Object.keys(aiMetrics.hallucination_metrics?.hallucination_by_type || {}).length > 0 && (
+                    <div className="breakdown-card">
+                      <h4>Hallucination Rate by Claim Type</h4>
+                      <div className="breakdown-bars">
+                        {Object.entries(aiMetrics.hallucination_metrics.hallucination_by_type).map(([type, rate]) => (
+                          <div key={type} className="breakdown-row">
+                            <span className="breakdown-label">{type}</span>
+                            <div className="breakdown-bar-container">
+                              <div
+                                className="breakdown-bar"
+                                style={{
+                                  width: `${Math.min(rate * 100, 100)}%`,
+                                  backgroundColor: rate > 0.1 ? '#ef4444' : rate > 0.05 ? '#f59e0b' : '#22c55e'
+                                }}
+                              />
+                            </div>
+                            <span className="breakdown-value">{(rate * 100).toFixed(1)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Agent Performance */}
+                <div className="metrics-section">
+                  <h3>Agent Performance</h3>
+                  <div className="metrics-grid">
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {(aiMetrics.agent_performance?.avg_response_time_ms / 1000).toFixed(2)}s
+                        </span>
+                        <span className="metric-label">Avg Response Time</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.agent_performance?.tool_success_rate || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Tool Success Rate</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.agent_performance?.satisfaction_rate || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">User Satisfaction</span>
+                        <span className="metric-sublabel">
+                          {aiMetrics.agent_performance?.thumbs_up_count || 0} 👍 / {aiMetrics.agent_performance?.thumbs_down_count || 0} 👎
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.agent_performance?.error_rate || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Error Rate</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Business Metrics */}
+                <div className="metrics-section">
+                  <h3>Business Metrics</h3>
+                  <div className="metrics-grid">
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {aiMetrics.business_metrics?.total_queries || 0}
+                        </span>
+                        <span className="metric-label">Total Queries</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {aiMetrics.business_metrics?.unique_users || 0}
+                        </span>
+                        <span className="metric-label">Unique Users</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {(aiMetrics.business_metrics?.queries_per_user || 0).toFixed(1)}
+                        </span>
+                        <span className="metric-label">Queries per User</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {aiMetrics.business_metrics?.actions_executed || 0}
+                        </span>
+                        <span className="metric-label">Actions Executed</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Quality */}
+                <div className="metrics-section">
+                  <h3>AI Quality</h3>
+                  <div className="metrics-grid">
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.ai_quality?.intent_accuracy || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Intent Accuracy</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.ai_quality?.tool_selection_accuracy || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Tool Selection Accuracy</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {((aiMetrics.ai_quality?.followup_click_rate || 0) * 100).toFixed(1)}%
+                        </span>
+                        <span className="metric-label">Follow-up Click Rate</span>
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-content">
+                        <span className="metric-value">
+                          {aiMetrics.ai_quality?.user_corrections_count || 0}
+                        </span>
+                        <span className="metric-label">User Corrections</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="loading-metrics">
+                <div className="loading-spinner"></div>
+                <p>Loading AI metrics...</p>
               </div>
             )}
           </section>
