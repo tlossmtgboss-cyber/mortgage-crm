@@ -242,21 +242,21 @@ async def create_recording(
 
         result = db.execute(text("""
             INSERT INTO ci_call_recordings (
-                id, loan_id, lead_id, agent_id, direction,
+                id, loan_id, lead_id, agent_user_id, direction,
                 caller_number, callee_number, external_call_id,
                 telephony_provider, status, metadata
             ) VALUES (
-                :id, :loan_id, :lead_id, :agent_id, :direction,
+                :id, :loan_id, :lead_id, :agent_user_id, :direction,
                 :caller_number, :callee_number, :external_call_id,
                 :telephony_provider, 'pending', :metadata
             )
-            RETURNING id, loan_id, lead_id, agent_id, direction, status,
+            RETURNING id, loan_id, lead_id, agent_user_id, direction, status,
                       duration_seconds, audio_url, created_at
         """), {
             "id": recording_id,
             "loan_id": request.loan_id,
             "lead_id": request.lead_id,
-            "agent_id": request.agent_id,
+            "agent_user_id": request.agent_id,
             "direction": request.direction,
             "caller_number": request.caller_number,
             "callee_number": request.callee_number,
@@ -294,7 +294,7 @@ async def get_recording(
     """Get a specific call recording."""
     try:
         result = db.execute(text("""
-            SELECT id, loan_id, lead_id, agent_id, direction, status,
+            SELECT id, loan_id, lead_id, agent_user_id, direction, status,
                    duration_seconds, audio_url, created_at
             FROM ci_call_recordings
             WHERE id = :id
@@ -341,8 +341,8 @@ async def list_recordings(
         params = {"limit": limit, "offset": offset}
 
         if agent_id:
-            filters.append("agent_id = :agent_id")
-            params["agent_id"] = agent_id
+            filters.append("agent_user_id = :agent_id")
+            params["agent_user_id"] = agent_id
         if loan_id:
             filters.append("loan_id = :loan_id")
             params["loan_id"] = loan_id
@@ -359,8 +359,8 @@ async def list_recordings(
         where_clause = " AND ".join(filters)
 
         result = db.execute(text(f"""
-            SELECT id, loan_id, lead_id, agent_id, direction, status,
-                   duration_seconds, audio_url, created_at
+            SELECT id, loan_id, lead_id, agent_user_id, direction, status,
+                   duration_seconds, recording_url, created_at
             FROM ci_call_recordings
             WHERE {where_clause}
             ORDER BY created_at DESC
@@ -369,6 +369,9 @@ async def list_recordings(
 
         recordings = []
         for row in result.fetchall():
+            created_at = row[8]
+            if created_at and hasattr(created_at, 'isoformat'):
+                created_at = created_at.isoformat()
             recordings.append({
                 "id": str(row[0]),
                 "loan_id": row[1],
@@ -378,7 +381,7 @@ async def list_recordings(
                 "status": row[5],
                 "duration_seconds": row[6],
                 "audio_url": row[7],
-                "created_at": row[8].isoformat() if row[8] else None
+                "created_at": created_at
             })
 
         # Get total count
@@ -1098,23 +1101,27 @@ async def list_qa_rubrics(
     """List available QA rubrics."""
     try:
         result = db.execute(text("""
-            SELECT id, name, description, category, max_total_score,
-                   is_default, created_at
+            SELECT id, name, description, category, max_points,
+                   weight, required, created_at
             FROM ci_qa_rubrics
-            WHERE is_active = true
-            ORDER BY is_default DESC, name
+            WHERE is_active = 1
+            ORDER BY category, name
         """))
 
         rubrics = []
         for row in result.fetchall():
+            created_at = row[7]
+            if created_at and hasattr(created_at, 'isoformat'):
+                created_at = created_at.isoformat()
             rubrics.append({
                 "id": str(row[0]),
                 "name": row[1],
                 "description": row[2],
                 "category": row[3],
-                "max_total_score": float(row[4]) if row[4] else 100,
-                "is_default": row[5],
-                "created_at": row[6].isoformat() if row[6] else None
+                "maxTotalScore": int(row[4]) if row[4] else 10,
+                "weight": float(row[5]) if row[5] else 1.0,
+                "isDefault": bool(row[6]),  # using 'required' as proxy for default
+                "created_at": created_at
             })
 
         return {"rubrics": rubrics}
@@ -1144,31 +1151,31 @@ async def create_realtime_session(
         # Create recording first
         db.execute(text("""
             INSERT INTO ci_call_recordings (
-                id, loan_id, lead_id, agent_id, direction,
+                id, loan_id, lead_id, agent_user_id, direction,
                 caller_number, status
             ) VALUES (
-                :id, :loan_id, :lead_id, :agent_id, 'outbound',
+                :id, :loan_id, :lead_id, :agent_user_id, 'outbound',
                 :caller_number, 'in_progress'
             )
         """), {
             "id": recording_id,
             "loan_id": request.loan_id,
             "lead_id": request.lead_id,
-            "agent_id": request.agent_id,
+            "agent_user_id": request.agent_id,
             "caller_number": request.caller_number
         })
 
         # Create session
         db.execute(text("""
             INSERT INTO ci_realtime_sessions (
-                id, recording_id, agent_id, status, settings
+                id, recording_id, agent_user_id, status, settings
             ) VALUES (
-                :id, :recording_id, :agent_id, 'active', :settings
+                :id, :recording_id, :agent_user_id, 'active', :settings
             )
         """), {
             "id": session_id,
             "recording_id": recording_id,
-            "agent_id": request.agent_id,
+            "agent_user_id": request.agent_id,
             "settings": json.dumps(request.context) if request.context else None
         })
 
@@ -1414,8 +1421,8 @@ async def list_coaching_clips(
             filters.append("c.category = :category")
             params["category"] = category
         if agent_id:
-            filters.append("r.agent_id = :agent_id")
-            params["agent_id"] = agent_id
+            filters.append("r.agent_user_id = :agent_id")
+            params["agent_user_id"] = agent_id
 
         where_clause = " AND ".join(filters)
 
@@ -1622,7 +1629,7 @@ async def get_team_dashboard(
                 AVG(r.duration_seconds) as avg_duration,
                 COUNT(CASE WHEN r.status = 'scored' THEN 1 END) as scored_calls
             FROM ci_call_recordings r
-            JOIN users u ON u.id = r.agent_id
+            JOIN users u ON u.id = r.agent_user_id
             WHERE r.created_at BETWEEN :start_date AND :end_date
             {team_filter}
         """), params)
@@ -1639,7 +1646,7 @@ async def get_team_dashboard(
                 COUNT(CASE WHEN s.grade IN ('D', 'F') THEN 1 END) as grade_low
             FROM ci_qa_scorecards s
             JOIN ci_call_recordings r ON r.id = s.recording_id
-            JOIN users u ON u.id = r.agent_id
+            JOIN users u ON u.id = r.agent_user_id
             WHERE s.created_at BETWEEN :start_date AND :end_date
             {team_filter}
         """), params)
@@ -1653,7 +1660,7 @@ async def get_team_dashboard(
                 COUNT(r.id) as call_count,
                 AVG(s.percentage_score) as avg_score
             FROM users u
-            JOIN ci_call_recordings r ON r.agent_id = u.id
+            JOIN ci_call_recordings r ON r.agent_user_id = u.id
             LEFT JOIN ci_qa_scorecards s ON s.recording_id = r.id
             WHERE r.created_at BETWEEN :start_date AND :end_date
             {team_filter}
@@ -1728,7 +1735,7 @@ async def get_agent_dashboard(
                 SUM(r.duration_seconds) as total_duration,
                 COUNT(CASE WHEN r.status = 'scored' THEN 1 END) as scored_calls
             FROM ci_call_recordings r
-            WHERE r.agent_id = :agent_id
+            WHERE r.agent_user_id = :agent_id
             AND r.created_at BETWEEN :start_date AND :end_date
         """), params)
 
@@ -1744,7 +1751,7 @@ async def get_agent_dashboard(
                 COUNT(*) as count
             FROM ci_qa_scorecards s
             JOIN ci_call_recordings r ON r.id = s.recording_id
-            WHERE r.agent_id = :agent_id
+            WHERE r.agent_user_id = :agent_id
             AND s.created_at BETWEEN :start_date AND :end_date
             GROUP BY s.grade
             ORDER BY count DESC
@@ -1763,19 +1770,22 @@ async def get_agent_dashboard(
                    r.created_at, s.grade, s.percentage_score
             FROM ci_call_recordings r
             LEFT JOIN ci_qa_scorecards s ON s.recording_id = r.id
-            WHERE r.agent_id = :agent_id
+            WHERE r.agent_user_id = :agent_id
             ORDER BY r.created_at DESC
             LIMIT 10
         """), {"agent_id": agent_id})
 
         recent_calls = []
         for row in recent_result.fetchall():
+            created_at = row[4]
+            if created_at and hasattr(created_at, 'isoformat'):
+                created_at = created_at.isoformat()
             recent_calls.append({
                 "id": str(row[0]),
                 "direction": row[1],
                 "duration_seconds": row[2],
                 "status": row[3],
-                "created_at": row[4].isoformat() if row[4] else None,
+                "created_at": created_at,
                 "qa_grade": row[5],
                 "qa_score": float(row[6]) if row[6] else None
             })
@@ -1783,7 +1793,7 @@ async def get_agent_dashboard(
         # Get pending assignments
         assignments_result = db.execute(text("""
             SELECT COUNT(*) FROM ci_coaching_assignments
-            WHERE assigned_to = :agent_id AND status = 'pending'
+            WHERE agent_user_id = :agent_id AND status = 'pending'
         """), {"agent_id": agent_id})
 
         pending_assignments = assignments_result.fetchone()[0]
@@ -1916,17 +1926,17 @@ async def export_recordings(
             filters.append("r.created_at <= :end_date")
             params["end_date"] = end_date
         if agent_id:
-            filters.append("r.agent_id = :agent_id")
-            params["agent_id"] = agent_id
+            filters.append("r.agent_user_id = :agent_id")
+            params["agent_user_id"] = agent_id
 
         where_clause = " AND ".join(filters)
 
         result = db.execute(text(f"""
-            SELECT r.id, r.agent_id, u.email as agent_email,
+            SELECT r.id, r.agent_user_id, u.email as agent_email,
                    r.direction, r.duration_seconds, r.status,
                    r.created_at, s.grade, s.percentage_score
             FROM ci_call_recordings r
-            LEFT JOIN users u ON u.id = r.agent_id
+            LEFT JOIN users u ON u.id = r.agent_user_id
             LEFT JOIN ci_qa_scorecards s ON s.recording_id = r.id
             WHERE {where_clause}
             ORDER BY r.created_at DESC
