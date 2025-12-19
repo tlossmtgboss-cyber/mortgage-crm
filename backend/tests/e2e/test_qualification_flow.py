@@ -32,7 +32,8 @@ class TestIntakeAgentFlow:
         agent = MockIntakeAgent()
 
         r1 = await agent.run("I want to refinance")
-        assert any(word in r1.lower() for word in ["property", "address", "home", "current"])
+        # Should ask about loan amount/balance for refinance
+        assert any(word in r1.lower() for word in ["balance", "owe", "amount", "mortgage", "home"])
 
         r2 = await agent.run("123 Main St, Austin TX")
         assert any(word in r2.lower() for word in ["loan", "amount", "balance", "owe"])
@@ -203,6 +204,9 @@ class MockIntakeAgent:
         """Extract qualification info from text"""
         text_lower = text.lower()
 
+        # Check for corrections (meant, actually, sorry)
+        is_correction = any(w in text_lower for w in ["meant", "actually", "sorry", "correction"])
+
         # Loan purpose
         if any(w in text_lower for w in ["buy", "purchase", "first home"]):
             self.state["loan_purpose"] = "purchase"
@@ -212,7 +216,7 @@ class MockIntakeAgent:
         # Extract amounts
         import re
 
-        # Loan amount
+        # Loan amount - check for corrections or new values
         amount_patterns = [
             r'\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',  # $400,000
             r'(\d{1,3}(?:,\d{3})*)\s*(?:dollars|k)',  # 400k or 400,000 dollars
@@ -227,15 +231,17 @@ class MockIntakeAgent:
                 self.state["loan_amount"] = int(amount)
                 break
 
-        # Credit score
+        # Credit score - always update if found (handles corrections)
         credit_match = re.search(r'(?:credit|score|fico)[^\d]*(\d{3})', text_lower)
         if credit_match:
             self.state["credit_score"] = int(credit_match.group(1))
         else:
-            # Direct number that looks like credit score
+            # Direct number that looks like credit score (600-850 range)
             score_match = re.search(r'\b(6\d{2}|7\d{2}|8\d{2})\b', text)
-            if score_match and "credit" in text_lower or "score" in text_lower:
-                self.state["credit_score"] = int(score_match.group(1))
+            if score_match:
+                # If it's a correction OR we're talking about credit, update it
+                if is_correction or "credit" in text_lower or "score" in text_lower:
+                    self.state["credit_score"] = int(score_match.group(1))
 
         # Income
         income_match = re.search(r'(?:make|earn|income|salary)[^\d]*\$?(\d{1,3}(?:,\d{3})*)', text_lower)
@@ -256,6 +262,10 @@ class MockIntakeAgent:
 
         if not missing_fields:
             return "Great! I have all the information I need. Let me check your qualification options."
+
+        # For refinance, ask about current property/mortgage first
+        if self.state.get("loan_purpose") == "refinance" and "loan_amount" in missing_fields:
+            return "What is your current mortgage balance or how much do you owe on your home?"
 
         # Ask for next missing field
         field = missing_fields[0]

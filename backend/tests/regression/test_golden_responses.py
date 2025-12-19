@@ -170,7 +170,7 @@ def get_mock_response(agent: str, input_text: str) -> str:
     responses = {
         "rate_analysis_agent": {
             "default": "Based on current market conditions, a 740 FICO conventional loan would qualify for rates around 6.5-6.875%. This is competitive for the current market.",
-            "fha": "For first-time buyers, FHA loans offer lower down payment requirements (3.5%) compared to conventional (typically 5-20%). However, conventional loans don't require mortgage insurance once you reach 20% equity.",
+            "comparison": "For first-time buyers, FHA loans offer lower down payment requirements (3.5%) compared to conventional (typically 5-20%). However, conventional loans don't require mortgage insurance once you reach 20% equity.",
         },
         "qualification_agent": {
             "default": "Based on your credit score and target price, you appear to be well-qualified for a conventional loan. Current rates for your profile would be around 6.5-6.75%.",
@@ -179,9 +179,19 @@ def get_mock_response(agent: str, input_text: str) -> str:
         "pipeline_analyst": {
             "default": "Your current pipeline shows 45 active loans totaling $18.5M in volume. 8 loans are approaching closing within the next 30 days.",
         },
+        "compliance_checker": {
+            "default": "Checking TRID compliance for the loan. I'll verify the Loan Estimate was delivered within 3 business days of application and the Closing Disclosure timing requirements.",
+        },
+        "document_tracker": {
+            "default": "Let me check the document status for this file. I'll identify any missing required documents and pending conditions.",
+        },
+        "lead_nurturer": {
+            "default": "Based on the lead's engagement history and preferences, I'll recommend the optimal contact time and channel for outreach.",
+        },
         "general_assistant": {
             "default": "I'd be happy to help you. Could you please provide more details about what you're looking for?",
             "help": "I can assist you with mortgage inquiries, loan status, rate information, document tracking, and scheduling. How can I help you today?",
+            "hello": "Hello! I'm here to help with your mortgage questions. How can I assist you today?",
         },
     }
 
@@ -189,12 +199,19 @@ def get_mock_response(agent: str, input_text: str) -> str:
 
     # Match input to response
     input_lower = input_text.lower()
-    if "fha" in input_lower or "conventional" in input_lower:
-        return agent_responses.get("fha", agent_responses.get("default", ""))
+
+    # Check for comparison queries (FHA vs conventional)
+    if "fha" in input_lower and "conventional" in input_lower:
+        return agent_responses.get("comparison", agent_responses.get("default", ""))
+    # Check for rate queries (default for rate agent)
+    if "rate" in input_lower or "fico" in input_lower:
+        return agent_responses.get("default", "")
     if "580" in input_lower or "low credit" in input_lower:
         return agent_responses.get("low_credit", agent_responses.get("default", ""))
     if "help" in input_lower:
         return agent_responses.get("help", agent_responses.get("default", ""))
+    if input_lower in ["hello", "hi", "hey"]:
+        return agent_responses.get("hello", agent_responses.get("default", ""))
 
     return agent_responses.get("default", "I'm here to help with your mortgage questions.")
 

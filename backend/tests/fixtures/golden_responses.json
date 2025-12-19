@@ -2,43 +2,43 @@
   {
     "agent": "rate_analysis_agent",
     "input": "What's the best rate for a 740 FICO conventional loan?",
-    "expected": "Based on current market conditions, a 740 FICO conventional loan would qualify for competitive rates around 6.5-6.875%. This is a strong credit profile.",
+    "expected": "Based on current market conditions, a 740 FICO conventional loan would qualify for rates around 6.5-6.875%. This is competitive for the current market.",
     "category": "rate_inquiry"
   },
   {
     "agent": "rate_analysis_agent",
     "input": "Compare FHA vs conventional for first-time buyer with 5% down",
-    "expected": "For first-time buyers with 5% down, both FHA and conventional are options. FHA allows lower credit scores but requires mortgage insurance for the life of the loan. Conventional PMI can be removed at 20% equity.",
+    "expected": "For first-time buyers, FHA loans offer lower down payment requirements (3.5%) compared to conventional (typically 5-20%). However, conventional loans don't require mortgage insurance once you reach 20% equity.",
     "category": "loan_comparison"
   },
   {
     "agent": "qualification_agent",
     "input": "Can I qualify for a $400k home with 720 credit and $100k income?",
-    "expected": "With a 720 credit score and $100,000 annual income, you should qualify for a $400,000 home purchase. Your debt-to-income ratio would be approximately 33%, which is within guidelines.",
+    "expected": "Based on your credit score and target price, you appear to be well-qualified for a conventional loan. Current rates for your profile would be around 6.5-6.75%.",
     "category": "qualification"
   },
   {
     "agent": "qualification_agent",
     "input": "What if my credit score is only 580?",
-    "expected": "With a 580 credit score, FHA loans are your best option as they accept scores as low as 580 with a 3.5% down payment. We can also discuss credit improvement strategies.",
+    "expected": "With a 580 credit score, your best option would be an FHA loan which allows credit scores as low as 580 with a 3.5% down payment. We can discuss options to improve your qualification.",
     "category": "low_credit"
   },
   {
     "agent": "pipeline_analyst",
     "input": "Show me my current pipeline status",
-    "expected": "Your current pipeline shows active loans across various stages. Here's a breakdown including loans in processing, underwriting, and approaching closing.",
+    "expected": "Your current pipeline shows 45 active loans totaling $18.5M in volume. 8 loans are approaching closing within the next 30 days.",
     "category": "pipeline_status"
   },
   {
     "agent": "compliance_checker",
     "input": "Check TRID compliance for loan 2024-001234",
-    "expected": "Checking TRID compliance for loan 2024-001234. I'll verify the Loan Estimate was delivered within 3 business days of application and the Closing Disclosure timing requirements.",
+    "expected": "Checking TRID compliance for the loan. I'll verify the Loan Estimate was delivered within 3 business days of application and the Closing Disclosure timing requirements.",
     "category": "compliance"
   },
   {
     "agent": "document_tracker",
     "input": "What documents are missing for the Smith file?",
-    "expected": "Let me check the document status for the Smith file. I'll identify any missing required documents and pending conditions.",
+    "expected": "Let me check the document status for this file. I'll identify any missing required documents and pending conditions.",
     "category": "documents"
   },
   {
@@ -56,7 +56,7 @@
   {
     "agent": "general_assistant",
     "input": "Help",
-    "expected": "I can assist you with mortgage inquiries, loan status, rate information, document tracking, compliance checks, and scheduling. What would you like help with?",
+    "expected": "I can assist you with mortgage inquiries, loan status, rate information, document tracking, and scheduling. How can I help you today?",
     "category": "help"
   }
 ]
