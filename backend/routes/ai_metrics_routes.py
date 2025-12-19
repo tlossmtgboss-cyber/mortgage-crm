@@ -76,6 +76,14 @@ class DashboardSummaryResponse(BaseModel):
     generated_at: str
 
 
+class VerifyResponseRequest(BaseModel):
+    """Request model for manual response verification"""
+    response_text: str
+    source_data: Dict[str, Any]
+    tools_used: List[str] = []
+    use_llm: bool = False
+
+
 # =============================================================================
 # Dependency Injection
 # =============================================================================
@@ -290,10 +298,7 @@ async def get_business_metrics(
 
 @router.post("/verify-response")
 async def manually_verify_response(
-    response_text: str,
-    source_data: Dict[str, Any],
-    tools_used: List[str] = [],
-    use_llm: bool = True,
+    request: VerifyResponseRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -303,6 +308,7 @@ async def manually_verify_response(
     """
     try:
         from agents.hallucination_verifier import get_hallucination_verifier
+        from agents.metrics.service import AIMetricsService
         import uuid
 
         verifier = get_hallucination_verifier()
@@ -310,10 +316,17 @@ async def manually_verify_response(
         report = await verifier.generate_report(
             session_id="manual",
             message_id=f"manual_{uuid.uuid4().hex[:8]}",
-            response_text=response_text,
-            source_data=source_data,
-            tools_used=tools_used,
-            use_llm=use_llm
+            response_text=request.response_text,
+            source_data=request.source_data,
+            tools_used=request.tools_used,
+            use_llm=request.use_llm
+        )
+
+        # Record to database for metrics tracking
+        await AIMetricsService.record_hallucination_report(
+            db=db,
+            user_id=1,  # Admin/test user
+            report=report
         )
 
         return {
