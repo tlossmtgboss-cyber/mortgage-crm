@@ -515,13 +515,18 @@ async def get_cached_estimate(
         if not result:
             raise HTTPException(status_code=404, detail='Estimate not found')
 
+        # Handle created_at which may be datetime (PostgreSQL) or string (SQLite)
+        created_at = result[4]
+        if created_at and hasattr(created_at, 'isoformat'):
+            created_at = created_at.isoformat()
+
         return {
             'doc_hash': doc_hash,
             'data': result[0],
             'confidence_score': float(result[1]) if result[1] else None,
             'needs_review': result[2],
             'source_type': result[3],
-            'created_at': result[4].isoformat() if result[4] else None,
+            'created_at': created_at,
         }
 
     except HTTPException:

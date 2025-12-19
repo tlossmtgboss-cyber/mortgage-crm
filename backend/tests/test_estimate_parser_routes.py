@@ -168,7 +168,6 @@ class TestEstimateParserRoutes:
         assert "failures" in data
         assert "comparisons" in data
 
-    @pytest.mark.skip(reason="Requires PostgreSQL - test db isolation issue")
     def test_get_cached_estimate(self, client, db_session, sample_parsed_estimate_a):
         """Test GET /api/v1/estimate-parser/cache/{doc_hash} endpoint"""
         from sqlalchemy import text
