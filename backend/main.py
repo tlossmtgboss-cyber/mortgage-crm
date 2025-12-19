@@ -19704,6 +19704,21 @@ app.include_router(email_drop_router, tags=["Email Drop"])
 from document_drop_routes import router as document_drop_router
 app.include_router(document_drop_router, tags=["Document Drop"])
 
+# Include Smart Documents routes (intelligent document collection)
+try:
+    from routes.smart_docs_routes import router as smart_docs_router
+    app.include_router(smart_docs_router, tags=["Smart Documents"])
+except Exception as e:
+    logger.warning(f"Could not load smart docs routes: {e}")
+
+# Include Portal Smart Documents routes (borrower-facing document requirements)
+try:
+    from routes.portal_smart_docs_routes import router as portal_smart_docs_router
+    app.include_router(portal_smart_docs_router, tags=["Portal Smart Documents"])
+    logger.info("✅ Portal Smart Documents routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load portal smart docs routes: {e}")
+
 # Include Morning Check-in routes
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])
