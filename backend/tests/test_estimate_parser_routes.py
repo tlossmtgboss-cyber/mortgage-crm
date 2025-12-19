@@ -200,7 +200,6 @@ class TestEstimateParserRoutes:
 
         assert response.status_code == 404
 
-    @pytest.mark.skip(reason="Route returns 500 - requires parse_failures table")
     def test_get_failures_endpoint(self, client, db_session):
         """Test GET /api/v1/estimate-parser/failures endpoint"""
         response = client.get("/api/v1/estimate-parser/failures")

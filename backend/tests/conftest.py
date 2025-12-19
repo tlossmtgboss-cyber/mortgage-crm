@@ -144,6 +144,18 @@ def db_engine():
             )
         """))
 
+        # Create estimate_parse_failures table for estimate parser tests
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS estimate_parse_failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT,
+                doc_hash TEXT,
+                error_stage TEXT,
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
         conn.commit()
 
     yield test_engine
