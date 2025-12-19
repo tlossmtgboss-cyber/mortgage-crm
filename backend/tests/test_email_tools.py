@@ -86,7 +86,6 @@ def sample_email_results():
 class TestGetEmailsNeedingResponse:
     """Tests for the get_emails_needing_response tool."""
 
-    @pytest.mark.skip(reason="Tool implementation differs from test expectations")
     def test_requires_user_id(self):
         """Should return error when user_id is not provided."""
         from agents.tools.email_intel import get_emails_needing_response
@@ -94,7 +93,8 @@ class TestGetEmailsNeedingResponse:
         result = get_emails_needing_response(user_id=None)
 
         assert result.status.value == "error"
-        assert "user_id is required" in result.error
+        # ToolResult uses 'message' for error text, not 'error' attribute
+        assert "user_id is required" in result.message
 
     def test_returns_emails(self, mock_execute_query, sample_email_results):
         """Should return emails needing response."""
@@ -130,7 +130,6 @@ class TestGetEmailsNeedingResponse:
         assert result.data["total_count"] == 0
         assert "clear" in result.message.lower()
 
-    @pytest.mark.skip(reason="Tool implementation passes params differently")
     def test_respects_days_parameter(self, mock_execute_query, sample_email_results):
         """Should filter by days parameter."""
         from agents.tools.email_intel import get_emails_needing_response
@@ -140,9 +139,10 @@ class TestGetEmailsNeedingResponse:
         result = get_emails_needing_response(user_id=1, days=30)
 
         # Check that query was called with correct date range
+        # The implementation uses start_date calculated from days parameter
         call_args = mock_execute_query.call_args
         params = call_args[0][1]  # Second arg is params dict
-        assert params["days"] == 30 or "start_date" in params
+        assert "start_date" in params  # days is converted to start_date in implementation
 
     def test_respects_limit_parameter(self, mock_execute_query, sample_email_results):
         """Should respect limit parameter."""
