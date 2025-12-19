@@ -215,7 +215,6 @@ class TestGetEmailsNeedingResponse:
         # Preview should be truncated to 200 chars
         assert len(result.data["emails"][0]["preview"]) <= 200
 
-    @pytest.mark.skip(reason="Tool handles exceptions differently than expected")
     def test_handles_database_error(self, mock_execute_query):
         """Should handle database errors gracefully."""
         from agents.tools.email_intel import get_emails_needing_response
@@ -225,7 +224,8 @@ class TestGetEmailsNeedingResponse:
         result = get_emails_needing_response(user_id=1)
 
         assert result.status.value == "error"
-        assert "failed" in result.error.lower() or "database" in result.error.lower()
+        # ToolResult uses 'message' for error text, and 'errors' list for details
+        assert "failed" in result.message.lower() or "database" in result.message.lower()
 
     def test_handles_null_received_date(self, mock_execute_query):
         """Should handle null received_date gracefully."""
