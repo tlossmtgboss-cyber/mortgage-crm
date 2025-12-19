@@ -32,6 +32,7 @@ from .nodes.reason import reason_and_analyze
 from .nodes.execute import execute_actions
 from .nodes.respond import generate_response, format_structured_response
 from .nodes.reason_and_respond import reason_and_respond
+from .hallucination_verifier import get_hallucination_verifier
 
 logger = logging.getLogger(__name__)
 
@@ -411,6 +412,29 @@ async def run_orchestrator(
             response["warnings"] = errors
 
         # ================================================================
+        # HALLUCINATION VERIFICATION (Background - non-blocking)
+        # ================================================================
+        # Run hallucination check in background to not delay response
+        verification_enabled = os.getenv("ENABLE_HALLUCINATION_VERIFICATION", "true").lower() == "true"
+        if verification_enabled and final_state.get("response") and final_state.get("gathered_data"):
+            try:
+                # Fire and forget - verification runs asynchronously
+                asyncio.create_task(
+                    _verify_response_hallucinations(
+                        session_id=conversation_id or state.get("session_id"),
+                        message_id=f"msg_{datetime.utcnow().timestamp()}",
+                        response_text=final_state.get("response", ""),
+                        gathered_data=final_state.get("gathered_data", {}),
+                        tools_used=[tc.tool_name for tc in final_state.get("tool_calls", [])],
+                        user_id=user_id,
+                        db_session=db_session
+                    )
+                )
+                logger.debug("[ORCHESTRATOR] Hallucination verification started in background")
+            except Exception as e:
+                logger.warning(f"[ORCHESTRATOR] Failed to start hallucination verification: {e}")
+
+        # ================================================================
         # TIMING SUMMARY
         # ================================================================
         total_perf = (time.perf_counter() - start_perf) * 1000
@@ -533,3 +557,94 @@ class OrchestratorSession:
         """Clear conversation history."""
         self.conversation_history = []
         self.turn_count = 0
+
+
+# =============================================================================
+# HALLUCINATION VERIFICATION HELPER
+# =============================================================================
+
+async def _verify_response_hallucinations(
+    session_id: str,
+    message_id: str,
+    response_text: str,
+    gathered_data: Dict[str, Any],
+    tools_used: list,
+    user_id: str,
+    db_session = None,
+    use_llm: bool = True
+) -> None:
+    """
+    Verify an AI response for hallucinations and record metrics.
+
+    This function runs in the background after the response is sent to the user.
+    It extracts claims from the response, verifies them against source data,
+    and records the results to the metrics database.
+
+    Args:
+        session_id: Session/conversation identifier
+        message_id: Unique message identifier
+        response_text: The AI response to verify
+        gathered_data: Tool outputs used to generate the response
+        tools_used: List of tool names that were called
+        user_id: User ID for metrics recording
+        db_session: Database session for recording metrics (optional)
+        use_llm: Whether to use LLM for extraction/verification (default True)
+    """
+    try:
+        logger.info(f"[HALLUCINATION] Starting verification for message {message_id}")
+
+        # Get the hallucination verifier
+        verifier = get_hallucination_verifier()
+
+        # Generate the hallucination report
+        report = await verifier.generate_report(
+            session_id=session_id or "unknown",
+            message_id=message_id,
+            response_text=response_text,
+            source_data=gathered_data,
+            tools_used=tools_used,
+            use_llm=use_llm
+        )
+
+        logger.info(
+            f"[HALLUCINATION] Verification complete for {message_id}: "
+            f"faithfulness={report.faithfulness_score:.2%}, "
+            f"claims={report.total_claims} "
+            f"(verified={report.verified_claims}, "
+            f"unsupported={report.unsupported_claims}, "
+            f"contradicted={report.contradicted_claims}), "
+            f"time={report.analysis_time_ms:.0f}ms"
+        )
+
+        # Log warnings for potential hallucinations
+        if report.contradicted_claims > 0:
+            logger.warning(
+                f"[HALLUCINATION] ⚠️ Found {report.contradicted_claims} contradicted claims "
+                f"in message {message_id}"
+            )
+            for result in report.verification_results:
+                if result.status.value == "contradicted":
+                    logger.warning(
+                        f"[HALLUCINATION] - Contradicted: '{result.claim_text[:100]}...' "
+                        f"(expected: {result.expected_value}, claimed: {result.claimed_value})"
+                    )
+
+        # Record metrics to database if session provided
+        if db_session is not None:
+            try:
+                from .metrics.service import AIMetricsService
+
+                # Convert user_id to int if string
+                uid = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else 0
+
+                await AIMetricsService.record_hallucination_report(
+                    db=db_session,
+                    user_id=uid,
+                    report=report
+                )
+                logger.debug(f"[HALLUCINATION] Metrics recorded for message {message_id}")
+            except Exception as metrics_error:
+                logger.warning(f"[HALLUCINATION] Failed to record metrics: {metrics_error}")
+
+    except Exception as e:
+        logger.error(f"[HALLUCINATION] Verification failed for message {message_id}: {e}")

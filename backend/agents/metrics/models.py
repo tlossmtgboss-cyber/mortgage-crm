@@ -29,6 +29,33 @@ class AIMetricType(str, Enum):
     RESPONSE_QUALITY = "response_quality"
     FOLLOWUP_CLICK = "followup_click"
 
+    # Hallucination Tracking
+    CLAIM_VERIFIED = "claim_verified"           # Individual claim verification
+    CLAIM_UNSUPPORTED = "claim_unsupported"     # Claim without supporting data
+    CLAIM_CONTRADICTED = "claim_contradicted"   # Claim contradicts source data
+    HALLUCINATION_DETECTED = "hallucination_detected"  # Response-level hallucination
+    FAITHFULNESS_SCORE = "faithfulness_score"   # Overall faithfulness rating
+
+
+class ClaimType(str, Enum):
+    """Types of claims extracted from responses"""
+    NUMERIC = "numeric"           # Numbers, counts, percentages
+    TEMPORAL = "temporal"         # Dates, times, durations
+    ENTITY = "entity"             # Names, IDs, references
+    STATUS = "status"             # States, stages, conditions
+    COMPARISON = "comparison"     # Comparisons between values
+    AGGREGATION = "aggregation"   # Sums, averages, totals
+    FACTUAL = "factual"           # General factual statements
+
+
+class VerificationStatus(str, Enum):
+    """Status of claim verification"""
+    VERIFIED = "verified"           # Claim matches source data
+    UNSUPPORTED = "unsupported"     # No source data to verify
+    CONTRADICTED = "contradicted"   # Claim contradicts source
+    PARTIAL = "partial"             # Partially supported
+    UNABLE_TO_VERIFY = "unable"     # Cannot determine
+
 
 class FeedbackType(str, Enum):
     """User feedback types"""
@@ -143,5 +170,93 @@ class AIQualityMetrics(BaseModel):
     response_quality_avg: float
     followup_click_rate: float
     user_corrections_count: int
+    period_start: datetime
+    period_end: datetime
+
+
+# =============================================================================
+# HALLUCINATION TRACKING MODELS
+# =============================================================================
+
+class ExtractedClaim(BaseModel):
+    """A single claim extracted from an AI response"""
+    claim_id: str                          # Unique identifier
+    claim_text: str                        # The actual claim text
+    claim_type: ClaimType                  # Type of claim
+    source_sentence: str                   # Original sentence containing claim
+    extracted_value: Optional[Any] = None  # The specific value being claimed
+    entity_references: List[str] = []      # Referenced entities (loan IDs, names, etc.)
+    confidence: float = 1.0                # Extraction confidence
+
+
+class ClaimVerificationResult(BaseModel):
+    """Result of verifying a single claim"""
+    claim_id: str
+    claim_text: str
+    claim_type: ClaimType
+    status: VerificationStatus
+    source_data: Optional[Dict[str, Any]] = None  # The data used to verify
+    source_tool: Optional[str] = None             # Tool that provided the data
+    expected_value: Optional[Any] = None          # What the data shows
+    claimed_value: Optional[Any] = None           # What was claimed
+    discrepancy: Optional[str] = None             # Description of mismatch
+    confidence: float = 1.0                       # Verification confidence
+
+
+class HallucinationReport(BaseModel):
+    """Complete hallucination analysis for a response"""
+    session_id: str
+    message_id: str
+    response_text: str
+
+    # Claim analysis
+    total_claims: int
+    verified_claims: int
+    unsupported_claims: int
+    contradicted_claims: int
+    partial_claims: int
+
+    # Scores
+    faithfulness_score: float              # 0-1, % of claims that are verified
+    hallucination_rate: float              # 0-1, % of claims that are hallucinated
+    confidence: float                      # Overall confidence in analysis
+
+    # Details
+    claims: List[ExtractedClaim] = []
+    verification_results: List[ClaimVerificationResult] = []
+
+    # Source tracking
+    tools_used: List[str] = []
+    source_data_summary: Dict[str, Any] = {}
+
+    # Metadata
+    analysis_time_ms: float = 0
+    timestamp: datetime = None
+
+
+class HallucinationMetrics(BaseModel):
+    """Aggregated hallucination metrics over a period"""
+    # Overall rates
+    avg_faithfulness_score: float
+    avg_hallucination_rate: float
+    total_responses_analyzed: int
+    total_claims_extracted: int
+
+    # Claim breakdown
+    verified_claims_count: int
+    unsupported_claims_count: int
+    contradicted_claims_count: int
+    verification_rate: float               # % of claims we could verify
+
+    # By claim type
+    hallucination_by_type: Dict[str, float]  # Hallucination rate per claim type
+
+    # By agent/tool
+    hallucination_by_tool: Dict[str, float]  # Rate per tool used
+
+    # Trends
+    responses_with_hallucinations: int
+    clean_responses: int
+
     period_start: datetime
     period_end: datetime

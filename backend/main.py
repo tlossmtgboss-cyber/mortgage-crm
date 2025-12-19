@@ -19861,6 +19861,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ AI Feedback routes not loaded: {e}")
 
+# Include AI Metrics routes (hallucination tracking, performance metrics)
+try:
+    from routes.ai_metrics_routes import router as ai_metrics_router
+    app.include_router(ai_metrics_router, prefix="/api/v1/ai-metrics", tags=["AI Metrics"])
+    logger.info("✅ AI Metrics routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ AI Metrics routes not loaded: {e}")
+
 # AI Email Conversations (Two-Way AI Communication)
 try:
     from routes.ai_email_conversation_routes import router as ai_email_conv_router

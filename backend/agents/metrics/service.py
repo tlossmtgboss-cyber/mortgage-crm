@@ -21,7 +21,11 @@ from .models import (
     AgentPerformanceMetrics,
     BusinessMetrics,
     AIQualityMetrics,
-    FeedbackType
+    FeedbackType,
+    HallucinationReport,
+    HallucinationMetrics,
+    ClaimType,
+    VerificationStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -333,6 +337,223 @@ class AIMetricsService:
                 "error_type": error_type
             }
         )
+
+    # =========================================================================
+    # HALLUCINATION TRACKING METHODS
+    # =========================================================================
+
+    @staticmethod
+    async def record_hallucination_report(
+        db: Session,
+        user_id: int,
+        report: HallucinationReport
+    ) -> bool:
+        """
+        Record a complete hallucination report for an AI response.
+        Records multiple metrics: faithfulness score, individual claims, and hallucination detection.
+        """
+        try:
+            # Record the overall faithfulness score
+            await AIMetricsService.record_metric(
+                db=db,
+                metric_type=AIMetricType.FAITHFULNESS_SCORE,
+                user_id=user_id,
+                value=report.faithfulness_score,
+                session_id=report.session_id,
+                metadata={
+                    "message_id": report.message_id,
+                    "total_claims": report.total_claims,
+                    "verified_claims": report.verified_claims,
+                    "unsupported_claims": report.unsupported_claims,
+                    "contradicted_claims": report.contradicted_claims,
+                    "partial_claims": report.partial_claims,
+                    "hallucination_rate": report.hallucination_rate,
+                    "confidence": report.confidence,
+                    "tools_used": report.tools_used,
+                    "analysis_time_ms": report.analysis_time_ms,
+                }
+            )
+
+            # Record hallucination detection if any contradicted claims
+            if report.contradicted_claims > 0:
+                await AIMetricsService.record_metric(
+                    db=db,
+                    metric_type=AIMetricType.HALLUCINATION_DETECTED,
+                    user_id=user_id,
+                    value=report.contradicted_claims,
+                    session_id=report.session_id,
+                    metadata={
+                        "message_id": report.message_id,
+                        "hallucination_rate": report.hallucination_rate,
+                        "contradicted_claims": [
+                            {
+                                "claim_id": r.claim_id,
+                                "claim_text": r.claim_text[:200],
+                                "claim_type": r.claim_type.value if hasattr(r.claim_type, 'value') else str(r.claim_type),
+                                "expected_value": str(r.expected_value)[:100] if r.expected_value else None,
+                                "claimed_value": str(r.claimed_value)[:100] if r.claimed_value else None,
+                                "discrepancy": r.discrepancy[:200] if r.discrepancy else None,
+                            }
+                            for r in report.verification_results
+                            if r.status == VerificationStatus.CONTRADICTED
+                        ][:10]  # Limit to 10 for storage
+                    }
+                )
+
+            # Record individual claim verifications (sample for high-volume)
+            for result in report.verification_results[:20]:  # Limit per response
+                metric_type = {
+                    VerificationStatus.VERIFIED: AIMetricType.CLAIM_VERIFIED,
+                    VerificationStatus.UNSUPPORTED: AIMetricType.CLAIM_UNSUPPORTED,
+                    VerificationStatus.CONTRADICTED: AIMetricType.CLAIM_CONTRADICTED,
+                }.get(result.status)
+
+                if metric_type:
+                    await AIMetricsService.record_metric(
+                        db=db,
+                        metric_type=metric_type,
+                        user_id=user_id,
+                        value=result.confidence,
+                        session_id=report.session_id,
+                        metadata={
+                            "message_id": report.message_id,
+                            "claim_id": result.claim_id,
+                            "claim_type": result.claim_type.value if hasattr(result.claim_type, 'value') else str(result.claim_type),
+                            "source_tool": result.source_tool,
+                        }
+                    )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error recording hallucination report: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return False
+
+    @staticmethod
+    async def get_hallucination_metrics(
+        db: Session,
+        days: int = 7,
+        user_id: Optional[int] = None
+    ) -> HallucinationMetrics:
+        """Get aggregated hallucination metrics over a period."""
+        try:
+            period_start = datetime.now(timezone.utc) - timedelta(days=days)
+            period_end = datetime.now(timezone.utc)
+
+            user_filter = "AND user_id = :user_id" if user_id else ""
+            params = {"days": days}
+            if user_id:
+                params["user_id"] = user_id
+
+            # Get faithfulness scores
+            faith_result = db.execute(text(f"""
+                SELECT
+                    AVG(value) as avg_faithfulness,
+                    AVG((metadata->>'hallucination_rate')::float) as avg_hallucination_rate,
+                    COUNT(*) as total_responses,
+                    SUM((metadata->>'total_claims')::int) as total_claims,
+                    SUM((metadata->>'verified_claims')::int) as verified_claims,
+                    SUM((metadata->>'unsupported_claims')::int) as unsupported_claims,
+                    SUM((metadata->>'contradicted_claims')::int) as contradicted_claims,
+                    COUNT(CASE WHEN (metadata->>'contradicted_claims')::int > 0 THEN 1 END) as responses_with_hallucinations,
+                    COUNT(CASE WHEN (metadata->>'contradicted_claims')::int = 0 THEN 1 END) as clean_responses
+                FROM ai_metrics
+                WHERE metric_type = 'faithfulness_score'
+                AND created_at > NOW() - INTERVAL '{days} days'
+                {user_filter}
+            """), params)
+            faith_row = faith_result.fetchone()
+
+            # Get hallucination rate by claim type
+            type_result = db.execute(text(f"""
+                SELECT
+                    metadata->>'claim_type' as claim_type,
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN metric_type = 'claim_contradicted' THEN 1 END) as contradicted
+                FROM ai_metrics
+                WHERE metric_type IN ('claim_verified', 'claim_unsupported', 'claim_contradicted')
+                AND created_at > NOW() - INTERVAL '{days} days'
+                {user_filter}
+                GROUP BY metadata->>'claim_type'
+            """), params)
+            hallucination_by_type = {}
+            for row in type_result:
+                claim_type = row[0] or 'unknown'
+                total = row[1] or 1
+                contradicted = row[2] or 0
+                hallucination_by_type[claim_type] = contradicted / total if total > 0 else 0
+
+            # Get hallucination rate by tool
+            tool_result = db.execute(text(f"""
+                SELECT
+                    metadata->>'source_tool' as tool,
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN metric_type = 'claim_contradicted' THEN 1 END) as contradicted
+                FROM ai_metrics
+                WHERE metric_type IN ('claim_verified', 'claim_unsupported', 'claim_contradicted')
+                AND metadata->>'source_tool' IS NOT NULL
+                AND created_at > NOW() - INTERVAL '{days} days'
+                {user_filter}
+                GROUP BY metadata->>'source_tool'
+            """), params)
+            hallucination_by_tool = {}
+            for row in tool_result:
+                tool = row[0] or 'unknown'
+                total = row[1] or 1
+                contradicted = row[2] or 0
+                hallucination_by_tool[tool] = contradicted / total if total > 0 else 0
+
+            # Calculate verification rate
+            total_claims = faith_row[3] or 0
+            verified = faith_row[4] or 0
+            unsupported = faith_row[5] or 0
+            contradicted = faith_row[6] or 0
+            verifiable = verified + contradicted
+            verification_rate = verifiable / total_claims if total_claims > 0 else 0
+
+            return HallucinationMetrics(
+                avg_faithfulness_score=faith_row[0] or 1.0,
+                avg_hallucination_rate=faith_row[1] or 0.0,
+                total_responses_analyzed=faith_row[2] or 0,
+                total_claims_extracted=total_claims,
+                verified_claims_count=verified,
+                unsupported_claims_count=unsupported,
+                contradicted_claims_count=contradicted,
+                verification_rate=verification_rate,
+                hallucination_by_type=hallucination_by_type,
+                hallucination_by_tool=hallucination_by_tool,
+                responses_with_hallucinations=faith_row[7] or 0,
+                clean_responses=faith_row[8] or 0,
+                period_start=period_start,
+                period_end=period_end
+            )
+
+        except Exception as e:
+            logger.error(f"Error getting hallucination metrics: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return HallucinationMetrics(
+                avg_faithfulness_score=1.0,
+                avg_hallucination_rate=0.0,
+                total_responses_analyzed=0,
+                total_claims_extracted=0,
+                verified_claims_count=0,
+                unsupported_claims_count=0,
+                contradicted_claims_count=0,
+                verification_rate=0.0,
+                hallucination_by_type={},
+                hallucination_by_tool={},
+                responses_with_hallucinations=0,
+                clean_responses=0,
+                period_start=datetime.now(timezone.utc) - timedelta(days=days),
+                period_end=datetime.now(timezone.utc)
+            )
 
     # =========================================================================
     # ANALYTICS METHODS
@@ -738,12 +959,14 @@ class AIMetricsService:
             business = await AIMetricsService.get_business_metrics(db, days)
             quality = await AIMetricsService.get_ai_quality_metrics(db, days)
             timing = await AIMetricsService.get_response_time_breakdown(db, days)
+            hallucination = await AIMetricsService.get_hallucination_metrics(db, days)
 
             return {
                 "agent_performance": performance.model_dump(),
                 "business_metrics": business.model_dump(),
                 "ai_quality": quality.model_dump(),
                 "response_time_breakdown": timing,
+                "hallucination_metrics": hallucination.model_dump(),
                 "generated_at": datetime.now(timezone.utc).isoformat()
             }
 
