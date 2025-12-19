@@ -5,37 +5,20 @@ import sys
 import asyncio
 from dotenv import load_dotenv
 
-# Load environment
-load_dotenv()
-
-# Verify Claude is configured
-if not os.getenv("ANTHROPIC_API_KEY"):
-    print("❌ ANTHROPIC_API_KEY not set")
-    sys.exit(1)
-
-if os.getenv("AI_PROVIDER", "").lower() != "claude":
-    print("❌ AI_PROVIDER not set to 'claude'")
-    print(f"   Current value: {os.getenv('AI_PROVIDER')}")
-    sys.exit(1)
-
-print(f"✅ AI_PROVIDER: {os.getenv('AI_PROVIDER')}")
-print(f"✅ ANTHROPIC_API_KEY: {os.getenv('ANTHROPIC_API_KEY')[:20]}...")
-
-# Import after env is loaded
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from database import Base
-from main import process_microsoft_email_to_dre
-
-# Create test database
-DATABASE_URL = "sqlite:///./test_claude_integration.db"
-engine = create_engine(DATABASE_URL)
-Base.metadata.create_all(engine)
-SessionLocal = sessionmaker(bind=engine)
-
 
 async def test_claude_email_processing():
     """Test processing an email with Claude"""
+    # Import after env is loaded
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from database import Base
+    from main import process_microsoft_email_to_dre
+
+    # Create test database
+    DATABASE_URL = "sqlite:///./test_claude_integration.db"
+    engine = create_engine(DATABASE_URL)
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
 
     print("\n" + "="*80)
     print("TESTING CLAUDE INTEGRATION IN PRODUCTION CODE")
@@ -115,7 +98,23 @@ John Smith
         db.close()
 
 
-if __name__ == "__main__":
+def main():
+    # Load environment
+    load_dotenv()
+
+    # Verify Claude is configured
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("❌ ANTHROPIC_API_KEY not set")
+        sys.exit(1)
+
+    if os.getenv("AI_PROVIDER", "").lower() != "claude":
+        print("❌ AI_PROVIDER not set to 'claude'")
+        print(f"   Current value: {os.getenv('AI_PROVIDER')}")
+        sys.exit(1)
+
+    print(f"✅ AI_PROVIDER: {os.getenv('AI_PROVIDER')}")
+    print(f"✅ ANTHROPIC_API_KEY: {os.getenv('ANTHROPIC_API_KEY')[:20]}...")
+
     success = asyncio.run(test_claude_email_processing())
 
     # Cleanup
@@ -123,3 +122,7 @@ if __name__ == "__main__":
         os.remove("test_claude_integration.db")
 
     sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()
