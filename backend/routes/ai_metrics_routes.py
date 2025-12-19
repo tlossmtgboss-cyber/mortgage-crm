@@ -313,8 +313,11 @@ async def manually_verify_response(
 
         verifier = get_hallucination_verifier()
 
+        # Generate proper UUID for session tracking
+        session_uuid = str(uuid.uuid4())
+
         report = await verifier.generate_report(
-            session_id="manual",
+            session_id=session_uuid,
             message_id=f"manual_{uuid.uuid4().hex[:8]}",
             response_text=request.response_text,
             source_data=request.source_data,
