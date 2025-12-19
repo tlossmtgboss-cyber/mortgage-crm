@@ -19,18 +19,19 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database import get_engine
+from database import engine
+from sqlalchemy import text
 
 
-def run_sql_file(engine, filepath: str):
+def run_sql_file(db_engine, filepath: str):
     """Execute a SQL file."""
     with open(filepath, 'r') as f:
         sql = f.read()
 
     # Split by statements (handle complex SQL with functions)
     # We'll execute the whole file as one transaction
-    with engine.connect() as conn:
-        conn.execute(sql)
+    with db_engine.connect() as conn:
+        conn.execute(text(sql))
         conn.commit()
     print(f"✓ Executed: {filepath}")
 
@@ -41,7 +42,6 @@ def run_migration():
     print("Conversation Intelligence Platform Migration")
     print("=" * 60)
 
-    engine = get_engine()
     migrations_dir = Path(__file__).parent
 
     # Run schema migration
@@ -78,9 +78,8 @@ def run_migration():
     return True
 
 
-def run_migration_statements(engine, filepath: str):
+def run_migration_statements(db_engine, filepath: str):
     """Execute SQL file statement by statement for better error handling."""
-    from sqlalchemy import text
 
     with open(filepath, 'r') as f:
         sql = f.read()
@@ -113,7 +112,7 @@ def run_migration_statements(engine, filepath: str):
             current = []
 
     # Execute each statement
-    with engine.connect() as conn:
+    with db_engine.connect() as conn:
         for i, stmt in enumerate(statements):
             try:
                 if stmt.strip():
