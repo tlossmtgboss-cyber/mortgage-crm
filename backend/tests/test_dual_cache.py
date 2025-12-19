@@ -6,11 +6,24 @@ Layer 1: Response cache (utils/cache.py) - Caches full AI responses
 Layer 2: Tool cache (core/cache.py) - Caches individual tool results
 
 Run with: pytest tests/test_dual_cache.py -v
+
+NOTE: These tests require redis module which is not installed.
 """
 import pytest
 import asyncio
 import time
 from unittest.mock import AsyncMock, patch, MagicMock
+
+
+# Check for redis module
+try:
+    import redis
+    HAS_REDIS = True
+except ImportError:
+    HAS_REDIS = False
+
+
+pytestmark = pytest.mark.skipif(not HAS_REDIS, reason="redis module not installed")
 
 
 # ============================================================================

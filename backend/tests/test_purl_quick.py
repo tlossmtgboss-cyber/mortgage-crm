@@ -11,6 +11,9 @@ Usage:
 Environment:
     API_BASE: API base URL (default: http://localhost:8000)
     ADMIN_TOKEN: JWT token for admin access
+
+NOTE: This is a standalone smoke test script, not a pytest test file.
+      Run it directly with python, not via pytest.
 """
 
 import os
@@ -18,6 +21,10 @@ import sys
 import json
 import requests
 from datetime import datetime
+
+# Skip this file when running pytest - it's a standalone smoke test script
+import pytest
+pytestmark = pytest.mark.skip(reason="Standalone smoke test script - run directly with python, not pytest")
 
 API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
