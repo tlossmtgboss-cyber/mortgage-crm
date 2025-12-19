@@ -96,6 +96,7 @@ const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntell
 const AIOutreach = lazy(() => import('./pages/AIOutreach'));
 const ConversationIntelligence = lazy(() => import('./pages/ConversationIntelligence'));
 const ConversationIntelligenceRecordingDetail = lazy(() => import('./pages/ConversationIntelligenceRecordingDetail'));
+const SmartDocs = lazy(() => import('./pages/SmartDocs'));
 const PublicBooking = lazy(() => import('./pages/PublicBooking'));
 const BorrowerApplication = lazy(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazy(() => import('./pages/AdaptiveURLA'));
@@ -1557,6 +1558,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ConversationIntelligence /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/smart-docs"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><SmartDocs /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

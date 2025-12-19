@@ -65,6 +65,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Documents {renderBadge(taskCounts.pendingDocs)}
           </Link>
           <Link
+            to="/smart-docs"
+            className={`nav-link ${isActive('/smart-docs') || location.pathname.startsWith('/smart-docs/') ? 'active' : ''}`}
+          >
+            Smart Docs
+          </Link>
+          <Link
             to="/reconciliation"
             className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
           >
