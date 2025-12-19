@@ -206,7 +206,6 @@ class TestEstimateParserRoutes:
         data = response.json()
         assert "failures" in data
 
-    @pytest.mark.skip(reason="Requires reportlab module which is not installed")
     def test_pdf_generation_endpoint(self, client, db_session,
                                     sample_parsed_estimate_a, sample_parsed_estimate_b):
         """Test GET /api/v1/estimate-parser/compare/{id}/pdf endpoint"""
