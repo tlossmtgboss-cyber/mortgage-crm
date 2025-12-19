@@ -324,7 +324,6 @@ class TestEmailToolRegistration:
         tool = tool_registry.get("get_emails_needing_response")
         assert tool is not None
 
-    @pytest.mark.skip(reason="ToolRegistry.get_metadata method not implemented")
     def test_tool_metadata(self):
         """Should have correct metadata."""
         from agents.tools.base import tool_registry

@@ -310,6 +310,31 @@ class ToolRegistry:
         return instance._tools.get(name)
 
     @classmethod
+    def get_metadata(cls, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for a tool by name.
+
+        Args:
+            name: The tool name
+
+        Returns:
+            Dict with tool metadata or None if tool not found
+        """
+        tool_def = cls.get(name)
+        if tool_def is None:
+            return None
+
+        return {
+            "name": tool_def.name,
+            "description": tool_def.description,
+            "agent_roles": tool_def.agent_roles,
+            "risk_level": tool_def.risk_level.upper(),  # Normalize to uppercase
+            "requires_confirmation": tool_def.requires_confirmation,
+            "examples": tool_def.examples,
+            "parameters": tool_def.parameters,
+        }
+
+    @classmethod
     def get_all(cls) -> Dict[str, ToolDefinition]:
         """Get all registered tools."""
         instance = cls()
