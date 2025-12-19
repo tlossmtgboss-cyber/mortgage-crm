@@ -136,22 +136,47 @@ class TestWorkflowSLAService:
 
             assert result.get("success") is True or mock_create.called
 
-    @pytest.mark.skip(reason="Mock setup needs to match actual service implementation")
     def test_enroll_lead_already_enrolled(self, mock_db, sample_lead):
         """Test that duplicate enrollment is prevented."""
         from services.workflow_sla_service import WorkflowSLAService
 
-        # Mock existing enrollment
-        mock_db.execute.return_value.fetchone.return_value = (50,)  # Existing instance ID
+        # Create mock lead object
+        mock_lead = MagicMock()
+        mock_lead.id = 1
+        mock_lead.owner_id = 1
+
+        # Create mock user/owner object
+        mock_owner = MagicMock()
+        mock_owner.organization_id = 1
+
+        # Create mock workflow config
+        mock_config = MagicMock()
+        mock_config.id = 1
+
+        # Create mock existing instance (already enrolled)
+        mock_existing_instance = MagicMock()
+        mock_existing_instance.id = 50
+
+        # Setup ORM query chain mock - returns lead, then owner
+        mock_db.query.return_value.filter.return_value.first.side_effect = [
+            mock_lead,   # Lead query
+            mock_owner,  # User query
+        ]
 
         service = WorkflowSLAService(mock_db)
-        result = service.enroll_lead(
-            lead_id=1,
-            workflow_key="prospect"
-        )
 
-        # Should indicate already enrolled or return existing
-        assert "already" in str(result).lower() or result.get("instance_id") == 50
+        # Patch internal methods to control flow
+        with patch.object(service, '_get_workflow_config', return_value=mock_config), \
+             patch.object(service, '_get_active_workflow_instance', return_value=mock_existing_instance):
+
+            result = service.enroll_lead(
+                lead_id=1,
+                workflow_key="prospect"
+            )
+
+        # Should indicate already enrolled or return existing instance ID
+        assert result.get("success") is False
+        assert "already" in str(result).lower() or result.get("existing_instance_id") == 50
 
     def test_pause_workflow(self, mock_db):
         """Test pausing an active workflow."""
