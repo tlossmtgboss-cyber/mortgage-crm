@@ -17,6 +17,11 @@ from datetime import datetime
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from dataclasses import dataclass
 
+# Load environment variables from .env file BEFORE any other imports
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path)
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
@@ -44,6 +49,89 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 @pytest.fixture(scope="session")
 def db_engine():
     """Create test database engine for the session"""
+    # Create tables needed for integration tests
+    with test_engine.connect() as conn:
+        # Create leads table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS leads (
+                id TEXT PRIMARY KEY,
+                first_name TEXT,
+                last_name TEXT,
+                email TEXT,
+                phone TEXT,
+                status TEXT DEFAULT 'new',
+                source TEXT,
+                campaign TEXT,
+                loan_purpose TEXT,
+                property_type TEXT,
+                estimated_amount REAL,
+                estimated_credit_score INTEGER,
+                pre_approved INTEGER DEFAULT 0,
+                lead_score INTEGER DEFAULT 0,
+                assigned_to TEXT,
+                preferred_contact_method TEXT,
+                preferred_contact_time TEXT,
+                timezone TEXT,
+                last_contact_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create loans table
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS loans (
+                id TEXT PRIMARY KEY,
+                loan_number TEXT,
+                borrower_name TEXT,
+                borrower_id TEXT,
+                loan_amount REAL,
+                interest_rate REAL,
+                loan_type TEXT,
+                property_address TEXT,
+                status TEXT DEFAULT 'lead',
+                loan_officer_id TEXT,
+                branch_id TEXT,
+                application_date TIMESTAMP,
+                disclosure_sent_at TIMESTAMP,
+                disclosure_received_at TIMESTAMP,
+                closing_disclosure_sent_at TIMESTAMP,
+                closing_disclosure_received_at TIMESTAMP,
+                consummation_date TIMESTAMP,
+                submitted_to_uw_at TIMESTAMP,
+                approval_date TIMESTAMP,
+                clear_to_close_at TIMESTAMP,
+                funded_at TIMESTAMP,
+                expected_close_date DATE,
+                lock_expiration_date DATE,
+                le_revision_count INTEGER DEFAULT 0,
+                cd_revision_count INTEGER DEFAULT 0,
+                borrower_credit_score INTEGER,
+                pricing_exception INTEGER DEFAULT 0,
+                pricing_exception_reason TEXT,
+                referral_source TEXT,
+                referral_fee_paid REAL,
+                title_company_id TEXT,
+                title_fee REAL,
+                appraisal_company_id TEXT,
+                appraisal_fee REAL,
+                status_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create users table for joins
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                nmls_id TEXT,
+                manager_id TEXT
+            )
+        """))
+
+        conn.commit()
+
     yield test_engine
 
 
