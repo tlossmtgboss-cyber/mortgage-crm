@@ -1401,9 +1401,6 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             <div className="portal-dashboard-layout">
               {/* Main Content Area */}
               <div className="portal-main-content">
-                {/* Loan Status Card with House Illustration */}
-                <LoanStatusCard loan={loan} workspace={workspace} subStage={subStage} />
-
                 {/* What's Next Section - Only show if there are tasks or conditions */}
                 {(conditions.length > 0 || tasks.filter(t => t.status === 'open' || t.status === 'TODO').length > 0) && (
                   <section className="whats-next-section">
