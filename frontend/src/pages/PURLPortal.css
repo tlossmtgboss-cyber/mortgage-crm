@@ -925,7 +925,7 @@
 }
 
 /* ========================================
-   Navigation - Skewed Parallelogram Tabs
+   Navigation - Step Tabs with Angled Dividers
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
@@ -935,7 +935,7 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-bottom: none;
-  gap: 4px;
+  gap: 0;
 }
 
 .portal-nav.chevron-tabs::-webkit-scrollbar {
@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 24px;
+  padding: 10px 20px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,14 +958,22 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
-  /* Skew creates parallelogram - negative value leans right */
-  transform: skewX(-12deg);
 }
 
-/* Un-skew the text so it stays readable */
-.chevron-tabs .purl-tab-btn .tab-label,
-.chevron-tabs .purl-tab-btn .tab-notification-dot {
-  transform: skewX(12deg);
+/* Angled divider between tabs - creates step-down effect */
+.chevron-tabs .purl-tab-btn::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  background: linear-gradient(to bottom right, #334155 50%, #1e293b 50%);
+  z-index: 1;
+}
+
+.chevron-tabs .purl-tab-btn.last::after {
+  display: none;
 }
 
 .chevron-tabs .purl-tab-btn.first {
