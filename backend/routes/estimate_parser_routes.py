@@ -729,40 +729,81 @@ CRITICAL RULES:
         context_parts = []
 
         def format_estimate_details(estimate: dict, label: str) -> str:
-            """Format all available estimate details into a readable string."""
+            """Format ALL available estimate details into a readable string."""
             parts = [f"{label}:"]
 
-            # Basic loan info
+            # Lender & Property Info
             if estimate.get('lender_name'):
-                parts.append(f"  Lender: {estimate.get('lender_name')}")
+                parts.append(f"  Lender Name: {estimate.get('lender_name')}")
+            if estimate.get('property_address'):
+                parts.append(f"  Property Address: {estimate.get('property_address')}")
+            if estimate.get('estimated_closing_date'):
+                parts.append(f"  Estimated Closing Date: {estimate.get('estimated_closing_date')}")
+
+            # Loan Terms
             if estimate.get('loan_amount'):
                 parts.append(f"  Loan Amount: {format_currency(estimate.get('loan_amount'))}")
+            if estimate.get('loan_type'):
+                parts.append(f"  Loan Type: {estimate.get('loan_type')}")
+            if estimate.get('loan_term'):
+                # loan_term might be in months or years
+                term = estimate.get('loan_term')
+                if term and term > 100:  # Likely in months
+                    parts.append(f"  Loan Term: {term} months ({term // 12} years)")
+                else:
+                    parts.append(f"  Loan Term: {term} years")
+
+            # Rates
             if estimate.get('interest_rate'):
                 parts.append(f"  Interest Rate: {format_rate(estimate.get('interest_rate'))}")
             if estimate.get('apr'):
-                parts.append(f"  APR: {format_rate(estimate.get('apr'))}")
-            if estimate.get('loan_term'):
-                parts.append(f"  Loan Term: {estimate.get('loan_term')} years")
+                parts.append(f"  APR (Annual Percentage Rate): {format_rate(estimate.get('apr'))}")
 
-            # Monthly payment info
-            if estimate.get('monthly_pi'):
+            # Monthly Payment Info
+            if estimate.get('monthly_principal_and_interest'):
+                parts.append(f"  Monthly Principal & Interest (P&I): {format_currency(estimate.get('monthly_principal_and_interest'))}")
+            if estimate.get('monthly_pi'):  # alternate field name
                 parts.append(f"  Monthly P&I: {format_currency(estimate.get('monthly_pi'))}")
-            if estimate.get('monthly_payment'):
+            if estimate.get('estimated_total_monthly_payment'):
+                parts.append(f"  Estimated Total Monthly Payment: {format_currency(estimate.get('estimated_total_monthly_payment'))}")
+            if estimate.get('monthly_payment'):  # alternate field name
                 parts.append(f"  Total Monthly Payment: {format_currency(estimate.get('monthly_payment'))}")
 
-            # Closing costs
+            # Closing Costs Summary
             if estimate.get('cash_to_close'):
                 parts.append(f"  Cash to Close: {format_currency(estimate.get('cash_to_close'))}")
             if estimate.get('total_closing_costs'):
                 parts.append(f"  Total Closing Costs: {format_currency(estimate.get('total_closing_costs'))}")
+
+            # Loan Costs Breakdown (Section A, B, C on Loan Estimate)
+            costs = estimate.get('costs') or {}
+            loan_costs = costs.get('loan_costs') or {}
+            other_costs = costs.get('other_costs') or {}
+
+            if loan_costs.get('origination_charges'):
+                parts.append(f"  Origination Charges (Section A): {format_currency(loan_costs.get('origination_charges'))}")
+            if loan_costs.get('services_you_cannot_shop_for'):
+                parts.append(f"  Services You Cannot Shop For (Section B): {format_currency(loan_costs.get('services_you_cannot_shop_for'))}")
+            if loan_costs.get('services_you_can_shop_for'):
+                parts.append(f"  Services You Can Shop For (Section C): {format_currency(loan_costs.get('services_you_can_shop_for'))}")
+
+            # Other Costs (Section D, E, F, G on Loan Estimate)
+            if other_costs.get('taxes'):
+                parts.append(f"  Taxes & Government Fees (Section D): {format_currency(other_costs.get('taxes'))}")
+            if other_costs.get('prepaids'):
+                parts.append(f"  Prepaids (Section E): {format_currency(other_costs.get('prepaids'))}")
+            if other_costs.get('escrow_and_other'):
+                parts.append(f"  Initial Escrow & Other (Section F/G): {format_currency(other_costs.get('escrow_and_other'))}")
+
+            # Additional fields that might be present
             if estimate.get('lender_credits'):
                 parts.append(f"  Lender Credits: {format_currency(estimate.get('lender_credits'))}")
             if estimate.get('prepaid_items'):
                 parts.append(f"  Prepaid Items: {format_currency(estimate.get('prepaid_items'))}")
-
-            # Rate lock
             if estimate.get('rate_lock_days'):
-                parts.append(f"  Rate Lock: {estimate.get('rate_lock_days')} days")
+                parts.append(f"  Rate Lock Period: {estimate.get('rate_lock_days')} days")
+            if estimate.get('rate_lock'):
+                parts.append(f"  Rate Lock: {estimate.get('rate_lock')}")
 
             return "\n".join(parts)
 
