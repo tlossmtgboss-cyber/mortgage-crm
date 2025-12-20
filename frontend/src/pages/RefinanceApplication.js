@@ -1271,6 +1271,78 @@ export default function RefinanceApplication() {
     proceedToNextQuestion();
   };
 
+  // Handle follow-up for income/asset stages (doesn't navigate to next question)
+  const handleStageFollowupSubmit = (answers, trigger) => {
+    setFollowupAnswers(prev => ({
+      ...prev,
+      [trigger]: answers
+    }));
+    setActiveFollowup(null);
+    clearFollowup();
+  };
+
+  const handleStageFollowupSkip = () => {
+    setActiveFollowup(null);
+    clearFollowup();
+  };
+
+  // Check for follow-ups when income data changes
+  const handleIncomeFieldChange = async (fieldName, value, setter) => {
+    setter(prev => ({ ...prev, [fieldName]: value }));
+
+    // Trigger follow-up check for specific fields
+    const triggerFields = ['businessType', 'ownershipPercent', 'rentalIncome', 'otherIncome'];
+    if (triggerFields.includes(fieldName) && value) {
+      const result = await checkForFollowup(
+        `income_${fieldName}`,
+        value,
+        'refinance',
+        { ...declarations, ...incomeData, [fieldName]: value }
+      );
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+      }
+    }
+  };
+
+  // Check for follow-ups when asset data changes
+  const handleAssetFieldChange = async (fieldName, value, setter) => {
+    setter(prev => ({ ...prev, [fieldName]: value }));
+
+    // Trigger follow-up check for large deposits or cash-out related fields
+    const triggerFields = ['largeDeposits', 'cashOutAmount', 'cashOutPurpose', 'otherAssets'];
+    if (triggerFields.includes(fieldName) && value) {
+      const result = await checkForFollowup(
+        `asset_${fieldName}`,
+        value,
+        'refinance',
+        { ...declarations, [fieldName]: value }
+      );
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+      }
+    }
+  };
+
+  // Check for follow-ups when goals data changes (cash-out amount/purpose)
+  const handleGoalsFieldChange = async (fieldName, value, setter) => {
+    setter(prev => ({ ...prev, [fieldName]: value }));
+
+    // Trigger follow-up check for cash-out related fields
+    const triggerFields = ['cashOutAmount', 'cashOutPurpose'];
+    if (triggerFields.includes(fieldName) && value) {
+      const result = await checkForFollowup(
+        `goals_${fieldName}`,
+        value,
+        'refinance',
+        { ...declarations, ...goalsData, [fieldName]: value }
+      );
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+      }
+    }
+  };
+
   // Proceed to next question
   const proceedToNextQuestion = () => {
     let nextIndex = currentQuestionIndex + 1;
@@ -1766,7 +1838,7 @@ export default function RefinanceApplication() {
                 <label>Business Type</label>
                 <select
                   value={incomeData.businessType || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, businessType: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('businessType', e.target.value, setIncomeData)}
                   className="fun-input"
                 >
                   <option value="">Select...</option>
@@ -1781,7 +1853,7 @@ export default function RefinanceApplication() {
                 <input
                   type="number"
                   value={incomeData.ownershipPercent || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, ownershipPercent: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('ownershipPercent', e.target.value, setIncomeData)}
                   className="fun-input"
                   min="0"
                   max="100"
@@ -1858,7 +1930,7 @@ export default function RefinanceApplication() {
                 <input
                   type="number"
                   value={incomeData.rentalIncome || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, rentalIncome: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('rentalIncome', e.target.value, setIncomeData)}
                   className="fun-input"
                   placeholder="0"
                 />
@@ -1884,13 +1956,24 @@ export default function RefinanceApplication() {
                 <input
                   type="number"
                   value={incomeData.otherIncome || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, otherIncome: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('otherIncome', e.target.value, setIncomeData)}
                   className="fun-input"
                   placeholder="0"
                 />
               </div>
             </div>
           </div>
+        )}
+
+        {/* AI-powered follow-up questions for income-related triggers */}
+        {activeFollowup && activeFollowup.trigger?.startsWith('income_') && activeFollowup.questions?.length > 0 && (
+          <InlineFollowup
+            trigger={activeFollowup.trigger}
+            context={activeFollowup.context}
+            questions={activeFollowup.questions}
+            onAnswersSubmit={handleStageFollowupSubmit}
+            onSkip={handleStageFollowupSkip}
+          />
         )}
 
         <div className="stage-navigation">
@@ -2176,7 +2259,7 @@ export default function RefinanceApplication() {
                 <input
                   type="number"
                   value={goalsData.cashOutAmount || ''}
-                  onChange={(e) => setGoalsData(prev => ({ ...prev, cashOutAmount: e.target.value }))}
+                  onChange={(e) => handleGoalsFieldChange('cashOutAmount', e.target.value, setGoalsData)}
                   className="fun-input"
                   placeholder="0"
                   max={maxCashOut}
@@ -2187,7 +2270,7 @@ export default function RefinanceApplication() {
               <label>What will you use the cash for?</label>
               <select
                 value={goalsData.cashOutPurpose || ''}
-                onChange={(e) => setGoalsData(prev => ({ ...prev, cashOutPurpose: e.target.value }))}
+                onChange={(e) => handleGoalsFieldChange('cashOutPurpose', e.target.value, setGoalsData)}
                 className="fun-input"
               >
                 <option value="">Select...</option>
@@ -2200,6 +2283,17 @@ export default function RefinanceApplication() {
               </select>
             </div>
           </div>
+        )}
+
+        {/* AI-powered follow-up questions for goals-related triggers */}
+        {activeFollowup && activeFollowup.trigger?.startsWith('goals_') && activeFollowup.questions?.length > 0 && (
+          <InlineFollowup
+            trigger={activeFollowup.trigger}
+            context={activeFollowup.context}
+            questions={activeFollowup.questions}
+            onAnswersSubmit={handleStageFollowupSubmit}
+            onSkip={handleStageFollowupSkip}
+          />
         )}
 
         <div className="stage-navigation">
