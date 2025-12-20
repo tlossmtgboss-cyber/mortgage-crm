@@ -83,14 +83,13 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
     'pre_qualified', 'pre_approved', 'preapproval', 'active'
   ].includes(statusLower) || leadStage;
 
-  // Define lead journey milestones (matches reference image)
-  // App Completed → Docs Requested → Docs Approved → Pre Approved → Submit to Processing
+  // Define lead journey milestones
+  // App Completed → Docs Requested → Docs Approved → Pre Approved
   const leadStages = [
     { id: 'app_completed', label: 'Application Completed', shortLabel: 'App Completed' },
     { id: 'docs_requested', label: 'Docs Requested', shortLabel: 'Docs Requested' },
     { id: 'docs_approved', label: 'Docs Approved', shortLabel: 'Docs Approved' },
     { id: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre Approved' },
-    { id: 'submit_to_processing', label: 'Submit to Processing', shortLabel: 'Submit to Processing' },
   ];
 
   // Define full loan journey stages (after contract received)
@@ -108,12 +107,11 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
   // Determine current stage index based on status
   const getCurrentStageIndex = () => {
     if (isLeadStage) {
-      // Lead stage mapping for new milestones:
+      // Lead stage mapping (4 stages total):
       // App Completed (0) - always complete when portal exists
       // Docs Requested (1) - documents have been requested
       // Docs Approved (2) - all documents approved
-      // Pre Approved (3) - pre-approval issued
-      // Submit to Processing (4) - contract received, ready for processing
+      // Pre Approved (3) - pre-approval issued (final stage)
       const leadStatusToIndex = {
         'new': 1,           // App completed, docs requested
         'contacted': 1,     // App completed, docs requested
@@ -125,8 +123,7 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
         'docs_received': 2, // Docs received, reviewing
         'docs_approved': 3, // Docs approved, working on pre-approval
         'pre_qualified': 3, // Working on pre-approval
-        'pre_approved': 4,  // Pre-approved, waiting for contract
-        'under_contract': 5, // Contract received, ready to submit
+        'pre_approved': 4,  // Pre-approved (all complete)
       };
       return leadStatusToIndex[statusLower] ?? 1; // Default: app completed
     } else {
