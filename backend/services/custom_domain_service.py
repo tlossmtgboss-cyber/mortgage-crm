@@ -204,7 +204,8 @@ class CustomDomainService:
             try:
                 result = db.execute(text("""
                     SELECT id, domain, is_verified, is_active, ssl_status,
-                           created_at, organization_id, user_id
+                           created_at, organization_id, user_id,
+                           verification_token, verified_at
                     FROM custom_domains
                     ORDER BY created_at DESC
                 """))
@@ -219,7 +220,9 @@ class CustomDomainService:
                         "ssl_status": row[4],
                         "created_at": row[5].isoformat() if row[5] else None,
                         "organization_id": row[6],
-                        "user_id": row[7]
+                        "user_id": row[7],
+                        "verification_token": row[8],
+                        "verified_at": row[9].isoformat() if row[9] else None
                     })
 
                 return domains
