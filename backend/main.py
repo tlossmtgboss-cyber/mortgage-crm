@@ -53515,6 +53515,50 @@ async def startup_event():
             except Exception as slug_e:
                 logger.warning(f"⚠️ Slug column migration skipped: {slug_e}")
 
+            # Create custom_domains table for multi-tenant domain support
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_name = 'custom_domains'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("""
+                        CREATE TABLE custom_domains (
+                            id SERIAL PRIMARY KEY,
+                            domain VARCHAR(255) NOT NULL UNIQUE,
+                            organization_id INTEGER,
+                            user_id INTEGER,
+                            is_verified BOOLEAN DEFAULT FALSE,
+                            verification_token VARCHAR(64),
+                            verified_at TIMESTAMP,
+                            is_active BOOLEAN DEFAULT TRUE,
+                            ssl_status VARCHAR(50) DEFAULT 'pending',
+                            notes TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            created_by INTEGER
+                        )
+                    """))
+                    db_temp.execute(text("CREATE INDEX idx_custom_domains_domain ON custom_domains(domain)"))
+                    db_temp.execute(text("CREATE INDEX idx_custom_domains_active ON custom_domains(domain, is_active)"))
+                    db_temp.commit()
+                    logger.info("✅ Created 'custom_domains' table")
+
+                    # Seed initial domains
+                    db_temp.execute(text("""
+                        INSERT INTO custom_domains (domain, is_verified, is_active, ssl_status, notes)
+                        VALUES
+                            ('www.timloss.com', true, true, 'pending', 'Initial custom domain'),
+                            ('timloss.com', true, true, 'pending', 'Apex domain for timloss')
+                        ON CONFLICT (domain) DO NOTHING
+                    """))
+                    db_temp.commit()
+                    logger.info("✅ Seeded initial custom domains")
+                db_temp.close()
+            except Exception as cd_e:
+                logger.warning(f"⚠️ Custom domains table migration skipped: {cd_e}")
+
             # Add owner_id column to referral_partners table (for user isolation)
             try:
                 db_temp = SessionLocal()
