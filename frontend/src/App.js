@@ -56,6 +56,7 @@ const MyProfile = lazy(() => import('./pages/MyProfile'));
 const MyPermissions = lazy(() => import('./pages/MyPermissions'));
 const ComplianceDashboard = lazy(() => import('./pages/ComplianceDashboard'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
+const AdminCustomDomains = lazy(() => import('./pages/AdminCustomDomains'));
 const DataUpload = lazy(() => import('./pages/DataUpload'));
 const EstimateComparison = lazy(() => import('./pages/EstimateComparison'));
 const Users = lazy(() => import('./pages/Users'));
@@ -112,6 +113,7 @@ const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
 const MicrositePreview = lazy(() => import('./pages/microsites/MicrositePreview'));
 const MicrositeWizard = lazy(() => import('./components/microsites/MicrositeWizard'));
+const MicrositeEditor = lazy(() => import('./pages/MicrositeEditor'));
 const LODashboard = lazy(() => import('./pages/LODashboard'));
 const RealtorDashboard = lazy(() => import('./pages/RealtorDashboard'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
@@ -1592,6 +1594,28 @@ function App() {
             }
           />
           <Route
+            path="/microsite/editor"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MicrositeEditor /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/team-members"
             element={
               <PrivateRoute>
@@ -1717,6 +1741,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AdminSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/domains"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AdminCustomDomains /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
