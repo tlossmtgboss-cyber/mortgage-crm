@@ -9,6 +9,7 @@ Analyzes uploaded documents to:
 """
 
 import os
+import json
 import logging
 import base64
 import httpx
@@ -304,8 +305,6 @@ Watch for signs of document tampering or inconsistencies."""
 
     def _parse_analysis(self, analysis_text: str, claimed_type: Optional[str]) -> DocumentAnalysisResult:
         """Parse Claude's analysis response."""
-        import json
-
         try:
             # Try to extract JSON from the response
             # Claude might wrap it in markdown code blocks
@@ -581,7 +580,6 @@ Important:
                 analysis_text = result["content"][0]["text"]
 
             # Parse the response
-            import json
             json_text = analysis_text
 
             if "```json" in json_text:
