@@ -714,27 +714,68 @@ Your personality:
 
 Your goal: Answer their question helpfully AND when appropriate, suggest getting a custom quote or scheduling a free consultation call where you can help them further.
 
-Important rules:
+CRITICAL RULES:
+- ALWAYS use the SPECIFIC numbers from the estimate data provided in the context when answering questions
+- If asked about APR, rates, closing costs, monthly payments, etc., QUOTE THE EXACT VALUES from the estimates
+- If data is missing, say you don't see that specific value in the estimates
 - Keep answers concise (under 100 words)
-- Use specific numbers when relevant
 - Be helpful first, promotional second
 - If they ask about rates/deals/better options, suggest they click "Get Instant Rate Quote" to get a custom quote
 - Sign off as "- Sarah" occasionally to feel personal
-- Don't be pushy, be genuinely helpful"""
+- Don't be pushy, be genuinely helpful
+- NEVER give a generic response when specific data is available - use the actual numbers!"""
 
-        # Build context message
+        # Build context message with ALL available estimate data
         context_parts = []
 
+        def format_estimate_details(estimate: dict, label: str) -> str:
+            """Format all available estimate details into a readable string."""
+            parts = [f"{label}:"]
+
+            # Basic loan info
+            if estimate.get('lender_name'):
+                parts.append(f"  Lender: {estimate.get('lender_name')}")
+            if estimate.get('loan_amount'):
+                parts.append(f"  Loan Amount: {format_currency(estimate.get('loan_amount'))}")
+            if estimate.get('interest_rate'):
+                parts.append(f"  Interest Rate: {format_rate(estimate.get('interest_rate'))}")
+            if estimate.get('apr'):
+                parts.append(f"  APR: {format_rate(estimate.get('apr'))}")
+            if estimate.get('loan_term'):
+                parts.append(f"  Loan Term: {estimate.get('loan_term')} years")
+
+            # Monthly payment info
+            if estimate.get('monthly_pi'):
+                parts.append(f"  Monthly P&I: {format_currency(estimate.get('monthly_pi'))}")
+            if estimate.get('monthly_payment'):
+                parts.append(f"  Total Monthly Payment: {format_currency(estimate.get('monthly_payment'))}")
+
+            # Closing costs
+            if estimate.get('cash_to_close'):
+                parts.append(f"  Cash to Close: {format_currency(estimate.get('cash_to_close'))}")
+            if estimate.get('total_closing_costs'):
+                parts.append(f"  Total Closing Costs: {format_currency(estimate.get('total_closing_costs'))}")
+            if estimate.get('lender_credits'):
+                parts.append(f"  Lender Credits: {format_currency(estimate.get('lender_credits'))}")
+            if estimate.get('prepaid_items'):
+                parts.append(f"  Prepaid Items: {format_currency(estimate.get('prepaid_items'))}")
+
+            # Rate lock
+            if estimate.get('rate_lock_days'):
+                parts.append(f"  Rate Lock: {estimate.get('rate_lock_days')} days")
+
+            return "\n".join(parts)
+
         if estimate_a:
-            context_parts.append(f"""Estimate A: {format_currency(estimate_a.get('loan_amount'))} loan at {format_rate(estimate_a.get('interest_rate'))}, {format_currency(estimate_a.get('cash_to_close'))} cash to close""")
+            context_parts.append(format_estimate_details(estimate_a, "Estimate A"))
 
         if estimate_b:
-            context_parts.append(f"""Estimate B: {format_currency(estimate_b.get('loan_amount'))} loan at {format_rate(estimate_b.get('interest_rate'))}, {format_currency(estimate_b.get('cash_to_close'))} cash to close""")
+            context_parts.append(format_estimate_details(estimate_b, "Estimate B"))
 
         if data.context:
             context_parts.append(f"Previous analysis: {data.context[:500]}")
 
-        context_str = "\n".join(context_parts) if context_parts else "No specific estimate context provided."
+        context_str = "\n\n".join(context_parts) if context_parts else "No specific estimate context provided."
 
         user_message = f"""Context about the loan estimates being compared:
 {context_str}
