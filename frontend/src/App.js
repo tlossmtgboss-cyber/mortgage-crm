@@ -89,7 +89,6 @@ const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
 const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
-const FirstTimeOnboarding = lazy(() => import('./pages/FirstTimeOnboarding'));
 const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
@@ -153,30 +152,9 @@ const API_BASE_URL = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
-function PrivateRoute({ children, skipOnboardingCheck = false }) {
-  const location = useLocation();
-
+function PrivateRoute({ children }) {
   if (!isAuthenticated()) {
     return <Navigate to="/login" />;
-  }
-
-  // Skip onboarding check for certain routes or when explicitly skipped
-  if (skipOnboardingCheck || location.pathname === '/first-time-setup') {
-    return children;
-  }
-
-  // Check if user has completed onboarding
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      if (user.onboarding_completed === false || user.onboarding_completed === undefined) {
-        // Redirect to first-time setup
-        return <Navigate to="/first-time-setup" replace />;
-      }
-    }
-  } catch (e) {
-    console.warn('Error checking onboarding status:', e);
   }
 
   return children;
@@ -195,8 +173,6 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [taskSidebarOpen, setTaskSidebarOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   // Task counts for navigation badges (MUM = Client for Life Engine tasks)
   const [taskCounts, setTaskCounts] = useState({
@@ -224,54 +200,6 @@ function App() {
   const handleUnifiedTaskCountChange = (count) => {
     setTaskCounts(prev => ({ ...prev, unifiedTasks: count }));
   };
-
-  // Removed dismiss handler - onboarding is now mandatory until completion
-
-  useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      // OPTIMIZED: Don't block rendering - check localStorage first
-      setCheckingOnboarding(false);
-
-      if (!isAuthenticated()) return;
-
-      // Check localStorage immediately (non-blocking)
-      try {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
-            setShowOnboarding(true);
-          }
-        }
-      } catch (parseError) {
-        console.warn('Error parsing user data:', parseError);
-      }
-
-      // Then verify with API in background (non-blocking for UI)
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          // Update state if different from localStorage
-          if (!userData.onboarding_completed) {
-            setShowOnboarding(true);
-          } else {
-            setShowOnboarding(false);
-          }
-        }
-      } catch (error) {
-        console.error('Error checking onboarding status:', error);
-        // Already checked localStorage, so we're okay
-      }
-    };
-
-    checkOnboardingStatus();
-  }, []);
 
   // Fetch task counts for navigation badges
   useEffect(() => {
@@ -400,24 +328,12 @@ function App() {
           {/* OAuth Callback (public) */}
           <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />
 
-          {/* First Time User Onboarding - Required for new accounts */}
-          <Route
-            path="/first-time-setup"
-            element={
-              <PrivateRoute skipOnboardingCheck={true}>
-                <LazyPage>
-                  <FirstTimeOnboarding />
-                </LazyPage>
-              </PrivateRoute>
-            }
-          />
-
-          {/* Onboarding Page (old) */}
+          {/* Onboarding redirect to wizard */}
           <Route
             path="/onboarding"
             element={
               <PrivateRoute>
-                <Navigate to="/first-time-setup" replace />
+                <Navigate to="/onboarding/welcome" replace />
               </PrivateRoute>
             }
           />
