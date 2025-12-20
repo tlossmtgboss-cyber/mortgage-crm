@@ -19448,6 +19448,14 @@ except Exception as e:
 from borrower_auth_routes import router as borrower_auth_router
 app.include_router(borrower_auth_router, tags=["Borrower Auth"])
 
+# Include borrower portal routes (applications, documents, scheduling)
+try:
+    from routes.borrower_routes import router as borrower_portal_router
+    app.include_router(borrower_portal_router, tags=["Borrower Portal"])
+    logger.info("✅ Borrower Portal routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load borrower portal routes: {e}")
+
 # Include application analytics routes
 from analytics_routes import router as analytics_router
 app.include_router(analytics_router, tags=["Analytics"])
