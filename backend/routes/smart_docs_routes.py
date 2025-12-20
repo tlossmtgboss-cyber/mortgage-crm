@@ -26,6 +26,7 @@ from services.smart_docs.needs_list_generator import NeedsListGenerator
 from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
 from services.smart_docs.auto_renewal_scheduler import AutoRenewalScheduler
 from services.smart_docs.freshness_validator import FreshnessValidator
+from services.smart_docs.notification_service import SmartDocsNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,10 @@ class AddCustomRequestBody(BaseModel):
     instructions: Optional[str] = None
     priority: str = "NORMAL"
     due_date: Optional[datetime] = None
+    # Notification options
+    send_notification: bool = False
+    borrower_email: Optional[str] = None
+    borrower_name: Optional[str] = None
 
 
 class WaiveRequestBody(BaseModel):
@@ -126,13 +131,18 @@ async def get_needs_list(
 @router.post("/needs-list/{loan_id}/custom-request")
 async def add_custom_request(
     loan_id: int,
-    borrower_id: int,
-    body: AddCustomRequestBody,
+    borrower_id: int = Query(...),
+    body: AddCustomRequestBody = None,
     db: Session = Depends(get_db),
 ):
-    """Add a custom document request to the needs list."""
+    """
+    Add a custom document request to the needs list.
+
+    Optionally sends an email notification to the borrower if send_notification
+    is set to True and borrower_email is provided.
+    """
     generator = NeedsListGenerator(db)
-    return generator.add_custom_request(
+    result = generator.add_custom_request(
         loan_id=loan_id,
         borrower_id=borrower_id,
         title=body.title,
@@ -141,6 +151,31 @@ async def add_custom_request(
         priority=body.priority,
         due_date=body.due_date,
     )
+
+    # Send notification if requested
+    notification_sent = False
+    if body.send_notification and body.borrower_email:
+        try:
+            # Get the created request from the database
+            request = db.query(DocumentRequest).filter(
+                DocumentRequest.loan_id == loan_id,
+                DocumentRequest.title == body.title
+            ).order_by(DocumentRequest.created_at.desc()).first()
+
+            if request:
+                notification_service = SmartDocsNotificationService(db)
+                notification_sent = notification_service.send_document_request_notification(
+                    request=request,
+                    borrower_email=body.borrower_email,
+                    borrower_name=body.borrower_name or "Borrower",
+                )
+        except Exception as e:
+            logger.error(f"Failed to send notification for custom request: {e}")
+
+    # Add notification status to response
+    if isinstance(result, dict):
+        result["notification_sent"] = notification_sent
+    return result
 
 
 @router.post("/needs-list/request/{request_id}/waive")
@@ -524,6 +559,237 @@ async def get_loan_events(
             }
             for e in events
         ],
+    }
+
+
+# =============================================================================
+# Applicant Views - Dashboard Endpoints
+# =============================================================================
+
+@router.get("/applicants/pending-review")
+async def get_applicants_with_pending_review(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all applicants/loans that have documents pending review.
+    Returns grouped by loan with summary of pending documents.
+    """
+    from sqlalchemy import func, distinct
+    from models.purl import PURLLoan, PURLWorkspace
+
+    # Get loans with pending documents
+    pending_docs_query = db.query(
+        SmartDocument.loan_id,
+        func.count(SmartDocument.id).label('pending_count'),
+        func.min(SmartDocument.uploaded_at).label('oldest_upload')
+    ).filter(
+        SmartDocument.status == 'PENDING_REVIEW'
+    ).group_by(SmartDocument.loan_id)
+
+    # Get total count
+    total_query = db.query(func.count(distinct(SmartDocument.loan_id))).filter(
+        SmartDocument.status == 'PENDING_REVIEW'
+    ).scalar() or 0
+
+    # Paginate
+    offset = (page - 1) * limit
+    pending_loans = pending_docs_query.order_by(
+        func.min(SmartDocument.uploaded_at).asc()
+    ).offset(offset).limit(limit).all()
+
+    applicants = []
+    for loan_id, pending_count, oldest_upload in pending_loans:
+        # Get loan/workspace info
+        loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
+        workspace = None
+        if loan and loan.workspace_id:
+            workspace = db.query(PURLWorkspace).filter(
+                PURLWorkspace.id == loan.workspace_id
+            ).first()
+
+        # Get pending document details
+        pending_docs = db.query(SmartDocument).filter(
+            SmartDocument.loan_id == loan_id,
+            SmartDocument.status == 'PENDING_REVIEW'
+        ).all()
+
+        applicants.append({
+            "loan_id": loan_id,
+            "loan_number": loan.loan_number if loan else None,
+            "borrower_name": workspace.display_name if workspace else f"Loan {loan_id}",
+            "loan_purpose": loan.loan_purpose if loan else None,
+            "pending_count": pending_count,
+            "oldest_upload": oldest_upload.isoformat() if oldest_upload else None,
+            "documents": [
+                {
+                    "id": doc.id,
+                    "file_name": doc.original_filename,
+                    "doc_type": doc.doc_type.value if doc.doc_type else None,
+                    "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                }
+                for doc in pending_docs
+            ]
+        })
+
+    return {
+        "total": total_query,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_query + limit - 1) // limit,
+        "applicants": applicants,
+    }
+
+
+@router.get("/applicants/outstanding-docs")
+async def get_applicants_with_outstanding_docs(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    include_overdue_only: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all applicants/loans that have outstanding document requests (needs list items not fulfilled).
+    Returns grouped by loan with summary of outstanding requirements.
+    """
+    from sqlalchemy import func, distinct
+    from models.purl import PURLLoan, PURLWorkspace
+
+    # Build filter for outstanding requests
+    outstanding_filter = [DocumentRequest.status == RequestStatus.OPEN]
+
+    if include_overdue_only:
+        outstanding_filter.append(DocumentRequest.due_date < datetime.utcnow())
+
+    # Get loans with outstanding requests
+    outstanding_query = db.query(
+        DocumentRequest.loan_id,
+        func.count(DocumentRequest.id).label('outstanding_count'),
+        func.count().filter(
+            DocumentRequest.due_date < datetime.utcnow()
+        ).label('overdue_count'),
+        func.min(DocumentRequest.due_date).label('nearest_due')
+    ).filter(
+        *outstanding_filter
+    ).group_by(DocumentRequest.loan_id)
+
+    # Get total count
+    total_query = db.query(func.count(distinct(DocumentRequest.loan_id))).filter(
+        *outstanding_filter
+    ).scalar() or 0
+
+    # Paginate - prioritize by overdue and nearest due date
+    offset = (page - 1) * limit
+    outstanding_loans = outstanding_query.order_by(
+        func.count().filter(DocumentRequest.due_date < datetime.utcnow()).desc(),
+        func.min(DocumentRequest.due_date).asc().nullslast()
+    ).offset(offset).limit(limit).all()
+
+    applicants = []
+    for loan_id, outstanding_count, overdue_count, nearest_due in outstanding_loans:
+        # Get loan/workspace info
+        loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
+        workspace = None
+        if loan and loan.workspace_id:
+            workspace = db.query(PURLWorkspace).filter(
+                PURLWorkspace.id == loan.workspace_id
+            ).first()
+
+        # Get outstanding requests
+        requests = db.query(DocumentRequest).filter(
+            DocumentRequest.loan_id == loan_id,
+            DocumentRequest.status == RequestStatus.OPEN
+        ).order_by(
+            DocumentRequest.priority.desc(),
+            DocumentRequest.due_date.asc().nullslast()
+        ).all()
+
+        applicants.append({
+            "loan_id": loan_id,
+            "loan_number": loan.loan_number if loan else None,
+            "borrower_name": workspace.display_name if workspace else f"Loan {loan_id}",
+            "loan_purpose": loan.loan_purpose if loan else None,
+            "outstanding_count": outstanding_count,
+            "overdue_count": overdue_count or 0,
+            "nearest_due": nearest_due.isoformat() if nearest_due else None,
+            "requests": [
+                {
+                    "id": req.id,
+                    "title": req.title,
+                    "doc_type": req.doc_type.value if req.doc_type else None,
+                    "priority": req.priority.value if req.priority else "NORMAL",
+                    "due_date": req.due_date.isoformat() if req.due_date else None,
+                    "is_overdue": req.due_date and req.due_date < datetime.utcnow(),
+                }
+                for req in requests
+            ]
+        })
+
+    return {
+        "total": total_query,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_query + limit - 1) // limit,
+        "applicants": applicants,
+    }
+
+
+@router.get("/dashboard/summary")
+async def get_document_dashboard_summary(
+    db: Session = Depends(get_db),
+):
+    """
+    Get summary statistics for the document management dashboard.
+    """
+    from sqlalchemy import func
+
+    # Pending review count
+    pending_review = db.query(func.count(SmartDocument.id)).filter(
+        SmartDocument.status == 'PENDING_REVIEW'
+    ).scalar() or 0
+
+    # Pending review by unique loans
+    pending_review_loans = db.query(func.count(func.distinct(SmartDocument.loan_id))).filter(
+        SmartDocument.status == 'PENDING_REVIEW'
+    ).scalar() or 0
+
+    # Outstanding requests
+    outstanding = db.query(func.count(DocumentRequest.id)).filter(
+        DocumentRequest.status == RequestStatus.OPEN
+    ).scalar() or 0
+
+    # Outstanding by unique loans
+    outstanding_loans = db.query(func.count(func.distinct(DocumentRequest.loan_id))).filter(
+        DocumentRequest.status == RequestStatus.OPEN
+    ).scalar() or 0
+
+    # Overdue requests
+    overdue = db.query(func.count(DocumentRequest.id)).filter(
+        DocumentRequest.status == RequestStatus.OPEN,
+        DocumentRequest.due_date < datetime.utcnow()
+    ).scalar() or 0
+
+    # Documents processed today
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    processed_today = db.query(func.count(SmartDocument.id)).filter(
+        SmartDocument.reviewed_at >= today_start
+    ).scalar() or 0
+
+    return {
+        "pending_review": {
+            "documents": pending_review,
+            "applicants": pending_review_loans,
+        },
+        "outstanding_requests": {
+            "total": outstanding,
+            "applicants": outstanding_loans,
+            "overdue": overdue,
+        },
+        "activity": {
+            "processed_today": processed_today,
+        },
+        "generated_at": datetime.utcnow().isoformat(),
     }
 
 

@@ -65,7 +65,12 @@ class PortalNeedsListResponse(BaseModel):
 # =============================================================================
 
 def get_workspace_loan(db: Session, workspace_slug: str) -> tuple:
-    """Get workspace and active loan from slug."""
+    """Get workspace and active loan from slug.
+
+    Returns:
+        tuple: (workspace, purl_loan, main_loan_id)
+        - main_loan_id is the ID used in Smart Docs tables (references loans.id)
+    """
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.slug == workspace_slug
     ).first()
@@ -80,7 +85,10 @@ def get_workspace_loan(db: Session, workspace_slug: str) -> tuple:
     if not loan:
         raise HTTPException(status_code=404, detail="No active loan found")
 
-    return workspace, loan
+    # Smart Docs uses main_loan_id (references loans.id), not purl_loan.id
+    main_loan_id = loan.main_loan_id or loan.id
+
+    return workspace, loan, main_loan_id
 
 
 def format_requirement(request: DocumentRequest, documents: list) -> dict:
@@ -134,11 +142,11 @@ async def get_portal_requirements(
 
     Returns the needs list with status, due dates, and uploaded documents.
     """
-    workspace, loan = get_workspace_loan(db, workspace_slug)
+    workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
-    # Get all document requests for this loan
+    # Get all document requests for this loan (using main_loan_id for Smart Docs)
     requests = db.query(DocumentRequest).filter(
-        DocumentRequest.loan_id == loan.id
+        DocumentRequest.loan_id == main_loan_id
     ).order_by(
         DocumentRequest.priority.desc(),
         DocumentRequest.due_date.asc().nullslast()
@@ -146,7 +154,7 @@ async def get_portal_requirements(
 
     # Get all documents for this loan
     documents = db.query(SmartDocument).filter(
-        SmartDocument.loan_id == loan.id
+        SmartDocument.loan_id == main_loan_id
     ).all()
 
     # Format requirements
@@ -161,7 +169,7 @@ async def get_portal_requirements(
     completion_pct = int((completed / total) * 100) if total > 0 else 0
 
     return {
-        "loan_id": loan.id,
+        "loan_id": main_loan_id,
         "workspace_slug": workspace_slug,
         "total_requirements": total,
         "completed_count": completed,
@@ -179,11 +187,11 @@ async def get_requirement_detail(
     db: Session = Depends(get_db)
 ):
     """Get detailed information about a specific document requirement."""
-    workspace, loan = get_workspace_loan(db, workspace_slug)
+    workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
     request = db.query(DocumentRequest).filter(
         DocumentRequest.id == request_id,
-        DocumentRequest.loan_id == loan.id
+        DocumentRequest.loan_id == main_loan_id
     ).first()
 
     if not request:
@@ -208,12 +216,12 @@ async def upload_document_for_requirement(
 
     The document will be validated and linked to the specific requirement.
     """
-    workspace, loan = get_workspace_loan(db, workspace_slug)
+    workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
     # Verify the request belongs to this loan
     request = db.query(DocumentRequest).filter(
         DocumentRequest.id == request_id,
-        DocumentRequest.loan_id == loan.id
+        DocumentRequest.loan_id == main_loan_id
     ).first()
 
     if not request:
@@ -232,7 +240,7 @@ async def upload_document_for_requirement(
             file_content=content,
             filename=file.filename,
             content_type=file.content_type,
-            loan_id=loan.id,
+            loan_id=main_loan_id,
             borrower_id=request.borrower_id or 1,
             request_id=request_id,
             document_category=request.doc_type.value if request.doc_type else "other"
@@ -264,11 +272,11 @@ async def get_document_summary(
     """
     Get a summary of document collection progress for the portal dashboard.
     """
-    workspace, loan = get_workspace_loan(db, workspace_slug)
+    workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
     # Get request counts by status
     requests = db.query(DocumentRequest).filter(
-        DocumentRequest.loan_id == loan.id
+        DocumentRequest.loan_id == main_loan_id
     ).all()
 
     by_status = {
@@ -310,7 +318,7 @@ async def get_document_summary(
     completed = by_status["accepted"] + by_status["waived"]
 
     return {
-        "loan_id": loan.id,
+        "loan_id": main_loan_id,
         "total_requirements": total,
         "completed": completed,
         "pending": by_status["open"] + by_status["pending_review"],

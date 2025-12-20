@@ -1,6 +1,6 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { loansAPI, activitiesAPI, schedulerAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
@@ -11,6 +11,7 @@ import VoicemailDrop from '../components/VoicemailDrop';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
+import NeedsListView from '../components/smart-docs/NeedsListView';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -40,6 +41,7 @@ const generateMockLeads = () => {
 function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [client, setClient] = useState(null);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +89,18 @@ function ClientProfile() {
     markLoanAsViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Handle tab query parameter for deep linking
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      // Valid tabs: personal, loan-details, employment, circle-of-trust, documents, important-dates, communications
+      const validTabs = ['personal', 'loan-details', 'employment', 'circle-of-trust', 'documents', 'important-dates', 'communications'];
+      if (validTabs.includes(tabParam)) {
+        setActiveTab(tabParam);
+      }
+    }
+  }, [searchParams]);
 
   const markLoanAsViewed = () => {
     try {
@@ -1281,80 +1295,18 @@ function ClientProfile() {
           {activeTab === 'documents' && (
           <div className="info-section">
             <h2>Documents</h2>
-            <div className="documents-content">
-              <p className="circle-description">
-                Manage and organize all loan-related documents including income verification,
-                credit reports, property documents, and disclosures.
-              </p>
-
-              <div className="documents-upload-area">
-                <button className="btn-upload-document">
-                  📄 Upload Document
-                </button>
-              </div>
-
-              <div className="documents-grid">
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>📋 Income Verification</h3>
-                    <span className="doc-count">0 files</span>
-                  </div>
-                  <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>💳 Credit Reports</h3>
-                    <span className="doc-count">0 files</span>
-                  </div>
-                  <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>🏠 Property Documents</h3>
-                    <span className="doc-count">0 files</span>
-                  </div>
-                  <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>✍️ Disclosures & Forms</h3>
-                    <span className="doc-count">0 files</span>
-                  </div>
-                  <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>🏦 Bank Statements</h3>
-                    <span className="doc-count">0 files</span>
-                  </div>
-                  <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
-                  </div>
-                </div>
-
-                <div className="document-category">
-                  <div className="category-header">
-                    <h3>📑 Other Documents</h3>
-                    <span className="doc-count">0 files</span>
-                  </div>
-                  <div className="document-list">
-                    <div className="empty-state">No documents uploaded yet</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <p className="section-subtitle">
+              Manage document collection and track outstanding requests for this loan.
+              {borrowers.length > 1 && ` Showing documents for ${borrowers[activeBorrower]?.name || 'borrower'}.`}
+            </p>
+            <NeedsListView
+              loanId={parseInt(id)}
+              borrowerId={activeBorrower + 1}
+              onRequestUpdated={() => {
+                // Optionally refresh any related data when documents change
+                console.log('Document request updated');
+              }}
+            />
           </div>
           )}
 

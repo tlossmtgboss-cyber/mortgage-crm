@@ -2,11 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { smartDocsAPI } from '../../services/smartDocsApi';
 import './NeedsListView.css';
 
-function NeedsListView({ loanId, onRequestUpdated }) {
+function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
   const [needsList, setNeedsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addingRequest, setAddingRequest] = useState(false);
+  const [newRequest, setNewRequest] = useState({
+    title: '',
+    description: '',
+    instructions: '',
+    priority: 'NORMAL',
+    due_date: '',
+    send_notification: false,
+    borrower_email: '',
+    borrower_name: ''
+  });
 
   useEffect(() => {
     if (loanId) {
@@ -52,6 +64,71 @@ function NeedsListView({ loanId, onRequestUpdated }) {
     }
   };
 
+  const handleAddCustomRequest = async (e) => {
+    e.preventDefault();
+    if (!newRequest.title.trim()) {
+      setError('Document title is required');
+      return;
+    }
+
+    try {
+      setAddingRequest(true);
+      setError(null);
+
+      const requestData = {
+        title: newRequest.title.trim(),
+        description: newRequest.description.trim() || null,
+        instructions: newRequest.instructions.trim() || null,
+        priority: newRequest.priority,
+        due_date: newRequest.due_date || null,
+        send_notification: newRequest.send_notification,
+        borrower_email: newRequest.borrower_email.trim() || null,
+        borrower_name: newRequest.borrower_name.trim() || null
+      };
+
+      const result = await smartDocsAPI.addCustomRequest(loanId, borrowerId, requestData);
+
+      // Show notification status
+      if (result.notification_sent) {
+        console.log('Email notification sent to borrower');
+      }
+
+      // Reset form and close modal
+      setNewRequest({
+        title: '',
+        description: '',
+        instructions: '',
+        priority: 'NORMAL',
+        due_date: '',
+        send_notification: false,
+        borrower_email: '',
+        borrower_name: ''
+      });
+      setShowAddModal(false);
+
+      // Refresh the list
+      await fetchNeedsList();
+      if (onRequestUpdated) onRequestUpdated();
+    } catch (err) {
+      console.error('Error adding custom request:', err);
+      setError('Failed to add document request');
+    } finally {
+      setAddingRequest(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setNewRequest({
+      title: '',
+      description: '',
+      instructions: '',
+      priority: 'NORMAL',
+      due_date: ''
+    });
+    setError(null);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'fulfilled': return 'green';
@@ -78,16 +155,141 @@ function NeedsListView({ loanId, onRequestUpdated }) {
     <div className="needs-list-view">
       <div className="needs-list-header">
         <h3>Document Needs List</h3>
-        <button
-          className="generate-btn"
-          onClick={handleGenerateNeedsList}
-          disabled={generating}
-        >
-          {generating ? 'Generating...' : 'Generate/Refresh List'}
-        </button>
+        <div className="needs-list-actions">
+          <button
+            className="add-request-btn"
+            onClick={() => setShowAddModal(true)}
+          >
+            + Add Request
+          </button>
+          <button
+            className="generate-btn"
+            onClick={handleGenerateNeedsList}
+            disabled={generating}
+          >
+            {generating ? 'Generating...' : 'Generate/Refresh List'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="needs-list-error">{error}</div>}
+
+      {/* Add Custom Request Modal */}
+      {showAddModal && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content add-request-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Request Document</h3>
+              <button className="modal-close" onClick={handleCloseModal}>×</button>
+            </div>
+            <form onSubmit={handleAddCustomRequest}>
+              <div className="form-group">
+                <label htmlFor="title">Document Title *</label>
+                <input
+                  type="text"
+                  id="title"
+                  value={newRequest.title}
+                  onChange={(e) => setNewRequest({ ...newRequest, title: e.target.value })}
+                  placeholder="e.g., Bank Statement - Chase"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="description">Description</label>
+                <textarea
+                  id="description"
+                  value={newRequest.description}
+                  onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
+                  placeholder="What document is needed and why"
+                  rows={2}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="instructions">Instructions for Borrower</label>
+                <textarea
+                  id="instructions"
+                  value={newRequest.instructions}
+                  onChange={(e) => setNewRequest({ ...newRequest, instructions: e.target.value })}
+                  placeholder="Instructions on how to obtain or submit this document"
+                  rows={3}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="priority">Priority</label>
+                  <select
+                    id="priority"
+                    value={newRequest.priority}
+                    onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value })}
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="NORMAL">Normal</option>
+                    <option value="HIGH">High</option>
+                    <option value="CRITICAL">Critical</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="due_date">Due Date</label>
+                  <input
+                    type="date"
+                    id="due_date"
+                    value={newRequest.due_date}
+                    onChange={(e) => setNewRequest({ ...newRequest, due_date: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+              </div>
+
+              {/* Email Notification Section */}
+              <div className="notification-section">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={newRequest.send_notification}
+                    onChange={(e) => setNewRequest({ ...newRequest, send_notification: e.target.checked })}
+                  />
+                  <span>Send email notification to borrower</span>
+                </label>
+
+                {newRequest.send_notification && (
+                  <div className="notification-fields">
+                    <div className="form-group">
+                      <label htmlFor="borrower_email">Borrower Email *</label>
+                      <input
+                        type="email"
+                        id="borrower_email"
+                        value={newRequest.borrower_email}
+                        onChange={(e) => setNewRequest({ ...newRequest, borrower_email: e.target.value })}
+                        placeholder="borrower@email.com"
+                        required={newRequest.send_notification}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="borrower_name">Borrower Name</label>
+                      <input
+                        type="text"
+                        id="borrower_name"
+                        value={newRequest.borrower_name}
+                        onChange={(e) => setNewRequest({ ...newRequest, borrower_name: e.target.value })}
+                        placeholder="John Smith"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={handleCloseModal}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-submit" disabled={addingRequest}>
+                  {addingRequest ? 'Adding...' : 'Add Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {needsList.length === 0 ? (
         <div className="needs-list-empty">

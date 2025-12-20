@@ -245,6 +245,43 @@ export async function getLoanEvents(loanId, limit = 50) {
 }
 
 // =============================================================================
+// Applicant Dashboard Views
+// =============================================================================
+
+/**
+ * Get applicants with documents pending review
+ */
+export async function getApplicantsPendingReview(page = 1, limit = 20) {
+  const response = await fetch(`${API_BASE}/applicants/pending-review?page=${page}&limit=${limit}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Get applicants with outstanding document requests
+ */
+export async function getApplicantsOutstandingDocs(page = 1, limit = 20, overdueOnly = false) {
+  const params = new URLSearchParams({ page, limit });
+  if (overdueOnly) params.append('include_overdue_only', 'true');
+
+  const response = await fetch(`${API_BASE}/applicants/outstanding-docs?${params}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Get dashboard summary statistics
+ */
+export async function getDashboardSummary() {
+  const response = await fetch(`${API_BASE}/dashboard/summary`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+// =============================================================================
 // Export all functions
 // =============================================================================
 
@@ -271,6 +308,10 @@ export const smartDocsAPI = {
   getTemplate,
   // Events
   getLoanEvents,
+  // Dashboard
+  getApplicantsPendingReview,
+  getApplicantsOutstandingDocs,
+  getDashboardSummary,
 };
 
 export default smartDocsAPI;
