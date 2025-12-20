@@ -958,19 +958,17 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
-  /* Small notch at bottom-right corner only */
-  clip-path: polygon(0 0, 100% 0, 100% 60%, calc(100% - 8px) 100%, 0 100%);
-  margin-right: 2px;
+  margin-right: 3px;
+  border-radius: 4px;
 }
 
 .chevron-tabs .purl-tab-btn.first {
-  border-radius: 4px 0 0 4px;
+  border-radius: 4px;
 }
 
 .chevron-tabs .purl-tab-btn.last {
-  border-radius: 0 4px 4px 0;
+  border-radius: 4px;
   margin-right: 0;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn:hover {
