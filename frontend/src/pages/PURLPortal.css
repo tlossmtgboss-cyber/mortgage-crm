@@ -925,7 +925,7 @@
 }
 
 /* ========================================
-   Navigation - Step Tabs with Angled Dividers
+   Navigation - Step Tabs
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 10px 22px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,23 +958,18 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
+  margin-right: -6px;
+  /* Bottom-right extends further than top-right */
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 100%, 0 100%);
 }
 
-/* Angled divider between tabs - creates step-down effect */
-.chevron-tabs .purl-tab-btn::after {
-  content: '';
-  position: absolute;
-  right: -5px;
-  top: 0;
-  width: 12px;
-  height: 100%;
-  background: linear-gradient(to bottom right, #334155 50%, #1e293b 50%);
-  z-index: 1;
-}
-
-.chevron-tabs .purl-tab-btn.last::after {
-  display: none;
-}
+/* Z-index: later tabs on top */
+.chevron-tabs .purl-tab-btn:nth-child(1) { z-index: 1; }
+.chevron-tabs .purl-tab-btn:nth-child(2) { z-index: 2; }
+.chevron-tabs .purl-tab-btn:nth-child(3) { z-index: 3; }
+.chevron-tabs .purl-tab-btn:nth-child(4) { z-index: 4; }
+.chevron-tabs .purl-tab-btn:nth-child(5) { z-index: 5; }
+.chevron-tabs .purl-tab-btn:nth-child(6) { z-index: 6; }
 
 .chevron-tabs .purl-tab-btn.first {
   border-radius: 4px 0 0 4px;
@@ -982,6 +977,8 @@
 
 .chevron-tabs .purl-tab-btn.last {
   border-radius: 0 4px 4px 0;
+  margin-right: 0;
+  clip-path: none;
 }
 
 .chevron-tabs .purl-tab-btn:hover {
@@ -993,6 +990,7 @@
   background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
   color: #ffffff;
   font-weight: 600;
+  z-index: 10 !important;
 }
 
 .chevron-tabs .tab-label {
