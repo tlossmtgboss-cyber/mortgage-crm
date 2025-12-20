@@ -249,24 +249,121 @@ const DocumentsTable = ({ documents, onDownload }) => {
   );
 };
 
-// Task card component
-const TaskCard = ({ task, onComplete }) => {
-  const priorityColors = {
-    high: 'red',
-    medium: 'yellow',
-    low: 'green'
+// Task status badge component
+const TaskStatusBadge = ({ status, isOverdue }) => {
+  const statusConfig = {
+    open: { label: 'To Do', className: 'status-todo' },
+    TODO: { label: 'To Do', className: 'status-todo' },
+    IN_PROGRESS: { label: 'In Progress', className: 'status-progress' },
+    completed: { label: 'Completed', className: 'status-completed' },
+    DONE: { label: 'Completed', className: 'status-completed' },
   };
 
-  const isOverdue = task.due_at && new Date(task.due_at) < new Date();
+  const config = statusConfig[status] || statusConfig.open;
+
+  if (isOverdue && status !== 'completed' && status !== 'DONE') {
+    return <span className="task-status-badge status-overdue">Overdue</span>;
+  }
+
+  return <span className={`task-status-badge ${config.className}`}>{config.label}</span>;
+};
+
+// Priority badge component
+const PriorityBadge = ({ priority }) => {
+  const priorityConfig = {
+    high: { label: 'High', className: 'priority-high' },
+    medium: { label: 'Medium', className: 'priority-medium' },
+    low: { label: 'Low', className: 'priority-low' },
+  };
+
+  const config = priorityConfig[priority] || priorityConfig.medium;
+
+  return <span className={`priority-badge ${config.className}`}>{config.label}</span>;
+};
+
+// Tasks table component
+const TasksTable = ({ tasks, onComplete, title, showCompleted = false }) => {
+  if (tasks.length === 0) {
+    return (
+      <div className="empty-state-card">
+        <div className="empty-icon">{showCompleted ? '🎉' : '✓'}</div>
+        <h3>{showCompleted ? 'No completed tasks yet' : 'All caught up!'}</h3>
+        <p>{showCompleted ? 'Completed tasks will appear here' : 'You have no pending tasks'}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`task-card ${task.status === 'completed' ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
+    <div className="tasks-table-wrapper">
+      <table className="tasks-table">
+        <thead>
+          <tr>
+            <th style={{ width: '40px' }}></th>
+            <th>Task</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Due Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map(task => {
+            const isOverdue = task.due_at && new Date(task.due_at) < new Date();
+            const isCompleted = task.status === 'completed' || task.status === 'DONE';
+
+            return (
+              <tr key={task.id} className={isCompleted ? 'completed-row' : ''}>
+                <td className="checkbox-cell">
+                  <input
+                    type="checkbox"
+                    className="task-checkbox"
+                    checked={isCompleted}
+                    onChange={() => onComplete(task.id, !isCompleted)}
+                    disabled={isCompleted}
+                  />
+                </td>
+                <td className="task-name-cell">
+                  <span className={`task-title ${isCompleted ? 'completed' : ''}`}>
+                    {task.title}
+                  </span>
+                  {task.description && (
+                    <span className="task-description">{task.description}</span>
+                  )}
+                </td>
+                <td className="task-status-cell">
+                  <TaskStatusBadge status={task.status} isOverdue={isOverdue} />
+                </td>
+                <td className="task-priority-cell">
+                  <PriorityBadge priority={task.priority} />
+                </td>
+                <td className="task-date-cell">
+                  {task.due_at ? (
+                    <span className={isOverdue && !isCompleted ? 'overdue-date' : ''}>
+                      {new Date(task.due_at).toLocaleDateString()}
+                    </span>
+                  ) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// Legacy Task card component (for overview)
+const TaskCard = ({ task, onComplete }) => {
+  const isOverdue = task.due_at && new Date(task.due_at) < new Date();
+  const isCompleted = task.status === 'completed' || task.status === 'DONE';
+
+  return (
+    <div className={`task-card ${isCompleted ? 'completed' : ''} ${isOverdue ? 'overdue' : ''}`}>
       <div className="task-checkbox">
         <input
           type="checkbox"
-          checked={task.status === 'completed'}
-          onChange={() => onComplete(task.id, task.status !== 'completed')}
-          disabled={task.status === 'completed'}
+          checked={isCompleted}
+          onChange={() => onComplete(task.id, !isCompleted)}
+          disabled={isCompleted}
         />
       </div>
       <div className="task-content">
@@ -278,9 +375,7 @@ const TaskCard = ({ task, onComplete }) => {
               Due: {new Date(task.due_at).toLocaleDateString()}
             </span>
           )}
-          <span className={`priority priority-${priorityColors[task.priority]}`}>
-            {task.priority}
-          </span>
+          {task.priority && <PriorityBadge priority={task.priority} />}
         </div>
       </div>
     </div>
@@ -1107,34 +1202,38 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
         {/* Tasks Tab */}
         {activeTab === 'tasks' && (
           <div className="tab-content tasks-tab">
-            <h2>Your Tasks</h2>
+            <div className="tasks-header">
+              <h2>Your Tasks</h2>
+            </div>
 
             <div className="tasks-section">
-              <h3>To Do ({tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS').length})</h3>
-              {tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS').map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onComplete={handleTaskComplete}
-                />
-              ))}
-              {tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS').length === 0 && (
-                <div className="empty-state">
-                  <p>No pending tasks - great job!</p>
-                </div>
-              )}
+              <div className="section-header">
+                <h3>To Do</h3>
+                <span className="section-count">
+                  {tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS').length} items
+                </span>
+              </div>
+              <TasksTable
+                tasks={tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS')}
+                onComplete={handleTaskComplete}
+              />
             </div>
 
-            <div className="tasks-section completed-tasks">
-              <h3>Completed ({tasks.filter(t => t.status === 'completed' || t.status === 'DONE').length})</h3>
-              {tasks.filter(t => t.status === 'completed' || t.status === 'DONE').slice(0, 5).map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
+            {tasks.filter(t => t.status === 'completed' || t.status === 'DONE').length > 0 && (
+              <div className="tasks-section completed-section">
+                <div className="section-header">
+                  <h3>Completed</h3>
+                  <span className="section-count">
+                    {tasks.filter(t => t.status === 'completed' || t.status === 'DONE').length} items
+                  </span>
+                </div>
+                <TasksTable
+                  tasks={tasks.filter(t => t.status === 'completed' || t.status === 'DONE').slice(0, 5)}
                   onComplete={handleTaskComplete}
+                  showCompleted={true}
                 />
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
