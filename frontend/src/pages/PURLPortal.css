@@ -925,17 +925,17 @@
 }
 
 /* ========================================
-   Navigation - Step Tab Design with Angled Dividers
+   Navigation - Skewed Tab Design (Parallelogram)
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
   display: flex;
   justify-content: center;
-  padding: 10px 16px;
+  padding: 10px 24px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-bottom: none;
-  gap: 0;
+  gap: 2px;
 }
 
 .portal-nav.chevron-tabs::-webkit-scrollbar {
@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 10px 24px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,31 +958,20 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
+  transform: skewX(-12deg);
 }
 
-/* Angled divider between tabs */
-.chevron-tabs .purl-tab-btn::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 16px;
-  height: 100%;
-  background: #1e293b;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 100%);
-  z-index: 2;
+.chevron-tabs .purl-tab-btn .tab-label,
+.chevron-tabs .purl-tab-btn .tab-notification-dot {
+  transform: skewX(12deg);
 }
 
 .chevron-tabs .purl-tab-btn.first {
-  border-radius: 6px 0 0 6px;
+  border-radius: 4px 0 0 4px;
 }
 
 .chevron-tabs .purl-tab-btn.last {
-  border-radius: 0 6px 6px 0;
-}
-
-.chevron-tabs .purl-tab-btn.last::after {
-  display: none;
+  border-radius: 0 4px 4px 0;
 }
 
 .chevron-tabs .purl-tab-btn:hover {
@@ -1014,11 +1003,11 @@
 @media (max-width: 768px) {
   .portal-nav.chevron-tabs {
     justify-content: flex-start;
-    padding: 8px 12px;
+    padding: 8px 16px;
   }
 
   .chevron-tabs .purl-tab-btn {
-    padding: 8px 16px;
+    padding: 8px 18px;
     font-size: 12px;
   }
 }
@@ -1027,6 +1016,12 @@
   .chevron-tabs .purl-tab-btn {
     padding: 8px 14px;
     font-size: 11px;
+    transform: skewX(-8deg);
+  }
+
+  .chevron-tabs .purl-tab-btn .tab-label,
+  .chevron-tabs .purl-tab-btn .tab-notification-dot {
+    transform: skewX(8deg);
   }
 }
 
