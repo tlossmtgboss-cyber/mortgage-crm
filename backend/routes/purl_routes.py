@@ -537,9 +537,9 @@ async def complete_document_upload(
         "success": True,
         "document": {
             "id": document.id,
-            "filename": document.filename,
-            "document_type": document.document_type,
-            "category": document.category,
+            "filename": document.file_name,
+            "document_type": document.doc_type,
+            "category": document.doc_category,
             "status": document.status
         }
     }
@@ -675,7 +675,18 @@ async def list_conditions(
         PURLWorkspace.id == context.workspace_id
     ).first()
 
-    if not workspace or not workspace.lead_id:
+    # Extract lead_id from meta_data (not a direct column on PURLWorkspace)
+    # Note: lead_id is stored as a string in meta_data but needs to be int for DB queries
+    lead_id = None
+    if workspace and workspace.meta_data:
+        lead_id_str = workspace.meta_data.get('lead_id')
+        if lead_id_str:
+            try:
+                lead_id = int(lead_id_str)
+            except (ValueError, TypeError):
+                lead_id = None
+
+    if not workspace or not lead_id:
         return {"conditions": [], "message": "No lead associated with workspace"}
 
     # Build query for lead_conditions
@@ -686,7 +697,7 @@ async def list_conditions(
         FROM lead_conditions
         WHERE lead_id = :lead_id
     """
-    params = {"lead_id": workspace.lead_id}
+    params = {"lead_id": lead_id}
 
     if status:
         query += " AND status = :status"
@@ -747,7 +758,18 @@ async def mark_condition_received(
         PURLWorkspace.id == context.workspace_id
     ).first()
 
-    if not workspace or not workspace.lead_id:
+    # Extract lead_id from meta_data (not a direct column on PURLWorkspace)
+    # Note: lead_id is stored as a string in meta_data but needs to be int for DB queries
+    lead_id = None
+    if workspace and workspace.meta_data:
+        lead_id_str = workspace.meta_data.get('lead_id')
+        if lead_id_str:
+            try:
+                lead_id = int(lead_id_str)
+            except (ValueError, TypeError):
+                lead_id = None
+
+    if not workspace or not lead_id:
         raise HTTPException(status_code=404, detail="No lead associated with workspace")
 
     # Update the condition
@@ -759,7 +781,7 @@ async def mark_condition_received(
                 WHERE id = :condition_id AND lead_id = :lead_id
                 RETURNING id, name, status
             """),
-            {"condition_id": condition_id, "lead_id": workspace.lead_id}
+            {"condition_id": condition_id, "lead_id": lead_id}
         )
         row = result.fetchone()
         db.commit()
