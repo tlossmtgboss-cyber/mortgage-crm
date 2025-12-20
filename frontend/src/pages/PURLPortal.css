@@ -583,66 +583,152 @@
 }
 
 /* ========================================
-   Quick Actions Bar - Modern Cards
+   Contact Loan Officer Card
    ======================================== */
-.quick-actions-bar {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.quick-action-btn {
+.contact-lo-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 24px 16px;
-  background: white;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, var(--portal-gray-50) 0%, white 100%);
   border: 1px solid var(--portal-gray-200);
   border-radius: var(--portal-radius);
-  cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: var(--portal-shadow-sm);
+  margin-top: 24px;
 }
 
-.quick-action-btn:hover {
-  border-color: var(--portal-primary);
-  background: linear-gradient(180deg, rgba(15, 118, 110, 0.04) 0%, rgba(15, 118, 110, 0.08) 100%);
-  transform: translateY(-3px);
-  box-shadow: var(--portal-shadow-md);
+.contact-lo-content h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--portal-gray-900);
+  margin: 0 0 4px 0;
 }
 
-.quick-action-btn .action-icon {
-  font-size: 28px;
-  width: 56px;
-  height: 56px;
+.contact-lo-content p {
+  font-size: 14px;
+  color: var(--portal-gray-500);
+  margin: 0;
+}
+
+.schedule-call-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: var(--portal-gray-50);
-  border-radius: 50%;
-  transition: all 0.25s ease;
-}
-
-.quick-action-btn:hover .action-icon {
-  background: rgba(15, 118, 110, 0.1);
-  transform: scale(1.05);
-}
-
-.quick-action-btn .action-label {
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--portal-primary);
+  color: white;
+  border: none;
+  border-radius: var(--portal-radius-sm);
   font-size: 14px;
   font-weight: 600;
-  color: var(--portal-gray-700);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.schedule-call-btn:hover {
+  background: var(--portal-primary-dark);
+  transform: translateY(-1px);
+}
+
+.schedule-call-btn .btn-icon {
+  font-size: 16px;
 }
 
 /* ========================================
-   Overview Sections
+   All Caught Up Section
+   ======================================== */
+.all-caught-up-section {
+  text-align: center;
+  padding: 48px 24px;
+  background: white;
+  border-radius: var(--portal-radius);
+  border: 1px solid var(--portal-gray-100);
+  box-shadow: var(--portal-shadow-sm);
+}
+
+.caught-up-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  background: linear-gradient(135deg, var(--portal-success) 0%, #10b981 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.all-caught-up-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--portal-gray-900);
+  margin: 0 0 8px 0;
+}
+
+.all-caught-up-section p {
+  font-size: 15px;
+  color: var(--portal-gray-500);
+  margin: 0;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* ========================================
+   What's Next Section
+   ======================================== */
+.whats-next-section {
+  background: white;
+  border-radius: var(--portal-radius);
+  padding: 24px;
+  border: 1px solid var(--portal-gray-100);
+  box-shadow: var(--portal-shadow-sm);
+}
+
+.whats-next-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--portal-gray-900);
+  margin: 0 0 16px 0;
+}
+
+.pending-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ========================================
+   Progress & Activity Sections
+   ======================================== */
+.progress-section,
+.activity-section {
+  background: white;
+  border-radius: var(--portal-radius);
+  padding: 24px;
+  border: 1px solid var(--portal-gray-100);
+  box-shadow: var(--portal-shadow-sm);
+  margin-top: 20px;
+}
+
+.progress-section h2,
+.activity-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--portal-gray-900);
+  margin: 0 0 16px 0;
+}
+
+/* ========================================
+   Overview Sections (Legacy support)
    ======================================== */
 .overview-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
+  margin-top: 20px;
 }
 
 .overview-column {
@@ -1402,13 +1488,23 @@
     gap: 16px;
   }
 
-  .quick-actions-bar {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+  .contact-lo-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
   }
 
-  .quick-action-btn {
-    padding: 18px 12px;
+  .contact-lo-content {
+    margin-bottom: 16px;
+  }
+
+  .schedule-call-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .all-caught-up-section {
+    padding: 32px 20px;
   }
 
   .documents-header {
@@ -1436,8 +1532,10 @@
     grid-template-columns: 1fr;
   }
 
-  .quick-actions-bar {
-    grid-template-columns: repeat(2, 1fr);
+  .caught-up-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 24px;
   }
 
   .milestone-step .step-label {

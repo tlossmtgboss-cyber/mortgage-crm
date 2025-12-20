@@ -640,23 +640,15 @@ const NeedsListCard = ({ tasks, onViewAll }) => {
 };
 
 // Quick Actions Bar - Provides quick access to common actions
-const QuickActionsBar = ({ onSchedule, onMessage, onUpload, onCalculator }) => (
-  <div className="quick-actions-bar">
-    <button className="quick-action-btn" onClick={onSchedule}>
-      <span className="action-icon">📅</span>
-      <span className="action-label">Schedule Call</span>
-    </button>
-    <button className="quick-action-btn" onClick={onMessage}>
-      <span className="action-icon">💬</span>
-      <span className="action-label">Message</span>
-    </button>
-    <button className="quick-action-btn" onClick={onUpload}>
-      <span className="action-icon">📄</span>
-      <span className="action-label">Upload Docs</span>
-    </button>
-    <button className="quick-action-btn" onClick={onCalculator}>
-      <span className="action-icon">🧮</span>
-      <span className="action-label">Calculator</span>
+const ContactLOCard = ({ onSchedule }) => (
+  <div className="contact-lo-card">
+    <div className="contact-lo-content">
+      <h3>Questions about your loan?</h3>
+      <p>Your loan officer is here to help guide you through the process.</p>
+    </div>
+    <button className="schedule-call-btn" onClick={onSchedule}>
+      <span className="btn-icon">📅</span>
+      Schedule a Call
     </button>
   </div>
 );
@@ -980,86 +972,67 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             {/* Loan Summary Card */}
             <LoanSummaryCard loan={loan} workspace={workspace} contacts={contacts} subStage={subStage} />
 
-            {/* Needs List - Full Width Prominent Section */}
-            <section className="needs-list-section">
-              {conditions.length > 0 ? (
-                <ConditionsNeedsListCard
-                  conditions={conditions}
-                  onViewAll={() => setActiveTab('tasks')}
-                  onUploadForCondition={handleUploadForCondition}
-                  uploading={conditionUploading}
-                />
-              ) : (
-                <NeedsListCard
-                  tasks={tasks}
-                  onViewAll={() => setActiveTab('tasks')}
-                />
-              )}
-            </section>
-
-            {/* Quick Actions Bar */}
-            <QuickActionsBar
-              onSchedule={() => setShowScheduleModal(true)}
-              onMessage={() => setActiveTab('messages')}
-              onUpload={() => setActiveTab('documents')}
-              onCalculator={() => setActiveTab('calculator')}
-            />
-
-            {/* Two Column Layout */}
-            <div className="overview-columns">
-              {/* Left Column - Progress & Tasks */}
-              <div className="overview-column">
-                <section className="overview-section">
-                  <h2>Loan Progress</h2>
-                  <MilestoneTracker milestones={milestones} />
-                </section>
-
-                <section className="overview-section">
-                  <h2>Your To-Do List</h2>
-                  {tasks.filter(t => t.status === 'open' || t.status === 'TODO').length === 0 ? (
-                    <div className="empty-state">
-                      <p>✓ No pending tasks - you're all caught up!</p>
-                    </div>
-                  ) : (
-                    <>
-                      {tasks.filter(t => t.status === 'open' || t.status === 'TODO').slice(0, 3).map(task => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onComplete={handleTaskComplete}
-                        />
-                      ))}
-                      {pendingTasksCount > 3 && (
-                        <button
-                          className="view-all-btn"
-                          onClick={() => setActiveTab('tasks')}
-                        >
-                          View all {pendingTasksCount} tasks →
-                        </button>
-                      )}
-                    </>
-                  )}
-                </section>
-              </div>
-
-              {/* Right Column - Recent Activity */}
-              <div className="overview-column">
-                <section className="overview-section">
-                  <h2>Recent Activity</h2>
-                  <div className="recent-timeline">
-                    {timeline.length === 0 ? (
-                      <div className="empty-state">
-                        <p>Activity will appear here as your loan progresses.</p>
-                      </div>
-                    ) : (
-                      timeline.slice(0, 5).map((event, index) => (
-                        <TimelineEvent key={event.id || index} event={event} />
-                      ))
+            {/* What's Next Section - Only show if there are tasks or conditions */}
+            {(conditions.length > 0 || tasks.filter(t => t.status === 'open' || t.status === 'TODO').length > 0) && (
+              <section className="whats-next-section">
+                <h2>What's Next</h2>
+                {conditions.length > 0 ? (
+                  <ConditionsNeedsListCard
+                    conditions={conditions}
+                    onViewAll={() => setActiveTab('tasks')}
+                    onUploadForCondition={handleUploadForCondition}
+                    uploading={conditionUploading}
+                  />
+                ) : (
+                  <div className="pending-tasks-list">
+                    {tasks.filter(t => t.status === 'open' || t.status === 'TODO').slice(0, 3).map(task => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        onComplete={handleTaskComplete}
+                      />
+                    ))}
+                    {pendingTasksCount > 3 && (
+                      <button className="view-all-btn" onClick={() => setActiveTab('tasks')}>
+                        View all {pendingTasksCount} tasks →
+                      </button>
                     )}
                   </div>
-                </section>
-              </div>
-            </div>
+                )}
+              </section>
+            )}
+
+            {/* All Caught Up Message - Show when no pending items */}
+            {conditions.length === 0 && tasks.filter(t => t.status === 'open' || t.status === 'TODO').length === 0 && (
+              <section className="all-caught-up-section">
+                <div className="caught-up-icon">✓</div>
+                <h2>You're all caught up!</h2>
+                <p>Your loan officer is reviewing your application. We'll notify you when there's something new.</p>
+              </section>
+            )}
+
+            {/* Loan Progress - Only show if there are milestones */}
+            {milestones.length > 0 && (
+              <section className="progress-section">
+                <h2>Loan Progress</h2>
+                <MilestoneTracker milestones={milestones} />
+              </section>
+            )}
+
+            {/* Recent Activity - Only show if there's activity */}
+            {timeline.length > 0 && (
+              <section className="activity-section">
+                <h2>Recent Activity</h2>
+                <div className="recent-timeline">
+                  {timeline.slice(0, 5).map((event, index) => (
+                    <TimelineEvent key={event.id || index} event={event} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Contact Your Loan Officer */}
+            <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
           </div>
         )}
 
