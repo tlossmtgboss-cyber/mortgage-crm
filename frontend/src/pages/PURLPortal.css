@@ -925,17 +925,17 @@
 }
 
 /* ========================================
-   Navigation - Skewed Tab Design (Parallelogram)
+   Navigation - Angled Right Edge Tabs
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
   display: flex;
   justify-content: center;
-  padding: 10px 24px;
+  padding: 10px 20px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-bottom: none;
-  gap: 2px;
+  gap: 3px;
 }
 
 .portal-nav.chevron-tabs::-webkit-scrollbar {
@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 24px;
+  padding: 10px 20px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,20 +958,18 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
-  transform: skewX(-12deg);
-}
-
-.chevron-tabs .purl-tab-btn .tab-label,
-.chevron-tabs .purl-tab-btn .tab-notification-dot {
-  transform: skewX(12deg);
+  /* Straight left, angled right: top-left, top-right, bottom-right (indented), bottom-left */
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn.first {
   border-radius: 4px 0 0 4px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn.last {
   border-radius: 0 4px 4px 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn:hover {
@@ -1016,12 +1014,6 @@
   .chevron-tabs .purl-tab-btn {
     padding: 8px 14px;
     font-size: 11px;
-    transform: skewX(-8deg);
-  }
-
-  .chevron-tabs .purl-tab-btn .tab-label,
-  .chevron-tabs .purl-tab-btn .tab-notification-dot {
-    transform: skewX(8deg);
   }
 }
 
