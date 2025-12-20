@@ -4840,30 +4840,10 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS - Allow production domains and Vercel deployments
-allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "https://mortgage-crm-nine.vercel.app",
-    "https://perenniaai.com",
-    "https://www.perenniaai.com",
-    # Custom user domains
-    "https://www.timloss.com",
-    "https://timloss.com",
-]
-
-# Allow all Vercel preview deployments and perenniaai.com subdomains
-import re
-def is_allowed_origin(origin: str) -> bool:
-    if origin in allowed_origins:
-        return True
-    # Allow any Vercel deployment
-    if re.match(r"https://.*\.vercel\.app$", origin):
-        return True
-    # Allow perenniaai.com and subdomains
-    if re.match(r"https://.*\.?perenniaai\.com$", origin):
-        return True
-    return False
+# CORS - Dynamic custom domain support
+# Custom domains are stored in the database and checked dynamically
+# No code changes needed to add new user domains
+from middleware.dynamic_cors import DynamicCORSMiddleware
 
 # Add security middleware FIRST (order matters - last added = outermost = first to execute)
 # Security middleware runs first, then CORS wraps everything including error responses
@@ -4874,12 +4854,10 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=300, requests_per_ho
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
 
-# CORS middleware added LAST = outermost = wraps ALL responses including security middleware errors
-# This ensures CORS headers are added even when security middleware returns 403/429/etc
+# Dynamic CORS middleware - checks database for allowed custom domains
+# Caches domains in memory for performance, refreshes every 60 seconds
 app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"https://(.*\.vercel\.app|.*\.?perenniaai\.com)$",
-    allow_origins=allowed_origins,
+    DynamicCORSMiddleware,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -19524,6 +19502,14 @@ app.include_router(ai_command_router, tags=["AI Commands"])
 # Include Subscription routes for Perennia AI
 from subscription_routes import router as subscription_router
 app.include_router(subscription_router, tags=["Subscriptions"])
+
+# Include Custom Domain routes for multi-tenant domain support
+try:
+    from routes.custom_domain_routes import router as custom_domain_router
+    app.include_router(custom_domain_router, tags=["Custom Domains"])
+    logger.info("Custom Domain routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Custom Domain routes: {e}")
 
 # Include Conversation Intelligence routes (unified AI for email + SMS)
 try:
