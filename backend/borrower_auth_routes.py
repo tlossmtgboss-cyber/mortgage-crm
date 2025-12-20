@@ -9,7 +9,7 @@ Handles OAuth flows for borrowers to:
 This is separate from internal user authentication (LO/staff login).
 """
 
-from fastapi import APIRouter, Request, HTTPException, Depends, Query, Body
+from fastapi import APIRouter, Request, HTTPException, Depends, Query, Body, UploadFile, File
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -20,6 +20,7 @@ import secrets
 import logging
 import jwt
 import json
+import tempfile
 from urllib.parse import urlencode, quote
 import os
 from typing import Optional
@@ -1159,6 +1160,211 @@ async def logout_borrower(request: Request):
 
 
 # =============================================================================
+# AI FOLLOW-UP QUESTIONS
+# =============================================================================
+
+class FollowupCheckRequest(BaseModel):
+    """Request to check if a field triggers follow-up questions."""
+    field_name: str
+    field_value: Any
+    application_type: str = "purchase"
+    existing_answers: Optional[Dict[str, Any]] = None
+
+# Rebuild for Python 3.14 compatibility
+FollowupCheckRequest.model_rebuild()
+
+
+@router.post("/check-followup")
+async def check_followup_trigger(request: FollowupCheckRequest):
+    """
+    Check if a field value triggers AI follow-up questions.
+
+    Called when user answers certain questions to determine if
+    clarifying questions are needed for complex situations.
+    """
+    from services.application_followup_service import application_followup_service
+
+    try:
+        # Check if this answer triggers follow-up
+        trigger_info = application_followup_service.check_triggers(
+            field_name=request.field_name,
+            field_value=request.field_value,
+            all_answers=request.existing_answers
+        )
+
+        if not trigger_info:
+            return {
+                "needs_followup": False,
+                "questions": []
+            }
+
+        # Generate follow-up questions
+        questions = application_followup_service.generate_followup_questions(
+            trigger_info=trigger_info,
+            application_type=request.application_type,
+            existing_answers=request.existing_answers
+        )
+
+        return {
+            "needs_followup": True,
+            "trigger": trigger_info["trigger"],
+            "context": trigger_info["context"],
+            "questions": questions
+        }
+
+    except Exception as e:
+        logger.error(f"Follow-up check failed: {e}")
+        return {
+            "needs_followup": False,
+            "questions": [],
+            "error": str(e)
+        }
+
+
+@router.get("/followup-triggers")
+async def get_followup_triggers():
+    """Get all available follow-up triggers for reference."""
+    from services.application_followup_service import application_followup_service
+
+    return {
+        "triggers": application_followup_service.get_all_triggers()
+    }
+
+
+# =============================================================================
+# MORTGAGE STATEMENT PARSING
+# =============================================================================
+
+@router.post("/parse-mortgage-statement")
+async def parse_mortgage_statement(
+    file: UploadFile = File(...),
+    borrower_name: Optional[str] = None,
+):
+    """
+    Parse a mortgage statement document to extract loan information.
+
+    This endpoint uses AI vision to analyze uploaded mortgage statements and
+    extract key data like property address, current balance, monthly payment,
+    interest rate, etc.
+
+    Supports PDF, PNG, JPG, and JPEG files.
+
+    Returns structured data that can be used to pre-populate refinance application forms.
+    """
+    from services.document_analysis_service import document_analysis_service
+
+    # Validate file type
+    allowed_types = ["application/pdf", "image/png", "image/jpeg", "image/jpg"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Allowed types: PDF, PNG, JPG"
+        )
+
+    # Validate file size (max 10MB)
+    max_size = 10 * 1024 * 1024  # 10MB
+    contents = await file.read()
+    if len(contents) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 10MB."
+        )
+
+    # Determine file extension
+    ext_map = {
+        "application/pdf": ".pdf",
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+    }
+    file_ext = ext_map.get(file.content_type, ".pdf")
+
+    # Save to temp file for processing
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+
+        # Parse the mortgage statement
+        result = await document_analysis_service.parse_mortgage_statement(
+            file_path=tmp_path,
+            borrower_name=borrower_name,
+        )
+
+        # Clean up temp file
+        import os
+        os.unlink(tmp_path)
+
+        if not result.get("success", False):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": result.get("error", "Failed to parse mortgage statement"),
+                    "data": {}
+                }
+            )
+
+        # Map parsed data to form fields for the refinance application
+        data = result.get("data", {})
+        form_data = {
+            # Property information
+            "address": data.get("property_address"),
+            "street": data.get("property_street"),
+            "city": data.get("property_city"),
+            "state": data.get("property_state"),
+            "zip": data.get("property_zip"),
+
+            # Loan details
+            "mortgageBalance": data.get("principal_balance"),
+            "monthlyPayment": data.get("monthly_payment"),
+            "currentRate": data.get("interest_rate"),
+            "loanDate": data.get("original_loan_date"),
+            "currentTerm": data.get("loan_term_years"),
+
+            # Lender info
+            "lenderName": data.get("lender_name"),
+            "loanNumber": data.get("loan_number"),
+
+            # Payment breakdown
+            "principalAndInterest": data.get("principal_and_interest"),
+            "escrowPayment": data.get("escrow_payment"),
+            "propertyTaxes": data.get("property_taxes_monthly"),
+            "insurance": data.get("homeowners_insurance_monthly"),
+            "pmi": data.get("pmi_monthly"),
+            "hoa": data.get("hoa_monthly"),
+
+            # Additional info
+            "escrowBalance": data.get("escrow_balance"),
+            "maturityDate": data.get("maturity_date"),
+        }
+
+        # Remove None values
+        form_data = {k: v for k, v in form_data.items() if v is not None}
+
+        return {
+            "success": True,
+            "confidence": result.get("confidence", 0),
+            "document_verified": result.get("document_type_verified", False),
+            "form_data": form_data,
+            "warnings": result.get("warnings", []),
+            "borrower_name_matches": result.get("borrower_name_matches"),
+            "parsed_at": result.get("parsed_at"),
+        }
+
+    except Exception as e:
+        logger.error(f"Error parsing mortgage statement: {e}")
+        # Clean up temp file if it exists
+        import os
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing document: {str(e)}"
+        )
+
+
+# =============================================================================
 # APPLICATION SUBMISSION
 # =============================================================================
 
@@ -1170,9 +1376,11 @@ class ApplicationSubmissionRequest(BaseModel):
     propertyData: dict
     declarations: dict
     paymentEstimate: Optional[dict] = None
+    goalsData: Optional[dict] = None  # Refinance goals data
     eConsentAgreed: bool
     creditAuthAgreed: bool
     loId: Optional[str] = None
+    applicationType: Optional[str] = "purchase"  # 'purchase' or 'refinance'
 
 
 @router.post("/submit-application")
@@ -1623,10 +1831,28 @@ async def submit_application(
                     if lo_result and lo_result[0]:
                         org_id = lo_result[0]
 
-                # Generate a unique slug from borrower name
-                base_slug = re.sub(r'[^a-z0-9]+', '-', borrower_name.lower()).strip('-')
-                random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-                workspace_slug = f"{base_slug}-{random_suffix}"
+                # Generate a unique slug in format: firstname.lastname.url
+                first_name_clean = re.sub(r'[^a-z]+', '', submission.profileData.get("firstName", "").lower())
+                last_name_clean = re.sub(r'[^a-z]+', '', submission.profileData.get("lastName", "").lower())
+
+                # Build base slug: firstname.lastname.url
+                if first_name_clean and last_name_clean:
+                    base_slug = f"{first_name_clean}.{last_name_clean}.url"
+                else:
+                    # Fallback if names are missing
+                    base_slug = re.sub(r'[^a-z0-9]+', '.', borrower_name.lower()).strip('.') + ".url"
+
+                # Check if slug already exists and add number suffix if needed
+                workspace_slug = base_slug
+                counter = 1
+                while True:
+                    existing = db.execute(text("""
+                        SELECT id FROM purl_workspaces WHERE slug = :slug
+                    """), {"slug": workspace_slug}).fetchone()
+                    if not existing:
+                        break
+                    workspace_slug = f"{first_name_clean}.{last_name_clean}{counter}.url"
+                    counter += 1
 
                 # Create workspace with direct SQL (avoids ORM relationship issues)
                 workspace_result = db.execute(text("""
@@ -1747,6 +1973,7 @@ async def submit_application(
                     # =================================================================
                     # CREATE PURL LOAN RECORD FOR PORTAL
                     # =================================================================
+                    purl_loan_id = None
                     try:
                         # Get property address components
                         property_address = {
@@ -1756,7 +1983,10 @@ async def submit_application(
                             "zip": submission.propertyData.get("zip", ""),
                         }
 
-                        db.execute(text("""
+                        # Determine loan purpose from application type
+                        loan_purpose = submission.applicationType if hasattr(submission, 'applicationType') and submission.applicationType else 'purchase'
+
+                        loan_result = db.execute(text("""
                             INSERT INTO purl_loans (
                                 organization_id, workspace_id, loan_number, status,
                                 loan_purpose, product_type, loan_amount,
@@ -1765,14 +1995,16 @@ async def submit_application(
                             )
                             VALUES (
                                 :org_id, :workspace_id, :loan_number, 'processing',
-                                'purchase', :product_type, :loan_amount,
+                                :loan_purpose, :product_type, :loan_amount,
                                 :property_address, :property_type, :meta_data,
                                 :created_at, :updated_at
                             )
+                            RETURNING id
                         """), {
                             "org_id": org_id,
                             "workspace_id": workspace_id,
                             "loan_number": f"APP-{lead_id}" if lead_id else f"APP-{workspace_id}",
+                            "loan_purpose": loan_purpose,
                             "product_type": submission.propertyData.get("loanProgram", "Conventional"),
                             "loan_amount": loan_amount,
                             "property_address": json.dumps(property_address),
@@ -1786,10 +2018,67 @@ async def submit_application(
                             "created_at": submission_date,
                             "updated_at": submission_date,
                         })
+                        loan_row = loan_result.fetchone()
+                        if loan_row:
+                            purl_loan_id = loan_row[0]
                         db.commit()
-                        logger.info(f"Created PURL loan record for workspace {workspace_id}")
+                        logger.info(f"Created PURL loan record {purl_loan_id} for workspace {workspace_id}")
                     except Exception as loan_error:
                         logger.warning(f"Failed to create PURL loan: {loan_error}")
+
+                    # =================================================================
+                    # GENERATE SMART DOCS NEEDS LIST
+                    # =================================================================
+                    if purl_loan_id:
+                        try:
+                            from services.smart_docs.needs_list_generator import NeedsListGenerator
+
+                            # Map loan program
+                            loan_program_raw = submission.propertyData.get("loanProgram", "Conventional").upper()
+                            if loan_program_raw in ["FHA", "VA", "USDA", "CONVENTIONAL"]:
+                                loan_program = loan_program_raw
+                            else:
+                                loan_program = "CONVENTIONAL"
+
+                            # Map occupancy type
+                            occupancy_raw = submission.propertyData.get("occupancy", "primary").upper()
+                            occupancy_map = {
+                                "PRIMARY": "PRIMARY",
+                                "PRIMARY_RESIDENCE": "PRIMARY",
+                                "SECOND_HOME": "SECOND_HOME",
+                                "INVESTMENT": "INVESTMENT",
+                                "RENTAL": "INVESTMENT",
+                            }
+                            occupancy_type = occupancy_map.get(occupancy_raw, "PRIMARY")
+
+                            # Map income type based on declarations
+                            is_self_employed = submission.declarations.get("self_employed") in ["yes", "side_business"]
+                            income_type = "SELF_EMPLOYED" if is_self_employed else "W2"
+
+                            # Additional flags
+                            has_gift_funds = submission.declarations.get("gift_funds") == "yes"
+                            has_bankruptcy = submission.declarations.get("bankruptcy") == "yes"
+                            has_co_borrower = submission.declarations.get("has_co_borrower", False)
+
+                            # Generate needs list using Smart Docs
+                            generator = NeedsListGenerator(db)
+                            result = generator.generate_needs_list(
+                                loan_id=purl_loan_id,
+                                loan_program=loan_program,
+                                occupancy_type=occupancy_type,
+                                income_type=income_type,
+                                borrower_id=1,
+                                co_borrower_id=2 if has_co_borrower else None,
+                                has_gift_funds=has_gift_funds,
+                                is_self_employed=is_self_employed,
+                                has_bankruptcy=has_bankruptcy,
+                                property_type=submission.propertyData.get("propertyType"),
+                            )
+                            logger.info(f"Generated Smart Docs needs list for loan {purl_loan_id}: {result.get('request_count', 0)} requests")
+                        except ImportError:
+                            logger.warning("Smart Docs NeedsListGenerator not available, skipping needs list generation")
+                        except Exception as needs_error:
+                            logger.warning(f"Failed to generate Smart Docs needs list: {needs_error}")
 
                     # =================================================================
                     # CREATE NEEDS LIST TASKS BASED ON DECLARATIONS
@@ -1909,6 +2198,35 @@ async def submit_application(
 
                         db.commit()
                         logger.info(f"Created {len(needs_tasks)} needs list tasks for workspace {workspace_id}")
+
+                        # =================================================================
+                        # CREATE LEAD_CONDITIONS FOR PORTAL NEEDS LIST
+                        # =================================================================
+                        # Also create lead_conditions which the portal uses for the needs list
+                        try:
+                            for task in needs_tasks:
+                                db.execute(text("""
+                                    INSERT INTO lead_conditions (
+                                        lead_id, name, description, category, priority,
+                                        status, is_new, created_at, updated_at
+                                    )
+                                    VALUES (
+                                        :lead_id, :name, :description, :category, 'required',
+                                        'pending', 1, :created_at, :updated_at
+                                    )
+                                """), {
+                                    "lead_id": lead_id,
+                                    "name": task["title"],
+                                    "description": task["description"],
+                                    "category": task["category"],
+                                    "created_at": submission_date,
+                                    "updated_at": submission_date,
+                                })
+                            db.commit()
+                            logger.info(f"Created {len(needs_tasks)} lead_conditions for lead {lead_id}")
+                        except Exception as cond_error:
+                            logger.warning(f"Failed to create lead_conditions (table may not exist): {cond_error}")
+
                     except Exception as task_error:
                         logger.warning(f"Failed to create needs list tasks: {task_error}")
                         import traceback

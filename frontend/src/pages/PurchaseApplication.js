@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
 import PaymentCalculator from '../components/PaymentCalculator';
+import InlineFollowup, { useFollowupCheck } from '../components/InlineFollowup';
 import './AdaptiveURLA.css';
 
 /**
@@ -987,6 +988,11 @@ export default function PurchaseApplication() {
   const [incomeData, setIncomeData] = useState({});
   const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
 
+  // AI Follow-up questions state
+  const [followupAnswers, setFollowupAnswers] = useState({});
+  const [activeFollowup, setActiveFollowup] = useState(null); // Current active follow-up trigger
+  const { followupData, checkForFollowup, clearFollowup } = useFollowupCheck(API_URL);
+
   // Agent autocomplete state
   const [agentSearch, setAgentSearch] = useState('');
   const [agentSuggestions, setAgentSuggestions] = useState([]);
@@ -1305,11 +1311,65 @@ export default function PurchaseApplication() {
     }
   };
 
+  // Handle follow-up answers submitted
+  const handleFollowupSubmit = (answers, trigger) => {
+    // Store follow-up answers
+    setFollowupAnswers(prev => ({
+      ...prev,
+      [trigger]: answers
+    }));
+    // Also merge into declarations for form submission
+    setDeclarations(prev => ({
+      ...prev,
+      ...Object.entries(answers).reduce((acc, [key, val]) => {
+        acc[`${trigger}_${key}`] = val;
+        return acc;
+      }, {})
+    }));
+    // Clear active follow-up and continue to next question
+    setActiveFollowup(null);
+    clearFollowup();
+    proceedToNextQuestion();
+  };
+
+  // Handle skipping follow-up
+  const handleFollowupSkip = () => {
+    setActiveFollowup(null);
+    clearFollowup();
+    proceedToNextQuestion();
+  };
+
+  // Proceed to next question
+  const proceedToNextQuestion = () => {
+    let nextIndex = currentQuestionIndex + 1;
+    while (nextIndex < DECLARATION_QUESTIONS.length) {
+      const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+      if (shouldShowQuestion(nextQuestion, declarations)) {
+        setCurrentQuestionIndex(nextIndex);
+        return;
+      }
+      nextIndex++;
+    }
+    // If no more questions, go to planning stage
+    setCurrentStage('planning');
+  };
+
   // Handle declaration answer
-  const handleDeclarationAnswer = (questionId, value) => {
+  const handleDeclarationAnswer = async (questionId, value) => {
     setIsAnimating(true);
     const newDeclarations = { ...declarations, [questionId]: value };
     setDeclarations(newDeclarations);
+
+    // Check for AI follow-up questions on complex situations
+    const triggerFields = ['self_employed', 'gift_funds', 'bankruptcy', 'credit_issues', 'investment_property', 'coborrower'];
+    if (triggerFields.some(f => questionId.includes(f))) {
+      const result = await checkForFollowup(questionId, value, 'purchase', newDeclarations);
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+        setIsAnimating(false);
+        return; // Don't proceed to next question yet
+      }
+    }
 
     setTimeout(() => {
       setIsAnimating(false);
@@ -1694,7 +1754,19 @@ export default function PurchaseApplication() {
         <h2 className="declaration-question">{question.question}</h2>
         {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
         {renderQuestionInput()}
-        {currentQuestionIndex > 0 && (
+
+        {/* AI-powered follow-up questions for complex situations */}
+        {activeFollowup && activeFollowup.questions?.length > 0 && (
+          <InlineFollowup
+            trigger={activeFollowup.trigger}
+            context={activeFollowup.context}
+            questions={activeFollowup.questions}
+            onAnswersSubmit={handleFollowupSubmit}
+            onSkip={handleFollowupSkip}
+          />
+        )}
+
+        {currentQuestionIndex > 0 && !activeFollowup && (
           <button className="back-link" onClick={goToPrevQuestion}>
             ← Go back
           </button>

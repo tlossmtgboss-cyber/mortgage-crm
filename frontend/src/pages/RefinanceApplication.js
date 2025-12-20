@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
+import MortgageStatementUpload from '../components/MortgageStatementUpload';
+import InlineFollowup, { useFollowupCheck } from '../components/InlineFollowup';
 import './AdaptiveURLA.css';
 
 /**
@@ -455,7 +457,7 @@ const STAGES = [
   { id: 'property', label: 'Current Home', icon: 'home', description: 'Property details' },
   { id: 'goals', label: 'Refi Goals', icon: 'target', description: 'Refinance options' },
   { id: 'review', label: 'Review', icon: 'review', description: 'Review your info' },
-  { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
+  { id: 'schedule', label: 'Submit', icon: 'check', description: 'Complete application' },
 ];
 
 // Refinance-specific declaration questions
@@ -1016,6 +1018,12 @@ export default function RefinanceApplication() {
   // Only show demo mode for explicit /apply/start - /apply/refinance is a real application entry point
   const isDemoMode = token === 'start';
 
+  // API Configuration
+  const isProduction = window.location.hostname !== 'localhost';
+  const API_URL = isProduction
+    ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+    : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
   // State
   const [currentStage, setCurrentStage] = useState('declarations');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -1024,6 +1032,7 @@ export default function RefinanceApplication() {
   const [incomeData, setIncomeData] = useState({});
   const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
   const [propertyData, setPropertyData] = useState({});
+  const [statementParsed, setStatementParsed] = useState(false);
   const [goalsData, setGoalsData] = useState({});
   const [planningData, setPlanningData] = useState({
     mortgagePriorities: [],
@@ -1039,6 +1048,16 @@ export default function RefinanceApplication() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
+  const [eConsentAgreed, setEConsentAgreed] = useState(false);
+  const [creditAuthAgreed, setCreditAuthAgreed] = useState(false);
+  const [scheduleStep, setScheduleStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+
+  // AI Follow-up questions state
+  const [followupAnswers, setFollowupAnswers] = useState({});
+  const [activeFollowup, setActiveFollowup] = useState(null);
+  const { followupData, checkForFollowup, clearFollowup } = useFollowupCheck(API_URL);
 
   // Filter employers
   const filterEmployers = (input) => {
@@ -1052,6 +1071,92 @@ export default function RefinanceApplication() {
     ).slice(0, 8);
     setEmployerSuggestions(filtered);
     setShowEmployerDropdown(filtered.length > 0);
+  };
+
+  // Handle mortgage statement data extraction
+  const handleMortgageStatementData = useCallback((formData) => {
+    setPropertyData(prev => ({
+      ...prev,
+      // Property address
+      address: formData.address || prev.address,
+      street: formData.street || prev.street,
+      city: formData.city || prev.city,
+      state: formData.state || prev.state,
+      zip: formData.zip || prev.zip,
+      // Loan details
+      mortgageBalance: formData.mortgageBalance || prev.mortgageBalance,
+      monthlyPayment: formData.monthlyPayment || prev.monthlyPayment,
+      currentRate: formData.currentRate || prev.currentRate,
+      loanDate: formData.loanDate || prev.loanDate,
+      currentTerm: formData.currentTerm ? String(formData.currentTerm) : prev.currentTerm,
+      // Additional info from statement
+      lenderName: formData.lenderName || prev.lenderName,
+    }));
+    setStatementParsed(true);
+  }, []);
+
+  // Handle application submission
+  const handleSubmitApplication = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Get loan officer ID from token if available
+      let loId = null;
+      if (token && token !== 'start') {
+        const storedLoId = localStorage.getItem('lo_id');
+        if (storedLoId) {
+          loId = storedLoId;
+        }
+      }
+
+      const submissionData = {
+        profileData,
+        incomeData,
+        assetData: {}, // Refinance doesn't have asset data like purchase
+        propertyData,
+        declarations,
+        goalsData, // Include refinance goals
+        eConsentAgreed,
+        creditAuthAgreed,
+        loId,
+        applicationType: 'refinance',
+      };
+
+      const response = await fetch(`${API_URL}/api/v1/borrower-auth/submit-application`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(submissionData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || 'Submission failed');
+      }
+
+      // Success - show animation
+      showMicroWinAnimation('Application Submitted!');
+
+      // Redirect to client portal with the full portal URL
+      if (result.data?.portal_url) {
+        setTimeout(() => {
+          window.location.href = result.data.portal_url;
+        }, 1500);
+      } else {
+        // Fallback - redirect to generic portal
+        setTimeout(() => {
+          navigate('/portal');
+        }, 1500);
+      }
+    } catch (error) {
+      console.error('Application submission error:', error);
+      setSubmitError(error.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Calculate progress
@@ -1139,11 +1244,65 @@ export default function RefinanceApplication() {
     setTimeout(() => setShowMicroWin(false), 2500);
   };
 
+  // Handle follow-up answers submission
+  const handleFollowupSubmit = (answers, trigger) => {
+    // Store follow-up answers
+    setFollowupAnswers(prev => ({
+      ...prev,
+      [trigger]: answers
+    }));
+    // Also merge into declarations for form submission
+    setDeclarations(prev => ({
+      ...prev,
+      ...Object.entries(answers).reduce((acc, [key, val]) => {
+        acc[`${trigger}_${key}`] = val;
+        return acc;
+      }, {})
+    }));
+    setActiveFollowup(null);
+    clearFollowup();
+    proceedToNextQuestion();
+  };
+
+  // Handle skipping follow-up
+  const handleFollowupSkip = () => {
+    setActiveFollowup(null);
+    clearFollowup();
+    proceedToNextQuestion();
+  };
+
+  // Proceed to next question
+  const proceedToNextQuestion = () => {
+    let nextIndex = currentQuestionIndex + 1;
+    while (nextIndex < DECLARATION_QUESTIONS.length) {
+      const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+      if (shouldShowQuestion(nextQuestion, declarations)) {
+        setCurrentQuestionIndex(nextIndex);
+        return;
+      }
+      nextIndex++;
+    }
+    // If no more questions, go to next stage
+    showMicroWinAnimation('Great! Your checklist is ready!');
+    setTimeout(() => setCurrentStage('profile'), 1500);
+  };
+
   // Handle declaration answer
-  const handleDeclarationAnswer = (questionId, value) => {
+  const handleDeclarationAnswer = async (questionId, value) => {
     setIsAnimating(true);
     const newDeclarations = { ...declarations, [questionId]: value };
     setDeclarations(newDeclarations);
+
+    // Check for AI follow-up questions on complex situations
+    const triggerFields = ['self_employed', 'gift_funds', 'bankruptcy', 'credit_issues', 'investment_property', 'coborrower'];
+    if (triggerFields.some(f => questionId.includes(f))) {
+      const result = await checkForFollowup(questionId, value, 'refinance', newDeclarations);
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+        setIsAnimating(false);
+        return; // Don't proceed to next question yet
+      }
+    }
 
     setTimeout(() => {
       setIsAnimating(false);
@@ -1343,7 +1502,19 @@ export default function RefinanceApplication() {
         <h2 className="declaration-question">{question.question}</h2>
         {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
         {renderQuestionInput()}
-        {currentQuestionIndex > 0 && (
+
+        {/* AI-powered follow-up questions for complex situations */}
+        {activeFollowup && activeFollowup.questions?.length > 0 && (
+          <InlineFollowup
+            trigger={activeFollowup.trigger}
+            context={activeFollowup.context}
+            questions={activeFollowup.questions}
+            onAnswersSubmit={handleFollowupSubmit}
+            onSkip={handleFollowupSkip}
+          />
+        )}
+
+        {currentQuestionIndex > 0 && !activeFollowup && (
           <button className="back-link" onClick={goToPrevQuestion}>
             ← Go back
           </button>
@@ -1738,6 +1909,27 @@ export default function RefinanceApplication() {
         <p>Tell us about the property you want to refinance</p>
       </div>
 
+      {/* Mortgage Statement Upload - only show if form not already filled */}
+      {!statementParsed && !propertyData.mortgageBalance && (
+        <MortgageStatementUpload
+          onDataExtracted={handleMortgageStatementData}
+          apiUrl={API_URL}
+        />
+      )}
+
+      {/* Show success message if statement was parsed */}
+      {statementParsed && (
+        <div className="statement-parsed-notice">
+          <span className="notice-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </span>
+          <span>Information imported from your mortgage statement. Please review and update if needed.</span>
+        </div>
+      )}
+
       <div className="form-card">
         <div className="form-group">
           <AddressAutocomplete
@@ -2010,71 +2202,6 @@ export default function RefinanceApplication() {
           </div>
         )}
 
-        {/* New Loan Term */}
-        <div className="form-card">
-          <h3>New Loan Term</h3>
-          <div className="income-cards">
-            <div
-              className={`income-card ${goalsData.newTerm === '30' ? 'selected' : ''}`}
-              onClick={() => setGoalsData(prev => ({ ...prev, newTerm: '30' }))}
-            >
-              <span className="card-icon"><Icon name="calendar" size={28} /></span>
-              <span className="card-label">30 Year</span>
-              <span className="card-desc">Lowest payment</span>
-            </div>
-            <div
-              className={`income-card ${goalsData.newTerm === '20' ? 'selected' : ''}`}
-              onClick={() => setGoalsData(prev => ({ ...prev, newTerm: '20' }))}
-            >
-              <span className="card-icon"><Icon name="timer" size={28} /></span>
-              <span className="card-label">20 Year</span>
-              <span className="card-desc">Balance</span>
-            </div>
-            <div
-              className={`income-card ${goalsData.newTerm === '15' ? 'selected' : ''}`}
-              onClick={() => setGoalsData(prev => ({ ...prev, newTerm: '15' }))}
-            >
-              <span className="card-icon"><Icon name="rocket" size={28} /></span>
-              <span className="card-label">15 Year</span>
-              <span className="card-desc">Pay off faster</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Loan Program Selection */}
-        <div className="form-card">
-          <h3>Recommended Programs</h3>
-          <div className="program-cards">
-            {isVeteran && (
-              <div
-                className={`program-card va ${goalsData.program === 'va' ? 'selected' : ''}`}
-                onClick={() => setGoalsData(prev => ({ ...prev, program: 'va' }))}
-              >
-                <span className="program-badge"><Icon name="medal" size={14} /> FOR YOU</span>
-                <span className="program-name">VA</span>
-                <span className="program-rate">~6.0% APR</span>
-                <span className="program-note">No PMI, great rates</span>
-              </div>
-            )}
-            <div
-              className={`program-card ${goalsData.program === 'conventional' ? 'selected' : ''}`}
-              onClick={() => setGoalsData(prev => ({ ...prev, program: 'conventional' }))}
-            >
-              <span className="program-name">Conventional</span>
-              <span className="program-rate">~6.5% APR</span>
-              <span className="program-note">Best for good credit</span>
-            </div>
-            <div
-              className={`program-card ${goalsData.program === 'fha' ? 'selected' : ''}`}
-              onClick={() => setGoalsData(prev => ({ ...prev, program: 'fha' }))}
-            >
-              <span className="program-name">FHA</span>
-              <span className="program-rate">~6.25% APR</span>
-              <span className="program-note">Flexible requirements</span>
-            </div>
-          </div>
-        </div>
-
         <div className="stage-navigation">
           <button className="btn-back" onClick={goToPrevStage}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
@@ -2085,82 +2212,193 @@ export default function RefinanceApplication() {
 
   // Render review
   const renderReviewStage = () => {
+    const homeValue = parseFloat(propertyData.homeValue) || 0;
+    const currentBalance = parseFloat(propertyData.mortgageBalance) || 0;
+    const equity = homeValue - currentBalance;
     const newLoanAmount = goalsData.refiType === 'cash_out'
-      ? (parseFloat(propertyData.mortgageBalance) || 0) + (parseFloat(goalsData.cashOutAmount) || 0)
-      : (parseFloat(propertyData.mortgageBalance) || 0);
+      ? currentBalance + (parseFloat(goalsData.cashOutAmount) || 0)
+      : currentBalance;
 
     return (
-      <div className="stage-content">
+      <div className="stage-content review-stage">
         <div className="stage-header">
           <h2>Review Your Application</h2>
-          <p>Let's make sure everything looks good!</p>
+          <p>Almost there! Review your information below and make any edits needed.</p>
         </div>
 
-        <div className="review-sections">
-          <div className="review-section">
-            <div className="section-header">
-              <h3><Icon name="profile" size={18} /> Your Profile</h3>
-              <button className="edit-link" onClick={() => setCurrentStage('profile')}>Edit</button>
-            </div>
-            <div className="section-content">
-              <p><strong>Name:</strong> {profileData.firstName} {profileData.lastName}</p>
-              <p><strong>Email:</strong> {profileData.email}</p>
-              <p><strong>Phone:</strong> {profileData.phone}</p>
-            </div>
+        {/* Summary Hero Card */}
+        <div className="review-hero-card">
+          <div className="hero-icon-wrapper">
+            <Icon name="check" size={32} />
           </div>
-
-          <div className="review-section">
-            <div className="section-header">
-              <h3><Icon name="briefcase" size={18} /> Income</h3>
-              <button className="edit-link" onClick={() => setCurrentStage('income')}>Edit</button>
-            </div>
-            <div className="section-content">
-              <p><strong>Type:</strong> {incomeData.primaryType}</p>
-              {incomeData.employerName && <p><strong>Employer:</strong> {incomeData.employerName}</p>}
-              {incomeData.annualSalary && <p><strong>Annual Income:</strong> ${parseFloat(incomeData.annualSalary).toLocaleString()}</p>}
-            </div>
-          </div>
-
-          <div className="review-section">
-            <div className="section-header">
-              <h3><Icon name="home" size={18} /> Current Home</h3>
-              <button className="edit-link" onClick={() => setCurrentStage('property')}>Edit</button>
-            </div>
-            <div className="section-content">
-              <p><strong>Address:</strong> {propertyData.address}</p>
-              <p><strong>Home Value:</strong> ${parseFloat(propertyData.homeValue || 0).toLocaleString()}</p>
-              <p><strong>Current Balance:</strong> ${parseFloat(propertyData.mortgageBalance || 0).toLocaleString()}</p>
-              <p><strong>Current Rate:</strong> {propertyData.currentRate}%</p>
-            </div>
-          </div>
-
-          <div className="review-section">
-            <div className="section-header">
-              <h3><Icon name="target" size={18} /> Refinance Details</h3>
-              <button className="edit-link" onClick={() => setCurrentStage('goals')}>Edit</button>
-            </div>
-            <div className="section-content">
-              <p><strong>Type:</strong> {goalsData.refiType === 'cash_out' ? 'Cash-Out Refinance' : 'Rate & Term'}</p>
-              <p><strong>New Loan Amount:</strong> ${newLoanAmount.toLocaleString()}</p>
-              {goalsData.cashOutAmount && <p><strong>Cash Out:</strong> ${parseFloat(goalsData.cashOutAmount).toLocaleString()}</p>}
-              <p><strong>New Term:</strong> {goalsData.newTerm} Years</p>
-              <p><strong>Program:</strong> {goalsData.program?.toUpperCase()}</p>
+          <div className="hero-content">
+            <h3>Your Refinance Summary</h3>
+            <div className="hero-stats">
+              <div className="hero-stat">
+                <span className="stat-label">Home Value</span>
+                <span className="stat-value">${homeValue.toLocaleString()}</span>
+              </div>
+              <div className="hero-stat-divider"></div>
+              <div className="hero-stat">
+                <span className="stat-label">Current Balance</span>
+                <span className="stat-value">${currentBalance.toLocaleString()}</span>
+              </div>
+              <div className="hero-stat-divider"></div>
+              <div className="hero-stat">
+                <span className="stat-label">Your Equity</span>
+                <span className="stat-value highlight">${equity.toLocaleString()}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="needs-list-section">
-          <h3><Icon name="clipboard" size={18} /> Your Document Checklist</h3>
-          <p>We'll need these documents to process your refinance:</p>
-          <ul className="needs-list">
-            {needsList.map(item => (
-              <li key={item.id} className="needs-item">
-                <span className="needs-icon"><Icon name="document" size={16} /></span>
-                <span className="needs-label">{item.label}</span>
-                <span className={`needs-category ${item.category}`}>{item.category}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="review-grid">
+          {/* Profile Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon profile-icon">
+                <Icon name="profile" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Personal Information</h4>
+                <span className="card-subtitle">Your contact details</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('profile')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="profile" size={16} />
+                <span className="info-label">Full Name</span>
+                <span className="info-value">{profileData.firstName} {profileData.lastName}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="email" size={16} />
+                <span className="info-label">Email</span>
+                <span className="info-value">{profileData.email}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="phone" size={16} />
+                <span className="info-label">Phone</span>
+                <span className="info-value">{profileData.phone}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Income Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon income-icon">
+                <Icon name="briefcase" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Employment & Income</h4>
+                <span className="card-subtitle">Your income sources</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('income')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="briefcase" size={16} />
+                <span className="info-label">Employment Type</span>
+                <span className="info-value capitalize">{incomeData.primaryType?.replace('_', ' ') || 'Not specified'}</span>
+              </div>
+              {incomeData.employerName && (
+                <div className="info-row">
+                  <Icon name="building" size={16} />
+                  <span className="info-label">Employer</span>
+                  <span className="info-value">{incomeData.employerName}</span>
+                </div>
+              )}
+              {incomeData.annualSalary && (
+                <div className="info-row highlight-row">
+                  <Icon name="dollarSign" size={16} />
+                  <span className="info-label">Annual Income</span>
+                  <span className="info-value">${parseFloat(incomeData.annualSalary).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Property Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon property-icon">
+                <Icon name="home" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Current Property</h4>
+                <span className="card-subtitle">Property being refinanced</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('property')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="mapPin" size={16} />
+                <span className="info-label">Address</span>
+                <span className="info-value">{propertyData.address || 'Not specified'}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="home" size={16} />
+                <span className="info-label">Home Value</span>
+                <span className="info-value">${homeValue.toLocaleString()}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="dollarSign" size={16} />
+                <span className="info-label">Current Balance</span>
+                <span className="info-value">${currentBalance.toLocaleString()}</span>
+              </div>
+              <div className="info-row">
+                <Icon name="trendDown" size={16} />
+                <span className="info-label">Current Rate</span>
+                <span className="info-value">{propertyData.currentRate || '0'}%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Refinance Goals Card */}
+          <div className="review-card">
+            <div className="card-header">
+              <div className="card-icon goals-icon">
+                <Icon name="target" size={24} />
+              </div>
+              <div className="card-title">
+                <h4>Refinance Goals</h4>
+                <span className="card-subtitle">Your refinance objectives</span>
+              </div>
+              <button className="edit-btn-modern" onClick={() => setCurrentStage('goals')}>
+                <Icon name="edit" size={16} />
+                <span>Edit</span>
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="info-row">
+                <Icon name="document" size={16} />
+                <span className="info-label">Refinance Type</span>
+                <span className="info-value capitalize">{goalsData.refiType === 'cash_out' ? 'Cash-Out Refinance' : goalsData.refiType?.replace('_', ' ') || 'Rate & Term'}</span>
+              </div>
+              {goalsData.refiType === 'cash_out' && goalsData.cashOutAmount && (
+                <div className="info-row highlight-row">
+                  <Icon name="money" size={16} />
+                  <span className="info-label">Cash Out Amount</span>
+                  <span className="info-value">${parseFloat(goalsData.cashOutAmount).toLocaleString()}</span>
+                </div>
+              )}
+              <div className="info-row">
+                <Icon name="dollarSign" size={16} />
+                <span className="info-label">New Loan Amount</span>
+                <span className="info-value">${newLoanAmount.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="stage-navigation">
@@ -2308,71 +2546,257 @@ export default function RefinanceApplication() {
     return slots.slice(0, 12);
   };
 
-  // Render schedule stage with video and calendar
+  // Render schedule stage with e-consent and credit authorization
   const renderScheduleStage = () => {
-    const timeSlots = generateTimeSlots();
-
-    return (
-      <div className="stage-content scheduling-page">
-        <div className="scheduling-header">
-          <h2>You're Almost Done!</h2>
-          <p>Watch this quick video to learn what happens next, then schedule your consultation.</p>
-        </div>
-
-        <div className="video-section">
-          <div className="video-container">
-            <div className="video-placeholder">
-              <span className="play-icon"><Icon name="play" size={32} /></span>
-              <p>What to Expect: Your Refinance Journey</p>
-            </div>
+    // Step 1: E-Consent Page
+    if (scheduleStep === 1) {
+      return (
+        <div className="stage-content scheduling-page">
+          <div className="scheduling-header">
+            <h2>E-Consent Documentation</h2>
+            <p>Please review and consent to receive documents electronically.</p>
           </div>
 
-          <div className="next-steps-list">
-            <h3><Icon name="clipboard" size={18} /> What Happens Next</h3>
-            <ol>
-              <li><strong>Consultation Call</strong> - We'll review your refinance goals and answer questions</li>
-              <li><strong>Rate Lock</strong> - Lock in your new rate once you're ready</li>
-              <li><strong>Document Collection</strong> - Upload your documents through our secure portal</li>
-              <li><strong>Appraisal</strong> - We'll order and coordinate your home appraisal</li>
-              <li><strong>Closing</strong> - Sign your new loan docs and start saving!</li>
-            </ol>
-          </div>
-        </div>
+          <div className="econsent-section econsent-full-page">
+            <div className="econsent-content">
+              <p className="econsent-intro">
+                To use electronic signatures and receive documents electronically in connection with your use of this
+                platform, you must read and consent to the terms outlined in this document, which require your ability to
+                access and retain electronic documents.
+              </p>
 
-        <div className="calendar-section">
-          <h3>Schedule Your Consultation</h3>
+              <div className="econsent-scrollbox">
+                <p>
+                  This eConsent, if you provide it, applies to your use of this Platform on any Access Device, including a
+                  desktop, laptop, tablet, mobile, or any other electronic device, and to any Document, including loan
+                  documents, disclosures (initial disclosures, pre-close disclosures, closing disclosures), records, and servicing
+                  notices, and any other loan documents that we provide to you in electronic form.
+                </p>
 
-          <div className="calendar-placeholder">
-            <span className="cal-icon"><Icon name="calendar" size={32} /></span>
-            <h4>Pick a Time That Works For You</h4>
-            <p>Select an available time slot below for your 15-minute consultation call</p>
+                <p>
+                  If you provide eConsent, we will be able to provide electronic Documents to you within this platform, in
+                  other portals, and/or through other methods we may use for delivery of electronic Documents. With Your
+                  eConsent, You will also be able to sign and authorize these Documents electronically, rather than on paper.
+                  Anytime you are signing using a platform contracted with nCino Mortgage, you will be prompted to provide
+                  eConsent again.
+                </p>
 
-            <div className="time-slots">
-              {timeSlots.map(slot => (
-                <div
-                  key={slot.id}
-                  className={`time-slot ${selectedTimeSlot === slot.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedTimeSlot(slot.id)}
+                <p>
+                  Before We can engage in this transaction electronically, it is important that You understand Your rights and
+                  responsibilities. Please read the following and affirm Your consent to conduct business with Us electronically.
+                  For purposes of this eConsent Agreement, 'You' and 'Your' mean the borrower(s) under the applicable loan to
+                  which such Documents apply, and 'We', 'Our' and 'Us' mean the applicable mortgage broker(s), loan
+                  processor(s), or mortgage banker(s) with whom You are transacting business for such loan(s).
+                </p>
+
+                <h4>Your Consent</h4>
+                <p>
+                  Your consent to participate in this transaction electronically will apply to all Loan Documents for the
+                  applicable loans for which You are applying. If You provide Your consent by clicking the 'I agree'
+                  button at the bottom of the page, We will conduct this transaction electronically, instead of providing
+                  You with the Loan Documents in paper form.
+                </p>
+                <p>
+                  If a document related to Your loan is not available in electronic form, a paper copy will be provided to
+                  You free of charge.
+                </p>
+                <p>
+                  Conducting this transaction electronically is an option. If You choose not to receive Documents
+                  electronically, paper Documents will be mailed to You. Additionally: You will not be required to pay a
+                  fee for receiving paper copies of the Documents.
+                </p>
+
+                <h4>Withdrawal of Consent</h4>
+                <p>
+                  You have the right to withdraw Your consent at any time. By declining or revoking Your consent to
+                  receive Documents electronically, We will provide You with the Documents in paper form.
+                </p>
+                <p>
+                  If You originally consent to receive Documents electronically, but later decide to withdraw Your
+                  consent, You can do so by clicking on the 'I do not agree' button, or by contacting Us by phone.
+                </p>
+                <p>
+                  If You originally consent to receive Documents electronically, but later withdraw Your consent, You
+                  will not be required to pay a fee for withdrawing consent and receiving paper copies of the Documents.
+                </p>
+
+                <h4>Obtaining Paper Copies</h4>
+                <p>
+                  After Your consent is given, You may request from Us paper copies of Your Loan Documents by contacting Us.
+                  If You request paper copies of the Loan Documents, You will not be required to pay a fee for receiving
+                  paper copies of the Loan Documents.
+                </p>
+
+                <h4>System Requirements</h4>
+                <p>
+                  In order to receive Documents electronically, You must have a computer with Internet access and an
+                  Internet email account and address; an Internet browser using 128-bit encryption or higher, Adobe
+                  Acrobat 7.0 or higher, SSL encryption and access to a printer or the ability to download information in
+                  order to keep copies of Your Documents electronically for Your records.
+                </p>
+                <p>
+                  If the software or hardware requirements change in the future, and You are unable to continue receiving
+                  Documents electronically, paper copies of such Loan Documents will be mailed to You once You
+                  notify Us that You are no longer able to access the Documents electronically because of the changed
+                  requirements. We will use commercially reasonable efforts to notify You before such requirements
+                  change. If You choose to withdraw Your consent upon notification of the change, You will be able to
+                  do so without penalty.
+                </p>
+
+                <h4>How Can We Reach You</h4>
+                <p>
+                  You must promptly notify Us if there is a change in Your email address or in other information needed
+                  to contact You electronically.
+                </p>
+                <p>
+                  We will not assume liability for non-receipt of notification of the availability of Documents
+                  electronically in the event Your email address on file is invalid; Your email or Internet service provider
+                  filters the notification as 'spam' or 'junk mail'; there is a malfunction in Your computer, browser, Internet
+                  service and/or software; or for other reasons beyond Our control.
+                </p>
+              </div>
+
+              <div className="econsent-actions">
+                <button
+                  className={`econsent-btn agree ${eConsentAgreed ? 'selected' : ''}`}
+                  onClick={() => setEConsentAgreed(true)}
                 >
-                  <div className="time-slot-time">{slot.time}</div>
-                  <div className="time-slot-date">{slot.date}</div>
-                </div>
-              ))}
+                  <Icon name="check" size={18} />
+                  I Agree
+                </button>
+                <button
+                  className="econsent-btn disagree"
+                  onClick={() => {
+                    setEConsentAgreed(false);
+                    alert('You have chosen not to consent to electronic documents. Paper documents will be mailed to you. You can still proceed with your application.');
+                  }}
+                >
+                  I Do Not Agree
+                </button>
+              </div>
             </div>
+          </div>
 
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
             <button
-              className="btn-schedule"
-              disabled={!selectedTimeSlot}
-              onClick={() => showMicroWinAnimation('Consultation Scheduled! 🎉 Check your email for confirmation.')}
+              className="btn-continue"
+              disabled={!eConsentAgreed}
+              onClick={() => setScheduleStep(2)}
             >
-              {selectedTimeSlot ? 'Confirm Appointment' : 'Select a Time Slot'}
+              {eConsentAgreed ? 'Continue →' : 'Please Accept E-Consent to Continue'}
             </button>
           </div>
         </div>
+      );
+    }
 
-        <div className="stage-navigation">
-          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+    // Step 2: Credit Authorization Page
+    if (scheduleStep === 2) {
+      return (
+        <div className="stage-content scheduling-page">
+          <div className="scheduling-header">
+            <h2>Credit Authorization</h2>
+            <p>Please authorize us to check your credit to provide accurate refinance options.</p>
+          </div>
+
+          <div className="econsent-section credit-auth-section econsent-full-page">
+            <div className="econsent-content">
+              <p className="econsent-intro">
+                Your credit information will help us understand more about your personal and financial background and
+                ensure we give you the most accurate refinance options. To help us, we need the following authorization:
+              </p>
+
+              <div className="credit-auth-box">
+                <p>
+                  I authorize my Lender to perform a credit check, via either a soft or hard pull of my credit; I understand this
+                  may affect my credit score. I acknowledge that any owner of a completed loan, its servicers, successors and
+                  assigns, may verify or re-verify any information contained in this form or obtain any information or data
+                  relating to a completed loan, for any legitimate purpose, through any source, including a source named in this
+                  form or a consumer reporting agency.
+                </p>
+              </div>
+
+              <div className="econsent-actions">
+                <button
+                  className={`econsent-btn agree ${creditAuthAgreed ? 'selected' : ''}`}
+                  onClick={() => setCreditAuthAgreed(true)}
+                >
+                  <Icon name="check" size={18} />
+                  I Authorize
+                </button>
+                <button
+                  className="econsent-btn disagree"
+                  onClick={() => {
+                    setCreditAuthAgreed(false);
+                    alert('Credit authorization is required to process your refinance application. Without it, we cannot verify your creditworthiness.');
+                  }}
+                >
+                  I Do Not Authorize
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {submitError && (
+            <div className="error-message" style={{
+              color: '#dc3545',
+              backgroundColor: '#f8d7da',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              {submitError}
+            </div>
+          )}
+
+          <div className="submit-section">
+            <button
+              className="btn-submit"
+              disabled={!creditAuthAgreed || isSubmitting}
+              onClick={handleSubmitApplication}
+            >
+              {isSubmitting
+                ? 'Submitting...'
+                : creditAuthAgreed
+                  ? 'Submit Application'
+                  : 'Please Authorize Credit Check to Submit'}
+            </button>
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={() => setScheduleStep(1)} disabled={isSubmitting}>← Back</button>
+          </div>
         </div>
+      );
+    }
+
+    // Default: Confirmation (shouldn't typically reach here as we redirect after submit)
+    return (
+      <div className="stage-content scheduling-page confirmation-page">
+        <div className="scheduling-header">
+          <div className="success-icon">
+            <Icon name="check" size={48} />
+          </div>
+          <h2>Application Submitted!</h2>
+          <p>Congratulations! Your refinance application has been successfully submitted.</p>
+        </div>
+
+        <div className="next-steps-list" style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <h3><Icon name="clipboard" size={18} /> What Happens Next</h3>
+          <ol>
+            <li><strong>Consultation Call</strong> - We'll review your refinance goals and answer questions</li>
+            <li><strong>Rate Lock</strong> - Lock in your new rate once you're ready</li>
+            <li><strong>Document Collection</strong> - Upload your documents through our secure portal</li>
+            <li><strong>Appraisal</strong> - We'll order and coordinate your home appraisal</li>
+            <li><strong>Closing</strong> - Sign your new loan docs and start saving!</li>
+          </ol>
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: '24px', color: '#666' }}>
+          Redirecting you to your client portal...
+        </p>
       </div>
     );
   };
