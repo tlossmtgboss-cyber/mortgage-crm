@@ -99,3 +99,4 @@ bleach>=6.0.0
 google-auth
 google-auth-oauthlib
 google-api-python-client
+pdf2image>=1.16.0

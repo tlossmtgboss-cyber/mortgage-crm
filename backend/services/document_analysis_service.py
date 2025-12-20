@@ -479,19 +479,41 @@ Watch for signs of document tampering or inconsistencies."""
                 raise FileNotFoundError(f"Document not found: {file_path}")
 
             suffix = file_path.suffix.lower()
-            media_type_map = {
-                ".pdf": "application/pdf",
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-            }
 
-            media_type = media_type_map.get(suffix)
-            if not media_type:
-                raise ValueError(f"Unsupported file type: {suffix}")
+            # Handle PDFs by converting to image first (Claude Vision only accepts images)
+            if suffix == ".pdf":
+                try:
+                    from pdf2image import convert_from_path
+                    import io
 
-            with open(file_path, "rb") as f:
-                file_content = base64.standard_b64encode(f.read()).decode("utf-8")
+                    # Convert first page of PDF to image
+                    images = convert_from_path(file_path, first_page=1, last_page=1, dpi=150)
+                    if not images:
+                        raise ValueError("Could not convert PDF to image")
+
+                    # Convert PIL image to bytes
+                    img_buffer = io.BytesIO()
+                    images[0].save(img_buffer, format='PNG')
+                    img_buffer.seek(0)
+                    file_content = base64.standard_b64encode(img_buffer.read()).decode("utf-8")
+                    media_type = "image/png"
+
+                except ImportError:
+                    logger.warning("pdf2image not available, trying alternative PDF handling")
+                    raise ValueError("PDF processing requires poppler to be installed")
+            else:
+                media_type_map = {
+                    ".png": "image/png",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                }
+
+                media_type = media_type_map.get(suffix)
+                if not media_type:
+                    raise ValueError(f"Unsupported file type: {suffix}")
+
+                with open(file_path, "rb") as f:
+                    file_content = base64.standard_b64encode(f.read()).decode("utf-8")
 
             # Build specialized prompt for mortgage statements
             prompt = f"""Analyze this mortgage statement and extract the following information for a refinance application.
