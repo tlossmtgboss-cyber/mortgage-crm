@@ -144,7 +144,7 @@ function ConversationIntelligence() {
             <i className="fas fa-phone-volume"></i>
           </div>
           <div className="ci-metric-content">
-            <span className="ci-metric-value">{teamDashboard?.metrics?.totalCalls || 0}</span>
+            <span className="ci-metric-value">{teamDashboard?.metrics?.total_calls || 0}</span>
             <span className="ci-metric-label">Total Calls</span>
           </div>
         </div>
@@ -154,7 +154,7 @@ function ConversationIntelligence() {
           </div>
           <div className="ci-metric-content">
             <span className="ci-metric-value">
-              {formatDuration(teamDashboard?.metrics?.avgDurationSeconds || 0)}
+              {formatDuration(teamDashboard?.metrics?.avg_duration_seconds || 0)}
             </span>
             <span className="ci-metric-label">Avg Duration</span>
           </div>
@@ -164,7 +164,7 @@ function ConversationIntelligence() {
             <i className="fas fa-chart-line"></i>
           </div>
           <div className="ci-metric-content">
-            <span className="ci-metric-value">{teamDashboard?.qaSummary?.avgScore?.toFixed(1) || 0}%</span>
+            <span className="ci-metric-value">{teamDashboard?.qa_summary?.avg_score?.toFixed(1) || 0}%</span>
             <span className="ci-metric-label">Avg QA Score</span>
           </div>
         </div>
@@ -173,7 +173,7 @@ function ConversationIntelligence() {
             <i className="fas fa-exclamation-triangle"></i>
           </div>
           <div className="ci-metric-content">
-            <span className="ci-metric-value">{complianceDashboard?.totalViolations || 0}</span>
+            <span className="ci-metric-value">{complianceDashboard?.total_violations || 0}</span>
             <span className="ci-metric-label">Compliance Issues</span>
           </div>
         </div>
@@ -185,8 +185,8 @@ function ConversationIntelligence() {
           <h3>QA Grade Distribution</h3>
           <div className="ci-grade-bars">
             {['A', 'B', 'C', 'D/F'].map((grade) => {
-              const count = teamDashboard?.qaSummary?.gradeDistribution?.[grade] || 0;
-              const total = Object.values(teamDashboard?.qaSummary?.gradeDistribution || {}).reduce((a, b) => a + b, 0) || 1;
+              const count = teamDashboard?.qa_summary?.grade_distribution?.[grade] || 0;
+              const total = Object.values(teamDashboard?.qa_summary?.grade_distribution || {}).reduce((a, b) => a + b, 0) || 1;
               const percentage = (count / total) * 100;
               return (
                 <div key={grade} className="ci-grade-bar-item">
@@ -210,17 +210,17 @@ function ConversationIntelligence() {
         <div className="ci-card ci-top-performers">
           <h3>Top Performers</h3>
           <div className="ci-performers-list">
-            {teamDashboard?.topPerformers?.slice(0, 5).map((performer, index) => (
-              <div key={performer.agentId} className="ci-performer-item">
+            {teamDashboard?.top_performers?.slice(0, 5).map((performer, index) => (
+              <div key={performer.agent_id} className="ci-performer-item">
                 <span className="ci-performer-rank">#{index + 1}</span>
                 <span className="ci-performer-name">{performer.name || performer.email}</span>
-                <span className="ci-performer-calls">{performer.callCount} calls</span>
-                {performer.avgScore && (
+                <span className="ci-performer-calls">{performer.call_count} calls</span>
+                {performer.avg_score && (
                   <span
                     className="ci-performer-score"
-                    style={{ backgroundColor: getGradeColor(performer.avgScore >= 90 ? 'A' : performer.avgScore >= 80 ? 'B' : 'C') }}
+                    style={{ backgroundColor: getGradeColor(performer.avg_score >= 90 ? 'A' : performer.avg_score >= 80 ? 'B' : 'C') }}
                   >
-                    {performer.avgScore.toFixed(0)}%
+                    {performer.avg_score.toFixed(0)}%
                   </span>
                 )}
               </div>
@@ -245,10 +245,10 @@ function ConversationIntelligence() {
                   <i className={recording.direction === 'inbound' ? 'fas fa-phone-alt' : 'fas fa-phone-volume'}></i>
                 </div>
                 <div className="ci-recording-mini-info">
-                  <span className="ci-recording-mini-agent">{recording.agentName || `Agent #${recording.agentId}`}</span>
-                  <span className="ci-recording-mini-time">{formatDate(recording.createdAt)}</span>
+                  <span className="ci-recording-mini-agent">{recording.agent_name || `Agent #${recording.agent_id}`}</span>
+                  <span className="ci-recording-mini-time">{formatDate(recording.created_at)}</span>
                 </div>
-                <span className="ci-recording-mini-duration">{formatDuration(recording.durationSeconds)}</span>
+                <span className="ci-recording-mini-duration">{formatDuration(recording.duration_seconds)}</span>
                 <span className="ci-status-badge" style={{ backgroundColor: status.color }}>
                   {status.label}
                 </span>
@@ -325,25 +325,25 @@ function ConversationIntelligence() {
                 const status = getStatusBadge(recording.status);
                 return (
                   <tr key={recording.id}>
-                    <td>{formatDate(recording.createdAt)}</td>
-                    <td>{recording.agentName || `Agent #${recording.agentId}`}</td>
+                    <td>{formatDate(recording.created_at)}</td>
+                    <td>{recording.agent_name || `Agent #${recording.agent_id}`}</td>
                     <td>
                       <i className={recording.direction === 'inbound' ? 'fas fa-phone-alt' : 'fas fa-phone-volume'}></i>
                       {' '}{recording.direction}
                     </td>
-                    <td>{formatDuration(recording.durationSeconds)}</td>
+                    <td>{formatDuration(recording.duration_seconds)}</td>
                     <td>
                       <span className="ci-status-badge" style={{ backgroundColor: status.color }}>
                         {status.label}
                       </span>
                     </td>
                     <td>
-                      {recording.qaScore ? (
+                      {recording.qa_score ? (
                         <span
                           className="ci-qa-score"
-                          style={{ backgroundColor: getGradeColor(recording.qaGrade) }}
+                          style={{ backgroundColor: getGradeColor(recording.qa_grade) }}
                         >
-                          {recording.qaScore}%
+                          {recording.qa_score}%
                         </span>
                       ) : (
                         '-'
@@ -412,18 +412,18 @@ function ConversationIntelligence() {
               <p className="ci-empty">No coaching clips yet</p>
             ) : (
               clips.map((clip) => (
-                <div key={clip.clipId} className="ci-clip-item">
+                <div key={clip.clip_id} className="ci-clip-item">
                   <div className="ci-clip-icon">
                     <i className="fas fa-play-circle"></i>
                   </div>
                   <div className="ci-clip-info">
                     <span className="ci-clip-title">{clip.title}</span>
                     <span className="ci-clip-meta">
-                      {formatDuration(clip.durationSeconds)} | {clip.category}
+                      {formatDuration(clip.duration_seconds)} | {clip.category}
                     </span>
                   </div>
                   <span className="ci-clip-views">
-                    <i className="fas fa-eye"></i> {clip.viewCount}
+                    <i className="fas fa-eye"></i> {clip.view_count}
                   </span>
                 </div>
               ))
@@ -448,19 +448,19 @@ function ConversationIntelligence() {
               <p className="ci-empty">No active assignments</p>
             ) : (
               assignments.map((assignment) => (
-                <div key={assignment.assignmentId} className="ci-assignment-item">
+                <div key={assignment.assignment_id} className="ci-assignment-item">
                   <div className="ci-assignment-status">
                     <i className={assignment.status === 'completed' ? 'fas fa-check-circle' : 'fas fa-clock'}></i>
                   </div>
                   <div className="ci-assignment-info">
                     <span className="ci-assignment-title">{assignment.title}</span>
                     <span className="ci-assignment-meta">
-                      Assigned to: {assignment.assignedToName || `User #${assignment.assignedTo}`}
+                      Assigned to: {assignment.assigned_to_name || `User #${assignment.assigned_to}`}
                     </span>
                   </div>
-                  {assignment.dueDate && (
-                    <span className={`ci-assignment-due ${new Date(assignment.dueDate) < new Date() ? 'overdue' : ''}`}>
-                      Due: {formatDate(assignment.dueDate)}
+                  {assignment.due_date && (
+                    <span className={`ci-assignment-due ${new Date(assignment.due_date) < new Date() ? 'overdue' : ''}`}>
+                      Due: {formatDate(assignment.due_date)}
                     </span>
                   )}
                 </div>
@@ -480,7 +480,7 @@ function ConversationIntelligence() {
         {['critical', 'high', 'medium', 'low'].map((severity) => (
           <div key={severity} className="ci-severity-card" style={{ borderColor: getSeverityColor(severity) }}>
             <span className="ci-severity-count">
-              {complianceDashboard?.severitySummary?.[severity] || 0}
+              {complianceDashboard?.severity_summary?.[severity] || 0}
             </span>
             <span className="ci-severity-label">{severity}</span>
           </div>
@@ -495,12 +495,12 @@ function ConversationIntelligence() {
             <div className="ci-loading">
               <i className="fas fa-spinner fa-spin"></i>
             </div>
-          ) : complianceDashboard?.violationsByRule?.length === 0 ? (
+          ) : complianceDashboard?.violations_by_rule?.length === 0 ? (
             <p className="ci-empty">No violations in this period</p>
           ) : (
-            complianceDashboard?.violationsByRule?.map((rule) => (
-              <div key={rule.ruleId} className="ci-violation-rule-item">
-                <span className="ci-violation-rule-name">{rule.ruleName}</span>
+            complianceDashboard?.violations_by_rule?.map((rule) => (
+              <div key={rule.rule_id} className="ci-violation-rule-item">
+                <span className="ci-violation-rule-name">{rule.rule_name}</span>
                 <span className="ci-violation-severity" style={{ color: getSeverityColor(rule.severity) }}>
                   {rule.severity}
                 </span>
@@ -525,10 +525,10 @@ function ConversationIntelligence() {
             </tr>
           </thead>
           <tbody>
-            {complianceDashboard?.recentViolations?.map((violation) => (
+            {complianceDashboard?.recent_violations?.map((violation) => (
               <tr key={violation.id}>
-                <td>{formatDate(violation.detectedAt)}</td>
-                <td>{violation.ruleName}</td>
+                <td>{formatDate(violation.detected_at)}</td>
+                <td>{violation.rule_name}</td>
                 <td>
                   <span style={{ color: getSeverityColor(violation.severity) }}>
                     {violation.severity}
@@ -537,7 +537,7 @@ function ConversationIntelligence() {
                 <td>
                   <button
                     className="ci-btn ci-btn-link"
-                    onClick={() => navigate(`/conversation-intelligence/recordings/${violation.recordingId}`)}
+                    onClick={() => navigate(`/conversation-intelligence/recordings/${violation.recording_id}`)}
                   >
                     View
                   </button>
@@ -564,9 +564,9 @@ function ConversationIntelligence() {
             <div key={rubric.id} className="ci-rubric-item">
               <div className="ci-rubric-info">
                 <span className="ci-rubric-name">{rubric.name}</span>
-                <span className="ci-rubric-meta">{rubric.category} | Max Score: {rubric.maxTotalScore}</span>
+                <span className="ci-rubric-meta">{rubric.category} | Max Score: {rubric.max_total_score}</span>
               </div>
-              {rubric.isDefault && <span className="ci-rubric-default">Default</span>}
+              {rubric.is_default && <span className="ci-rubric-default">Default</span>}
             </div>
           ))}
         </div>
