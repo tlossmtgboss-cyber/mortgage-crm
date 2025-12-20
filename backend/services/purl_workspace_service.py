@@ -436,11 +436,12 @@ class PURLWorkspaceService:
                 if lo_user:
                     loan_officer_data = {
                         "id": lo_user.id,
-                        "name": lo_user.name or f"{lo_user.first_name or ''} {lo_user.last_name or ''}".strip(),
+                        "name": lo_user.full_name or lo_user.email.split('@')[0] if lo_user.email else 'Loan Officer',
                         "email": lo_user.email,
-                        "phone": getattr(lo_user, 'phone', None) or getattr(lo_user, 'phone_number', None),
+                        "phone": lo_user.phone,
                         "nmls_id": getattr(lo_user, 'nmls_id', None)
                     }
+                    logger.info(f"Loaded LO info for workspace {workspace.id}: {loan_officer_data.get('name')}")
             except Exception as e:
                 logger.warning(f"Failed to fetch loan officer {workspace.owner_user_id}: {e}")
 
