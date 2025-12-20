@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower", tags=["Borrower Portal"])
 
 
+def safe_isoformat(dt):
+    """Safely format a datetime, handling both datetime objects and strings."""
+    if dt is None:
+        return None
+    if hasattr(dt, 'isoformat'):
+        return dt.isoformat()
+    return str(dt)  # Already a string (SQLite)
+
+
 # =============================================================================
 # AUTHENTICATION DEPENDENCY
 # =============================================================================
@@ -185,8 +194,8 @@ async def list_applications(
                 "status": r[3],
                 "current_step": r[4],
                 "progress_percentage": r[5],
-                "created_at": r[6].isoformat() if r[6] else None,
-                "updated_at": r[7].isoformat() if r[7] else None,
+                "created_at": safe_isoformat(r[6]),
+                "updated_at": safe_isoformat(r[7]),
             }
             for r in results
         ]
@@ -225,8 +234,8 @@ async def get_application(
         "asset_data": json.loads(result[8]) if result[8] else {},
         "property_data": json.loads(result[9]) if result[9] else {},
         "declarations": json.loads(result[10]) if result[10] else {},
-        "created_at": result[11].isoformat() if result[11] else None,
-        "updated_at": result[12].isoformat() if result[12] else None,
+        "created_at": safe_isoformat(result[11]),
+        "updated_at": safe_isoformat(result[12]),
     }
 
 
@@ -383,7 +392,7 @@ async def list_documents(
                 "filename": d[3],
                 "file_size": d[4],
                 "status": d[5],
-                "uploaded_at": d[6].isoformat() if d[6] else None,
+                "uploaded_at": safe_isoformat(d[6]),
                 "review_notes": d[7],
             }
             for d in docs
@@ -524,8 +533,8 @@ async def list_coborrowers(
                 "last_name": c[3],
                 "relationship": c[4],
                 "status": c[5],
-                "invited_at": c[6].isoformat() if c[6] else None,
-                "completed_at": c[7].isoformat() if c[7] else None,
+                "invited_at": safe_isoformat(c[6]),
+                "completed_at": safe_isoformat(c[7]),
             }
             for c in coborrowers
         ]
@@ -740,7 +749,7 @@ async def get_concierge_history(
                 "id": m[0],
                 "role": m[1],
                 "content": m[2],
-                "created_at": m[3].isoformat() if m[3] else None,
+                "created_at": safe_isoformat(m[3]),
             }
             for m in reversed(messages)  # Return in chronological order
         ]
@@ -839,10 +848,10 @@ async def get_scheduled_calls(
                 "preferred_date": c[1],
                 "preferred_time": c[2],
                 "timezone": c[3],
-                "confirmed_datetime": c[4].isoformat() if c[4] else None,
+                "confirmed_datetime": safe_isoformat(c[4]),
                 "status": c[5],
                 "notes": c[6],
-                "created_at": c[7].isoformat() if c[7] else None,
+                "created_at": safe_isoformat(c[7]),
             }
             for c in calls
         ]
