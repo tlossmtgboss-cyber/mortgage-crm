@@ -72,16 +72,14 @@ const StatusBadge = ({ status }) => {
 
 // Header Milestone Progress - Horizontal step indicator for loan stages
 const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
-  // Determine if we're in the lead/pre-approval phase or active loan phase
+  // Use the actual CRM lead stage if available, otherwise fall back to workspace status
+  const crmStage = leadStage?.toLowerCase() || '';
   const status = subStage || workspaceStatus || '';
   const statusLower = status?.toLowerCase() || '';
 
-  // Check if we're in the lead stage (pre-approval journey)
-  // Lead stages: new, contacted, qualified, application, pre_qualified, pre_approved
-  const isLeadStage = [
-    'lead', 'new', 'contacted', 'qualified', 'application',
-    'pre_qualified', 'pre_approved', 'preapproval', 'active'
-  ].includes(statusLower) || leadStage;
+  // Check if we're in the lead stage (pre-approval journey) based on CRM lead stage
+  // CRM Lead stages: new, contacted, qualified, nurturing, pre_qualified, pre_approved, under_contract, won, lost
+  const isLeadStage = crmStage && !['under_contract', 'won', 'lost'].includes(crmStage);
 
   // Define lead journey milestones
   // App Completed → Docs Requested → Docs Approved → Pre Approved
@@ -104,30 +102,25 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
   // Use appropriate stages based on current phase
   const stages = isLeadStage ? leadStages : loanStages;
 
-  // Determine current stage index based on status
+  // Determine current stage index based on CRM lead stage
   const getCurrentStageIndex = () => {
     if (isLeadStage) {
-      // Lead stage mapping (4 stages total):
-      // App Completed (0) - always complete when portal exists
-      // Docs Requested (1) - documents have been requested
-      // Docs Approved (2) - all documents approved
-      // Pre Approved (3) - pre-approval issued (final stage)
-      const leadStatusToIndex = {
-        'new': 1,           // App completed, docs requested
-        'contacted': 1,     // App completed, docs requested
-        'qualified': 1,     // App completed, docs requested
-        'application': 1,   // App completed, docs requested
-        'lead': 1,          // App completed, docs requested
-        'active': 1,        // App completed, docs requested
-        'preapproval': 2,   // Docs requested, reviewing
-        'docs_received': 2, // Docs received, reviewing
-        'docs_approved': 3, // Docs approved, working on pre-approval
-        'pre_qualified': 3, // Working on pre-approval
+      // Map CRM lead stages to milestone progress (4 stages total):
+      // App Completed (index 1) - new, contacted = application just submitted
+      // Docs Requested (index 2) - qualified, nurturing = docs requested
+      // Docs Approved (index 3) - pre_qualified = docs reviewed/approved
+      // Pre Approved (index 4) - pre_approved = pre-approval issued
+      const crmStageToIndex = {
+        'new': 1,           // App completed, starting docs
+        'contacted': 1,     // App completed, starting docs
+        'qualified': 2,     // Docs have been requested
+        'nurturing': 2,     // Docs have been requested
+        'pre_qualified': 3, // Docs approved, pre-approval in progress
         'pre_approved': 4,  // Pre-approved (all complete)
       };
-      return leadStatusToIndex[statusLower] ?? 1; // Default: app completed
+      return crmStageToIndex[crmStage] ?? 1; // Default: app completed
     } else {
-      // Full loan process mapping
+      // Full loan process mapping (after contract received)
       const loanStatusToIndex = {
         'processing': 1,
         'underwriting': 2,
@@ -1324,11 +1317,11 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             loanOfficerInfo={data?.loanOfficer}
           />
 
-          {/* Milestone Progress Indicator */}
+          {/* Milestone Progress Indicator - Uses actual CRM lead stage */}
           <HeaderMilestoneProgress
             subStage={subStage}
             workspaceStatus={workspace?.status}
-            leadStage={workspace?.lead_stage || data?.lead?.stage}
+            leadStage={data?.lead?.stage}
           />
         </div>
       </header>

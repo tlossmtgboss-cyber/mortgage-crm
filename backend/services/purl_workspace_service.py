@@ -427,12 +427,30 @@ class PURLWorkspaceService:
             except Exception as e:
                 logger.warning(f"Failed to fetch linked lead {lead_id}: {e}")
 
+        # Get loan officer info from workspace owner
+        loan_officer_data = None
+        if workspace.owner_user_id:
+            try:
+                from main import User
+                lo_user = self.db.query(User).filter(User.id == workspace.owner_user_id).first()
+                if lo_user:
+                    loan_officer_data = {
+                        "id": lo_user.id,
+                        "name": lo_user.name or f"{lo_user.first_name or ''} {lo_user.last_name or ''}".strip(),
+                        "email": lo_user.email,
+                        "phone": getattr(lo_user, 'phone', None) or getattr(lo_user, 'phone_number', None),
+                        "nmls_id": getattr(lo_user, 'nmls_id', None)
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to fetch loan officer {workspace.owner_user_id}: {e}")
+
         return {
             "workspace": self._workspace_to_dict(workspace),
             "contacts": [self._contact_to_dict(c) for c in contacts],
             "application": self._application_to_dict(application) if application else None,
             "loan": self._loan_to_dict(current_loan) if current_loan else None,
             "lead": lead_data,  # Include linked lead data for milestone sync
+            "loanOfficer": loan_officer_data,  # Include LO info for portal display
             "documents": [self._document_to_dict(d) for d in documents],
             "tasks": [self._task_to_dict(t) for t in tasks],
             "milestones": milestones,
