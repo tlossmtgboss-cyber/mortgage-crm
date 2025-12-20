@@ -925,7 +925,7 @@
 }
 
 /* ========================================
-   Navigation - Angled Right Edge Tabs
+   Navigation - Step Tabs (top wider than bottom)
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
@@ -935,7 +935,7 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-bottom: none;
-  gap: 3px;
+  gap: 0;
 }
 
 .portal-nav.chevron-tabs::-webkit-scrollbar {
@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 10px 24px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,17 +958,18 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
-  /* Straight left, angled right: top-left, top-right, bottom-right (indented), bottom-left */
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  margin-right: 2px;
+  /* Top wider, bottom narrower: top-left, top-right (full), bottom-right (indented), bottom-left */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn.first {
   border-radius: 4px 0 0 4px;
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn.last {
   border-radius: 0 4px 4px 0;
+  margin-right: 0;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
 }
 
