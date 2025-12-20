@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 22px;
+  padding: 10px 20px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,18 +958,10 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
-  margin-right: -6px;
-  /* Bottom-right extends further than top-right */
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 100%, 0 100%);
+  /* Small notch at bottom-right corner only */
+  clip-path: polygon(0 0, 100% 0, 100% 60%, calc(100% - 8px) 100%, 0 100%);
+  margin-right: 2px;
 }
-
-/* Z-index: later tabs on top */
-.chevron-tabs .purl-tab-btn:nth-child(1) { z-index: 1; }
-.chevron-tabs .purl-tab-btn:nth-child(2) { z-index: 2; }
-.chevron-tabs .purl-tab-btn:nth-child(3) { z-index: 3; }
-.chevron-tabs .purl-tab-btn:nth-child(4) { z-index: 4; }
-.chevron-tabs .purl-tab-btn:nth-child(5) { z-index: 5; }
-.chevron-tabs .purl-tab-btn:nth-child(6) { z-index: 6; }
 
 .chevron-tabs .purl-tab-btn.first {
   border-radius: 4px 0 0 4px;
@@ -978,7 +970,7 @@
 .chevron-tabs .purl-tab-btn.last {
   border-radius: 0 4px 4px 0;
   margin-right: 0;
-  clip-path: none;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
 }
 
 .chevron-tabs .purl-tab-btn:hover {
@@ -990,7 +982,6 @@
   background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
   color: #ffffff;
   font-weight: 600;
-  z-index: 10 !important;
 }
 
 .chevron-tabs .tab-label {
