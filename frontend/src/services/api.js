@@ -2291,6 +2291,62 @@ export const perenniaDocsAPI = {
   },
 };
 
+// Outreach/Communication API
+export const outreachAPI = {
+  // Send SMS message
+  sendSMS: async (to, message, leadId = null) => {
+    const response = await api.post('/api/v1/sms/send', {
+      to,
+      message,
+      lead_id: leadId,
+    });
+    return response.data;
+  },
+
+  // Send email
+  sendEmail: async (to, subject, body, leadId = null) => {
+    const response = await api.post('/api/v1/outreach/email', {
+      to,
+      subject,
+      body,
+      lead_id: leadId,
+    });
+    return response.data;
+  },
+
+  // Request a phone call (creates task for LO to call)
+  requestCall: async (phoneNumber, leadId = null, notes = '') => {
+    const response = await api.post('/api/v1/outreach/request-call', {
+      phone_number: phoneNumber,
+      lead_id: leadId,
+      notes,
+    });
+    return response.data;
+  },
+
+  // Send voicemail drop
+  sendVoicemail: async (to, templateId = 'default', leadId = null) => {
+    const response = await api.post('/api/v1/outreach/voicemail', {
+      to,
+      template_id: templateId,
+      lead_id: leadId,
+    });
+    return response.data;
+  },
+
+  // Log an outreach activity
+  logActivity: async (leadId, channel, direction, content, outcome = null) => {
+    const response = await api.post('/api/v1/outreach/log', {
+      lead_id: leadId,
+      channel,
+      direction,
+      content,
+      outcome,
+    });
+    return response.data;
+  },
+};
+
 export default api;
 
 // Debug function for console - helps diagnose API issues

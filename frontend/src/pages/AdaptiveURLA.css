@@ -2857,3 +2857,32 @@
 .btn-add-coborrower:hover {
   background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
 }
+
+/* ========================================
+   Mortgage Statement Parsed Notice
+   ======================================== */
+
+.statement-parsed-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: #166534;
+}
+
+.statement-parsed-notice .notice-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.statement-parsed-notice .notice-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: #22c55e;
+}

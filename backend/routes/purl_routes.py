@@ -711,6 +711,14 @@ async def list_conditions(
 
         conditions = []
         for row in rows:
+            # Handle dates - SQLite returns strings, PostgreSQL returns datetime objects
+            def format_date(val):
+                if val is None:
+                    return None
+                if hasattr(val, 'isoformat'):
+                    return val.isoformat()
+                return str(val)  # Already a string from SQLite
+
             conditions.append({
                 "id": row.id,
                 "lead_id": row.lead_id,
@@ -718,11 +726,11 @@ async def list_conditions(
                 "description": row.description,
                 "category": row.category,
                 "priority": row.priority,
-                "due_date": row.due_date.isoformat() if row.due_date else None,
+                "due_date": format_date(row.due_date),
                 "status": row.status,
                 "is_new": row.is_new,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "created_at": format_date(row.created_at),
+                "updated_at": format_date(row.updated_at),
             })
 
         return {

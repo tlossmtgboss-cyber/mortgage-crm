@@ -19619,6 +19619,14 @@ except Exception as e:
     logger.warning(f"⚠️ Could not load Calendly routes: {e}")
     logger.warning(f"Traceback: {traceback.format_exc()}")
 
+# Include Microsoft Teams Integration routes
+try:
+    from routes.teams_routes import router as teams_router
+    app.include_router(teams_router, tags=["Teams Integration"])
+    logger.info("✅ Microsoft Teams Integration routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Teams routes: {e}")
+
 # Include Video Meeting routes (UVIP - Ultimate Video Intelligence Platform)
 _video_meeting_error = None
 try:
@@ -35814,6 +35822,69 @@ async def update_current_user_profile(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/users/{user_id}/photo")
+async def upload_user_photo(
+    user_id: int,
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a profile photo for a user (self or with admin permissions)"""
+    import uuid
+    import os
+
+    try:
+        # Check permissions - must be self or admin
+        if current_user.id != user_id and not getattr(current_user, 'is_admin', False):
+            raise HTTPException(status_code=403, detail="Not authorized to update this user's photo")
+
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if photo.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Invalid file type. Allowed: JPEG, PNG, GIF, WebP")
+
+        # Validate file size (max 5MB)
+        contents = await photo.read()
+        if len(contents) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB")
+
+        # Generate unique filename
+        ext = photo.filename.split('.')[-1] if '.' in photo.filename else 'jpg'
+        filename = f"profile_{user_id}_{uuid.uuid4().hex[:8]}.{ext}"
+
+        # Ensure upload directory exists
+        upload_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'profiles')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Save file
+        file_path = os.path.join(upload_dir, filename)
+        with open(file_path, 'wb') as f:
+            f.write(contents)
+
+        # Update user's photo URL
+        photo_url = f"/uploads/profiles/{filename}"
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if target_user:
+            if hasattr(target_user, 'photo_url'):
+                target_user.photo_url = photo_url
+            elif hasattr(target_user, 'profile_photo'):
+                target_user.profile_photo = photo_url
+            db.commit()
+
+        logger.info(f"Photo uploaded for user {user_id}: {filename}")
+        return {
+            "success": True,
+            "photo_url": photo_url,
+            "message": "Photo uploaded successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading photo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class PasswordChange(BaseModel):
     """Schema for changing password"""
     current_password: str
@@ -48437,13 +48508,27 @@ def filter_leads_by_permissions(query, user: User, db: Session):
 
     Returns filtered query based on:
     - leads.view_all: See all leads
-    - leads.view_team: See team's leads (not implemented yet - needs team_id)
+    - leads.view_team: See team's leads
     - leads.view_assigned: See only assigned leads
     """
     try:
         if has_permission(user.id, 'leads.view_all', db):
             # Management: See all leads
             return query
+
+        if has_permission(user.id, 'leads.view_team', db):
+            # Team Lead: See team's leads
+            team_id = getattr(user, 'team_id', None)
+            if team_id:
+                # Get all team member IDs
+                team_member_ids = db.execute(text("""
+                    SELECT id FROM users WHERE team_id = :team_id
+                """), {"team_id": team_id}).fetchall()
+                team_ids = [m[0] for m in team_member_ids]
+                if team_ids:
+                    return query.filter(Lead.owner_id.in_(team_ids))
+            # If no team, fall back to own leads
+            return query.filter(Lead.owner_id == user.id)
 
         if has_permission(user.id, 'leads.view_assigned', db):
             # Sales: See only their assigned leads
@@ -48461,21 +48546,39 @@ def filter_clients_by_permissions(query, user: User, db: Session):
     """
     Filter clients query based on user's permissions
 
-    Note: Client model doesn't have owner_id, so this is a placeholder.
-    In production, you'd need to add owner_id to Client model.
+    Returns filtered query based on:
+    - clients.view_all: See all clients
+    - clients.view_team: See team's clients
+    - clients.view_assigned: See only assigned clients
     """
-    if has_permission(user.id, 'clients.view_all', db):
-        # Management/Operations: See all clients
+    try:
+        if has_permission(user.id, 'clients.view_all', db):
+            # Management/Operations: See all clients
+            return query
+
+        if has_permission(user.id, 'clients.view_team', db):
+            # Team Lead: See team's clients (clients owned by team members)
+            team_id = getattr(user, 'team_id', None)
+            if team_id:
+                team_member_ids = db.execute(text("""
+                    SELECT id FROM users WHERE team_id = :team_id
+                """), {"team_id": team_id}).fetchall()
+                team_ids = [m[0] for m in team_member_ids]
+                if team_ids and hasattr(query.column_descriptions[0]['entity'], 'owner_id'):
+                    return query.filter(query.column_descriptions[0]['entity'].owner_id.in_(team_ids))
+            return query  # Fall back to all if no team filtering possible
+
+        if has_permission(user.id, 'clients.view_assigned', db):
+            # See only assigned clients
+            if hasattr(query.column_descriptions[0]['entity'], 'owner_id'):
+                return query.filter(query.column_descriptions[0]['entity'].owner_id == user.id)
+            return query  # Fall back if no owner_id column
+
+        # Default: Return all clients (backwards compatibility)
         return query
-
-    if has_permission(user.id, 'clients.view_assigned', db):
-        # Sales: See only their assigned clients
-        # TODO: Add owner_id to Client model
-        # return query.filter(Client.owner_id == user.id)
-        return query  # For now, return all (needs schema update)
-
-    # No permission to view clients
-    return query.filter(False)  # Returns empty result
+    except Exception as e:
+        logger.error(f"Client permission filter error: {e}")
+        return query
 
 
 def filter_loans_by_permissions(query, user: User, db: Session):
@@ -48489,14 +48592,28 @@ def filter_loans_by_permissions(query, user: User, db: Session):
 
     Default behavior (no permissions set): Show assigned loans
     """
-    if has_permission(user.id, 'loans.view_all', db):
-        # Management/Operations: See all loans
-        return query
+    try:
+        if has_permission(user.id, 'loans.view_all', db):
+            # Management/Operations: See all loans
+            return query
 
-    # Default: Show loans where user is the loan officer
-    # This handles both explicit 'loans.view_assigned' permission AND users with no permissions set
-    # (More permissive default to avoid breaking functionality for users without explicit permissions)
-    return query.filter(Loan.loan_officer_id == user.id)
+        if has_permission(user.id, 'loans.view_team', db):
+            # Team Lead: See team's loans
+            team_id = getattr(user, 'team_id', None)
+            if team_id:
+                team_member_ids = db.execute(text("""
+                    SELECT id FROM users WHERE team_id = :team_id
+                """), {"team_id": team_id}).fetchall()
+                team_ids = [m[0] for m in team_member_ids]
+                if team_ids:
+                    return query.filter(Loan.loan_officer_id.in_(team_ids))
+            return query.filter(Loan.loan_officer_id == user.id)
+
+        # Default: Show loans where user is the loan officer
+        return query.filter(Loan.loan_officer_id == user.id)
+    except Exception as e:
+        logger.error(f"Loan permission filter error: {e}")
+        return query.filter(Loan.loan_officer_id == user.id)
 
 
 def apply_role_template_to_user(user_id: int, role_name: str, granted_by_id: int, db: Session) -> bool:

@@ -72,21 +72,32 @@ function TeamMemberProfile() {
 
     try {
       setUploadingPhoto(true);
-      const formData = new FormData();
-      formData.append('photo', file);
+      const photoFormData = new FormData();
+      photoFormData.append('photo', file);
 
-      // TODO: Update this endpoint when backend support is added
-      // await teamAPI.uploadPhoto(id, formData);
+      // Upload to backend
+      const response = await fetch(`/api/v1/users/${id}/photo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: photoFormData
+      });
 
-      // For now, create a local URL preview
-      const photoUrl = URL.createObjectURL(file);
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const result = await response.json();
+      const photoUrl = result.photo_url;
+
       setFormData(prev => ({ ...prev, photo_url: photoUrl }));
       setMember(prev => ({ ...prev, photo_url: photoUrl }));
 
-      alert('Photo uploaded successfully! (Note: This is a preview. Backend integration pending)');
+      alert('Photo uploaded successfully!');
     } catch (error) {
       console.error('Failed to upload photo:', error);
-      alert('Failed to upload photo');
+      alert('Failed to upload photo. Please try again.');
     } finally {
       setUploadingPhoto(false);
     }

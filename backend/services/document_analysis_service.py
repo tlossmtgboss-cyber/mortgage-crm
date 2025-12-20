@@ -111,6 +111,15 @@ class DocumentAnalysisService:
             "required_fields": ["donor_name", "recipient_name", "gift_amount", "relationship"],
             "optional_fields": ["donor_address", "date_signed", "no_repayment_statement"],
         },
+        "mortgage_statement": {
+            "description": "Monthly mortgage statement or escrow statement",
+            "required_fields": ["lender_name", "property_address", "principal_balance", "monthly_payment"],
+            "optional_fields": [
+                "interest_rate", "loan_number", "maturity_date", "original_loan_date",
+                "escrow_balance", "principal_and_interest", "property_taxes", "insurance",
+                "hoa_dues", "pmi", "statement_date", "next_payment_due"
+            ],
+        },
     }
 
     def __init__(self):
@@ -432,6 +441,177 @@ Watch for signs of document tampering or inconsistencies."""
             pass  # FHA uses similar base docs
 
         return base_docs
+
+
+    async def parse_mortgage_statement(
+        self,
+        file_path: str,
+        borrower_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Parse a mortgage statement to extract key information for refinance applications.
+
+        This specialized method extracts data commonly needed for refinance applications:
+        - Property address
+        - Current mortgage balance
+        - Monthly payment breakdown
+        - Interest rate
+        - Original loan date
+        - Lender information
+
+        Args:
+            file_path: Path to the mortgage statement file (PDF or image)
+            borrower_name: Optional borrower name to verify against document
+
+        Returns:
+            Dict with parsed mortgage information ready for form population
+        """
+        if not self.enabled:
+            return {
+                "success": False,
+                "error": "Document analysis service not configured",
+                "data": {}
+            }
+
+        try:
+            # Read and encode the file
+            file_path = Path(file_path)
+            if not file_path.exists():
+                raise FileNotFoundError(f"Document not found: {file_path}")
+
+            suffix = file_path.suffix.lower()
+            media_type_map = {
+                ".pdf": "application/pdf",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+            }
+
+            media_type = media_type_map.get(suffix)
+            if not media_type:
+                raise ValueError(f"Unsupported file type: {suffix}")
+
+            with open(file_path, "rb") as f:
+                file_content = base64.standard_b64encode(f.read()).decode("utf-8")
+
+            # Build specialized prompt for mortgage statements
+            prompt = f"""Analyze this mortgage statement and extract the following information for a refinance application.
+
+{f"Expected borrower name: {borrower_name}" if borrower_name else ""}
+
+Please extract and return a JSON response with this exact structure:
+{{
+    "success": true,
+    "confidence": 0.0 to 1.0,
+    "data": {{
+        "property_address": "Full property address",
+        "property_street": "Street address only",
+        "property_city": "City",
+        "property_state": "State abbreviation (e.g., CA)",
+        "property_zip": "ZIP code",
+        "lender_name": "Name of the mortgage company/servicer",
+        "loan_number": "Last 4 digits only for security",
+        "principal_balance": 0.00,
+        "monthly_payment": 0.00,
+        "principal_and_interest": 0.00,
+        "escrow_payment": 0.00,
+        "property_taxes_monthly": 0.00,
+        "homeowners_insurance_monthly": 0.00,
+        "pmi_monthly": 0.00,
+        "hoa_monthly": 0.00,
+        "interest_rate": 0.000,
+        "original_loan_date": "YYYY-MM-DD or YYYY-MM if day unknown",
+        "loan_term_years": 30,
+        "maturity_date": "YYYY-MM-DD",
+        "escrow_balance": 0.00,
+        "statement_date": "YYYY-MM-DD",
+        "next_payment_due": "YYYY-MM-DD"
+    }},
+    "borrower_name_matches": true or false or null if cannot verify,
+    "warnings": ["list of any issues or uncertainties"],
+    "document_type_verified": true if this appears to be a valid mortgage statement
+}}
+
+Important:
+- For amounts, use numbers without currency symbols or commas (e.g., 350000.00 not "$350,000")
+- For interest rate, use decimal format (e.g., 6.5 not "6.5%")
+- If a field cannot be found, use null
+- Include any warnings about data quality or uncertainty
+- Verify this is actually a mortgage statement and not another document type"""
+
+            # Call Claude API
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": CLAUDE_MODEL,
+                        "max_tokens": 2000,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": media_type,
+                                            "data": file_content,
+                                        },
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": prompt,
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Claude API error: {response.status_code} - {response.text}")
+                    raise Exception(f"Claude API error: {response.status_code}")
+
+                result = response.json()
+                analysis_text = result["content"][0]["text"]
+
+            # Parse the response
+            import json
+            json_text = analysis_text
+
+            if "```json" in json_text:
+                json_text = json_text.split("```json")[1].split("```")[0]
+            elif "```" in json_text:
+                json_text = json_text.split("```")[1].split("```")[0]
+
+            parsed = json.loads(json_text.strip())
+
+            # Add metadata
+            parsed["parsed_at"] = datetime.now().isoformat()
+            parsed["source_file"] = str(file_path.name)
+
+            return parsed
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse mortgage statement response: {e}")
+            return {
+                "success": False,
+                "error": "Could not parse document analysis response",
+                "raw_response": analysis_text[:500] if 'analysis_text' in locals() else None,
+                "data": {}
+            }
+        except Exception as e:
+            logger.error(f"Mortgage statement parsing failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "data": {}
+            }
 
 
 # Create singleton instance

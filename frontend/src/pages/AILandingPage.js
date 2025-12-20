@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI } from '../services/api';
+import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI } from '../services/api';
 import ActionSidebar from '../components/ActionSidebar';
 import './AILandingPage.css';
 // Note: EmailDropZone wrapper removed - App.js already wraps with EmailDropZone globally
@@ -2846,9 +2846,53 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                     <div className="detail-actions">
                       <button
                         className="detail-action-btn send"
-                        onClick={() => {
+                        onClick={async () => {
                           addMessage(`Sending ${selectedSendMethod} to ${task.client}...`, 'assistant');
-                          // TODO: Implement actual send functionality
+                          try {
+                            const message = `Complete task: ${task.title}`;
+                            const leadId = task.leadId || task.backendId || null;
+
+                            switch (selectedSendMethod) {
+                              case 'email':
+                                await outreachAPI.sendEmail(
+                                  task.clientEmail || task.email,
+                                  `Follow-up: ${task.title}`,
+                                  message,
+                                  leadId
+                                );
+                                addMessage(`✅ Email sent to ${task.client}`, 'assistant');
+                                break;
+                              case 'text':
+                                await outreachAPI.sendSMS(
+                                  task.clientPhone || task.phone,
+                                  message,
+                                  leadId
+                                );
+                                addMessage(`✅ Text sent to ${task.client}`, 'assistant');
+                                break;
+                              case 'phone':
+                                await outreachAPI.requestCall(
+                                  task.clientPhone || task.phone,
+                                  leadId,
+                                  task.title
+                                );
+                                addMessage(`✅ Call request created for ${task.client}`, 'assistant');
+                                break;
+                              case 'voicemail':
+                                await outreachAPI.sendVoicemail(
+                                  task.clientPhone || task.phone,
+                                  'default',
+                                  leadId
+                                );
+                                addMessage(`✅ Voicemail dropped for ${task.client}`, 'assistant');
+                                break;
+                              default:
+                                addMessage(`✅ Message sent to ${task.client}`, 'assistant');
+                            }
+                          } catch (error) {
+                            console.error('Error sending message:', error);
+                            addMessage(`⚠️ Could not send ${selectedSendMethod}. Please try again or use another method.`, 'assistant');
+                          }
                         }}
                       >
                         🚀 Send via {selectedSendMethod.charAt(0).toUpperCase() + selectedSendMethod.slice(1)}

@@ -1339,6 +1339,59 @@ export default function PurchaseApplication() {
     proceedToNextQuestion();
   };
 
+  // Handle follow-up for income/asset stages (doesn't navigate to next question)
+  const handleStageFollowupSubmit = (answers, trigger) => {
+    setFollowupAnswers(prev => ({
+      ...prev,
+      [trigger]: answers
+    }));
+    setActiveFollowup(null);
+    clearFollowup();
+  };
+
+  const handleStageFollowupSkip = () => {
+    setActiveFollowup(null);
+    clearFollowup();
+  };
+
+  // Check for follow-ups when income data changes
+  const handleIncomeFieldChange = async (fieldName, value, setter) => {
+    setter(prev => ({ ...prev, [fieldName]: value }));
+
+    // Trigger follow-up check for specific fields
+    const triggerFields = ['businessType', 'ownershipPercent', 'rentalIncome', 'otherIncome'];
+    if (triggerFields.includes(fieldName) && value) {
+      const result = await checkForFollowup(
+        `income_${fieldName}`,
+        value,
+        'purchase',
+        { ...declarations, ...incomeData, [fieldName]: value }
+      );
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+      }
+    }
+  };
+
+  // Check for follow-ups when asset data changes
+  const handleAssetFieldChange = async (fieldName, value, setter) => {
+    setter(prev => ({ ...prev, [fieldName]: value }));
+
+    // Trigger follow-up check for large deposits or gift-related fields
+    const triggerFields = ['largeDeposits', 'giftAmount', 'donorName', 'otherAssets'];
+    if (triggerFields.includes(fieldName) && value) {
+      const result = await checkForFollowup(
+        `asset_${fieldName}`,
+        value,
+        'purchase',
+        { ...declarations, ...assetData, [fieldName]: value }
+      );
+      if (result && result.needs_followup) {
+        setActiveFollowup(result);
+      }
+    }
+  };
+
   // Proceed to next question
   const proceedToNextQuestion = () => {
     let nextIndex = currentQuestionIndex + 1;
@@ -2197,7 +2250,7 @@ export default function PurchaseApplication() {
                 <label>Business Type</label>
                 <select
                   value={incomeData.businessType || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, businessType: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('businessType', e.target.value, setIncomeData)}
                   className="fun-input"
                 >
                   <option value="">Select...</option>
@@ -2212,7 +2265,7 @@ export default function PurchaseApplication() {
                 <input
                   type="number"
                   value={incomeData.ownershipPercent || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, ownershipPercent: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('ownershipPercent', e.target.value, setIncomeData)}
                   className="fun-input"
                   min="0"
                   max="100"
@@ -2247,7 +2300,7 @@ export default function PurchaseApplication() {
                 <input
                   type="number"
                   value={incomeData.rentalIncome || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, rentalIncome: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('rentalIncome', e.target.value, setIncomeData)}
                   className="fun-input"
                   placeholder="0"
                 />
@@ -2260,7 +2313,7 @@ export default function PurchaseApplication() {
                 <input
                   type="number"
                   value={incomeData.otherIncome || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, otherIncome: e.target.value }))}
+                  onChange={(e) => handleIncomeFieldChange('otherIncome', e.target.value, setIncomeData)}
                   className="fun-input"
                   placeholder="0"
                 />
@@ -2268,6 +2321,17 @@ export default function PurchaseApplication() {
             </div>
           </div>
         </div>
+
+        {/* AI-powered follow-up questions for income-related triggers */}
+        {activeFollowup && activeFollowup.trigger?.startsWith('income_') && activeFollowup.questions?.length > 0 && (
+          <InlineFollowup
+            trigger={activeFollowup.trigger}
+            context={activeFollowup.context}
+            questions={activeFollowup.questions}
+            onAnswersSubmit={handleStageFollowupSubmit}
+            onSkip={handleStageFollowupSkip}
+          />
+        )}
 
         <div className="stage-navigation">
           <button className="btn-back" onClick={goToPrevStage}>← Back</button>
@@ -2368,7 +2432,7 @@ export default function PurchaseApplication() {
                   <input
                     type="number"
                     value={assetData.giftAmount || ''}
-                    onChange={(e) => setAssetData(prev => ({ ...prev, giftAmount: e.target.value }))}
+                    onChange={(e) => handleAssetFieldChange('giftAmount', e.target.value, setAssetData)}
                     className="fun-input"
                   />
                 </div>
@@ -2379,7 +2443,7 @@ export default function PurchaseApplication() {
                   <input
                     type="text"
                     value={assetData.donorName || ''}
-                    onChange={(e) => setAssetData(prev => ({ ...prev, donorName: e.target.value }))}
+                    onChange={(e) => handleAssetFieldChange('donorName', e.target.value, setAssetData)}
                     className="fun-input"
                     placeholder="Who is giving the gift?"
                   />
@@ -2414,6 +2478,17 @@ export default function PurchaseApplication() {
             ).toLocaleString()}
           </strong>
         </div>
+
+        {/* AI-powered follow-up questions for asset-related triggers */}
+        {activeFollowup && activeFollowup.trigger?.startsWith('asset_') && activeFollowup.questions?.length > 0 && (
+          <InlineFollowup
+            trigger={activeFollowup.trigger}
+            context={activeFollowup.context}
+            questions={activeFollowup.questions}
+            onAnswersSubmit={handleStageFollowupSubmit}
+            onSkip={handleStageFollowupSkip}
+          />
+        )}
 
         <div className="stage-navigation">
           <button className="btn-back" onClick={goToPrevStage}>← Back</button>

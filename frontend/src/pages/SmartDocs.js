@@ -11,6 +11,7 @@ import './SmartDocs.css';
 function SmartDocs() {
   const [searchParams] = useSearchParams();
   const [selectedLoanId, setSelectedLoanId] = useState(searchParams.get('loan_id') || '');
+  const [selectedLoan, setSelectedLoan] = useState(null);
   const [loans, setLoans] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [expiringDocs, setExpiringDocs] = useState([]);
@@ -83,7 +84,12 @@ function SmartDocs() {
         <select
           id="loan-select"
           value={selectedLoanId}
-          onChange={(e) => setSelectedLoanId(e.target.value)}
+          onChange={(e) => {
+            const loanId = e.target.value;
+            setSelectedLoanId(loanId);
+            const loan = loans.find(l => String(l.id) === loanId);
+            setSelectedLoan(loan || null);
+          }}
         >
           <option value="">-- Select a loan --</option>
           {loans.map((loan) => (
@@ -166,7 +172,7 @@ function SmartDocs() {
               <div className="upload-section">
                 <SmartDocumentUpload
                   loanId={selectedLoanId}
-                  borrowerId={1} // TODO: Get from loan or user context
+                  borrowerId={selectedLoan?.borrower_id || selectedLoan?.primary_borrower_id || null}
                   onUploadComplete={handleDocumentUploaded}
                 />
               </div>

@@ -2,24 +2,65 @@
 API endpoint to run migrations remotely
 This allows running migrations on production via HTTP request
 """
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Any
+from fastapi import APIRouter, HTTPException, Depends, Header
+from typing import Any, Optional
 import logging
+import os
 
 router = APIRouter(prefix="/api/v1/migrations", tags=["migrations"])
 
 logger = logging.getLogger(__name__)
 
 
-def get_admin_user():
-    """Placeholder for admin authentication - implement proper auth"""
-    # TODO: Add proper admin authentication
-    return True
+async def verify_admin_access(
+    x_admin_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Verify admin access for migration endpoints.
+    Requires either:
+    1. X-Admin-Key header matching MIGRATION_ADMIN_KEY env var
+    2. Valid admin user token (checks is_admin flag)
+    """
+    admin_key = os.getenv("MIGRATION_ADMIN_KEY")
+
+    # Option 1: Check admin key header
+    if admin_key and x_admin_key == admin_key:
+        return True
+
+    # Option 2: Check for authenticated admin user
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+
+            token = authorization.replace("Bearer ", "")
+            db = SessionLocal()
+            try:
+                # Verify token and check admin status
+                result = db.execute(text("""
+                    SELECT u.id, u.is_admin
+                    FROM users u
+                    JOIN sessions s ON s.user_id = u.id
+                    WHERE s.token = :token AND s.expires_at > NOW()
+                """), {"token": token}).fetchone()
+
+                if result and result[1]:  # is_admin = True
+                    return True
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Admin auth check failed: {e}")
+
+    raise HTTPException(
+        status_code=403,
+        detail="Admin access required. Provide X-Admin-Key header or authenticate as admin user."
+    )
 
 
 @router.post("/add-guideline-updates-tables")
 async def run_guideline_updates_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the guideline updates tables migration
@@ -49,7 +90,7 @@ async def run_guideline_updates_migration(
 
 @router.post("/seed-guideline-updates")
 async def seed_guideline_updates(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Seed sample guideline updates data
@@ -73,7 +114,7 @@ async def seed_guideline_updates(
 
 @router.post("/update-guideline-urls")
 async def update_guideline_urls(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Update guideline URLs with real, working links
@@ -196,7 +237,7 @@ async def update_guideline_urls(
 
 @router.post("/scrape-mortgage-guidelines")
 async def scrape_mortgage_guidelines(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Scrape real guideline updates from my.mortgageguidelines.com
@@ -222,7 +263,7 @@ async def scrape_mortgage_guidelines(
 
 @router.post("/clear-guidelines")
 async def clear_guideline_updates(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Clear all guideline updates and user views from database
@@ -260,7 +301,7 @@ async def clear_guideline_updates(
 @router.post("/import-browser-guidelines")
 async def import_browser_guidelines(
     request: dict,
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Import guideline updates scraped by browser extension
@@ -355,7 +396,7 @@ async def import_browser_guidelines(
 
 @router.post("/add-circle-of-cashflow-tables")
 async def run_circle_of_cashflow_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the Circle of Cashflow tables migration
@@ -380,7 +421,7 @@ async def run_circle_of_cashflow_migration(
 
 @router.post("/add-circle-contacts-table")
 async def run_circle_contacts_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the Circle Contacts table migration
@@ -404,7 +445,7 @@ async def run_circle_contacts_migration(
 
 @router.post("/add-ai-task-automation-tables")
 async def run_ai_task_automation_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the AI Task Automation tables migration
@@ -442,7 +483,7 @@ async def run_ai_task_automation_migration(
 
 @router.post("/create-mortgage-glossary")
 async def run_mortgage_glossary_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the mortgage glossary migration
@@ -481,7 +522,7 @@ async def run_mortgage_glossary_migration(
 
 @router.post("/add-concierge-responsible-column")
 async def add_concierge_responsible_column(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Add concierge_responsible column to workflow_day_configs table
@@ -523,7 +564,7 @@ async def add_concierge_responsible_column(
 
 @router.post("/update-user-email")
 async def update_user_email(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Update demo user email from admin@perenniaai.com to admin@perenniaai.com
@@ -579,7 +620,7 @@ async def update_user_email(
 
 @router.post("/add-weekly-task-columns")
 async def run_weekly_task_columns_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Add weekly task scheduling columns to workflow_day_configs table.
@@ -632,7 +673,7 @@ async def run_weekly_task_columns_migration(
 
 @router.post("/add-email-response-training-tables")
 async def run_email_response_training_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the Email Response Training tables migration.
@@ -682,7 +723,7 @@ async def run_email_response_training_migration(
 
 @router.post("/rename-theme")
 async def rename_microsite_theme(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Rename 'LeadPops Cardinal' theme to 'Bold Impact'
@@ -749,7 +790,7 @@ async def rename_microsite_theme(
 
 @router.post("/add-microsite-themes")
 async def run_microsite_themes_migration(
-    admin: Any = Depends(get_admin_user)
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Run the Microsite Themes migration.

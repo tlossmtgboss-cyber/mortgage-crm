@@ -275,8 +275,46 @@ class WorkflowScheduler:
                     WHERE id = :id
                 """), {"id": task_id})
 
-                # TODO: Create BrokenTaskAlert record
-                # TODO: Send notification to manager
+                # Create BrokenTaskAlert record
+                self.db.execute(text("""
+                    INSERT INTO workflow_task_alerts (
+                        task_instance_id, alert_type, severity, message, created_at
+                    ) VALUES (
+                        :task_id, 'overdue', 'high', 'Task overdue and escalated', NOW()
+                    )
+                    ON CONFLICT DO NOTHING
+                """), {"task_id": task_id})
+
+                # Get manager info and send notification
+                manager_info = self.db.execute(text("""
+                    SELECT u.email, u.full_name, wti.task_name, l.loan_number
+                    FROM workflow_task_instances wti
+                    JOIN users assignee ON assignee.id = wti.assigned_to
+                    LEFT JOIN users u ON u.id = assignee.manager_id
+                    LEFT JOIN loans l ON l.id = wti.loan_id
+                    WHERE wti.id = :task_id AND u.email IS NOT NULL
+                """), {"task_id": task_id}).fetchone()
+
+                if manager_info and manager_info[0]:
+                    try:
+                        from services.notification_service import NotificationService
+                        notifier = NotificationService()
+                        notifier.send_email(
+                            to_email=manager_info[0],
+                            subject=f"[URGENT] Overdue Task Escalation - {manager_info[2]}",
+                            html_content=f"""
+                            <h3>Task Escalation Alert</h3>
+                            <p>A task has been escalated due to being overdue:</p>
+                            <ul>
+                                <li><strong>Task:</strong> {manager_info[2]}</li>
+                                <li><strong>Loan:</strong> {manager_info[3] or 'N/A'}</li>
+                                <li><strong>Status:</strong> Overdue - Requires Attention</li>
+                            </ul>
+                            <p>Please review and take action.</p>
+                            """
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not send escalation notification: {e}")
 
                 escalated += 1
 
