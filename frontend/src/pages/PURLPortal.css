@@ -925,7 +925,7 @@
 }
 
 /* ========================================
-   Navigation - Step Tabs (top wider than bottom)
+   Navigation - Chevron Tabs (overlapping angled edges)
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
@@ -948,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 24px;
+  padding: 10px 28px 10px 20px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -958,19 +958,29 @@
   transition: all 0.15s ease;
   position: relative;
   white-space: nowrap;
-  margin-right: 2px;
-  /* Top wider, bottom narrower: top-left, top-right (full), bottom-right (indented), bottom-left */
-  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  margin-right: -12px;
+  /* Angled right edge - top extends right, bottom cuts in */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
 }
+
+/* Z-index so earlier tabs overlap later tabs */
+.chevron-tabs .purl-tab-btn:nth-child(1) { z-index: 6; }
+.chevron-tabs .purl-tab-btn:nth-child(2) { z-index: 5; }
+.chevron-tabs .purl-tab-btn:nth-child(3) { z-index: 4; }
+.chevron-tabs .purl-tab-btn:nth-child(4) { z-index: 3; }
+.chevron-tabs .purl-tab-btn:nth-child(5) { z-index: 2; }
+.chevron-tabs .purl-tab-btn:nth-child(6) { z-index: 1; }
 
 .chevron-tabs .purl-tab-btn.first {
   border-radius: 4px 0 0 4px;
+  padding-left: 20px;
 }
 
 .chevron-tabs .purl-tab-btn.last {
   border-radius: 0 4px 4px 0;
   margin-right: 0;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  padding-right: 20px;
 }
 
 .chevron-tabs .purl-tab-btn:hover {
@@ -982,6 +992,7 @@
   background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
   color: #ffffff;
   font-weight: 600;
+  z-index: 10 !important;
 }
 
 .chevron-tabs .tab-label {
