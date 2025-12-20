@@ -2423,6 +2423,135 @@
   margin-top: 16px;
 }
 
+/* Application Data Sections */
+.application-data-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.app-section {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 24px;
+  box-shadow: var(--portal-shadow);
+  border: 1px solid var(--portal-border);
+}
+
+.app-section .section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--portal-border);
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.field-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-item.full-width {
+  grid-column: span 4;
+}
+
+.field-item .field-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+}
+
+.field-item .field-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--portal-text-primary);
+}
+
+/* Declarations List */
+.declarations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.declaration-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius-sm);
+}
+
+.declaration-question {
+  font-size: 14px;
+  color: var(--portal-text-primary);
+  flex: 1;
+}
+
+.declaration-answer {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.declaration-answer.yes {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--portal-error);
+}
+
+.declaration-answer.no {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--portal-success);
+}
+
+.application-empty-card {
+  text-align: center;
+  padding: 48px 32px;
+  color: var(--portal-text-secondary);
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius-lg);
+  margin-top: 24px;
+}
+
+@media (max-width: 1024px) {
+  .section-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .field-item.full-width {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-item.full-width {
+    grid-column: span 1;
+  }
+
+  .declaration-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
 /* ========================================
    Loan Quote Tab
    ======================================== */

@@ -1512,12 +1512,317 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                   <span className="detail-value">{loan?.occupancy_type || 'Primary Residence'}</span>
                 </div>
               </div>
-              {!application && (
-                <div className="application-empty">
-                  <p>Your application details will appear here once submitted.</p>
-                </div>
-              )}
             </div>
+
+            {/* Application Data Sections */}
+            {application?.data ? (
+              <div className="application-data-sections">
+                {/* Personal Information */}
+                {(application.data.borrower || application.data.personal) && (
+                  <div className="app-section">
+                    <h3 className="section-title">Personal Information</h3>
+                    <div className="section-grid">
+                      {application.data.borrower?.firstName && (
+                        <div className="field-item">
+                          <span className="field-label">First Name</span>
+                          <span className="field-value">{application.data.borrower.firstName}</span>
+                        </div>
+                      )}
+                      {application.data.borrower?.lastName && (
+                        <div className="field-item">
+                          <span className="field-label">Last Name</span>
+                          <span className="field-value">{application.data.borrower.lastName}</span>
+                        </div>
+                      )}
+                      {application.data.borrower?.email && (
+                        <div className="field-item">
+                          <span className="field-label">Email</span>
+                          <span className="field-value">{application.data.borrower.email}</span>
+                        </div>
+                      )}
+                      {application.data.borrower?.phone && (
+                        <div className="field-item">
+                          <span className="field-label">Phone</span>
+                          <span className="field-value">{application.data.borrower.phone}</span>
+                        </div>
+                      )}
+                      {application.data.borrower?.dateOfBirth && (
+                        <div className="field-item">
+                          <span className="field-label">Date of Birth</span>
+                          <span className="field-value">{application.data.borrower.dateOfBirth}</span>
+                        </div>
+                      )}
+                      {application.data.borrower?.ssn && (
+                        <div className="field-item">
+                          <span className="field-label">SSN</span>
+                          <span className="field-value">***-**-{application.data.borrower.ssn.slice(-4)}</span>
+                        </div>
+                      )}
+                      {application.data.borrower?.maritalStatus && (
+                        <div className="field-item">
+                          <span className="field-label">Marital Status</span>
+                          <span className="field-value">{application.data.borrower.maritalStatus}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Current Address */}
+                {application.data.borrower?.currentAddress && (
+                  <div className="app-section">
+                    <h3 className="section-title">Current Address</h3>
+                    <div className="section-grid">
+                      {application.data.borrower.currentAddress.street && (
+                        <div className="field-item full-width">
+                          <span className="field-label">Street Address</span>
+                          <span className="field-value">{application.data.borrower.currentAddress.street}</span>
+                        </div>
+                      )}
+                      {application.data.borrower.currentAddress.city && (
+                        <div className="field-item">
+                          <span className="field-label">City</span>
+                          <span className="field-value">{application.data.borrower.currentAddress.city}</span>
+                        </div>
+                      )}
+                      {application.data.borrower.currentAddress.state && (
+                        <div className="field-item">
+                          <span className="field-label">State</span>
+                          <span className="field-value">{application.data.borrower.currentAddress.state}</span>
+                        </div>
+                      )}
+                      {application.data.borrower.currentAddress.zip && (
+                        <div className="field-item">
+                          <span className="field-label">ZIP Code</span>
+                          <span className="field-value">{application.data.borrower.currentAddress.zip}</span>
+                        </div>
+                      )}
+                      {application.data.borrower.currentAddress.yearsAtAddress && (
+                        <div className="field-item">
+                          <span className="field-label">Years at Address</span>
+                          <span className="field-value">{application.data.borrower.currentAddress.yearsAtAddress}</span>
+                        </div>
+                      )}
+                      {application.data.borrower.currentAddress.housingStatus && (
+                        <div className="field-item">
+                          <span className="field-label">Housing Status</span>
+                          <span className="field-value">{application.data.borrower.currentAddress.housingStatus}</span>
+                        </div>
+                      )}
+                      {application.data.borrower.currentAddress.monthlyPayment && (
+                        <div className="field-item">
+                          <span className="field-label">Monthly Payment</span>
+                          <span className="field-value">{formatCurrency(application.data.borrower.currentAddress.monthlyPayment)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Employment Information */}
+                {application.data.employment && (
+                  <div className="app-section">
+                    <h3 className="section-title">Employment Information</h3>
+                    <div className="section-grid">
+                      {application.data.employment.employmentStatus && (
+                        <div className="field-item">
+                          <span className="field-label">Employment Status</span>
+                          <span className="field-value">{application.data.employment.employmentStatus}</span>
+                        </div>
+                      )}
+                      {application.data.employment.employerName && (
+                        <div className="field-item">
+                          <span className="field-label">Employer Name</span>
+                          <span className="field-value">{application.data.employment.employerName}</span>
+                        </div>
+                      )}
+                      {application.data.employment.jobTitle && (
+                        <div className="field-item">
+                          <span className="field-label">Job Title</span>
+                          <span className="field-value">{application.data.employment.jobTitle}</span>
+                        </div>
+                      )}
+                      {application.data.employment.yearsEmployed && (
+                        <div className="field-item">
+                          <span className="field-label">Years Employed</span>
+                          <span className="field-value">{application.data.employment.yearsEmployed}</span>
+                        </div>
+                      )}
+                      {application.data.employment.monthlyIncome && (
+                        <div className="field-item">
+                          <span className="field-label">Monthly Income</span>
+                          <span className="field-value">{formatCurrency(application.data.employment.monthlyIncome)}</span>
+                        </div>
+                      )}
+                      {application.data.employment.employerPhone && (
+                        <div className="field-item">
+                          <span className="field-label">Employer Phone</span>
+                          <span className="field-value">{application.data.employment.employerPhone}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Property Information */}
+                {application.data.property && (
+                  <div className="app-section">
+                    <h3 className="section-title">Subject Property</h3>
+                    <div className="section-grid">
+                      {application.data.property.address && (
+                        <div className="field-item full-width">
+                          <span className="field-label">Property Address</span>
+                          <span className="field-value">{application.data.property.address}</span>
+                        </div>
+                      )}
+                      {application.data.property.propertyType && (
+                        <div className="field-item">
+                          <span className="field-label">Property Type</span>
+                          <span className="field-value">{application.data.property.propertyType}</span>
+                        </div>
+                      )}
+                      {application.data.property.occupancyType && (
+                        <div className="field-item">
+                          <span className="field-label">Occupancy Type</span>
+                          <span className="field-value">{application.data.property.occupancyType}</span>
+                        </div>
+                      )}
+                      {application.data.property.purchasePrice && (
+                        <div className="field-item">
+                          <span className="field-label">Purchase Price</span>
+                          <span className="field-value">{formatCurrency(application.data.property.purchasePrice)}</span>
+                        </div>
+                      )}
+                      {application.data.property.estimatedValue && (
+                        <div className="field-item">
+                          <span className="field-label">Estimated Value</span>
+                          <span className="field-value">{formatCurrency(application.data.property.estimatedValue)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Loan Information */}
+                {application.data.loan && (
+                  <div className="app-section">
+                    <h3 className="section-title">Loan Details</h3>
+                    <div className="section-grid">
+                      {application.data.loan.loanPurpose && (
+                        <div className="field-item">
+                          <span className="field-label">Loan Purpose</span>
+                          <span className="field-value">{application.data.loan.loanPurpose}</span>
+                        </div>
+                      )}
+                      {application.data.loan.loanAmount && (
+                        <div className="field-item">
+                          <span className="field-label">Loan Amount</span>
+                          <span className="field-value">{formatCurrency(application.data.loan.loanAmount)}</span>
+                        </div>
+                      )}
+                      {application.data.loan.downPayment && (
+                        <div className="field-item">
+                          <span className="field-label">Down Payment</span>
+                          <span className="field-value">{formatCurrency(application.data.loan.downPayment)}</span>
+                        </div>
+                      )}
+                      {application.data.loan.loanType && (
+                        <div className="field-item">
+                          <span className="field-label">Loan Type</span>
+                          <span className="field-value">{application.data.loan.loanType}</span>
+                        </div>
+                      )}
+                      {application.data.loan.loanTerm && (
+                        <div className="field-item">
+                          <span className="field-label">Loan Term</span>
+                          <span className="field-value">{application.data.loan.loanTerm} Years</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Assets */}
+                {application.data.assets && (
+                  <div className="app-section">
+                    <h3 className="section-title">Assets</h3>
+                    <div className="section-grid">
+                      {application.data.assets.checkingBalance && (
+                        <div className="field-item">
+                          <span className="field-label">Checking Account</span>
+                          <span className="field-value">{formatCurrency(application.data.assets.checkingBalance)}</span>
+                        </div>
+                      )}
+                      {application.data.assets.savingsBalance && (
+                        <div className="field-item">
+                          <span className="field-label">Savings Account</span>
+                          <span className="field-value">{formatCurrency(application.data.assets.savingsBalance)}</span>
+                        </div>
+                      )}
+                      {application.data.assets.retirementBalance && (
+                        <div className="field-item">
+                          <span className="field-label">Retirement Accounts</span>
+                          <span className="field-value">{formatCurrency(application.data.assets.retirementBalance)}</span>
+                        </div>
+                      )}
+                      {application.data.assets.otherAssets && (
+                        <div className="field-item">
+                          <span className="field-label">Other Assets</span>
+                          <span className="field-value">{formatCurrency(application.data.assets.otherAssets)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Declarations */}
+                {application.data.declarations && (
+                  <div className="app-section">
+                    <h3 className="section-title">Declarations</h3>
+                    <div className="declarations-list">
+                      {Object.entries(application.data.declarations).map(([key, value]) => (
+                        <div key={key} className="declaration-item">
+                          <span className="declaration-question">
+                            {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                          </span>
+                          <span className={`declaration-answer ${value === true || value === 'yes' ? 'yes' : 'no'}`}>
+                            {value === true || value === 'yes' ? 'Yes' : value === false || value === 'no' ? 'No' : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Display any other fields not in standard sections */}
+                {Object.keys(application.data).filter(key =>
+                  !['borrower', 'employment', 'property', 'loan', 'assets', 'declarations', 'personal', 'coBorrower'].includes(key)
+                ).length > 0 && (
+                  <div className="app-section">
+                    <h3 className="section-title">Additional Information</h3>
+                    <div className="section-grid">
+                      {Object.entries(application.data)
+                        .filter(([key]) => !['borrower', 'employment', 'property', 'loan', 'assets', 'declarations', 'personal', 'coBorrower'].includes(key))
+                        .map(([key, value]) => {
+                          if (typeof value === 'object' && value !== null) return null;
+                          return (
+                            <div key={key} className="field-item">
+                              <span className="field-label">
+                                {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                              </span>
+                              <span className="field-value">{String(value)}</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="application-empty-card">
+                <p>Your application details will appear here once submitted.</p>
+              </div>
+            )}
           </div>
         )}
 
