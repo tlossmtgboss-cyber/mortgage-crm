@@ -4,14 +4,99 @@ import './PowerDialer.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
+// Dial Pad Component
+const DialPad = ({ onDigitPress, disabled }) => {
+  const digits = [
+    { num: '1', letters: '' },
+    { num: '2', letters: 'ABC' },
+    { num: '3', letters: 'DEF' },
+    { num: '4', letters: 'GHI' },
+    { num: '5', letters: 'JKL' },
+    { num: '6', letters: 'MNO' },
+    { num: '7', letters: 'PQRS' },
+    { num: '8', letters: 'TUV' },
+    { num: '9', letters: 'WXYZ' },
+    { num: '*', letters: '' },
+    { num: '0', letters: '+' },
+    { num: '#', letters: '' },
+  ];
+
+  return (
+    <div className="dial-pad">
+      {digits.map(({ num, letters }) => (
+        <button
+          key={num}
+          className="dial-pad-btn"
+          onClick={() => onDigitPress(num)}
+          disabled={disabled}
+        >
+          <span className="dial-num">{num}</span>
+          {letters && <span className="dial-letters">{letters}</span>}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// Phone Input Component
+const PhoneInput = ({ label, value, onChange, onDial, onSms, highlight }) => (
+  <div className={`phone-input-group ${highlight ? 'highlight' : ''}`}>
+    <label>{label}</label>
+    <div className="phone-input-row">
+      <input
+        type="tel"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="(___) ___-____"
+      />
+      <button className="phone-action-btn dial" onClick={onDial} title="Dial">
+        📞
+      </button>
+      <button className="phone-action-btn sms" onClick={onSms} title="SMS">
+        💬
+      </button>
+    </div>
+  </div>
+);
+
+// Call Control Button Component
+const CallControlBtn = ({ icon, label, onClick, variant = 'default', active, disabled }) => (
+  <button
+    className={`call-control-btn ${variant} ${active ? 'active' : ''}`}
+    onClick={onClick}
+    disabled={disabled}
+  >
+    <span className="control-icon">{icon}</span>
+    <span className="control-label">{label}</span>
+  </button>
+);
+
+// Disposition Button Component
+const DispositionBtn = ({ label, variant, onClick, active }) => (
+  <button
+    className={`disposition-btn ${variant} ${active ? 'active' : ''}`}
+    onClick={onClick}
+  >
+    {label}
+  </button>
+);
+
+// Call Note Entry Component
+const CallNoteEntry = ({ note }) => (
+  <div className="call-note-entry">
+    <p className="note-text">{note.text}</p>
+    <span className="note-timestamp">{note.timestamp}</span>
+  </div>
+);
+
 const PowerDialer = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [currentTask, setCurrentTask] = useState(null);
-  const [callStatus, setCallStatus] = useState('idle'); // idle, dialing, ringing, in-progress, disposition
+  const [callStatus, setCallStatus] = useState('idle');
   const [tasks, setTasks] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' or 'contacts'
+  const [activeTab, setActiveTab] = useState('tasks');
   const [selectedTasks, setSelectedTasks] = useState([]);
   const [settings, setSettings] = useState(null);
   const [callLogs, setCallLogs] = useState([]);
@@ -21,6 +106,21 @@ const PowerDialer = () => {
   const [error, setError] = useState(null);
   const callTimerRef = useRef(null);
   const [callDuration, setCallDuration] = useState(0);
+
+  // New states for enhanced dialer
+  const [phoneNumbers, setPhoneNumbers] = useState({ cell: '', home: '', work: '' });
+  const [activePhoneType, setActivePhoneType] = useState('cell');
+  const [isHold, setIsHold] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [scriptTab, setScriptTab] = useState('script'); // 'script', 'interaction', 'activities'
+  const [callNote, setCallNote] = useState('');
+  const [callNotes, setCallNotes] = useState([]);
+  const [sessionStats, setSessionStats] = useState({
+    calls: 0,
+    talks: 0,
+    emails: 0,
+    voicemails: 0
+  });
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -48,13 +148,11 @@ const PowerDialer = () => {
   // Fetch available tasks for dialing
   const fetchTasks = useCallback(async () => {
     try {
-      // Use the dedicated call-tasks endpoint that returns tasks with phone numbers
       const response = await fetch(`${API_BASE}/api/v1/dialer/call-tasks`, {
         headers: getAuthHeaders()
       });
       if (response.ok) {
         const data = await response.json();
-        // Tasks already filtered by backend to only include those with phone numbers
         setTasks(data.tasks || []);
       }
     } catch (err) {
@@ -62,7 +160,7 @@ const PowerDialer = () => {
     }
   }, []);
 
-  // Fetch all callable contacts (leads and loans with phone numbers)
+  // Fetch all callable contacts
   const fetchContacts = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/api/v1/dialer/callable-contacts`, {
@@ -129,6 +227,17 @@ const PowerDialer = () => {
     init();
   }, [fetchSettings, fetchTasks, fetchContacts, checkActiveSession, fetchCallLogs]);
 
+  // Update phone numbers when current task changes
+  useEffect(() => {
+    if (currentTask) {
+      setPhoneNumbers({
+        cell: currentTask.contact_phone || currentTask.lead_phone || currentTask.loan_borrower_phone || '',
+        home: currentTask.home_phone || '',
+        work: currentTask.work_phone || ''
+      });
+    }
+  }, [currentTask]);
+
   // Create new dialer session
   const startSession = async () => {
     if (selectedTasks.length === 0) {
@@ -149,10 +258,8 @@ const PowerDialer = () => {
         if (data.success) {
           setSession({ session_id: data.session_id, ...data });
           setSelectedTasks([]);
-          // Get first task
           await getNextTask(data.session_id);
         } else {
-          // Backend returned success: false with an error message
           setError(data.error || 'Failed to start session');
         }
       } else {
@@ -178,8 +285,9 @@ const PowerDialer = () => {
         if (data.next_task) {
           setCurrentTask(data.next_task);
           setCallStatus('idle');
+          setCallNotes([]);
+          setCallNote('');
         } else {
-          // No more tasks
           setCurrentTask(null);
           setCallStatus('idle');
           await refreshSession(sessionId);
@@ -191,16 +299,23 @@ const PowerDialer = () => {
   };
 
   // Initiate call
-  const initiateCall = async () => {
+  const initiateCall = async (phoneType = activePhoneType) => {
     if (!session || !currentTask) return;
+    const phoneNumber = phoneNumbers[phoneType];
+    if (!phoneNumber) {
+      setError(`No ${phoneType} phone number available`);
+      return;
+    }
 
     try {
       setCallStatus('dialing');
+      setActivePhoneType(phoneType);
       const response = await fetch(
         `${API_BASE}/api/v1/dialer/sessions/${session.session_id}/call/${currentTask.id}`,
         {
           method: 'POST',
-          headers: getAuthHeaders()
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ phone_number: phoneNumber })
         }
       );
 
@@ -209,8 +324,8 @@ const PowerDialer = () => {
         if (data.success) {
           setCallStatus('ringing');
           startCallTimer();
+          setSessionStats(prev => ({ ...prev, calls: prev.calls + 1 }));
         } else if (data.skipped) {
-          // Task was skipped due to compliance
           setError(`Skipped: ${data.issues?.join(', ')}`);
           await getNextTask(session.session_id);
         }
@@ -245,7 +360,7 @@ const PowerDialer = () => {
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // End call (show disposition)
@@ -255,8 +370,8 @@ const PowerDialer = () => {
     setCallStatus('disposition');
   };
 
-  // Submit disposition
-  const submitDisposition = async () => {
+  // Quick disposition
+  const quickDisposition = async (disposition) => {
     if (!session || !currentTask) return;
 
     try {
@@ -266,17 +381,23 @@ const PowerDialer = () => {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            disposition: dispositionForm.disposition,
-            notes: dispositionForm.notes,
+            disposition: disposition,
+            notes: callNotes.map(n => n.text).join('\n'),
             schedule_callback: dispositionForm.scheduleCallback
           })
         }
       );
 
       if (response.ok) {
+        if (disposition === 'connected') {
+          setSessionStats(prev => ({ ...prev, talks: prev.talks + 1 }));
+        } else if (disposition === 'voicemail') {
+          setSessionStats(prev => ({ ...prev, voicemails: prev.voicemails + 1 }));
+        }
         setShowDisposition(false);
         setDispositionForm({ disposition: '', notes: '', scheduleCallback: null });
-        // Get next task or check if session is complete
+        stopCallTimer();
+        setCallStatus('idle');
         await getNextTask(session.session_id);
         await fetchCallLogs();
       } else {
@@ -369,6 +490,7 @@ const PowerDialer = () => {
         setSession(null);
         setCurrentTask(null);
         setCallStatus('idle');
+        setSessionStats({ calls: 0, talks: 0, emails: 0, voicemails: 0 });
         await fetchTasks();
         await fetchCallLogs();
       }
@@ -402,7 +524,7 @@ const PowerDialer = () => {
     );
   };
 
-  // Select all tasks or contacts based on active tab
+  // Select all tasks
   const selectAllTasks = () => {
     const items = activeTab === 'tasks' ? tasks : contacts;
     if (selectedTasks.length === items.length) {
@@ -410,6 +532,33 @@ const PowerDialer = () => {
     } else {
       setSelectedTasks(items.map(t => t.id));
     }
+  };
+
+  // Add call note
+  const addCallNote = () => {
+    if (!callNote.trim()) return;
+    const newNote = {
+      id: Date.now(),
+      text: callNote,
+      timestamp: new Date().toLocaleString()
+    };
+    setCallNotes(prev => [...prev, newNote]);
+    setCallNote('');
+  };
+
+  // Handle digit press from dial pad
+  const handleDigitPress = (digit) => {
+    // In a real implementation, this would send DTMF tones
+    console.log('Digit pressed:', digit);
+  };
+
+  // Get current time
+  const getCurrentTime = () => {
+    return new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
   };
 
   if (loading && !session) {
@@ -431,16 +580,13 @@ const PowerDialer = () => {
           <h1>Power Dialer</h1>
           {session && (
             <span className={`session-badge ${session.status}`}>
-              Session: {session.status}
+              {session.status === 'active' ? '● Live' : session.status}
             </span>
           )}
         </div>
-        <div className="header-right">
-          <button
-            className="settings-btn"
-            onClick={() => navigate('/settings?tab=dialer')}
-          >
-            Settings
+        <div className="header-actions">
+          <button className="header-btn" onClick={() => navigate('/settings?tab=dialer')}>
+            ⚙️ Settings
           </button>
         </div>
       </div>
@@ -461,310 +607,431 @@ const PowerDialer = () => {
         </div>
       )}
 
-      <div className="dialer-content">
-        {/* Left panel - Task Selection / Session Progress */}
-        <div className="dialer-left-panel">
-          {!session ? (
-            <>
-              {/* Tab Navigation */}
-              <div className="dialer-tabs">
-                <button
-                  className={`dialer-tab ${activeTab === 'tasks' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('tasks'); setSelectedTasks([]); }}
-                >
-                  Call Tasks ({tasks.length})
-                </button>
-                <button
-                  className={`dialer-tab ${activeTab === 'contacts' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('contacts'); setSelectedTasks([]); }}
-                >
-                  All Contacts ({contacts.length})
-                </button>
-              </div>
+      {/* Main Content */}
+      {!session ? (
+        /* Pre-Session: Task Selection */
+        <div className="pre-session-layout">
+          <div className="task-selection-panel">
+            <div className="dialer-tabs">
+              <button
+                className={`dialer-tab ${activeTab === 'tasks' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('tasks'); setSelectedTasks([]); }}
+              >
+                Call Tasks ({tasks.length})
+              </button>
+              <button
+                className={`dialer-tab ${activeTab === 'contacts' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('contacts'); setSelectedTasks([]); }}
+              >
+                All Contacts ({contacts.length})
+              </button>
+            </div>
 
-              <div className="panel-header">
-                <h2>{activeTab === 'tasks' ? 'Select Tasks to Dial' : 'Select Contacts to Dial'}</h2>
-                <button
-                  className="select-all-btn"
-                  onClick={selectAllTasks}
-                >
-                  {selectedTasks.length === (activeTab === 'tasks' ? tasks : contacts).length ? 'Deselect All' : 'Select All'}
-                </button>
-              </div>
+            <div className="panel-header">
+              <h2>{activeTab === 'tasks' ? 'Select Tasks to Dial' : 'Select Contacts to Dial'}</h2>
+              <button className="select-all-btn" onClick={selectAllTasks}>
+                {selectedTasks.length === (activeTab === 'tasks' ? tasks : contacts).length ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
 
-              <div className="task-list">
-                {activeTab === 'tasks' ? (
-                  // Tasks tab
-                  tasks.length === 0 ? (
-                    <div className="empty-state">
-                      <p>No call tasks available</p>
-                      <p className="empty-hint">Switch to "All Contacts" to dial leads or borrowers directly</p>
-                    </div>
-                  ) : (
-                    tasks.map(task => (
-                      <div
-                        key={task.id}
-                        className={`task-item ${selectedTasks.includes(task.id) ? 'selected' : ''}`}
-                        onClick={() => toggleTaskSelection(task.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedTasks.includes(task.id)}
-                          onChange={() => {}}
-                        />
-                        <div className="task-info">
-                          <span className="task-title">{task.title}</span>
-                          <span className="task-contact">
-                            {task.contact_name || task.lead_name || task.loan_borrower_name || 'Unknown'}
-                          </span>
-                          <span className="task-phone">
-                            {task.contact_phone || task.lead_phone || task.loan_borrower_phone}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )
+            <div className="task-list">
+              {activeTab === 'tasks' ? (
+                tasks.length === 0 ? (
+                  <div className="empty-state">
+                    <p>No call tasks available</p>
+                    <p className="empty-hint">Switch to "All Contacts" to dial leads or borrowers directly</p>
+                  </div>
                 ) : (
-                  // Contacts tab
-                  contacts.length === 0 ? (
-                    <div className="empty-state">
-                      <p>No contacts with phone numbers found</p>
-                    </div>
-                  ) : (
-                    contacts.map(contact => (
-                      <div
-                        key={contact.id}
-                        className={`task-item ${selectedTasks.includes(contact.id) ? 'selected' : ''}`}
-                        onClick={() => toggleTaskSelection(contact.id)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedTasks.includes(contact.id)}
-                          onChange={() => {}}
-                        />
-                        <div className="task-info">
-                          <span className="task-title">{contact.contact_name}</span>
-                          <span className={`task-type-badge ${contact.entity_type}`}>
-                            {contact.entity_type === 'lead' ? 'Lead' : 'Loan'}
-                          </span>
-                          <span className="task-phone">{contact.contact_phone}</span>
-                          {contact.stage && <span className="task-stage">{contact.stage}</span>}
-                        </div>
+                  tasks.map(task => (
+                    <div
+                      key={task.id}
+                      className={`task-item ${selectedTasks.includes(task.id) ? 'selected' : ''}`}
+                      onClick={() => toggleTaskSelection(task.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTasks.includes(task.id)}
+                        onChange={() => {}}
+                      />
+                      <div className="task-info">
+                        <span className="task-title">{task.title}</span>
+                        <span className="task-contact">
+                          {task.contact_name || task.lead_name || task.loan_borrower_name || 'Unknown'}
+                        </span>
+                        <span className="task-phone">
+                          {task.contact_phone || task.lead_phone || task.loan_borrower_phone}
+                        </span>
                       </div>
-                    ))
-                  )
-                )}
-              </div>
+                    </div>
+                  ))
+                )
+              ) : (
+                contacts.length === 0 ? (
+                  <div className="empty-state">
+                    <p>No contacts with phone numbers found</p>
+                  </div>
+                ) : (
+                  contacts.map(contact => (
+                    <div
+                      key={contact.id}
+                      className={`task-item ${selectedTasks.includes(contact.id) ? 'selected' : ''}`}
+                      onClick={() => toggleTaskSelection(contact.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTasks.includes(contact.id)}
+                        onChange={() => {}}
+                      />
+                      <div className="task-info">
+                        <span className="task-title">{contact.contact_name}</span>
+                        <span className={`task-type-badge ${contact.entity_type}`}>
+                          {contact.entity_type === 'lead' ? 'Lead' : 'Loan'}
+                        </span>
+                        <span className="task-phone">{contact.contact_phone}</span>
+                        {contact.stage && <span className="task-stage">{contact.stage}</span>}
+                      </div>
+                    </div>
+                  ))
+                )
+              )}
+            </div>
 
-              <div className="panel-footer">
-                <button
-                  className="start-session-btn"
-                  onClick={startSession}
-                  disabled={selectedTasks.length === 0 || !settings?.business_caller_id}
-                >
-                  Start Power Dialer ({selectedTasks.length} {activeTab === 'tasks' ? 'tasks' : 'contacts'})
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="panel-header">
-                <h2>Session Progress</h2>
-              </div>
+            <div className="panel-footer">
+              <button
+                className="start-session-btn"
+                onClick={startSession}
+                disabled={selectedTasks.length === 0 || !settings?.business_caller_id}
+              >
+                🚀 Start Power Dialer ({selectedTasks.length} {activeTab === 'tasks' ? 'tasks' : 'contacts'})
+              </button>
+            </div>
+          </div>
 
-              <div className="session-stats">
-                <div className="stat">
-                  <span className="stat-value">{session.completed_tasks || 0}</span>
-                  <span className="stat-label">Completed</span>
+          {/* Recent Calls Preview */}
+          <div className="recent-calls-preview">
+            <h3>Recent Calls</h3>
+            <div className="call-logs-mini">
+              {callLogs.slice(0, 5).map(log => (
+                <div key={log.id} className="call-log-mini-item">
+                  <span className="log-status-icon">
+                    {log.outcome === 'completed' ? '✅' : log.outcome === 'no-answer' ? '📵' : '❌'}
+                  </span>
+                  <span className="log-contact">{log.contact_name || 'Unknown'}</span>
+                  <span className="log-duration-mini">
+                    {log.duration_seconds ? formatDuration(log.duration_seconds) : '--:--'}
+                  </span>
                 </div>
-                <div className="stat">
-                  <span className="stat-value">{session.pending_tasks || 0}</span>
-                  <span className="stat-label">Remaining</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">{session.no_answer_tasks || 0}</span>
-                  <span className="stat-label">No Answer</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">{session.skipped_tasks || 0}</span>
-                  <span className="stat-label">Skipped</span>
-                </div>
-              </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Active Session: Dial Interface */
+        <div className="dial-session-layout">
+          {/* Dial Session Header */}
+          <div className="dial-session-header">
+            <div className="session-title">
+              <h2>Dial Session</h2>
+              <span className="contact-counter">
+                Contacts: {session.completed_tasks || 0} of {session.total_tasks || 0}
+              </span>
+            </div>
+            <div className="session-header-actions">
+              <button className="session-action-btn" title="Actions">
+                ▼ Actions
+              </button>
+              <button className="nav-btn" onClick={skipTask} disabled={!currentTask}>‹</button>
+              <button className="nav-btn" onClick={() => getNextTask(session.session_id)}>›</button>
+            </div>
+          </div>
 
-              <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{
-                    width: `${((session.completed_tasks || 0) / (session.total_tasks || 1)) * 100}%`
-                  }}
+          <div className="dial-session-content">
+            {/* Left Column: Controls & Dial Pad */}
+            <div className="dial-controls-column">
+              {/* Phone Number Inputs */}
+              <div className="phone-inputs-section">
+                <PhoneInput
+                  label="Cell Phone"
+                  value={phoneNumbers.cell}
+                  onChange={(val) => setPhoneNumbers(prev => ({ ...prev, cell: val }))}
+                  onDial={() => initiateCall('cell')}
+                  onSms={() => {}}
+                  highlight={activePhoneType === 'cell' && callStatus !== 'idle'}
+                />
+                <PhoneInput
+                  label="Home Phone"
+                  value={phoneNumbers.home}
+                  onChange={(val) => setPhoneNumbers(prev => ({ ...prev, home: val }))}
+                  onDial={() => initiateCall('home')}
+                  onSms={() => {}}
+                  highlight={activePhoneType === 'home' && callStatus !== 'idle'}
+                />
+                <PhoneInput
+                  label="Work Phone"
+                  value={phoneNumbers.work}
+                  onChange={(val) => setPhoneNumbers(prev => ({ ...prev, work: val }))}
+                  onDial={() => initiateCall('work')}
+                  onSms={() => {}}
+                  highlight={activePhoneType === 'work' && callStatus !== 'idle'}
                 />
               </div>
 
-              <div className="session-controls">
-                {session.status === 'active' ? (
-                  <button className="pause-btn" onClick={pauseSession}>
-                    Pause Session
-                  </button>
-                ) : session.status === 'paused' ? (
-                  <button className="resume-btn" onClick={resumeSession}>
-                    Resume Session
-                  </button>
-                ) : null}
-                <button className="stop-btn" onClick={stopSession}>
-                  Stop Session
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Center panel - Active Call */}
-        <div className="dialer-center-panel">
-          {session && currentTask ? (
-            <div className="active-call-card">
-              <div className="call-header">
-                <span className={`call-status ${callStatus}`}>
-                  {callStatus === 'idle' && 'Ready to call'}
-                  {callStatus === 'dialing' && 'Dialing...'}
-                  {callStatus === 'ringing' && 'Ringing...'}
-                  {callStatus === 'in-progress' && 'On Call'}
-                  {callStatus === 'disposition' && 'Enter Disposition'}
-                </span>
-                {(callStatus === 'ringing' || callStatus === 'in-progress') && (
-                  <span className="call-timer">{formatDuration(callDuration)}</span>
-                )}
-              </div>
-
-              <div className="contact-info">
-                <div className="contact-avatar">
-                  {(currentTask.contact_name || 'U')[0].toUpperCase()}
+              {/* Call Control Buttons */}
+              <div className="call-controls-section">
+                <div className="call-controls-row">
+                  <CallControlBtn
+                    icon="⏸"
+                    label="Hold"
+                    onClick={() => setIsHold(!isHold)}
+                    active={isHold}
+                    disabled={callStatus === 'idle'}
+                  />
+                  <CallControlBtn
+                    icon="🔇"
+                    label="Mute"
+                    onClick={() => setIsMuted(!isMuted)}
+                    active={isMuted}
+                    disabled={callStatus === 'idle'}
+                  />
                 </div>
-                <h3>{currentTask.contact_name || 'Unknown Contact'}</h3>
-                <p className="phone-number">{currentTask.contact_phone}</p>
-                {currentTask.lead_id && (
-                  <span className="contact-type lead">Lead</span>
-                )}
-                {currentTask.loan_id && (
-                  <span className="contact-type loan">Loan</span>
-                )}
-              </div>
-
-              {!showDisposition ? (
-                <div className="call-actions">
-                  {callStatus === 'idle' && (
-                    <>
-                      <button className="dial-btn" onClick={initiateCall}>
-                        <span className="icon">📞</span>
-                        Dial
-                      </button>
-                      <button className="skip-btn" onClick={skipTask}>
-                        Skip
-                      </button>
-                    </>
-                  )}
-                  {(callStatus === 'ringing' || callStatus === 'in-progress') && (
-                    <button className="hangup-btn" onClick={endCall}>
-                      <span className="icon">📵</span>
-                      End Call
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="disposition-form">
-                  <h4>Call Disposition</h4>
-                  <select
-                    value={dispositionForm.disposition}
-                    onChange={(e) => setDispositionForm({...dispositionForm, disposition: e.target.value})}
-                  >
-                    <option value="">Select disposition...</option>
-                    <option value="connected">Connected - Spoke with contact</option>
-                    <option value="voicemail">Left Voicemail</option>
-                    <option value="callback_scheduled">Callback Scheduled</option>
-                    <option value="not_interested">Not Interested</option>
-                    <option value="wrong_number">Wrong Number</option>
-                    <option value="do_not_call">Do Not Call Request</option>
-                  </select>
-
-                  {dispositionForm.disposition === 'callback_scheduled' && (
-                    <input
-                      type="datetime-local"
-                      value={dispositionForm.scheduleCallback || ''}
-                      onChange={(e) => setDispositionForm({...dispositionForm, scheduleCallback: e.target.value})}
-                      placeholder="Schedule callback"
+                <CallControlBtn
+                  icon="📵"
+                  label="Hangup the Call"
+                  onClick={endCall}
+                  variant="hangup"
+                  disabled={callStatus === 'idle'}
+                />
+                <CallControlBtn
+                  icon="🎤"
+                  label="Play Voice Mail"
+                  onClick={() => {}}
+                  variant="voicemail"
+                  disabled={callStatus === 'idle'}
+                />
+                <div className="session-control-btns">
+                  {session.status === 'active' ? (
+                    <CallControlBtn
+                      icon="⏸"
+                      label="Pause Dialing Session"
+                      onClick={pauseSession}
+                      variant="pause"
+                    />
+                  ) : (
+                    <CallControlBtn
+                      icon="▶"
+                      label="Resume Dialing Session"
+                      onClick={resumeSession}
+                      variant="resume"
                     />
                   )}
-
-                  <textarea
-                    placeholder="Notes (optional)"
-                    value={dispositionForm.notes}
-                    onChange={(e) => setDispositionForm({...dispositionForm, notes: e.target.value})}
-                    rows={3}
+                  <CallControlBtn
+                    icon="⏹"
+                    label="End Dialing Session"
+                    onClick={stopSession}
+                    variant="end"
                   />
-
-                  <div className="disposition-actions">
-                    <button
-                      className="save-btn"
-                      onClick={submitDisposition}
-                      disabled={!dispositionForm.disposition}
-                    >
-                      Save & Next
-                    </button>
-                  </div>
                 </div>
-              )}
-            </div>
-          ) : session ? (
-            <div className="no-tasks-state">
-              <h3>Session Complete</h3>
-              <p>All tasks have been processed</p>
-              <button onClick={stopSession}>Close Session</button>
-            </div>
-          ) : (
-            <div className="no-session-state">
-              <div className="dialer-illustration">
-                <span className="big-icon">📞</span>
               </div>
-              <h3>No Active Session</h3>
-              <p>Select tasks from the left panel to start a dialing session</p>
-            </div>
-          )}
-        </div>
 
-        {/* Right panel - Call History */}
-        <div className="dialer-right-panel">
-          <div className="panel-header">
-            <h2>Recent Calls</h2>
+              {/* Dial Pad */}
+              <DialPad
+                onDigitPress={handleDigitPress}
+                disabled={callStatus === 'idle'}
+              />
+            </div>
+
+            {/* Center Column: Script & Dispositions */}
+            <div className="script-column">
+              {/* Script Tabs */}
+              <div className="script-tabs">
+                <button
+                  className={`script-tab ${scriptTab === 'interaction' ? 'active' : ''}`}
+                  onClick={() => setScriptTab('interaction')}
+                >
+                  Interaction
+                </button>
+                <button
+                  className={`script-tab ${scriptTab === 'script' ? 'active' : ''}`}
+                  onClick={() => setScriptTab('script')}
+                >
+                  Phone Scripts
+                </button>
+                <button
+                  className={`script-tab ${scriptTab === 'activities' ? 'active' : ''}`}
+                  onClick={() => setScriptTab('activities')}
+                >
+                  Activities
+                </button>
+              </div>
+
+              {/* Script Content */}
+              <div className="script-content">
+                {scriptTab === 'script' && (
+                  <div className="phone-script">
+                    <p>Hi <strong>{currentTask?.contact_name?.split(' ')[0] || 'there'}</strong>, this is <strong>[Your Name]</strong> from <strong>[Company]</strong>.</p>
+                    <p>I'm getting back with you because you expressed an interest in our mortgage services.</p>
+                    <p>I wanted to give you a quick call to find out how I may be of service.</p>
+                    <p>I know you weren't expecting my phone call, could I confirm your email address and shoot you over a quick link to our website?</p>
+                    <p>Our website will give you all the details if you'd like to check it out...</p>
+                    <p>Would it be OK for me to give you a follow-up call to see if you have any questions?</p>
+                    <p><em>Great, thank you for your time.</em></p>
+                  </div>
+                )}
+                {scriptTab === 'interaction' && (
+                  <div className="interaction-content">
+                    <div className="contact-card">
+                      <div className="contact-avatar-large">
+                        {(currentTask?.contact_name || 'U')[0].toUpperCase()}
+                      </div>
+                      <h3>{currentTask?.contact_name || 'Unknown Contact'}</h3>
+                      <p className="contact-phone-display">{phoneNumbers.cell || phoneNumbers.home || phoneNumbers.work || 'No phone'}</p>
+                      {currentTask?.lead_id && <span className="contact-badge lead">Lead</span>}
+                      {currentTask?.loan_id && <span className="contact-badge loan">Loan</span>}
+                    </div>
+                  </div>
+                )}
+                {scriptTab === 'activities' && (
+                  <div className="activities-content">
+                    <p className="empty-activities">No recent activities for this contact</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Disposition Buttons */}
+              <div className="disposition-buttons">
+                <div className="disposition-row primary">
+                  <DispositionBtn
+                    label="Live Answer"
+                    variant="success"
+                    onClick={() => quickDisposition('connected')}
+                  />
+                  <DispositionBtn
+                    label="Voice Mail"
+                    variant="default"
+                    onClick={() => quickDisposition('voicemail')}
+                  />
+                  <DispositionBtn
+                    label="Follow up VM"
+                    variant="default"
+                    onClick={() => quickDisposition('followup_vm')}
+                  />
+                  <DispositionBtn
+                    label="Leave English VM"
+                    variant="default"
+                    onClick={() => quickDisposition('english_vm')}
+                  />
+                </div>
+                <div className="disposition-row secondary">
+                  <DispositionBtn
+                    label="Leave Spanish VM"
+                    variant="outline"
+                    onClick={() => quickDisposition('spanish_vm')}
+                  />
+                  <DispositionBtn
+                    label="Left Live Voice Mail"
+                    variant="outline"
+                    onClick={() => quickDisposition('left_vm')}
+                  />
+                  <DispositionBtn
+                    label="No Answer"
+                    variant="outline"
+                    onClick={() => quickDisposition('no_answer')}
+                  />
+                </div>
+                <div className="disposition-row tertiary">
+                  <DispositionBtn
+                    label="Busy Signal"
+                    variant="dark"
+                    onClick={() => quickDisposition('busy')}
+                  />
+                  <DispositionBtn
+                    label="Bad Number"
+                    variant="dark"
+                    onClick={() => quickDisposition('bad_number')}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Notes & Activity Log */}
+            <div className="notes-column">
+              <div className="call-note-section">
+                <h3>Call Note</h3>
+                <div className="note-input-area">
+                  <textarea
+                    value={callNote}
+                    onChange={(e) => setCallNote(e.target.value)}
+                    placeholder="Add Content"
+                    rows={4}
+                  />
+                  <div className="note-toolbar">
+                    <button title="Bold">B</button>
+                    <button title="Italic">I</button>
+                    <button title="Underline">U</button>
+                    <button title="List">≡</button>
+                    <button title="Link">🔗</button>
+                  </div>
+                  <button className="add-note-btn" onClick={addCallNote}>
+                    Add Note
+                  </button>
+                </div>
+              </div>
+
+              <div className="activity-log-section">
+                <h3>Activity Log</h3>
+                <div className="activity-log">
+                  {callNotes.length === 0 ? (
+                    <p className="empty-log">No notes yet for this call</p>
+                  ) : (
+                    callNotes.map(note => (
+                      <CallNoteEntry key={note.id} note={note} />
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="call-logs">
-            {callLogs.length === 0 ? (
-              <div className="empty-state">
-                <p>No recent calls</p>
-              </div>
-            ) : (
-              callLogs.map(log => (
-                <div key={log.id} className="call-log-item">
-                  <div className="log-icon">
-                    {log.outcome === 'completed' ? '✅' :
-                     log.outcome === 'no-answer' ? '📵' :
-                     log.outcome === 'busy' ? '⏸️' : '❌'}
-                  </div>
-                  <div className="log-info">
-                    <span className="log-name">{log.contact_name || 'Unknown'}</span>
-                    <span className="log-phone">{log.contact_phone}</span>
-                    <span className="log-time">
-                      {log.started_at && new Date(log.started_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="log-duration">
-                    {log.duration_seconds ? formatDuration(log.duration_seconds) : '--:--'}
-                  </div>
-                </div>
-              ))
-            )}
+          {/* Footer Stats Bar */}
+          <div className="dial-session-footer">
+            <div className="footer-stat">
+              <span className="footer-label">Caller ID</span>
+              <span className="footer-value">{settings?.business_caller_id || '(000)000-0000'}</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-label">Duration</span>
+              <span className="footer-value">{formatDuration(callDuration)}</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-label">Contacts</span>
+              <span className="footer-value">{session.completed_tasks || 0} of {session.total_tasks || 0}</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-label">Calls</span>
+              <span className="footer-value">{sessionStats.calls}</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-label">Talks</span>
+              <span className="footer-value">{sessionStats.talks}</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-label">Emails</span>
+              <span className="footer-value">{sessionStats.emails}</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-label">Voicemails</span>
+              <span className="footer-value">{sessionStats.voicemails}</span>
+            </div>
+            <div className="footer-stat recording">
+              <span className="rec-indicator">●</span>
+              <span className="footer-label">Rec</span>
+            </div>
+            <div className="footer-stat">
+              <span className="footer-value time">{getCurrentTime()}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
