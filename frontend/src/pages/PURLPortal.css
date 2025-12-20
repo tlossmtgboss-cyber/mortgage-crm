@@ -1,19 +1,46 @@
 /**
- * PURL Borrower Portal Styles - Professional Edition
- * Clean, modern, enterprise-grade design
+ * PURL Borrower Portal Styles - Light Theme Dashboard
+ * Modern dashboard layout with white background
  */
 
 /* ========================================
-   CSS Variables for Consistency
+   CSS Variables - Light Theme
    ======================================== */
 :root {
+  /* Light theme background colors */
+  --portal-bg-main: #f8fafc;
+  --portal-bg-card: #ffffff;
+  --portal-bg-card-hover: #f1f5f9;
+  --portal-bg-elevated: #ffffff;
+  --portal-bg-input: #f8fafc;
+  --portal-bg-header: #0f766e;
+
+  /* Accent colors */
   --portal-primary: #0f766e;
   --portal-primary-light: #14b8a6;
   --portal-primary-dark: #0d5c56;
-  --portal-secondary: #1e40af;
-  --portal-success: #059669;
-  --portal-warning: #d97706;
-  --portal-error: #dc2626;
+  --portal-secondary: #3b82f6;
+  --portal-accent: #8b5cf6;
+
+  /* Status colors */
+  --portal-success: #10b981;
+  --portal-warning: #f59e0b;
+  --portal-error: #ef4444;
+  --portal-info: #3b82f6;
+
+  /* Text colors */
+  --portal-text-primary: #1e293b;
+  --portal-text-secondary: #64748b;
+  --portal-text-muted: #94a3b8;
+  --portal-text-accent: #0f766e;
+  --portal-text-white: #ffffff;
+
+  /* Border colors */
+  --portal-border: #e2e8f0;
+  --portal-border-light: #f1f5f9;
+  --portal-border-accent: rgba(15, 118, 110, 0.2);
+
+  /* Gray scale */
   --portal-gray-50: #f8fafc;
   --portal-gray-100: #f1f5f9;
   --portal-gray-200: #e2e8f0;
@@ -24,13 +51,19 @@
   --portal-gray-700: #334155;
   --portal-gray-800: #1e293b;
   --portal-gray-900: #0f172a;
+
+  /* Shadows */
   --portal-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --portal-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
   --portal-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --portal-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --portal-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  /* Border radius */
   --portal-radius: 12px;
   --portal-radius-sm: 8px;
   --portal-radius-lg: 16px;
+  --portal-radius-xl: 24px;
 }
 
 /* ========================================
@@ -38,9 +71,9 @@
    ======================================== */
 .purl-portal {
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--portal-gray-50) 0%, #ffffff 100%);
+  background: var(--portal-bg-main);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: var(--portal-gray-800);
+  color: var(--portal-text-primary);
   line-height: 1.6;
 }
 
@@ -54,6 +87,40 @@
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-primary-dark) 100%);
+}
+
+/* ========================================
+   Dashboard Layout - Two Column
+   ======================================== */
+.portal-dashboard-layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.portal-main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.portal-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .portal-dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-sidebar {
+    order: -1;
+  }
 }
 
 /* ========================================
@@ -128,22 +195,157 @@
 }
 
 /* ========================================
-   Header - Clean White Design
+   Header - Modern Dashboard Design
    ======================================== */
 .portal-header {
-  background: white;
-  color: var(--portal-gray-900);
-  padding: 32px 24px 28px;
+  background: var(--portal-bg-card);
+  color: var(--portal-text-primary);
+  padding: 20px 24px;
   position: relative;
-  border-bottom: 1px solid var(--portal-gray-200);
+  border-bottom: 1px solid var(--portal-border);
 }
 
 .header-content {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   position: relative;
 }
 
+/* Header Top Row - User Info & Date */
+.header-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.user-greeting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-primary-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.user-name-section h1 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--portal-text-primary);
+}
+
+.user-name-section .greeting-subtitle {
+  font-size: 14px;
+  color: var(--portal-text-secondary);
+  margin: 2px 0 0;
+}
+
+.header-date {
+  text-align: right;
+  color: var(--portal-text-secondary);
+  font-size: 14px;
+}
+
+.header-date .date-label {
+  font-weight: 500;
+}
+
+/* Info Bar - Property & Loan Details */
+.portal-info-bar {
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius);
+  padding: 16px 24px;
+  margin-top: 16px;
+  border: 1px solid var(--portal-border);
+}
+
+.info-bar-content {
+  display: grid;
+  grid-template-columns: 2fr repeat(6, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-item.property-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.property-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--portal-primary);
+  border-radius: var(--portal-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+}
+
+.info-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.info-value.large {
+  font-size: 16px;
+}
+
+.info-value.highlight {
+  color: var(--portal-primary);
+}
+
+@media (max-width: 1024px) {
+  .info-bar-content {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .info-item.property-info {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 640px) {
+  .info-bar-content {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .info-item.property-info {
+    grid-column: span 2;
+  }
+}
+
+/* Legacy support */
 .workspace-info {
   display: flex;
   align-items: center;
@@ -156,7 +358,7 @@
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.5px;
-  color: var(--portal-gray-900);
+  color: var(--portal-text-primary);
 }
 
 /* ========================================
@@ -276,6 +478,296 @@
 }
 
 /* ========================================
+   Days Until Closing Counter
+   ======================================== */
+.days-counter-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 32px;
+  text-align: center;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+}
+
+.days-counter-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--portal-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+
+.days-counter-display {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.days-digit {
+  width: 80px;
+  height: 100px;
+  background: linear-gradient(180deg, var(--portal-gray-50) 0%, var(--portal-bg-card) 100%);
+  border: 2px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--portal-primary);
+  box-shadow: var(--portal-shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.days-digit::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--portal-border);
+  opacity: 0.5;
+}
+
+.days-counter-label {
+  font-size: 16px;
+  color: var(--portal-text-secondary);
+  font-weight: 500;
+}
+
+.days-counter-subtext {
+  font-size: 13px;
+  color: var(--portal-text-muted);
+  margin-top: 8px;
+}
+
+/* Animated counter effect */
+@keyframes digitFlip {
+  0% { transform: translateY(-10%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.days-digit.animated {
+  animation: digitFlip 0.5s ease-out;
+}
+
+/* ========================================
+   Loan Status Card with House Illustration
+   ======================================== */
+.loan-status-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 28px;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+}
+
+.loan-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.loan-status-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+  margin: 0;
+}
+
+.loan-status-content {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.house-illustration {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, var(--portal-gray-50) 0%, var(--portal-gray-100) 100%);
+  border-radius: var(--portal-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  position: relative;
+}
+
+.house-illustration::after {
+  content: '';
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 4px;
+  background: var(--portal-primary);
+  border-radius: 2px;
+  opacity: 0.3;
+}
+
+.loan-status-details {
+  flex: 1;
+}
+
+.status-progress-bar {
+  height: 8px;
+  background: var(--portal-gray-200);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.status-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--portal-primary) 0%, var(--portal-primary-light) 100%);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.status-text {
+  font-size: 14px;
+  color: var(--portal-text-secondary);
+}
+
+.status-text strong {
+  color: var(--portal-text-primary);
+}
+
+/* ========================================
+   Recent Activity Sidebar
+   ======================================== */
+.recent-activity-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 20px;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+}
+
+.activity-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--portal-border);
+}
+
+.activity-card-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+  margin: 0;
+}
+
+.activity-view-all {
+  font-size: 13px;
+  color: var(--portal-primary);
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.activity-view-all:hover {
+  text-decoration: underline;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius-sm);
+  transition: background 0.2s ease;
+}
+
+.activity-item:hover {
+  background: var(--portal-gray-100);
+}
+
+.activity-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--portal-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.activity-icon.document { background: #3b82f6; }
+.activity-icon.task { background: #8b5cf6; }
+.activity-icon.message { background: #f59e0b; }
+.activity-icon.milestone { background: #10b981; }
+.activity-icon.status { background: #ec4899; }
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--portal-text-primary);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.activity-new-badge {
+  background: var(--portal-error);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.activity-description {
+  font-size: 13px;
+  color: var(--portal-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-time {
+  font-size: 12px;
+  color: var(--portal-text-muted);
+  margin-top: 4px;
+}
+
+.activity-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--portal-text-muted);
+  font-size: 14px;
+}
+
+/* ========================================
    Progress Bar - Clean
    ======================================== */
 .purl-progress-container {
@@ -312,12 +804,12 @@
    Navigation - Modern Tab Design
    ======================================== */
 .portal-nav {
-  background: white;
-  border-bottom: 1px solid var(--portal-gray-200);
+  background: var(--portal-bg-card);
+  border-bottom: 1px solid var(--portal-border);
   display: flex;
   justify-content: center;
-  gap: 4px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 16px 24px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -330,12 +822,12 @@
 .purl-tab-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border: none;
+  gap: 10px;
+  padding: 12px 20px;
+  border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-secondary);
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -345,13 +837,15 @@
 }
 
 .purl-tab-btn:hover {
-  color: var(--portal-gray-700);
+  color: var(--portal-text-primary);
   background: var(--portal-gray-100);
+  border-color: var(--portal-border);
 }
 
 .purl-tab-btn.active {
   color: var(--portal-primary);
-  background: rgba(15, 118, 110, 0.1);
+  background: rgba(15, 118, 110, 0.08);
+  border-color: var(--portal-primary);
   font-weight: 600;
 }
 
@@ -380,14 +874,14 @@
 @media (max-width: 640px) {
   .portal-nav {
     justify-content: flex-start;
-    gap: 2px;
-    padding: 8px 12px;
+    gap: 4px;
+    padding: 12px 16px;
   }
 
   .purl-tab-btn {
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 14px;
+    gap: 6px;
+    padding: 12px 16px;
     min-width: 70px;
   }
 
@@ -408,9 +902,9 @@
    Main Content
    ======================================== */
 .portal-content {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 24px;
 }
 
 .tab-content {
@@ -492,12 +986,12 @@
    Loan Summary Card - Professional
    ======================================== */
 .loan-summary-card {
-  background: white;
+  background: var(--portal-bg-card);
   border-radius: var(--portal-radius-lg);
   padding: 28px;
   margin-bottom: 28px;
   box-shadow: var(--portal-shadow-md);
-  border: 1px solid var(--portal-gray-100);
+  border: 1px solid var(--portal-border);
 }
 
 .loan-header {
@@ -506,7 +1000,7 @@
   align-items: center;
   margin-bottom: 24px;
   padding-bottom: 20px;
-  border-bottom: 1px solid var(--portal-gray-100);
+  border-bottom: 1px solid var(--portal-border);
 }
 
 .loan-type-badge {
@@ -534,7 +1028,7 @@
 
 .detail-label {
   font-size: 11px;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 600;
@@ -543,7 +1037,7 @@
 .detail-value {
   font-size: 20px;
   font-weight: 700;
-  color: var(--portal-gray-900);
+  color: var(--portal-text-primary);
 }
 
 .detail-address {
@@ -557,7 +1051,7 @@
   margin-left: 10px;
   padding: 4px 10px;
   background: var(--portal-gray-100);
-  color: var(--portal-gray-700);
+  color: var(--portal-text-secondary);
   border-radius: 16px;
   font-size: 12px;
   font-weight: 600;
@@ -566,7 +1060,7 @@
 .loan-empty-state {
   padding: 32px;
   text-align: center;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-secondary);
   background: var(--portal-gray-50);
   border-radius: var(--portal-radius);
   margin-top: 16px;
@@ -581,8 +1075,8 @@
   justify-content: space-between;
   gap: 24px;
   padding: 24px 28px;
-  background: linear-gradient(135deg, var(--portal-gray-50) 0%, white 100%);
-  border: 1px solid var(--portal-gray-200);
+  background: linear-gradient(135deg, var(--portal-gray-50) 0%, var(--portal-bg-card) 100%);
+  border: 1px solid var(--portal-border);
   border-radius: var(--portal-radius);
   margin-top: 24px;
 }
@@ -590,13 +1084,13 @@
 .contact-lo-content h3 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--portal-gray-900);
+  color: var(--portal-text-primary);
   margin: 0 0 4px 0;
 }
 
 .contact-lo-content p {
   font-size: 14px;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-secondary);
   margin: 0;
 }
 
@@ -631,10 +1125,10 @@
 .all-caught-up-section {
   text-align: center;
   padding: 48px 24px;
-  background: white;
-  border-radius: var(--portal-radius);
-  border: 1px solid var(--portal-gray-100);
-  box-shadow: var(--portal-shadow-sm);
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  border: 1px solid var(--portal-border);
+  box-shadow: var(--portal-shadow-md);
 }
 
 .caught-up-icon {
@@ -654,13 +1148,13 @@
 .all-caught-up-section h2 {
   font-size: 20px;
   font-weight: 600;
-  color: var(--portal-gray-900);
+  color: var(--portal-text-primary);
   margin: 0 0 8px 0;
 }
 
 .all-caught-up-section p {
   font-size: 15px;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-secondary);
   margin: 0;
   max-width: 400px;
   margin: 0 auto;
@@ -670,17 +1164,17 @@
    What's Next Section
    ======================================== */
 .whats-next-section {
-  background: white;
-  border-radius: var(--portal-radius);
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
   padding: 24px;
-  border: 1px solid var(--portal-gray-100);
-  box-shadow: var(--portal-shadow-sm);
+  border: 1px solid var(--portal-border);
+  box-shadow: var(--portal-shadow-md);
 }
 
 .whats-next-section h2 {
   font-size: 18px;
   font-weight: 600;
-  color: var(--portal-gray-900);
+  color: var(--portal-text-primary);
   margin: 0 0 16px 0;
 }
 
@@ -695,11 +1189,11 @@
    ======================================== */
 .progress-section,
 .activity-section {
-  background: white;
-  border-radius: var(--portal-radius);
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
   padding: 24px;
-  border: 1px solid var(--portal-gray-100);
-  box-shadow: var(--portal-shadow-sm);
+  border: 1px solid var(--portal-border);
+  box-shadow: var(--portal-shadow-md);
   margin-top: 20px;
 }
 
@@ -707,7 +1201,7 @@
 .activity-section h2 {
   font-size: 16px;
   font-weight: 600;
-  color: var(--portal-gray-900);
+  color: var(--portal-text-primary);
   margin: 0 0 16px 0;
 }
 
@@ -1344,9 +1838,9 @@
 
 /* Documents Table */
 .documents-table-wrapper {
-  background: white;
+  background: var(--portal-bg-card);
   border-radius: var(--portal-radius);
-  border: 1px solid var(--portal-gray-200);
+  border: 1px solid var(--portal-border);
   overflow: hidden;
 }
 
@@ -1357,7 +1851,7 @@
 
 .documents-table thead {
   background: var(--portal-gray-50);
-  border-bottom: 1px solid var(--portal-gray-200);
+  border-bottom: 1px solid var(--portal-border);
 }
 
 .documents-table th {
@@ -1365,16 +1859,16 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .documents-table td {
   padding: 16px;
-  border-bottom: 1px solid var(--portal-gray-100);
+  border-bottom: 1px solid var(--portal-border-light);
   font-size: 14px;
-  color: var(--portal-gray-700);
+  color: var(--portal-text-secondary);
 }
 
 .documents-table tbody tr:last-child td {
@@ -1725,11 +2219,11 @@
 .portal-footer {
   text-align: center;
   padding: 32px 24px;
-  color: var(--portal-gray-500);
+  color: var(--portal-text-secondary);
   font-size: 14px;
-  border-top: 1px solid var(--portal-gray-200);
+  border-top: 1px solid var(--portal-border);
   margin-top: 48px;
-  background: white;
+  background: var(--portal-bg-card);
 }
 
 .portal-footer p {
@@ -1738,7 +2232,7 @@
 
 .footer-contact {
   margin-top: 8px;
-  color: var(--portal-gray-400);
+  color: var(--portal-text-muted);
   font-size: 13px;
 }
 

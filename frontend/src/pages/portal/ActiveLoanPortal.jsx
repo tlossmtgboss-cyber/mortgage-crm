@@ -493,6 +493,234 @@ const daysUntilClose = (closeDate) => {
   return diffDays;
 };
 
+// Helper function to get user initials
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+  return parts[0][0].toUpperCase();
+};
+
+// Helper function to format current date
+const formatCurrentDate = () => {
+  const now = new Date();
+  return now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+// Days Until Closing Counter Component
+const DaysCounterCard = ({ closeDate, estimatedCloseDate }) => {
+  const targetDate = closeDate || estimatedCloseDate;
+  const daysLeft = daysUntilClose(targetDate);
+
+  // Convert days to two-digit display
+  const displayDays = daysLeft !== null && daysLeft >= 0 ? daysLeft : 0;
+  const digit1 = Math.floor(displayDays / 10);
+  const digit2 = displayDays % 10;
+
+  return (
+    <div className="days-counter-card">
+      <div className="days-counter-header">Days Until Closing</div>
+      <div className="days-counter-display">
+        <div className="days-digit animated">{digit1}</div>
+        <div className="days-digit animated">{digit2}</div>
+      </div>
+      <div className="days-counter-label">
+        {daysLeft === null ? 'Closing date TBD' :
+         daysLeft === 0 ? 'Closing Today!' :
+         daysLeft < 0 ? 'Past closing date' :
+         daysLeft === 1 ? 'Day remaining' : 'Days remaining'}
+      </div>
+      {targetDate && (
+        <div className="days-counter-subtext">
+          {closeDate ? 'Scheduled' : 'Estimated'}: {formatDate(targetDate)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Loan Status Card with House Illustration
+const LoanStatusCard = ({ loan, workspace, subStage }) => {
+  // Calculate progress percentage based on stage
+  const getProgressPercentage = () => {
+    const stageProgress = {
+      'lead': 10,
+      'application': 20,
+      'preapproval': 30,
+      'pre_qualified': 40,
+      'pre_approved': 50,
+      'processing': 60,
+      'underwriting': 70,
+      'approved': 80,
+      'clear_to_close': 90,
+      'closing': 95,
+      'funded': 100,
+    };
+    const status = subStage?.toLowerCase() || workspace?.status?.toLowerCase() || 'application';
+    return stageProgress[status] || 20;
+  };
+
+  const progressPct = getProgressPercentage();
+  const statusLabel = subStage || workspace?.status || 'In Progress';
+
+  return (
+    <div className="loan-status-card">
+      <div className="loan-status-header">
+        <h2>Loan Status</h2>
+      </div>
+      <div className="loan-status-content">
+        <div className="house-illustration">
+          🏠
+        </div>
+        <div className="loan-status-details">
+          <div className="status-progress-bar">
+            <div className="status-progress-fill" style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className="status-text">
+            Your loan is currently in <strong>{statusLabel}</strong> ({progressPct}% complete)
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Recent Activity Sidebar Component
+const RecentActivitySidebar = ({ timeline, onViewAll }) => {
+  const typeIcons = {
+    document: '📄',
+    task: '✓',
+    milestone: '🏆',
+    message: '💬',
+    status: '📊',
+    application: '📝'
+  };
+
+  const getIconClass = (type) => {
+    const typeMap = {
+      document: 'document',
+      task: 'task',
+      milestone: 'milestone',
+      message: 'message',
+      status: 'status',
+      application: 'document'
+    };
+    return typeMap[type] || 'status';
+  };
+
+  // Get relative time string
+  const getRelativeTime = (dateStr) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Check if activity is new (within last 24 hours)
+  const isNew = (dateStr) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    return (now - date) < 86400000; // 24 hours in ms
+  };
+
+  return (
+    <div className="recent-activity-card">
+      <div className="activity-card-header">
+        <h3>Recent Activity</h3>
+        {timeline.length > 5 && (
+          <button className="activity-view-all" onClick={onViewAll}>
+            View All
+          </button>
+        )}
+      </div>
+      <div className="activity-list">
+        {timeline.length === 0 ? (
+          <div className="activity-empty">No recent activity</div>
+        ) : (
+          timeline.slice(0, 5).map((event, index) => (
+            <div key={event.id || index} className="activity-item">
+              <div className={`activity-icon ${getIconClass(event.event_type)}`}>
+                {typeIcons[event.event_type] || '●'}
+              </div>
+              <div className="activity-content">
+                <div className="activity-title">
+                  {event.title}
+                  {isNew(event.created_at) && (
+                    <span className="activity-new-badge">New</span>
+                  )}
+                </div>
+                {event.description && (
+                  <div className="activity-description">{event.description}</div>
+                )}
+                <div className="activity-time">{getRelativeTime(event.created_at)}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Info Bar Component - Shows property and loan details
+const PortalInfoBar = ({ loan, workspace, contacts }) => {
+  const loanOfficer = contacts?.find(c => c.contact_type === 'loan_officer');
+
+  return (
+    <div className="portal-info-bar">
+      <div className="info-bar-content">
+        <div className="info-item property-info">
+          <div className="property-icon">🏠</div>
+          <div>
+            <span className="info-label">Property Address</span>
+            <span className="info-value large">{formatAddress(loan?.property_address)}</span>
+          </div>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Purpose</span>
+          <span className="info-value">{loan?.loan_purpose || 'Purchase'}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Loan Type</span>
+          <span className="info-value">{loan?.product_type || 'Conventional'}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Term</span>
+          <span className="info-value">{loan?.loan_term || '30'} Years</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Loan Amount</span>
+          <span className="info-value highlight">{formatCurrency(loan?.loan_amount)}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Interest Rate</span>
+          <span className="info-value">{loan?.interest_rate ? `${loan.interest_rate}%` : 'TBD'}</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">Est. Closing</span>
+          <span className="info-value">{formatDate(loan?.target_close_date)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Loan Summary Card Component - Shows loan details at a glance
 const LoanSummaryCard = ({ loan, workspace, contacts, subStage }) => {
   const borrower = contacts?.find(c => c.contact_type === 'borrower') || contacts?.[0];
@@ -1032,20 +1260,41 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const pendingTasksCount = tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS').length;
   const unreadMessagesCount = messages.filter(m => !m.is_read && m.direction === 'outbound').length;
 
+  // Get borrower name for greeting
+  const borrowerName = borrower
+    ? `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim()
+    : 'Welcome';
+
   return (
     <div className="purl-portal">
       {/* Header */}
       <header className="portal-header">
         <div className="header-content">
-          <div className="workspace-info">
-            <h1>{workspace?.display_name || 'Your Loan Portal'}</h1>
+          {/* Top Row - User Greeting & Date */}
+          <div className="header-top-row">
+            <div className="user-greeting">
+              <div className="user-avatar">
+                {getInitials(borrowerName)}
+              </div>
+              <div className="user-name-section">
+                <h1>{borrowerName}</h1>
+                <p className="greeting-subtitle">Welcome to your loan portal</p>
+              </div>
+            </div>
+            <div className="header-date">
+              <span className="date-label">{formatCurrentDate()}</span>
+            </div>
           </div>
+
           {/* Milestone Progress Indicator */}
           <HeaderMilestoneProgress
             subStage={subStage}
             workspaceStatus={workspace?.status}
             leadStage={workspace?.lead_stage || data?.lead?.stage}
           />
+
+          {/* Info Bar with Loan Details */}
+          <PortalInfoBar loan={loan} workspace={workspace} contacts={contacts} />
         </div>
       </header>
 
@@ -1111,70 +1360,78 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="tab-content overview-tab">
-            {/* Loan Summary Card */}
-            <LoanSummaryCard loan={loan} workspace={workspace} contacts={contacts} subStage={subStage} />
+            <div className="portal-dashboard-layout">
+              {/* Main Content Area */}
+              <div className="portal-main-content">
+                {/* Loan Status Card with House Illustration */}
+                <LoanStatusCard loan={loan} workspace={workspace} subStage={subStage} />
 
-            {/* What's Next Section - Only show if there are tasks or conditions */}
-            {(conditions.length > 0 || tasks.filter(t => t.status === 'open' || t.status === 'TODO').length > 0) && (
-              <section className="whats-next-section">
-                <h2>What's Next</h2>
-                {conditions.length > 0 ? (
-                  <ConditionsNeedsListCard
-                    conditions={conditions}
-                    onViewAll={() => setActiveTab('tasks')}
-                    onUploadForCondition={handleUploadForCondition}
-                    uploading={conditionUploading}
-                  />
-                ) : (
-                  <div className="pending-tasks-list">
-                    {tasks.filter(t => t.status === 'open' || t.status === 'TODO').slice(0, 3).map(task => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onComplete={handleTaskComplete}
+                {/* What's Next Section - Only show if there are tasks or conditions */}
+                {(conditions.length > 0 || tasks.filter(t => t.status === 'open' || t.status === 'TODO').length > 0) && (
+                  <section className="whats-next-section">
+                    <h2>What's Next</h2>
+                    {conditions.length > 0 ? (
+                      <ConditionsNeedsListCard
+                        conditions={conditions}
+                        onViewAll={() => setActiveTab('tasks')}
+                        onUploadForCondition={handleUploadForCondition}
+                        uploading={conditionUploading}
                       />
-                    ))}
-                    {pendingTasksCount > 3 && (
-                      <button className="view-all-btn" onClick={() => setActiveTab('tasks')}>
-                        View all {pendingTasksCount} tasks →
-                      </button>
+                    ) : (
+                      <div className="pending-tasks-list">
+                        {tasks.filter(t => t.status === 'open' || t.status === 'TODO').slice(0, 3).map(task => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onComplete={handleTaskComplete}
+                          />
+                        ))}
+                        {pendingTasksCount > 3 && (
+                          <button className="view-all-btn" onClick={() => setActiveTab('tasks')}>
+                            View all {pendingTasksCount} tasks →
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </div>
+                  </section>
                 )}
-              </section>
-            )}
 
-            {/* All Caught Up Message - Show when no pending items */}
-            {conditions.length === 0 && tasks.filter(t => t.status === 'open' || t.status === 'TODO').length === 0 && (
-              <section className="all-caught-up-section">
-                <div className="caught-up-icon">✓</div>
-                <h2>You're all caught up!</h2>
-                <p>Your loan officer is reviewing your application. We'll notify you when there's something new.</p>
-              </section>
-            )}
+                {/* All Caught Up Message - Show when no pending items */}
+                {conditions.length === 0 && tasks.filter(t => t.status === 'open' || t.status === 'TODO').length === 0 && (
+                  <section className="all-caught-up-section">
+                    <div className="caught-up-icon">✓</div>
+                    <h2>You're all caught up!</h2>
+                    <p>Your loan officer is reviewing your application. We'll notify you when there's something new.</p>
+                  </section>
+                )}
 
-            {/* Loan Progress - Only show if there are milestones */}
-            {milestones.length > 0 && (
-              <section className="progress-section">
-                <h2>Loan Progress</h2>
-                <MilestoneTracker milestones={milestones} />
-              </section>
-            )}
+                {/* Loan Progress - Only show if there are milestones */}
+                {milestones.length > 0 && (
+                  <section className="progress-section">
+                    <h2>Loan Progress</h2>
+                    <MilestoneTracker milestones={milestones} />
+                  </section>
+                )}
 
-            {/* Recent Activity - Only show if there's activity */}
-            {timeline.length > 0 && (
-              <section className="activity-section">
-                <h2>Recent Activity</h2>
-                <div className="recent-timeline">
-                  {timeline.slice(0, 5).map((event, index) => (
-                    <TimelineEvent key={event.id || index} event={event} />
-                  ))}
-                </div>
-              </section>
-            )}
+                {/* Contact Your Loan Officer */}
+                <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
+              </div>
 
-            {/* Contact Your Loan Officer */}
-            <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
+              {/* Sidebar */}
+              <div className="portal-sidebar">
+                {/* Days Until Closing Counter */}
+                <DaysCounterCard
+                  closeDate={loan?.closing_date}
+                  estimatedCloseDate={loan?.target_close_date}
+                />
+
+                {/* Recent Activity */}
+                <RecentActivitySidebar
+                  timeline={timeline}
+                  onViewAll={() => setActiveTab('timeline')}
+                />
+              </div>
+            </div>
           </div>
         )}
 
