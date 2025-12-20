@@ -1121,7 +1121,7 @@
 }
 
 /* ========================================
-   Documents
+   Documents - Table Layout
    ======================================== */
 .documents-header {
   display: flex;
@@ -1139,63 +1139,176 @@
 
 .upload-btn {
   padding: 12px 24px;
-  background: linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-primary-dark) 100%);
+  background: var(--portal-primary);
   color: white;
   border-radius: var(--portal-radius-sm);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.3);
+  border: none;
 }
 
 .upload-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.4);
+  background: var(--portal-primary-dark);
 }
 
 .upload-btn input {
   display: none;
 }
 
-.documents-grid {
-  display: grid;
+/* Documents Table */
+.documents-table-wrapper {
+  background: white;
+  border-radius: var(--portal-radius);
+  border: 1px solid var(--portal-gray-200);
+  overflow: hidden;
+}
+
+.documents-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.documents-table thead {
+  background: var(--portal-gray-50);
+  border-bottom: 1px solid var(--portal-gray-200);
+}
+
+.documents-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--portal-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.documents-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--portal-gray-100);
+  font-size: 14px;
+  color: var(--portal-gray-700);
+}
+
+.documents-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.documents-table tbody tr:hover {
+  background: var(--portal-gray-50);
+}
+
+.doc-name-cell {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
-.document-card {
+.doc-name-cell .doc-icon {
+  font-size: 20px;
+}
+
+.doc-filename {
+  font-weight: 500;
+  color: var(--portal-gray-900);
+}
+
+.doc-type-cell {
+  color: var(--portal-gray-500);
+}
+
+/* Document Status Badges */
+.doc-status-badge {
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.doc-status-badge.status-approved {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.doc-status-badge.status-pending {
+  background: rgba(251, 191, 36, 0.15);
+  color: #b45309;
+}
+
+.doc-status-badge.status-rejected {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.doc-status-badge.status-uploaded {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+}
+
+.doc-status-badge.status-outstanding {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.doc-actions-cell {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px;
+  gap: 8px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--portal-gray-200);
   background: white;
-  border-radius: var(--portal-radius-sm);
-  box-shadow: var(--portal-shadow-sm);
-  border: 1px solid var(--portal-gray-100);
-  transition: all 0.2s ease;
-}
-
-.document-card:hover {
-  box-shadow: var(--portal-shadow);
-  border-color: var(--portal-gray-200);
-}
-
-.doc-icon {
-  font-size: 28px;
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  border-radius: 6px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  color: var(--portal-gray-600);
+}
+
+.action-btn:hover {
   background: var(--portal-gray-50);
-  border-radius: var(--portal-radius-sm);
+  border-color: var(--portal-gray-300);
 }
 
-.doc-info {
-  flex: 1;
-  min-width: 0;
+.action-btn.download:hover {
+  color: var(--portal-primary);
+  border-color: var(--portal-primary);
 }
 
+/* Empty State Card */
+.empty-state-card {
+  text-align: center;
+  padding: 60px 24px;
+  background: white;
+  border-radius: var(--portal-radius);
+  border: 1px solid var(--portal-gray-200);
+}
+
+.empty-state-card .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--portal-gray-900);
+  margin: 0 0 8px 0;
+}
+
+.empty-state-card p {
+  color: var(--portal-gray-500);
+  margin: 0;
+}
+
+/* Legacy document card support */
 .doc-name {
   font-weight: 500;
   color: var(--portal-gray-800);
@@ -1501,6 +1614,19 @@
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
+  }
+
+  .documents-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .documents-table {
+    min-width: 500px;
+  }
+
+  .documents-table th,
+  .documents-table td {
+    padding: 12px;
   }
 
   .message-item {

@@ -175,29 +175,76 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
 };
 
 // Document card component
-const DocumentCard = ({ document, onDownload }) => {
-  const statusIcons = {
-    pending: '⏳',
-    approved: '✓',
-    rejected: '✗'
+const DocumentStatusBadge = ({ status }) => {
+  const statusConfig = {
+    pending: { label: 'Pending Review', className: 'status-pending' },
+    approved: { label: 'Approved', className: 'status-approved' },
+    rejected: { label: 'Needs Revision', className: 'status-rejected' },
+    uploaded: { label: 'Uploaded', className: 'status-uploaded' },
+    outstanding: { label: 'Outstanding', className: 'status-outstanding' },
   };
 
+  const config = statusConfig[status] || statusConfig.pending;
+
   return (
-    <div className={`document-card status-${document.status}`}>
-      <div className="doc-icon">📄</div>
-      <div className="doc-info">
-        <div className="doc-name">{document.filename}</div>
-        <div className="doc-meta">
-          {document.document_type && <span>{document.document_type}</span>}
-          <span>{new Date(document.uploaded_at).toLocaleDateString()}</span>
-        </div>
+    <span className={`doc-status-badge ${config.className}`}>
+      {config.label}
+    </span>
+  );
+};
+
+const DocumentsTable = ({ documents, onDownload }) => {
+  if (documents.length === 0) {
+    return (
+      <div className="empty-state-card">
+        <div className="empty-icon">📁</div>
+        <h3>No documents yet</h3>
+        <p>Documents you upload will appear here</p>
       </div>
-      <div className="doc-status">
-        <span className="status-icon">{statusIcons[document.status]}</span>
-        <button className="download-btn" onClick={() => onDownload(document.id)}>
-          ↓
-        </button>
-      </div>
+    );
+  }
+
+  return (
+    <div className="documents-table-wrapper">
+      <table className="documents-table">
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Uploaded</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {documents.map(doc => (
+            <tr key={doc.id}>
+              <td className="doc-name-cell">
+                <span className="doc-icon">📄</span>
+                <span className="doc-filename">{doc.filename}</span>
+              </td>
+              <td className="doc-type-cell">
+                {doc.document_type || '—'}
+              </td>
+              <td className="doc-status-cell">
+                <DocumentStatusBadge status={doc.status} />
+              </td>
+              <td className="doc-date-cell">
+                {new Date(doc.uploaded_at).toLocaleDateString()}
+              </td>
+              <td className="doc-actions-cell">
+                <button
+                  className="action-btn download"
+                  onClick={() => onDownload(doc.id)}
+                  title="Download"
+                >
+                  ↓
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
@@ -1053,23 +1100,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
               </label>
             </div>
 
-            <div className="documents-grid">
-              {documents.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📁</div>
-                  <p>No documents uploaded yet</p>
-                  <p className="empty-hint">Upload documents using the button above</p>
-                </div>
-              ) : (
-                documents.map(doc => (
-                  <DocumentCard
-                    key={doc.id}
-                    document={doc}
-                    onDownload={handleDownload}
-                  />
-                ))
-              )}
-            </div>
+            <DocumentsTable documents={documents} onDownload={handleDownload} />
           </div>
         )}
 
