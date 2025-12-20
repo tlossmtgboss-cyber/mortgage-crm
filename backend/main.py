@@ -19511,6 +19511,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Custom Domain routes: {e}")
 
+# Include SSL Certificate routes for custom domain SSL management
+try:
+    from routes.ssl_routes import router as ssl_router
+    app.include_router(ssl_router, tags=["SSL Certificates"])
+    logger.info("SSL Certificate routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load SSL Certificate routes: {e}")
+
 # Include Conversation Intelligence routes (unified AI for email + SMS)
 try:
     from routes.conversation_intelligence_routes import router as conversation_intelligence_router
