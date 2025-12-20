@@ -925,16 +925,17 @@
 }
 
 /* ========================================
-   Navigation - Chevron/Arrow Tab Design
+   Navigation - Step Tab Design
    ======================================== */
 .portal-nav.chevron-tabs {
   background: #1e293b;
   display: flex;
   justify-content: center;
-  padding: 0;
+  padding: 12px 16px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-bottom: none;
+  gap: 4px;
 }
 
 .portal-nav.chevron-tabs::-webkit-scrollbar {
@@ -947,7 +948,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 14px 32px;
+  padding: 12px 24px;
   border: none;
   background: #334155;
   cursor: pointer;
@@ -957,19 +958,15 @@
   transition: all 0.2s ease;
   position: relative;
   white-space: nowrap;
-  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
-  margin-left: -8px;
+  border-radius: 6px;
 }
 
 .chevron-tabs .purl-tab-btn.first {
-  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
-  margin-left: 0;
-  border-radius: 8px 0 0 8px;
+  border-radius: 6px;
 }
 
 .chevron-tabs .purl-tab-btn.last {
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 16px 50%);
-  border-radius: 0 8px 8px 0;
+  border-radius: 6px;
 }
 
 .chevron-tabs .purl-tab-btn:hover {
@@ -981,14 +978,13 @@
   background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
   color: #ffffff;
   font-weight: 600;
-  z-index: 1;
 }
 
 .chevron-tabs .tab-label {
   font-size: 14px;
 }
 
-/* Notification dot for chevron tabs */
+/* Notification dot for tabs */
 .chevron-tabs .tab-notification-dot {
   width: 8px;
   height: 8px;
@@ -996,30 +992,24 @@
   border-radius: 50%;
   margin-left: 4px;
   flex-shrink: 0;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.1); }
 }
 
 /* Responsive: Horizontal scroll on mobile */
 @media (max-width: 768px) {
   .portal-nav.chevron-tabs {
     justify-content: flex-start;
-    padding: 0 8px;
+    padding: 10px 12px;
   }
 
   .chevron-tabs .purl-tab-btn {
-    padding: 12px 20px;
+    padding: 10px 18px;
     font-size: 13px;
   }
 }
 
 @media (max-width: 480px) {
   .chevron-tabs .purl-tab-btn {
-    padding: 10px 16px;
+    padding: 8px 14px;
     font-size: 12px;
   }
 }
