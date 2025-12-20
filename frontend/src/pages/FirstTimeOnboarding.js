@@ -175,28 +175,41 @@ function FirstTimeOnboarding() {
     setError(null);
 
     try {
+      // Prepare data - convert empty strings to null for optional fields
+      const parseOptionalFloat = (value) => {
+        if (value === '' || value === null || value === undefined) return null;
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? null : parsed;
+      };
+
+      const requestData = {
+        first_name: formData.first_name || '',
+        last_name: formData.last_name || '',
+        phone: formData.phone || null,
+        timezone: formData.timezone || 'America/New_York',
+        role: formData.role || null,
+        department: formData.department || null,
+        job_title: formData.job_title || null,
+        nmls_id: formData.nmls_id || null,
+        annual_goal: parseOptionalFloat(formData.annual_goal),
+        monthly_goal: parseOptionalFloat(formData.monthly_goal),
+        avg_loan_amount: parseOptionalFloat(formData.avg_loan_amount) || 350000,
+        pull_through_rate: parseOptionalFloat(formData.pull_through_rate) || 75
+      };
+
+      console.log('Sending onboarding data:', requestData);
+
       // Save profile data to backend
       const response = await fetch(`${API_BASE_URL}/api/v1/users/complete-onboarding`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          phone: formData.phone,
-          timezone: formData.timezone,
-          role: formData.role,
-          department: formData.department,
-          job_title: formData.job_title,
-          nmls_id: formData.nmls_id,
-          annual_goal: formData.annual_goal ? parseFloat(formData.annual_goal) : null,
-          monthly_goal: formData.monthly_goal ? parseFloat(formData.monthly_goal) : null,
-          avg_loan_amount: formData.avg_loan_amount ? parseFloat(formData.avg_loan_amount) : 350000,
-          pull_through_rate: formData.pull_through_rate ? parseFloat(formData.pull_through_rate) : 75
-        })
+        body: JSON.stringify(requestData)
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save onboarding data');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Onboarding API error:', response.status, errorData);
+        throw new Error(errorData.detail || errorData.error || 'Failed to save onboarding data');
       }
 
       // Update local user data
@@ -205,10 +218,10 @@ function FirstTimeOnboarding() {
 
       // Also save goals to localStorage for Goal Tracker
       localStorage.setItem('goalTrackerInputs', JSON.stringify({
-        annualClosingsDollarGoal: formData.annual_goal ? parseFloat(formData.annual_goal) : 12000000,
-        monthlyClosingsDollarGoal: formData.monthly_goal ? parseFloat(formData.monthly_goal) : 1000000,
-        avgLoanAmount: formData.avg_loan_amount ? parseFloat(formData.avg_loan_amount) : 350000,
-        pullThroughRate: formData.pull_through_rate ? parseFloat(formData.pull_through_rate) / 100 : 0.75
+        annualClosingsDollarGoal: parseOptionalFloat(formData.annual_goal) || 12000000,
+        monthlyClosingsDollarGoal: parseOptionalFloat(formData.monthly_goal) || 1000000,
+        avgLoanAmount: parseOptionalFloat(formData.avg_loan_amount) || 350000,
+        pullThroughRate: (parseOptionalFloat(formData.pull_through_rate) || 75) / 100
       }));
 
       // Move to complete step
