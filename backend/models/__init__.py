@@ -43,6 +43,26 @@ from .agent_governance import (
     ToolCategory,
     ToolRiskLevel
 )
+from .microsite import (
+    MicrositeTemplatePack,
+    Microsite,
+    MicrositeAsset,
+    MicrositePublishHistory,
+    MicrositeAnalyticsEvent,
+    MicrositeLead,
+    OrganizationMicrositeSettings,
+    # Enums
+    MicrositeStatus,
+    TemplateStatus,
+    PublishAction,
+    AssetType,
+    AnalyticsEventType,
+    LeadStatus,
+    IntentType,
+    # Utilities
+    MicrositeSlugGenerator,
+    ContentValidator
+)
 
 __all__ = [
     'LeadProfile',
@@ -81,5 +101,22 @@ __all__ = [
     'AlertSeverity',
     'TestStatus',
     'ToolCategory',
-    'ToolRiskLevel'
+    'ToolRiskLevel',
+    # Microsite Platform
+    'MicrositeTemplatePack',
+    'Microsite',
+    'MicrositeAsset',
+    'MicrositePublishHistory',
+    'MicrositeAnalyticsEvent',
+    'MicrositeLead',
+    'OrganizationMicrositeSettings',
+    'MicrositeStatus',
+    'TemplateStatus',
+    'PublishAction',
+    'AssetType',
+    'AnalyticsEventType',
+    'LeadStatus',
+    'IntentType',
+    'MicrositeSlugGenerator',
+    'ContentValidator'
 ]

@@ -19430,6 +19430,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load microsite theme routes: {e}")
 
+# Include microsite platform routes (template-based microsites with schema-driven content)
+try:
+    from routes.microsite_routes import router as microsite_platform_router
+    app.include_router(microsite_platform_router, tags=["Microsite Platform"])
+    logger.info("✅ Microsite Platform routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load microsite platform routes: {e}")
+
 # Include borrower authentication routes (social login for applicants)
 from borrower_auth_routes import router as borrower_auth_router
 app.include_router(borrower_auth_router, tags=["Borrower Auth"])
