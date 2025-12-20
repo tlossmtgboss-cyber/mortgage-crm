@@ -4846,7 +4846,10 @@ allowed_origins = [
     "http://localhost:3001",
     "https://mortgage-crm-nine.vercel.app",
     "https://perenniaai.com",
-    "https://www.perenniaai.com"
+    "https://www.perenniaai.com",
+    # Custom user domains
+    "https://www.timloss.com",
+    "https://timloss.com",
 ]
 
 # Allow all Vercel preview deployments and perenniaai.com subdomains
