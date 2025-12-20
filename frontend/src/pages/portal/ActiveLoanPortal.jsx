@@ -21,8 +21,8 @@ import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal'
 import PaymentCalculator from '../../components/PaymentCalculator';
 import '../PURLPortal.css';
 
-// Tab components
-const TabButton = ({ label, icon, isActive, onClick, badge }) => (
+// Tab components - supports both numeric badges and notification dots
+const TabButton = ({ label, icon, isActive, onClick, badge, hasNotification }) => (
   <button
     className={`purl-tab-btn ${isActive ? 'active' : ''}`}
     onClick={onClick}
@@ -30,6 +30,7 @@ const TabButton = ({ label, icon, isActive, onClick, badge }) => (
     <span className="tab-icon">{icon}</span>
     <span className="tab-label">{label}</span>
     {badge > 0 && <span className="tab-badge">{badge}</span>}
+    {hasNotification && !badge && <span className="tab-notification-dot" />}
   </button>
 );
 
@@ -82,19 +83,22 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
     'pre_qualified', 'pre_approved', 'preapproval', 'active'
   ].includes(statusLower) || leadStage;
 
-  // Define lead journey milestones (matches CRM Lead stages)
+  // Define lead journey milestones (matches reference image)
+  // App Completed → Docs Requested → Docs Approved → Pre Approved → Submit to Processing
   const leadStages = [
-    { id: 'application_completed', label: 'Application Completed', shortLabel: 'App Completed' },
-    { id: 'document_fulfillment', label: 'Document Fulfillment', shortLabel: 'Doc Fulfillment' },
-    { id: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre-Approved' },
+    { id: 'app_completed', label: 'Application Completed', shortLabel: 'App Completed' },
+    { id: 'docs_requested', label: 'Docs Requested', shortLabel: 'Docs Requested' },
+    { id: 'docs_approved', label: 'Docs Approved', shortLabel: 'Docs Approved' },
+    { id: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre Approved' },
+    { id: 'submit_to_processing', label: 'Submit to Processing', shortLabel: 'Submit to Processing' },
   ];
 
-  // Define full loan journey stages (after pre-approval)
+  // Define full loan journey stages (after contract received)
   const loanStages = [
     { id: 'processing', label: 'Processing', shortLabel: 'Processing' },
     { id: 'underwriting', label: 'Underwriting', shortLabel: 'Underwriting' },
     { id: 'approval', label: 'Approval', shortLabel: 'Approved' },
-    { id: 'clear_to_close', label: 'Clear to Close', shortLabel: 'CTC' },
+    { id: 'clear_to_close', label: 'Clear to Close', shortLabel: 'Clear to Close' },
     { id: 'closing', label: 'Closing', shortLabel: 'Closing' },
   ];
 
@@ -104,35 +108,40 @@ const HeaderMilestoneProgress = ({ subStage, workspaceStatus, leadStage }) => {
   // Determine current stage index based on status
   const getCurrentStageIndex = () => {
     if (isLeadStage) {
-      // Lead stage mapping:
-      // Application Completed (0) - always complete when portal exists (application was submitted)
-      // Document Fulfillment (1) - Pre-Qualified in CRM
-      // Pre-Approved (2) - Pre-Approved in CRM
+      // Lead stage mapping for new milestones:
+      // App Completed (0) - always complete when portal exists
+      // Docs Requested (1) - documents have been requested
+      // Docs Approved (2) - all documents approved
+      // Pre Approved (3) - pre-approval issued
+      // Submit to Processing (4) - contract received, ready for processing
       const leadStatusToIndex = {
-        'new': 1,           // Application completed, working on documents
-        'contacted': 1,     // Application completed, working on documents
-        'qualified': 1,     // Application completed, working on documents
-        'application': 1,   // Application completed, working on documents
-        'lead': 1,          // Application completed, working on documents
-        'active': 1,        // Application completed, working on documents
-        'preapproval': 1,   // Application completed, working on documents
-        'pre_qualified': 2, // Documents done, working on pre-approval
-        'pre_approved': 3,  // All complete
+        'new': 1,           // App completed, docs requested
+        'contacted': 1,     // App completed, docs requested
+        'qualified': 1,     // App completed, docs requested
+        'application': 1,   // App completed, docs requested
+        'lead': 1,          // App completed, docs requested
+        'active': 1,        // App completed, docs requested
+        'preapproval': 2,   // Docs requested, reviewing
+        'docs_received': 2, // Docs received, reviewing
+        'docs_approved': 3, // Docs approved, working on pre-approval
+        'pre_qualified': 3, // Working on pre-approval
+        'pre_approved': 4,  // Pre-approved, waiting for contract
+        'under_contract': 5, // Contract received, ready to submit
       };
-      return leadStatusToIndex[statusLower] ?? 1; // Default: application complete
+      return leadStatusToIndex[statusLower] ?? 1; // Default: app completed
     } else {
       // Full loan process mapping
       const loanStatusToIndex = {
-        'processing': 0,
-        'underwriting': 1,
-        'conditional_approval': 2,
-        'approved': 2,
-        'approval': 2,
-        'clear_to_close': 3,
-        'ctc': 3,
-        'closing': 4,
-        'docs_out': 4,
-        'docs_back': 4,
+        'processing': 1,
+        'underwriting': 2,
+        'conditional_approval': 3,
+        'approved': 3,
+        'approval': 3,
+        'clear_to_close': 4,
+        'ctc': 4,
+        'closing': 5,
+        'docs_out': 5,
+        'docs_back': 5,
         'funded': 5,
         'closed': 5,
       };
@@ -678,43 +687,73 @@ const RecentActivitySidebar = ({ timeline, onViewAll }) => {
   );
 };
 
-// Info Bar Component - Shows property and loan details
-const PortalInfoBar = ({ loan, workspace, contacts }) => {
-  const loanOfficer = contacts?.find(c => c.contact_type === 'loan_officer');
+// Info Bar Component - Shows LO info on left, loan details on right
+const PortalInfoBar = ({ loan, workspace, contacts, loanOfficerInfo }) => {
+  // LO info comes from the workspace's assigned user (loan officer)
+  const loName = loanOfficerInfo?.name || workspace?.assigned_user_name || 'Your Loan Officer';
+  const loEmail = loanOfficerInfo?.email || workspace?.assigned_user_email || '';
+  const loPhone = loanOfficerInfo?.phone || workspace?.assigned_user_phone || '';
 
   return (
     <div className="portal-info-bar">
       <div className="info-bar-content">
-        <div className="info-item property-info">
-          <div className="property-icon">🏠</div>
-          <div>
-            <span className="info-label">Property Address</span>
-            <span className="info-value large">{formatAddress(loan?.property_address)}</span>
+        {/* Left Side - Loan Officer Info */}
+        <div className="info-bar-left">
+          <div className="lo-info-section">
+            <div className="lo-name">{loName}</div>
+            <div className="lo-contact">
+              {loEmail && (
+                <a href={`mailto:${loEmail}`} className="lo-email">
+                  <span className="contact-icon">✉</span> {loEmail}
+                </a>
+              )}
+              {loPhone && (
+                <a href={`tel:${loPhone}`} className="lo-phone">
+                  <span className="contact-icon">📞</span> {loPhone}
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="property-info-section">
+            <div className="property-icon">🏠</div>
+            <span className="property-address">{formatAddress(loan?.property_address)}</span>
           </div>
         </div>
-        <div className="info-item">
-          <span className="info-label">Purpose</span>
-          <span className="info-value">{loan?.loan_purpose || 'Purchase'}</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">Loan Type</span>
-          <span className="info-value">{loan?.product_type || 'Conventional'}</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">Term</span>
-          <span className="info-value">{loan?.loan_term || '30'} Years</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">Loan Amount</span>
-          <span className="info-value highlight">{formatCurrency(loan?.loan_amount)}</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">Interest Rate</span>
-          <span className="info-value">{loan?.interest_rate ? `${loan.interest_rate}%` : 'TBD'}</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">Est. Closing</span>
-          <span className="info-value">{formatDate(loan?.target_close_date)}</span>
+
+        {/* Right Side - Loan Details */}
+        <div className="info-bar-right">
+          <div className="loan-detail-item">
+            <span className="detail-label">Purpose</span>
+            <span className="detail-value">{loan?.loan_purpose || 'Purchase'}</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Loan Type</span>
+            <span className="detail-value">{loan?.product_type || 'Conventional'}</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Term</span>
+            <span className="detail-value">{loan?.loan_term || '30'} Years</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Loan Amount</span>
+            <span className="detail-value highlight">{formatCurrency(loan?.loan_amount)}</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Interest Rate</span>
+            <span className="detail-value">{loan?.interest_rate ? `${loan.interest_rate}%` : 'TBD'}</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Rate Lock</span>
+            <span className="detail-value">{loan?.rate_lock_date ? formatDate(loan.rate_lock_date) : 'Not Locked'}</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Est. Closing</span>
+            <span className="detail-value">{formatDate(loan?.target_close_date)}</span>
+          </div>
+          <div className="loan-detail-item">
+            <span className="detail-label">Scheduled</span>
+            <span className="detail-value">{loan?.closing_date ? formatDate(loan.closing_date) : 'TBD'}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1270,21 +1309,23 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       {/* Header */}
       <header className="portal-header">
         <div className="header-content">
-          {/* Top Row - User Greeting & Date */}
+          {/* Top Row - Client Name & Date Only */}
           <div className="header-top-row">
-            <div className="user-greeting">
-              <div className="user-avatar">
-                {getInitials(borrowerName)}
-              </div>
-              <div className="user-name-section">
-                <h1>{borrowerName}</h1>
-                <p className="greeting-subtitle">Welcome to your loan portal</p>
-              </div>
+            <div className="client-name-section">
+              <h1 className="client-name">{borrowerName}</h1>
             </div>
             <div className="header-date">
               <span className="date-label">{formatCurrentDate()}</span>
             </div>
           </div>
+
+          {/* Info Bar with LO Info (left) and Loan Details (right) */}
+          <PortalInfoBar
+            loan={loan}
+            workspace={workspace}
+            contacts={contacts}
+            loanOfficerInfo={data?.loanOfficer}
+          />
 
           {/* Milestone Progress Indicator */}
           <HeaderMilestoneProgress
@@ -1292,9 +1333,6 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             workspaceStatus={workspace?.status}
             leadStage={workspace?.lead_stage || data?.lead?.stage}
           />
-
-          {/* Info Bar with Loan Details */}
-          <PortalInfoBar loan={loan} workspace={workspace} contacts={contacts} />
         </div>
       </header>
 
@@ -1312,13 +1350,19 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
         </div>
       )}
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs - Overview, Application, Documents, Loan Quote, Pre-Approval, Contacts */}
       <nav className="portal-nav">
         <TabButton
           label="Overview"
           icon="🏠"
           isActive={activeTab === 'overview'}
           onClick={() => setActiveTab('overview')}
+        />
+        <TabButton
+          label="Application"
+          icon="📝"
+          isActive={activeTab === 'application'}
+          onClick={() => setActiveTab('application')}
         />
         <TabButton
           label="Documents"
@@ -1328,30 +1372,24 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           badge={documents.filter(d => d.status === 'pending').length}
         />
         <TabButton
-          label="Tasks"
+          label="Loan Quote"
+          icon="💰"
+          isActive={activeTab === 'loan-quote'}
+          onClick={() => setActiveTab('loan-quote')}
+          hasNotification={data?.loanEstimates?.length > 0}
+        />
+        <TabButton
+          label="Pre-Approval"
           icon="✓"
-          isActive={activeTab === 'tasks'}
-          onClick={() => setActiveTab('tasks')}
-          badge={pendingTasksCount}
+          isActive={activeTab === 'pre-approval'}
+          onClick={() => setActiveTab('pre-approval')}
+          hasNotification={data?.preApprovalLetter != null}
         />
         <TabButton
-          label="Timeline"
-          icon="📅"
-          isActive={activeTab === 'timeline'}
-          onClick={() => setActiveTab('timeline')}
-        />
-        <TabButton
-          label="Messages"
-          icon="💬"
-          isActive={activeTab === 'messages'}
-          onClick={() => setActiveTab('messages')}
-          badge={unreadMessagesCount}
-        />
-        <TabButton
-          label="Calculator"
-          icon="🧮"
-          isActive={activeTab === 'calculator'}
-          onClick={() => setActiveTab('calculator')}
+          label="Contacts"
+          icon="👥"
+          isActive={activeTab === 'contacts'}
+          onClick={() => setActiveTab('contacts')}
         />
       </nav>
 
@@ -1456,133 +1494,199 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           </div>
         )}
 
-        {/* Tasks Tab */}
-        {activeTab === 'tasks' && (
-          <div className="tab-content tasks-tab">
-            <div className="tasks-header">
-              <h2>Your Tasks</h2>
+        {/* Application Tab */}
+        {activeTab === 'application' && (
+          <div className="tab-content application-tab">
+            <div className="application-header">
+              <h2>Your Application</h2>
             </div>
-
-            <div className="tasks-section">
-              <div className="section-header">
-                <h3>To Do</h3>
-                <span className="section-count">
-                  {tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS').length} items
-                </span>
+            <div className="application-summary-card">
+              <div className="application-status">
+                <span className="status-label">Application Status</span>
+                <StatusBadge status={subStage || workspace?.status} />
               </div>
-              <TasksTable
-                tasks={tasks.filter(t => t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS')}
-                onComplete={handleTaskComplete}
-              />
-            </div>
-
-            {tasks.filter(t => t.status === 'completed' || t.status === 'DONE').length > 0 && (
-              <div className="tasks-section completed-section">
-                <div className="section-header">
-                  <h3>Completed</h3>
-                  <span className="section-count">
-                    {tasks.filter(t => t.status === 'completed' || t.status === 'DONE').length} items
+              <div className="application-details-grid">
+                <div className="app-detail">
+                  <span className="detail-label">Submitted</span>
+                  <span className="detail-value">
+                    {application?.submitted_at ? formatDate(application.submitted_at) : 'Pending'}
                   </span>
                 </div>
-                <TasksTable
-                  tasks={tasks.filter(t => t.status === 'completed' || t.status === 'DONE').slice(0, 5)}
-                  onComplete={handleTaskComplete}
-                  showCompleted={true}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Timeline Tab */}
-        {activeTab === 'timeline' && (
-          <div className="tab-content timeline-tab">
-            <h2>Loan Timeline</h2>
-
-            <section className="milestones-section">
-              <h3>Milestones</h3>
-              <MilestoneTracker milestones={milestones} />
-            </section>
-
-            <section className="activity-section">
-              <h3>Activity History</h3>
-              <div className="timeline-list">
-                {timeline.length === 0 ? (
-                  <div className="empty-state">
-                    <p>No activity yet</p>
-                  </div>
-                ) : (
-                  timeline.map((event, index) => (
-                    <TimelineEvent key={event.id || index} event={event} />
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* Messages Tab */}
-        {activeTab === 'messages' && (
-          <div className="tab-content messages-tab">
-            <h2>Messages</h2>
-
-            <form className="message-form" onSubmit={handleSendMessage}>
-              <input
-                type="text"
-                placeholder="Subject (optional)"
-                value={newMessage.subject}
-                onChange={(e) => setNewMessage({ ...newMessage, subject: e.target.value })}
-              />
-              <textarea
-                placeholder="Write a message to your loan team..."
-                value={newMessage.body}
-                onChange={(e) => setNewMessage({ ...newMessage, body: e.target.value })}
-                rows={3}
-              />
-              <button type="submit" disabled={sendingMessage || !newMessage.body.trim()}>
-                {sendingMessage ? 'Sending...' : 'Send Message'}
-              </button>
-            </form>
-
-            <div className="messages-list">
-              {messages.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">💬</div>
-                  <p>No messages yet</p>
-                  <p className="empty-hint">Send a message using the form above</p>
+                <div className="app-detail">
+                  <span className="detail-label">Loan Purpose</span>
+                  <span className="detail-value">{loan?.loan_purpose || 'Purchase'}</span>
                 </div>
-              ) : (
-                messages.map(message => (
-                  <MessageItem
-                    key={message.id}
-                    message={message}
-                    isMine={message.direction === 'inbound'}
-                  />
-                ))
+                <div className="app-detail">
+                  <span className="detail-label">Property Type</span>
+                  <span className="detail-value">{loan?.property_type || 'Single Family'}</span>
+                </div>
+                <div className="app-detail">
+                  <span className="detail-label">Occupancy</span>
+                  <span className="detail-value">{loan?.occupancy_type || 'Primary Residence'}</span>
+                </div>
+              </div>
+              {!application && (
+                <div className="application-empty">
+                  <p>Your application details will appear here once submitted.</p>
+                </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Calculator Tab */}
-        {activeTab === 'calculator' && (
-          <div className="tab-content calculator-tab">
-            <h2>Payment Calculator</h2>
-            <p className="calculator-intro">
-              Estimate your monthly payment and explore different scenarios.
-            </p>
-            <PaymentCalculator
-              initialHomeValue={loan?.loan_amount ? Math.round(loan.loan_amount / 0.8) : 400000}
-              initialDownPayment={loan?.loan_amount ? Math.round(loan.loan_amount * 0.2 / 0.8) : 80000}
-              initialState={loan?.property_address?.state || ''}
-              initialCounty={loan?.property_address?.county || ''}
-              initialCreditScore={720}
-              initialLoanType={loan?.product_type?.toLowerCase().includes('fha') ? 'fha' :
-                              loan?.product_type?.toLowerCase().includes('va') ? 'va' :
-                              loan?.product_type?.toLowerCase().includes('usda') ? 'usda' : 'conventional'}
-              compact={false}
-              showAdvancedOptions={true}
-            />
+        {/* Loan Quote Tab */}
+        {activeTab === 'loan-quote' && (
+          <div className="tab-content loan-quote-tab">
+            <div className="loan-quote-header">
+              <h2>Your Loan Quote</h2>
+            </div>
+            {data?.loanEstimates && data.loanEstimates.length > 0 ? (
+              <div className="loan-estimates-list">
+                {data.loanEstimates.map((estimate, idx) => (
+                  <div key={estimate.id || idx} className="loan-estimate-card">
+                    <div className="estimate-header">
+                      <span className="estimate-lender">{estimate.lender_name || 'Loan Estimate'}</span>
+                      <span className="estimate-date">{formatDate(estimate.created_at)}</span>
+                    </div>
+                    <div className="estimate-details">
+                      <div className="estimate-item">
+                        <span className="item-label">Loan Amount</span>
+                        <span className="item-value">{formatCurrency(estimate.loan_amount)}</span>
+                      </div>
+                      <div className="estimate-item">
+                        <span className="item-label">Interest Rate</span>
+                        <span className="item-value">{estimate.interest_rate}%</span>
+                      </div>
+                      <div className="estimate-item">
+                        <span className="item-label">APR</span>
+                        <span className="item-value">{estimate.apr}%</span>
+                      </div>
+                      <div className="estimate-item">
+                        <span className="item-label">Monthly Payment</span>
+                        <span className="item-value">{formatCurrency(estimate.monthly_payment)}</span>
+                      </div>
+                      <div className="estimate-item">
+                        <span className="item-label">Cash to Close</span>
+                        <span className="item-value">{formatCurrency(estimate.cash_to_close)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state-card">
+                <div className="empty-icon">💰</div>
+                <h3>No Loan Quotes Yet</h3>
+                <p>Your loan quotes and estimates will appear here once available.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pre-Approval Tab */}
+        {activeTab === 'pre-approval' && (
+          <div className="tab-content pre-approval-tab">
+            <div className="pre-approval-header">
+              <h2>Pre-Approval Status</h2>
+            </div>
+            {data?.preApprovalLetter ? (
+              <div className="pre-approval-card">
+                <div className="pre-approval-status success">
+                  <span className="status-icon">✓</span>
+                  <span className="status-text">You're Pre-Approved!</span>
+                </div>
+                <div className="pre-approval-details">
+                  <div className="approval-item">
+                    <span className="item-label">Approved Amount</span>
+                    <span className="item-value highlight">{formatCurrency(data.preApprovalLetter.amount)}</span>
+                  </div>
+                  <div className="approval-item">
+                    <span className="item-label">Issue Date</span>
+                    <span className="item-value">{formatDate(data.preApprovalLetter.issued_at)}</span>
+                  </div>
+                  <div className="approval-item">
+                    <span className="item-label">Expires</span>
+                    <span className="item-value">{formatDate(data.preApprovalLetter.expires_at)}</span>
+                  </div>
+                </div>
+                <button className="download-letter-btn" onClick={() => window.open(data.preApprovalLetter.download_url, '_blank')}>
+                  Download Pre-Approval Letter
+                </button>
+              </div>
+            ) : (
+              <div className="pre-approval-pending">
+                <div className="pending-icon">⏳</div>
+                <h3>Pre-Approval In Progress</h3>
+                <p>Your pre-approval letter will be available here once your loan officer completes the review.</p>
+                <div className="pre-approval-steps">
+                  <div className={`step ${subStage === 'application' || !subStage ? 'current' : 'complete'}`}>
+                    <span className="step-number">1</span>
+                    <span className="step-text">Application Review</span>
+                  </div>
+                  <div className={`step ${subStage === 'docs_requested' ? 'current' : subStage === 'docs_approved' || subStage === 'pre_approved' ? 'complete' : ''}`}>
+                    <span className="step-number">2</span>
+                    <span className="step-text">Document Verification</span>
+                  </div>
+                  <div className={`step ${subStage === 'pre_approved' ? 'complete' : ''}`}>
+                    <span className="step-number">3</span>
+                    <span className="step-text">Pre-Approval Issued</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Contacts Tab */}
+        {activeTab === 'contacts' && (
+          <div className="tab-content contacts-tab">
+            <div className="contacts-header">
+              <h2>Your Loan Team</h2>
+            </div>
+            <div className="contacts-grid">
+              {/* Loan Officer */}
+              <div className="contact-card primary">
+                <div className="contact-avatar">
+                  {getInitials(data?.loanOfficer?.name || workspace?.assigned_user_name || 'LO')}
+                </div>
+                <div className="contact-info">
+                  <span className="contact-role">Loan Officer</span>
+                  <span className="contact-name">{data?.loanOfficer?.name || workspace?.assigned_user_name || 'Your Loan Officer'}</span>
+                  {(data?.loanOfficer?.email || workspace?.assigned_user_email) && (
+                    <a href={`mailto:${data?.loanOfficer?.email || workspace?.assigned_user_email}`} className="contact-email">
+                      {data?.loanOfficer?.email || workspace?.assigned_user_email}
+                    </a>
+                  )}
+                  {(data?.loanOfficer?.phone || workspace?.assigned_user_phone) && (
+                    <a href={`tel:${data?.loanOfficer?.phone || workspace?.assigned_user_phone}`} className="contact-phone">
+                      {data?.loanOfficer?.phone || workspace?.assigned_user_phone}
+                    </a>
+                  )}
+                </div>
+                <button className="contact-action-btn" onClick={() => setShowScheduleModal(true)}>
+                  Schedule a Call
+                </button>
+              </div>
+
+              {/* Additional team members from contacts */}
+              {contacts.filter(c => c.contact_type !== 'borrower').map(contact => (
+                <div key={contact.id} className="contact-card">
+                  <div className="contact-avatar">
+                    {getInitials(`${contact.first_name || ''} ${contact.last_name || ''}`)}
+                  </div>
+                  <div className="contact-info">
+                    <span className="contact-role">{contact.contact_type?.replace('_', ' ') || 'Team Member'}</span>
+                    <span className="contact-name">{`${contact.first_name || ''} ${contact.last_name || ''}`.trim()}</span>
+                    {contact.email && (
+                      <a href={`mailto:${contact.email}`} className="contact-email">{contact.email}</a>
+                    )}
+                    {contact.phone && (
+                      <a href={`tel:${contact.phone}`} className="contact-phone">{contact.phone}</a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

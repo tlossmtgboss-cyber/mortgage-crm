@@ -211,14 +211,39 @@
   position: relative;
 }
 
-/* Header Top Row - User Info & Date */
+/* Header Top Row - Client Name & Date */
 .header-top-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--portal-border);
 }
 
+.client-name-section {
+  display: flex;
+  align-items: center;
+}
+
+.client-name-section .client-name {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--portal-text-primary);
+}
+
+.header-date {
+  text-align: right;
+  color: var(--portal-text-secondary);
+  font-size: 14px;
+}
+
+.header-date .date-label {
+  font-weight: 500;
+}
+
+/* Legacy support for user greeting */
 .user-greeting {
   display: flex;
   align-items: center;
@@ -251,32 +276,128 @@
   margin: 2px 0 0;
 }
 
-.header-date {
-  text-align: right;
-  color: var(--portal-text-secondary);
-  font-size: 14px;
-}
-
-.header-date .date-label {
-  font-weight: 500;
-}
-
-/* Info Bar - Property & Loan Details */
+/* Info Bar - LO Info on Left, Loan Details on Right */
 .portal-info-bar {
   background: var(--portal-gray-50);
   border-radius: var(--portal-radius);
-  padding: 16px 24px;
-  margin-top: 16px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
   border: 1px solid var(--portal-border);
 }
 
 .info-bar-content {
-  display: grid;
-  grid-template-columns: 2fr repeat(6, 1fr);
-  gap: 24px;
-  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
 }
 
+/* Left Side - Loan Officer Info */
+.info-bar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.lo-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lo-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--portal-text-primary);
+}
+
+.lo-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lo-email,
+.lo-phone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--portal-text-secondary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.lo-email:hover,
+.lo-phone:hover {
+  color: var(--portal-primary);
+}
+
+.contact-icon {
+  font-size: 12px;
+}
+
+.property-info-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--portal-border);
+}
+
+.property-info-section .property-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--portal-primary);
+  border-radius: var(--portal-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.property-address {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--portal-text-primary);
+}
+
+/* Right Side - Loan Details Grid */
+.info-bar-right {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 24px;
+  flex: 1;
+}
+
+.loan-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.loan-detail-item .detail-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+}
+
+.loan-detail-item .detail-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.loan-detail-item .detail-value.highlight {
+  color: var(--portal-primary);
+  font-size: 14px;
+}
+
+/* Legacy support */
 .info-item {
   display: flex;
   flex-direction: column;
@@ -326,22 +447,25 @@
 
 @media (max-width: 1024px) {
   .info-bar-content {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
+    flex-direction: column;
+    gap: 20px;
   }
 
-  .info-item.property-info {
-    grid-column: span 3;
+  .info-bar-right {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
-@media (max-width: 640px) {
-  .info-bar-content {
+@media (max-width: 768px) {
+  .info-bar-right {
     grid-template-columns: repeat(2, 1fr);
   }
+}
 
-  .info-item.property-info {
-    grid-column: span 2;
+@media (max-width: 480px) {
+  .info-bar-right {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
   }
 }
 
@@ -868,6 +992,22 @@
   min-width: 20px;
   text-align: center;
   margin-left: 4px;
+}
+
+/* Notification dot for tabs */
+.tab-notification-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--portal-error);
+  border-radius: 50%;
+  margin-left: 6px;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
 }
 
 /* Responsive: Stack on mobile */
@@ -2211,6 +2351,427 @@
   color: var(--portal-gray-500);
   margin-bottom: 24px;
   font-size: 15px;
+}
+
+/* ========================================
+   Application Tab
+   ======================================== */
+.application-tab .application-header {
+  margin-bottom: 24px;
+}
+
+.application-tab .application-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.application-summary-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 28px;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+}
+
+.application-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--portal-border);
+}
+
+.application-status .status-label {
+  font-size: 14px;
+  color: var(--portal-text-secondary);
+}
+
+.application-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.app-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-detail .detail-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+}
+
+.app-detail .detail-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.application-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--portal-text-secondary);
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius);
+  margin-top: 16px;
+}
+
+/* ========================================
+   Loan Quote Tab
+   ======================================== */
+.loan-quote-tab .loan-quote-header {
+  margin-bottom: 24px;
+}
+
+.loan-quote-tab .loan-quote-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.loan-estimates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loan-estimate-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 24px;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+}
+
+.estimate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--portal-border);
+}
+
+.estimate-lender {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--portal-text-primary);
+}
+
+.estimate-date {
+  font-size: 13px;
+  color: var(--portal-text-muted);
+}
+
+.estimate-details {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+}
+
+.estimate-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.estimate-item .item-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+}
+
+.estimate-item .item-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--portal-text-primary);
+}
+
+/* ========================================
+   Pre-Approval Tab
+   ======================================== */
+.pre-approval-tab .pre-approval-header {
+  margin-bottom: 24px;
+}
+
+.pre-approval-tab .pre-approval-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.pre-approval-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 32px;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+  text-align: center;
+}
+
+.pre-approval-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.pre-approval-status.success {
+  color: var(--portal-success);
+}
+
+.pre-approval-status .status-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.pre-approval-status .status-text {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.pre-approval-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius);
+}
+
+.approval-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approval-item .item-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+}
+
+.approval-item .item-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--portal-text-primary);
+}
+
+.approval-item .item-value.highlight {
+  color: var(--portal-success);
+  font-size: 24px;
+}
+
+.download-letter-btn {
+  padding: 14px 32px;
+  background: var(--portal-primary);
+  color: white;
+  border: none;
+  border-radius: var(--portal-radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.download-letter-btn:hover {
+  background: var(--portal-primary-dark);
+  transform: translateY(-1px);
+}
+
+.pre-approval-pending {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 48px 32px;
+  box-shadow: var(--portal-shadow-md);
+  border: 1px solid var(--portal-border);
+  text-align: center;
+}
+
+.pre-approval-pending .pending-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.pre-approval-pending h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+  margin: 0 0 8px 0;
+}
+
+.pre-approval-pending p {
+  font-size: 15px;
+  color: var(--portal-text-secondary);
+  margin: 0 0 32px 0;
+}
+
+.pre-approval-steps {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--portal-border);
+}
+
+.pre-approval-steps .step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.pre-approval-steps .step-number {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--portal-gray-100);
+  color: var(--portal-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.pre-approval-steps .step.current .step-number {
+  background: var(--portal-primary);
+  color: white;
+}
+
+.pre-approval-steps .step.complete .step-number {
+  background: var(--portal-success);
+  color: white;
+}
+
+.pre-approval-steps .step-text {
+  font-size: 12px;
+  color: var(--portal-text-secondary);
+}
+
+.pre-approval-steps .step.current .step-text {
+  color: var(--portal-primary);
+  font-weight: 600;
+}
+
+/* ========================================
+   Contacts Tab
+   ======================================== */
+.contacts-tab .contacts-header {
+  margin-bottom: 24px;
+}
+
+.contacts-tab .contacts-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+}
+
+.contacts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.contact-card {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  padding: 24px;
+  box-shadow: var(--portal-shadow);
+  border: 1px solid var(--portal-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.contact-card.primary {
+  border-color: var(--portal-primary);
+  border-width: 2px;
+}
+
+.contact-card .contact-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-primary-dark) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.contact-card .contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contact-card .contact-role {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--portal-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.contact-card .contact-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--portal-text-primary);
+}
+
+.contact-card .contact-email,
+.contact-card .contact-phone {
+  font-size: 14px;
+  color: var(--portal-text-secondary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.contact-card .contact-email:hover,
+.contact-card .contact-phone:hover {
+  color: var(--portal-primary);
+}
+
+.contact-action-btn {
+  padding: 12px 24px;
+  background: var(--portal-primary);
+  color: white;
+  border: none;
+  border-radius: var(--portal-radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.contact-action-btn:hover {
+  background: var(--portal-primary-dark);
 }
 
 /* ========================================
