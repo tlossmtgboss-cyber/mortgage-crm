@@ -34,6 +34,13 @@ from models.purl import (
     EventStatus
 )
 
+# Smart Docs integration
+try:
+    from services.smart_docs.needs_list_generator import NeedsListGenerator
+    SMART_DOCS_AVAILABLE = True
+except ImportError:
+    SMART_DOCS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -338,6 +345,9 @@ class PURLApplicationService:
         # Initialize loan workflow (milestones and tasks)
         self._initialize_loan_workflow(organization_id, loan.id, workspace_id)
 
+        # Generate Smart Docs needs list automatically
+        self._generate_smart_docs_needs_list(loan.id, application, borrower_id=1)
+
         # Emit events
         self._emit_event(
             organization_id=organization_id,
@@ -622,3 +632,109 @@ class PURLApplicationService:
             status=EventStatus.PENDING.value
         )
         self.db.add(event)
+
+    def _generate_smart_docs_needs_list(
+        self,
+        loan_id: int,
+        application: PURLApplication,
+        borrower_id: int
+    ):
+        """
+        Generate Smart Docs needs list based on application data.
+        Maps application fields to Smart Docs parameters and generates requirements.
+        """
+        if not SMART_DOCS_AVAILABLE:
+            logger.warning("Smart Docs not available, skipping needs list generation")
+            return
+
+        try:
+            data = application.data or {}
+
+            # Map loan purpose to loan program
+            loan_purpose = data.get("loan_purpose", "").lower()
+            loan_program = self._map_loan_program(loan_purpose, data)
+
+            # Map occupancy type
+            occupancy_raw = data.get("occupancy_type", "").upper()
+            occupancy_type = self._map_occupancy_type(occupancy_raw)
+
+            # Map employment status to income type
+            employment_status = data.get("employment_status", "").lower()
+            income_type = self._map_income_type(employment_status)
+
+            # Determine flags from application data
+            is_self_employed = employment_status in ["self_employed", "self-employed", "business_owner"]
+            has_gift_funds = data.get("has_gift_funds", False) or data.get("gift_funds", False)
+            has_bankruptcy = data.get("has_bankruptcy", False) or data.get("bankruptcy_history", False)
+
+            # Get co-borrower ID if present
+            co_borrower_id = None
+            if data.get("has_co_borrower") or data.get("co_borrower_first_name"):
+                co_borrower_id = 2  # Placeholder - in real system, create/lookup co-borrower
+
+            # Generate the needs list
+            generator = NeedsListGenerator(self.db)
+            result = generator.generate_needs_list(
+                loan_id=loan_id,
+                loan_program=loan_program,
+                occupancy_type=occupancy_type,
+                income_type=income_type,
+                borrower_id=borrower_id,
+                co_borrower_id=co_borrower_id,
+                has_gift_funds=has_gift_funds,
+                is_self_employed=is_self_employed,
+                has_bankruptcy=has_bankruptcy,
+                property_type=data.get("property_type"),
+            )
+
+            logger.info(
+                f"Generated Smart Docs needs list for loan {loan_id}: "
+                f"{result.get('request_count', 0)} document requests created"
+            )
+
+        except Exception as e:
+            # Log but don't fail the application submission
+            logger.error(f"Failed to generate Smart Docs needs list for loan {loan_id}: {e}")
+
+    def _map_loan_program(self, loan_purpose: str, data: Dict[str, Any]) -> str:
+        """Map application loan purpose/type to Smart Docs loan program."""
+        # Check for explicit loan type
+        loan_type = data.get("loan_type", "").upper()
+        if loan_type in ["FHA", "VA", "USDA", "CONVENTIONAL"]:
+            return loan_type
+
+        # Default based on loan purpose
+        if "va" in loan_purpose:
+            return "VA"
+        elif "fha" in loan_purpose:
+            return "FHA"
+        elif "usda" in loan_purpose or "rural" in loan_purpose:
+            return "USDA"
+        else:
+            return "CONVENTIONAL"
+
+    def _map_occupancy_type(self, occupancy: str) -> str:
+        """Map application occupancy to Smart Docs occupancy type."""
+        occupancy_map = {
+            "PRIMARY": "PRIMARY",
+            "PRIMARY_RESIDENCE": "PRIMARY",
+            "PRIMARY RESIDENCE": "PRIMARY",
+            "OWNER_OCCUPIED": "PRIMARY",
+            "SECOND_HOME": "SECOND_HOME",
+            "SECOND HOME": "SECOND_HOME",
+            "VACATION": "SECOND_HOME",
+            "INVESTMENT": "INVESTMENT",
+            "RENTAL": "INVESTMENT",
+            "NON_OWNER": "INVESTMENT",
+        }
+        return occupancy_map.get(occupancy.upper(), "PRIMARY")
+
+    def _map_income_type(self, employment_status: str) -> str:
+        """Map application employment status to Smart Docs income type."""
+        status_lower = employment_status.lower()
+        if status_lower in ["self_employed", "self-employed", "business_owner", "1099"]:
+            return "SELF_EMPLOYED"
+        elif status_lower in ["retired", "retirement", "pension", "social_security"]:
+            return "RETIREMENT"
+        else:
+            return "W2"

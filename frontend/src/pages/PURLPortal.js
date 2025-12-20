@@ -23,6 +23,7 @@ import {
 } from '../lib/api';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../components/PaymentCalculator';
+import PortalDocumentRequirements from '../components/portal/PortalDocumentRequirements';
 import './PURLPortal.css';
 
 // Tab components
@@ -823,37 +824,42 @@ export default function PURLPortal() {
         {/* Documents Tab */}
         {activeTab === 'documents' && (
           <div className="tab-content documents-tab">
-            <div className="documents-header">
-              <h2>Your Documents</h2>
-              <label className="upload-btn">
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleUpload}
-                  disabled={uploading}
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                />
-                {uploading ? 'Uploading...' : '+ Upload Document'}
-              </label>
-            </div>
+            {/* Smart Docs Requirements */}
+            <PortalDocumentRequirements
+              workspaceSlug={slug}
+              onProgressUpdate={(progress) => {
+                // Could update a progress indicator if needed
+                console.log('Document progress:', progress);
+              }}
+            />
 
-            <div className="documents-grid">
-              {documents.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📁</div>
-                  <p>No documents uploaded yet</p>
-                  <p className="empty-hint">Upload documents using the button above</p>
+            {/* Additional Uploaded Documents */}
+            {documents.length > 0 && (
+              <div className="additional-documents">
+                <h3>Additional Uploads</h3>
+                <div className="documents-header">
+                  <label className="upload-btn">
+                    <input
+                      type="file"
+                      multiple
+                      onChange={handleUpload}
+                      disabled={uploading}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    />
+                    {uploading ? 'Uploading...' : '+ Upload Other Document'}
+                  </label>
                 </div>
-              ) : (
-                documents.map(doc => (
-                  <DocumentCard
-                    key={doc.id}
-                    document={doc}
-                    onDownload={handleDownload}
-                  />
-                ))
-              )}
-            </div>
+                <div className="documents-grid">
+                  {documents.map(doc => (
+                    <DocumentCard
+                      key={doc.id}
+                      document={doc}
+                      onDownload={handleDownload}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
