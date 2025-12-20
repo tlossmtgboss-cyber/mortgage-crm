@@ -1,0 +1,96 @@
+{
+  "extracted_fields": {
+    "employee_id": "EMP-2047",
+    "start_date": "2023-06-01",
+    "department": "Loan Processing",
+    "manager": "Sarah Johnson",
+    "loans_processed": 127,
+    "avg_close_time": 32,
+    "satisfaction_score": 4.8,
+    "volume": 28500000,
+    "disc_d": 35,
+    "disc_i": 75,
+    "disc_s": 60,
+    "disc_c": 45,
+    "disc_summary": "Influence (I) - Collaborative, enthusiastic, people-oriented",
+    "birthday": "August 12th",
+    "anniversary": "June 1st",
+    "hobbies": "Marathon running, photography",
+    "emergency_contact": "Maria Rodriguez",
+    "emergency_phone": "555-2468",
+    "q1_goals": "Reduce average close time to under 30 days",
+    "q2_goals": "Process 150+ loans while maintaining quality",
+    "q3_goals": "Complete advanced underwriting certification",
+    "q4_goals": "Mentor 2 junior processors",
+    "development_areas": "Technical underwriting skills, Time management under pressure, Delegation skills"
+  },
+  "confidence_scores": {
+    "employee_id": 100,
+    "start_date": 100,
+    "department": 100,
+    "manager": 100,
+    "loans_processed": 100,
+    "avg_close_time": 100,
+    "satisfaction_score": 100,
+    "volume": 100,
+    "disc_d": 100,
+    "disc_i": 100,
+    "disc_s": 100,
+    "disc_c": 100,
+    "disc_summary": 100,
+    "birthday": 95,
+    "anniversary": 95,
+    "hobbies": 100,
+    "emergency_contact": 100,
+    "emergency_phone": 100,
+    "q1_goals": 100,
+    "q2_goals": 100,
+    "q3_goals": 100,
+    "q4_goals": 100,
+    "development_areas": 100
+  },
+  "calculated_fields": {
+    "years_of_service": 1.55,
+    "quarterly_volume_per_loan": 224409.45,
+    "performance_rating": "exceeding_expectations"
+  },
+  "milestone_triggers": [
+    {
+      "milestone": "performance_review_completed",
+      "date": "2025-12-19",
+      "confidence": 100
+    },
+    {
+      "milestone": "upcoming_work_anniversary",
+      "date": "2025-06-01",
+      "confidence": 95
+    },
+    {
+      "milestone": "upcoming_birthday",
+      "date": "2025-08-12",
+      "confidence": 95
+    }
+  ],
+  "field_updates": [],
+  "conflicts": [],
+  "suggested_actions": [
+    "Schedule goal-setting meeting for 2025 objectives",
+    "Enroll Emily in advanced underwriting certification program",
+    "Identify junior processors for mentoring assignment",
+    "Provide time management training resources",
+    "Consider Emily for leadership development program"
+  ],
+  "email_summary": "Q4 2024 performance review for Emily Rodriguez showing exceptional results with 127 loans processed totaling $28.5M and 4.8/5 customer satisfaction. Emily is exceeding expectations with strong leadership potential and has clear development goals set for 2025.",
+  "sentiment": "positive",
+  "urgency_score": 25,
+  "next_best_action": "Schedule 2025 goal-setting meeting with Emily to discuss Q1 objectives and development plan",
+  "extraction_metadata": {
+    "parser_version": "1.0.0",
+    "model": "claude-sonnet-4-20250514",
+    "timestamp": "2025-12-19T15:17:34.528493",
+    "email_id": "msg-team-001",
+    "processing_time_ms": 12416
+  },
+  "overall_confidence": 99.57,
+  "field_count": 23
+}
