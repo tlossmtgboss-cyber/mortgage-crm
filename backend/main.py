@@ -4840,20 +4840,25 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS - Allow all Vercel deployments
+# CORS - Allow production domains and Vercel deployments
 allowed_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
-    "https://mortgage-crm-nine.vercel.app"
+    "https://mortgage-crm-nine.vercel.app",
+    "https://perenniaai.com",
+    "https://www.perenniaai.com"
 ]
 
-# Allow all Vercel preview deployments
+# Allow all Vercel preview deployments and perenniaai.com subdomains
 import re
 def is_allowed_origin(origin: str) -> bool:
     if origin in allowed_origins:
         return True
     # Allow any Vercel deployment
     if re.match(r"https://.*\.vercel\.app$", origin):
+        return True
+    # Allow perenniaai.com and subdomains
+    if re.match(r"https://.*\.?perenniaai\.com$", origin):
         return True
     return False
 
@@ -4870,7 +4875,7 @@ app.add_middleware(SecurityLoggingMiddleware)
 # This ensures CORS headers are added even when security middleware returns 403/429/etc
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app$",
+    allow_origin_regex=r"https://(.*\.vercel\.app|.*\.?perenniaai\.com)$",
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
