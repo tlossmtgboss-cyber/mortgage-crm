@@ -1089,8 +1089,16 @@ export default function RefinanceApplication() {
       currentRate: formData.currentRate || prev.currentRate,
       loanDate: formData.loanDate || prev.loanDate,
       currentTerm: formData.currentTerm ? String(formData.currentTerm) : prev.currentTerm,
-      // Additional info from statement
+      // Lender info
       lenderName: formData.lenderName || prev.lenderName,
+      loanNumber: formData.loanNumber || prev.loanNumber,
+      // Payment breakdown (from statement)
+      principalAndInterest: formData.principalAndInterest || prev.principalAndInterest,
+      propertyTaxes: formData.propertyTaxes || prev.propertyTaxes,
+      insurance: formData.insurance || prev.insurance,
+      pmi: formData.pmi || prev.pmi,
+      hoa: formData.hoa || prev.hoa,
+      escrowPayment: formData.escrowPayment || prev.escrowPayment,
     }));
     setStatementParsed(true);
   }, []);
@@ -2141,6 +2149,81 @@ export default function RefinanceApplication() {
         </div>
 
         <div className="form-group">
+          <label>Current Lender</label>
+          <input
+            type="text"
+            value={propertyData.lenderName || ''}
+            onChange={(e) => setPropertyData(prev => ({ ...prev, lenderName: e.target.value }))}
+            className="fun-input"
+            placeholder="e.g., Wells Fargo, Chase, Rocket Mortgage"
+          />
+        </div>
+
+        {/* Payment Breakdown - show if we have parsed data or user wants to enter */}
+        {(statementParsed && (propertyData.principalAndInterest || propertyData.propertyTaxes || propertyData.insurance)) && (
+          <div className="payment-breakdown-section">
+            <h4><Icon name="list" size={18} /> Payment Breakdown</h4>
+            <p className="section-hint">Imported from your mortgage statement</p>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Principal & Interest</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={propertyData.principalAndInterest || ''}
+                    onChange={(e) => setPropertyData(prev => ({ ...prev, principalAndInterest: e.target.value }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Property Taxes</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={propertyData.propertyTaxes || ''}
+                    onChange={(e) => setPropertyData(prev => ({ ...prev, propertyTaxes: e.target.value }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Homeowner's Insurance</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={propertyData.insurance || ''}
+                    onChange={(e) => setPropertyData(prev => ({ ...prev, insurance: e.target.value }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>PMI / HOA</label>
+                <div className="input-with-prefix">
+                  <span className="input-prefix">$</span>
+                  <input
+                    type="number"
+                    value={(parseFloat(propertyData.pmi || 0) + parseFloat(propertyData.hoa || 0)) || ''}
+                    onChange={(e) => setPropertyData(prev => ({ ...prev, pmi: e.target.value, hoa: '' }))}
+                    className="fun-input"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="form-group">
           <label>Is there a second mortgage or HELOC?</label>
           <div className="income-cards" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div
@@ -2455,6 +2538,13 @@ export default function RefinanceApplication() {
                 <span className="info-label">Current Rate</span>
                 <span className="info-value">{propertyData.currentRate || '0'}%</span>
               </div>
+              {propertyData.lenderName && (
+                <div className="info-row">
+                  <Icon name="building" size={16} />
+                  <span className="info-label">Current Lender</span>
+                  <span className="info-value">{propertyData.lenderName}</span>
+                </div>
+              )}
             </div>
           </div>
 

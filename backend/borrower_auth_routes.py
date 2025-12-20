@@ -23,7 +23,7 @@ import json
 import tempfile
 from urllib.parse import urlencode, quote
 import os
-from typing import Optional
+from typing import Optional, Any, Dict
 from pydantic import BaseModel, EmailStr
 
 from database import get_db
