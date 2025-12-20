@@ -714,7 +714,7 @@ const PortalInfoBar = ({ loan, workspace, contacts, loanOfficerInfo }) => {
         <div className="info-bar-right">
           <div className="loan-detail-item">
             <span className="detail-label">Purpose</span>
-            <span className="detail-value">{loan?.loan_purpose || 'Purchase'}</span>
+            <span className="detail-value">{loan?.loan_purpose ? loan.loan_purpose.charAt(0).toUpperCase() + loan.loan_purpose.slice(1) : 'Purchase'}</span>
           </div>
           <div className="loan-detail-item">
             <span className="detail-label">Loan Type</span>
@@ -1501,7 +1501,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                 </div>
                 <div className="app-detail">
                   <span className="detail-label">Loan Purpose</span>
-                  <span className="detail-value">{loan?.loan_purpose || 'Purchase'}</span>
+                  <span className="detail-value">{loan?.loan_purpose ? loan.loan_purpose.charAt(0).toUpperCase() + loan.loan_purpose.slice(1) : 'Purchase'}</span>
                 </div>
                 <div className="app-detail">
                   <span className="detail-label">Property Type</span>
