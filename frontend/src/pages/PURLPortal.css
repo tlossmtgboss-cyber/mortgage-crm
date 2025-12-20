@@ -319,71 +319,99 @@
 }
 
 /* ========================================
-   Navigation - Professional Tabs
+   Navigation - Modern Tab Design
    ======================================== */
 .portal-nav {
   background: white;
   border-bottom: 1px solid var(--portal-gray-200);
   display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 16px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  box-shadow: var(--portal-shadow-sm);
 }
 
 .portal-nav::-webkit-scrollbar {
+  height: 0;
   display: none;
 }
 
 .purl-tab-btn {
-  flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 18px 16px;
+  gap: 8px;
+  padding: 10px 18px;
   border: none;
-  background: none;
+  background: transparent;
   cursor: pointer;
   color: var(--portal-gray-500);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
-  border-bottom: 3px solid transparent;
+  border-radius: var(--portal-radius-sm);
   position: relative;
-  min-width: 90px;
+  white-space: nowrap;
 }
 
 .purl-tab-btn:hover {
-  color: var(--portal-primary);
-  background: var(--portal-gray-50);
+  color: var(--portal-gray-700);
+  background: var(--portal-gray-100);
 }
 
 .purl-tab-btn.active {
   color: var(--portal-primary);
-  border-bottom-color: var(--portal-primary);
-  background: rgba(15, 118, 110, 0.04);
+  background: rgba(15, 118, 110, 0.1);
+  font-weight: 600;
 }
 
 .tab-icon {
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .tab-label {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .tab-badge {
-  position: absolute;
-  top: 10px;
-  right: calc(50% - 24px);
   background: var(--portal-error);
   color: white;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
   border-radius: 10px;
-  min-width: 18px;
+  min-width: 20px;
   text-align: center;
+  margin-left: 4px;
+}
+
+/* Responsive: Stack on mobile */
+@media (max-width: 640px) {
+  .portal-nav {
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+  }
+
+  .purl-tab-btn {
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    min-width: 70px;
+  }
+
+  .tab-label {
+    font-size: 11px;
+  }
+
+  .tab-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+  }
 }
 
 /* ========================================
