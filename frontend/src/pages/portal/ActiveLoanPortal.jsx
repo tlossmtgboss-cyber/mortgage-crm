@@ -21,16 +21,14 @@ import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal'
 import PaymentCalculator from '../../components/PaymentCalculator';
 import '../PURLPortal.css';
 
-// Tab components - supports both numeric badges and notification dots
-const TabButton = ({ label, icon, isActive, onClick, badge, hasNotification }) => (
+// Tab components - Arrow/chevron style with notification dots
+const TabButton = ({ label, isActive, onClick, hasNotification, isFirst, isLast }) => (
   <button
-    className={`purl-tab-btn ${isActive ? 'active' : ''}`}
+    className={`purl-tab-btn ${isActive ? 'active' : ''} ${isFirst ? 'first' : ''} ${isLast ? 'last' : ''}`}
     onClick={onClick}
   >
-    <span className="tab-icon">{icon}</span>
     <span className="tab-label">{label}</span>
-    {badge > 0 && <span className="tab-badge">{badge}</span>}
-    {hasNotification && !badge && <span className="tab-notification-dot" />}
+    {hasNotification && <span className="tab-notification-dot" />}
   </button>
 );
 
@@ -1340,46 +1338,42 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
         </div>
       )}
 
-      {/* Navigation Tabs - Overview, Application, Documents, Loan Quote, Pre-Approval, Contacts */}
-      <nav className="portal-nav">
+      {/* Navigation Tabs - Arrow/chevron style */}
+      <nav className="portal-nav chevron-tabs">
         <TabButton
           label="Overview"
-          icon="🏠"
           isActive={activeTab === 'overview'}
           onClick={() => setActiveTab('overview')}
+          isFirst={true}
         />
         <TabButton
           label="Application"
-          icon="📝"
           isActive={activeTab === 'application'}
           onClick={() => setActiveTab('application')}
         />
         <TabButton
           label="Documents"
-          icon="📄"
           isActive={activeTab === 'documents'}
           onClick={() => setActiveTab('documents')}
-          badge={documents.filter(d => d.status === 'pending').length}
+          hasNotification={documents.filter(d => d.status === 'pending').length > 0}
         />
         <TabButton
           label="Loan Quote"
-          icon="💰"
           isActive={activeTab === 'loan-quote'}
           onClick={() => setActiveTab('loan-quote')}
           hasNotification={data?.loanEstimates?.length > 0}
         />
         <TabButton
           label="Pre-Approval"
-          icon="✓"
           isActive={activeTab === 'pre-approval'}
           onClick={() => setActiveTab('pre-approval')}
           hasNotification={data?.preApprovalLetter != null}
         />
         <TabButton
           label="Contacts"
-          icon="👥"
           isActive={activeTab === 'contacts'}
           onClick={() => setActiveTab('contacts')}
+          isLast={true}
         />
       </nav>
 

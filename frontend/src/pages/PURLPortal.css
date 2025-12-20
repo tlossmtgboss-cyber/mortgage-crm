@@ -925,82 +925,76 @@
 }
 
 /* ========================================
-   Navigation - Modern Tab Design
+   Navigation - Chevron/Arrow Tab Design
    ======================================== */
-.portal-nav {
-  background: var(--portal-bg-card);
-  border-bottom: 1px solid var(--portal-border);
+.portal-nav.chevron-tabs {
+  background: #1e293b;
   display: flex;
   justify-content: center;
-  gap: 8px;
-  padding: 16px 24px;
+  padding: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border-bottom: none;
 }
 
-.portal-nav::-webkit-scrollbar {
+.portal-nav.chevron-tabs::-webkit-scrollbar {
   height: 0;
   display: none;
 }
 
-.purl-tab-btn {
+.chevron-tabs .purl-tab-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  border: 1px solid transparent;
-  background: transparent;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 32px;
+  border: none;
+  background: #334155;
   cursor: pointer;
-  color: var(--portal-text-secondary);
+  color: #94a3b8;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
-  border-radius: var(--portal-radius-sm);
   position: relative;
   white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
+  margin-left: -8px;
 }
 
-.purl-tab-btn:hover {
-  color: var(--portal-text-primary);
-  background: var(--portal-gray-100);
-  border-color: var(--portal-border);
+.chevron-tabs .purl-tab-btn.first {
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%);
+  margin-left: 0;
+  border-radius: 8px 0 0 8px;
 }
 
-.purl-tab-btn.active {
-  color: var(--portal-primary);
-  background: rgba(15, 118, 110, 0.08);
-  border-color: var(--portal-primary);
+.chevron-tabs .purl-tab-btn.last {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 16px 50%);
+  border-radius: 0 8px 8px 0;
+}
+
+.chevron-tabs .purl-tab-btn:hover {
+  background: #475569;
+  color: #e2e8f0;
+}
+
+.chevron-tabs .purl-tab-btn.active {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  color: #ffffff;
   font-weight: 600;
+  z-index: 1;
 }
 
-.tab-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.tab-label {
+.chevron-tabs .tab-label {
   font-size: 14px;
 }
 
-.tab-badge {
-  background: var(--portal-error);
-  color: white;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-  min-width: 20px;
-  text-align: center;
-  margin-left: 4px;
-}
-
-/* Notification dot for tabs */
-.tab-notification-dot {
+/* Notification dot for chevron tabs */
+.chevron-tabs .tab-notification-dot {
   width: 8px;
   height: 8px;
-  background: var(--portal-error);
+  background: #ef4444;
   border-radius: 50%;
-  margin-left: 6px;
+  margin-left: 4px;
   flex-shrink: 0;
   animation: pulse 2s infinite;
 }
@@ -1010,31 +1004,23 @@
   50% { opacity: 0.7; transform: scale(1.1); }
 }
 
-/* Responsive: Stack on mobile */
-@media (max-width: 640px) {
-  .portal-nav {
+/* Responsive: Horizontal scroll on mobile */
+@media (max-width: 768px) {
+  .portal-nav.chevron-tabs {
     justify-content: flex-start;
-    gap: 4px;
-    padding: 12px 16px;
+    padding: 0 8px;
   }
 
-  .purl-tab-btn {
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px 16px;
-    min-width: 70px;
+  .chevron-tabs .purl-tab-btn {
+    padding: 12px 20px;
+    font-size: 13px;
   }
+}
 
-  .tab-label {
-    font-size: 11px;
-  }
-
-  .tab-badge {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    padding: 1px 6px;
-    font-size: 10px;
+@media (max-width: 480px) {
+  .chevron-tabs .purl-tab-btn {
+    padding: 10px 16px;
+    font-size: 12px;
   }
 }
 
