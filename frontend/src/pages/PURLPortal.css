@@ -128,32 +128,20 @@
 }
 
 /* ========================================
-   Header - Professional Gradient
+   Header - Clean White Design
    ======================================== */
 .portal-header {
-  background: linear-gradient(135deg, var(--portal-primary) 0%, var(--portal-primary-dark) 50%, #064e3b 100%);
-  color: white;
+  background: white;
+  color: var(--portal-gray-900);
   padding: 32px 24px 28px;
   position: relative;
-  overflow: hidden;
-}
-
-.portal-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  opacity: 0.5;
+  border-bottom: 1px solid var(--portal-gray-200);
 }
 
 .header-content {
   max-width: 1200px;
   margin: 0 auto;
   position: relative;
-  z-index: 1;
 }
 
 .workspace-info {
@@ -168,10 +156,11 @@
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.5px;
+  color: var(--portal-gray-900);
 }
 
 /* ========================================
-   Status Badge - Refined
+   Status Badge - For Light Background
    ======================================== */
 .status-badge {
   padding: 6px 14px;
@@ -182,23 +171,22 @@
   letter-spacing: 0.5px;
 }
 
-.status-blue { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
-.status-yellow { background: rgba(251, 191, 36, 0.15); color: #fcd34d; }
-.status-green { background: rgba(34, 197, 94, 0.15); color: #86efac; }
-.status-emerald { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
-.status-gray { background: rgba(156, 163, 175, 0.15); color: #d1d5db; }
-.status-orange { background: rgba(251, 146, 60, 0.15); color: #fdba74; }
+.status-blue { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.status-yellow { background: rgba(251, 191, 36, 0.15); color: #b45309; }
+.status-green { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
+.status-emerald { background: rgba(16, 185, 129, 0.1); color: #059669; }
+.status-gray { background: rgba(156, 163, 175, 0.15); color: #4b5563; }
+.status-orange { background: rgba(251, 146, 60, 0.15); color: #c2410c; }
 
 /* ========================================
-   Header Milestone Progress - Modern Stepper
+   Header Milestone Progress - Clean Card
    ======================================== */
 .header-milestone-progress {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
+  background: var(--portal-gray-50);
   border-radius: var(--portal-radius);
   padding: 24px 32px;
   margin-top: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--portal-gray-200);
 }
 
 .milestone-steps {
@@ -231,23 +219,23 @@
 }
 
 .milestone-step.pending .step-indicator {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.4);
-  border: 2px dashed rgba(255, 255, 255, 0.3);
+  background: var(--portal-gray-100);
+  color: var(--portal-gray-400);
+  border: 2px dashed var(--portal-gray-300);
 }
 
 .milestone-step.current .step-indicator {
-  background: white;
-  color: var(--portal-primary);
+  background: var(--portal-primary);
+  color: white;
   border: none;
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: scale(1.1);
 }
 
 .milestone-step.complete .step-indicator {
   background: var(--portal-success);
   color: white;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: none;
 }
 
 .milestone-step .step-check {
@@ -257,19 +245,19 @@
 .milestone-step .step-label {
   font-size: 12px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--portal-gray-500);
   text-align: center;
   max-width: 100px;
   line-height: 1.3;
 }
 
 .milestone-step.current .step-label {
-  color: white;
+  color: var(--portal-primary);
   font-weight: 600;
 }
 
 .milestone-step.complete .step-label {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--portal-gray-700);
 }
 
 .step-connector {
@@ -278,7 +266,7 @@
   left: calc(50% + 28px);
   width: calc(100% - 56px);
   height: 3px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--portal-gray-200);
   border-radius: 2px;
   z-index: 0;
 }
@@ -291,9 +279,10 @@
    Progress Bar - Clean
    ======================================== */
 .purl-progress-container {
-  background: rgba(255, 255, 255, 0.1);
+  background: white;
   border-radius: var(--portal-radius-sm);
   padding: 14px 18px;
+  border: 1px solid var(--portal-gray-200);
 }
 
 .progress-header {
@@ -302,11 +291,12 @@
   margin-bottom: 10px;
   font-size: 13px;
   font-weight: 500;
+  color: var(--portal-gray-700);
 }
 
 .progress-bar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--portal-gray-200);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1556,13 +1546,13 @@
   .portal-nav,
   .upload-btn,
   .message-form,
-  .submit-success-banner,
-  .quick-actions-bar {
+  .submit-success-banner {
     display: none;
   }
 
   .portal-header {
-    background: var(--portal-primary) !important;
+    background: white !important;
+    border-bottom: 1px solid var(--portal-gray-300);
     -webkit-print-color-adjust: exact;
   }
 
