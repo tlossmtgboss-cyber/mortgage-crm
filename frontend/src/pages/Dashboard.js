@@ -958,20 +958,6 @@ function Dashboard() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
           <button
-            className="purchase-app-btn"
-            onClick={() => navigate('/apply/purchase')}
-            title="Start Purchase Application"
-          >
-            Purchase Application
-          </button>
-          <button
-            className="refinance-app-btn"
-            onClick={() => navigate('/apply/refinance')}
-            title="Start Refinance Application"
-          >
-            Refinance Application
-          </button>
-          <button
             className="ai-landing-btn"
             onClick={() => navigate('/ai')}
             title="Open AI Assistant"

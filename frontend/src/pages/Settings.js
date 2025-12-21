@@ -2964,6 +2964,54 @@ const API_BASE_URL = isProduction
                         </button>
                       </div>
                     </div>
+
+                    <div className="landing-page-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Purchase Application</h4>
+                        <span style={{ fontSize: '12px', color: '#10b981', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px' }}>Active</span>
+                      </div>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
+                        Full mortgage application for home purchase
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => navigate('/apply/purchase')}
+                          style={{ flex: 1, padding: '8px 16px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          View Page
+                        </button>
+                        <button
+                          onClick={() => window.open('/apply/purchase', '_blank')}
+                          style={{ padding: '8px 12px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          ↗
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="landing-page-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Refinance Application</h4>
+                        <span style={{ fontSize: '12px', color: '#10b981', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px' }}>Active</span>
+                      </div>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
+                        Full mortgage application for refinancing
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => navigate('/apply/refinance')}
+                          style={{ flex: 1, padding: '8px 16px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          View Page
+                        </button>
+                        <button
+                          onClick={() => window.open('/apply/refinance', '_blank')}
+                          style={{ padding: '8px 12px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          ↗
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
