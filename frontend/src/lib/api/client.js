@@ -5,16 +5,30 @@
  * Provides typed methods for all portal and integration endpoints.
  */
 
-// In production (Vercel), use relative URLs so rewrites can proxy to Railway
-// In development, use localhost
-const isProduction = typeof window !== 'undefined' &&
-                     window.location.hostname !== 'localhost' &&
-                     window.location.hostname !== '127.0.0.1';
+// Determine API base URL:
+// - If env var is set, use it
+// - In production (Vercel), use empty string for relative URLs (Vercel rewrites handle proxying)
+// - In development, use localhost:8000
+function getApiBaseUrl() {
+  // Check environment variables first
+  if (process.env.NEXT_PUBLIC_FASTAPI_URL) return process.env.NEXT_PUBLIC_FASTAPI_URL;
+  if (process.env.REACT_APP_FASTAPI_URL) return process.env.REACT_APP_FASTAPI_URL;
+  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
 
-const FASTAPI_BASE_URL = process.env.NEXT_PUBLIC_FASTAPI_URL ||
-                         process.env.REACT_APP_FASTAPI_URL ||
-                         process.env.REACT_APP_API_URL ||
-                         (isProduction ? '' : 'http://localhost:8000');
+  // Runtime detection for production vs development
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Production: use relative URLs for Vercel rewrites
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return '';
+    }
+  }
+
+  // Development default
+  return 'http://localhost:8000';
+}
+
+const FASTAPI_BASE_URL = getApiBaseUrl();
 
 class PerenniaAPIError extends Error {
   constructor(message, status, data) {
@@ -617,5 +631,5 @@ export const api = new PerenniaAPI();
 // Export class for custom instances
 export { PerenniaAPI, PerenniaAPIError };
 
-// Export base URL for direct usage
-export const getApiBaseUrl = () => FASTAPI_BASE_URL;
+// Export base URL function for direct usage
+export { getApiBaseUrl };
