@@ -65,15 +65,20 @@ class AutoRenewalScheduler:
         """
         from sqlalchemy import text
 
-        # Get borrower info
+        # Get borrower info (first_name, last_name are separate columns)
         borrower_result = self.db.execute(
-            text("SELECT email, full_name FROM borrower_profiles WHERE id = :borrower_id"),
+            text("SELECT email, first_name, last_name FROM borrower_profiles WHERE id = :borrower_id"),
             {"borrower_id": borrower_id}
         ).fetchone()
 
         if not borrower_result or not borrower_result[0]:
             logger.warning(f"No email found for borrower {borrower_id}")
             return None
+
+        # Build full name from first_name and last_name
+        first_name = borrower_result[1] or ""
+        last_name = borrower_result[2] or ""
+        borrower_name = f"{first_name} {last_name}".strip() or "Valued Customer"
 
         # Get loan officer info
         lo_result = self.db.execute(
@@ -90,7 +95,7 @@ class AutoRenewalScheduler:
 
         return {
             "borrower_email": borrower_result[0],
-            "borrower_name": borrower_result[1] or "Valued Customer",
+            "borrower_name": borrower_name,
             "loan_officer_name": lo_name,
             "portal_url": f"/borrower/documents?loan_id={loan_id}",  # Can be configured
         }
