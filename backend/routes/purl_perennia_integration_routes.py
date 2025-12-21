@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from services.notification_service import NotificationService
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/purl-integration", tags=["PURL Integration"])
@@ -54,6 +56,82 @@ async def get_current_user(request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     return await _get_current_user(token=token, request=request, db=db)
+
+
+def send_milestone_notification(db: Session, workspace_id: int, milestone_id: str, status: str):
+    """
+    Send milestone update notification to borrower.
+
+    Args:
+        db: Database session
+        workspace_id: The workspace ID
+        milestone_id: The milestone identifier
+        status: New status (in_progress, completed)
+    """
+    try:
+        # Get borrower contact info and milestone details
+        result = db.execute(text("""
+            SELECT
+                w.borrower_email,
+                w.borrower_name,
+                w.borrower_phone,
+                m.name as milestone_name,
+                m.description as milestone_description,
+                l.loan_number,
+                l.property_address
+            FROM purl_workspaces w
+            LEFT JOIN purl_loans l ON l.workspace_id = w.id
+            LEFT JOIN purl_milestones m ON m.id = :milestone_id
+            WHERE w.id = :workspace_id
+        """), {"workspace_id": workspace_id, "milestone_id": milestone_id}).fetchone()
+
+        if not result or not result.borrower_email:
+            logger.warning(f"Cannot send milestone notification - no borrower email for workspace {workspace_id}")
+            return
+
+        notification_service = NotificationService()
+
+        # Determine status message
+        if status == "completed":
+            status_text = "has been completed"
+            emoji = "✅"
+        else:  # in_progress
+            status_text = "is now in progress"
+            emoji = "🔄"
+
+        milestone_name = result.milestone_name or f"Milestone {milestone_id}"
+
+        # Send email notification
+        notification_service.send_email(
+            to_email=result.borrower_email,
+            subject=f"{emoji} Loan Update: {milestone_name} {status_text}",
+            html_content=f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #1e40af;">Loan Progress Update</h2>
+                <p>Hi {result.borrower_name or 'there'},</p>
+
+                <p>Great news! Your loan milestone <strong>{milestone_name}</strong> {status_text}.</p>
+
+                {f'<p><em>{result.milestone_description}</em></p>' if result.milestone_description else ''}
+
+                <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Loan:</strong> {result.loan_number or 'Your Application'}</p>
+                    {f'<p style="margin: 5px 0 0 0;"><strong>Property:</strong> {result.property_address}</p>' if result.property_address else ''}
+                </div>
+
+                <p>Log in to your portal to see the full status of your loan application.</p>
+
+                <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                    Questions? Reply to this email or contact your loan officer.
+                </p>
+            </div>
+            """
+        )
+
+        logger.info(f"Sent milestone notification to {result.borrower_email} for milestone {milestone_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to send milestone notification for workspace {workspace_id}: {e}")
 
 
 # =============================================================================
@@ -693,10 +771,13 @@ async def update_workspace_milestone(
 
         db.commit()
 
-        # TODO: If auto_notify, queue notification to borrower
+        # Send notification to borrower if auto_notify is enabled
         if update.auto_notify and update.status in ["in_progress", "completed"]:
-            # background_tasks.add_task(send_milestone_notification, workspace_id, milestone_id, update.status)
-            pass
+            try:
+                send_milestone_notification(db, workspace_id, milestone_id, update.status)
+            except Exception as notify_err:
+                logger.error(f"Failed to send auto-notification: {notify_err}")
+                # Don't fail the update just because notification failed
 
         return {
             "success": True,

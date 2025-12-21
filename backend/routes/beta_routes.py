@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, text
 from sqlalchemy.orm import Session
@@ -20,6 +20,61 @@ from database import get_db, Base, engine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/beta", tags=["Beta Program"])
+
+
+# ================================================================
+# ADMIN AUTHENTICATION
+# ================================================================
+
+# Lazy-loaded get_current_user dependency
+_get_current_user = None
+
+def _get_auth_dependency():
+    """Get the authentication dependency from main module."""
+    global _get_current_user
+    if _get_current_user is None:
+        import main
+        _get_current_user = main.get_current_user
+    return _get_current_user
+
+
+async def require_admin_user(request, db: Session = Depends(get_db)):
+    """
+    Dependency that requires admin authentication.
+    Use this for admin-only endpoints.
+    """
+    from fastapi.security import OAuth2PasswordBearer
+    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+    # Get token from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = auth_header.replace("Bearer ", "")
+
+    # Get current user via main's authentication
+    import main
+    try:
+        user = await main.get_current_user(token=token, db=db)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Check if user is admin
+    is_admin = (
+        getattr(user, 'permission_role', None) == 'admin' or
+        getattr(user, 'role', None) == 'admin'
+    )
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required for this endpoint"
+        )
+
+    return user
 
 
 # ================================================================
@@ -375,6 +430,7 @@ async def submit_beta_application(
 
 @router.get("/applications", response_model=List[BetaApplicationResponse])
 async def list_beta_applications(
+    request: Request,
     status: Optional[BetaApplicationStatus] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
@@ -383,9 +439,11 @@ async def list_beta_applications(
     """
     List all beta applications.
 
-    **Note:** This endpoint should be protected with admin authentication.
+    Requires admin authentication.
     """
-    # TODO: Add admin authentication check
+    # Verify admin access
+    await require_admin_user(request, db)
+
     query = db.query(BetaApplication)
 
     if status:
@@ -400,14 +458,18 @@ async def list_beta_applications(
 
 @router.get("/applications/{application_id}", response_model=BetaApplicationResponse)
 async def get_beta_application(
+    request: Request,
     application_id: int,
     db: Session = Depends(get_db)
 ):
     """
     Get a specific beta application by ID.
 
-    **Note:** This endpoint should be protected with admin authentication.
+    Requires admin authentication.
     """
+    # Verify admin access
+    await require_admin_user(request, db)
+
     application = db.query(BetaApplication).filter(
         BetaApplication.id == application_id
     ).first()
@@ -420,6 +482,7 @@ async def get_beta_application(
 
 @router.patch("/applications/{application_id}/status")
 async def update_application_status(
+    request: Request,
     application_id: int,
     status_update: BetaStatusUpdate,
     db: Session = Depends(get_db)
@@ -427,10 +490,12 @@ async def update_application_status(
     """
     Update beta application status.
 
-    **Note:** This endpoint should be protected with admin authentication.
-
+    Requires admin authentication.
     Automatically tracks when applications are contacted or activated.
     """
+    # Verify admin access
+    await require_admin_user(request, db)
+
     application = db.query(BetaApplication).filter(
         BetaApplication.id == application_id
     ).first()
@@ -462,12 +527,16 @@ async def update_application_status(
 
 
 @router.get("/stats", response_model=BetaStatsResponse)
-async def get_beta_stats(db: Session = Depends(get_db)):
+async def get_beta_stats(request: Request, db: Session = Depends(get_db)):
     """
     Get beta program statistics.
 
+    Requires admin authentication.
     Returns counts by status, referral source, and team size.
     """
+    # Verify admin access
+    await require_admin_user(request, db)
+
     total = db.query(func.count(BetaApplication.id)).scalar() or 0
     pending = db.query(func.count(BetaApplication.id)).filter(
         BetaApplication.status == BetaApplicationStatus.PENDING.value
