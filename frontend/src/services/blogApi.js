@@ -166,6 +166,13 @@ export const updateUserSettings = async (data) => {
   return response.data;
 };
 
+// ============ Trending Topics ============
+
+export const getTrendingTopics = async () => {
+  const response = await axios.get(`${API_BASE}/trending-topics`);
+  return response.data;
+};
+
 // ============ Analytics ============
 
 export const getAnalyticsOverview = async (days = 30) => {
@@ -206,6 +213,7 @@ export const blogAPI = {
   // Topics
   mineTopics,
   getTopics,
+  getTrendingTopics,
   // Compliance & Similarity
   checkCompliance,
   checkSimilarity,

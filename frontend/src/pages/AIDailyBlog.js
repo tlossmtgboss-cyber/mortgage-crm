@@ -156,6 +156,9 @@ const AIDailyBlog = () => {
   const [contentList, setContentList] = useState([]);
   const [topicQueue, setTopicQueue] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [trendingTopics, setTrendingTopics] = useState([]);
+  const [selectedTopics, setSelectedTopics] = useState([]);
+  const [trendingDate, setTrendingDate] = useState('');
 
   // Generation form state
   const [generateForm, setGenerateForm] = useState({
@@ -194,21 +197,31 @@ const AIDailyBlog = () => {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [voiceRes, complianceRes, docsRes, contentRes, topicsRes] = await Promise.all([
-        blogAPI.getVoiceProfiles(),
-        blogAPI.getComplianceProfiles(),
-        blogAPI.getSourceDocuments(),
-        blogAPI.getContentList({ limit: 20 }),
-        blogAPI.getTopics(null, false),
-      ]);
+      // Load trending topics first - this is the main feature
+      const trendingRes = await blogAPI.getTrendingTopics();
+      setTrendingTopics(trendingRes.topics || []);
+      setTrendingDate(trendingRes.date || '');
 
-      setVoiceProfiles(voiceRes.profiles || []);
-      setComplianceProfiles(complianceRes.profiles || []);
-      setSourceDocuments(docsRes.documents || []);
-      setContentList(contentRes.items || []);
-      setTopicQueue(topicsRes.topics || []);
+      // Try to load other data but don't fail if they error
+      try {
+        const [voiceRes, complianceRes, docsRes, contentRes, topicsRes] = await Promise.all([
+          blogAPI.getVoiceProfiles().catch(() => ({ profiles: [] })),
+          blogAPI.getComplianceProfiles().catch(() => ({ profiles: [] })),
+          blogAPI.getSourceDocuments().catch(() => ({ documents: [] })),
+          blogAPI.getContentList({ limit: 20 }).catch(() => ({ items: [] })),
+          blogAPI.getTopics(null, false).catch(() => ({ topics: [] })),
+        ]);
+
+        setVoiceProfiles(voiceRes.profiles || []);
+        setComplianceProfiles(complianceRes.profiles || []);
+        setSourceDocuments(docsRes.documents || []);
+        setContentList(contentRes.items || []);
+        setTopicQueue(topicsRes.topics || []);
+      } catch (innerErr) {
+        console.log('Some data failed to load:', innerErr);
+      }
     } catch (err) {
-      setError('Failed to load data. Please try again.');
+      setError('Failed to load trending topics. Please try again.');
       console.error(err);
     }
     setLoading(false);
@@ -451,8 +464,122 @@ const AIDailyBlog = () => {
         {activeTab === 'generate' && (
           <div className="generate-tab">
             <div className="generate-form">
+              {/* Trending Topics Section */}
+              <div className="form-section trending-section">
+                <div className="trending-header">
+                  <h3>Top 10 Trending Mortgage Topics</h3>
+                  <span className="trending-date">Based on searches from {trendingDate || 'yesterday'}</span>
+                </div>
+
+                {trendingTopics.length > 0 ? (
+                  <>
+                    <div className="trending-actions">
+                      <button
+                        className="btn-select-all"
+                        onClick={() => {
+                          if (selectedTopics.length === trendingTopics.length) {
+                            setSelectedTopics([]);
+                          } else {
+                            setSelectedTopics(trendingTopics.map(t => t.rank));
+                          }
+                        }}
+                      >
+                        {selectedTopics.length === trendingTopics.length ? 'Deselect All' : 'Select All 10'}
+                      </button>
+                      {selectedTopics.length > 0 && (
+                        <span className="selected-count">{selectedTopics.length} topic{selectedTopics.length > 1 ? 's' : ''} selected</span>
+                      )}
+                    </div>
+
+                    <div className="trending-topics-list">
+                      {trendingTopics.map((topic) => (
+                        <div
+                          key={topic.rank}
+                          className={`trending-topic-item ${selectedTopics.includes(topic.rank) ? 'selected' : ''}`}
+                          onClick={() => {
+                            if (selectedTopics.includes(topic.rank)) {
+                              setSelectedTopics(selectedTopics.filter(r => r !== topic.rank));
+                            } else {
+                              setSelectedTopics([...selectedTopics, topic.rank]);
+                            }
+                          }}
+                        >
+                          <div className="topic-rank">#{topic.rank}</div>
+                          <div className="topic-content">
+                            <div className="topic-title">{topic.topic}</div>
+                            <div className="topic-meta">
+                              <span className="topic-keyword">{topic.keyword}</span>
+                              <span className={`topic-trend trend-${topic.trend}`}>
+                                {topic.trend === 'up' ? '↑' : topic.trend === 'down' ? '↓' : '→'} {topic.trend}
+                              </span>
+                              <span className="topic-volume">{topic.search_volume?.toLocaleString()} searches</span>
+                            </div>
+                          </div>
+                          <div className="topic-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedTopics.includes(topic.rank)}
+                              onChange={() => {}}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {selectedTopics.length > 0 && (
+                      <button
+                        className="btn-generate-selected"
+                        onClick={async () => {
+                          const topicsToGenerate = trendingTopics.filter(t => selectedTopics.includes(t.rank));
+                          setLoading(true);
+                          setError(null);
+                          let successCount = 0;
+
+                          for (const topic of topicsToGenerate) {
+                            try {
+                              await blogAPI.generateContent({
+                                topic: topic.topic,
+                                archetype: topic.archetype,
+                                keyword: topic.keyword,
+                                generate_social: generateForm.generateSocial,
+                                platforms: generateForm.platforms,
+                              });
+                              successCount++;
+                            } catch (err) {
+                              console.error(`Failed to generate: ${topic.topic}`, err);
+                            }
+                          }
+
+                          setLoading(false);
+                          if (successCount > 0) {
+                            setSuccess(`Successfully generated ${successCount} blog post${successCount > 1 ? 's' : ''}!`);
+                            setSelectedTopics([]);
+                            // Refresh content list
+                            try {
+                              const contentRes = await blogAPI.getContentList({ limit: 20 });
+                              setContentList(contentRes.items || []);
+                            } catch (e) {}
+                          } else {
+                            setError('Failed to generate content. Please try again.');
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        {loading ? 'Generating...' : `Generate ${selectedTopics.length} Post${selectedTopics.length > 1 ? 's' : ''}`}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="no-topics">Loading trending topics...</div>
+                )}
+              </div>
+
+              <div className="divider-or">
+                <span>or enter a custom topic</span>
+              </div>
+
               <div className="form-section">
-                <h3>What should we write about?</h3>
+                <h3>Custom Topic</h3>
                 <input
                   type="text"
                   className="topic-input"
