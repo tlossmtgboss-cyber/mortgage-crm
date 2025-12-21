@@ -20,6 +20,7 @@ from models.smart_docs_models import (
     DocType, RequestStatus, PayrollFrequency, DocPolicyEventType
 )
 from services.smart_docs.freshness_validator import FreshnessValidator
+from services.smart_docs.notification_service import SmartDocsNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,55 @@ class AutoRenewalScheduler:
     def __init__(self, db: Session):
         self.db = db
         self.freshness_validator = FreshnessValidator()
+        self.notification_service = SmartDocsNotificationService(db)
+
+    def _get_notification_context(
+        self,
+        loan_id: int,
+        borrower_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get borrower and loan officer info for notifications.
+
+        Args:
+            loan_id: Loan ID
+            borrower_id: Borrower ID
+
+        Returns:
+            Dict with borrower_email, borrower_name, loan_officer_name, portal_url
+            or None if borrower info not found
+        """
+        from sqlalchemy import text
+
+        # Get borrower info
+        borrower_result = self.db.execute(
+            text("SELECT email, full_name FROM borrower_profiles WHERE id = :borrower_id"),
+            {"borrower_id": borrower_id}
+        ).fetchone()
+
+        if not borrower_result or not borrower_result[0]:
+            logger.warning(f"No email found for borrower {borrower_id}")
+            return None
+
+        # Get loan officer info
+        lo_result = self.db.execute(
+            text("""
+                SELECT u.full_name
+                FROM loans l
+                JOIN users u ON u.id = l.loan_officer_id
+                WHERE l.id = :loan_id
+            """),
+            {"loan_id": loan_id}
+        ).fetchone()
+
+        lo_name = lo_result[0] if lo_result and lo_result[0] else "Your Loan Officer"
+
+        return {
+            "borrower_email": borrower_result[0],
+            "borrower_name": borrower_result[1] or "Valued Customer",
+            "loan_officer_name": lo_name,
+            "portal_url": f"/borrower/documents?loan_id={loan_id}",  # Can be configured
+        }
 
     def process_pending_renewals(self) -> Dict[str, Any]:
         """
@@ -225,6 +275,21 @@ class AutoRenewalScheduler:
             f"doc_type={original_request.doc_type.value}"
         )
 
+        # Send notification email to borrower about new renewal request
+        context = self._get_notification_context(renewal.loan_id, renewal.borrower_id)
+        if context:
+            try:
+                self.notification_service.send_document_request_notification(
+                    request=renewal,
+                    borrower_email=context["borrower_email"],
+                    borrower_name=context["borrower_name"],
+                    loan_officer_name=context["loan_officer_name"],
+                    portal_url=context["portal_url"],
+                )
+                logger.info(f"Sent renewal request notification to {context['borrower_email']}")
+            except Exception as e:
+                logger.error(f"Failed to send renewal request notification: {e}")
+
         return renewal
 
     def _calculate_next_expected(
@@ -284,13 +349,20 @@ class AutoRenewalScheduler:
             f"loan {request.loan_id}, doc_type={request.doc_type.value}"
         )
 
-        # TODO: Integration with notification service
-        # notification_service.send_document_renewal_reminder(
-        #     loan_id=request.loan_id,
-        #     borrower_id=request.borrower_id,
-        #     doc_type=request.doc_type,
-        #     request_id=request.id,
-        # )
+        # Send notification email to borrower
+        context = self._get_notification_context(request.loan_id, request.borrower_id)
+        if context:
+            try:
+                self.notification_service.send_document_request_notification(
+                    request=request,
+                    borrower_email=context["borrower_email"],
+                    borrower_name=context["borrower_name"],
+                    loan_officer_name=context["loan_officer_name"],
+                    portal_url=context["portal_url"],
+                )
+                logger.info(f"Sent renewal reminder email to {context['borrower_email']}")
+            except Exception as e:
+                logger.error(f"Failed to send renewal reminder email: {e}")
 
     def infer_payroll_frequency(
         self,
