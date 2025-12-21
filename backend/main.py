@@ -53743,21 +53743,28 @@ async def startup_event():
                 # Check if any user has slug 'tim-loss'
                 result = db_temp.execute(text("SELECT id FROM users WHERE slug = 'tim-loss'"))
                 if not result.fetchone():
-                    # Set slug on first admin/LO user
-                    db_temp.execute(text("""
+                    # Set slug on first admin/LO user matching 'tim'
+                    result = db_temp.execute(text("""
                         UPDATE users SET slug = 'tim-loss'
-                        WHERE id = (SELECT id FROM users WHERE email LIKE '%tim%' OR name ILIKE '%tim%' ORDER BY id LIMIT 1)
-                        AND slug IS NULL
+                        WHERE id = (SELECT id FROM users WHERE email ILIKE '%tim%' OR first_name ILIKE '%tim%' ORDER BY id LIMIT 1)
+                        AND (slug IS NULL OR slug = '')
+                        RETURNING id
                     """))
-                    if db_temp.execute(text("SELECT changes()")).scalar() == 0:
+                    updated = result.fetchone()
+                    if not updated:
                         # Fallback: set on first active user
-                        db_temp.execute(text("""
+                        result = db_temp.execute(text("""
                             UPDATE users SET slug = 'tim-loss'
                             WHERE id = (SELECT id FROM users WHERE is_active = true ORDER BY id LIMIT 1)
-                            AND slug IS NULL
+                            AND (slug IS NULL OR slug = '')
+                            RETURNING id
                         """))
+                        updated = result.fetchone()
                     db_temp.commit()
-                    logger.info("✅ Set 'tim-loss' slug for user")
+                    if updated:
+                        logger.info(f"✅ Set 'tim-loss' slug for user id={updated[0]}")
+                    else:
+                        logger.info("⚠️ No user updated with tim-loss slug")
                 db_temp.close()
             except Exception as slug_e:
                 logger.warning(f"⚠️ User slug migration skipped: {slug_e}")

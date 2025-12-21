@@ -535,7 +535,7 @@ async def get_public_microsite(
 
     # Get user info
     user = db.execute(text("""
-        SELECT first_name, last_name, email FROM users WHERE id = :user_id
+        SELECT full_name, email FROM users WHERE id = :user_id
     """), {"user_id": microsite.user_id}).fetchone()
 
     # Increment view count (consider using Redis for performance)
@@ -555,8 +555,8 @@ async def get_public_microsite(
         template_name=template.name if template else None,
         template_version=microsite.template_version,
         template_layout=template.template_json if template else None,
-        user_name=f"{user[0]} {user[1]}" if user else None,
-        user_email=user[2] if user else None
+        user_name=user[0] if user else None,
+        user_email=user[1] if user else None
     )
 
 
