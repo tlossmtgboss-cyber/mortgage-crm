@@ -365,23 +365,69 @@ const LOMicrosite = () => {
         return (
           <section className="lo-page-content testimonials-page">
             <div className="container">
-              <h2>{content.heading || currentPage.title}</h2>
-              {content.description && <p className="section-subtitle">{content.description}</p>}
+              <div className="testimonials-header">
+                <h2>{content.headline || currentPage.title}</h2>
+                {content.subheadline && <p className="section-subtitle">{content.subheadline}</p>}
+              </div>
+
+              {/* Stats Section */}
+              {content.stats && (
+                <div className="testimonials-stats">
+                  {content.stats.totalClients && (
+                    <div className="stat-item">
+                      <span className="stat-value">{content.stats.totalClients}</span>
+                      <span className="stat-label">Happy Clients</span>
+                    </div>
+                  )}
+                  {content.stats.avgRating && (
+                    <div className="stat-item">
+                      <span className="stat-value">{content.stats.avgRating}</span>
+                      <span className="stat-label">Average Rating</span>
+                    </div>
+                  )}
+                  {content.stats.yearsExperience && (
+                    <div className="stat-item">
+                      <span className="stat-value">{content.stats.yearsExperience}</span>
+                      <span className="stat-label">Years Experience</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {content.testimonials?.length > 0 ? (
                 <div className="testimonials-grid">
                   {content.testimonials.map((testimonial, idx) => (
                     <div key={idx} className="testimonial-card">
-                      <div className="testimonial-quote">"</div>
-                      <p className="testimonial-text">{testimonial.text}</p>
+                      <div className="testimonial-rating">
+                        {[...Array(testimonial.rating || 5)].map((_, i) => (
+                          <svg key={i} viewBox="0 0 24 24" fill="currentColor" className="star-icon">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                          </svg>
+                        ))}
+                      </div>
+                      <p className="testimonial-text">"{testimonial.text}"</p>
                       <div className="testimonial-author">
                         <strong>{testimonial.name}</strong>
-                        {testimonial.location && <span>{testimonial.location}</span>}
+                        <div className="author-details">
+                          {testimonial.type && <span className="testimonial-type">{testimonial.type}</span>}
+                          {testimonial.location && <span className="testimonial-location">{testimonial.location}</span>}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="no-content">Client testimonials coming soon!</p>
+              )}
+
+              {content.cta && (
+                <div className="testimonials-cta">
+                  <h3>{content.cta.headline}</h3>
+                  <p>{content.cta.text}</p>
+                  <button onClick={() => navigateToPage('home')} className="btn-primary">
+                    {content.cta.buttonText || 'Get Started'}
+                  </button>
+                </div>
               )}
             </div>
           </section>

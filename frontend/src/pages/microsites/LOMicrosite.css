@@ -172,46 +172,204 @@
 }
 
 /* Testimonials Page Styles */
+.testimonials-page {
+  padding: 60px 0 80px;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.testimonials-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.testimonials-header h2 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0 0 12px;
+}
+
+.testimonials-header .section-subtitle {
+  font-size: 18px;
+  color: #6b7280;
+  margin: 0 auto;
+  max-width: 600px;
+}
+
+/* Testimonials Stats */
+.testimonials-stats {
+  display: flex;
+  justify-content: center;
+  gap: 60px;
+  margin-bottom: 50px;
+  padding: 30px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.testimonials-stats .stat-item {
+  text-align: center;
+}
+
+.testimonials-stats .stat-value {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--lo-primary);
+  margin-bottom: 4px;
+}
+
+.testimonials-stats .stat-label {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+@media (max-width: 640px) {
+  .testimonials-stats {
+    gap: 30px;
+    padding: 20px;
+  }
+
+  .testimonials-stats .stat-value {
+    font-size: 28px;
+  }
+}
+
+/* Testimonials Grid */
 .testimonials-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 24px;
+  gap: 28px;
+  margin-bottom: 60px;
+}
+
+@media (max-width: 400px) {
+  .testimonials-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .testimonial-card {
-  background: #f9fafb;
+  background: white;
   padding: 32px;
-  border-radius: 12px;
-  position: relative;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
 }
 
-.testimonial-quote {
-  font-size: 48px;
-  color: var(--lo-primary);
-  opacity: 0.3;
-  position: absolute;
-  top: 16px;
-  left: 24px;
-  font-family: serif;
+.testimonial-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* Star Rating */
+.testimonial-rating {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.testimonial-rating .star-icon {
+  width: 20px;
+  height: 20px;
+  color: #fbbf24;
 }
 
 .testimonial-text {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.7;
   color: #374151;
   margin-bottom: 24px;
-  padding-top: 24px;
+  flex-grow: 1;
+  font-style: italic;
+}
+
+.testimonial-author {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 16px;
 }
 
 .testimonial-author strong {
   display: block;
   font-size: 16px;
   color: var(--lo-secondary);
+  margin-bottom: 4px;
 }
 
-.testimonial-author span {
-  font-size: 14px;
+.author-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.testimonial-type {
+  font-size: 13px;
+  color: var(--lo-primary);
+  background: rgba(13, 148, 136, 0.1);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.testimonial-location {
+  font-size: 13px;
   color: #6b7280;
+}
+
+/* Testimonials CTA */
+.testimonials-cta {
+  background: linear-gradient(135deg, var(--lo-primary) 0%, var(--lo-accent) 100%);
+  border-radius: 20px;
+  padding: 50px 40px;
+  text-align: center;
+  color: white;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.testimonials-cta h3 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.testimonials-cta p {
+  font-size: 16px;
+  opacity: 0.95;
+  margin: 0 0 24px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.testimonials-cta .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  color: var(--lo-primary);
+  padding: 14px 32px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: none;
+  cursor: pointer;
+}
+
+.testimonials-cta .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 /* Blog Page Styles */
