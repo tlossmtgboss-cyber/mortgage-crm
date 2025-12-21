@@ -1234,13 +1234,24 @@ View application: {dashboard_link}"""
 
         Returns:
             True if opted out, False otherwise
-
-        Note: In production, this would check a database table.
-        For now, returns False (not opted out).
         """
-        # TODO: Implement opt-out checking against database
-        # For now, assume no one is opted out
-        return False
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+
+            db = SessionLocal()
+            try:
+                normalized_phone = self._normalize_phone(phone)
+                result = db.execute(text("""
+                    SELECT 1 FROM sms_opt_outs WHERE phone_number = :phone LIMIT 1
+                """), {"phone": normalized_phone}).fetchone()
+                return result is not None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Error checking opt-out status for {phone}: {e}")
+            # Fail open - allow sending if we can't check
+            return False
 
 
 # Create singleton instance

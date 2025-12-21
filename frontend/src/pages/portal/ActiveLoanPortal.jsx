@@ -19,6 +19,7 @@ import { useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../../components/PaymentCalculator';
+import ApplicantTasks, { LightboxModal, SevenStepProcessContent, BulletProofBuyerContent } from '../../components/portal/ApplicantTasks';
 import '../PURLPortal.css';
 
 // Tab components - Arrow/chevron style with notification dots
@@ -1086,6 +1087,10 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [newMessage, setNewMessage] = useState({ subject: '', body: '' });
 
+  // Toolbar lightbox states
+  const [showSevenStepModal, setShowSevenStepModal] = useState(false);
+  const [showBulletProofModal, setShowBulletProofModal] = useState(false);
+
   // Check for submission success message
   const urlParams = new URLSearchParams(location.search);
   const justSubmitted = urlParams.get('submitted') === 'true';
@@ -1370,6 +1375,16 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           hasNotification={data?.preApprovalLetter != null}
         />
         <TabButton
+          label="7 Step Process"
+          isActive={false}
+          onClick={() => setShowSevenStepModal(true)}
+        />
+        <TabButton
+          label="Bullet Proof Buyer"
+          isActive={false}
+          onClick={() => setShowBulletProofModal(true)}
+        />
+        <TabButton
           label="Contacts"
           isActive={activeTab === 'contacts'}
           onClick={() => setActiveTab('contacts')}
@@ -1385,42 +1400,28 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             <div className="portal-dashboard-layout">
               {/* Main Content Area */}
               <div className="portal-main-content">
-                {/* What's Next Section - Only show if there are tasks or conditions */}
-                {(conditions.length > 0 || tasks.filter(t => t.status === 'open' || t.status === 'TODO').length > 0) && (
-                  <section className="whats-next-section">
-                    <h2>What's Next</h2>
-                    {conditions.length > 0 ? (
-                      <ConditionsNeedsListCard
-                        conditions={conditions}
-                        onViewAll={() => setActiveTab('tasks')}
-                        onUploadForCondition={handleUploadForCondition}
-                        uploading={conditionUploading}
-                      />
-                    ) : (
-                      <div className="pending-tasks-list">
-                        {tasks.filter(t => t.status === 'open' || t.status === 'TODO').slice(0, 3).map(task => (
-                          <TaskCard
-                            key={task.id}
-                            task={task}
-                            onComplete={handleTaskComplete}
-                          />
-                        ))}
-                        {pendingTasksCount > 3 && (
-                          <button className="view-all-btn" onClick={() => setActiveTab('tasks')}>
-                            View all {pendingTasksCount} tasks →
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </section>
-                )}
+                {/* Contact Your Loan Officer - Now at the top */}
+                <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
 
-                {/* All Caught Up Message - Show when no pending items */}
-                {conditions.length === 0 && tasks.filter(t => t.status === 'open' || t.status === 'TODO').length === 0 && (
-                  <section className="all-caught-up-section">
-                    <div className="caught-up-icon">✓</div>
-                    <h2>You're all caught up!</h2>
-                    <p>Your loan officer is reviewing your application. We'll notify you when there's something new.</p>
+                {/* Applicant Tasks Section - Your Action Items */}
+                <ApplicantTasks
+                  workspaceId={workspace?.id}
+                  conditions={conditions}
+                  documentRequirements={data?.document_requirements || []}
+                  onUploadForCondition={handleUploadForCondition}
+                  uploading={conditionUploading}
+                />
+
+                {/* What's Next Section - Only show if there are additional conditions beyond applicant tasks */}
+                {conditions.length > 0 && (
+                  <section className="whats-next-section">
+                    <h2>Documents Needed</h2>
+                    <ConditionsNeedsListCard
+                      conditions={conditions}
+                      onViewAll={() => setActiveTab('documents')}
+                      onUploadForCondition={handleUploadForCondition}
+                      uploading={conditionUploading}
+                    />
                   </section>
                 )}
 
@@ -1431,9 +1432,6 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                     <MilestoneTracker milestones={milestones} />
                   </section>
                 )}
-
-                {/* Contact Your Loan Officer */}
-                <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
               </div>
 
               {/* Sidebar */}
@@ -1993,6 +1991,24 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           phone: borrower.phone,
         } : null}
       />
+
+      {/* 7 Step Process Lightbox - Toolbar Link */}
+      <LightboxModal
+        isOpen={showSevenStepModal}
+        onClose={() => setShowSevenStepModal(false)}
+        title="The 7 Step Mortgage Process"
+      >
+        <SevenStepProcessContent />
+      </LightboxModal>
+
+      {/* Bullet Proof Buyer Lightbox - Toolbar Link */}
+      <LightboxModal
+        isOpen={showBulletProofModal}
+        onClose={() => setShowBulletProofModal(false)}
+        title="Be a Bullet Proof Buyer"
+      >
+        <BulletProofBuyerContent />
+      </LightboxModal>
 
       {/* Footer */}
       <footer className="portal-footer">

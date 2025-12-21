@@ -839,7 +839,31 @@ class ConversationIntelligenceService:
         if conversation_id in self._conversation_cache:
             return self._conversation_cache[conversation_id]
 
-        # TODO: Load from database if not in cache
+        # Load from database if not in cache
+        if self.db:
+            try:
+                from sqlalchemy import text
+                result = self.db.execute(text("""
+                    SELECT conversation_id, channel, lead_id, user_id, stage,
+                           qualification_data, message_count, last_message_at
+                    FROM conversation_states WHERE conversation_id = :conv_id
+                """), {"conv_id": conversation_id}).fetchone()
+
+                if result:
+                    state = ConversationState(
+                        conversation_id=result[0],
+                        channel=Channel(result[1]) if result[1] else channel,
+                        lead_id=result[2],
+                        user_id=result[3]
+                    )
+                    state.stage = ConversationStage(result[4]) if result[4] else ConversationStage.GREETING
+                    state.qualification_data = result[5] or {}
+                    state.message_count = result[6] or 0
+                    state.last_message_at = result[7]
+                    self._conversation_cache[conversation_id] = state
+                    return state
+            except Exception as e:
+                logger.warning(f"Could not load conversation from database: {e}")
 
         state = ConversationState(
             conversation_id=conversation_id,

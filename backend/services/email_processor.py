@@ -80,12 +80,22 @@ class EmailProcessor:
 
             logger.info(f"Email classified as: {profile_type}")
 
+            # Step 1.5: Try preliminary profile lookup based on sender email
+            current_profile = None
+            sender_email = email_data.get('from_email', email_data.get('sender'))
+            if sender_email and profile_type:
+                current_profile = await self._preliminary_profile_lookup(
+                    sender_email, profile_type, db, user_id
+                )
+                if current_profile:
+                    logger.info(f"Found existing profile for sender {sender_email}")
+
             # Step 2: Parse email with AI
             if self.ai_provider == "claude":
                 parsed_result = await self.parser.parse_email(
                     email_data,
                     profile_type,
-                    current_profile=None  # TODO: Load current profile after matching
+                    current_profile=current_profile
                 )
             else:
                 # Legacy OpenAI parsing
@@ -209,6 +219,49 @@ class EmailProcessor:
                 'error': str(e),
                 'email_id': email_id
             }
+
+    async def _preliminary_profile_lookup(
+        self,
+        sender_email: str,
+        profile_type: str,
+        db: Session,
+        user_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Quick lookup of existing profile by sender email.
+        Used to provide context to AI parser for conflict detection.
+
+        Returns profile data as dict if found, None otherwise.
+        """
+        try:
+            # Get appropriate model based on profile type
+            if profile_type == 'lead':
+                model = LeadProfile
+            elif profile_type == 'active_loan':
+                model = ActiveLoanProfile
+            elif profile_type == 'mum_client':
+                model = MUMClientProfile
+            elif profile_type == 'team_member':
+                model = TeamMemberProfile
+            else:
+                return None
+
+            # Look up by email
+            profile = db.query(model).filter_by(email=sender_email).first()
+            if profile:
+                # Convert to dict for AI parser
+                return {
+                    "id": profile.id,
+                    "email": profile.email,
+                    "first_name": getattr(profile, 'first_name', None),
+                    "last_name": getattr(profile, 'last_name', None),
+                    "phone": getattr(profile, 'phone', None),
+                    "profile_type": profile_type
+                }
+            return None
+        except Exception as e:
+            logger.warning(f"Error in preliminary profile lookup: {e}")
+            return None
 
     async def _match_profile(
         self,

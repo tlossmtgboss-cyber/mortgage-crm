@@ -363,8 +363,40 @@ async def publish_microsite(
     ).first()
 
     if org_settings and org_settings.require_approval_before_publish:
-        # TODO: Implement approval workflow
-        pass
+        # Set to pending approval and notify admins
+        microsite.status = MicrositeStatus.PENDING_APPROVAL.value
+        db.commit()
+
+        # Notify organization admins about pending approval
+        try:
+            from services.notification_service import notification_service
+            admins = db.execute(text("""
+                SELECT email FROM users
+                WHERE organization_id = :org_id AND role IN ('admin', 'owner')
+            """), {"org_id": current_user.organization_id}).fetchall()
+
+            for admin in admins:
+                notification_service.send_email(
+                    to_email=admin[0],
+                    subject=f"Microsite Pending Approval - {microsite.slug}",
+                    html_content=f"""
+                    <p>A microsite is pending your approval:</p>
+                    <ul>
+                        <li><strong>User:</strong> {current_user.email}</li>
+                        <li><strong>Slug:</strong> {microsite.slug}</li>
+                    </ul>
+                    <p>Please review and approve or reject the microsite.</p>
+                    """
+                )
+        except Exception as notify_err:
+            logger.warning(f"Failed to notify admins of pending microsite: {notify_err}")
+
+        return PublishResponse(
+            success=True,
+            message="Microsite submitted for approval",
+            public_url=None,
+            preview_url=f"https://{microsite.slug}.{MICROSITE_DOMAIN}?preview=true"
+        )
 
     # Update status
     microsite.status = MicrositeStatus.PUBLISHED.value

@@ -578,8 +578,62 @@ async def analyze_sms_with_ai(message_body: str, context: Dict[str, Any] = None)
             is_opt_out=True
         )
 
-    # Simple rule-based analysis for now
-    # TODO: Integrate with Claude AI for deeper analysis
+    # Try Claude AI for deeper analysis
+    import os
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+
+    if anthropic_key:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=anthropic_key)
+
+            prompt = f"""Analyze this SMS message in a mortgage/lending context and respond with JSON only:
+
+Message: "{message_body}"
+
+Respond with this exact JSON structure:
+{{
+    "intent": "one of: question, document_mention, appointment, status_update, thank_you, complaint, general",
+    "disposition": "one of: status_inquiry, document_mention, appointment_related, action_required, general_correspondence",
+    "sentiment": "one of: positive, neutral, negative",
+    "urgency_level": 1-5,
+    "requires_response": true/false,
+    "summary": "brief 5-10 word summary",
+    "documents_mentioned": ["list of document types if any"],
+    "confidence": 0.0-1.0
+}}"""
+
+            response = client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            import json
+            result_text = response.content[0].text.strip()
+            # Extract JSON from response
+            if '{' in result_text:
+                json_start = result_text.index('{')
+                json_end = result_text.rindex('}') + 1
+                ai_result = json.loads(result_text[json_start:json_end])
+
+                return SMSAnalysisResult(
+                    direction=context.get('direction', 'inbound') if context else 'inbound',
+                    disposition=ai_result.get('disposition', 'general_correspondence'),
+                    confidence=ai_result.get('confidence', 0.9),
+                    summary=ai_result.get('summary', 'AI analyzed message'),
+                    intent=ai_result.get('intent', 'general'),
+                    documents_mentioned=ai_result.get('documents_mentioned', []),
+                    sentiment=ai_result.get('sentiment', 'neutral'),
+                    urgency_level=ai_result.get('urgency_level', 2),
+                    requires_response=ai_result.get('requires_response', False),
+                    is_opt_out=False
+                )
+
+        except Exception as ai_err:
+            logger.warning(f"Claude AI analysis failed, falling back to rules: {ai_err}")
+
+    # Fallback: Rule-based analysis
     message_lower = message_body.lower()
 
     # Determine intent

@@ -134,8 +134,15 @@ async def process_message(
         # Get organization for white-label (if provided)
         organization = None
         if request.organization_id:
-            # TODO: Load organization from database
-            pass
+            org_result = db.execute(text("""
+                SELECT id, name, settings FROM organizations WHERE id = :org_id
+            """), {"org_id": request.organization_id}).fetchone()
+            if org_result:
+                organization = {
+                    "id": org_result[0],
+                    "name": org_result[1],
+                    "settings": org_result[2] or {}
+                }
 
         # Process through qualification agent
         result = process_qualification_message(
@@ -603,7 +610,33 @@ async def log_conversation_processing(
             f"stage={result['conversation_state']['stage']}, "
             f"qualification={result['qualification']['completion_percentage']}%"
         )
-        # TODO: Store in analytics table
+
+        # Store in analytics table
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            db.execute(text("""
+                INSERT INTO conversation_analytics (
+                    conversation_id, channel, stage, qualification_percentage,
+                    response_type, should_escalate, tone_sentiment, processed_at
+                ) VALUES (
+                    :conv_id, :channel, :stage, :qual_pct,
+                    :resp_type, :escalate, :sentiment, CURRENT_TIMESTAMP
+                )
+            """), {
+                "conv_id": conversation_id,
+                "channel": channel,
+                "stage": result['conversation_state']['stage'],
+                "qual_pct": result['qualification']['completion_percentage'],
+                "resp_type": result.get('response_type'),
+                "escalate": result.get('should_escalate', False),
+                "sentiment": result['tone_analysis'].get('sentiment', {}).get('sentiment_category')
+            })
+            db.commit()
+        except Exception as db_err:
+            logger.warning(f"Could not store analytics (table may not exist): {db_err}")
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"Error logging conversation: {e}")
 
