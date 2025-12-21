@@ -535,7 +535,7 @@ class SchedulerService:
             # Send email reminder
             if appt_dict.get("attendee_email"):
                 try:
-                    notifier.send_appointment_confirmation(
+                    email_result = notifier.send_appointment_confirmation(
                         borrower_email=appt_dict["attendee_email"],
                         borrower_name=appt_dict.get("attendee_name", "there"),
                         appointment_type=f"{reminder_prefix}{appt_dict.get('title', 'Appointment')}",
@@ -543,21 +543,29 @@ class SchedulerService:
                         lo_name=lo_name,
                         meeting_link=appt_dict.get("video_link"),
                     )
-                    email_sent = True
+                    email_sent = email_result.get("success", False)
+                    if email_sent:
+                        logger.info(f"Email reminder sent for appointment {appointment_id}: {email_result}")
+                    else:
+                        logger.error(f"Email reminder failed for appointment {appointment_id}: {email_result}")
                 except Exception as e:
                     logger.error(f"Failed to send email reminder for appointment {appointment_id}: {e}")
 
             # Send SMS reminder
             if appt_dict.get("attendee_phone"):
                 try:
-                    notifier.send_appointment_reminder_sms(
+                    sms_result = notifier.send_appointment_reminder_sms(
                         borrower_phone=appt_dict["attendee_phone"],
                         borrower_name=appt_dict.get("attendee_name", "there"),
                         appointment_time=appt_dict["scheduled_start"],
                         lo_name=lo_name,
                         meeting_link=appt_dict.get("video_link"),
                     )
-                    sms_sent = True
+                    sms_sent = sms_result.get("success", False)
+                    if sms_sent:
+                        logger.info(f"SMS reminder sent for appointment {appointment_id}: {sms_result}")
+                    else:
+                        logger.error(f"SMS reminder failed for appointment {appointment_id}: {sms_result}")
                 except Exception as e:
                     logger.error(f"Failed to send SMS reminder for appointment {appointment_id}: {e}")
 
