@@ -20661,6 +20661,65 @@ async def create_test_appointment(
         return {"error": str(e)}
 
 
+@app.post("/api/v1/debug/send-test-sms", tags=["Debug"])
+async def send_test_sms(
+    phone: str = "8438345251",
+    message: str = "Test reminder from Perennia AI - your appointment is coming up!"
+):
+    """Send a test SMS to verify Twilio is working"""
+    import os
+    try:
+        from twilio.rest import Client
+
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not all([account_sid, auth_token, from_number]):
+            return {
+                "success": False,
+                "error": "Twilio not configured",
+                "config": {
+                    "account_sid": bool(account_sid),
+                    "auth_token": bool(auth_token),
+                    "from_number": from_number
+                }
+            }
+
+        # Format phone number
+        if not phone.startswith("+"):
+            phone = "+1" + phone.replace("-", "").replace(" ", "")
+
+        client = Client(account_sid, auth_token)
+        sms = client.messages.create(
+            body=message,
+            from_=from_number,
+            to=phone
+        )
+
+        return {
+            "success": True,
+            "message_sid": sms.sid,
+            "to": phone,
+            "from": from_number,
+            "status": sms.status
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/v1/debug/trigger-appointment-reminders", tags=["Debug"])
+async def trigger_appointment_reminders():
+    """Manually trigger the appointment reminder job"""
+    try:
+        from services.scheduler_service import scheduler_service
+        scheduler_service.send_appointment_reminders()
+        return {"success": True, "message": "Reminder job executed"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
