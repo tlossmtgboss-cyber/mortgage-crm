@@ -227,6 +227,135 @@
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
+/* Main Content Layout with Sidebar */
+.bold-impact-main-content {
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  gap: 24px;
+}
+
+.bold-impact-chat-container {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Right Sidebar */
+.bold-impact-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 100px;
+  height: fit-content;
+}
+
+.sidebar-card {
+  background: var(--theme-bg);
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.sidebar-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.sidebar-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.sidebar-card-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.sidebar-card-icon.schedule-icon {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.sidebar-card-icon.compare-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.sidebar-card-icon.refinance-icon {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.sidebar-card-icon.purchase-icon {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.sidebar-card-text {
+  font-size: 14px;
+  color: var(--theme-text-light);
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+.sidebar-card-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.sidebar-card-btn.schedule-btn-action {
+  background: #2563eb;
+  color: white;
+}
+
+.sidebar-card-btn.schedule-btn-action:hover {
+  background: #1d4ed8;
+}
+
+.sidebar-card-btn.compare-btn {
+  background: #d97706;
+  color: white;
+}
+
+.sidebar-card-btn.compare-btn:hover {
+  background: #b45309;
+}
+
+.sidebar-card-btn.refinance-btn {
+  background: #059669;
+  color: white;
+}
+
+.sidebar-card-btn.refinance-btn:hover {
+  background: #047857;
+}
+
+.sidebar-card-btn.purchase-btn {
+  background: #7c3aed;
+  color: white;
+}
+
+.sidebar-card-btn.purchase-btn:hover {
+  background: #6d28d9;
+}
+
 /* Specialties Section */
 .bold-impact-specialties {
   padding: 80px 24px;
@@ -635,6 +764,46 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .bold-impact-main-content {
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .bold-impact-sidebar {
+    width: 100%;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .sidebar-card {
+    padding: 16px;
+  }
+
+  .sidebar-card-icon {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 10px;
+  }
+
+  .sidebar-card-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sidebar-card-text {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+
+  .sidebar-card-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 768px) {
   .bold-impact-nav {
     padding: 12px 16px;
@@ -681,6 +850,10 @@
 
   .hero-image img {
     max-width: 120px;
+  }
+
+  .bold-impact-sidebar {
+    grid-template-columns: 1fr;
   }
 
   .about-content {
