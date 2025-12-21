@@ -8,7 +8,7 @@
 
 import React from 'react';
 import './BoldImpact.css';
-import MortgageAIChat from '../../../components/MortgageAIChat';
+import EmbeddedAIChat from '../../../components/EmbeddedAIChat';
 
 const BoldImpact = ({ user, profile, themeConfig = {} }) => {
 
@@ -108,6 +108,13 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
         </div>
       </section>
 
+      {/* AI Chat Section - Claude-style embedded chat */}
+      <EmbeddedAIChat
+        userSlug={user?.slug}
+        loName={loName}
+        themeConfig={themeConfig}
+      />
+
       {/* Specialties Section */}
       {specialties.length > 0 && (
         <section className="bold-impact-specialties">
@@ -181,12 +188,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
           </div>
         </div>
       </footer>
-
-      {/* AI Mortgage Chat Assistant */}
-      <MortgageAIChat
-        userSlug={user?.slug}
-        themeConfig={themeConfig}
-      />
     </div>
   );
 };
