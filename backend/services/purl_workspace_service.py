@@ -336,166 +336,188 @@ class PURLWorkspaceService:
         Returns comprehensive workspace data including contacts,
         loans, documents, tasks, and module configuration.
         """
-        workspace = self.db.query(PURLWorkspace).filter(
-            PURLWorkspace.id == workspace_id,
-            PURLWorkspace.organization_id == organization_id
-        ).first()
+        try:
+            logger.info(f"get_complete_workspace_data: Starting for workspace_id={workspace_id}, org_id={organization_id}")
 
-        if not workspace:
-            return None
+            workspace = self.db.query(PURLWorkspace).filter(
+                PURLWorkspace.id == workspace_id,
+                PURLWorkspace.organization_id == organization_id
+            ).first()
 
-        # Get contacts
-        contacts = self.db.query(PURLContact).filter(
-            PURLContact.workspace_id == workspace_id
-        ).all()
+            if not workspace:
+                logger.warning(f"get_complete_workspace_data: Workspace not found")
+                return None
 
-        # Get application (in-progress or submitted)
-        application = self.db.query(PURLApplication).filter(
-            PURLApplication.workspace_id == workspace_id,
-            PURLApplication.status.in_([
-                ApplicationStatus.IN_PROGRESS.value,
-                ApplicationStatus.SUBMITTED.value
-            ])
-        ).order_by(PURLApplication.version.desc()).first()
+            logger.debug(f"get_complete_workspace_data: Found workspace {workspace.slug}")
 
-        # Get loans
-        loans = self.db.query(PURLLoan).filter(
-            PURLLoan.workspace_id == workspace_id
-        ).order_by(PURLLoan.created_at.desc()).all()
+            # Get contacts
+            contacts = self.db.query(PURLContact).filter(
+                PURLContact.workspace_id == workspace_id
+            ).all()
+            logger.debug(f"get_complete_workspace_data: Found {len(contacts)} contacts")
 
-        # Get current active loan
-        current_loan = next(
-            (l for l in loans if l.status in ["active", "processing", "underwriting", "closing"]),
-            None
-        )
+            # Get application (in-progress or submitted)
+            application = self.db.query(PURLApplication).filter(
+                PURLApplication.workspace_id == workspace_id,
+                PURLApplication.status.in_([
+                    ApplicationStatus.IN_PROGRESS.value,
+                    ApplicationStatus.SUBMITTED.value
+                ])
+            ).order_by(PURLApplication.version.desc()).first()
+            logger.debug(f"get_complete_workspace_data: Application found: {application is not None}")
 
-        # Get portal modules
-        modules = self.db.query(PURLPortalModule).filter(
-            PURLPortalModule.workspace_id == workspace_id
-        ).order_by(PURLPortalModule.order_index).all()
+            # Get loans
+            loans = self.db.query(PURLLoan).filter(
+                PURLLoan.workspace_id == workspace_id
+            ).order_by(PURLLoan.created_at.desc()).all()
+            logger.debug(f"get_complete_workspace_data: Found {len(loans)} loans")
 
-        # Get tasks (all, not just pending)
-        tasks = self.db.query(PURLTask).filter(
-            PURLTask.workspace_id == workspace_id
-        ).order_by(PURLTask.due_at.asc().nullslast()).all()
+            # Get current active loan
+            current_loan = next(
+                (l for l in loans if l.status in ["active", "processing", "underwriting", "closing"]),
+                None
+            )
 
-        # Get documents
-        documents = self.db.query(PURLDocument).filter(
-            PURLDocument.workspace_id == workspace_id
-        ).order_by(PURLDocument.created_at.desc()).all()
+            # Get portal modules
+            modules = self.db.query(PURLPortalModule).filter(
+                PURLPortalModule.workspace_id == workspace_id
+            ).order_by(PURLPortalModule.order_index).all()
+            logger.debug(f"get_complete_workspace_data: Found {len(modules)} modules")
 
-        # Get document requirements from Smart Docs if available
-        document_requirements = []
-        if SMART_DOCS_AVAILABLE and current_loan:
-            try:
-                requests = self.db.query(DocumentRequest).filter(
-                    DocumentRequest.loan_id == current_loan.id
-                ).order_by(DocumentRequest.priority.desc(), DocumentRequest.created_at).all()
+            # Get tasks (all, not just pending)
+            tasks = self.db.query(PURLTask).filter(
+                PURLTask.workspace_id == workspace_id
+            ).order_by(PURLTask.due_at.asc().nullslast()).all()
+            logger.debug(f"get_complete_workspace_data: Found {len(tasks)} tasks")
 
-                document_requirements = [
-                    {
-                        "id": req.id,
-                        "doc_type": req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type),
-                        "title": req.title,
-                        "description": req.description,
-                        "instructions": req.instructions,
-                        "status": req.status.value if hasattr(req.status, 'value') else str(req.status),
-                        "priority": req.priority.value if hasattr(req.priority, 'value') else str(req.priority),
-                        "due_date": req.due_date.isoformat() if req.due_date else None,
-                        "applies_to": req.applies_to.value if hasattr(req.applies_to, 'value') else str(req.applies_to),
-                        "is_required": req.is_required,
-                        "fulfilled_at": req.fulfilled_at.isoformat() if req.fulfilled_at else None,
-                    }
-                    for req in requests
-                ]
-                logger.info(f"Loaded {len(document_requirements)} document requirements for loan {current_loan.id}")
-            except Exception as e:
-                logger.warning(f"Failed to load document requirements: {e}")
+            # Get documents
+            documents = self.db.query(PURLDocument).filter(
+                PURLDocument.workspace_id == workspace_id
+            ).order_by(PURLDocument.created_at.desc()).all()
+            logger.debug(f"get_complete_workspace_data: Found {len(documents)} documents")
 
-        # Get milestones if loan exists
-        milestones = []
-        if current_loan:
-            milestone_records = self.db.query(PURLLoanMilestone).filter(
-                PURLLoanMilestone.loan_id == current_loan.id
-            ).order_by(PURLLoanMilestone.id).all()
-            milestones = [self._milestone_to_dict(m) for m in milestone_records]
+            # Get document requirements from Smart Docs if available
+            document_requirements = []
+            if SMART_DOCS_AVAILABLE and current_loan:
+                try:
+                    requests = self.db.query(DocumentRequest).filter(
+                        DocumentRequest.loan_id == current_loan.id
+                    ).order_by(DocumentRequest.priority.desc(), DocumentRequest.created_at).all()
 
-        # Get timeline (audit log entries)
-        timeline_records = self.db.query(PURLAuditLog).filter(
-            PURLAuditLog.workspace_id == workspace_id
-        ).order_by(PURLAuditLog.created_at.desc()).limit(20).all()
+                    document_requirements = [
+                        {
+                            "id": req.id,
+                            "doc_type": req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type),
+                            "title": req.title,
+                            "description": req.description,
+                            "instructions": req.instructions,
+                            "status": req.status.value if hasattr(req.status, 'value') else str(req.status),
+                            "priority": req.priority.value if hasattr(req.priority, 'value') else str(req.priority),
+                            "due_date": req.due_date.isoformat() if req.due_date else None,
+                            "applies_to": req.applies_to.value if hasattr(req.applies_to, 'value') else str(req.applies_to),
+                            "is_required": req.is_required,
+                            "fulfilled_at": req.fulfilled_at.isoformat() if req.fulfilled_at else None,
+                        }
+                        for req in requests
+                    ]
+                    logger.info(f"Loaded {len(document_requirements)} document requirements for loan {current_loan.id}")
+                except Exception as e:
+                    logger.warning(f"Failed to load document requirements: {e}")
 
-        timeline = [
-            {
-                "id": t.id,
-                "action": t.action,
-                "actor_type": t.actor_type,
-                "resource_type": t.resource_type,
-                "resource_id": t.resource_id,
-                "metadata": t.meta_data,
-                "created_at": t.created_at.isoformat() if t.created_at else None
+            # Get milestones if loan exists
+            milestones = []
+            if current_loan:
+                milestone_records = self.db.query(PURLLoanMilestone).filter(
+                    PURLLoanMilestone.loan_id == current_loan.id
+                ).order_by(PURLLoanMilestone.id).all()
+                milestones = [self._milestone_to_dict(m) for m in milestone_records]
+            logger.debug(f"get_complete_workspace_data: Found {len(milestones)} milestones")
+
+            # Get timeline (audit log entries)
+            timeline_records = self.db.query(PURLAuditLog).filter(
+                PURLAuditLog.workspace_id == workspace_id
+            ).order_by(PURLAuditLog.created_at.desc()).limit(20).all()
+
+            timeline = [
+                {
+                    "id": t.id,
+                    "action": t.action,
+                    "actor_type": t.actor_type,
+                    "resource_type": t.resource_type,
+                    "resource_id": t.resource_id,
+                    "metadata": t.meta_data,
+                    "created_at": t.created_at.isoformat() if t.created_at else None
+                }
+                for t in timeline_records
+            ]
+            logger.debug(f"get_complete_workspace_data: Built {len(timeline)} timeline entries")
+
+            # Get unread message count
+            unread_count = self.db.query(func.count(PURLMessage.id)).filter(
+                PURLMessage.workspace_id == workspace_id,
+                PURLMessage.is_read_by_borrower == False
+            ).scalar() or 0
+
+            # Get linked lead information if available
+            lead_data = None
+            lead_id = workspace.meta_data.get('lead_id') if workspace.meta_data else None
+            if lead_id:
+                try:
+                    from main import Lead
+                    lead = self.db.query(Lead).filter(Lead.id == int(lead_id)).first()
+                    if lead:
+                        lead_data = {
+                            "id": lead.id,
+                            "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
+                            "name": lead.name,
+                            "first_name": lead.first_name,
+                            "last_name": lead.last_name
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to fetch linked lead {lead_id}: {e}")
+
+            # Get loan officer info from workspace owner
+            loan_officer_data = None
+            if workspace.owner_user_id:
+                try:
+                    from main import User
+                    lo_user = self.db.query(User).filter(User.id == workspace.owner_user_id).first()
+                    if lo_user:
+                        loan_officer_data = {
+                            "id": lo_user.id,
+                            "name": lo_user.full_name or lo_user.email.split('@')[0] if lo_user.email else 'Loan Officer',
+                            "email": lo_user.email,
+                            "phone": lo_user.phone,
+                            "nmls_id": getattr(lo_user, 'nmls_id', None)
+                        }
+                        logger.info(f"Loaded LO info for workspace {workspace.id}: {loan_officer_data.get('name')}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch loan officer {workspace.owner_user_id}: {e}")
+
+            logger.debug(f"get_complete_workspace_data: Building final response dict")
+
+            result = {
+                "workspace": self._workspace_to_dict(workspace),
+                "contacts": [self._contact_to_dict(c) for c in contacts],
+                "application": self._application_to_dict(application) if application else None,
+                "loan": self._loan_to_dict(current_loan) if current_loan else None,
+                "lead": lead_data,  # Include linked lead data for milestone sync
+                "loanOfficer": loan_officer_data,  # Include LO info for portal display
+                "documents": [self._document_to_dict(d) for d in documents],
+                "document_requirements": document_requirements,  # Smart Docs needs list
+                "tasks": [self._task_to_dict(t) for t in tasks],
+                "milestones": milestones,
+                "timeline": timeline,
+                "modules": [self._module_to_dict(m) for m in modules],
+                # Extra fields for backwards compatibility
+                "unread_messages_count": unread_count
             }
-            for t in timeline_records
-        ]
+            logger.info(f"get_complete_workspace_data: Successfully built response for workspace {workspace_id}")
+            return result
 
-        # Get unread message count
-        unread_count = self.db.query(func.count(PURLMessage.id)).filter(
-            PURLMessage.workspace_id == workspace_id,
-            PURLMessage.is_read_by_borrower == False
-        ).scalar() or 0
-
-        # Get linked lead information if available
-        lead_data = None
-        lead_id = workspace.meta_data.get('lead_id') if workspace.meta_data else None
-        if lead_id:
-            try:
-                from main import Lead
-                lead = self.db.query(Lead).filter(Lead.id == int(lead_id)).first()
-                if lead:
-                    lead_data = {
-                        "id": lead.id,
-                        "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
-                        "name": lead.name,
-                        "first_name": lead.first_name,
-                        "last_name": lead.last_name
-                    }
-            except Exception as e:
-                logger.warning(f"Failed to fetch linked lead {lead_id}: {e}")
-
-        # Get loan officer info from workspace owner
-        loan_officer_data = None
-        if workspace.owner_user_id:
-            try:
-                from main import User
-                lo_user = self.db.query(User).filter(User.id == workspace.owner_user_id).first()
-                if lo_user:
-                    loan_officer_data = {
-                        "id": lo_user.id,
-                        "name": lo_user.full_name or lo_user.email.split('@')[0] if lo_user.email else 'Loan Officer',
-                        "email": lo_user.email,
-                        "phone": lo_user.phone,
-                        "nmls_id": getattr(lo_user, 'nmls_id', None)
-                    }
-                    logger.info(f"Loaded LO info for workspace {workspace.id}: {loan_officer_data.get('name')}")
-            except Exception as e:
-                logger.warning(f"Failed to fetch loan officer {workspace.owner_user_id}: {e}")
-
-        return {
-            "workspace": self._workspace_to_dict(workspace),
-            "contacts": [self._contact_to_dict(c) for c in contacts],
-            "application": self._application_to_dict(application) if application else None,
-            "loan": self._loan_to_dict(current_loan) if current_loan else None,
-            "lead": lead_data,  # Include linked lead data for milestone sync
-            "loanOfficer": loan_officer_data,  # Include LO info for portal display
-            "documents": [self._document_to_dict(d) for d in documents],
-            "document_requirements": document_requirements,  # Smart Docs needs list
-            "tasks": [self._task_to_dict(t) for t in tasks],
-            "milestones": milestones,
-            "timeline": timeline,
-            "modules": [self._module_to_dict(m) for m in modules],
-            # Extra fields for backwards compatibility
-            "unread_messages_count": unread_count
-        }
+        except Exception as e:
+            logger.error(f"get_complete_workspace_data: Error for workspace {workspace_id}: {e}", exc_info=True)
+            raise
 
     # =========================================================================
     # CONTACT MANAGEMENT
