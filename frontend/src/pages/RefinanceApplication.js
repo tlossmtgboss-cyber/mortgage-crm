@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
 import MortgageStatementUpload from '../components/MortgageStatementUpload';
-import InlineFollowup, { useFollowupCheck } from '../components/InlineFollowup';
 import './AdaptiveURLA.css';
 
 /**
@@ -1064,10 +1063,11 @@ export default function RefinanceApplication() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
-  // AI Follow-up questions state
+  // AI Follow-up questions state (disabled - inline followups removed)
   const [followupAnswers, setFollowupAnswers] = useState({});
   const [activeFollowup, setActiveFollowup] = useState(null);
-  const { followupData, checkForFollowup, clearFollowup } = useFollowupCheck(API_URL);
+  const clearFollowup = () => {}; // Stub - followup feature disabled
+  const checkForFollowup = async () => null; // Stub - followup feature disabled
 
   // Filter employers
   const filterEmployers = (input) => {
@@ -1593,18 +1593,7 @@ export default function RefinanceApplication() {
         {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
         {renderQuestionInput()}
 
-        {/* AI-powered follow-up questions for complex situations */}
-        {activeFollowup && activeFollowup.questions?.length > 0 && (
-          <InlineFollowup
-            trigger={activeFollowup.trigger}
-            context={activeFollowup.context}
-            questions={activeFollowup.questions}
-            onAnswersSubmit={handleFollowupSubmit}
-            onSkip={handleFollowupSkip}
-          />
-        )}
-
-        {currentQuestionIndex > 0 && !activeFollowup && (
+        {currentQuestionIndex > 0 && (
           <button className="back-link" onClick={goToPrevQuestion}>
             ← Go back
           </button>
@@ -1981,17 +1970,6 @@ export default function RefinanceApplication() {
               </div>
             </div>
           </div>
-        )}
-
-        {/* AI-powered follow-up questions for income-related triggers */}
-        {activeFollowup && activeFollowup.trigger?.startsWith('income_') && activeFollowup.questions?.length > 0 && (
-          <InlineFollowup
-            trigger={activeFollowup.trigger}
-            context={activeFollowup.context}
-            questions={activeFollowup.questions}
-            onAnswersSubmit={handleStageFollowupSubmit}
-            onSkip={handleStageFollowupSkip}
-          />
         )}
 
         <div className="stage-navigation">
@@ -2376,17 +2354,6 @@ export default function RefinanceApplication() {
               </select>
             </div>
           </div>
-        )}
-
-        {/* AI-powered follow-up questions for goals-related triggers */}
-        {activeFollowup && activeFollowup.trigger?.startsWith('goals_') && activeFollowup.questions?.length > 0 && (
-          <InlineFollowup
-            trigger={activeFollowup.trigger}
-            context={activeFollowup.context}
-            questions={activeFollowup.questions}
-            onAnswersSubmit={handleStageFollowupSubmit}
-            onSkip={handleStageFollowupSkip}
-          />
         )}
 
         <div className="stage-navigation">

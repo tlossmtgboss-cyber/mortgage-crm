@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
 import PaymentCalculator from '../components/PaymentCalculator';
-import InlineFollowup, { useFollowupCheck } from '../components/InlineFollowup';
 import './AdaptiveURLA.css';
 
 /**
@@ -988,10 +987,11 @@ export default function PurchaseApplication() {
   const [incomeData, setIncomeData] = useState({});
   const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
 
-  // AI Follow-up questions state
+  // AI Follow-up questions state (disabled - inline followups removed)
   const [followupAnswers, setFollowupAnswers] = useState({});
-  const [activeFollowup, setActiveFollowup] = useState(null); // Current active follow-up trigger
-  const { followupData, checkForFollowup, clearFollowup } = useFollowupCheck(API_URL);
+  const [activeFollowup, setActiveFollowup] = useState(null);
+  const clearFollowup = () => {}; // Stub - followup feature disabled
+  const checkForFollowup = async () => null; // Stub - followup feature disabled
 
   // Agent autocomplete state
   const [agentSearch, setAgentSearch] = useState('');
@@ -1808,18 +1808,7 @@ export default function PurchaseApplication() {
         {question.hint && <p className="declaration-hint"><Icon name="info" size={16} /> {question.hint}</p>}
         {renderQuestionInput()}
 
-        {/* AI-powered follow-up questions for complex situations */}
-        {activeFollowup && activeFollowup.questions?.length > 0 && (
-          <InlineFollowup
-            trigger={activeFollowup.trigger}
-            context={activeFollowup.context}
-            questions={activeFollowup.questions}
-            onAnswersSubmit={handleFollowupSubmit}
-            onSkip={handleFollowupSkip}
-          />
-        )}
-
-        {currentQuestionIndex > 0 && !activeFollowup && (
+        {currentQuestionIndex > 0 && (
           <button className="back-link" onClick={goToPrevQuestion}>
             ← Go back
           </button>
@@ -2322,17 +2311,6 @@ export default function PurchaseApplication() {
           </div>
         </div>
 
-        {/* AI-powered follow-up questions for income-related triggers */}
-        {activeFollowup && activeFollowup.trigger?.startsWith('income_') && activeFollowup.questions?.length > 0 && (
-          <InlineFollowup
-            trigger={activeFollowup.trigger}
-            context={activeFollowup.context}
-            questions={activeFollowup.questions}
-            onAnswersSubmit={handleStageFollowupSubmit}
-            onSkip={handleStageFollowupSkip}
-          />
-        )}
-
         <div className="stage-navigation">
           <button className="btn-back" onClick={goToPrevStage}>← Back</button>
           <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
@@ -2478,17 +2456,6 @@ export default function PurchaseApplication() {
             ).toLocaleString()}
           </strong>
         </div>
-
-        {/* AI-powered follow-up questions for asset-related triggers */}
-        {activeFollowup && activeFollowup.trigger?.startsWith('asset_') && activeFollowup.questions?.length > 0 && (
-          <InlineFollowup
-            trigger={activeFollowup.trigger}
-            context={activeFollowup.context}
-            questions={activeFollowup.questions}
-            onAnswersSubmit={handleStageFollowupSubmit}
-            onSkip={handleStageFollowupSkip}
-          />
-        )}
 
         <div className="stage-navigation">
           <button className="btn-back" onClick={goToPrevStage}>← Back</button>
@@ -3877,7 +3844,7 @@ export default function PurchaseApplication() {
           {renderStage()}
         </main>
 
-        {/* Documents Sidebar */}
+        {/* Documents Sidebar - Reveals progressively as application is completed */}
         <aside className="documents-sidebar">
           <div className="sidebar-header">
             <Icon name="document" size={20} />
@@ -3886,38 +3853,56 @@ export default function PurchaseApplication() {
           <p className="sidebar-subtitle">Gather these documents to speed up your application</p>
 
           <div className="documents-list">
-            {['identity', 'income', 'assets', 'property'].map(category => {
-              const categoryDocs = REQUIRED_DOCUMENTS.filter(d => d.category === category);
+            {(() => {
+              const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+
+              // Map category to the stage that unlocks it
+              const categoryUnlockStage = {
+                identity: 'profile',
+                income: 'income',
+                assets: 'assets',
+                property: 'property'
+              };
+
               const categoryLabels = {
                 identity: 'Identity Verification',
                 income: 'Income Documents',
                 assets: 'Asset Documents',
                 property: 'Property Documents'
               };
-              const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-              const categoryStageIndex = STAGES.findIndex(s => s.id === categoryDocs[0]?.stage);
-              const isCurrent = categoryDocs.some(d => d.stage === currentStage);
-              const isUpcoming = categoryStageIndex > currentIndex;
 
-              return (
-                <div key={category} className={`doc-category ${isCurrent ? 'current' : ''} ${isUpcoming ? 'upcoming' : ''}`}>
-                  <h4 className="doc-category-title">{categoryLabels[category]}</h4>
-                  <ul className="doc-items">
-                    {categoryDocs.map(doc => (
-                      <li key={doc.id} className="doc-item">
-                        <span className="doc-checkbox">
-                          <Icon name="document" size={14} />
-                        </span>
-                        <div className="doc-info">
-                          <span className="doc-name">{doc.name}</span>
-                          <span className="doc-desc">{doc.description}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
+              // Filter categories to only show those that have been unlocked
+              const visibleCategories = ['identity', 'income', 'assets', 'property'].filter(category => {
+                const unlockStage = categoryUnlockStage[category];
+                const unlockIndex = STAGES.findIndex(s => s.id === unlockStage);
+                // Show category if user has reached or passed its unlock stage
+                return currentIndex >= unlockIndex;
+              });
+
+              return visibleCategories.map(category => {
+                const categoryDocs = REQUIRED_DOCUMENTS.filter(d => d.category === category);
+                const isCurrent = categoryDocs.some(d => d.stage === currentStage);
+
+                return (
+                  <div key={category} className={`doc-category ${isCurrent ? 'current' : ''}`}>
+                    <h4 className="doc-category-title">{categoryLabels[category]}</h4>
+                    <ul className="doc-items">
+                      {categoryDocs.map(doc => (
+                        <li key={doc.id} className="doc-item">
+                          <span className="doc-checkbox">
+                            <Icon name="document" size={14} />
+                          </span>
+                          <div className="doc-info">
+                            <span className="doc-name">{doc.name}</span>
+                            <span className="doc-desc">{doc.description}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           <div className="sidebar-tip">
