@@ -27,6 +27,7 @@ from models.smart_docs_models import (
 from services.smart_docs.screenshot_detector import ScreenshotDetector, ScreenshotDetectionResult
 from services.smart_docs.date_extractor import DateExtractor, DateExtractionResult
 from services.smart_docs.freshness_validator import FreshnessValidator, FreshnessResult, FreshnessStatus
+from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
 
 logger = logging.getLogger(__name__)
 
@@ -485,7 +486,18 @@ class DocumentReviewPipeline:
         """
         Reprocess a document that was previously processed.
 
+        Retrieves the file from S3 storage and runs it through the pipeline again.
         Useful when fixing issues or updating detection logic.
+
+        Args:
+            document_id: ID of the SmartDocument to reprocess
+
+        Returns:
+            ProcessingResult with updated decision and analysis
+
+        Raises:
+            ValueError: If document not found
+            RuntimeError: If file cannot be retrieved from storage
         """
         document = self.db.query(SmartDocument).filter(
             SmartDocument.id == document_id
@@ -494,10 +506,61 @@ class DocumentReviewPipeline:
         if not document:
             raise ValueError(f"Document {document_id} not found")
 
-        # Would need to retrieve file content from storage
-        # For now, this is a placeholder
-        raise NotImplementedError(
-            "Reprocessing requires file content retrieval from storage"
+        # Check if we have a storage key
+        if not document.storage_key:
+            raise RuntimeError(
+                f"Document {document_id} has no storage_key - cannot retrieve file content"
+            )
+
+        # Get the S3 service and download the file
+        s3_service = get_smart_docs_s3_service()
+
+        if not s3_service.is_available:
+            raise RuntimeError(
+                "S3 storage is not available - cannot retrieve file for reprocessing"
+            )
+
+        logger.info(f"Retrieving document {document_id} from S3: {document.storage_key}")
+
+        download_result = s3_service.download_file(document.storage_key)
+
+        if not download_result.get("success"):
+            error = download_result.get("error", "Unknown error")
+            if download_result.get("not_found"):
+                raise RuntimeError(
+                    f"Document file not found in storage: {document.storage_key}"
+                )
+            raise RuntimeError(f"Failed to retrieve document from storage: {error}")
+
+        file_content = download_result["content"]
+        mime_type = download_result.get("content_type", document.mime_type or "application/octet-stream")
+
+        # Reset document state for reprocessing
+        document.decision = None
+        document.rejection_category = None
+        document.rejection_reason = None
+        document.fix_instructions = None
+        document.detected_is_screenshot = None
+        document.screenshot_confidence = None
+        document.screenshot_reasons = None
+        document.doc_date = None
+        document.extracted_dates = None
+        document.extraction_confidence = None
+        document.is_expired = None
+        document.days_until_expiration = None
+        document.status = ProcessingStatus.UPLOADED.value
+        self.db.commit()
+
+        logger.info(f"Reprocessing document {document_id} ({len(file_content)} bytes)")
+
+        # Run through the full processing pipeline
+        return self.process_document(
+            document_id=document_id,
+            file_content=file_content,
+            mime_type=mime_type,
+            filename=document.file_name or document.original_filename or "document",
+            doc_type=document.doc_type,
+            request_id=document.request_id,
         )
 
     def manual_review(

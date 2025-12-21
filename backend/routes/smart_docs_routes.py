@@ -415,6 +415,33 @@ async def manual_review_document(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.post("/document/{document_id}/reprocess")
+async def reprocess_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Reprocess a document through the validation pipeline.
+
+    Retrieves the file from S3 storage and runs it through screenshot detection,
+    date extraction, and freshness validation again. Useful when:
+    - Detection logic has been updated
+    - A document was incorrectly rejected
+    - Document metadata needs to be refreshed
+
+    Returns:
+        Updated processing result with new decision
+    """
+    pipeline = DocumentReviewPipeline(db)
+    try:
+        result = pipeline.reprocess_document(document_id)
+        return pipeline.result_to_dict(result)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/documents/{loan_id}")
 async def get_loan_documents(
     loan_id: int,

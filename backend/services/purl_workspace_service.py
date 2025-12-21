@@ -427,10 +427,14 @@ class PURLWorkspaceService:
             # Get milestones if loan exists
             milestones = []
             if current_loan:
-                milestone_records = self.db.query(PURLLoanMilestone).filter(
-                    PURLLoanMilestone.loan_id == current_loan.id
-                ).order_by(PURLLoanMilestone.id).all()
-                milestones = [self._milestone_to_dict(m) for m in milestone_records]
+                try:
+                    milestone_records = self.db.query(PURLLoanMilestone).filter(
+                        PURLLoanMilestone.loan_id == current_loan.id
+                    ).order_by(PURLLoanMilestone.id).all()
+                    milestones = [self._milestone_to_dict(m) for m in milestone_records]
+                except Exception as e:
+                    logger.warning(f"Failed to load milestones: {e}")
+                    self.db.rollback()
             logger.debug(f"get_complete_workspace_data: Found {len(milestones)} milestones")
 
             # Get timeline (audit log entries)
