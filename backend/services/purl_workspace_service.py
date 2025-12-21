@@ -378,10 +378,25 @@ class PURLWorkspaceService:
                 None
             )
 
-            # Get portal modules
+            # Get portal modules - initialize if none exist
             modules = self.db.query(PURLPortalModule).filter(
                 PURLPortalModule.workspace_id == workspace_id
             ).order_by(PURLPortalModule.order_index).all()
+
+            if not modules:
+                # Initialize default modules for workspaces created before module system
+                try:
+                    logger.info(f"Initializing default portal modules for workspace {workspace_id}")
+                    self._initialize_portal_modules(organization_id, workspace_id)
+                    self.db.commit()
+                    # Re-fetch modules after initialization
+                    modules = self.db.query(PURLPortalModule).filter(
+                        PURLPortalModule.workspace_id == workspace_id
+                    ).order_by(PURLPortalModule.order_index).all()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize portal modules: {e}")
+                    self.db.rollback()
+
             logger.debug(f"get_complete_workspace_data: Found {len(modules)} modules")
 
             # Get tasks (all, not just pending)
