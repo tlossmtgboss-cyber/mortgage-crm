@@ -704,7 +704,6 @@ const PortalInfoBar = ({ loan, workspace, contacts, loanOfficerInfo }) => {
             </div>
           </div>
           <div className="property-info-section">
-            <div className="property-icon">🏠</div>
             <span className="property-address">{formatAddress(loan?.property_address)}</span>
           </div>
         </div>
