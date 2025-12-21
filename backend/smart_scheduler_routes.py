@@ -2901,56 +2901,72 @@ async def get_public_booking_page(
         BookingLink.is_public == True
     ).first()
 
-    # Auto-create demo booking link if it doesn't exist
-    if not link and slug == "demo":
+    # Auto-create booking link if it doesn't exist
+    if not link:
         try:
-            # Get admin user or first user
             if User:
-                admin_user = db.query(User).filter(User.is_admin == True).first()
-                if not admin_user:
-                    admin_user = db.query(User).first()
-                if admin_user:
-                    # Create demo appointment type
-                    demo_type = db.query(AppointmentType).filter(AppointmentType.type_key == "demo_consultation").first()
-                    if not demo_type:
-                        demo_type = AppointmentType(
-                            user_id=admin_user.id,
-                            type_name="Product Demo",
-                            type_key="demo_consultation",
-                            description="Schedule a personalized demo of our platform",
+                # Check if slug matches a user's slug (for microsite booking)
+                target_user = db.query(User).filter(User.slug == slug).first()
+
+                # Fallback: for demo slug, use admin user
+                if not target_user and slug == "demo":
+                    target_user = db.query(User).filter(User.is_admin == True).first()
+                    if not target_user:
+                        target_user = db.query(User).first()
+
+                if target_user:
+                    # Create default appointment type for this user if none exists
+                    user_type = db.query(AppointmentType).filter(
+                        AppointmentType.user_id == target_user.id,
+                        AppointmentType.is_active == True
+                    ).first()
+
+                    if not user_type:
+                        type_key = f"{slug}_consultation" if slug != "demo" else "demo_consultation"
+                        user_name = getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'Loan Officer')
+                        first_name = user_name.split()[0] if user_name else 'the LO'
+
+                        user_type = AppointmentType(
+                            user_id=target_user.id,
+                            type_name="Discovery Call" if slug != "demo" else "Product Demo",
+                            type_key=type_key,
+                            description=f"Schedule a call with {first_name}" if slug != "demo" else "Schedule a personalized demo of our platform",
                             default_duration_minutes=30,
                             allowed_durations=[15, 30, 45, 60],
                             meeting_type="consultation",
-                            meeting_mode="video",
-                            color="#667eea",
-                            icon="calendar",
+                            meeting_mode="phone",
+                            color="#2563eb",
+                            icon="phone",
                             is_public=True,
                             is_active=True,
                             requires_confirmation=False,
                             buffer_before_minutes=5,
                             buffer_after_minutes=5
                         )
-                        db.add(demo_type)
+                        db.add(user_type)
                         db.flush()
 
+                    user_name = getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'Loan Officer')
+                    first_name = user_name.split()[0] if user_name else 'Loan Officer'
+
                     link = BookingLink(
-                        user_id=admin_user.id,
-                        slug="demo",
-                        link_name="Schedule a Demo",
-                        description="Book a personalized demo of Perennia AI - Intelligent Mortgage Production Manager",
+                        user_id=target_user.id,
+                        slug=slug,
+                        link_name=f"Schedule with {first_name}" if slug != "demo" else "Schedule a Demo",
+                        description=f"Book a call with {user_name}" if slug != "demo" else "Book a personalized demo of Perennia AI",
                         is_active=True,
                         is_public=True,
-                        appointment_type_ids=[demo_type.id],
-                        custom_title="Schedule Your Demo",
-                        custom_description="See how Perennia AI can transform your mortgage operations.",
+                        appointment_type_ids=[user_type.id],
+                        custom_title=f"Schedule a Call" if slug != "demo" else "Schedule Your Demo",
+                        custom_description=f"Choose a time that works for you to speak with {first_name}." if slug != "demo" else "See how Perennia AI can transform your mortgage operations.",
                         routing_strategy="round_robin",
-                        max_bookings_per_day=10
+                        max_bookings_per_day=20
                     )
                     db.add(link)
                     db.commit()
-                    logger.info("Auto-created demo booking link")
+                    logger.info(f"Auto-created booking link for slug: {slug}")
         except Exception as e:
-            logger.error(f"Error auto-creating demo link: {e}")
+            logger.error(f"Error auto-creating booking link for {slug}: {e}")
 
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")

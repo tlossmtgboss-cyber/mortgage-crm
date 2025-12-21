@@ -6,12 +6,9 @@
  * comprehensive contact form.
  */
 
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState } from 'react';
 import './BoldImpact.css';
 import EmbeddedAIChat from '../../../components/EmbeddedAIChat';
-
-// Lazy load SmartScheduler to prevent build issues
-const SmartScheduler = lazy(() => import('../../../components/SmartScheduler'));
 
 const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -116,16 +113,18 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
         </div>
       )}
 
-      {/* Scheduler Modal */}
+      {/* Scheduler Modal - Public Booking Calendar */}
       {showSchedulerModal && (
-        <div className="scheduler-modal-overlay" onClick={() => setShowSchedulerModal(false)}>
-          <div className="scheduler-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="scheduler-modal-close" onClick={() => setShowSchedulerModal(false)}>
+        <div className="embedded-modal-overlay" onClick={() => setShowSchedulerModal(false)}>
+          <div className="embedded-modal scheduler-modal-size" onClick={(e) => e.stopPropagation()}>
+            <button className="embedded-modal-close" onClick={() => setShowSchedulerModal(false)}>
               ×
             </button>
-            <Suspense fallback={<div className="scheduler-loading">Loading scheduler...</div>}>
-              <SmartScheduler onClose={() => setShowSchedulerModal(false)} />
-            </Suspense>
+            <iframe
+              src={`/book/${user?.slug || 'tim-loss'}?embedded=true`}
+              title="Schedule Appointment"
+              className="embedded-modal-iframe"
+            />
           </div>
         </div>
       )}

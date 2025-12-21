@@ -1109,6 +1109,13 @@
   border-radius: 16px;
 }
 
+/* Scheduler modal - slightly smaller */
+.embedded-modal.scheduler-modal-size {
+  max-width: 900px;
+  height: 85vh;
+  max-height: 750px;
+}
+
 /* Responsive for embedded modals */
 @media (max-width: 768px) {
   .embedded-modal-overlay {
@@ -1118,6 +1125,11 @@
   .embedded-modal {
     border-radius: 0;
     height: 100vh;
+    max-height: none;
+  }
+
+  .embedded-modal.scheduler-modal-size {
+    max-width: none;
     max-height: none;
   }
 
