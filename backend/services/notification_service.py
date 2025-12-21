@@ -23,7 +23,8 @@ SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Sarah from Perennia AI")
 # Twilio configuration
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER")
+# Support both TWILIO_PHONE_NUMBER (primary) and TWILIO_FROM_NUMBER (fallback)
+TWILIO_FROM_NUMBER = os.getenv("TWILIO_PHONE_NUMBER") or os.getenv("TWILIO_FROM_NUMBER")
 
 # Application URLs
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
