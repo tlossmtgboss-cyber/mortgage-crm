@@ -16,6 +16,9 @@ const SmartScheduler = lazy(() => import('../../../components/SmartScheduler'));
 const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSchedulerModal, setShowSchedulerModal] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [showRefinanceModal, setShowRefinanceModal] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
   // Extract config with defaults
   const config = {
@@ -127,6 +130,54 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
         </div>
       )}
 
+      {/* Compare Estimates Modal */}
+      {showCompareModal && (
+        <div className="embedded-modal-overlay" onClick={() => setShowCompareModal(false)}>
+          <div className="embedded-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="embedded-modal-close" onClick={() => setShowCompareModal(false)}>
+              ×
+            </button>
+            <iframe
+              src="/estimate-comparison?embedded=true"
+              title="Compare Loan Estimates"
+              className="embedded-modal-iframe"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Refinance Modal */}
+      {showRefinanceModal && (
+        <div className="embedded-modal-overlay" onClick={() => setShowRefinanceModal(false)}>
+          <div className="embedded-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="embedded-modal-close" onClick={() => setShowRefinanceModal(false)}>
+              ×
+            </button>
+            <iframe
+              src="/apply/refinance?embedded=true"
+              title="Refinance Application"
+              className="embedded-modal-iframe"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Modal */}
+      {showPurchaseModal && (
+        <div className="embedded-modal-overlay" onClick={() => setShowPurchaseModal(false)}>
+          <div className="embedded-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="embedded-modal-close" onClick={() => setShowPurchaseModal(false)}>
+              ×
+            </button>
+            <iframe
+              src="/apply/purchase?embedded=true"
+              title="Purchase Application"
+              className="embedded-modal-iframe"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className={`bold-impact-hero ${config.heroStyle}`}>
         <div className="hero-background"></div>
@@ -186,25 +237,34 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
           {/* Compare Estimates Card */}
           <div className="sidebar-card">
             <p className="sidebar-card-text">Shopping for a home loan? Upload your estimates and I'll compare them for you.</p>
-            <a href="/estimate-comparison" className="sidebar-card-btn compare-btn">
+            <button
+              className="sidebar-card-btn compare-btn"
+              onClick={() => setShowCompareModal(true)}
+            >
               Compare Loan Estimates
-            </a>
+            </button>
           </div>
 
           {/* Refinance Card */}
           <div className="sidebar-card">
             <p className="sidebar-card-text">Lower your rate or tap into your home's equity.</p>
-            <a href="/apply/refinance" className="sidebar-card-btn refinance-btn">
+            <button
+              className="sidebar-card-btn refinance-btn"
+              onClick={() => setShowRefinanceModal(true)}
+            >
               Refinance Your Home
-            </a>
+            </button>
           </div>
 
           {/* Purchase Application Card */}
           <div className="sidebar-card">
             <p className="sidebar-card-text">Become a bulletproof buyer with a fully underwritten pre-approval.</p>
-            <a href="/apply/purchase" className="sidebar-card-btn purchase-btn">
+            <button
+              className="sidebar-card-btn purchase-btn"
+              onClick={() => setShowPurchaseModal(true)}
+            >
               Get Pre-Approved
-            </a>
+            </button>
           </div>
         </aside>
       </div>
