@@ -451,12 +451,11 @@ class SchedulerService:
                     sa.attendee_name,
                     sa.attendee_email,
                     sa.attendee_phone,
-                    u.first_name as lo_first_name,
-                    u.last_name as lo_last_name
+                    u.full_name as lo_name
                 FROM scheduler_appointments sa
                 LEFT JOIN users u ON u.id = sa.assigned_user_id
                 WHERE sa.scheduled_start BETWEEN NOW() + INTERVAL '23 hours' AND NOW() + INTERVAL '25 hours'
-                AND sa.status = 'booked'
+                AND UPPER(sa.status::text) = 'BOOKED'
                 AND NOT EXISTS (
                     SELECT 1 FROM scheduler_reminders sr
                     WHERE sr.appointment_id = sa.id
@@ -481,12 +480,11 @@ class SchedulerService:
                     sa.attendee_name,
                     sa.attendee_email,
                     sa.attendee_phone,
-                    u.first_name as lo_first_name,
-                    u.last_name as lo_last_name
+                    u.full_name as lo_name
                 FROM scheduler_appointments sa
                 LEFT JOIN users u ON u.id = sa.assigned_user_id
                 WHERE sa.scheduled_start BETWEEN NOW() + INTERVAL '50 minutes' AND NOW() + INTERVAL '70 minutes'
-                AND sa.status = 'booked'
+                AND UPPER(sa.status::text) = 'BOOKED'
                 AND NOT EXISTS (
                     SELECT 1 FROM scheduler_reminders sr
                     WHERE sr.appointment_id = sa.id

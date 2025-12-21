@@ -23,6 +23,8 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from services.notification_service import NotificationService
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/realtor-portal", tags=["Realtor Portal"])
@@ -635,7 +637,51 @@ async def send_message(
     message_id = result.fetchone()[0]
     db.commit()
 
-    # TODO: Trigger notification to loan officer
+    # Send notification to loan officer
+    try:
+        # Get loan officer info and borrower name from the loan
+        lo_info = db.execute(text("""
+            SELECT
+                u.email as lo_email,
+                u.full_name as lo_name,
+                l.borrower_name,
+                l.loan_number
+            FROM loans l
+            JOIN users u ON u.id = l.owner_id
+            WHERE l.id = :loan_id
+        """), {"loan_id": loan_id}).fetchone()
+
+        if lo_info and lo_info.lo_email:
+            # Get realtor name
+            realtor_name = realtor.get("name") or realtor.get("company_name") or "A realtor partner"
+
+            notification_service = NotificationService()
+            notification_service.send_email(
+                to_email=lo_info.lo_email,
+                subject=f"New Message from Realtor - {lo_info.borrower_name or 'Loan'} ({lo_info.loan_number or loan_id})",
+                html_content=f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #1e40af;">New Realtor Portal Message</h2>
+                    <p>You have received a new message from <strong>{realtor_name}</strong> regarding:</p>
+                    <ul>
+                        <li><strong>Borrower:</strong> {lo_info.borrower_name or 'N/A'}</li>
+                        <li><strong>Loan #:</strong> {lo_info.loan_number or loan_id}</li>
+                        {f'<li><strong>Callback Requested:</strong> Yes</li>' if request.request_callback else ''}
+                    </ul>
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0; white-space: pre-wrap;">{request.message}</p>
+                    </div>
+                    <p><a href="{os.getenv('FRONTEND_URL', 'https://mortgage-crm-nine.vercel.app')}/loans/{loan_id}"
+                          style="background: #1e40af; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                        View Loan Details
+                    </a></p>
+                </div>
+                """
+            )
+            logger.info(f"Sent realtor message notification to {lo_info.lo_email} for loan {loan_id}")
+    except Exception as notify_err:
+        logger.error(f"Failed to send realtor message notification: {notify_err}")
+        # Don't fail the message send just because notification failed
 
     return {
         "success": True,

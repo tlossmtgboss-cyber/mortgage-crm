@@ -13,6 +13,7 @@ import logging
 import uuid
 import json
 import base64
+import os
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
@@ -21,6 +22,7 @@ from sqlalchemy import text
 from pydantic import BaseModel, EmailStr
 
 from database import get_db
+from services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower", tags=["Borrower Portal"])
@@ -588,7 +590,48 @@ async def invite_coborrower(
     })
     db.commit()
 
-    # TODO: Send invitation email
+    # Send invitation email to co-borrower
+    email_sent = False
+    try:
+        frontend_url = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+        accept_url = f"{frontend_url}/borrower/coborrower-accept?token={invitation_token}"
+
+        # Get primary borrower's name for context
+        primary_name = f"{borrower.get('first_name', '')} {borrower.get('last_name', '')}".strip() or "your partner"
+
+        notification_service = NotificationService()
+        notification_service.send_email(
+            to_email=request.email,
+            subject=f"You've been invited as a Co-Borrower on a Mortgage Application",
+            html_content=f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #1e40af;">Co-Borrower Invitation</h2>
+                <p>Hi {request.first_name},</p>
+                <p><strong>{primary_name}</strong> has invited you to join their mortgage application as a co-borrower.</p>
+                <p>As a co-borrower, you'll need to provide your personal and financial information to complete the application.</p>
+
+                <div style="margin: 30px 0; text-align: center;">
+                    <a href="{accept_url}"
+                       style="background: #1e40af; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-size: 16px;">
+                        Accept Invitation
+                    </a>
+                </div>
+
+                <p style="color: #6b7280; font-size: 14px;">This invitation expires on {expires_at.strftime('%B %d, %Y')}.</p>
+                <p style="color: #6b7280; font-size: 14px;">If you have questions, please contact the primary borrower or your loan officer.</p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                <p style="color: #9ca3af; font-size: 12px;">
+                    If you didn't expect this invitation, please ignore this email.
+                </p>
+            </div>
+            """
+        )
+        email_sent = True
+        logger.info(f"Sent co-borrower invitation email to {request.email}")
+    except Exception as email_err:
+        logger.error(f"Failed to send co-borrower invitation email: {email_err}")
+        # Don't fail the invitation creation just because email failed
 
     return {
         "id": invitation_id,
@@ -596,6 +639,7 @@ async def invite_coborrower(
         "status": "pending",
         "invited_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
+        "email_sent": email_sent,
     }
 
 
