@@ -1894,6 +1894,10 @@ class Responsibility(Base):
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
 
+    # Relationships (back_populates for mapper resolution)
+    role_responsibilities = relationship("RoleResponsibility", back_populates="responsibility")
+    user_responsibilities = relationship("UserResponsibility", back_populates="responsibility")
+
 
 class RoleResponsibility(Base):
     """Default responsibilities assigned per role."""
@@ -1902,7 +1906,7 @@ class RoleResponsibility(Base):
     id = Column(Integer, primary_key=True, index=True)
     role = Column(String(50), nullable=False)
     responsibility_id = Column(Integer, ForeignKey("responsibilities.id"), nullable=False)
-    responsibility = relationship("Responsibility")
+    responsibility = relationship("Responsibility", back_populates="role_responsibilities")
 
     __table_args__ = (UniqueConstraint('role', 'responsibility_id', name='uq_role_responsibility'),)
 
@@ -1916,7 +1920,7 @@ class UserResponsibility(Base):
     responsibility_id = Column(Integer, ForeignKey("responsibilities.id"), nullable=False)
     is_enabled = Column(Boolean, default=True)
     sla_config = Column(JSON, default=dict)
-    responsibility = relationship("Responsibility")
+    responsibility = relationship("Responsibility", back_populates="user_responsibilities")
 
     __table_args__ = (UniqueConstraint('user_id', 'responsibility_id', name='uq_user_responsibility'),)
 
