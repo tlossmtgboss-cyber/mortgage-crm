@@ -19,7 +19,7 @@ import { useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../../components/PaymentCalculator';
-import ApplicantTasks, { LightboxModal, SevenStepProcessContent, BulletProofBuyerContent } from '../../components/portal/ApplicantTasks';
+import ApplicantTasks from '../../components/portal/ApplicantTasks';
 import '../PURLPortal.css';
 
 // Tab components - Arrow/chevron style with notification dots
@@ -1087,10 +1087,6 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [newMessage, setNewMessage] = useState({ subject: '', body: '' });
 
-  // Toolbar lightbox states
-  const [showSevenStepModal, setShowSevenStepModal] = useState(false);
-  const [showBulletProofModal, setShowBulletProofModal] = useState(false);
-
   // Check for submission success message
   const urlParams = new URLSearchParams(location.search);
   const justSubmitted = urlParams.get('submitted') === 'true';
@@ -1373,16 +1369,6 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           isActive={activeTab === 'pre-approval'}
           onClick={() => setActiveTab('pre-approval')}
           hasNotification={data?.preApprovalLetter != null}
-        />
-        <TabButton
-          label="7 Step Process"
-          isActive={false}
-          onClick={() => setShowSevenStepModal(true)}
-        />
-        <TabButton
-          label="Bullet Proof Buyer"
-          isActive={false}
-          onClick={() => setShowBulletProofModal(true)}
         />
         <TabButton
           label="Contacts"
@@ -1991,24 +1977,6 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           phone: borrower.phone,
         } : null}
       />
-
-      {/* 7 Step Process Lightbox - Toolbar Link */}
-      <LightboxModal
-        isOpen={showSevenStepModal}
-        onClose={() => setShowSevenStepModal(false)}
-        title="How to Borrow Money: The 7 Steps"
-      >
-        <SevenStepProcessContent />
-      </LightboxModal>
-
-      {/* Bullet Proof Buyer Lightbox - Toolbar Link */}
-      <LightboxModal
-        isOpen={showBulletProofModal}
-        onClose={() => setShowBulletProofModal(false)}
-        title="Be a Bullet Proof Buyer"
-      >
-        <BulletProofBuyerContent />
-      </LightboxModal>
 
       {/* Footer */}
       <footer className="portal-footer">
