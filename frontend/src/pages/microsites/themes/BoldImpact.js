@@ -170,7 +170,7 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
         <aside className="bold-impact-sidebar">
           {/* Schedule Appointment Card */}
           <div className="sidebar-card">
-            <p className="sidebar-card-text">Have questions? Schedule a call with me.</p>
+            <p className="sidebar-card-text">Have questions? Schedule a time for me to call you.</p>
             <button
               className="sidebar-card-btn schedule-btn-action"
               onClick={() => setShowSchedulerModal(true)}
