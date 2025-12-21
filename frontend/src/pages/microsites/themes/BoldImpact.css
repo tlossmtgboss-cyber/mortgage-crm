@@ -118,7 +118,7 @@
 /* Hero Section */
 .bold-impact-hero {
   position: relative;
-  padding: 80px 24px;
+  padding: 20px 24px;
   background: var(--theme-secondary);
   color: white;
   overflow: hidden;
@@ -139,22 +139,22 @@
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
   align-items: center;
 }
 
 .hero-text h1 {
-  font-size: 48px;
-  font-weight: 800;
-  line-height: 1.1;
-  margin: 0 0 16px 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 8px 0;
 }
 
 .hero-tagline {
-  font-size: 20px;
+  font-size: 16px;
   opacity: 0.9;
-  margin: 0 0 32px 0;
+  margin: 0;
 }
 
 .hero-cta-group {
@@ -195,7 +195,8 @@
 
 .hero-stats {
   display: flex;
-  gap: 48px;
+  gap: 32px;
+  margin-top: 12px;
 }
 
 .stat {
@@ -204,13 +205,13 @@
 }
 
 .stat-number {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--theme-primary);
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 12px;
   opacity: 0.8;
 }
 
@@ -220,10 +221,10 @@
 }
 
 .hero-image img {
-  max-width: 400px;
+  max-width: 200px;
   width: 100%;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
 /* Specialties Section */
@@ -666,16 +667,12 @@
   }
 
   .hero-text h1 {
-    font-size: 32px;
-  }
-
-  .hero-cta-group {
-    flex-direction: column;
-    align-items: center;
+    font-size: 22px;
   }
 
   .hero-stats {
     justify-content: center;
+    gap: 24px;
   }
 
   .hero-image {
@@ -683,7 +680,7 @@
   }
 
   .hero-image img {
-    max-width: 250px;
+    max-width: 120px;
   }
 
   .about-content {

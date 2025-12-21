@@ -87,10 +87,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
           <div className="hero-text">
             <h1>{headline}</h1>
             <p className="hero-tagline">{tagline}</p>
-            <div className="hero-cta-group">
-              <a href="/apply/purchase" className="hero-cta primary">{ctaText}</a>
-              <a href="/apply/refinance" className="hero-cta secondary">Refinance</a>
-            </div>
             {(yearsExperience || totalLoansFunded) && (
               <div className="hero-stats">
                 {yearsExperience && (
