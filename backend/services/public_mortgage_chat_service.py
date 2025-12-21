@@ -373,14 +373,67 @@ class PublicMortgageChatService:
     ):
         """Send notifications for the appointment"""
         try:
-            # Log the appointment for now - actual email sending can be added
-            logger.info(f"Appointment {appointment_id} booked:")
-            logger.info(f"  - Contact: {contact_name} ({contact_email}, {contact_phone})")
-            logger.info(f"  - Time: {appointment_time}")
-            logger.info(f"  - LO: {self.lo_info['name']} ({self.lo_info['email']})")
+            from services.notification_service import NotificationService
+            notification_service = NotificationService()
 
-            # TODO: Add actual email/SMS notifications
-            # This would integrate with SendGrid, Twilio, etc.
+            lo_name = self.lo_info['name']
+            lo_email = self.lo_info['email']
+            lo_phone = self.lo_info.get('phone', '')
+
+            formatted_time = appointment_time.strftime('%A, %B %d, %Y at %I:%M %p')
+
+            # Send confirmation email to the contact/lead
+            if contact_email:
+                notification_service.send_email(
+                    to_email=contact_email,
+                    subject=f"Appointment Confirmed with {lo_name}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #1e40af;">Appointment Confirmed!</h2>
+                        <p>Hi {contact_name},</p>
+                        <p>Your appointment has been scheduled:</p>
+
+                        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <p style="margin: 0;"><strong>Date & Time:</strong> {formatted_time}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> {duration} minutes</p>
+                            <p style="margin: 10px 0 0 0;"><strong>With:</strong> {lo_name}</p>
+                        </div>
+
+                        <p>{lo_name} will call you at the scheduled time to discuss your mortgage needs.</p>
+
+                        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                            Need to reschedule? Reply to this email or call {lo_phone if lo_phone else 'your loan officer'}.
+                        </p>
+                    </div>
+                    """
+                )
+                logger.info(f"Sent appointment confirmation to {contact_email}")
+
+            # Send notification to the loan officer
+            if lo_email:
+                notification_service.send_email(
+                    to_email=lo_email,
+                    subject=f"New Appointment: {contact_name} - {formatted_time}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #1e40af;">New Appointment Scheduled</h2>
+                        <p>A new appointment has been booked through your microsite:</p>
+
+                        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <p style="margin: 0;"><strong>Contact:</strong> {contact_name}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Email:</strong> {contact_email or 'Not provided'}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Phone:</strong> {contact_phone or 'Not provided'}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Date & Time:</strong> {formatted_time}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> {duration} minutes</p>
+                        </div>
+
+                        <p>This appointment was scheduled through your AI mortgage assistant.</p>
+                    </div>
+                    """
+                )
+                logger.info(f"Sent new appointment alert to {lo_email}")
+
+            logger.info(f"Appointment {appointment_id} notifications sent")
 
         except Exception as e:
             logger.warning(f"Failed to send notifications: {e}")
