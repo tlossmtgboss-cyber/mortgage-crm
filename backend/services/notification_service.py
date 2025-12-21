@@ -590,6 +590,92 @@ class NotificationService:
             html_content=html_content,
         )
 
+    def send_lo_new_lead_alert(
+        self,
+        lo_email: str,
+        lo_name: str,
+        lead_name: str,
+        lead_email: str,
+        lead_phone: Optional[str],
+        lead_source: str,
+        intent_type: Optional[str] = None,
+        lead_id: Optional[int] = None,
+        microsite_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Send new lead alert to loan officer from microsite or other sources."""
+
+        subject = f"🔔 New Lead: {lead_name}"
+        intent_display = (intent_type or "General Inquiry").replace("_", " ").title()
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
+
+                    <div style="background: #218D8D; color: white; padding: 16px 24px; margin: -40px -40px 32px; border-radius: 16px 16px 0 0;">
+                        <h1 style="margin: 0; font-size: 20px;">🔔 New Lead from {lead_source}</h1>
+                    </div>
+
+                    <p style="color: #6b7280; margin: 0 0 8px;">Hi {lo_name.split()[0] if lo_name else 'there'},</p>
+                    <p style="color: #111827; margin: 0 0 24px;">You have a new lead! Here are the details:</p>
+
+                    <h2 style="color: #111827; font-size: 24px; margin: 0 0 24px;">{lead_name}</h2>
+
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Email</td>
+                            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
+                                <a href="mailto:{lead_email}" style="color: #218D8D;">{lead_email}</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Phone</td>
+                            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
+                                {lead_phone or 'Not provided'}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Interest</td>
+                            <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
+                                {intent_display}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px 0; color: #6b7280;">Source</td>
+                            <td style="padding: 12px 0; color: #111827; text-align: right;">
+                                {microsite_name or lead_source}
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="{FRONTEND_URL}/leads{f'/{lead_id}' if lead_id else ''}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            View Lead
+                        </a>
+                    </div>
+
+                    <p style="color: #6b7280; font-size: 14px; margin: 24px 0 0; text-align: center;">
+                        Respond quickly to maximize conversion! 🚀
+                    </p>
+
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        return self.send_email(
+            to_email=lo_email,
+            subject=subject,
+            html_content=html_content,
+        )
+
     # =========================================================================
     # SMS METHODS
     # =========================================================================

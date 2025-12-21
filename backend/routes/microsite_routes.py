@@ -20,6 +20,10 @@ import uuid
 import hashlib
 
 from database import get_db
+from services.notification_service import NotificationService
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Wrapper for lazy loading get_current_user from main (avoids circular import)
 def get_current_user_dep():
@@ -608,12 +612,77 @@ async def capture_lead(
     db.commit()
     db.refresh(lead)
 
-    # TODO: Trigger lead notification (email, SMS, etc.)
-    # TODO: Add lead to CRM pipeline
+    # Create lead in main CRM pipeline
+    crm_lead_id = None
+    try:
+        # Lazy import to avoid circular imports
+        import main
+        Lead = main.Lead
+        LeadStage = main.LeadStage
+        User = main.User
+
+        # Check for existing lead by email to avoid duplicates
+        existing_lead = None
+        if lead_data.email:
+            existing_lead = db.query(Lead).filter(Lead.email == lead_data.email).first()
+
+        if existing_lead:
+            # Update existing lead with microsite source info
+            if not existing_lead.source:
+                existing_lead.source = f"microsite:{microsite.slug}"
+            crm_lead_id = existing_lead.id
+            logger.info(f"Microsite lead {lead.id} linked to existing CRM lead {crm_lead_id}")
+        else:
+            # Create new lead in CRM
+            full_name = f"{lead_data.first_name} {lead_data.last_name}".strip()
+            crm_lead = Lead(
+                name=full_name,
+                first_name=lead_data.first_name,
+                last_name=lead_data.last_name,
+                email=lead_data.email,
+                phone=lead_data.phone,
+                stage=LeadStage.NEW,
+                source=f"microsite:{microsite.slug}",
+                owner_id=microsite.user_id,
+                notes=f"Intent: {lead_data.intent_type or 'Not specified'}\nQualifier: {lead_data.qualifier_answer or 'None'}\nUTM: {lead_data.utm_source}/{lead_data.utm_medium}/{lead_data.utm_campaign}"
+            )
+            db.add(crm_lead)
+            db.commit()
+            db.refresh(crm_lead)
+            crm_lead_id = crm_lead.id
+            logger.info(f"Created CRM lead {crm_lead_id} from microsite lead {lead.id}")
+
+        # Get loan officer info for notification
+        lo_user = db.query(User).filter(User.id == microsite.user_id).first()
+
+        if lo_user and lo_user.email:
+            # Send notification to loan officer
+            try:
+                notification_service = NotificationService()
+                notification_result = notification_service.send_lo_new_lead_alert(
+                    lo_email=lo_user.email,
+                    lo_name=lo_user.full_name or lo_user.email,
+                    lead_name=f"{lead_data.first_name} {lead_data.last_name}".strip(),
+                    lead_email=lead_data.email,
+                    lead_phone=lead_data.phone,
+                    lead_source=f"Microsite: {microsite.title or microsite.slug}",
+                    intent_type=lead_data.intent_type,
+                    lead_id=crm_lead_id,
+                    microsite_name=microsite.title or microsite.slug
+                )
+                logger.info(f"Lead notification sent to {lo_user.email}: {notification_result}")
+            except Exception as notify_err:
+                logger.error(f"Failed to send lead notification: {notify_err}")
+                # Don't fail the lead capture just because notification failed
+
+    except Exception as crm_err:
+        logger.error(f"Failed to create CRM lead or send notification: {crm_err}")
+        # Don't fail the microsite lead capture - it's already saved
 
     return {
         "success": True,
         "lead_id": lead.id,
+        "crm_lead_id": crm_lead_id,
         "message": "Thank you! We'll contact you shortly."
     }
 
