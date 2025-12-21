@@ -20443,6 +20443,111 @@ async def debug_purl_auth_flow(
         result["traceback"] = traceback.format_exc()
         return result
 
+
+@app.get("/api/v1/debug/appointments-status", tags=["Debug"])
+async def debug_appointments_status(db: Session = Depends(get_db)):
+    """Debug endpoint to check recent appointments and reminder status"""
+    result = {
+        "scheduler_appointments": [],
+        "legacy_appointments": [],
+        "reminders_sent": [],
+        "summary": {}
+    }
+
+    try:
+        # Check smart scheduler appointments
+        try:
+            smart_appts = db.execute(text("""
+                SELECT
+                    sa.id, sa.title, sa.scheduled_start, sa.status,
+                    sa.attendee_name, sa.attendee_email, sa.attendee_phone,
+                    sa.video_link, sa.created_at,
+                    u.first_name as lo_first_name, u.last_name as lo_last_name
+                FROM scheduler_appointments sa
+                LEFT JOIN users u ON u.id = sa.assigned_user_id
+                ORDER BY sa.created_at DESC
+                LIMIT 5
+            """)).fetchall()
+
+            for row in smart_appts:
+                result["scheduler_appointments"].append({
+                    "id": row[0],
+                    "title": row[1],
+                    "scheduled_start": row[2].isoformat() if row[2] else None,
+                    "status": row[3],
+                    "attendee_name": row[4],
+                    "attendee_email": row[5],
+                    "attendee_phone": row[6],
+                    "video_link": row[7],
+                    "created_at": row[8].isoformat() if row[8] else None,
+                    "lo_name": f"{row[9] or ''} {row[10] or ''}".strip()
+                })
+        except Exception as e:
+            result["scheduler_appointments_error"] = str(e)
+
+        # Check legacy appointments
+        try:
+            legacy_appts = db.execute(text("""
+                SELECT
+                    a.id, a.appointment_type, a.scheduled_at, a.status,
+                    a.reminder_sent, a.meeting_link,
+                    l.first_name as lead_name, l.email as lead_email, l.phone as lead_phone,
+                    u.first_name as lo_first_name, u.last_name as lo_last_name
+                FROM appointments a
+                LEFT JOIN leads l ON l.id = a.lead_id
+                LEFT JOIN users u ON u.id = a.assigned_to
+                ORDER BY a.created_at DESC
+                LIMIT 5
+            """)).fetchall()
+
+            for row in legacy_appts:
+                result["legacy_appointments"].append({
+                    "id": row[0],
+                    "type": row[1],
+                    "scheduled_at": row[2].isoformat() if row[2] else None,
+                    "status": row[3],
+                    "reminder_sent": row[4],
+                    "meeting_link": row[5],
+                    "lead_name": row[6],
+                    "lead_email": row[7],
+                    "lead_phone": row[8],
+                    "lo_name": f"{row[9] or ''} {row[10] or ''}".strip()
+                })
+        except Exception as e:
+            result["legacy_appointments_error"] = str(e)
+
+        # Check sent reminders
+        try:
+            reminders = db.execute(text("""
+                SELECT appointment_id, channel, hours_before, status, sent_at
+                FROM scheduler_reminders
+                ORDER BY created_at DESC
+                LIMIT 10
+            """)).fetchall()
+
+            for row in reminders:
+                result["reminders_sent"].append({
+                    "appointment_id": row[0],
+                    "channel": row[1],
+                    "hours_before": row[2],
+                    "status": row[3],
+                    "sent_at": row[4].isoformat() if row[4] else None
+                })
+        except Exception as e:
+            result["reminders_error"] = str(e)
+
+        result["summary"] = {
+            "scheduler_appointments_count": len(result["scheduler_appointments"]),
+            "legacy_appointments_count": len(result["legacy_appointments"]),
+            "reminders_sent_count": len(result["reminders_sent"])
+        }
+
+        return result
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
