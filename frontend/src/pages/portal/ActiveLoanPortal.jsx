@@ -1996,7 +1996,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       <LightboxModal
         isOpen={showSevenStepModal}
         onClose={() => setShowSevenStepModal(false)}
-        title="The 7 Step Mortgage Process"
+        title="How to Borrow Money: The 7 Steps"
       >
         <SevenStepProcessContent />
       </LightboxModal>

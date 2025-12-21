@@ -76,77 +76,141 @@ const LightboxModal = ({ isOpen, onClose, title, children }) => {
 // 7 Step Process Content
 const SevenStepProcessContent = () => (
   <div className="seven-step-process">
+    <div className="process-hero">
+      <h2>How to Borrow Money: The 7 Steps</h2>
+      <p className="process-tagline">
+        Borrowing money isn't just about getting approved—it's about making sure the money you borrow actually improves your life.
+      </p>
+    </div>
+
     <p className="process-intro">
-      Understanding the mortgage process helps ensure a smooth journey to homeownership.
-      Here are the 7 key steps we'll guide you through:
+      <strong>How to Borrow Money: The 7 Steps</strong> is the proven framework I use to help clients make smarter borrowing decisions that support cash flow, reduce stress, and build long-term wealth. This goes far beyond what most lenders offer, because it treats your mortgage as a financial strategy—not a transaction.
     </p>
 
+    <div className="process-callout">
+      <p><strong>You're not here just to get a loan.</strong></p>
+      <p>You're here to make a good decision.</p>
+    </div>
+
+    <div className="process-section">
+      <h3>Why This Matters for You</h3>
+      <p>Most lenders focus almost exclusively on numbers:</p>
+      <ul className="simple-list">
+        <li>Income</li>
+        <li>Assets</li>
+        <li>Credit</li>
+        <li>Property</li>
+      </ul>
+      <p>Those details matter—but they don't tell the full story.</p>
+      <p>This 7-step process is designed to help you:</p>
+      <ul>
+        <li>Borrow with confidence</li>
+        <li>Protect your liquidity</li>
+        <li>Align your mortgage with your long-term goals</li>
+        <li>Adjust as your life and opportunities change</li>
+      </ul>
+      <p className="highlight-text">
+        We'll focus deeply on <strong>Steps 1–4</strong> right now to structure your loan correctly. Then we'll map out <strong>Steps 5–7</strong> so this decision keeps working for you long after closing—something most lenders never revisit.
+      </p>
+    </div>
+
+    <div className="process-section">
+      <h3>The 7 Steps to Borrowing Money the Right Way</h3>
+      <p>This process is built around thoughtful questions, not pressure, so your mortgage fits your priorities.</p>
+    </div>
+
     <div className="process-steps">
-      <div className="process-step">
+      <div className="process-step primary-step">
         <div className="step-number">1</div>
         <div className="step-content">
-          <h3>Pre-Qualification</h3>
-          <p>We'll review your financial situation to determine how much home you can afford. This gives you a realistic budget for your home search.</p>
+          <h3>Safety</h3>
+          <p className="step-question">What does financial safety mean to you?</p>
+          <p>We start by understanding your comfort level with risk, stability, and monthly obligations—so your loan feels secure, not restrictive.</p>
         </div>
       </div>
 
-      <div className="process-step">
+      <div className="process-step primary-step">
         <div className="step-number">2</div>
         <div className="step-content">
-          <h3>Document Collection</h3>
-          <p>Gather your financial documents including pay stubs, W-2s, tax returns, and bank statements. The more complete your file, the faster we can process your loan.</p>
+          <h3>Liquidity</h3>
+          <p className="step-question">How important is access to cash?</p>
+          <p>We protect your cash flow and flexibility, because borrowing shouldn't trap your money or limit your options.</p>
         </div>
       </div>
 
-      <div className="process-step">
+      <div className="process-step primary-step">
         <div className="step-number">3</div>
         <div className="step-content">
-          <h3>Pre-Approval</h3>
-          <p>Once we verify your documents, you'll receive a pre-approval letter. This shows sellers you're a serious, qualified buyer.</p>
+          <h3>Growth & Return</h3>
+          <p className="step-question">What do you want this home to do for you financially?</p>
+          <p>Whether this is a lifestyle decision, an investment, or both, we align your borrowing with your bigger financial picture.</p>
         </div>
       </div>
 
-      <div className="process-step">
+      <div className="process-step primary-step">
         <div className="step-number">4</div>
         <div className="step-content">
-          <h3>Home Shopping & Contract</h3>
-          <p>Find your dream home and make an offer. Once accepted, we'll lock in your interest rate and begin processing your loan.</p>
-        </div>
-      </div>
-
-      <div className="process-step">
-        <div className="step-number">5</div>
-        <div className="step-content">
-          <h3>Processing & Underwriting</h3>
-          <p>Our team verifies all information, orders the appraisal, and prepares your file for final approval. Stay responsive to any requests during this phase.</p>
-        </div>
-      </div>
-
-      <div className="process-step">
-        <div className="step-number">6</div>
-        <div className="step-content">
-          <h3>Clear to Close</h3>
-          <p>Your loan is approved! We'll prepare your closing documents and coordinate with the title company to schedule your closing date.</p>
-        </div>
-      </div>
-
-      <div className="process-step">
-        <div className="step-number">7</div>
-        <div className="step-content">
-          <h3>Closing Day</h3>
-          <p>Sign your documents, receive your keys, and celebrate! You're officially a homeowner. We'll be here for any questions even after closing.</p>
+          <h3>Optimize the Borrowing</h3>
+          <p className="step-question">This is where structure matters most.</p>
+          <p>We design the loan around rates, terms, and payment strategy to create the best real-world outcome—not just the lowest headline rate.</p>
         </div>
       </div>
     </div>
 
-    <div className="process-tips">
-      <h4>💡 Pro Tips</h4>
-      <ul>
-        <li>Don't make major purchases or open new credit accounts during this process</li>
-        <li>Keep all your financial accounts stable - avoid large deposits or withdrawals</li>
-        <li>Respond quickly to any document requests</li>
-        <li>Ask questions - we're here to help!</li>
-      </ul>
+    <div className="process-divider">
+      <h3>What Most Lenders Never Cover (But We Do)</h3>
+      <p>Borrowing doesn't stop at closing—and neither do we.</p>
+    </div>
+
+    <div className="process-steps secondary-steps">
+      <div className="process-step secondary-step">
+        <div className="step-number">5</div>
+        <div className="step-content">
+          <h3>Repay Smart</h3>
+          <p>We create strategies to reduce interest and accelerate payoff, often tied to life events like income growth or retirement.</p>
+        </div>
+      </div>
+
+      <div className="process-step secondary-step">
+        <div className="step-number">6</div>
+        <div className="step-content">
+          <h3>Protect Wealth</h3>
+          <p>Your equity is valuable. We help you think through protection strategies so one unexpected event doesn't undo years of progress.</p>
+        </div>
+      </div>
+
+      <div className="process-step secondary-step">
+        <div className="step-number">7</div>
+        <div className="step-content">
+          <h3>Review & Adjust</h3>
+          <p>Life changes. Markets change. That's why we schedule ongoing reviews to refine your strategy, explore refinance opportunities, and keep your plan optimized over time.</p>
+        </div>
+      </div>
+    </div>
+
+    <div className="process-summary">
+      <h3>What This Means for You</h3>
+      <div className="summary-table">
+        <div className="summary-row header">
+          <div className="summary-cell">Your Focus</div>
+          <div className="summary-cell">What We Do Now</div>
+          <div className="summary-cell">Long-Term Advantage</div>
+        </div>
+        <div className="summary-row">
+          <div className="summary-cell"><strong>Steps 1–4: Borrow Smart</strong></div>
+          <div className="summary-cell">Design the right loan today</div>
+          <div className="summary-cell">Clarity, confidence, and immediate savings</div>
+        </div>
+        <div className="summary-row">
+          <div className="summary-cell"><strong>Steps 5–7: Repay & Protect</strong></div>
+          <div className="summary-cell">Strategic roadmap</div>
+          <div className="summary-cell">Ongoing optimization most lenders never offer</div>
+        </div>
+      </div>
+    </div>
+
+    <div className="process-footer">
+      <p><strong>This isn't about one loan—it's about borrowing money well, consistently, over your lifetime.</strong></p>
     </div>
   </div>
 );
@@ -504,7 +568,7 @@ export default function ApplicantTasks({
       <LightboxModal
         isOpen={showSevenStep}
         onClose={() => handleCloseLightbox('seven_step_process', setShowSevenStep)}
-        title="The 7 Step Mortgage Process"
+        title="How to Borrow Money: The 7 Steps"
       >
         <SevenStepProcessContent />
       </LightboxModal>
