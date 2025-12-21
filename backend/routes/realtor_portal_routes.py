@@ -245,7 +245,7 @@ async def get_current_realtor(
     """Validate token and return realtor info."""
     result = db.execute(text("""
         SELECT rs.realtor_id, rpu.organization_id, rpu.first_name, rpu.last_name
-        FROM realtor_sessions rs
+        FROM realtor_portal_sessions rs
         JOIN realtor_portal_users rpu ON rpu.id = rs.realtor_id
         WHERE rs.token = :token
             AND rs.expires_at > CURRENT_TIMESTAMP
