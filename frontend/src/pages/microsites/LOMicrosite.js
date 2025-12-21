@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import './LOMicrosite.css';
+import MortgageAIChat from '../../components/MortgageAIChat';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -686,6 +687,12 @@ const LOMicrosite = () => {
           </p>
         </div>
       </footer>
+
+      {/* AI Mortgage Chat Assistant */}
+      <MortgageAIChat
+        userSlug={slug || userId}
+        themeConfig={themeData?.themeConfig}
+      />
     </div>
   );
 };

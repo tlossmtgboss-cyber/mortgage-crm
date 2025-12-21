@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -1480,3 +1481,175 @@ async def get_public_page(
     except Exception as e:
         logger.error(f"Error fetching public page: {e}")
         raise HTTPException(status_code=500, detail="Error loading page")
+
+
+# =============================================================================
+# PUBLIC AI CHAT ROUTES
+# =============================================================================
+
+class ChatMessageRequest(BaseModel):
+    """Request model for chat messages"""
+    message: str = Field(..., min_length=1, max_length=2000)
+    session_id: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, Any]]] = None
+
+
+class BookAppointmentRequest(BaseModel):
+    """Request model for booking appointments"""
+    contact_name: str = Field(..., min_length=1, max_length=200)
+    contact_email: str = Field(..., min_length=1)
+    contact_phone: Optional[str] = None
+    appointment_date: str  # YYYY-MM-DD
+    appointment_time: str  # HH:MM
+    appointment_type: str = "consultation"
+    notes: Optional[str] = None
+
+
+@public_router.post("/chat/{user_slug}/message")
+async def chat_with_mortgage_assistant(
+    user_slug: str,
+    request: ChatMessageRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Send a message to the AI mortgage assistant.
+    No authentication required - public facing for microsite visitors.
+    """
+    try:
+        from services.public_mortgage_chat_service import get_public_chat_service
+
+        chat_service = get_public_chat_service(db, user_slug)
+
+        result = chat_service.generate_response(
+            user_message=request.message,
+            conversation_history=request.conversation_history
+        )
+
+        return {
+            "success": True,
+            "response": result.get("response"),
+            "loan_officer": result.get("loan_officer"),
+            "scheduling_intent": result.get("scheduling_intent", False),
+            "available_slots": result.get("available_slots"),
+            "session_id": request.session_id or str(uuid.uuid4())
+        }
+
+    except Exception as e:
+        logger.error(f"Error in chat: {e}")
+        return {
+            "success": False,
+            "response": "I'm sorry, I'm having trouble processing your request. Please try again.",
+            "error": str(e)
+        }
+
+
+@public_router.get("/chat/{user_slug}/availability")
+async def get_loan_officer_availability(
+    user_slug: str,
+    days_ahead: int = Query(7, ge=1, le=30),
+    db: Session = Depends(get_db)
+):
+    """
+    Get available appointment slots for a loan officer.
+    """
+    try:
+        from services.public_mortgage_chat_service import get_public_chat_service
+
+        chat_service = get_public_chat_service(db, user_slug)
+        slots = chat_service.get_available_slots(days_ahead=days_ahead)
+
+        return {
+            "success": True,
+            "loan_officer": chat_service.lo_info.get("name") if chat_service.lo_info else None,
+            "slots": slots,
+            "total_available": len(slots)
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting availability: {e}")
+        return {
+            "success": False,
+            "slots": [],
+            "error": str(e)
+        }
+
+
+@public_router.post("/chat/{user_slug}/book")
+async def book_appointment_via_chat(
+    user_slug: str,
+    request: BookAppointmentRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Book an appointment with the loan officer.
+    """
+    try:
+        from services.public_mortgage_chat_service import get_public_chat_service
+        from datetime import datetime
+
+        chat_service = get_public_chat_service(db, user_slug)
+
+        # Parse appointment datetime
+        appointment_datetime = datetime.strptime(
+            f"{request.appointment_date} {request.appointment_time}",
+            "%Y-%m-%d %H:%M"
+        )
+
+        result = chat_service.book_appointment(
+            contact_name=request.contact_name,
+            contact_email=request.contact_email,
+            contact_phone=request.contact_phone,
+            appointment_time=appointment_datetime,
+            appointment_type=request.appointment_type,
+            notes=request.notes
+        )
+
+        return result
+
+    except ValueError as e:
+        logger.error(f"Invalid date format: {e}")
+        return {
+            "success": False,
+            "error": "Invalid date or time format"
+        }
+    except Exception as e:
+        logger.error(f"Error booking appointment: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@public_router.get("/chat/{user_slug}/info")
+async def get_loan_officer_chat_info(
+    user_slug: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get loan officer information for chat widget initialization.
+    """
+    try:
+        from services.public_mortgage_chat_service import get_public_chat_service
+
+        chat_service = get_public_chat_service(db, user_slug)
+
+        if not chat_service.lo_info:
+            raise HTTPException(status_code=404, detail="Loan officer not found")
+
+        return {
+            "success": True,
+            "loan_officer": {
+                "name": chat_service.lo_info.get("name"),
+                "bio": chat_service.lo_info.get("bio"),
+                "company": chat_service.lo_info.get("company"),
+                "photo_url": None  # Can be added if available
+            },
+            "chat_enabled": True,
+            "greeting": f"Hi! I'm an AI assistant for {chat_service.lo_info.get('name')}. I can answer your mortgage questions and help schedule a consultation. How can I help you today?"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chat info: {e}")
+        raise HTTPException(status_code=500, detail="Error loading chat")
