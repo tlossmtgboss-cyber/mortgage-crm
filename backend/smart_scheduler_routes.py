@@ -2904,6 +2904,8 @@ async def get_public_booking_page(
     # Auto-create booking link if it doesn't exist
     if not link:
         try:
+            SchedulerConfig = _models['SchedulerConfig']
+
             if User:
                 # Check if slug matches a user's slug (for microsite booking)
                 target_user = db.query(User).filter(User.slug == slug).first()
@@ -2915,26 +2917,46 @@ async def get_public_booking_page(
                         target_user = db.query(User).first()
 
                 if target_user:
-                    # Create default appointment type for this user if none exists
+                    user_name = getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'Loan Officer')
+                    first_name = user_name.split()[0] if user_name else 'Loan Officer'
+
+                    # Get or create SchedulerConfig for this user
+                    user_config = db.query(SchedulerConfig).filter(
+                        SchedulerConfig.user_id == target_user.id
+                    ).first()
+
+                    if not user_config:
+                        user_config = SchedulerConfig(
+                            user_id=target_user.id,
+                            config_name=f"{first_name}'s Schedule",
+                            description=f"Availability settings for {user_name}",
+                            timezone="America/New_York",
+                            default_duration_minutes=30,
+                            min_notice_hours=2,
+                            max_advance_days=60,
+                            is_active=True
+                        )
+                        db.add(user_config)
+                        db.flush()
+
+                    # Get or create appointment type for this user
                     user_type = db.query(AppointmentType).filter(
-                        AppointmentType.user_id == target_user.id,
+                        AppointmentType.config_id == user_config.id,
                         AppointmentType.is_active == True
                     ).first()
 
                     if not user_type:
                         type_key = f"{slug}_consultation" if slug != "demo" else "demo_consultation"
-                        user_name = getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'Loan Officer')
-                        first_name = user_name.split()[0] if user_name else 'the LO'
 
                         user_type = AppointmentType(
-                            user_id=target_user.id,
+                            config_id=user_config.id,
                             type_name="Discovery Call" if slug != "demo" else "Product Demo",
                             type_key=type_key,
                             description=f"Schedule a call with {first_name}" if slug != "demo" else "Schedule a personalized demo of our platform",
                             default_duration_minutes=30,
                             allowed_durations=[15, 30, 45, 60],
                             meeting_type="consultation",
-                            meeting_mode="phone",
+                            default_mode="phone",
                             color="#2563eb",
                             icon="phone",
                             is_public=True,
@@ -2945,9 +2967,6 @@ async def get_public_booking_page(
                         )
                         db.add(user_type)
                         db.flush()
-
-                    user_name = getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'Loan Officer')
-                    first_name = user_name.split()[0] if user_name else 'Loan Officer'
 
                     link = BookingLink(
                         user_id=target_user.id,
@@ -2967,6 +2986,8 @@ async def get_public_booking_page(
                     logger.info(f"Auto-created booking link for slug: {slug}")
         except Exception as e:
             logger.error(f"Error auto-creating booking link for {slug}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
