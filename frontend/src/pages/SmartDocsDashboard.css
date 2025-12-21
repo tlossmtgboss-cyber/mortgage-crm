@@ -20,8 +20,69 @@
 }
 
 .header-content p {
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   color: #6b7280;
+}
+
+/* Search Section */
+.search-section {
+  margin-bottom: 20px;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 500px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  font-size: 1rem;
+  color: #9ca3af;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 40px 12px 44px;
+  font-size: 0.95rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.search-input::placeholder {
+  color: #9ca3af;
+}
+
+.search-clear {
+  position: absolute;
+  right: 12px;
+  background: #e5e7eb;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-clear:hover {
+  background: #d1d5db;
+  color: #374151;
 }
 
 /* Summary Cards */
@@ -60,6 +121,10 @@
 .summary-card.activity {
   border-left: 4px solid #10b981;
   cursor: default;
+}
+
+.summary-card.completed {
+  border-left: 4px solid #10b981;
 }
 
 .card-value {
@@ -148,6 +213,36 @@
   color: #1d4ed8;
 }
 
+.tab-badge.outstanding {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.tab-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tab-badge.completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tab-btn.active .tab-badge.outstanding {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.tab-btn.active .tab-badge.pending {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.tab-btn.active .tab-badge.completed {
+  background: #a7f3d0;
+  color: #047857;
+}
+
 /* Loading & Empty States */
 .loading-state,
 .empty-state {
@@ -232,6 +327,10 @@
   border-left: 4px solid #ef4444;
 }
 
+.applicant-card.completed-card {
+  border-left: 4px solid #10b981;
+}
+
 .applicant-header {
   display: flex;
   justify-content: space-between;
@@ -280,6 +379,50 @@
   border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+.completed-badge {
+  padding: 4px 12px;
+  background: #d1fae5;
+  color: #065f46;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Completed Details */
+.completed-details {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.completed-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.loan-complete-status {
+  font-size: 0.8rem;
+  color: #10b981;
+  font-weight: 500;
 }
 
 /* Documents Preview */
@@ -460,11 +603,20 @@
     padding: 16px;
   }
 
+  .search-input-wrapper {
+    max-width: 100%;
+  }
+
   .summary-cards {
     grid-template-columns: 1fr;
   }
 
   .applicant-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .completed-details {
     flex-direction: column;
     gap: 12px;
   }

@@ -19796,6 +19796,10 @@ app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
 from financial_intelligence_routes import router as financial_intelligence_router
 app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
 
+# Include AI Daily Blog + PDF Content Factory routes
+from blog_routes import router as blog_router
+app.include_router(blog_router, tags=["AI Daily Blog"])
+
 # Include Email Monitor routes
 from email_monitor_routes import router as email_monitor_router
 app.include_router(email_monitor_router, tags=["Email Monitor"])

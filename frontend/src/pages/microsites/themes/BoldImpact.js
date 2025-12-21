@@ -6,7 +6,7 @@
  * comprehensive contact form.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './BoldImpact.css';
 import EmbeddedAIChat from '../../../components/EmbeddedAIChat';
 
@@ -16,6 +16,26 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showRefinanceModal, setShowRefinanceModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+
+  // Listen for messages from embedded iframes (application submissions)
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data?.type === 'APPLICATION_SUBMITTED') {
+        // Close all modals when application is submitted
+        setShowRefinanceModal(false);
+        setShowPurchaseModal(false);
+        setShowCompareModal(false);
+
+        // Open the portal URL in a new tab if provided
+        if (event.data.portalUrl) {
+          window.open(event.data.portalUrl, '_blank');
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   // Extract config with defaults
   const config = {

@@ -39,6 +39,7 @@ def get_current_user_optional_dep():
 from models.microsite import (
     MicrositeTemplatePack, MicrositePage, MicrositeAsset, MicrositePublishHistory,
     MicrositeAnalyticsEvent, MicrositeLead, OrganizationMicrositeSettings,
+    MicrositeCustomPage,
     MicrositeStatus, TemplateStatus, LeadStatus, AnalyticsEventType,
     TemplatePackResponse, TemplatePackListResponse, TemplatePackCreate,
     MicrositeCreate, MicrositeUpdate, MicrositeResponse, MicrositePublicResponse,
@@ -46,7 +47,8 @@ from models.microsite import (
     AnalyticsEventCreate, AnalyticsSummary,
     PublishResponse, PublishHistoryResponse,
     OrgMicrositeSettingsUpdate, OrgMicrositeSettingsResponse,
-    ContentValidator, MicrositeSlugGenerator
+    ContentValidator, MicrositeSlugGenerator,
+    CustomPageCreate, CustomPageUpdate, CustomPageResponse
 )
 
 router = APIRouter(prefix="/api/v1/microsites", tags=["microsites"])
@@ -960,6 +962,188 @@ async def update_org_microsite_settings(
     db.refresh(settings)
 
     return settings
+
+
+# ============================================================================
+# CUSTOM PAGE ENDPOINTS
+# ============================================================================
+
+def generate_page_slug(title: str) -> str:
+    """Generate URL-friendly slug from title"""
+    import re
+    slug = title.lower()
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = slug.strip('-')
+    return slug
+
+
+@router.get("/my/pages", response_model=List[CustomPageResponse])
+async def get_my_custom_pages(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """Get all custom pages for user's microsite"""
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
+    ).first()
+
+    if not microsite:
+        return []
+
+    pages = db.query(MicrositeCustomPage).filter(
+        MicrositeCustomPage.microsite_id == microsite.id
+    ).order_by(MicrositeCustomPage.sort_order).all()
+
+    return pages
+
+
+@router.post("/my/pages", response_model=CustomPageResponse, status_code=status.HTTP_201_CREATED)
+async def create_custom_page(
+    page_data: CustomPageCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """Create a new custom page for user's microsite"""
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
+    ).first()
+
+    if not microsite:
+        raise HTTPException(status_code=404, detail="No microsite found. Create a microsite first.")
+
+    # Generate slug if not provided
+    slug = page_data.slug if page_data.slug else generate_page_slug(page_data.title)
+
+    # Check for duplicate slug
+    existing = db.query(MicrositeCustomPage).filter(
+        MicrositeCustomPage.microsite_id == microsite.id,
+        MicrositeCustomPage.slug == slug
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="A page with this URL already exists")
+
+    # Get next sort order
+    max_order = db.query(MicrositeCustomPage).filter(
+        MicrositeCustomPage.microsite_id == microsite.id
+    ).count()
+
+    page = MicrositeCustomPage(
+        microsite_id=microsite.id,
+        title=page_data.title,
+        slug=slug,
+        content=page_data.content,
+        is_published=page_data.is_published,
+        sort_order=page_data.sort_order if page_data.sort_order else max_order
+    )
+
+    db.add(page)
+    db.commit()
+    db.refresh(page)
+
+    return page
+
+
+@router.get("/my/pages/{page_id}", response_model=CustomPageResponse)
+async def get_custom_page(
+    page_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """Get a specific custom page"""
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
+    ).first()
+
+    if not microsite:
+        raise HTTPException(status_code=404, detail="No microsite found")
+
+    page = db.query(MicrositeCustomPage).filter(
+        MicrositeCustomPage.id == page_id,
+        MicrositeCustomPage.microsite_id == microsite.id
+    ).first()
+
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    return page
+
+
+@router.put("/my/pages/{page_id}", response_model=CustomPageResponse)
+async def update_custom_page(
+    page_id: int,
+    page_data: CustomPageUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """Update a custom page"""
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
+    ).first()
+
+    if not microsite:
+        raise HTTPException(status_code=404, detail="No microsite found")
+
+    page = db.query(MicrositeCustomPage).filter(
+        MicrositeCustomPage.id == page_id,
+        MicrositeCustomPage.microsite_id == microsite.id
+    ).first()
+
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    # Update fields if provided
+    if page_data.title is not None:
+        page.title = page_data.title
+    if page_data.slug is not None:
+        # Check for duplicate slug
+        existing = db.query(MicrositeCustomPage).filter(
+            MicrositeCustomPage.microsite_id == microsite.id,
+            MicrositeCustomPage.slug == page_data.slug,
+            MicrositeCustomPage.id != page_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="A page with this URL already exists")
+        page.slug = page_data.slug
+    if page_data.content is not None:
+        page.content = page_data.content
+    if page_data.is_published is not None:
+        page.is_published = page_data.is_published
+    if page_data.sort_order is not None:
+        page.sort_order = page_data.sort_order
+
+    db.commit()
+    db.refresh(page)
+
+    return page
+
+
+@router.delete("/my/pages/{page_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_custom_page(
+    page_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """Delete a custom page"""
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
+    ).first()
+
+    if not microsite:
+        raise HTTPException(status_code=404, detail="No microsite found")
+
+    page = db.query(MicrositeCustomPage).filter(
+        MicrositeCustomPage.id == page_id,
+        MicrositeCustomPage.microsite_id == microsite.id
+    ).first()
+
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    db.delete(page)
+    db.commit()
+
+    return None
 
 
 # ============================================================================

@@ -247,6 +247,327 @@ const daysUntilClose = (closeDate) => {
   return diffDays;
 };
 
+// Application field labels for Q&A display
+const APPLICATION_FIELD_LABELS = {
+  // Personal Information
+  borrower_first_name: 'First Name',
+  borrower_last_name: 'Last Name',
+  borrower_email: 'Email Address',
+  borrower_phone: 'Phone Number',
+  borrower_dob: 'Date of Birth',
+  ssn_last4: 'Last 4 of SSN',
+
+  // Employment & Income
+  employment_status: 'Employment Status',
+  employer_name: 'Employer Name',
+  job_title: 'Job Title',
+  years_employed: 'Years at Job',
+  annual_income: 'Annual Income',
+  monthly_income: 'Monthly Income',
+
+  // Loan Details
+  loan_purpose: 'Loan Purpose',
+  loan_type: 'Loan Type',
+  loan_amount: 'Loan Amount',
+  down_payment: 'Down Payment',
+  down_payment_percent: 'Down Payment %',
+  loan_term: 'Loan Term',
+  interest_rate: 'Interest Rate',
+
+  // Property Information
+  property_type: 'Property Type',
+  property_address: 'Street Address',
+  property_city: 'City',
+  property_state: 'State',
+  property_zip: 'ZIP Code',
+  occupancy_type: 'Occupancy Type',
+  estimated_value: 'Estimated Property Value',
+  purchase_price: 'Purchase Price',
+
+  // Credit & Assets
+  credit_score_range: 'Credit Score Range',
+  estimated_credit_score: 'Estimated Credit Score',
+  has_bankruptcy: 'Bankruptcy History',
+  has_foreclosure: 'Foreclosure History',
+  total_assets: 'Total Assets',
+  total_monthly_debt: 'Total Monthly Debt',
+
+  // Co-Borrower
+  has_co_borrower: 'Has Co-Borrower',
+  co_borrower_first_name: 'Co-Borrower First Name',
+  co_borrower_last_name: 'Co-Borrower Last Name',
+  co_borrower_email: 'Co-Borrower Email',
+  co_borrower_phone: 'Co-Borrower Phone',
+
+  // Additional Info
+  referral_source: 'How Did You Hear About Us',
+  preferred_contact_method: 'Preferred Contact Method',
+  preferred_contact_time: 'Best Time to Contact',
+  notes: 'Additional Notes',
+
+  // Consent
+  credit_auth_consent: 'Credit Authorization',
+  econsent: 'Electronic Consent',
+};
+
+// Value formatter for display
+const formatApplicationValue = (key, value) => {
+  if (value === null || value === undefined || value === '') return '—';
+
+  // Boolean values
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (value === 'true') return 'Yes';
+  if (value === 'false') return 'No';
+
+  // Currency fields
+  if (['loan_amount', 'down_payment', 'annual_income', 'monthly_income',
+       'estimated_value', 'purchase_price', 'total_assets', 'total_monthly_debt'].includes(key)) {
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(num);
+    }
+  }
+
+  // Percentage fields
+  if (key === 'down_payment_percent' || key === 'interest_rate') {
+    const num = parseFloat(value);
+    if (!isNaN(num)) return `${num}%`;
+  }
+
+  // Loan term
+  if (key === 'loan_term') {
+    return `${value} Years`;
+  }
+
+  // Date fields
+  if (key === 'borrower_dob') {
+    try {
+      return new Date(value).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return value;
+    }
+  }
+
+  // Employment status
+  if (key === 'employment_status') {
+    const statusMap = {
+      employed: 'Employed',
+      self_employed: 'Self-Employed',
+      retired: 'Retired',
+      not_employed: 'Not Employed',
+    };
+    return statusMap[value] || value;
+  }
+
+  // Loan purpose
+  if (key === 'loan_purpose') {
+    const purposeMap = {
+      purchase: 'Purchase a Home',
+      refinance: 'Refinance',
+      cash_out: 'Cash-Out Refinance',
+      construction: 'Construction Loan',
+    };
+    return purposeMap[value] || value;
+  }
+
+  // Property type
+  if (key === 'property_type') {
+    const typeMap = {
+      single_family: 'Single Family Home',
+      condo: 'Condominium',
+      townhouse: 'Townhouse',
+      multi_family: 'Multi-Family (2-4 units)',
+      manufactured: 'Manufactured Home',
+    };
+    return typeMap[value] || value;
+  }
+
+  // Occupancy type
+  if (key === 'occupancy_type') {
+    const occMap = {
+      primary: 'Primary Residence',
+      PRIMARY: 'Primary Residence',
+      second_home: 'Second Home',
+      SECOND_HOME: 'Second Home',
+      investment: 'Investment Property',
+      INVESTMENT: 'Investment Property',
+    };
+    return occMap[value] || value;
+  }
+
+  return value;
+};
+
+// Application Details Component - Shows all Q&A from application
+const ApplicationDetails = ({ application, workspace }) => {
+  if (!application || !application.data || Object.keys(application.data).length === 0) {
+    return (
+      <div className="application-empty-state">
+        <div className="empty-icon">📝</div>
+        <h3>No Application Data</h3>
+        <p>Your application details will appear here once you start your application.</p>
+      </div>
+    );
+  }
+
+  const data = application.data;
+
+  // Group fields by section
+  const sections = [
+    {
+      title: 'Personal Information',
+      fields: ['borrower_first_name', 'borrower_last_name', 'borrower_email',
+               'borrower_phone', 'borrower_dob', 'ssn_last4']
+    },
+    {
+      title: 'Employment & Income',
+      fields: ['employment_status', 'employer_name', 'job_title',
+               'years_employed', 'annual_income', 'monthly_income']
+    },
+    {
+      title: 'Loan Details',
+      fields: ['loan_purpose', 'loan_type', 'loan_amount', 'down_payment',
+               'down_payment_percent', 'loan_term', 'interest_rate']
+    },
+    {
+      title: 'Property Information',
+      fields: ['property_type', 'property_address', 'property_city',
+               'property_state', 'property_zip', 'occupancy_type',
+               'estimated_value', 'purchase_price']
+    },
+    {
+      title: 'Credit & Financial',
+      fields: ['credit_score_range', 'estimated_credit_score', 'has_bankruptcy',
+               'has_foreclosure', 'total_assets', 'total_monthly_debt']
+    },
+    {
+      title: 'Co-Borrower Information',
+      fields: ['has_co_borrower', 'co_borrower_first_name', 'co_borrower_last_name',
+               'co_borrower_email', 'co_borrower_phone']
+    },
+    {
+      title: 'Additional Information',
+      fields: ['referral_source', 'preferred_contact_method', 'preferred_contact_time', 'notes']
+    }
+  ];
+
+  // Also include any fields not in our defined sections
+  const definedFields = new Set(sections.flatMap(s => s.fields));
+  const extraFields = Object.keys(data).filter(key =>
+    !definedFields.has(key) &&
+    !['id', 'created_at', 'updated_at', 'workspace_id', 'organization_id',
+      'credit_auth_consent', 'econsent', 'credit_auth_timestamp', 'econsent_timestamp'].includes(key)
+  );
+
+  if (extraFields.length > 0) {
+    sections.push({
+      title: 'Other Information',
+      fields: extraFields
+    });
+  }
+
+  return (
+    <div className="application-details">
+      <div className="application-header">
+        <div className="application-status">
+          <span className="status-label">Status:</span>
+          <span className={`status-value status-${application.status || 'in_progress'}`}>
+            {(application.status || 'in_progress').replace('_', ' ').toUpperCase()}
+          </span>
+        </div>
+        {application.submitted_at && (
+          <div className="submitted-info">
+            Submitted: {new Date(application.submitted_at).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit'
+            })}
+          </div>
+        )}
+        {application.completeness_pct !== undefined && (
+          <div className="completeness-info">
+            Completeness: {application.completeness_pct}%
+          </div>
+        )}
+      </div>
+
+      {sections.map((section, sectionIndex) => {
+        // Filter to only fields that have values in the data
+        const filledFields = section.fields.filter(field =>
+          data[field] !== null && data[field] !== undefined && data[field] !== ''
+        );
+
+        // Skip sections with no filled fields
+        if (filledFields.length === 0) return null;
+
+        return (
+          <div key={sectionIndex} className="application-section">
+            <h3 className="section-title">{section.title}</h3>
+            <div className="qa-list">
+              {filledFields.map(field => (
+                <div key={field} className="qa-item">
+                  <div className="qa-question">
+                    {APPLICATION_FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  </div>
+                  <div className="qa-answer">
+                    {formatApplicationValue(field, data[field])}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Consent confirmations */}
+      {(data.credit_auth_consent || data.econsent) && (
+        <div className="application-section consents-section">
+          <h3 className="section-title">Authorizations & Consents</h3>
+          <div className="qa-list">
+            {data.credit_auth_consent && (
+              <div className="qa-item consent-item">
+                <div className="qa-question">Credit Authorization</div>
+                <div className="qa-answer consent-confirmed">
+                  ✓ Authorized
+                  {data.credit_auth_timestamp && (
+                    <span className="consent-date">
+                      on {new Date(data.credit_auth_timestamp).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            {data.econsent && (
+              <div className="qa-item consent-item">
+                <div className="qa-question">Electronic Consent</div>
+                <div className="qa-answer consent-confirmed">
+                  ✓ Consented
+                  {data.econsent_timestamp && (
+                    <span className="consent-date">
+                      on {new Date(data.econsent_timestamp).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Loan Summary Card Component - Shows loan details at a glance
 const LoanSummaryCard = ({ loan, workspace, contacts }) => {
   const borrower = contacts?.find(c => c.contact_type === 'borrower') || contacts?.[0];
@@ -719,6 +1040,12 @@ export default function PURLPortal() {
           onClick={() => setActiveTab('overview')}
         />
         <TabButton
+          label="Application"
+          icon="📝"
+          isActive={activeTab === 'application'}
+          onClick={() => setActiveTab('application')}
+        />
+        <TabButton
           label="Documents"
           icon="📄"
           isActive={activeTab === 'documents'}
@@ -829,6 +1156,17 @@ export default function PURLPortal() {
                 </section>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Application Tab */}
+        {activeTab === 'application' && (
+          <div className="tab-content application-tab">
+            <h2>Your Application</h2>
+            <p className="tab-intro">
+              Review all the information you provided in your loan application.
+            </p>
+            <ApplicationDetails application={application} workspace={workspace} />
           </div>
         )}
 

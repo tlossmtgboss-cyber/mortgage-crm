@@ -5,7 +5,8 @@
  * Shows:
  * - Applicants with documents pending review
  * - Applicants with outstanding document requests
- * - Summary statistics
+ * - Completed applicants (finished financing)
+ * - Summary statistics with loan search
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,14 +15,16 @@ import './SmartDocsDashboard.css';
 
 const SmartDocsDashboard = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('pending-review');
+  const [activeTab, setActiveTab] = useState('documents-owed');
   const [summary, setSummary] = useState(null);
   const [pendingReview, setPendingReview] = useState({ applicants: [], total: 0 });
   const [outstandingDocs, setOutstandingDocs] = useState({ applicants: [], total: 0 });
+  const [completedClients, setCompletedClients] = useState({ applicants: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch dashboard summary
   const fetchSummary = useCallback(async () => {
@@ -57,25 +60,87 @@ const SmartDocsDashboard = () => {
     }
   }, [pagination, overdueOnly]);
 
+  // Fetch completed clients (loans that are funded/closed)
+  const fetchCompletedClients = useCallback(async () => {
+    try {
+      // Fetch funded/closed loans
+      const response = await fetch(`/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`);
+      if (response.ok) {
+        const data = await response.json();
+        const loans = data.loans || data || [];
+        setCompletedClients({
+          applicants: loans.map(loan => ({
+            loan_id: loan.id,
+            loan_number: loan.loan_number,
+            borrower_name: loan.borrower_name,
+            loan_purpose: loan.loan_purpose,
+            funded_at: loan.funded_at,
+            loan_amount: loan.loan_amount,
+          })),
+          total: loans.length,
+          total_pages: Math.ceil(loans.length / pagination.limit) || 1,
+        });
+      }
+    } catch (err) {
+      setError('Failed to load completed clients data');
+    }
+  }, [pagination]);
+
   // Initial load
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       await fetchSummary();
-      if (activeTab === 'pending-review') {
+      if (activeTab === 'documents-uploaded') {
         await fetchPendingReview();
-      } else {
+      } else if (activeTab === 'documents-owed') {
         await fetchOutstandingDocs();
+      } else if (activeTab === 'completed') {
+        await fetchCompletedClients();
       }
       setLoading(false);
     };
     loadData();
-  }, [activeTab, fetchSummary, fetchPendingReview, fetchOutstandingDocs]);
+  }, [activeTab, fetchSummary, fetchPendingReview, fetchOutstandingDocs, fetchCompletedClients]);
 
   // Handle tab change
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setPagination({ page: 1, limit: 20 });
+  };
+
+  // Filter applicants by search query
+  const filterBySearch = (applicants) => {
+    if (!searchQuery.trim()) return applicants;
+    const query = searchQuery.toLowerCase();
+    return applicants.filter(applicant =>
+      (applicant.borrower_name && applicant.borrower_name.toLowerCase().includes(query)) ||
+      (applicant.loan_number && applicant.loan_number.toLowerCase().includes(query)) ||
+      (applicant.loan_id && String(applicant.loan_id).includes(query))
+    );
+  };
+
+  // Get filtered data based on active tab
+  const getFilteredData = () => {
+    if (activeTab === 'documents-uploaded') {
+      return filterBySearch(pendingReview.applicants);
+    } else if (activeTab === 'documents-owed') {
+      return filterBySearch(outstandingDocs.applicants);
+    } else if (activeTab === 'completed') {
+      return filterBySearch(completedClients.applicants);
+    }
+    return [];
+  };
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    if (!amount) return '-';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
   // Format date
@@ -120,37 +185,66 @@ const SmartDocsDashboard = () => {
     }
   };
 
+  const filteredData = getFilteredData();
+
   return (
     <div className="smart-docs-dashboard">
       {/* Header with Summary Stats */}
       <div className="dashboard-header">
         <div className="header-content">
-          <h1>Document Management</h1>
+          <h1>Smart Docs</h1>
           <p>Review documents and track outstanding requests across all applicants</p>
         </div>
+
+        {/* Search Bar */}
+        <div className="search-section">
+          <div className="search-input-wrapper">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by client name or loan number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                className="search-clear"
+                onClick={() => setSearchQuery('')}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
         {summary && (
           <div className="summary-cards">
             <div
-              className={`summary-card pending ${activeTab === 'pending-review' ? 'active' : ''}`}
-              onClick={() => handleTabChange('pending-review')}
-            >
-              <div className="card-value">{summary.pending_review?.applicants || 0}</div>
-              <div className="card-label">Applicants with Pending Documents</div>
-              <div className="card-sub">{summary.pending_review?.documents || 0} documents to review</div>
-            </div>
-            <div
-              className={`summary-card outstanding ${activeTab === 'outstanding' ? 'active' : ''}`}
-              onClick={() => handleTabChange('outstanding')}
+              className={`summary-card outstanding ${activeTab === 'documents-owed' ? 'active' : ''}`}
+              onClick={() => handleTabChange('documents-owed')}
             >
               <div className="card-value">{summary.outstanding_requests?.applicants || 0}</div>
-              <div className="card-label">Applicants with Outstanding Requests</div>
+              <div className="card-label">Documents Owed</div>
               <div className="card-sub">
                 {summary.outstanding_requests?.overdue || 0} overdue
               </div>
             </div>
-            <div className="summary-card activity">
-              <div className="card-value">{summary.activity?.processed_today || 0}</div>
-              <div className="card-label">Processed Today</div>
+            <div
+              className={`summary-card pending ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
+              onClick={() => handleTabChange('documents-uploaded')}
+            >
+              <div className="card-value">{summary.pending_review?.applicants || 0}</div>
+              <div className="card-label">Documents Uploaded</div>
+              <div className="card-sub">{summary.pending_review?.documents || 0} documents to review</div>
+            </div>
+            <div
+              className={`summary-card completed ${activeTab === 'completed' ? 'active' : ''}`}
+              onClick={() => handleTabChange('completed')}
+            >
+              <div className="card-value">{completedClients.total || 0}</div>
+              <div className="card-label">Completed</div>
+              <div className="card-sub">Finished financing</div>
             </div>
           </div>
         )}
@@ -166,21 +260,30 @@ const SmartDocsDashboard = () => {
       {/* Tabs */}
       <div className="dashboard-tabs">
         <button
-          className={`tab-btn ${activeTab === 'pending-review' ? 'active' : ''}`}
-          onClick={() => handleTabChange('pending-review')}
+          className={`tab-btn ${activeTab === 'documents-owed' ? 'active' : ''}`}
+          onClick={() => handleTabChange('documents-owed')}
         >
-          Pending Review
-          {pendingReview.total > 0 && (
-            <span className="tab-badge">{pendingReview.total}</span>
+          Documents Owed
+          {outstandingDocs.total > 0 && (
+            <span className="tab-badge outstanding">{outstandingDocs.total}</span>
           )}
         </button>
         <button
-          className={`tab-btn ${activeTab === 'outstanding' ? 'active' : ''}`}
-          onClick={() => handleTabChange('outstanding')}
+          className={`tab-btn ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
+          onClick={() => handleTabChange('documents-uploaded')}
         >
-          Outstanding Documents
-          {outstandingDocs.total > 0 && (
-            <span className="tab-badge">{outstandingDocs.total}</span>
+          Documents Uploaded
+          {pendingReview.total > 0 && (
+            <span className="tab-badge pending">{pendingReview.total}</span>
+          )}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
+          onClick={() => handleTabChange('completed')}
+        >
+          Completed
+          {completedClients.total > 0 && (
+            <span className="tab-badge completed">{completedClients.total}</span>
           )}
         </button>
       </div>
@@ -192,59 +295,8 @@ const SmartDocsDashboard = () => {
             <div className="spinner" />
             <p>Loading...</p>
           </div>
-        ) : activeTab === 'pending-review' ? (
-          /* Pending Review Tab */
-          <div className="applicants-list">
-            {pendingReview.applicants.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">✓</span>
-                <h3>All caught up!</h3>
-                <p>No documents pending review</p>
-              </div>
-            ) : (
-              pendingReview.applicants.map((applicant) => (
-                <div
-                  key={applicant.loan_id}
-                  className="applicant-card"
-                  onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
-                >
-                  <div className="applicant-header">
-                    <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
-                      <span className="loan-info">
-                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
-                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
-                      </span>
-                    </div>
-                    <div className="pending-badge">
-                      {applicant.pending_count} pending
-                    </div>
-                  </div>
-                  <div className="documents-preview">
-                    {applicant.documents.slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="doc-chip">
-                        <span className="doc-type">{doc.doc_type || 'Document'}</span>
-                        <span className="doc-date">{formatDate(doc.uploaded_at)}</span>
-                      </div>
-                    ))}
-                    {applicant.documents.length > 3 && (
-                      <div className="doc-chip more">
-                        +{applicant.documents.length - 3} more
-                      </div>
-                    )}
-                  </div>
-                  <div className="card-footer">
-                    <span className="oldest-upload">
-                      Oldest: {formatDate(applicant.oldest_upload)}
-                    </span>
-                    <button className="btn-review">Review Documents →</button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          /* Outstanding Documents Tab */
+        ) : activeTab === 'documents-owed' ? (
+          /* Documents Owed Tab */
           <div className="applicants-list">
             <div className="list-filters">
               <label className="filter-checkbox">
@@ -256,14 +308,14 @@ const SmartDocsDashboard = () => {
                 Show overdue only
               </label>
             </div>
-            {outstandingDocs.applicants.length === 0 ? (
+            {filteredData.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon">✓</span>
-                <h3>All documents collected!</h3>
-                <p>No outstanding document requests</p>
+                <h3>{searchQuery ? 'No matching clients' : 'All documents collected!'}</h3>
+                <p>{searchQuery ? 'Try a different search term' : 'No outstanding document requests'}</p>
               </div>
             ) : (
-              outstandingDocs.applicants.map((applicant) => (
+              filteredData.map((applicant) => (
                 <div
                   key={applicant.loan_id}
                   className={`applicant-card ${applicant.overdue_count > 0 ? 'has-overdue' : ''}`}
@@ -289,7 +341,7 @@ const SmartDocsDashboard = () => {
                     </div>
                   </div>
                   <div className="requests-preview">
-                    {applicant.requests.slice(0, 4).map((req) => {
+                    {(applicant.requests || []).slice(0, 4).map((req) => {
                       const dueInfo = formatDueDate(req.due_date);
                       return (
                         <div key={req.id} className={`request-chip ${req.is_overdue ? 'overdue' : ''}`}>
@@ -303,7 +355,7 @@ const SmartDocsDashboard = () => {
                         </div>
                       );
                     })}
-                    {applicant.requests.length > 4 && (
+                    {(applicant.requests || []).length > 4 && (
                       <div className="request-chip more">
                         +{applicant.requests.length - 4} more
                       </div>
@@ -321,12 +373,110 @@ const SmartDocsDashboard = () => {
               ))
             )}
           </div>
+        ) : activeTab === 'documents-uploaded' ? (
+          /* Documents Uploaded Tab */
+          <div className="applicants-list">
+            {filteredData.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-icon">✓</span>
+                <h3>{searchQuery ? 'No matching clients' : 'All caught up!'}</h3>
+                <p>{searchQuery ? 'Try a different search term' : 'No documents pending review'}</p>
+              </div>
+            ) : (
+              filteredData.map((applicant) => (
+                <div
+                  key={applicant.loan_id}
+                  className="applicant-card"
+                  onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                >
+                  <div className="applicant-header">
+                    <div className="applicant-info">
+                      <h3>{applicant.borrower_name}</h3>
+                      <span className="loan-info">
+                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
+                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
+                      </span>
+                    </div>
+                    <div className="pending-badge">
+                      {applicant.pending_count} pending
+                    </div>
+                  </div>
+                  <div className="documents-preview">
+                    {(applicant.documents || []).slice(0, 3).map((doc) => (
+                      <div key={doc.id} className="doc-chip">
+                        <span className="doc-type">{doc.doc_type || 'Document'}</span>
+                        <span className="doc-date">{formatDate(doc.uploaded_at)}</span>
+                      </div>
+                    ))}
+                    {(applicant.documents || []).length > 3 && (
+                      <div className="doc-chip more">
+                        +{applicant.documents.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                  <div className="card-footer">
+                    <span className="oldest-upload">
+                      Oldest: {formatDate(applicant.oldest_upload)}
+                    </span>
+                    <button className="btn-review">Review Documents →</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          /* Completed Tab */
+          <div className="applicants-list">
+            {filteredData.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-icon">🎉</span>
+                <h3>{searchQuery ? 'No matching clients' : 'No completed loans yet'}</h3>
+                <p>{searchQuery ? 'Try a different search term' : 'Funded loans will appear here'}</p>
+              </div>
+            ) : (
+              filteredData.map((applicant) => (
+                <div
+                  key={applicant.loan_id}
+                  className="applicant-card completed-card"
+                  onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                >
+                  <div className="applicant-header">
+                    <div className="applicant-info">
+                      <h3>{applicant.borrower_name}</h3>
+                      <span className="loan-info">
+                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
+                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
+                      </span>
+                    </div>
+                    <div className="completed-badge">
+                      ✓ Completed
+                    </div>
+                  </div>
+                  <div className="completed-details">
+                    <div className="completed-detail">
+                      <span className="detail-label">Loan Amount</span>
+                      <span className="detail-value">{formatCurrency(applicant.loan_amount)}</span>
+                    </div>
+                    <div className="completed-detail">
+                      <span className="detail-label">Funded</span>
+                      <span className="detail-value">{formatDate(applicant.funded_at)}</span>
+                    </div>
+                  </div>
+                  <div className="card-footer">
+                    <span className="loan-complete-status">All documents collected</span>
+                    <button className="btn-view">View Archive →</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
 
       {/* Pagination */}
-      {((activeTab === 'pending-review' && pendingReview.total_pages > 1) ||
-        (activeTab === 'outstanding' && outstandingDocs.total_pages > 1)) && (
+      {((activeTab === 'documents-uploaded' && pendingReview.total_pages > 1) ||
+        (activeTab === 'documents-owed' && outstandingDocs.total_pages > 1) ||
+        (activeTab === 'completed' && completedClients.total_pages > 1)) && (
         <div className="pagination">
           <button
             disabled={pagination.page === 1}
@@ -336,12 +486,20 @@ const SmartDocsDashboard = () => {
           </button>
           <span>
             Page {pagination.page} of{' '}
-            {activeTab === 'pending-review' ? pendingReview.total_pages : outstandingDocs.total_pages}
+            {activeTab === 'documents-uploaded'
+              ? pendingReview.total_pages
+              : activeTab === 'documents-owed'
+                ? outstandingDocs.total_pages
+                : completedClients.total_pages}
           </span>
           <button
             disabled={
               pagination.page >=
-              (activeTab === 'pending-review' ? pendingReview.total_pages : outstandingDocs.total_pages)
+              (activeTab === 'documents-uploaded'
+                ? pendingReview.total_pages
+                : activeTab === 'documents-owed'
+                  ? outstandingDocs.total_pages
+                  : completedClients.total_pages)
             }
             onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
           >

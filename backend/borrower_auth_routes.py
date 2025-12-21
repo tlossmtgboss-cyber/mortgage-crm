@@ -2183,8 +2183,8 @@ async def submit_application(
                                     created_at, updated_at
                                 )
                                 VALUES (
-                                    :org_id, :workspace_id, 'document', :title,
-                                    :description, 'pending', 'medium', :category, :order_index,
+                                    :org_id, :workspace_id, 'document_upload', :title,
+                                    :description, 'open', 'high', :category, :order_index,
                                     :created_at, :updated_at
                                 )
                             """), {
@@ -2248,11 +2248,13 @@ async def submit_application(
         # Build portal URL with token if available
         portal_url = None
         if workspace_slug:
-            portal_url = f"/portal/{workspace_slug}"
-            if 'portal_token' in dir() and portal_token:
-                portal_url += f"?token={portal_token}&submitted=true"
-            else:
-                portal_url += "?submitted=true"
+            base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+            portal_url = f"https://{base_domain}/portal/{workspace_slug}"
+            try:
+                if portal_token:
+                    portal_url += f"?token={portal_token}"
+            except NameError:
+                pass  # portal_token wasn't defined
 
         return {
             "success": True,

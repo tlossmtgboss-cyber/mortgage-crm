@@ -3018,6 +3018,210 @@
 }
 
 /* ========================================
+   Application Tab Styles
+   ======================================== */
+.application-tab {
+  max-width: 900px;
+}
+
+.application-tab h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--portal-text-primary);
+  margin: 0 0 8px 0;
+}
+
+.application-tab .tab-intro {
+  color: var(--portal-text-secondary);
+  margin: 0 0 28px 0;
+  font-size: 0.95rem;
+}
+
+/* Application Empty State */
+.application-empty-state {
+  text-align: center;
+  padding: 60px 24px;
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  border: 1px solid var(--portal-border);
+}
+
+.application-empty-state .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.application-empty-state h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--portal-text-primary);
+  margin: 0 0 8px 0;
+}
+
+.application-empty-state p {
+  color: var(--portal-text-secondary);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Application Details Container */
+.application-details {
+  background: var(--portal-bg-card);
+  border-radius: var(--portal-radius-lg);
+  border: 1px solid var(--portal-border);
+  overflow: hidden;
+}
+
+/* Application Header */
+.application-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  background: var(--portal-gray-50);
+  border-bottom: 1px solid var(--portal-border);
+}
+
+.application-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.application-status .status-label {
+  font-size: 0.875rem;
+  color: var(--portal-text-secondary);
+}
+
+.application-status .status-value {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.application-status .status-value.status-in_progress {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.application-status .status-value.status-submitted {
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+}
+
+.application-status .status-value.status-processing {
+  background: rgba(59, 130, 246, 0.15);
+  color: #1d4ed8;
+}
+
+.submitted-info,
+.completeness-info {
+  font-size: 0.875rem;
+  color: var(--portal-text-secondary);
+}
+
+/* Application Sections */
+.application-section {
+  padding: 24px;
+  border-bottom: 1px solid var(--portal-border);
+}
+
+.application-section:last-child {
+  border-bottom: none;
+}
+
+.application-section .section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--portal-primary);
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--portal-border-accent);
+}
+
+/* Q&A List */
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qa-item {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--portal-border-light);
+}
+
+.qa-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.qa-question {
+  font-size: 0.875rem;
+  color: var(--portal-text-secondary);
+  font-weight: 500;
+}
+
+.qa-answer {
+  font-size: 0.95rem;
+  color: var(--portal-text-primary);
+  font-weight: 500;
+}
+
+/* Consent section styles */
+.consents-section .section-title {
+  color: var(--portal-success);
+  border-bottom-color: rgba(16, 185, 129, 0.2);
+}
+
+.consent-confirmed {
+  color: var(--portal-success);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.consent-date {
+  font-size: 0.8rem;
+  color: var(--portal-text-secondary);
+  font-weight: 400;
+}
+
+/* Application Tab Responsive */
+@media (max-width: 768px) {
+  .application-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .qa-item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .qa-question {
+    font-size: 0.8rem;
+  }
+
+  .qa-answer {
+    font-size: 0.9rem;
+  }
+
+  .application-section {
+    padding: 20px 16px;
+  }
+}
+
+/* ========================================
    Print Styles
    ======================================== */
 @media print {

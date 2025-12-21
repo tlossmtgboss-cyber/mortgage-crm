@@ -9,6 +9,7 @@ Provides API endpoints for the PURL borrower portal system:
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
@@ -79,6 +80,7 @@ from middleware.purl_auth import (
     require_purl_write_scope,
     require_purl_full_scope,
     get_purl_context_optional,
+    get_purl_token,
     verify_workspace_access,
     log_purl_action,
     check_purl_rate_limit,
@@ -219,6 +221,7 @@ class ApplicationSubmitResponse(BaseModel):
     application_id: int
     loan_id: int
     submitted_at: str
+    portal_url: Optional[str] = None
 
 
 # =============================================================================
@@ -387,6 +390,7 @@ async def save_application(
 async def submit_application(
     slug: str = Path(..., description="Workspace slug"),
     context: PURLAuthContext = Depends(require_purl_write_scope),
+    token: Optional[str] = Depends(get_purl_token),
     db: Session = Depends(get_db)
 ):
     """
@@ -395,6 +399,7 @@ async def submit_application(
     Validates all required fields are present.
     Creates a loan record.
     Initializes loan workflow (milestones, tasks).
+    Returns portal_url for redirect after submission.
     """
     verify_workspace_access(context, slug)
 
@@ -407,6 +412,14 @@ async def submit_application(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    # Construct portal URL with the same token used for submission
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+    portal_url = f"https://{base_domain}/portal/{context.workspace_slug}"
+    if token:
+        portal_url = f"{portal_url}?token={token}"
+
+    result["portal_url"] = portal_url
 
     # Log the action
     await log_purl_action(

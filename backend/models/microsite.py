@@ -230,6 +230,7 @@ class MicrositePage(Base):
     publish_history = relationship("MicrositePublishHistory", back_populates="microsite", cascade="all, delete-orphan")
     analytics_events = relationship("MicrositeAnalyticsEvent", back_populates="microsite", cascade="all, delete-orphan")
     leads = relationship("MicrositeLead", back_populates="microsite", cascade="all, delete-orphan")
+    custom_pages = relationship("MicrositeCustomPage", back_populates="microsite", cascade="all, delete-orphan")
 
 
 class MicrositeAsset(Base):
@@ -350,6 +351,28 @@ class MicrositeLead(Base):
 
     # Relationships
     microsite = relationship("MicrositePage", back_populates="leads")
+
+
+class MicrositeCustomPage(Base):
+    """Custom sub-pages for microsites (About, Services, etc.)"""
+    __tablename__ = "microsite_custom_pages"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    microsite_id = Column(Integer, ForeignKey("microsite_pages.id", ondelete="CASCADE"), nullable=False)
+
+    title = Column(String(255), nullable=False)
+    slug = Column(String(100), nullable=False)
+    content = Column(Text)
+
+    is_published = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    microsite = relationship("MicrositePage", back_populates="custom_pages")
 
 
 class OrganizationMicrositeSettings(Base):
@@ -566,6 +589,41 @@ class LeadResponse(BaseModel):
     appointment_booked: bool
     appointment_date: Optional[datetime]
     created_at: datetime
+
+
+# -------------------- CUSTOM PAGE SCHEMAS --------------------
+
+class CustomPageCreate(BaseModel):
+    """Request model for creating a custom page"""
+    title: str = Field(..., min_length=1, max_length=255)
+    slug: Optional[str] = None
+    content: Optional[str] = None
+    is_published: bool = True
+    sort_order: Optional[int] = 0
+
+
+class CustomPageUpdate(BaseModel):
+    """Request model for updating a custom page"""
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    slug: Optional[str] = None
+    content: Optional[str] = None
+    is_published: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class CustomPageResponse(BaseModel):
+    """Response model for custom page"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    microsite_id: int
+    title: str
+    slug: str
+    content: Optional[str]
+    is_published: bool
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
 
 
 # -------------------- ANALYTICS SCHEMAS --------------------
