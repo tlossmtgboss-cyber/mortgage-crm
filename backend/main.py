@@ -53743,10 +53743,10 @@ async def startup_event():
                 # Check if any user has slug 'tim-loss'
                 result = db_temp.execute(text("SELECT id FROM users WHERE slug = 'tim-loss'"))
                 if not result.fetchone():
-                    # Force set slug on first user with 'tim' in email/name
+                    # Force set slug on first user with 'tim' or 'loss' in email/name
                     result = db_temp.execute(text("""
                         UPDATE users SET slug = 'tim-loss'
-                        WHERE id = (SELECT id FROM users WHERE email ILIKE '%tim%' OR first_name ILIKE '%tim%' OR last_name ILIKE '%loss%' ORDER BY id LIMIT 1)
+                        WHERE id = (SELECT id FROM users WHERE email ILIKE '%tim%' OR email ILIKE '%loss%' OR full_name ILIKE '%tim%' OR full_name ILIKE '%loss%' ORDER BY id LIMIT 1)
                         RETURNING id, email
                     """))
                     updated = result.fetchone()
