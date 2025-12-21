@@ -127,14 +127,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
         <aside className="bold-impact-sidebar">
           {/* Schedule Appointment Card */}
           <div className="sidebar-card">
-            <div className="sidebar-card-icon schedule-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-            </div>
             <p className="sidebar-card-text">Have questions? Schedule a call with me.</p>
             <a href={calendlyUrl || `/schedule/${user?.slug || ''}`} className="sidebar-card-btn schedule-btn-action">
               Schedule with {loName.split(' ')[0]}
@@ -143,13 +135,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
 
           {/* Compare Estimates Card */}
           <div className="sidebar-card">
-            <div className="sidebar-card-icon compare-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                <path d="M9 14l2 2 4-4"/>
-              </svg>
-            </div>
             <p className="sidebar-card-text">Shopping for a home loan? Upload your estimates and I'll compare them for you.</p>
             <a href="/estimate-comparison" className="sidebar-card-btn compare-btn">
               Compare Loan Estimates
@@ -158,12 +143,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
 
           {/* Refinance Card */}
           <div className="sidebar-card">
-            <div className="sidebar-card-icon refinance-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9 22 9 12 15 12 15 22"/>
-              </svg>
-            </div>
             <p className="sidebar-card-text">Lower your rate or tap into your home's equity.</p>
             <a href="/apply/refinance" className="sidebar-card-btn refinance-btn">
               Refinance Your Home
@@ -172,12 +151,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
 
           {/* Purchase Application Card */}
           <div className="sidebar-card">
-            <div className="sidebar-card-icon purchase-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                <polyline points="22 4 12 14.01 9 11.01"/>
-              </svg>
-            </div>
             <p className="sidebar-card-text">Become a bulletproof buyer with a fully underwritten pre-approval.</p>
             <a href="/apply/purchase" className="sidebar-card-btn purchase-btn">
               Get Pre-Approved

@@ -266,41 +266,6 @@
   transform: translateY(-2px);
 }
 
-.sidebar-card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.sidebar-card-icon svg {
-  width: 22px;
-  height: 22px;
-}
-
-.sidebar-card-icon.schedule-icon {
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.sidebar-card-icon.compare-icon {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.sidebar-card-icon.refinance-icon {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.sidebar-card-icon.purchase-icon {
-  background: #ede9fe;
-  color: #7c3aed;
-}
-
 .sidebar-card-text {
   font-size: 14px;
   color: var(--theme-text-light);
@@ -780,17 +745,6 @@
 
   .sidebar-card {
     padding: 16px;
-  }
-
-  .sidebar-card-icon {
-    width: 36px;
-    height: 36px;
-    margin-bottom: 10px;
-  }
-
-  .sidebar-card-icon svg {
-    width: 18px;
-    height: 18px;
   }
 
   .sidebar-card-text {
