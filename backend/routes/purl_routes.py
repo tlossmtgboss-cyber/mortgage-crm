@@ -1463,6 +1463,78 @@ async def create_token(
         raise HTTPException(status_code=500, detail=f"Token creation failed: {str(e)}")
 
 
+# Temporary endpoint to regenerate token for workspace (remove after use)
+@purl_router.post(
+    "/admin/regenerate-token/{workspace_id}",
+    summary="Regenerate token (temporary)",
+    include_in_schema=False
+)
+async def regenerate_token_temp(
+    workspace_id: int = Path(...),
+    admin_key: str = Query(..., description="Admin key"),
+    db: Session = Depends(get_db)
+):
+    """Temporary endpoint to regenerate a token for a workspace."""
+    import os
+    import secrets
+    import hashlib
+    from datetime import timezone, timedelta
+
+    # Simple admin key check
+    expected_key = os.getenv("ADMIN_REGEN_KEY", "temp_regen_key_2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    # Get workspace
+    workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Generate new token
+    token_raw = secrets.token_hex(32)
+    full_token = f"purl_live_{token_raw}"
+    token_hash = hashlib.sha256(full_token.encode()).hexdigest()
+    token_prefix = full_token[:16]
+
+    now_utc = datetime.now(timezone.utc)
+    expires_at = now_utc + timedelta(days=365)
+
+    # Insert token
+    from sqlalchemy import text
+    result = db.execute(text("""
+        INSERT INTO purl_access_tokens (
+            organization_id, workspace_id, token_hash, token_prefix,
+            scope, status, expires_at, created_at
+        ) VALUES (
+            :org_id, :workspace_id, :token_hash, :token_prefix,
+            'full', 'active', :expires_at, :created_at
+        ) RETURNING id
+    """), {
+        "org_id": workspace.organization_id,
+        "workspace_id": workspace_id,
+        "token_hash": token_hash,
+        "token_prefix": token_prefix,
+        "expires_at": expires_at,
+        "created_at": now_utc
+    })
+    token_id = result.scalar()
+    db.commit()
+
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+    portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={full_token}"
+
+    logger.info(f"Regenerated token for workspace {workspace_id}: token_id={token_id}")
+
+    return {
+        "success": True,
+        "token_id": token_id,
+        "token": full_token,
+        "portal_url": portal_url,
+        "workspace_slug": workspace.slug,
+        "expires_at": expires_at.isoformat()
+    }
+
+
 @purl_admin_router.get(
     "/workspaces/{workspace_id}/tokens",
     summary="List tokens",
