@@ -20462,7 +20462,7 @@ async def debug_appointments_status(db: Session = Depends(get_db)):
                     sa.id, sa.title, sa.scheduled_start, sa.status,
                     sa.attendee_name, sa.attendee_email, sa.attendee_phone,
                     sa.video_link, sa.created_at,
-                    u.first_name as lo_first_name, u.last_name as lo_last_name
+                    u.full_name as lo_name
                 FROM scheduler_appointments sa
                 LEFT JOIN users u ON u.id = sa.assigned_user_id
                 ORDER BY sa.created_at DESC
@@ -20480,39 +20480,50 @@ async def debug_appointments_status(db: Session = Depends(get_db)):
                     "attendee_phone": row[6],
                     "video_link": row[7],
                     "created_at": row[8].isoformat() if row[8] else None,
-                    "lo_name": f"{row[9] or ''} {row[10] or ''}".strip()
+                    "lo_name": row[9] or ''
                 })
         except Exception as e:
             result["scheduler_appointments_error"] = str(e)
 
-        # Check legacy appointments
+        # Check legacy appointments (may not exist in all deployments)
         try:
-            legacy_appts = db.execute(text("""
-                SELECT
-                    a.id, a.appointment_type, a.scheduled_at, a.status,
-                    a.reminder_sent, a.meeting_link,
-                    l.first_name as lead_name, l.email as lead_email, l.phone as lead_phone,
-                    u.first_name as lo_first_name, u.last_name as lo_last_name
-                FROM appointments a
-                LEFT JOIN leads l ON l.id = a.lead_id
-                LEFT JOIN users u ON u.id = a.assigned_to
-                ORDER BY a.created_at DESC
-                LIMIT 5
-            """)).fetchall()
+            # First check if appointments table exists
+            table_check = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'appointments'
+                )
+            """)).scalar()
 
-            for row in legacy_appts:
-                result["legacy_appointments"].append({
-                    "id": row[0],
-                    "type": row[1],
-                    "scheduled_at": row[2].isoformat() if row[2] else None,
-                    "status": row[3],
-                    "reminder_sent": row[4],
-                    "meeting_link": row[5],
-                    "lead_name": row[6],
-                    "lead_email": row[7],
-                    "lead_phone": row[8],
-                    "lo_name": f"{row[9] or ''} {row[10] or ''}".strip()
-                })
+            if table_check:
+                legacy_appts = db.execute(text("""
+                    SELECT
+                        a.id, a.appointment_type, a.scheduled_at, a.status,
+                        a.reminder_sent, a.meeting_link,
+                        l.name as lead_name, l.email as lead_email, l.phone as lead_phone,
+                        u.full_name as lo_name
+                    FROM appointments a
+                    LEFT JOIN leads l ON l.id = a.lead_id
+                    LEFT JOIN users u ON u.id = a.assigned_to
+                    ORDER BY a.created_at DESC
+                    LIMIT 5
+                """)).fetchall()
+
+                for row in legacy_appts:
+                    result["legacy_appointments"].append({
+                        "id": row[0],
+                        "type": row[1],
+                        "scheduled_at": row[2].isoformat() if row[2] else None,
+                        "status": row[3],
+                        "reminder_sent": row[4],
+                        "meeting_link": row[5],
+                        "lead_name": row[6],
+                        "lead_email": row[7],
+                        "lead_phone": row[8],
+                        "lo_name": row[9] or ''
+                    })
+            else:
+                result["legacy_appointments_note"] = "appointments table does not exist"
         except Exception as e:
             result["legacy_appointments_error"] = str(e)
 
