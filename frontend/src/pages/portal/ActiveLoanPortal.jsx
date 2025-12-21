@@ -1317,10 +1317,10 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       {/* Header */}
       <header className="portal-header">
         <div className="header-content">
-          {/* Top Row - Client Name & Date Only */}
+          {/* Top Row - Logo & Date */}
           <div className="header-top-row">
-            <div className="client-name-section">
-              <h1 className="client-name">{borrowerName}</h1>
+            <div className="logo-section">
+              {/* Logo will go here */}
             </div>
             <div className="header-date">
               <span className="date-label">{formatCurrentDate()}</span>
