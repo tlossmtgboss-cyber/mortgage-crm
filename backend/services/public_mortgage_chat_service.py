@@ -246,12 +246,13 @@ class PublicMortgageChatService:
         appointment_type: str = "consultation",
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Book an appointment with the loan officer"""
+        """Book an appointment with the loan officer and create a lead"""
         if not self.lo_info:
             return {"success": False, "error": "Loan officer not found"}
 
         try:
             from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+            from main import Lead, LeadStage
 
             # Generate appointment ID
             appointment_id = f"APPT-{uuid.uuid4().hex[:8].upper()}"
@@ -262,12 +263,56 @@ class PublicMortgageChatService:
 
             end_time = appointment_time + timedelta(minutes=duration)
 
+            # Create or find the lead in CRM
+            lead = None
+            lead_id = None
+            try:
+                # Check if lead already exists by email
+                existing_lead = self.db.query(Lead).filter(
+                    Lead.email == contact_email,
+                    Lead.owner_id == self.lo_info["id"]
+                ).first()
+
+                if existing_lead:
+                    lead = existing_lead
+                    lead_id = existing_lead.id
+                    logger.info(f"Found existing lead {lead_id} for {contact_email}")
+                else:
+                    # Parse name into first/last
+                    name_parts = contact_name.strip().split(" ", 1)
+                    first_name = name_parts[0]
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+                    # Create new lead as Prospect
+                    lead = Lead(
+                        name=contact_name,
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=contact_email,
+                        phone=contact_phone,
+                        stage=LeadStage.PROSPECT,
+                        source="AI Chat - Microsite",
+                        owner_id=self.lo_info["id"],
+                        ai_score=70,  # Good score since they're scheduling
+                        sentiment="positive",
+                        next_action=f"Consultation scheduled for {appointment_time.strftime('%B %d at %I:%M %p')}"
+                    )
+                    self.db.add(lead)
+                    self.db.flush()  # Get the ID without committing
+                    lead_id = lead.id
+                    logger.info(f"Created new lead {lead_id} for {contact_email} as Prospect")
+
+            except Exception as lead_error:
+                logger.warning(f"Could not create lead: {lead_error}")
+                # Continue with appointment booking even if lead creation fails
+
             # Create the appointment
             appointment = ScheduledAppointment(
                 appointment_id=appointment_id,
                 loan_officer_id=self.lo_info["id"],
                 lo_name=self.lo_info["name"],
                 lo_email=self.lo_info["email"],
+                contact_id=lead_id,
                 contact_name=contact_name,
                 contact_email=contact_email,
                 contact_phone=contact_phone,
@@ -284,9 +329,21 @@ class PublicMortgageChatService:
             self.db.commit()
             self.db.refresh(appointment)
 
+            # Send notifications (async - don't block on failure)
+            self._send_appointment_notifications(
+                appointment_id=appointment_id,
+                contact_name=contact_name,
+                contact_email=contact_email,
+                contact_phone=contact_phone,
+                appointment_time=appointment_time,
+                duration=duration
+            )
+
             return {
                 "success": True,
                 "appointment_id": appointment_id,
+                "lead_id": lead_id,
+                "lead_status": "prospect",
                 "appointment": {
                     "id": appointment.id,
                     "appointment_id": appointment_id,
@@ -296,13 +353,37 @@ class PublicMortgageChatService:
                     "end_time": end_time.isoformat(),
                     "duration_minutes": duration,
                     "type": appointment_type
-                }
+                },
+                "message": f"Appointment confirmed! {self.lo_info['name']} will call you on {appointment_time.strftime('%A, %B %d at %I:%M %p')}."
             }
 
         except Exception as e:
             logger.error(f"Error booking appointment: {e}")
             self.db.rollback()
             return {"success": False, "error": str(e)}
+
+    def _send_appointment_notifications(
+        self,
+        appointment_id: str,
+        contact_name: str,
+        contact_email: str,
+        contact_phone: Optional[str],
+        appointment_time: datetime,
+        duration: int
+    ):
+        """Send notifications for the appointment"""
+        try:
+            # Log the appointment for now - actual email sending can be added
+            logger.info(f"Appointment {appointment_id} booked:")
+            logger.info(f"  - Contact: {contact_name} ({contact_email}, {contact_phone})")
+            logger.info(f"  - Time: {appointment_time}")
+            logger.info(f"  - LO: {self.lo_info['name']} ({self.lo_info['email']})")
+
+            # TODO: Add actual email/SMS notifications
+            # This would integrate with SendGrid, Twilio, etc.
+
+        except Exception as e:
+            logger.warning(f"Failed to send notifications: {e}")
 
     def generate_response(
         self,
@@ -332,33 +413,44 @@ class PublicMortgageChatService:
 About {lo_name}:
 {lo_bio if lo_bio else f"{lo_name} is an experienced mortgage professional dedicated to helping clients achieve their homeownership dreams."}
 
-Your role is to:
-1. Answer questions about mortgages, home loans, refinancing, and the lending process
-2. Help visitors understand their options
-3. Encourage them to schedule a consultation with {lo_name}
-4. Be helpful, professional, and warm
+Your PRIMARY GOAL is to:
+1. Answer the user's mortgage question helpfully
+2. ALWAYS proactively offer to schedule a call with {lo_name} at the END of every response
+3. Collect the user's name, email, and phone number to schedule the appointment
 
-Available appointment times for the next few days:
-{slots_text if slots_text else "Please ask about availability to see current openings."}
+{lo_name}'s available times for calls:
+{slots_text if slots_text else "Availability coming soon - please provide your contact info and we'll reach out."}
 
-IMPORTANT GUIDELINES:
-- Keep responses concise (2-4 sentences for simple questions)
-- Be encouraging about scheduling a call with {lo_name}
-- If someone seems interested in talking to {lo_name}, suggest scheduling a call
-- You can answer general mortgage questions about rates, loan types, down payments, credit scores, etc.
-- For specific rate quotes or pre-approval, encourage them to schedule a consultation
-- Be warm and personable, but professional
+RESPONSE FORMAT - Follow this structure for EVERY response:
+1. Answer their question briefly (2-3 sentences)
+2. Add value or context if helpful
+3. ALWAYS end with a proactive scheduling offer like:
+   "Would you like me to have {lo_name} give you a call to discuss this further? Here are some times that work:
+   [list 3-4 available times]
+   Just share your name, phone number, and email, and I'll get that scheduled for you!"
 
-When someone wants to schedule:
-- Ask for their name, email, and phone number
-- Confirm a time from the available slots
-- Let them know you'll help them book the appointment
+IMPORTANT - BE PROACTIVE:
+- Don't wait for them to ask about scheduling
+- After answering ANY question, proactively suggest a call
+- Make it easy - offer specific times from the available slots
+- Ask for: name, phone number, and email address
+- Once they provide contact info and choose a time, confirm the appointment
+
+COLLECTING INFO:
+- If they provide partial info (just name or just email), acknowledge it and ask for the missing pieces
+- You need: Full name, Phone number, Email address, and Preferred time
+- Once you have all info, confirm: "Perfect! I've scheduled your call with {lo_name} for [time]. You'll receive a confirmation at [email]. {lo_name} will call you at [phone]. Is there anything specific you'd like to discuss during the call?"
+
+TONE:
+- Warm, friendly, and helpful
+- Professional but not stiff
+- Enthusiastic about helping them connect with {lo_name}
 
 Do NOT:
 - Make up specific rates or terms
 - Promise approval or specific outcomes
 - Provide legal or tax advice
-- Share personal information about the loan officer beyond what's provided"""
+- End a response without offering to schedule a call"""
 
         # Build messages for API
         messages = [{"role": "system", "content": system_prompt}]

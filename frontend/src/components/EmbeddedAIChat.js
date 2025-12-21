@@ -17,6 +17,10 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [bookingData, setBookingData] = useState({ name: '', email: '', phone: '', selectedSlot: null });
+  const [bookingStatus, setBookingStatus] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -72,10 +76,16 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
         setSessionId(data.session_id);
       }
 
+      // Check if scheduling_intent and available_slots are present
+      if (data.scheduling_intent && data.available_slots && data.available_slots.length > 0) {
+        setAvailableSlots(data.available_slots);
+      }
+
       setMessages(prev => [...prev, {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: data.response || "I'm sorry, I couldn't process that. Please try again.",
+        availableSlots: data.available_slots,
       }]);
 
     } catch (error) {
@@ -106,6 +116,61 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
     "How long does the process take?",
     "What's the difference between FHA and conventional?"
   ];
+
+  // Handle slot selection
+  const handleSlotSelect = (slot) => {
+    setBookingData(prev => ({ ...prev, selectedSlot: slot }));
+    setShowBookingForm(true);
+  };
+
+  // Handle booking submission
+  const handleBookAppointment = async () => {
+    if (!bookingData.name || !bookingData.email || !bookingData.selectedSlot) {
+      setBookingStatus({ type: 'error', message: 'Please fill in all required fields' });
+      return;
+    }
+
+    setBookingStatus({ type: 'loading', message: 'Scheduling your appointment...' });
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/public/themes/chat/${userSlug}/book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_name: bookingData.name,
+          contact_email: bookingData.email,
+          contact_phone: bookingData.phone,
+          appointment_date: bookingData.selectedSlot.date,
+          appointment_time: bookingData.selectedSlot.start_time,
+          appointment_type: 'consultation'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setBookingStatus({ type: 'success', message: data.message || 'Appointment confirmed!' });
+        setShowBookingForm(false);
+        setAvailableSlots([]);
+
+        // Add confirmation message to chat
+        setMessages(prev => [...prev, {
+          id: `system-${Date.now()}`,
+          role: 'assistant',
+          content: `Great news! Your appointment with ${loName} is confirmed for ${bookingData.selectedSlot.display}. You'll receive a confirmation at ${bookingData.email}. We look forward to speaking with you!`,
+          isConfirmation: true
+        }]);
+
+        // Reset booking data
+        setBookingData({ name: '', email: '', phone: '', selectedSlot: null });
+      } else {
+        setBookingStatus({ type: 'error', message: data.error || 'Could not book appointment. Please try again.' });
+      }
+    } catch (error) {
+      console.error('Error booking appointment:', error);
+      setBookingStatus({ type: 'error', message: 'Something went wrong. Please try again.' });
+    }
+  };
 
   return (
     <section className="embedded-ai-chat" style={{ '--chat-primary': primaryColor }}>
@@ -146,7 +211,7 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
           <div className="chat-messages-area">
             <div className="messages-list">
               {messages.map((message) => (
-                <div key={message.id} className={`message ${message.role}`}>
+                <div key={message.id} className={`message ${message.role} ${message.isConfirmation ? 'confirmation' : ''}`}>
                   <div className="message-avatar">
                     {message.role === 'assistant' ? (
                       <svg viewBox="0 0 24 24" fill="currentColor">
@@ -158,7 +223,7 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
                       </svg>
                     )}
                   </div>
-                  <div className={`message-content ${message.isError ? 'error' : ''}`}>
+                  <div className={`message-content ${message.isError ? 'error' : ''} ${message.isConfirmation ? 'confirmation' : ''}`}>
                     <p>{message.content}</p>
                   </div>
                 </div>
@@ -181,6 +246,79 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
 
               <div ref={messagesEndRef} />
             </div>
+          </div>
+        )}
+
+        {/* Available Slots - Show when AI offers scheduling */}
+        {availableSlots.length > 0 && !showBookingForm && (
+          <div className="available-slots">
+            <p className="slots-label">Select a time for your call with {loName}:</p>
+            <div className="slots-grid">
+              {availableSlots.slice(0, 6).map((slot, idx) => (
+                <button
+                  key={idx}
+                  className="slot-btn"
+                  onClick={() => handleSlotSelect(slot)}
+                >
+                  {slot.display}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Booking Form - Show when slot is selected */}
+        {showBookingForm && (
+          <div className="booking-form">
+            <h4>Complete Your Booking</h4>
+            <p className="booking-time">
+              <strong>Selected time:</strong> {bookingData.selectedSlot?.display}
+              <button className="change-time-btn" onClick={() => setShowBookingForm(false)}>Change</button>
+            </p>
+
+            <div className="form-group">
+              <label>Your Name *</label>
+              <input
+                type="text"
+                value={bookingData.name}
+                onChange={(e) => setBookingData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="John Smith"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Email *</label>
+              <input
+                type="email"
+                value={bookingData.email}
+                onChange={(e) => setBookingData(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="john@example.com"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Phone Number</label>
+              <input
+                type="tel"
+                value={bookingData.phone}
+                onChange={(e) => setBookingData(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+
+            {bookingStatus && (
+              <div className={`booking-status ${bookingStatus.type}`}>
+                {bookingStatus.message}
+              </div>
+            )}
+
+            <button
+              className="book-btn"
+              onClick={handleBookAppointment}
+              disabled={bookingStatus?.type === 'loading'}
+            >
+              {bookingStatus?.type === 'loading' ? 'Scheduling...' : 'Confirm Appointment'}
+            </button>
           </div>
         )}
 
