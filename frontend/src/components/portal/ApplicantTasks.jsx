@@ -44,7 +44,7 @@ const useTaskNotification = (tasks, hasNewTasks) => {
 };
 
 // Lightbox Modal Component
-const LightboxModal = ({ isOpen, onClose, title, children }) => {
+const LightboxModal = ({ isOpen, onClose, onComplete, title, children, showCompleteButton = false, isCompleted = false }) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -58,6 +58,13 @@ const LightboxModal = ({ isOpen, onClose, title, children }) => {
 
   if (!isOpen) return null;
 
+  const handleComplete = () => {
+    if (onComplete) {
+      onComplete();
+    }
+    onClose();
+  };
+
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <div className="lightbox-content" onClick={e => e.stopPropagation()}>
@@ -67,6 +74,20 @@ const LightboxModal = ({ isOpen, onClose, title, children }) => {
         </div>
         <div className="lightbox-body">
           {children}
+          {showCompleteButton && (
+            <div className="lightbox-complete-section">
+              {isCompleted ? (
+                <div className="task-already-complete">
+                  <span className="complete-check">✓</span>
+                  <span>You've completed this task</span>
+                </div>
+              ) : (
+                <button className="complete-task-btn" onClick={handleComplete}>
+                  ✓ I've Read This — Mark Complete
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -218,69 +239,129 @@ const SevenStepProcessContent = () => (
 // Bullet Proof Buyer Content
 const BulletProofBuyerContent = () => (
   <div className="bullet-proof-buyer">
+    <div className="buyer-hero">
+      <h2>You've Made a Smart Move</h2>
+      <p className="buyer-tagline">Welcome to Becoming a Bulletproof Buyer</p>
+    </div>
+
     <p className="buyer-intro">
-      Become a Bullet Proof Buyer and stand out from the competition. Here's how to make your offer irresistible to sellers:
+      Buying a home can feel overwhelming — especially in today's market. Multiple offers, fast timelines, confusing advice, and pressure to make big decisions quickly.
+    </p>
+    <p className="buyer-intro">
+      That's exactly why you're here — and that's a good thing.
     </p>
 
-    <div className="buyer-sections">
-      <div className="buyer-section">
-        <div className="section-icon">🎯</div>
-        <h3>Get Fully Pre-Approved</h3>
-        <p>A pre-qualification is good, but a full pre-approval is better. We'll verify your income, assets, and credit upfront so there are no surprises.</p>
-        <ul>
-          <li>Submit all required documents early</li>
-          <li>Get credit issues resolved before shopping</li>
-          <li>Know your exact buying power</li>
+    <div className="buyer-callout">
+      <p><strong>A Bulletproof Buyer isn't someone who rushes or takes risks.</strong></p>
+      <p>A Bulletproof Buyer is someone who is prepared, supported, and positioned to move forward with confidence.</p>
+      <p className="callout-emphasis">And that's what we're building together.</p>
+    </div>
+
+    <div className="buyer-section-block">
+      <h3>What Being a Bulletproof Buyer Really Means</h3>
+      <p>In simple terms, being a Bulletproof Buyer means your financing is solid, your plan is clear, and there are no surprises waiting around the corner.</p>
+
+      <div className="buyer-checklist-block">
+        <p><strong>A Bulletproof Buyer:</strong></p>
+        <ul className="check-list">
+          <li>✅ Has financing that's truly ready — not just "pre-approved on paper"</li>
+          <li>✅ Understands what they can do before they're in a stressful situation</li>
+          <li>✅ Can move forward confidently when the right home appears</li>
+          <li>✅ Feels calm knowing their loan is structured correctly from the start</li>
         </ul>
       </div>
 
-      <div className="buyer-section">
-        <div className="section-icon">📋</div>
-        <h3>Be Document-Ready</h3>
-        <p>Have your complete financial package ready before making an offer. This shows sellers you mean business.</p>
-        <ul>
-          <li>2 years of tax returns</li>
-          <li>Recent pay stubs (30 days)</li>
-          <li>2 months of bank statements</li>
-          <li>Valid ID and Social Security</li>
-        </ul>
+      <p className="highlight-text">
+        This isn't about pressure or perfection.<br/>
+        <strong>It's about clarity, preparation, and peace of mind.</strong>
+      </p>
+      <p>When sellers review offers, they're not just looking at price — they're looking for certainty. And certainty comes from knowing the buyer is backed by a strong, well-prepared loan.</p>
+    </div>
+
+    <div className="buyer-section-block">
+      <h3>Why Buyers Who Are Prepared Feel More at Ease</h3>
+
+      <div className="ease-item">
+        <h4>1. You Understand What's Happening — and Why</h4>
+        <p>We take the time to explain how today's market works — pricing trends, demand, timelines, and expectations — so nothing feels confusing or rushed.</p>
+        <p className="ease-highlight">When you understand the why, decisions feel lighter. You move forward thoughtfully instead of reactively.</p>
       </div>
 
-      <div className="buyer-section">
-        <div className="section-icon">💪</div>
-        <h3>Strengthen Your Offer</h3>
-        <p>In competitive markets, being bullet proof can make the difference.</p>
+      <div className="ease-item">
+        <h4>2. You're Not Caught Off Guard by Appraisals</h4>
+        <p>In competitive markets, appraisal questions are common — and stressful when no plan exists.</p>
+        <p>As a Bulletproof Buyer, you already understand:</p>
         <ul>
-          <li>Larger earnest money deposit shows commitment</li>
-          <li>Flexible closing date accommodates sellers</li>
-          <li>Clean offer with minimal contingencies</li>
-          <li>Personal letter can create emotional connection</li>
+          <li>How appraisals work</li>
+          <li>What your options are</li>
+          <li>What flexibility you may or may not need</li>
         </ul>
+        <p className="ease-highlight">That preparation removes anxiety and replaces it with confidence.</p>
       </div>
 
-      <div className="buyer-section">
-        <div className="section-icon">⚡</div>
-        <h3>Stay Responsive</h3>
-        <p>Speed matters in real estate. Be ready to act quickly throughout the process.</p>
-        <ul>
-          <li>Check messages and emails daily</li>
-          <li>Respond to document requests within 24 hours</li>
-          <li>Keep your schedule flexible for inspections and appraisals</li>
-          <li>Have your loan officer on speed dial</li>
+      <div className="ease-item">
+        <h4>3. Your Financing Has Real Strength Behind It</h4>
+        <p>Many buyers carry a basic pre-approval. We go a step further by verifying income, assets, and credit early, so your approval isn't fragile.</p>
+        <p><strong>That means:</strong></p>
+        <ul className="checkmark-list">
+          <li>✔ Fewer last-minute surprises</li>
+          <li>✔ Clear expectations from day one</li>
+          <li>✔ A smoother, more predictable path to closing</li>
         </ul>
+        <p className="ease-highlight">This isn't about being aggressive — it's about being secure.</p>
+      </div>
+
+      <div className="ease-item">
+        <h4>4. You Control the Timeline — Not the Other Way Around</h4>
+        <p>Because we prepare your loan upfront, you're not scrambling later.</p>
+        <p><strong>You can:</strong></p>
+        <ul>
+          <li>Move forward when you are ready</li>
+          <li>Offer timelines with confidence</li>
+          <li>Trust that the process won't unravel at the last minute</li>
+        </ul>
+        <p className="ease-highlight">Sellers appreciate that — but more importantly, you benefit from the calm that comes with readiness.</p>
       </div>
     </div>
 
-    <div className="buyer-checklist">
-      <h4>✅ Bullet Proof Buyer Checklist</h4>
-      <div className="checklist-grid">
-        <label><input type="checkbox" /> Full pre-approval letter in hand</label>
-        <label><input type="checkbox" /> All documents submitted and verified</label>
-        <label><input type="checkbox" /> Credit score optimized</label>
-        <label><input type="checkbox" /> Down payment funds verified</label>
-        <label><input type="checkbox" /> Gift letters prepared (if applicable)</label>
-        <label><input type="checkbox" /> Emergency fund established</label>
+    <div className="buyer-section-block highlight-section">
+      <h3>Why You're in the Right Place</h3>
+      <p>You didn't just apply for a loan — you chose a process designed to protect you.</p>
+
+      <p><strong>Here's what makes this experience different:</strong></p>
+
+      <div className="difference-item">
+        <h4>✔ We Prepare — Not Just Approve</h4>
+        <p>Your file is built carefully so it holds up under real-world conditions, not just ideal ones.</p>
       </div>
+
+      <div className="difference-item">
+        <h4>✔ You're Guided at Every Step</h4>
+        <p>You'll always know what's needed, what's next, and why it matters.</p>
+      </div>
+
+      <div className="difference-item">
+        <h4>✔ Confidence Replaces Stress</h4>
+        <p>Instead of wondering if something will go wrong, you know you're supported by a clear plan.</p>
+      </div>
+    </div>
+
+    <div className="buyer-summary">
+      <h3>Your Bulletproof Advantage (At a Glance)</h3>
+      <p>You're gaining:</p>
+      <ul className="advantage-list">
+        <li>🔹 Clear market guidance</li>
+        <li>🔹 Appraisal preparedness</li>
+        <li>🔹 Verified underwriting early in the process</li>
+        <li>🔹 Strong, reliable approvals</li>
+        <li>🔹 Fewer surprises and smoother closings</li>
+        <li>🔹 Confidence that your financing is built to last</li>
+      </ul>
+      <p className="summary-emphasis"><strong>That's what being a Bulletproof Buyer truly means.</strong></p>
+    </div>
+
+    <div className="buyer-footer">
+      <p><strong>And that's why you're exactly where you should be.</strong></p>
     </div>
   </div>
 );
@@ -512,9 +593,8 @@ export default function ApplicantTasks({
     }
   }, [completedTasks, storageKey]);
 
-  // Mark task as completed when lightbox is closed
-  const handleCloseLightbox = useCallback((taskId, setter) => {
-    setter(false);
+  // Mark task as completed (only via button click)
+  const markTaskComplete = useCallback((taskId) => {
     if (!completedTasks[taskId]) {
       setCompletedTasks(prev => ({ ...prev, [taskId]: true }));
       onTaskComplete?.(taskId);
@@ -567,8 +647,11 @@ export default function ApplicantTasks({
       {/* 7 Step Process Lightbox */}
       <LightboxModal
         isOpen={showSevenStep}
-        onClose={() => handleCloseLightbox('seven_step_process', setShowSevenStep)}
+        onClose={() => setShowSevenStep(false)}
+        onComplete={() => markTaskComplete('seven_step_process')}
         title="How to Borrow Money: The 7 Steps"
+        showCompleteButton={true}
+        isCompleted={completedTasks['seven_step_process'] || false}
       >
         <SevenStepProcessContent />
       </LightboxModal>
@@ -576,8 +659,11 @@ export default function ApplicantTasks({
       {/* Bullet Proof Buyer Lightbox */}
       <LightboxModal
         isOpen={showBulletProof}
-        onClose={() => handleCloseLightbox('bullet_proof_buyer', setShowBulletProof)}
+        onClose={() => setShowBulletProof(false)}
+        onComplete={() => markTaskComplete('bullet_proof_buyer')}
         title="Be a Bullet Proof Buyer"
+        showCompleteButton={true}
+        isCompleted={completedTasks['bullet_proof_buyer'] || false}
       >
         <BulletProofBuyerContent />
       </LightboxModal>
@@ -585,8 +671,11 @@ export default function ApplicantTasks({
       {/* Documents Needed Lightbox */}
       <LightboxModal
         isOpen={showDocuments}
-        onClose={() => handleCloseLightbox('review_documents', setShowDocuments)}
+        onClose={() => setShowDocuments(false)}
+        onComplete={() => markTaskComplete('review_documents')}
         title="Documents Needed"
+        showCompleteButton={true}
+        isCompleted={completedTasks['review_documents'] || false}
       >
         <DocumentsNeededContent
           documentRequirements={documentRequirements}
