@@ -96,7 +96,7 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
                 <span className="login-option-title">Loan Officer</span>
                 <span className="login-option-desc">Access the CRM dashboard</span>
               </a>
-              <a href="/borrower-login" className="login-option client">
+              <a href="/apply/login" className="login-option client">
                 <span className="login-option-title">Client</span>
                 <span className="login-option-desc">View your loan status</span>
               </a>
