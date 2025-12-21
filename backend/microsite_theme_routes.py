@@ -605,6 +605,124 @@ async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@public_router.post("/add-testimonials-page/{user_slug}")
+async def add_testimonials_page_for_user(user_slug: str, db: Session = Depends(get_db)):
+    """One-time endpoint to add a Testimonials page for a user's microsite."""
+    try:
+        from main import User
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
+
+        # Find user
+        user = db.query(User).filter(User.slug == user_slug).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_slug} not found")
+
+        # Get microsite
+        microsite = db.query(Microsite).filter(Microsite.user_id == user.id).first()
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found for this user")
+
+        # Check if Testimonials page already exists
+        existing = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == "testimonials"
+        ).first()
+
+        if existing:
+            return {"status": "exists", "message": "Testimonials page already exists", "page_id": existing.id}
+
+        user_name = user.full_name or user_slug.replace("-", " ").title()
+
+        # Create Testimonials page content with sample reviews
+        content = {
+            "headline": "What Our Clients Say",
+            "subheadline": "Real stories from homeowners I've helped achieve their dreams",
+            "testimonials": [
+                {
+                    "name": "Sarah & Michael Johnson",
+                    "location": "Denver, CO",
+                    "type": "First-Time Homebuyers",
+                    "rating": 5,
+                    "text": f"As first-time homebuyers, we were nervous about the entire process. {user_name} made everything so easy to understand and was always available to answer our questions. We closed on our dream home in just 30 days!",
+                    "date": "2024"
+                },
+                {
+                    "name": "Robert Chen",
+                    "location": "Aurora, CO",
+                    "type": "Refinance",
+                    "rating": 5,
+                    "text": f"{user_name} helped us refinance and save over $400/month on our mortgage. The process was smooth and {user_name} kept us informed every step of the way. Highly recommend!",
+                    "date": "2024"
+                },
+                {
+                    "name": "Jennifer Martinez",
+                    "location": "Boulder, CO",
+                    "type": "VA Loan",
+                    "rating": 5,
+                    "text": f"As a veteran, I wanted someone who understood VA loans. {user_name} was incredibly knowledgeable and helped me take advantage of benefits I didn't even know I had. Thank you for your patience and expertise!",
+                    "date": "2024"
+                },
+                {
+                    "name": "David & Lisa Thompson",
+                    "location": "Lakewood, CO",
+                    "type": "Investment Property",
+                    "rating": 5,
+                    "text": f"We've worked with {user_name} on multiple investment properties now. Always professional, always delivers great rates, and makes the process stress-free. Our go-to mortgage professional!",
+                    "date": "2023"
+                },
+                {
+                    "name": "Amanda Wilson",
+                    "location": "Centennial, CO",
+                    "type": "FHA Loan",
+                    "rating": 5,
+                    "text": f"I thought my credit score would prevent me from buying a home, but {user_name} found an FHA loan that worked for my situation. Now I'm a proud homeowner! Forever grateful.",
+                    "date": "2024"
+                },
+                {
+                    "name": "James & Patricia Brown",
+                    "location": "Highlands Ranch, CO",
+                    "type": "Jumbo Loan",
+                    "rating": 5,
+                    "text": f"Buying our luxury home required a jumbo loan, and {user_name} navigated the complexities with ease. Excellent communication throughout and a seamless closing. Top-notch service!",
+                    "date": "2024"
+                }
+            ],
+            "stats": {
+                "totalClients": "500+",
+                "avgRating": "4.9",
+                "yearsExperience": "10+"
+            },
+            "cta": {
+                "headline": "Ready to Start Your Journey?",
+                "text": "Join hundreds of satisfied clients who've found their perfect home.",
+                "buttonText": "Get Started Today"
+            }
+        }
+
+        # Create the Testimonials page
+        testimonials_page = MicrositeContentPage(
+            microsite_id=microsite.id,
+            page_type=PageType.TESTIMONIALS,
+            slug="testimonials",
+            title="Reviews",
+            content=content,
+            is_enabled=True,
+            display_order=3,
+            show_in_nav=True
+        )
+        db.add(testimonials_page)
+        db.commit()
+        db.refresh(testimonials_page)
+
+        return {"status": "success", "message": "Testimonials page created", "page_id": testimonials_page.id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding testimonials page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @public_router.post("/add-services-page/{user_slug}")
 async def add_services_page_for_user(user_slug: str, db: Session = Depends(get_db)):
     """One-time endpoint to add a Services/Loan Programs page for a user's microsite."""

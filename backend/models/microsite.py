@@ -22,11 +22,41 @@ import re
 
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, ForeignKey,
-    Numeric, Index, CheckConstraint, UniqueConstraint, Float, Date, BigInteger
+    Numeric, Index, CheckConstraint, UniqueConstraint, Float, Date, BigInteger,
+    TypeDecorator
 )
 from sqlalchemy.dialects.postgresql import JSONB, INET, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+import json as json_module
+
+
+class JSONArrayType(TypeDecorator):
+    """
+    Custom type that stores arrays as JSON strings in SQLite
+    but works as native arrays in PostgreSQL.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        """Convert Python list to JSON string for storage"""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return json_module.dumps(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        """Convert stored JSON string back to Python list"""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                return json_module.loads(value)
+            except json_module.JSONDecodeError:
+                return [value]
+        return list(value) if value else None
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic import ConfigDict
@@ -138,7 +168,7 @@ class MicrositeTemplatePack(Base):
 
     thumbnail_url = Column(Text)
     category = Column(String(100))
-    tags = Column(ARRAY(Text))
+    tags = Column(JSONArrayType)  # Use custom type for SQLite/PostgreSQL compatibility
 
     baseline_conversion_rate = Column(Numeric(5, 4))
 
@@ -406,20 +436,6 @@ class TemplatePackListResponse(BaseModel):
     category: Optional[str]
     tags: Optional[List[str]] = None
     thumbnail_url: Optional[str]
-
-    @field_validator('tags', mode='before')
-    @classmethod
-    def parse_tags(cls, v):
-        """Parse tags from JSON string (SQLite) or array (PostgreSQL)"""
-        if v is None:
-            return None
-        if isinstance(v, str):
-            import json
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                return [v]  # Single tag as string
-        return list(v) if v else None
 
 
 # -------------------- MICROSITE SCHEMAS --------------------
