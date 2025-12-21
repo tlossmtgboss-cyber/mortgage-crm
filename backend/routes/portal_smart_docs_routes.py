@@ -233,36 +233,92 @@ async def upload_document_for_requirement(
 
     # Read file content
     content = await file.read()
+    mime_type = file.content_type or "application/octet-stream"
+    file_size = len(content)
 
-    # Use the document review pipeline to process the upload
+    # Validate file size (max 20MB)
+    if file_size > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 20MB)")
+
+    # Get S3 service and generate storage key
+    s3_service = get_smart_docs_s3_service()
+    storage_key = s3_service.generate_storage_key(
+        loan_id=main_loan_id,
+        borrower_id=request.borrower_id,
+        file_name=file.filename
+    )
+
+    # Create document record
+    document = SmartDocument(
+        request_id=request_id,
+        loan_id=main_loan_id,
+        borrower_id=request.borrower_id,
+        file_name=file.filename,
+        mime_type=mime_type,
+        file_size=file_size,
+        storage_key=storage_key,
+        doc_type=request.doc_type,
+        status="UPLOADED",
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    # Upload file to S3
+    upload_result = s3_service.upload_file(
+        file_content=content,
+        storage_key=storage_key,
+        content_type=mime_type,
+        metadata={
+            "loan_id": str(main_loan_id),
+            "borrower_id": str(request.borrower_id) if request.borrower_id else "",
+            "document_id": str(document.id),
+            "request_id": str(request_id),
+            "original_filename": file.filename
+        }
+    )
+
+    if not upload_result.get("success"):
+        logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
+
+    # Process the document through the review pipeline
     try:
         pipeline = DocumentReviewPipeline(db)
-        result = pipeline.process_upload(
+        result = pipeline.process_document(
+            document_id=document.id,
             file_content=content,
+            mime_type=mime_type,
             filename=file.filename,
-            content_type=file.content_type,
-            loan_id=main_loan_id,
-            borrower_id=request.borrower_id or 1,
+            doc_type=request.doc_type,
             request_id=request_id,
-            document_category=request.doc_type.value if request.doc_type else "other"
         )
 
-        # Update request status to pending review
-        if request.status == RequestStatus.OPEN:
+        # Update request status based on result
+        if result.decision and result.decision.value == "ACCEPT":
+            request.status = RequestStatus.ACCEPTED
+        elif result.decision and result.decision.value == "REJECT":
+            request.status = RequestStatus.REJECTED
+        elif request.status == RequestStatus.OPEN:
             request.status = RequestStatus.PENDING_REVIEW
-            db.commit()
+        db.commit()
 
         return {
             "success": True,
             "message": "Document uploaded successfully",
-            "document_id": result.get("document", {}).get("id"),
-            "validation": result.get("validation", {}),
+            "document_id": document.id,
+            "decision": result.decision.value if result.decision else None,
+            "validation": {
+                "is_screenshot": result.is_screenshot,
+                "is_fresh": result.is_fresh,
+                "rejection_reason": result.rejection_reason,
+                "fix_instructions": result.fix_instructions,
+            },
             "requirement_status": request.status.value
         }
 
     except Exception as e:
         logger.error(f"Error processing upload: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload processing failed: {str(e)}")
 
 
 @router.get("/{workspace_slug}/summary")

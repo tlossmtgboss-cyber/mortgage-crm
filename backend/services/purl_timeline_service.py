@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, case
 
 from models.purl import (
     PURLWorkspace,
@@ -339,7 +339,7 @@ class PURLTimelineService:
 
         tasks = query.order_by(
             # Priority order
-            func.case(
+            case(
                 (PURLTask.priority == TaskPriority.URGENT.value, 1),
                 (PURLTask.priority == TaskPriority.HIGH.value, 2),
                 (PURLTask.priority == TaskPriority.MEDIUM.value, 3),
