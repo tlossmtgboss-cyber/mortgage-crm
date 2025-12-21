@@ -423,6 +423,8 @@ class PURLWorkspaceService:
                     logger.info(f"Loaded {len(document_requirements)} document requirements for loan {current_loan.id}")
                 except Exception as e:
                     logger.warning(f"Failed to load document requirements: {e}")
+                    # Rollback to clear the failed transaction state so subsequent queries can proceed
+                    self.db.rollback()
 
             # Get milestones if loan exists
             milestones = []
