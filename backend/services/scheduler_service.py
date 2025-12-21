@@ -342,15 +342,17 @@ class SchedulerService:
             session.close()
 
     def send_appointment_reminders(self):
-        """Send reminders for upcoming appointments."""
+        """Send reminders for upcoming appointments with cascading intervals (24h, 1h)."""
         logger.info("Running appointment reminder job")
 
         session = get_db_session()
         notifier = get_notification_service()
 
         try:
-            # Find appointments in the next 24 hours that haven't been reminded
-            query = text("""
+            # =====================================================================
+            # PART 1: Legacy appointments table (single reminder)
+            # =====================================================================
+            legacy_query = text("""
                 SELECT
                     a.id as appointment_id,
                     a.appointment_type,
@@ -371,7 +373,7 @@ class SchedulerService:
                 AND a.status = 'scheduled'
             """)
 
-            result = session.execute(query)
+            result = session.execute(legacy_query)
             appointments = result.fetchall()
 
             for appt in appointments:
@@ -409,16 +411,179 @@ class SchedulerService:
                     session.execute(update_query, {"appt_id": appt_dict["appointment_id"]})
                     session.commit()
 
-                    logger.info(f"Sent reminder for appointment {appt_dict['appointment_id']}")
+                    logger.info(f"Sent legacy reminder for appointment {appt_dict['appointment_id']}")
 
                 except Exception as e:
-                    logger.error(f"Failed to send reminder for appointment {appt_dict.get('appointment_id')}: {e}")
+                    logger.error(f"Failed to send legacy reminder for appointment {appt_dict.get('appointment_id')}: {e}")
                     session.rollback()
+
+            # =====================================================================
+            # PART 2: Smart scheduler appointments (cascading reminders: 24h, 1h)
+            # =====================================================================
+            self._send_smart_scheduler_reminders(session, notifier)
 
         except Exception as e:
             logger.error(f"Appointment reminder job failed: {e}")
         finally:
             session.close()
+
+    def _send_smart_scheduler_reminders(self, session, notifier):
+        """Send cascading reminders for smart scheduler appointments (24h and 1h before)."""
+        try:
+            # Check if scheduler_appointments table exists
+            table_check = session.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'scheduler_appointments'
+                )
+            """))
+            if not table_check.scalar():
+                logger.debug("scheduler_appointments table doesn't exist, skipping smart reminders")
+                return
+
+            # 24-hour reminders
+            query_24h = text("""
+                SELECT
+                    sa.id as appointment_id,
+                    sa.title,
+                    sa.scheduled_start,
+                    sa.video_link,
+                    sa.attendee_name,
+                    sa.attendee_email,
+                    sa.attendee_phone,
+                    u.first_name as lo_first_name,
+                    u.last_name as lo_last_name
+                FROM scheduler_appointments sa
+                LEFT JOIN users u ON u.id = sa.assigned_user_id
+                WHERE sa.scheduled_start BETWEEN NOW() + INTERVAL '23 hours' AND NOW() + INTERVAL '25 hours'
+                AND sa.status = 'booked'
+                AND NOT EXISTS (
+                    SELECT 1 FROM scheduler_reminders sr
+                    WHERE sr.appointment_id = sa.id
+                    AND sr.hours_before = 24
+                    AND sr.status IN ('sent', 'delivered')
+                )
+            """)
+
+            result_24h = session.execute(query_24h)
+            appointments_24h = result_24h.fetchall()
+
+            for appt in appointments_24h:
+                self._send_reminder_for_smart_appt(session, notifier, appt, 24)
+
+            # 1-hour reminders
+            query_1h = text("""
+                SELECT
+                    sa.id as appointment_id,
+                    sa.title,
+                    sa.scheduled_start,
+                    sa.video_link,
+                    sa.attendee_name,
+                    sa.attendee_email,
+                    sa.attendee_phone,
+                    u.first_name as lo_first_name,
+                    u.last_name as lo_last_name
+                FROM scheduler_appointments sa
+                LEFT JOIN users u ON u.id = sa.assigned_user_id
+                WHERE sa.scheduled_start BETWEEN NOW() + INTERVAL '50 minutes' AND NOW() + INTERVAL '70 minutes'
+                AND sa.status = 'booked'
+                AND NOT EXISTS (
+                    SELECT 1 FROM scheduler_reminders sr
+                    WHERE sr.appointment_id = sa.id
+                    AND sr.hours_before = 1
+                    AND sr.status IN ('sent', 'delivered')
+                )
+            """)
+
+            result_1h = session.execute(query_1h)
+            appointments_1h = result_1h.fetchall()
+
+            for appt in appointments_1h:
+                self._send_reminder_for_smart_appt(session, notifier, appt, 1)
+
+            logger.info(f"Processed {len(appointments_24h)} 24h reminders and {len(appointments_1h)} 1h reminders")
+
+        except Exception as e:
+            logger.error(f"Smart scheduler reminders failed: {e}")
+            session.rollback()
+
+    def _send_reminder_for_smart_appt(self, session, notifier, appt, hours_before: int):
+        """Send reminder for a smart scheduler appointment and record it."""
+        try:
+            appt_dict = dict(appt._mapping)
+            lo_name = f"{appt_dict.get('lo_first_name', '')} {appt_dict.get('lo_last_name', '')}".strip()
+            appointment_id = appt_dict["appointment_id"]
+
+            # Determine reminder message based on hours
+            if hours_before == 24:
+                reminder_prefix = "Reminder: Tomorrow - "
+            elif hours_before == 1:
+                reminder_prefix = "Starting Soon: "
+            else:
+                reminder_prefix = "Reminder: "
+
+            email_sent = False
+            sms_sent = False
+
+            # Send email reminder
+            if appt_dict.get("attendee_email"):
+                try:
+                    notifier.send_appointment_confirmation(
+                        borrower_email=appt_dict["attendee_email"],
+                        borrower_name=appt_dict.get("attendee_name", "there"),
+                        appointment_type=f"{reminder_prefix}{appt_dict.get('title', 'Appointment')}",
+                        appointment_time=appt_dict["scheduled_start"],
+                        lo_name=lo_name,
+                        meeting_link=appt_dict.get("video_link"),
+                    )
+                    email_sent = True
+                except Exception as e:
+                    logger.error(f"Failed to send email reminder for appointment {appointment_id}: {e}")
+
+            # Send SMS reminder
+            if appt_dict.get("attendee_phone"):
+                try:
+                    notifier.send_appointment_reminder_sms(
+                        borrower_phone=appt_dict["attendee_phone"],
+                        borrower_name=appt_dict.get("attendee_name", "there"),
+                        appointment_time=appt_dict["scheduled_start"],
+                        lo_name=lo_name,
+                        meeting_link=appt_dict.get("video_link"),
+                    )
+                    sms_sent = True
+                except Exception as e:
+                    logger.error(f"Failed to send SMS reminder for appointment {appointment_id}: {e}")
+
+            # Record the reminder in scheduler_reminders table
+            if email_sent or sms_sent:
+                # Check if scheduler_reminders table exists
+                table_check = session.execute(text("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = 'scheduler_reminders'
+                    )
+                """))
+                if table_check.scalar():
+                    if email_sent:
+                        session.execute(text("""
+                            INSERT INTO scheduler_reminders
+                            (appointment_id, channel, scheduled_for, hours_before, status, sent_at, created_at, updated_at)
+                            VALUES (:appt_id, 'email', NOW(), :hours_before, 'sent', NOW(), NOW(), NOW())
+                        """), {"appt_id": appointment_id, "hours_before": hours_before})
+
+                    if sms_sent:
+                        session.execute(text("""
+                            INSERT INTO scheduler_reminders
+                            (appointment_id, channel, scheduled_for, hours_before, status, sent_at, created_at, updated_at)
+                            VALUES (:appt_id, 'sms', NOW(), :hours_before, 'sent', NOW(), NOW(), NOW())
+                        """), {"appt_id": appointment_id, "hours_before": hours_before})
+
+                session.commit()
+                logger.info(f"Sent {hours_before}h reminder for smart appointment {appointment_id} (email={email_sent}, sms={sms_sent})")
+
+        except Exception as e:
+            logger.error(f"Failed to send reminder for smart appointment: {e}")
+            session.rollback()
 
     def cleanup_stale_applications(self):
         """Archive applications that have been inactive for 90+ days."""
