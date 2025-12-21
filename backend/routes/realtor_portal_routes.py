@@ -918,95 +918,123 @@ async def create_test_realtor(
     Requires admin API key for authorization.
     """
     import os
+    import traceback
     expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
 
     if admin_key != expected_key:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     test_email = "test.realtor@perenniaai.com"
+    realtor_id = None
 
-    # Check if already exists
-    existing = db.execute(text("""
-        SELECT id, email FROM realtor_portal_users WHERE email = :email
-    """), {"email": test_email}).fetchone()
+    try:
+        # Step 1: Check if already exists
+        logger.info("Step 1: Checking for existing realtor")
+        existing = db.execute(text("""
+            SELECT id, email FROM realtor_portal_users WHERE email = :email
+        """), {"email": test_email}).fetchone()
 
-    if existing:
-        realtor_id = existing[0]
-        logger.info(f"Test realtor already exists: {realtor_id}")
-    else:
-        # Get organization
-        org = db.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
-        org_id = org[0] if org else 1
+        if existing:
+            realtor_id = existing[0]
+            logger.info(f"Test realtor already exists: {realtor_id}")
+        else:
+            # Step 2: Get organization
+            logger.info("Step 2: Getting organization")
+            org = db.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
+            org_id = org[0] if org else 1
+            logger.info(f"Using org_id: {org_id}")
 
-        # Get an LO
-        lo = db.execute(text("""
-            SELECT id FROM users WHERE role IN ('loan_officer', 'admin', 'sales') LIMIT 1
-        """)).fetchone()
-        lo_id = lo[0] if lo else None
+            # Step 3: Get an LO
+            logger.info("Step 3: Getting LO")
+            lo = db.execute(text("""
+                SELECT id FROM users WHERE role IN ('loan_officer', 'admin', 'sales') LIMIT 1
+            """)).fetchone()
+            lo_id = lo[0] if lo else None
+            logger.info(f"Using lo_id: {lo_id}")
 
-        # Create realtor
-        result = db.execute(text("""
-            INSERT INTO realtor_portal_users (
-                organization_id, email, phone, first_name, last_name,
-                brokerage_name, license_number, license_state,
-                primary_lo_id, is_active, created_at
-            ) VALUES (
-                :org_id, :email, '555-TEST-001', 'Test', 'Realtor',
-                'Perennia Test Realty', 'TEST12345', 'CA',
-                :lo_id, TRUE, CURRENT_TIMESTAMP
-            ) RETURNING id
-        """), {"org_id": org_id, "email": test_email, "lo_id": lo_id})
-        realtor_id = result.fetchone()[0]
-        db.commit()
-        logger.info(f"Created test realtor: {realtor_id}")
+            # Step 4: Create realtor
+            logger.info("Step 4: Creating realtor")
+            result = db.execute(text("""
+                INSERT INTO realtor_portal_users (
+                    organization_id, email, phone, first_name, last_name,
+                    brokerage_name, license_number, license_state,
+                    primary_lo_id, is_active, created_at
+                ) VALUES (
+                    :org_id, :email, '555-TEST-001', 'Test', 'Realtor',
+                    'Perennia Test Realty', 'TEST12345', 'CA',
+                    :lo_id, TRUE, CURRENT_TIMESTAMP
+                ) RETURNING id
+            """), {"org_id": org_id, "email": test_email, "lo_id": lo_id})
+            realtor_id = result.fetchone()[0]
+            db.commit()
+            logger.info(f"Created test realtor: {realtor_id}")
 
-    # Create session token
-    session_token = f"test-prod-{secrets.token_urlsafe(24)}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        # Step 5: Create session token
+        logger.info("Step 5: Creating session token")
+        session_token = f"test-prod-{secrets.token_urlsafe(24)}"
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
-    # Remove old sessions
-    db.execute(text("""
-        DELETE FROM realtor_portal_sessions WHERE realtor_id = :rid
-    """), {"rid": realtor_id})
-
-    # Create new session
-    db.execute(text("""
-        INSERT INTO realtor_portal_sessions (
-            realtor_id, token, expires_at, ip_address, user_agent, created_at
-        ) VALUES (
-            :rid, :token, :exp, '0.0.0.0', 'Admin API', CURRENT_TIMESTAMP
-        )
-    """), {"rid": realtor_id, "token": session_token, "exp": expires_at})
-    db.commit()
-
-    # Associate with recent loans
-    loans = db.execute(text("""
-        SELECT l.id, l.borrower_name FROM loans l
-        WHERE l.id NOT IN (
-            SELECT loan_id FROM realtor_loan_associations WHERE realtor_id = :rid
-        )
-        ORDER BY l.id DESC LIMIT 5
-    """), {"rid": realtor_id}).fetchall()
-
-    associated_loans = []
-    for loan in loans:
+        # Step 6: Remove old sessions
+        logger.info("Step 6: Removing old sessions")
         db.execute(text("""
-            INSERT INTO realtor_loan_associations (
-                realtor_id, loan_id, role, access_granted_at
-            ) VALUES (:rid, :lid, 'buyer_agent', CURRENT_TIMESTAMP)
-        """), {"rid": realtor_id, "lid": loan[0]})
-        associated_loans.append({"id": loan[0], "borrower": loan[1]})
-    db.commit()
+            DELETE FROM realtor_portal_sessions WHERE realtor_id = :rid
+        """), {"rid": realtor_id})
 
-    return {
-        "success": True,
-        "realtor_id": realtor_id,
-        "email": test_email,
-        "token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "associated_loans": associated_loans,
-        "test_urls": {
-            "profile": f"https://api.perenniaai.com/api/v1/realtor-portal/me?token={session_token}",
-            "loans": f"https://api.perenniaai.com/api/v1/realtor-portal/loans?token={session_token}"
+        # Step 7: Create new session
+        logger.info("Step 7: Creating new session")
+        db.execute(text("""
+            INSERT INTO realtor_portal_sessions (
+                realtor_id, token, expires_at, ip_address, user_agent, created_at
+            ) VALUES (
+                :rid, :token, :exp, '0.0.0.0', 'Admin API', CURRENT_TIMESTAMP
+            )
+        """), {"rid": realtor_id, "token": session_token, "exp": expires_at})
+        db.commit()
+
+        # Step 8: Associate with recent loans
+        logger.info("Step 8: Associating with loans")
+        loans = db.execute(text("""
+            SELECT l.id, l.borrower_name FROM loans l
+            WHERE l.id NOT IN (
+                SELECT loan_id FROM realtor_loan_associations WHERE realtor_id = :rid
+            )
+            ORDER BY l.id DESC LIMIT 5
+        """), {"rid": realtor_id}).fetchall()
+
+        associated_loans = []
+        for loan in loans:
+            db.execute(text("""
+                INSERT INTO realtor_loan_associations (
+                    realtor_id, loan_id, role, access_granted_at
+                ) VALUES (:rid, :lid, 'buyer_agent', CURRENT_TIMESTAMP)
+            """), {"rid": realtor_id, "lid": loan[0]})
+            associated_loans.append({"id": loan[0], "borrower": loan[1]})
+        db.commit()
+
+        logger.info("Test realtor creation complete")
+        return {
+            "success": True,
+            "realtor_id": realtor_id,
+            "email": test_email,
+            "token": session_token,
+            "expires_at": expires_at.isoformat(),
+            "associated_loans": associated_loans,
+            "test_urls": {
+                "profile": f"https://api.perenniaai.com/api/v1/realtor-portal/me?token={session_token}",
+                "loans": f"https://api.perenniaai.com/api/v1/realtor-portal/loans?token={session_token}"
+            }
         }
-    }
+
+    except Exception as e:
+        db.rollback()
+        error_msg = str(e)
+        stack_trace = traceback.format_exc()
+        logger.error(f"Error creating test realtor: {error_msg}\n{stack_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": error_msg,
+                "step": "See logs for step info",
+                "traceback": stack_trace.split('\n')[-5:]
+            }
+        )
