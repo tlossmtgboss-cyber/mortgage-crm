@@ -1352,3 +1352,46 @@ async def check_email_verification(
     except Exception as e:
         logger.error(f"Error checking email verification: {str(e)}")
         return {"valid": False, "message": "Verification failed"}
+
+
+@router.get("/api/v1/public/debug/token-info")
+async def debug_token_info(token: str, db: Session = Depends(get_db)):
+    """
+    Debug endpoint to check what workspace a PURL token belongs to.
+    Temporary endpoint for troubleshooting - should be removed in production.
+    """
+    import hashlib
+    from models.purl import PURLAccessToken, PURLWorkspace
+
+    # Hash the token
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    # Look up token
+    token_record = db.query(PURLAccessToken).filter(
+        PURLAccessToken.token_hash == token_hash
+    ).first()
+
+    if not token_record:
+        return {
+            "found": False,
+            "message": "Token not found in database",
+            "token_prefix": token[:30] + "...",
+            "token_hash": token_hash[:20] + "..."
+        }
+
+    # Get workspace
+    workspace = db.query(PURLWorkspace).filter(
+        PURLWorkspace.id == token_record.workspace_id
+    ).first()
+
+    return {
+        "found": True,
+        "token_id": token_record.id,
+        "workspace_id": token_record.workspace_id,
+        "workspace_slug": workspace.slug if workspace else None,
+        "workspace_status": workspace.status if workspace else None,
+        "token_status": token_record.status,
+        "token_scope": token_record.scope,
+        "created_at": token_record.created_at.isoformat() if token_record.created_at else None,
+        "expires_at": token_record.expires_at.isoformat() if token_record.expires_at else None
+    }

@@ -29,6 +29,19 @@ router = APIRouter(prefix="/api/v1/realtor-portal", tags=["Realtor Portal"])
 
 
 # =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+def format_date(val):
+    """Format date for SQLite/PostgreSQL compatibility."""
+    if val is None:
+        return None
+    if hasattr(val, 'isoformat'):
+        return val.isoformat()
+    return str(val)
+
+
+# =============================================================================
 # DEPENDENCY INJECTION
 # =============================================================================
 
@@ -299,15 +312,14 @@ async def get_loan_details(
     perm_service = RealtorPermissionService(db)
     permissions = perm_service.get_permissions(realtor["realtor_id"], loan_id)
 
-    # Get loan data
+    # Get loan data (compatible with both PostgreSQL and SQLite schemas)
     loan = db.execute(text("""
         SELECT
-            l.id, l.status, l.loan_amount, l.loan_type,
-            l.property_address, l.expected_close_date,
-            CONCAT(c.first_name, ' ', c.last_name) as borrower_name,
-            u.name as lo_name, u.email as lo_email, u.phone as lo_phone
+            l.id, l.stage as status, l.amount as loan_amount, l.loan_type,
+            l.property_address, l.closing_date as expected_close_date,
+            l.borrower_name,
+            u.full_name as lo_name, u.email as lo_email, u.phone as lo_phone
         FROM loans l
-        LEFT JOIN contacts c ON c.id = l.borrower_id
         LEFT JOIN users u ON u.id = l.loan_officer_id
         WHERE l.id = :loan_id
     """), {"loan_id": loan_id}).fetchone()
@@ -318,12 +330,12 @@ async def get_loan_details(
     # Build response based on permissions
     response = {
         "id": loan[0],
-        "status": loan[1],
-        "status_display": loan[1].replace("_", " ").title(),
+        "status": loan[1] or "unknown",
+        "status_display": (loan[1] or "unknown").replace("_", " ").title(),
         "loan_amount": float(loan[2]) if loan[2] else None,
         "loan_type": loan[3],
         "property_address": loan[4] if permissions.can_view_status else None,
-        "expected_close_date": loan[5].isoformat() if loan[5] else None,
+        "expected_close_date": format_date(loan[5]),
         "borrower_name": loan[6],
         "loan_officer": {
             "name": loan[7],
@@ -370,8 +382,8 @@ async def get_loan_timeline(
             {
                 "name": m[0],
                 "is_completed": m[1],
-                "completed_at": m[2].isoformat() if m[2] else None,
-                "target_date": m[3].isoformat() if m[3] else None,
+                "completed_at": format_date(m[2]),
+                "target_date": format_date(m[3]),
                 "order": m[4]
             }
             for m in milestones
@@ -414,7 +426,7 @@ async def get_loan_conditions(
                 "category": c[2],
                 "status": c[3],
                 "description": c[4],
-                "due_date": c[5].isoformat() if c[5] else None
+                "due_date": format_date(c[5])
             }
             for c in conditions
         ],
@@ -667,8 +679,8 @@ async def get_messages(
                 "channel": m[2],
                 "direction": m[3],
                 "content": m[4],
-                "created_at": m[5].isoformat() if m[5] else None,
-                "read_at": m[6].isoformat() if m[6] else None
+                "created_at": format_date(m[5]),
+                "read_at": format_date(m[6])
             }
             for m in messages
         ]
@@ -884,7 +896,7 @@ async def get_realtor_profile(
             "license_number": profile[6],
             "license_state": profile[7],
             "notification_preferences": profile[8],
-            "last_login": profile[9].isoformat() if profile[9] else None,
+            "last_login": format_date(profile[9]),
             "login_count": profile[10]
         }
     }

@@ -257,7 +257,7 @@ class RealtorPermissionService:
     def _get_loan_info(self, loan_id: int) -> Optional[Dict]:
         """Get basic loan info for permission lookup."""
         result = self.db.execute(text("""
-            SELECT status, organization_id
+            SELECT stage, loan_officer_id
             FROM loans
             WHERE id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
@@ -267,7 +267,7 @@ class RealtorPermissionService:
 
         return {
             "status": result[0],
-            "organization_id": result[1]
+            "organization_id": result[1]  # Using loan_officer_id as org proxy for SQLite
         }
 
     def _get_realtor_role(self, realtor_id: int, loan_id: int) -> Optional[str]:
@@ -433,10 +433,17 @@ class RealtorAccessValidator:
         if association[2]:  # access_revoked_at
             return {"valid": False, "reason": "Access has been revoked"}
 
+        def format_date(val):
+            if val is None:
+                return None
+            if hasattr(val, 'isoformat'):
+                return val.isoformat()
+            return str(val)
+
         return {
             "valid": True,
             "role": association[0],
-            "granted_at": association[1].isoformat() if association[1] else None
+            "granted_at": format_date(association[1])
         }
 
     def get_accessible_loans(self, realtor_id: int) -> List[Dict]:
@@ -446,22 +453,28 @@ class RealtorAccessValidator:
                 rla.loan_id,
                 rla.role,
                 rla.access_granted_at,
-                l.status,
-                l.loan_amount,
-                CONCAT(c.first_name, ' ', c.last_name) as borrower_name
+                l.stage,
+                l.amount as loan_amount,
+                l.borrower_name
             FROM realtor_loan_associations rla
             JOIN loans l ON l.id = rla.loan_id
-            LEFT JOIN contacts c ON c.id = l.borrower_id
             WHERE rla.realtor_id = :realtor_id
                 AND rla.access_revoked_at IS NULL
             ORDER BY rla.access_granted_at DESC
         """), {"realtor_id": realtor_id}).fetchall()
 
+        def format_date(val):
+            if val is None:
+                return None
+            if hasattr(val, 'isoformat'):
+                return val.isoformat()
+            return str(val)
+
         return [
             {
                 "loan_id": row[0],
                 "role": row[1],
-                "granted_at": row[2].isoformat() if row[2] else None,
+                "granted_at": format_date(row[2]),
                 "status": row[3],
                 "loan_amount": float(row[4]) if row[4] else None,
                 "borrower_name": row[5],

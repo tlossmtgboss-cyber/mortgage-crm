@@ -20,15 +20,16 @@ import uuid
 import hashlib
 
 from database import get_db
-import main  # Import main module to access get_current_user
 
-# Wrapper for lazy loading get_current_user from main
+# Wrapper for lazy loading get_current_user from main (avoids circular import)
 def get_current_user_dep():
     """Get current user dependency from main module."""
+    import main
     return main.get_current_user
 
 def get_current_user_optional_dep():
     """Get optional current user dependency from main module."""
+    import main
     return main.get_current_user_optional
 
 from models.microsite import (
