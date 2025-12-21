@@ -121,7 +121,7 @@ class MicrositeTheme(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    microsites = relationship("Microsite", back_populates="theme")
+    microsites = relationship("UserMicrosite", back_populates="theme")
     # Note: Organization and User relationships removed to avoid circular import issues
     # Access via direct query when needed: db.query(Organization).get(theme.organization_id)
 
@@ -288,7 +288,7 @@ class MicrositeProfile(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    microsite = relationship("Microsite", back_populates="profile")
+    microsite = relationship("UserMicrosite", back_populates="profile")
 
     def __repr__(self):
         return f"<MicrositeProfile microsite_id={self.microsite_id}>"
