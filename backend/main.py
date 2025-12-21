@@ -19544,6 +19544,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load CI Voice routes: {e}")
 
+# Include Realtor Portal routes
+try:
+    from routes.realtor_portal_routes import router as realtor_portal_router
+    app.include_router(realtor_portal_router, tags=["Realtor Portal"])
+    logger.info("✅ Realtor Portal routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Realtor Portal routes: {e}")
+
 # Include Workflow System routes
 from workflow_routes import router as workflow_router
 app.include_router(workflow_router, tags=["Workflow"])

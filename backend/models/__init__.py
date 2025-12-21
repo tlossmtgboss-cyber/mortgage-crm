@@ -45,7 +45,7 @@ from .agent_governance import (
 )
 from .microsite import (
     MicrositeTemplatePack,
-    Microsite,
+    MicrositePage,
     MicrositeAsset,
     MicrositePublishHistory,
     MicrositeAnalyticsEvent,
@@ -104,7 +104,7 @@ __all__ = [
     'ToolRiskLevel',
     # Microsite Platform
     'MicrositeTemplatePack',
-    'Microsite',
+    'MicrositePage',
     'MicrositeAsset',
     'MicrositePublishHistory',
     'MicrositeAnalyticsEvent',

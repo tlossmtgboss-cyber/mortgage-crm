@@ -147,20 +147,24 @@ class MicrositeTemplatePack(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
 
     # Relationships
-    microsites = relationship("Microsite", back_populates="template_pack")
+    microsites = relationship("MicrositePage", back_populates="template_pack")
 
     __table_args__ = (
         UniqueConstraint('slug', 'version', name='unique_template_version'),
+        {'extend_existing': True}
     )
 
 
-class Microsite(Base):
+class MicrositePage(Base):
     """User-specific microsite instance"""
-    __tablename__ = "microsites"
+    __tablename__ = "microsite_pages"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Note: These don't use ForeignKey because User/Organization are in main.py's Base
+    # The actual FK constraints are created in the migration
+    organization_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
 
     template_pack_id = Column(Integer, ForeignKey("microsite_template_packs.id"), nullable=False)
     template_version = Column(Integer, nullable=False)
@@ -201,9 +205,10 @@ class Microsite(Base):
 class MicrositeAsset(Base):
     """Uploaded images and media for microsites"""
     __tablename__ = "microsite_assets"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    microsite_id = Column(Integer, ForeignKey("microsites.id", ondelete="CASCADE"), nullable=False)
+    microsite_id = Column(Integer, ForeignKey("microsite_pages.id", ondelete="CASCADE"), nullable=False)
 
     asset_type = Column(String(50), nullable=False)
     file_name = Column(String(255), nullable=False)
@@ -220,15 +225,16 @@ class MicrositeAsset(Base):
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    microsite = relationship("Microsite", back_populates="assets")
+    microsite = relationship("MicrositePage", back_populates="assets")
 
 
 class MicrositePublishHistory(Base):
     """Audit trail and rollback capability for publishes"""
     __tablename__ = "microsite_publish_history"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    microsite_id = Column(Integer, ForeignKey("microsites.id", ondelete="CASCADE"), nullable=False)
+    microsite_id = Column(Integer, ForeignKey("microsite_pages.id", ondelete="CASCADE"), nullable=False)
 
     content_snapshot = Column(JSONB, nullable=False)
     template_version = Column(Integer, nullable=False)
@@ -242,15 +248,16 @@ class MicrositePublishHistory(Base):
     deploy_error = Column(Text)
 
     # Relationships
-    microsite = relationship("Microsite", back_populates="publish_history")
+    microsite = relationship("MicrositePage", back_populates="publish_history")
 
 
 class MicrositeAnalyticsEvent(Base):
     """Conversion funnel and behavior tracking"""
     __tablename__ = "microsite_analytics_events"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    microsite_id = Column(Integer, ForeignKey("microsites.id", ondelete="CASCADE"), nullable=False)
+    microsite_id = Column(Integer, ForeignKey("microsite_pages.id", ondelete="CASCADE"), nullable=False)
 
     event_type = Column(String(100), nullable=False)
     event_data = Column(JSONB)
@@ -275,15 +282,16 @@ class MicrositeAnalyticsEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    microsite = relationship("Microsite", back_populates="analytics_events")
+    microsite = relationship("MicrositePage", back_populates="analytics_events")
 
 
 class MicrositeLead(Base):
     """Lead captures from microsite forms"""
     __tablename__ = "microsite_leads"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    microsite_id = Column(Integer, ForeignKey("microsites.id", ondelete="CASCADE"), nullable=False)
+    microsite_id = Column(Integer, ForeignKey("microsite_pages.id", ondelete="CASCADE"), nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
@@ -311,12 +319,13 @@ class MicrositeLead(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    microsite = relationship("Microsite", back_populates="leads")
+    microsite = relationship("MicrositePage", back_populates="leads")
 
 
 class OrganizationMicrositeSettings(Base):
     """Organization-level compliance and branding controls"""
     __tablename__ = "organization_microsite_settings"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, unique=True)

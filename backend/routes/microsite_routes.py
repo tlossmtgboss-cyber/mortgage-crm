@@ -20,9 +20,19 @@ import uuid
 import hashlib
 
 from database import get_db
-from auth import get_current_user, get_current_user_optional
+import main  # Import main module to access get_current_user
+
+# Wrapper for lazy loading get_current_user from main
+def get_current_user_dep():
+    """Get current user dependency from main module."""
+    return main.get_current_user
+
+def get_current_user_optional_dep():
+    """Get optional current user dependency from main module."""
+    return main.get_current_user_optional
+
 from models.microsite import (
-    MicrositeTemplatePack, Microsite, MicrositeAsset, MicrositePublishHistory,
+    MicrositeTemplatePack, MicrositePage, MicrositeAsset, MicrositePublishHistory,
     MicrositeAnalyticsEvent, MicrositeLead, OrganizationMicrositeSettings,
     MicrositeStatus, TemplateStatus, LeadStatus, AnalyticsEventType,
     TemplatePackResponse, TemplatePackListResponse, TemplatePackCreate,
@@ -50,7 +60,7 @@ async def list_template_packs(
     status: Optional[str] = "active",
     category: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """
     List available template packs for the current organization.
@@ -75,7 +85,7 @@ async def list_template_packs(
 async def get_template_pack(
     template_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Get specific template pack details including schema"""
     template = db.query(MicrositeTemplatePack).filter(
@@ -96,7 +106,7 @@ async def get_template_pack(
 async def create_template_pack(
     template_data: TemplatePackCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Create new template pack (admin only)"""
     # Check if user has admin role
@@ -132,11 +142,11 @@ async def create_template_pack(
 @router.get("/my", response_model=MicrositeResponse)
 async def get_my_microsite(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Get current user's microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -153,12 +163,12 @@ async def get_my_microsite(
 async def create_microsite(
     microsite_data: MicrositeCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Create a new microsite for the current user"""
     # Check if user already has a microsite
-    existing = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    existing = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if existing:
@@ -168,8 +178,8 @@ async def create_microsite(
         )
 
     # Check slug uniqueness
-    slug_exists = db.query(Microsite).filter(
-        Microsite.slug == microsite_data.slug
+    slug_exists = db.query(MicrositePage).filter(
+        MicrositePage.slug == microsite_data.slug
     ).first()
 
     if slug_exists:
@@ -210,7 +220,7 @@ async def create_microsite(
         })
 
     # Create microsite
-    db_microsite = Microsite(
+    db_microsite = MicrositePage(
         organization_id=current_user.organization_id,
         user_id=current_user.id,
         template_pack_id=template.id,
@@ -236,11 +246,11 @@ async def create_microsite(
 async def update_my_microsite(
     update_data: MicrositeUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Update current user's microsite content"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -313,11 +323,11 @@ async def update_my_microsite(
 @router.post("/my/publish", response_model=PublishResponse)
 async def publish_microsite(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Publish user's microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -367,11 +377,11 @@ async def publish_microsite(
 @router.post("/my/unpublish", response_model=PublishResponse)
 async def unpublish_microsite(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Unpublish user's microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -390,11 +400,11 @@ async def unpublish_microsite(
 async def get_publish_history(
     limit: int = 20,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Get publish history for user's microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -417,11 +427,11 @@ async def upload_asset(
     asset_type: str = Form(...),
     field_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Upload image or other asset for microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -504,13 +514,13 @@ async def get_public_microsite(
     Get published microsite data for public rendering.
     Used by frontend to generate static pages.
     """
-    query = db.query(Microsite).filter(
-        Microsite.slug == slug
+    query = db.query(MicrositePage).filter(
+        MicrositePage.slug == slug
     )
 
     # If not preview mode, only return published sites
     if not preview:
-        query = query.filter(Microsite.status == MicrositeStatus.PUBLISHED.value)
+        query = query.filter(MicrositePage.status == MicrositeStatus.PUBLISHED.value)
 
     microsite = query.first()
 
@@ -564,9 +574,9 @@ async def capture_lead(
     No authentication required.
     """
     # Get microsite by slug
-    microsite = db.query(Microsite).filter(
-        Microsite.slug == lead_data.microsite_slug,
-        Microsite.status == MicrositeStatus.PUBLISHED.value
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.slug == lead_data.microsite_slug,
+        MicrositePage.status == MicrositeStatus.PUBLISHED.value
     ).first()
 
     if not microsite:
@@ -622,9 +632,9 @@ async def track_analytics_event(
     Called from microsite frontend.
     """
     # Get microsite
-    microsite = db.query(Microsite).filter(
-        Microsite.slug == event.microsite_slug,
-        Microsite.status == MicrositeStatus.PUBLISHED.value
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.slug == event.microsite_slug,
+        MicrositePage.status == MicrositeStatus.PUBLISHED.value
     ).first()
 
     if not microsite:
@@ -663,11 +673,11 @@ async def track_analytics_event(
 async def get_my_analytics(
     days: int = 30,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Get analytics for user's microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -768,11 +778,11 @@ async def get_my_leads(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Get leads captured from user's microsite"""
-    microsite = db.query(Microsite).filter(
-        Microsite.user_id == current_user.id
+    microsite = db.query(MicrositePage).filter(
+        MicrositePage.user_id == current_user.id
     ).first()
 
     if not microsite:
@@ -797,7 +807,7 @@ async def get_my_leads(
 @router.get("/settings/org", response_model=OrgMicrositeSettingsResponse)
 async def get_org_microsite_settings(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Get organization microsite settings (admin only)"""
     if current_user.role not in ['admin', 'super_admin', 'owner']:
@@ -823,7 +833,7 @@ async def get_org_microsite_settings(
 async def update_org_microsite_settings(
     update_data: OrgMicrositeSettingsUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """Update organization microsite settings (admin only)"""
     if current_user.role not in ['admin', 'super_admin', 'owner']:
@@ -860,20 +870,20 @@ async def list_all_microsites(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """List all microsites in organization (admin only)"""
     if current_user.role not in ['admin', 'super_admin', 'owner']:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    query = db.query(Microsite).filter(
-        Microsite.organization_id == current_user.organization_id
+    query = db.query(MicrositePage).filter(
+        MicrositePage.organization_id == current_user.organization_id
     )
 
     if status:
-        query = query.filter(Microsite.status == status)
+        query = query.filter(MicrositePage.status == status)
 
-    microsites = query.order_by(Microsite.created_at.desc()).offset(offset).limit(limit).all()
+    microsites = query.order_by(MicrositePage.created_at.desc()).offset(offset).limit(limit).all()
 
     results = []
     for m in microsites:
