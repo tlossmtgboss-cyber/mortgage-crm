@@ -2079,6 +2079,8 @@ async def submit_application(
                             logger.warning("Smart Docs NeedsListGenerator not available, skipping needs list generation")
                         except Exception as needs_error:
                             logger.warning(f"Failed to generate Smart Docs needs list: {needs_error}")
+                            # Rollback to clear failed transaction state
+                            db.rollback()
 
                     # =================================================================
                     # CREATE NEEDS LIST TASKS BASED ON DECLARATIONS
@@ -2231,6 +2233,8 @@ async def submit_application(
                         logger.warning(f"Failed to create needs list tasks: {task_error}")
                         import traceback
                         logger.warning(traceback.format_exc())
+                        # Rollback to clear failed transaction state
+                        db.rollback()
 
             except Exception as ws_error:
                 logger.warning(f"Workspace creation failed (non-critical): {ws_error}")
