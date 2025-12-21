@@ -614,13 +614,34 @@ async def send_email_response(
     body: str,
     conversation_id: str
 ):
-    """Send email response via Microsoft Graph."""
+    """Send email response via Microsoft Graph or NotificationService."""
     try:
-        from services.microsoft_graph import MicrosoftGraphClient
-        # TODO: Implement actual email sending
-        logger.info(f"Would send email to {to_email}: {subject[:50]}...")
+        # Try Microsoft Graph first for authenticated users
+        from integrations.microsoft_graph import MicrosoftGraphClient
+        graph_client = MicrosoftGraphClient()
+
+        if graph_client.enabled:
+            result = await graph_client.send_email(
+                to_email=to_email,
+                subject=subject,
+                body=body
+            )
+            logger.info(f"Email sent via Microsoft Graph to {to_email} for conversation {conversation_id}")
+            return result
+        else:
+            # Fallback to NotificationService (SendGrid)
+            from services.notification_service import NotificationService
+            notification_service = NotificationService()
+            result = notification_service.send_email(
+                to_email=to_email,
+                subject=subject,
+                html_content=f"<div style='font-family: Arial, sans-serif;'>{body.replace(chr(10), '<br>')}</div>"
+            )
+            logger.info(f"Email sent via SendGrid to {to_email} for conversation {conversation_id}")
+            return result
     except Exception as e:
-        logger.error(f"Error sending email: {e}")
+        logger.error(f"Error sending email to {to_email}: {e}")
+        raise
 
 
 async def send_sms_response(
@@ -631,7 +652,25 @@ async def send_sms_response(
     """Send SMS response via Twilio."""
     try:
         from integrations.twilio_service import TwilioSMSClient
-        # TODO: Implement actual SMS sending
-        logger.info(f"Would send SMS to {to_number}: {message[:50]}...")
+        twilio_client = TwilioSMSClient()
+
+        if twilio_client.enabled:
+            message_sid = await twilio_client.send_sms(
+                to_number=to_number,
+                message=message
+            )
+            logger.info(f"SMS sent via Twilio to {to_number} for conversation {conversation_id}, SID: {message_sid}")
+            return message_sid
+        else:
+            # Fallback to NotificationService which may have alternative SMS provider
+            from services.notification_service import NotificationService
+            notification_service = NotificationService()
+            result = notification_service.send_sms(
+                to_phone=to_number,
+                message=message
+            )
+            logger.info(f"SMS sent via NotificationService to {to_number} for conversation {conversation_id}")
+            return result
     except Exception as e:
-        logger.error(f"Error sending SMS: {e}")
+        logger.error(f"Error sending SMS to {to_number}: {e}")
+        raise
