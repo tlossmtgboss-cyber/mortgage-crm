@@ -53778,6 +53778,54 @@ async def startup_event():
             except Exception as slug_e:
                 logger.warning(f"⚠️ User slug migration skipped: {slug_e}")
 
+            # Set up tim-loss microsite profile with bio and custom colors
+            try:
+                db_temp = SessionLocal()
+                # Get tim-loss user
+                user_result = db_temp.execute(text("SELECT id FROM users WHERE slug = 'tim-loss'"))
+                user_row = user_result.fetchone()
+                if user_row:
+                    user_id = user_row[0]
+                    # Update user bio
+                    db_temp.execute(text("""
+                        UPDATE users SET user_metadata = COALESCE(user_metadata, '{}'::jsonb) ||
+                        '{"bio": "Experienced mortgage professional dedicated to helping clients achieve their homeownership dreams with personalized service and competitive rates."}'::jsonb
+                        WHERE id = :user_id
+                    """), {"user_id": user_id})
+
+                    # Check if microsite exists for this user
+                    microsite_result = db_temp.execute(text("SELECT id FROM microsites WHERE user_id = :user_id"), {"user_id": user_id})
+                    if not microsite_result.fetchone():
+                        # Get bold-impact theme id
+                        theme_result = db_temp.execute(text("SELECT id FROM microsite_themes WHERE slug = 'bold-impact'"))
+                        theme_row = theme_result.fetchone()
+                        theme_id = theme_row[0] if theme_row else 1
+
+                        # Create microsite with forest green theme colors
+                        db_temp.execute(text("""
+                            INSERT INTO microsites (user_id, theme_id, theme_config, is_published, created_at, updated_at)
+                            VALUES (:user_id, :theme_id, :theme_config, true, NOW(), NOW())
+                        """), {
+                            "user_id": user_id,
+                            "theme_id": theme_id,
+                            "theme_config": '{"primaryColor": "#2d5a27", "secondaryColor": "#4a8c3f", "accentColor": "#8bc34a", "textColor": "#1a1a1a", "backgroundColor": "#ffffff"}'
+                        })
+                        logger.info(f"✅ Created microsite with forest green theme for user {user_id}")
+                    else:
+                        # Update existing microsite theme config
+                        db_temp.execute(text("""
+                            UPDATE microsites SET theme_config = :theme_config, updated_at = NOW()
+                            WHERE user_id = :user_id
+                        """), {
+                            "user_id": user_id,
+                            "theme_config": '{"primaryColor": "#2d5a27", "secondaryColor": "#4a8c3f", "accentColor": "#8bc34a", "textColor": "#1a1a1a", "backgroundColor": "#ffffff"}'
+                        })
+                        logger.info(f"✅ Updated microsite theme config for user {user_id}")
+                    db_temp.commit()
+                db_temp.close()
+            except Exception as ms_e:
+                logger.warning(f"⚠️ Microsite setup skipped: {ms_e}")
+
             # Add owner_id column to referral_partners table (for user isolation)
             try:
                 db_temp = SessionLocal()

@@ -512,6 +512,10 @@ async def get_public_microsite(
             profile_data = microsite.profile.to_dict() if microsite.profile else {}
 
         # Build user data (public fields only)
+        # Extract bio from user_metadata JSON if available
+        user_metadata = getattr(user, 'user_metadata', None) or {}
+        bio = user_metadata.get('bio') if isinstance(user_metadata, dict) else getattr(user, 'bio', None)
+
         user_data = {
             "id": user.id,
             "name": user.full_name or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip(),
@@ -520,7 +524,7 @@ async def get_public_microsite(
             "nmls_id": user.nmls_number,
             "slug": user.slug,
             "company": getattr(user, 'company', None),
-            "bio": getattr(user, 'bio', None),
+            "bio": bio,
             "photo_url": getattr(user, 'photo_url', None) or getattr(user, 'avatar_url', None),
         }
 
