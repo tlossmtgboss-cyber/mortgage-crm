@@ -6,10 +6,12 @@
  * comprehensive contact form.
  */
 
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import './BoldImpact.css';
 import EmbeddedAIChat from '../../../components/EmbeddedAIChat';
-import SmartScheduler from '../../../components/SmartScheduler';
+
+// Lazy load SmartScheduler to prevent build issues
+const SmartScheduler = lazy(() => import('../../../components/SmartScheduler'));
 
 const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -118,7 +120,9 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
             <button className="scheduler-modal-close" onClick={() => setShowSchedulerModal(false)}>
               ×
             </button>
-            <SmartScheduler onClose={() => setShowSchedulerModal(false)} />
+            <Suspense fallback={<div className="scheduler-loading">Loading scheduler...</div>}>
+              <SmartScheduler onClose={() => setShowSchedulerModal(false)} />
+            </Suspense>
           </div>
         </div>
       )}

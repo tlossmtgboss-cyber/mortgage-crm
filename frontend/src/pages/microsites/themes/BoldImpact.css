@@ -275,6 +275,13 @@
   color: #374151;
 }
 
+.scheduler-loading {
+  padding: 60px 40px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 16px;
+}
+
 .nav-logo {
   height: 48px;
   max-width: 200px;
