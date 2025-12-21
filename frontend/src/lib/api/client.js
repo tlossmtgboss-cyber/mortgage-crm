@@ -5,10 +5,16 @@
  * Provides typed methods for all portal and integration endpoints.
  */
 
+// In production (Vercel), use relative URLs so rewrites can proxy to Railway
+// In development, use localhost
+const isProduction = typeof window !== 'undefined' &&
+                     window.location.hostname !== 'localhost' &&
+                     window.location.hostname !== '127.0.0.1';
+
 const FASTAPI_BASE_URL = process.env.NEXT_PUBLIC_FASTAPI_URL ||
                          process.env.REACT_APP_FASTAPI_URL ||
                          process.env.REACT_APP_API_URL ||
-                         'http://localhost:8000';
+                         (isProduction ? '' : 'http://localhost:8000');
 
 class PerenniaAPIError extends Error {
   constructor(message, status, data) {
