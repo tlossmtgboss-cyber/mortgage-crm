@@ -469,7 +469,7 @@ class SchedulerService:
                     SELECT 1 FROM scheduler_reminders sr
                     WHERE sr.appointment_id = sa.id
                     AND sr.hours_before = 24
-                    AND sr.status IN ('sent', 'delivered')
+                    AND UPPER(sr.status::text) IN ('SENT', 'DELIVERED')
                 )
             """)
 
@@ -498,7 +498,7 @@ class SchedulerService:
                     SELECT 1 FROM scheduler_reminders sr
                     WHERE sr.appointment_id = sa.id
                     AND sr.hours_before = 1
-                    AND sr.status IN ('sent', 'delivered')
+                    AND UPPER(sr.status::text) IN ('SENT', 'DELIVERED')
                 )
             """)
 
@@ -575,14 +575,14 @@ class SchedulerService:
                         session.execute(text("""
                             INSERT INTO scheduler_reminders
                             (appointment_id, channel, scheduled_for, hours_before, status, sent_at, created_at, updated_at)
-                            VALUES (:appt_id, 'email', NOW(), :hours_before, 'sent', NOW(), NOW(), NOW())
+                            VALUES (:appt_id, 'EMAIL', NOW(), :hours_before, 'SENT', NOW(), NOW(), NOW())
                         """), {"appt_id": appointment_id, "hours_before": hours_before})
 
                     if sms_sent:
                         session.execute(text("""
                             INSERT INTO scheduler_reminders
                             (appointment_id, channel, scheduled_for, hours_before, status, sent_at, created_at, updated_at)
-                            VALUES (:appt_id, 'sms', NOW(), :hours_before, 'sent', NOW(), NOW(), NOW())
+                            VALUES (:appt_id, 'SMS', NOW(), :hours_before, 'SENT', NOW(), NOW(), NOW())
                         """), {"appt_id": appointment_id, "hours_before": hours_before})
 
                 session.commit()
