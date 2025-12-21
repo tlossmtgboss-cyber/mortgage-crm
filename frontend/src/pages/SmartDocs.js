@@ -25,6 +25,8 @@ function SmartDocs() {
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [docTypeFilter, setDocTypeFilter] = useState('all');
 
   // Fetch all loans and categorize them
   const fetchAllLoans = useCallback(async () => {
@@ -291,14 +293,44 @@ function SmartDocs() {
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="search-section">
+      {/* Filters Bar */}
+      <div className="filters-bar">
+        <div className="filter-group">
+          <select
+            className="filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="pending">Pending Review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <select
+            className="filter-select"
+            value={docTypeFilter}
+            onChange={(e) => setDocTypeFilter(e.target.value)}
+          >
+            <option value="all">All Document Types</option>
+            <option value="income">Income Documents</option>
+            <option value="assets">Asset Documents</option>
+            <option value="identity">Identity Documents</option>
+            <option value="property">Property Documents</option>
+            <option value="credit">Credit Documents</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
         <div className="search-input-wrapper">
           <span className="search-icon">🔍</span>
           <input
             type="text"
             className="search-input"
-            placeholder="Search by client name or loan number..."
+            placeholder="Search by borrower or loan..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
