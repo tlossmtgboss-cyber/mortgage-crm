@@ -597,7 +597,7 @@ class PerenniaAPI {
     }
 
     if (!response.ok) {
-      const message = data?.detail || data?.message || `HTTP ${response.status}`;
+      const message = data?.detail || data?.message || data?.error || `HTTP ${response.status}`;
       throw new PerenniaAPIError(message, response.status, data);
     }
 
