@@ -2977,9 +2977,7 @@ async def get_public_booking_page(
                         is_public=True,
                         appointment_type_ids=[user_type.id],
                         custom_title=f"Schedule a Call" if slug != "demo" else "Schedule Your Demo",
-                        custom_description=f"Choose a time that works for you to speak with {first_name}." if slug != "demo" else "See how Perennia AI can transform your mortgage operations.",
-                        routing_strategy="round_robin",
-                        max_bookings_per_day=20
+                        custom_description=f"Choose a time that works for you to speak with {first_name}." if slug != "demo" else "See how Perennia AI can transform your mortgage operations."
                     )
                     db.add(link)
                     db.commit()
