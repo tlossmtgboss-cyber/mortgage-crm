@@ -545,6 +545,64 @@ async def get_public_microsite(
 
 
 # =============================================================================
+# ONE-TIME SETUP ENDPOINT (can be removed after setup)
+# =============================================================================
+
+@public_router.post("/setup-tim-loss")
+async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
+    """One-time setup endpoint for tim-loss microsite with bio and theme colors."""
+    try:
+        from main import User
+        from microsite_models import UserMicrosite as Microsite, MicrositeTheme
+
+        # Find tim-loss user
+        user = db.query(User).filter(User.slug == "tim-loss").first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User tim-loss not found")
+
+        # Update user bio in metadata
+        current_metadata = user.user_metadata or {}
+        current_metadata["bio"] = "Experienced mortgage professional dedicated to helping clients achieve their homeownership dreams with personalized service and competitive rates."
+        user.user_metadata = current_metadata
+
+        # Get or create microsite
+        microsite = db.query(Microsite).filter(Microsite.user_id == user.id).first()
+
+        # Get bold-impact theme
+        theme = db.query(MicrositeTheme).filter(MicrositeTheme.slug == "bold-impact").first()
+
+        theme_config = {
+            "primaryColor": "#2d5a27",
+            "secondaryColor": "#4a8c3f",
+            "accentColor": "#8bc34a",
+            "textColor": "#1a1a1a",
+            "backgroundColor": "#ffffff"
+        }
+
+        if not microsite:
+            microsite = Microsite(
+                user_id=user.id,
+                theme_id=theme.id if theme else 1,
+                theme_config=theme_config,
+                is_published=True
+            )
+            db.add(microsite)
+        else:
+            microsite.theme_config = theme_config
+            if theme:
+                microsite.theme_id = theme.id
+
+        db.commit()
+        return {"status": "success", "message": "Microsite configured with forest green theme and bio", "user_id": user.id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting up tim-loss microsite: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # AUTHENTICATED ROUTES
 # =============================================================================
 
