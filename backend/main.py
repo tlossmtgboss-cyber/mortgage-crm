@@ -43125,11 +43125,30 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
         raise HTTPException(status_code=500, detail=f"Failed to create referral partner: {str(e)}")
 
 @app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
-async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_referral_partners(
+    skip: int = 0,
+    limit: int = 100,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     # Filter referral partners by owner - each user sees only their own partners
-    partners = db.query(ReferralPartner).filter(
+    query = db.query(ReferralPartner).filter(
         ReferralPartner.owner_id == current_user.id
-    ).order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
+    )
+
+    # Add search filter if provided
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                ReferralPartner.name.ilike(search_term),
+                ReferralPartner.email.ilike(search_term),
+                ReferralPartner.company.ilike(search_term)
+            )
+        )
+
+    partners = query.order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
     return partners
 
 @app.get("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)

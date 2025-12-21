@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI, circleOfCashflowAPI } from '../services/api';
+import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import VoicemailDrop from '../components/VoicemailDrop';
 import VoicemailModal from '../components/VoicemailModal';
@@ -218,7 +218,10 @@ function LoanDetail() {
   };
 
   // Circle of Influence handlers
-  const searchContacts = async (query) => {
+  // Professional contact types that should search partners instead of loans
+  const professionalTypes = ['Real Estate Agent', 'Attorney', 'Financial Advisor', 'Insurance Agent', 'Accountant'];
+
+  const searchContacts = async (query, contactType = circleForm.type) => {
     if (query.length < 2) {
       setSearchResults([]);
       setShowSearchResults(false);
@@ -226,8 +229,26 @@ function LoanDetail() {
     }
     setSearchLoading(true);
     try {
-      const response = await loansAPI.search(query);
-      setSearchResults(response.loans || []);
+      // Search partners for professional contact types, loans for others
+      if (professionalTypes.includes(contactType)) {
+        const response = await partnersAPI.getAll({ search: query });
+        // Map partner data to match expected format
+        const partners = (response.partners || response || []).map(p => ({
+          id: p.id,
+          name: p.name,
+          borrower_name: p.name,
+          email: p.email,
+          borrower_email: p.email,
+          phone: p.phone,
+          borrower_phone: p.phone,
+          company: p.company,
+          type: 'partner'
+        }));
+        setSearchResults(partners);
+      } else {
+        const response = await loansAPI.search(query);
+        setSearchResults(response.loans || []);
+      }
       setShowSearchResults(true);
     } catch (error) {
       console.error('Search error:', error);
@@ -2621,7 +2642,15 @@ function LoanDetail() {
                         <label>Contact Type *</label>
                         <select
                           value={circleForm.type}
-                          onChange={e => setCircleForm({...circleForm, type: e.target.value})}
+                          onChange={e => {
+                            const newType = e.target.value;
+                            setCircleForm({...circleForm, type: newType});
+                            // Re-search if name is entered and type changed
+                            if (circleForm.name.length >= 2) {
+                              setSearchResults([]);
+                              searchContacts(circleForm.name, newType);
+                            }
+                          }}
                           className="form-control"
                         >
                           {circleContactTypes.map(type => (
@@ -2673,10 +2702,11 @@ function LoanDetail() {
                                 onMouseLeave={e => e.target.style.backgroundColor = 'white'}
                               >
                                 <div style={{ fontWeight: '500' }}>{result.borrower_name || result.name}</div>
+                                {result.company && <div style={{ fontSize: '12px', color: '#888' }}>{result.company}</div>}
                                 <div style={{ fontSize: '12px', color: '#666' }}>
-                                  {result.borrower_email && <span>{result.borrower_email}</span>}
-                                  {result.borrower_email && result.borrower_phone && <span> • </span>}
-                                  {result.borrower_phone && <span>{result.borrower_phone}</span>}
+                                  {(result.borrower_email || result.email) && <span>{result.borrower_email || result.email}</span>}
+                                  {(result.borrower_email || result.email) && (result.borrower_phone || result.phone) && <span> • </span>}
+                                  {(result.borrower_phone || result.phone) && <span>{result.borrower_phone || result.phone}</span>}
                                 </div>
                               </div>
                             ))}
