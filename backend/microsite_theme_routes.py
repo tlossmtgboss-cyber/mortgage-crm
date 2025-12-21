@@ -448,7 +448,7 @@ async def get_public_microsite(
     """
     try:
         from main import User
-        from microsite_models import Microsite, MicrositeTheme, MicrositeProfile
+        from microsite_models import UserMicrosite as Microsite, MicrositeTheme, MicrositeProfile
 
         # Find user by slug
         user = db.query(User).filter(
@@ -551,7 +551,7 @@ async def get_my_microsite(
     Get the current user's microsite configuration.
     """
     try:
-        from microsite_models import Microsite
+        from microsite_models import UserMicrosite as Microsite
 
         microsite = db.query(Microsite).filter(
             Microsite.user_id == current_user.id
@@ -589,7 +589,7 @@ async def update_my_microsite(
     Creates a new microsite if one doesn't exist.
     """
     try:
-        from microsite_models import Microsite, MicrositeTheme
+        from microsite_models import UserMicrosite as Microsite, MicrositeTheme
 
         # Get or create microsite
         microsite = db.query(Microsite).filter(
@@ -664,7 +664,7 @@ async def update_my_microsite_profile(
     Creates microsite and profile if they don't exist.
     """
     try:
-        from microsite_models import Microsite, MicrositeProfile
+        from microsite_models import UserMicrosite as Microsite, MicrositeProfile
 
         # Get or create microsite
         microsite = db.query(Microsite).filter(
@@ -714,7 +714,7 @@ async def publish_microsite(
     Publish the current user's microsite.
     """
     try:
-        from microsite_models import Microsite
+        from microsite_models import UserMicrosite as Microsite
 
         microsite = db.query(Microsite).filter(
             Microsite.user_id == current_user.id
@@ -750,7 +750,7 @@ async def unpublish_microsite(
     Unpublish the current user's microsite.
     """
     try:
-        from microsite_models import Microsite
+        from microsite_models import UserMicrosite as Microsite
 
         microsite = db.query(Microsite).filter(
             Microsite.user_id == current_user.id

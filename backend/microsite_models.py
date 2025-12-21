@@ -153,11 +153,13 @@ class MicrositeTheme(Base):
         }
 
 
-class Microsite(Base):
+class UserMicrosite(Base):
     """
     User's microsite configuration.
 
     Links a user to their selected theme and custom configuration.
+    Note: Renamed from 'Microsite' to 'UserMicrosite' to avoid SQLAlchemy class registry conflicts
+    with other microsite models in the codebase.
     """
     __tablename__ = "microsites"
     __table_args__ = {'extend_existing': True}
