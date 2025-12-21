@@ -279,23 +279,84 @@ const LOMicrosite = () => {
         return (
           <section className="lo-page-content services-page">
             <div className="container">
-              <h2>{content.heading || currentPage.title}</h2>
-              {content.description && <p className="section-subtitle">{content.description}</p>}
+              <div className="services-header">
+                <h2>{content.headline || currentPage.title}</h2>
+                {content.subheadline && <p className="section-subtitle">{content.subheadline}</p>}
+              </div>
               <div className="services-grid">
                 {content.programs?.map((program, idx) => (
                   <div key={idx} className="service-card">
                     <div className="service-icon">
-                      {program.icon === 'home' && '🏠'}
-                      {program.icon === 'key' && '🔑'}
-                      {program.icon === 'star' && '⭐'}
-                      {program.icon === 'building' && '🏢'}
-                      {!['home', 'key', 'star', 'building'].includes(program.icon) && '💰'}
+                      {program.icon === 'home' && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                          <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                      )}
+                      {program.icon === 'shield' && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                      )}
+                      {program.icon === 'star' && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                      )}
+                      {program.icon === 'tree' && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 22v-7"/>
+                          <path d="M9 22h6"/>
+                          <path d="M12 15l-6-6h3l-4-5h5l-3-3 8 8h-3l5 6z"/>
+                        </svg>
+                      )}
+                      {program.icon === 'building' && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+                          <path d="M9 22v-4h6v4"/>
+                          <path d="M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/>
+                        </svg>
+                      )}
+                      {program.icon === 'refresh' && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="23 4 23 10 17 10"/>
+                          <polyline points="1 20 1 14 7 14"/>
+                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                      )}
+                      {!['home', 'shield', 'star', 'tree', 'building', 'refresh'].includes(program.icon) && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="12" y1="1" x2="12" y2="23"/>
+                          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                      )}
                     </div>
                     <h3>{program.name}</h3>
-                    <p>{program.description}</p>
+                    <p className="service-description">{program.description}</p>
+                    {program.features && program.features.length > 0 && (
+                      <ul className="service-features">
+                        {program.features.map((feature, fidx) => (
+                          <li key={fidx}>
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 ))}
               </div>
+              {content.cta && (
+                <div className="services-cta">
+                  <h3>{content.cta.headline}</h3>
+                  <p>{content.cta.text}</p>
+                  <a href="#contact" className="btn-primary" onClick={(e) => { e.preventDefault(); setActivePage('home'); setTimeout(() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' }), 100); }}>
+                    {content.cta.buttonText || 'Get Started'}
+                  </a>
+                </div>
+              )}
             </div>
           </section>
         );

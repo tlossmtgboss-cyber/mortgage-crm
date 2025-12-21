@@ -605,6 +605,105 @@ async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@public_router.post("/add-services-page/{user_slug}")
+async def add_services_page_for_user(user_slug: str, db: Session = Depends(get_db)):
+    """One-time endpoint to add a Services/Loan Programs page for a user's microsite."""
+    try:
+        from main import User
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
+
+        # Find user
+        user = db.query(User).filter(User.slug == user_slug).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_slug} not found")
+
+        # Get microsite
+        microsite = db.query(Microsite).filter(Microsite.user_id == user.id).first()
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found for this user")
+
+        # Check if Services page already exists
+        existing = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == "services"
+        ).first()
+
+        if existing:
+            return {"status": "exists", "message": "Services page already exists", "page_id": existing.id}
+
+        # Create Services page content with loan programs
+        content = {
+            "headline": "Loan Programs & Services",
+            "subheadline": "Find the perfect mortgage solution for your needs",
+            "programs": [
+                {
+                    "name": "Conventional Loans",
+                    "icon": "home",
+                    "description": "Traditional financing with competitive rates for qualified buyers. Ideal for borrowers with good credit and stable income.",
+                    "features": ["As low as 3% down payment", "Fixed and adjustable rate options", "No mortgage insurance with 20% down", "Loan amounts up to conforming limits"]
+                },
+                {
+                    "name": "FHA Loans",
+                    "icon": "shield",
+                    "description": "Government-backed loans designed to help first-time homebuyers and those with lower credit scores achieve homeownership.",
+                    "features": ["Down payments as low as 3.5%", "More flexible credit requirements", "Lower closing costs", "Gift funds allowed for down payment"]
+                },
+                {
+                    "name": "VA Loans",
+                    "icon": "star",
+                    "description": "Exclusive benefits for our veterans and active military. Thank you for your service - let us help you find your home.",
+                    "features": ["No down payment required", "No private mortgage insurance", "Competitive interest rates", "Limited closing costs"]
+                },
+                {
+                    "name": "USDA Loans",
+                    "icon": "tree",
+                    "description": "Zero-down financing for eligible rural and suburban properties. Perfect for buyers looking outside major metro areas.",
+                    "features": ["No down payment required", "Below-market interest rates", "Low mortgage insurance", "Flexible credit guidelines"]
+                },
+                {
+                    "name": "Jumbo Loans",
+                    "icon": "building",
+                    "description": "Financing for luxury homes and high-cost areas that exceed conventional loan limits.",
+                    "features": ["Loan amounts above conforming limits", "Competitive rates for high-value properties", "Various term options available", "Interest-only options available"]
+                },
+                {
+                    "name": "Refinance Options",
+                    "icon": "refresh",
+                    "description": "Lower your rate, reduce your term, or tap into your home's equity with our refinancing solutions.",
+                    "features": ["Rate-and-term refinancing", "Cash-out refinancing", "Streamline refinance programs", "Debt consolidation options"]
+                }
+            ],
+            "cta": {
+                "headline": "Not sure which program is right for you?",
+                "text": "Schedule a free consultation and I'll help you find the perfect loan for your situation.",
+                "buttonText": "Get Started Today"
+            }
+        }
+
+        # Create the Services page
+        services_page = MicrositeContentPage(
+            microsite_id=microsite.id,
+            page_type=PageType.SERVICES,
+            slug="services",
+            title="Loan Programs",
+            content=content,
+            is_enabled=True,
+            display_order=2,
+            show_in_nav=True
+        )
+        db.add(services_page)
+        db.commit()
+        db.refresh(services_page)
+
+        return {"status": "success", "message": "Services page created", "page_id": services_page.id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding services page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @public_router.post("/add-about-page/{user_slug}")
 async def add_about_page_for_user(user_slug: str, db: Session = Depends(get_db)):
     """One-time endpoint to add an About page for a user's microsite."""
