@@ -509,9 +509,10 @@ async def get_public_microsite(
                 "componentName": "LOMicrosite",
                 "features": ["contact_form"],
             }
-            # Merge theme_config with branding_json so logo and colors are available
+            # Merge theme_config with branding data so logo and colors are available
             theme_config = microsite.theme_config or {}
-            branding = microsite.branding_json or {}
+            # Check for branding_json in theme_config or as separate attribute
+            branding = getattr(microsite, 'branding_json', None) or theme_config.get('branding', {}) or {}
             if branding:
                 # Map branding fields to themeConfig
                 if branding.get('logo_url'):
