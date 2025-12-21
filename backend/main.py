@@ -20597,6 +20597,70 @@ async def debug_appointments_status(db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 
+@app.post("/api/v1/debug/create-test-appointment", tags=["Debug"])
+async def create_test_appointment(
+    attendee_email: str = "tloss@me.com",
+    attendee_phone: str = "8438345251",
+    attendee_name: str = "Test Reminder",
+    hours_from_now: int = 24,
+    db: Session = Depends(get_db)
+):
+    """Create a test appointment for notification testing"""
+    from datetime import datetime, timedelta
+
+    scheduled_start = datetime.utcnow() + timedelta(hours=hours_from_now)
+    scheduled_end = scheduled_start + timedelta(minutes=30)
+
+    try:
+        # Get first user to assign
+        user = db.execute(text("SELECT id, full_name FROM users LIMIT 1")).fetchone()
+        user_id = user[0] if user else None
+        user_name = user[1] if user else "Test LO"
+
+        # Insert appointment
+        result = db.execute(text("""
+            INSERT INTO scheduler_appointments
+            (title, scheduled_start, scheduled_end, duration_minutes, status,
+             attendee_name, attendee_email, attendee_phone, assigned_user_id,
+             meeting_type, timezone, created_at, updated_at)
+            VALUES
+            (:title, :start, :end, 30, 'booked',
+             :name, :email, :phone, :user_id,
+             'discovery_call', 'America/New_York', NOW(), NOW())
+            RETURNING id
+        """), {
+            "title": f"Test Call with {attendee_name}",
+            "start": scheduled_start,
+            "end": scheduled_end,
+            "name": attendee_name,
+            "email": attendee_email,
+            "phone": attendee_phone,
+            "user_id": user_id
+        })
+
+        appointment_id = result.fetchone()[0]
+        db.commit()
+
+        return {
+            "success": True,
+            "appointment_id": appointment_id,
+            "scheduled_start": scheduled_start.isoformat(),
+            "scheduled_end": scheduled_end.isoformat(),
+            "attendee_email": attendee_email,
+            "attendee_phone": attendee_phone,
+            "assigned_to": user_name,
+            "reminder_schedule": {
+                "24h_reminder": (scheduled_start - timedelta(hours=24)).isoformat() if hours_from_now > 24 else "Already passed",
+                "1h_reminder": (scheduled_start - timedelta(hours=1)).isoformat()
+            },
+            "note": f"Appointment created {hours_from_now} hours from now. Reminders will be sent automatically."
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {"error": str(e)}
+
+
 # Perennia Docs AI Routes
 perennia_docs_error = None
 try:
