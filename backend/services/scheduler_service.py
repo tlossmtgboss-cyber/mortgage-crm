@@ -352,34 +352,43 @@ class SchedulerService:
             # =====================================================================
             # PART 1: Legacy appointments table (single reminder)
             # =====================================================================
-            legacy_query = text("""
-                SELECT
-                    a.id as appointment_id,
-                    a.appointment_type,
-                    a.scheduled_at,
-                    a.meeting_link,
-                    a.lead_id,
-                    a.loan_id,
-                    l.first_name as borrower_first_name,
-                    l.email as borrower_email,
-                    l.phone as borrower_phone,
-                    u.first_name as lo_first_name,
-                    u.last_name as lo_last_name
-                FROM appointments a
-                LEFT JOIN leads l ON l.id = a.lead_id
-                LEFT JOIN users u ON u.id = a.assigned_to
-                WHERE a.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
-                AND a.reminder_sent = false
-                AND a.status = 'scheduled'
-            """)
-
-            result = session.execute(legacy_query)
-            appointments = result.fetchall()
+            # Check if legacy appointments table exists
+            legacy_table_check = session.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'appointments'
+                )
+            """))
+            if not legacy_table_check.scalar():
+                logger.debug("Legacy appointments table doesn't exist, skipping")
+                appointments = []
+            else:
+                legacy_query = text("""
+                    SELECT
+                        a.id as appointment_id,
+                        a.appointment_type,
+                        a.scheduled_at,
+                        a.meeting_link,
+                        a.lead_id,
+                        a.loan_id,
+                        l.first_name as borrower_first_name,
+                        l.email as borrower_email,
+                        l.phone as borrower_phone,
+                        u.full_name as lo_name
+                    FROM appointments a
+                    LEFT JOIN leads l ON l.id = a.lead_id
+                    LEFT JOIN users u ON u.id = a.assigned_to
+                    WHERE a.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
+                    AND a.reminder_sent = false
+                    AND a.status = 'scheduled'
+                """)
+                result = session.execute(legacy_query)
+                appointments = result.fetchall()
 
             for appt in appointments:
                 try:
                     appt_dict = dict(appt._mapping)
-                    lo_name = f"{appt_dict.get('lo_first_name', '')} {appt_dict.get('lo_last_name', '')}".strip()
+                    lo_name = appt_dict.get('lo_name', '') or 'Your Loan Officer'
 
                     # Send email reminder
                     if appt_dict.get("borrower_email"):
@@ -509,7 +518,7 @@ class SchedulerService:
         """Send reminder for a smart scheduler appointment and record it."""
         try:
             appt_dict = dict(appt._mapping)
-            lo_name = f"{appt_dict.get('lo_first_name', '')} {appt_dict.get('lo_last_name', '')}".strip()
+            lo_name = appt_dict.get('lo_name', '') or 'Your Loan Officer'
             appointment_id = appt_dict["appointment_id"]
 
             # Determine reminder message based on hours
