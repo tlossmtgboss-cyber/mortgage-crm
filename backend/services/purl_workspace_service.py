@@ -46,6 +46,13 @@ from models.purl import (
     ContactType
 )
 
+# Try to import Smart Docs models for document requirements
+try:
+    from models.smart_docs_models import DocumentRequest, RequestStatus
+    SMART_DOCS_AVAILABLE = True
+except ImportError:
+    SMART_DOCS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -377,6 +384,34 @@ class PURLWorkspaceService:
             PURLDocument.workspace_id == workspace_id
         ).order_by(PURLDocument.created_at.desc()).all()
 
+        # Get document requirements from Smart Docs if available
+        document_requirements = []
+        if SMART_DOCS_AVAILABLE and current_loan:
+            try:
+                requests = self.db.query(DocumentRequest).filter(
+                    DocumentRequest.loan_id == current_loan.id
+                ).order_by(DocumentRequest.priority.desc(), DocumentRequest.created_at).all()
+
+                document_requirements = [
+                    {
+                        "id": req.id,
+                        "doc_type": req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type),
+                        "title": req.title,
+                        "description": req.description,
+                        "instructions": req.instructions,
+                        "status": req.status.value if hasattr(req.status, 'value') else str(req.status),
+                        "priority": req.priority.value if hasattr(req.priority, 'value') else str(req.priority),
+                        "due_date": req.due_date.isoformat() if req.due_date else None,
+                        "applies_to": req.applies_to.value if hasattr(req.applies_to, 'value') else str(req.applies_to),
+                        "is_required": req.is_required,
+                        "fulfilled_at": req.fulfilled_at.isoformat() if req.fulfilled_at else None,
+                    }
+                    for req in requests
+                ]
+                logger.info(f"Loaded {len(document_requirements)} document requirements for loan {current_loan.id}")
+            except Exception as e:
+                logger.warning(f"Failed to load document requirements: {e}")
+
         # Get milestones if loan exists
         milestones = []
         if current_loan:
@@ -453,6 +488,7 @@ class PURLWorkspaceService:
             "lead": lead_data,  # Include linked lead data for milestone sync
             "loanOfficer": loan_officer_data,  # Include LO info for portal display
             "documents": [self._document_to_dict(d) for d in documents],
+            "document_requirements": document_requirements,  # Smart Docs needs list
             "tasks": [self._task_to_dict(t) for t in tasks],
             "milestones": milestones,
             "timeline": timeline,
