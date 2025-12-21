@@ -53,6 +53,7 @@ class MicrositeTheme(Base):
     Themes define the visual appearance and layout of LO microsites.
     """
     __tablename__ = "microsite_themes"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -159,6 +160,7 @@ class Microsite(Base):
     Links a user to their selected theme and custom configuration.
     """
     __tablename__ = "microsites"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -239,6 +241,7 @@ class MicrositeProfile(Base):
     Contains theme-specific content that goes beyond the base user profile.
     """
     __tablename__ = "microsite_profiles"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
 
