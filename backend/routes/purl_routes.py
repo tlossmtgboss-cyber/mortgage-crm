@@ -606,8 +606,9 @@ async def list_tasks(
 
     service = PURLTimelineService(db)
     tasks = service.get_borrower_tasks(
+        organization_id=context.organization_id,
         workspace_id=context.workspace_id,
-        status=TaskStatus(status) if status else None
+        include_completed=(status == "completed") if status else False
     )
 
     return {"tasks": tasks}
@@ -838,12 +839,12 @@ async def get_timeline(
     verify_workspace_access(context, slug)
 
     service = PURLTimelineService(db)
-    timeline = service.get_timeline(
-        workspace_id=context.workspace_id,
-        limit=limit
+    result = service.get_workspace_timeline(
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id
     )
 
-    return {"timeline": timeline}
+    return {"timeline": result.get("events", [])[:limit]}
 
 
 @purl_router.get(
@@ -859,18 +860,19 @@ async def get_milestones(
     """Get loan milestones and current status."""
     verify_workspace_access(context, slug)
 
-    # Get active loan
-    loan = db.query(PURLLoan).filter(
-        PURLLoan.workspace_id == context.workspace_id
-    ).order_by(PURLLoan.created_at.desc()).first()
+    service = PURLTimelineService(db)
+    result = service.get_workspace_timeline(
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id
+    )
 
-    if not loan:
+    milestones = result.get("milestones", [])
+    loan_status = result.get("loan_status")
+
+    if not milestones:
         return {"milestones": [], "message": "No active loan"}
 
-    service = PURLTimelineService(db)
-    milestones = service.get_milestones(loan.id)
-
-    return {"loan_id": loan.id, "milestones": milestones}
+    return {"milestones": milestones, "loan_status": loan_status}
 
 
 # =============================================================================

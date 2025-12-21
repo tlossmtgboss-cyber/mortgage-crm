@@ -27,6 +27,7 @@ from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
 from services.smart_docs.auto_renewal_scheduler import AutoRenewalScheduler
 from services.smart_docs.freshness_validator import FreshnessValidator
 from services.smart_docs.notification_service import SmartDocsNotificationService
+from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,16 @@ async def upload_document(
         except ValueError:
             logger.warning(f"Invalid doc_type: {doc_type}")
 
+    # Get S3 service
+    s3_service = get_smart_docs_s3_service()
+
+    # Generate storage key
+    storage_key = s3_service.generate_storage_key(
+        loan_id=loan_id,
+        borrower_id=borrower_id,
+        file_name=file.filename
+    )
+
     # Create document record
     document = SmartDocument(
         request_id=request_id,
@@ -249,7 +260,7 @@ async def upload_document(
         file_name=file.filename,
         mime_type=mime_type,
         file_size=file_size,
-        storage_key=f"smart-docs/{loan_id}/{borrower_id}/{datetime.utcnow().isoformat()}/{file.filename}",
+        storage_key=storage_key,
         doc_type=parsed_doc_type,
         status="UPLOADED",
     )
@@ -257,8 +268,22 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
-    # TODO: Upload file to S3
-    # s3_client.upload_fileobj(BytesIO(file_content), bucket, document.storage_key)
+    # Upload file to S3
+    upload_result = s3_service.upload_file(
+        file_content=file_content,
+        storage_key=storage_key,
+        content_type=mime_type,
+        metadata={
+            "loan_id": str(loan_id),
+            "borrower_id": str(borrower_id),
+            "document_id": str(document.id),
+            "original_filename": file.filename
+        }
+    )
+
+    if not upload_result.get("success"):
+        logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
+        # Continue processing even if S3 fails (for development/testing without S3)
 
     # Process the document
     pipeline = DocumentReviewPipeline(db)
@@ -318,6 +343,56 @@ async def get_document(
         "reviewed_at": document.reviewed_at.isoformat() if document.reviewed_at else None,
         "reviewed_by": document.reviewed_by,
         "created_at": document.created_at.isoformat() if document.created_at else None,
+    }
+
+
+@router.get("/document/{document_id}/download")
+async def download_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get a presigned URL to download a document.
+
+    Returns a temporary URL that can be used to download the file directly from S3.
+    """
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not document.storage_key:
+        raise HTTPException(status_code=404, detail="Document file not available")
+
+    s3_service = get_smart_docs_s3_service()
+
+    if not s3_service.is_available:
+        raise HTTPException(
+            status_code=503,
+            detail="Document storage not configured"
+        )
+
+    result = s3_service.get_presigned_download_url(
+        storage_key=document.storage_key,
+        file_name=document.file_name,
+        expires_in=300  # 5 minutes
+    )
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate download URL: {result.get('error')}"
+        )
+
+    return {
+        "document_id": document.id,
+        "file_name": document.file_name,
+        "download_url": result["presigned_url"],
+        "expires_in": result["expires_in"],
+        "content_type": document.mime_type,
+        "file_size": document.file_size
     }
 
 

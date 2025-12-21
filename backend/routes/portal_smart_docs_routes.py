@@ -17,10 +17,11 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db
-from models.smart_docs_models import DocumentRequest, SmartDocument, RequestStatus
+from models.smart_docs_models import DocumentRequest, SmartDocument, RequestStatus, DocType
 from models.purl import PURLWorkspace, PURLLoan
 from services.smart_docs.needs_list_generator import NeedsListGenerator
 from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
+from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
 
 logger = logging.getLogger(__name__)
 
