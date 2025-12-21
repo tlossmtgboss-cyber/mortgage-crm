@@ -166,34 +166,16 @@ function SmartDocs() {
     }
   }, [pagination]);
 
-  // Initial load - use fetchAllLoans as primary source
+  // Initial load - only use fetchAllLoans
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError(null);
-
-      // Primary: fetch all loans and categorize
       await fetchAllLoans();
-
-      // Secondary: try to get more accurate data from smart-docs API
-      try {
-        await fetchSummary();
-        if (activeTab === 'documents-uploaded') {
-          await fetchPendingReview();
-        } else if (activeTab === 'documents-owed') {
-          await fetchOutstandingDocs();
-        } else if (activeTab === 'completed') {
-          await fetchCompletedClients();
-        }
-      } catch (err) {
-        // Silently fail - we have fallback data from fetchAllLoans
-        console.error('Smart docs API unavailable, using fallback:', err);
-      }
-
       setLoading(false);
     };
     loadData();
-  }, [activeTab, fetchAllLoans, fetchSummary, fetchPendingReview, fetchOutstandingDocs, fetchCompletedClients]);
+  }, [fetchAllLoans]);
 
   // Handle tab change
   const handleTabChange = (tab) => {

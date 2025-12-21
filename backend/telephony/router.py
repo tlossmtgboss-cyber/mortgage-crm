@@ -1206,3 +1206,249 @@ async def webhook_dial_status(
 </Response>"""
 
     return Response(content=twiml, media_type="application/xml")
+
+
+# =============================================================================
+# Call Recording Webhook - Sends to Conversation Intelligence
+# =============================================================================
+
+@router.post("/webhook/recording-complete")
+async def webhook_recording_complete(
+    request: Request,
+    session_id: Optional[int] = None,
+    task_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Recording status callback - called when call recording is complete.
+
+    Receives the recording URL from Twilio and sends it to the
+    Conversation Intelligence pipeline for transcription, analysis,
+    and QA scoring.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    form_data = await request.form()
+
+    # Extract recording details from Twilio webhook
+    recording_sid = form_data.get("RecordingSid", "")
+    recording_url = form_data.get("RecordingUrl", "")
+    recording_status = form_data.get("RecordingStatus", "")
+    recording_duration = form_data.get("RecordingDuration", "0")
+    call_sid = form_data.get("CallSid", "")
+
+    logger.info(f"📼 Recording complete: call={call_sid}, recording={recording_sid}, duration={recording_duration}s")
+
+    if recording_status != "completed" or not recording_url:
+        logger.warning(f"Recording not ready: status={recording_status}")
+        return {"success": False, "message": "Recording not ready"}
+
+    try:
+        # Get call details from session/task if available
+        call_metadata = {
+            "call_sid": call_sid,
+            "recording_sid": recording_sid,
+            "duration_seconds": int(recording_duration) if recording_duration else 0,
+            "session_id": session_id,
+            "task_id": task_id,
+            "source": "power_dialer"
+        }
+
+        # Get lead/loan info if task_id is provided
+        if task_id:
+            from main import DialerSessionTask
+            task = db.query(DialerSessionTask).filter(
+                DialerSessionTask.id == task_id
+            ).first()
+            if task:
+                call_metadata["lead_id"] = task.lead_id
+                call_metadata["loan_id"] = task.loan_id
+                call_metadata["contact_name"] = task.contact_name
+                call_metadata["contact_phone"] = task.contact_phone
+
+        # Send to Conversation Intelligence pipeline
+        asyncio.create_task(
+            process_call_recording_for_ci(
+                recording_url=f"{recording_url}.mp3",  # Twilio provides MP3 format
+                recording_sid=recording_sid,
+                call_metadata=call_metadata,
+                db=db
+            )
+        )
+
+        return {"success": True, "message": "Recording queued for CI analysis"}
+
+    except Exception as e:
+        logger.error(f"Error processing recording webhook: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def process_call_recording_for_ci(
+    recording_url: str,
+    recording_sid: str,
+    call_metadata: dict,
+    db: Session
+):
+    """
+    Process a call recording through the Conversation Intelligence pipeline.
+
+    1. Create a CI Voice recording record
+    2. Transcribe the recording
+    3. Analyze with AI
+    4. Generate QA scores
+    5. Create task for review
+    """
+    import os
+    from datetime import datetime, timezone
+
+    logger.info(f"🎯 Processing recording {recording_sid} for CI analysis...")
+
+    try:
+        # Import CI models and services
+        from models.conversation_intelligence_models import (
+            CIVoiceRecording, CIVoiceRecordingStatus
+        )
+        from services.ci_transcription_service import CITranscriptionService
+        from services.ci_analysis_service import CIAnalysisService
+
+        # Get agent info from session
+        agent_id = None
+        lead_id = call_metadata.get("lead_id")
+        loan_id = call_metadata.get("loan_id")
+
+        if call_metadata.get("session_id"):
+            from main import DialerSession
+            session = db.query(DialerSession).filter(
+                DialerSession.id == call_metadata["session_id"]
+            ).first()
+            if session:
+                agent_id = session.agent_id
+
+        # Create CI Voice recording record
+        recording = CIVoiceRecording(
+            agent_id=agent_id,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            recording_url=recording_url,
+            recording_sid=recording_sid,
+            call_sid=call_metadata.get("call_sid"),
+            duration_seconds=call_metadata.get("duration_seconds", 0),
+            direction="outbound",
+            status=CIVoiceRecordingStatus.PENDING.value,
+            metadata={
+                "source": "power_dialer",
+                "contact_name": call_metadata.get("contact_name"),
+                "contact_phone": call_metadata.get("contact_phone"),
+                "session_id": call_metadata.get("session_id"),
+                "task_id": call_metadata.get("task_id")
+            },
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(recording)
+        db.commit()
+        db.refresh(recording)
+
+        logger.info(f"Created CI recording record: {recording.id}")
+
+        # Step 1: Transcribe the recording
+        transcription_service = CITranscriptionService()
+        transcript = await transcription_service.transcribe_from_url(recording_url)
+
+        if transcript:
+            recording.transcript = transcript
+            recording.status = CIVoiceRecordingStatus.TRANSCRIBED.value
+            db.commit()
+            logger.info(f"Transcription complete: {len(transcript)} characters")
+
+            # Step 2: Analyze the call
+            analysis_service = CIAnalysisService(db)
+            analysis_result = await analysis_service.analyze_call(
+                transcript=transcript,
+                recording_id=recording.id,
+                call_type="sales_call",
+                agent_id=agent_id
+            )
+
+            if analysis_result:
+                recording.analysis = analysis_result.get("analysis")
+                recording.sentiment_score = analysis_result.get("sentiment_score")
+                recording.qa_score = analysis_result.get("qa_score")
+                recording.coaching_notes = analysis_result.get("coaching_notes")
+                recording.key_moments = analysis_result.get("key_moments", [])
+                recording.status = CIVoiceRecordingStatus.ANALYZED.value
+                db.commit()
+                logger.info(f"Analysis complete: QA score = {recording.qa_score}")
+
+                # Step 3: Create task for QA review if score needs attention
+                if recording.qa_score and recording.qa_score < 70:
+                    await create_qa_review_task(
+                        recording=recording,
+                        agent_id=agent_id,
+                        db=db
+                    )
+        else:
+            recording.status = CIVoiceRecordingStatus.FAILED.value
+            recording.error_message = "Transcription failed"
+            db.commit()
+            logger.error(f"Transcription failed for recording {recording_sid}")
+
+    except Exception as e:
+        logger.error(f"Error in CI pipeline for recording {recording_sid}: {e}")
+        # Try to update status if recording was created
+        try:
+            if 'recording' in dir() and recording:
+                recording.status = CIVoiceRecordingStatus.FAILED.value
+                recording.error_message = str(e)
+                db.commit()
+        except:
+            pass
+
+
+async def create_qa_review_task(
+    recording,
+    agent_id: int,
+    db: Session
+):
+    """Create a task for the manager to review a call that needs coaching."""
+    from datetime import datetime, timezone
+
+    try:
+        from main import AITask, User
+
+        # Get agent's manager
+        agent = db.query(User).filter(User.id == agent_id).first()
+        manager_id = agent.manager_id if agent and agent.manager_id else agent_id
+
+        # Create review task
+        task = AITask(
+            user_id=manager_id,
+            task_type="call_qa_review",
+            title=f"Review Call: QA Score {recording.qa_score}%",
+            description=f"""A recorded call requires QA review.
+
+**Agent:** {agent.name if agent else 'Unknown'}
+**Call Duration:** {recording.duration_seconds // 60}:{recording.duration_seconds % 60:02d}
+**QA Score:** {recording.qa_score}%
+
+**Coaching Notes:**
+{recording.coaching_notes or 'No coaching notes generated.'}
+
+Please review the call recording and provide feedback to the agent.""",
+            status="pending",
+            priority="high",
+            metadata={
+                "recording_id": recording.id,
+                "recording_url": recording.recording_url,
+                "qa_score": recording.qa_score,
+                "agent_id": agent_id
+            },
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(task)
+        db.commit()
+
+        logger.info(f"Created QA review task for recording {recording.id}")
+
+    except Exception as e:
+        logger.error(f"Error creating QA review task: {e}")

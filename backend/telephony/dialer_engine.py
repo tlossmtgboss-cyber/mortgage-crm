@@ -368,6 +368,7 @@ class DialerEngine:
         # Build callback URLs
         callback_url = f"{base_url}/api/v1/dialer/twiml/outbound?session_id={session_id}&task_id={task_id}"
         status_callback_url = f"{base_url}/api/v1/dialer/webhook/status?session_id={session_id}&task_id={task_id}"
+        recording_callback_url = f"{base_url}/api/v1/dialer/webhook/recording-complete?session_id={session_id}&task_id={task_id}"
 
         # Acquire soft lock
         lock_acquired = self.compliance.acquire_soft_lock(
@@ -379,12 +380,14 @@ class DialerEngine:
         if not lock_acquired:
             return {"success": False, "error": "Could not acquire call lock - number may be in use"}
 
-        # Place the call
+        # Place the call with recording enabled
         result = self.provider.place_call(
             to_number=task.contact_phone,
             from_number=caller_id,
             callback_url=callback_url,
             status_callback_url=status_callback_url,
+            recording_status_callback=recording_callback_url,
+            record=True,
             timeout=30
         )
 
@@ -846,6 +849,7 @@ def click_to_dial(
     from urllib.parse import quote
     callback_url = f"{base_url}/api/v1/dialer/twiml/click-to-dial?destination={quote(phone_number)}&contact_name={quote(contact_name or 'Contact')}"
     status_callback_url = f"{base_url}/api/v1/dialer/webhook/click-to-dial-status?agent_id={agent_id}"
+    recording_callback_url = f"{base_url}/api/v1/dialer/webhook/recording-complete?agent_id={agent_id}"
 
     # Acquire soft lock
     lock_acquired = compliance.acquire_soft_lock(
@@ -867,6 +871,8 @@ def click_to_dial(
         from_number=settings.business_caller_id,
         callback_url=callback_url,  # TwiML will dial the contact
         status_callback_url=status_callback_url,
+        recording_status_callback=recording_callback_url,
+        record=True,
         timeout=30
     )
 
