@@ -560,10 +560,12 @@ async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=404, detail="User tim-loss not found")
 
-        # Update user bio in metadata
-        current_metadata = user.user_metadata or {}
+        # Update user bio in metadata (use flag_modified for JSON column updates)
+        from sqlalchemy.orm.attributes import flag_modified
+        current_metadata = dict(user.user_metadata) if user.user_metadata else {}
         current_metadata["bio"] = "Experienced mortgage professional dedicated to helping clients achieve their homeownership dreams with personalized service and competitive rates."
         user.user_metadata = current_metadata
+        flag_modified(user, "user_metadata")
 
         # Get or create microsite
         microsite = db.query(Microsite).filter(Microsite.user_id == user.id).first()
