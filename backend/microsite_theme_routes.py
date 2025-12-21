@@ -534,8 +534,10 @@ async def get_public_microsite(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
         logger.error(f"Error fetching public microsite: {e}")
-        raise HTTPException(status_code=500, detail="Error loading microsite")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error loading microsite: {str(e)}")
 
 
 # =============================================================================

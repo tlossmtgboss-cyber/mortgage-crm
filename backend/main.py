@@ -19546,7 +19546,8 @@ except Exception as e:
 
 # Include Realtor Portal routes
 try:
-    from routes.realtor_portal_routes import router as realtor_portal_router
+    from routes.realtor_portal_routes import router as realtor_portal_router, set_dependencies as set_realtor_portal_deps
+    set_realtor_portal_deps(get_db)
     app.include_router(realtor_portal_router, tags=["Realtor Portal"])
     logger.info("✅ Realtor Portal routes loaded")
 except Exception as e:
