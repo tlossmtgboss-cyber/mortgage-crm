@@ -379,13 +379,14 @@ class PURLWorkspaceService:
             )
 
             # Get portal modules - initialize if none exist
-            modules = self.db.query(PURLPortalModule).filter(
-                PURLPortalModule.workspace_id == workspace_id
-            ).order_by(PURLPortalModule.order_index).all()
+            modules = []
+            try:
+                modules = self.db.query(PURLPortalModule).filter(
+                    PURLPortalModule.workspace_id == workspace_id
+                ).order_by(PURLPortalModule.order_index).all()
 
-            if not modules:
-                # Initialize default modules for workspaces created before module system
-                try:
+                if not modules:
+                    # Initialize default modules for workspaces created before module system
                     logger.info(f"Initializing default portal modules for workspace {workspace_id}")
                     self._initialize_portal_modules(organization_id, workspace_id)
                     self.db.commit()
@@ -393,9 +394,11 @@ class PURLWorkspaceService:
                     modules = self.db.query(PURLPortalModule).filter(
                         PURLPortalModule.workspace_id == workspace_id
                     ).order_by(PURLPortalModule.order_index).all()
-                except Exception as e:
-                    logger.warning(f"Failed to initialize portal modules: {e}")
-                    self.db.rollback()
+            except Exception as e:
+                logger.warning(f"Failed to query/initialize portal modules: {e}")
+                self.db.rollback()
+                # Return default modules as fallback (without persisting)
+                modules = []
 
             logger.debug(f"get_complete_workspace_data: Found {len(modules)} modules")
 
@@ -529,7 +532,7 @@ class PURLWorkspaceService:
                 "tasks": [self._task_to_dict(t) for t in tasks],
                 "milestones": milestones,
                 "timeline": timeline,
-                "modules": [self._module_to_dict(m) for m in modules],
+                "modules": [self._module_to_dict(m) for m in modules] if modules else self._get_default_modules(),
                 # Extra fields for backwards compatibility
                 "unread_messages_count": unread_count
             }
@@ -866,6 +869,21 @@ class PURLWorkspaceService:
             "config": module.config,
             "config_version": module.config_version
         }
+
+    def _get_default_modules(self) -> List[Dict[str, Any]]:
+        """Return default module configuration when database table doesn't exist."""
+        return [
+            {
+                "id": None,
+                "module_key": config["module_key"],
+                "is_enabled": config["is_enabled"],
+                "is_visible": config["is_visible"],
+                "order_index": config["order_index"],
+                "config": config["config"],
+                "config_version": 1
+            }
+            for config in DEFAULT_PORTAL_MODULES
+        ]
 
     def _task_to_dict(self, task: PURLTask) -> Dict[str, Any]:
         """Convert task to dict."""
