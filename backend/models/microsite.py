@@ -404,8 +404,22 @@ class TemplatePackListResponse(BaseModel):
     version: int
     status: str
     category: Optional[str]
-    tags: Optional[List[str]]
+    tags: Optional[List[str]] = None
     thumbnail_url: Optional[str]
+
+    @field_validator('tags', mode='before')
+    @classmethod
+    def parse_tags(cls, v):
+        """Parse tags from JSON string (SQLite) or array (PostgreSQL)"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return [v]  # Single tag as string
+        return list(v) if v else None
 
 
 # -------------------- MICROSITE SCHEMAS --------------------

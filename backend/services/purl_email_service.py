@@ -287,12 +287,17 @@ class PURLEmailService:
         to_email: str,
         first_name: str,
         workspace_slug: str,
+        token: Optional[str] = None,
         loan_officer_name: Optional[str] = None,
         loan_officer_email: Optional[str] = None,
         loan_officer_phone: Optional[str] = None
     ) -> bool:
         """Send confirmation email when application is submitted."""
-        portal_url = f"https://{self.purl_domain}/portal/{workspace_slug}"
+        # Include token in URL so borrower can access portal
+        if token:
+            portal_url = f"https://{self.purl_domain}/portal/{workspace_slug}?token={token}"
+        else:
+            portal_url = f"https://{self.purl_domain}/portal/{workspace_slug}"
 
         context = {
             "first_name": first_name,

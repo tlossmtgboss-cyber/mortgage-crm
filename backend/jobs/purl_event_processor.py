@@ -212,6 +212,30 @@ def handle_application_submitted(event: Dict[str, Any], db: Session) -> bool:
         """), {"ws_id": workspace_id}).fetchone()
 
         if ws and ws.email:
+            # Generate a new token for the borrower to access their portal
+            # Since tokens are hashed and can't be retrieved, we need to create a fresh one
+            access_token = None
+            try:
+                from services.purl_token_service import PURLTokenService
+                from models.purl import TokenScope
+
+                # Get organization_id from workspace
+                org_result = db.execute(text("""
+                    SELECT organization_id FROM purl_workspaces WHERE id = :ws_id
+                """), {"ws_id": workspace_id}).fetchone()
+
+                if org_result:
+                    token_service = PURLTokenService(db)
+                    _, access_token = token_service.create_token(
+                        organization_id=org_result.organization_id,
+                        workspace_id=workspace_id,
+                        scope=TokenScope.WRITE,
+                        expires_in_days=30  # Token valid for 30 days
+                    )
+                    logger.info(f"Created new portal access token for workspace {workspace_id}")
+            except Exception as token_error:
+                logger.warning(f"Could not create portal token: {token_error}")
+
             # Queue email to borrower
             queue_email(
                 db=db,
@@ -220,7 +244,8 @@ def handle_application_submitted(event: Dict[str, Any], db: Session) -> bool:
                 context={
                     "first_name": ws.first_name,
                     "workspace_slug": ws.slug,
-                    "loan_id": loan_id
+                    "loan_id": loan_id,
+                    "token": access_token  # Include token for portal access
                 }
             )
 

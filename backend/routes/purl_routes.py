@@ -188,11 +188,14 @@ class WorkspaceDataResponse(BaseModel):
     application: Optional[Dict[str, Any]] = None
     loan: Optional[Dict[str, Any]] = None
     lead: Optional[Dict[str, Any]] = None  # Linked CRM lead data for milestone sync
+    loanOfficer: Optional[Dict[str, Any]] = None  # Loan officer info for portal display
     documents: List[Dict[str, Any]] = []
+    document_requirements: List[Dict[str, Any]] = []  # Smart Docs needs list
     tasks: List[Dict[str, Any]] = []
     milestones: List[Dict[str, Any]] = []
     timeline: List[Dict[str, Any]] = []
     modules: List[Dict[str, Any]] = []
+    unread_messages_count: int = 0
 
 
 class UploadUrlResponse(BaseModel):
