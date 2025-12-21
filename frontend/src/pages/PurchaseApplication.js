@@ -28,19 +28,49 @@ const STAGES = [
   { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
 ];
 
-// Documents needed for mortgage application
-const REQUIRED_DOCUMENTS = [
-  { id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' },
-  { id: 'ssn', name: 'Social Security Card', description: 'Or other SSN verification', category: 'identity', stage: 'profile' },
-  { id: 'paystubs', name: 'Pay Stubs', description: 'Last 2 months (most recent)', category: 'income', stage: 'income' },
-  { id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' },
-  { id: 'tax_returns', name: 'Tax Returns', description: 'Last 2 years (if self-employed)', category: 'income', stage: 'income' },
-  { id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'assets' },
-  { id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'assets' },
-  { id: 'gift_letter', name: 'Gift Letter', description: 'If receiving gift funds', category: 'assets', stage: 'assets' },
-  { id: 'purchase_contract', name: 'Purchase Contract', description: 'Signed purchase agreement', category: 'property', stage: 'property' },
-  { id: 'homeowners_insurance', name: 'Homeowners Insurance', description: 'Quote or declaration page', category: 'property', stage: 'property' },
-];
+// Generate documents needed based on user's declarations
+const getRequiredDocuments = (declarations = {}) => {
+  const docs = [];
+  const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
+  const hasGiftFunds = declarations.gift_funds === 'yes';
+  const hasCoBorrower = declarations.borrower_count && declarations.borrower_count !== 'one';
+
+  // Identity documents (always required)
+  docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
+  docs.push({ id: 'ssn', name: 'Social Security Card', description: 'Or other SSN verification', category: 'identity', stage: 'profile' });
+
+  // Income documents (varies based on employment type)
+  if (isSelfEmployed) {
+    docs.push({ id: 'tax_returns', name: 'Tax Returns', description: 'Personal returns (last 2 years)', category: 'income', stage: 'income' });
+    docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: 'Business returns (last 2 years)', category: 'income', stage: 'income' });
+    docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: 'Year-to-date P&L', category: 'income', stage: 'income' });
+    docs.push({ id: 'business_license', name: 'Business License', description: 'Current business license', category: 'income', stage: 'income' });
+  } else {
+    docs.push({ id: 'paystubs', name: 'Pay Stubs', description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
+    docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
+  }
+
+  // Asset documents
+  docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'assets' });
+  docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'assets' });
+
+  // Gift letter only if receiving gift funds
+  if (hasGiftFunds) {
+    docs.push({ id: 'gift_letter', name: 'Gift Letter', description: 'Signed gift letter from donor', category: 'assets', stage: 'assets' });
+  }
+
+  // Property documents
+  docs.push({ id: 'purchase_contract', name: 'Purchase Contract', description: 'Signed purchase agreement', category: 'property', stage: 'property' });
+  docs.push({ id: 'homeowners_insurance', name: 'Homeowners Insurance', description: 'Quote or declaration page', category: 'property', stage: 'property' });
+
+  // Co-borrower documents
+  if (hasCoBorrower) {
+    docs.push({ id: 'coborrower_id', name: 'Co-Borrower ID', description: "Co-borrower's government ID", category: 'identity', stage: 'profile' });
+    docs.push({ id: 'coborrower_income', name: 'Co-Borrower Income Docs', description: 'Pay stubs & W-2s for co-borrower', category: 'income', stage: 'income' });
+  }
+
+  return docs;
+};
 
 // Professional SVG Icon component
 const Icon = ({ name, size = 24, className = '' }) => {
@@ -1038,6 +1068,8 @@ export default function PurchaseApplication() {
   const [creditAuthAgreed, setCreditAuthAgreed] = useState(false); // Credit authorization agreement tracking
   const [isSubmitting, setIsSubmitting] = useState(false); // Application submission loading state
   const [submitError, setSubmitError] = useState(null); // Application submission error state
+  const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false); // Success lightbox
+  const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null); // Portal URL after submission
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -1290,19 +1322,11 @@ export default function PurchaseApplication() {
         throw new Error(result.detail || 'Submission failed');
       }
 
-      // Success - show animation
-      showMicroWinAnimation('Application Submitted!');
-
-      // Redirect to client portal with the full portal URL (includes auth token)
+      // Success - show the submission success lightbox
       if (result.data?.portal_url) {
-        // Small delay to show success animation before redirect
-        setTimeout(() => {
-          window.location.href = result.data.portal_url;
-        }, 1500);
-      } else {
-        // Fallback to confirmation page if no workspace was created
-        setScheduleStep(4);
+        setPortalUrlForRedirect(result.data.portal_url);
       }
+      setShowSubmissionSuccess(true);
     } catch (error) {
       console.error('Application submission error:', error);
       setSubmitError(error.message || 'Failed to submit application. Please try again.');
@@ -3855,6 +3879,8 @@ export default function PurchaseApplication() {
           <div className="documents-list">
             {(() => {
               const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+              // Get dynamic document list based on user's declarations
+              const requiredDocs = getRequiredDocuments(declarations);
 
               // Map category to the stage that unlocks it
               const categoryUnlockStage = {
@@ -3880,7 +3906,7 @@ export default function PurchaseApplication() {
               });
 
               return visibleCategories.map(category => {
-                const categoryDocs = REQUIRED_DOCUMENTS.filter(d => d.category === category);
+                const categoryDocs = requiredDocs.filter(d => d.category === category);
                 const isCurrent = categoryDocs.some(d => d.stage === currentStage);
 
                 return (
@@ -3911,6 +3937,38 @@ export default function PurchaseApplication() {
           </div>
         </aside>
       </div>
+
+      {/* Submission Success Lightbox */}
+      {showSubmissionSuccess && (
+        <div className="submission-success-overlay">
+          <div className="submission-success-lightbox">
+            <div className="success-checkmark">
+              <svg viewBox="0 0 52 52" className="checkmark-svg">
+                <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+              </svg>
+            </div>
+            <h2>Application Submitted!</h2>
+            <p>Your mortgage application has been successfully submitted.</p>
+            <p className="redirect-message">You will be redirected to your client portal...</p>
+            <button
+              className="btn-view-portal"
+              onClick={() => {
+                if (portalUrlForRedirect) {
+                  window.open(portalUrlForRedirect, '_blank');
+                }
+                setShowSubmissionSuccess(false);
+                // Signal to parent iframe that submission is complete (if embedded)
+                if (window.parent !== window) {
+                  window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: portalUrlForRedirect }, '*');
+                }
+              }}
+            >
+              View Your Portal
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

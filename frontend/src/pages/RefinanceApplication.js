@@ -469,6 +469,44 @@ const STAGES = [
   { id: 'schedule', label: 'Submit', icon: 'check', description: 'Complete application' },
 ];
 
+// Generate documents needed based on user's declarations (refinance-specific)
+const getRequiredDocuments = (declarations = {}) => {
+  const docs = [];
+  const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
+  const hasCoBorrower = declarations.borrower_count && !['1', 'one'].includes(declarations.borrower_count);
+
+  // Identity documents (always required)
+  docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
+  docs.push({ id: 'ssn', name: 'Social Security Card', description: 'Or other SSN verification', category: 'identity', stage: 'profile' });
+
+  // Income documents (varies based on employment type)
+  if (isSelfEmployed) {
+    docs.push({ id: 'tax_returns', name: 'Tax Returns', description: 'Personal returns (last 2 years)', category: 'income', stage: 'income' });
+    docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: 'Business returns (last 2 years)', category: 'income', stage: 'income' });
+    docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: 'Year-to-date P&L', category: 'income', stage: 'income' });
+  } else {
+    docs.push({ id: 'paystubs', name: 'Pay Stubs', description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
+    docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
+  }
+
+  // Asset documents
+  docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'income' });
+  docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'income' });
+
+  // Property documents (refinance-specific)
+  docs.push({ id: 'mortgage_statement', name: 'Mortgage Statement', description: 'Current mortgage statement', category: 'property', stage: 'property' });
+  docs.push({ id: 'homeowners_insurance', name: 'Homeowners Insurance', description: 'Current declaration page', category: 'property', stage: 'property' });
+  docs.push({ id: 'property_tax', name: 'Property Tax Bill', description: 'Most recent tax statement', category: 'property', stage: 'property' });
+
+  // Co-borrower documents
+  if (hasCoBorrower) {
+    docs.push({ id: 'coborrower_id', name: 'Co-Borrower ID', description: "Co-borrower's government ID", category: 'identity', stage: 'profile' });
+    docs.push({ id: 'coborrower_income', name: 'Co-Borrower Income Docs', description: 'Pay stubs & W-2s for co-borrower', category: 'income', stage: 'income' });
+  }
+
+  return docs;
+};
+
 // Refinance-specific declaration questions
 const DECLARATION_QUESTIONS = [
   {
@@ -1062,6 +1100,8 @@ export default function RefinanceApplication() {
   const [scheduleStep, setScheduleStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
+  const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null);
 
   // AI Follow-up questions state (disabled - inline followups removed)
   const [followupAnswers, setFollowupAnswers] = useState({});
@@ -1155,20 +1195,11 @@ export default function RefinanceApplication() {
         throw new Error(result.detail || 'Submission failed');
       }
 
-      // Success - show animation
-      showMicroWinAnimation('Application Submitted!');
-
-      // Redirect to client portal with the full portal URL
+      // Success - show the submission success lightbox
       if (result.data?.portal_url) {
-        setTimeout(() => {
-          window.location.href = result.data.portal_url;
-        }, 1500);
-      } else {
-        // Fallback - redirect to generic portal
-        setTimeout(() => {
-          navigate('/portal');
-        }, 1500);
+        setPortalUrlForRedirect(result.data.portal_url);
       }
+      setShowSubmissionSuccess(true);
     } catch (error) {
       console.error('Application submission error:', error);
       setSubmitError(error.message || 'Failed to submit application. Please try again.');
@@ -3019,9 +3050,80 @@ export default function RefinanceApplication() {
         </div>
       )}
 
-      <main className="urla-content">
-        {renderStage()}
-      </main>
+      <div className="urla-main-layout">
+        <main className="urla-content">
+          {renderStage()}
+        </main>
+
+        {/* Documents Sidebar - Reveals progressively as application is completed */}
+        <aside className="documents-sidebar">
+        <div className="sidebar-header">
+          <Icon name="document" size={20} />
+          <h3>Documents Needed</h3>
+        </div>
+        <p className="sidebar-subtitle">Gather these documents to speed up your application</p>
+
+        <div className="documents-list">
+          {(() => {
+            const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+            // Get dynamic document list based on user's declarations
+            const requiredDocs = getRequiredDocuments(declarations);
+
+            // Map category to the stage that unlocks it
+            const categoryUnlockStage = {
+              identity: 'profile',
+              income: 'income',
+              assets: 'income',  // Assets unlock with income stage for refinance
+              property: 'property'
+            };
+
+            const categoryLabels = {
+              identity: 'Identity Verification',
+              income: 'Income Documents',
+              assets: 'Asset Documents',
+              property: 'Property Documents'
+            };
+
+            // Filter categories to only show those that have been unlocked
+            const visibleCategories = ['identity', 'income', 'assets', 'property'].filter(category => {
+              const unlockStage = categoryUnlockStage[category];
+              const unlockIndex = STAGES.findIndex(s => s.id === unlockStage);
+              // Show category if user has reached or passed its unlock stage
+              return currentIndex >= unlockIndex;
+            });
+
+            return visibleCategories.map(category => {
+              const categoryDocs = requiredDocs.filter(d => d.category === category);
+              const isCurrent = categoryDocs.some(d => d.stage === currentStage);
+
+              return (
+                <div key={category} className={`doc-category ${isCurrent ? 'current' : ''}`}>
+                  <h4 className="doc-category-title">{categoryLabels[category]}</h4>
+                  <ul className="doc-items">
+                    {categoryDocs.map(doc => (
+                      <li key={doc.id} className="doc-item">
+                        <span className="doc-checkbox">
+                          <Icon name="document" size={14} />
+                        </span>
+                        <div className="doc-info">
+                          <span className="doc-name">{doc.name}</span>
+                          <span className="doc-desc">{doc.description}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            });
+          })()}
+        </div>
+
+        <div className="sidebar-tip">
+          <Icon name="info" size={16} />
+          <span>Documents can be uploaded after you submit your application</span>
+        </div>
+      </aside>
+      </div>
 
       {currentStage !== 'declarations' && needsList.length > 0 && (
         <aside className="needs-sidebar">
@@ -3035,6 +3137,38 @@ export default function RefinanceApplication() {
             <span className="more-items">+{needsList.length - 5} more</span>
           )}
         </aside>
+      )}
+
+      {/* Submission Success Lightbox */}
+      {showSubmissionSuccess && (
+        <div className="submission-success-overlay">
+          <div className="submission-success-lightbox">
+            <div className="success-checkmark">
+              <svg viewBox="0 0 52 52" className="checkmark-svg">
+                <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+              </svg>
+            </div>
+            <h2>Application Submitted!</h2>
+            <p>Your refinance application has been successfully submitted.</p>
+            <p className="redirect-message">You will be redirected to your client portal...</p>
+            <button
+              className="btn-view-portal"
+              onClick={() => {
+                if (portalUrlForRedirect) {
+                  window.open(portalUrlForRedirect, '_blank');
+                }
+                setShowSubmissionSuccess(false);
+                // Signal to parent iframe that submission is complete (if embedded)
+                if (window.parent !== window) {
+                  window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: portalUrlForRedirect }, '*');
+                }
+              }}
+            >
+              View Your Portal
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

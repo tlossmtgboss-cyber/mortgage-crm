@@ -659,17 +659,44 @@ class PURLApplicationService:
             occupancy_type = self._map_occupancy_type(occupancy_raw)
 
             # Map employment status to income type
+            # Check multiple possible locations for employment info
+            declarations = data.get("declarations", {})
             employment_status = data.get("employment_status", "").lower()
+
+            # Check declarations.self_employed (from PurchaseApplication/RefinanceApplication)
+            self_employed_value = declarations.get("self_employed", "")
+            if self_employed_value in ["yes", "side_business"]:
+                employment_status = "self_employed"
+            elif not employment_status:
+                # Fall back to income_type or default to W2
+                employment_status = data.get("income_type", "w2").lower()
+
             income_type = self._map_income_type(employment_status)
 
             # Determine flags from application data
-            is_self_employed = employment_status in ["self_employed", "self-employed", "business_owner"]
-            has_gift_funds = data.get("has_gift_funds", False) or data.get("gift_funds", False)
-            has_bankruptcy = data.get("has_bankruptcy", False) or data.get("bankruptcy_history", False)
+            is_self_employed = (
+                employment_status in ["self_employed", "self-employed", "business_owner"] or
+                self_employed_value in ["yes", "side_business"]
+            )
+            has_gift_funds = (
+                data.get("has_gift_funds", False) or
+                data.get("gift_funds", False) or
+                declarations.get("gift_funds") == "yes"
+            )
+            has_bankruptcy = (
+                data.get("has_bankruptcy", False) or
+                data.get("bankruptcy_history", False) or
+                declarations.get("bankruptcy") == "yes"
+            )
 
             # Get co-borrower ID if present
             co_borrower_id = None
-            if data.get("has_co_borrower") or data.get("co_borrower_first_name"):
+            has_coborrower = (
+                data.get("has_co_borrower") or
+                data.get("co_borrower_first_name") or
+                declarations.get("borrower_count") in ["two", "2", "two_of_us", "three", "3", "four_or_more"]
+            )
+            if has_coborrower:
                 co_borrower_id = 2  # Placeholder - in real system, create/lookup co-borrower
 
             # Generate the needs list
