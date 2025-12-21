@@ -1038,3 +1038,271 @@ async def create_test_realtor(
                 "traceback": stack_trace.split('\n')[-5:]
             }
         )
+
+
+@router.post("/admin/run-migration")
+async def run_realtor_portal_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """
+    Run the realtor portal migration to create all required tables.
+    Requires admin API key for authorization.
+    """
+    import os
+    import traceback
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = []
+
+    # SQL commands to create tables (PostgreSQL)
+    sql_commands = [
+        # Enable extensions
+        ("Enable pgcrypto", "CREATE EXTENSION IF NOT EXISTS pgcrypto;"),
+
+        # Realtor portal users
+        ("Create realtor_portal_users", """
+            CREATE TABLE IF NOT EXISTS realtor_portal_users (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                phone VARCHAR(50),
+                first_name VARCHAR(255) NOT NULL,
+                last_name VARCHAR(255) NOT NULL,
+                password_hash VARCHAR(255),
+                auth_provider VARCHAR(50) DEFAULT 'email',
+                brokerage_name VARCHAR(255),
+                license_number VARCHAR(100),
+                license_state VARCHAR(10),
+                primary_lo_id INTEGER,
+                notification_preferences JSONB DEFAULT '{"email": true, "sms": true, "push": false}'::jsonb,
+                timezone VARCHAR(100) DEFAULT 'America/New_York',
+                is_active BOOLEAN DEFAULT TRUE,
+                last_login_at TIMESTAMP WITH TIME ZONE,
+                login_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """),
+
+        # Realtor portal sessions
+        ("Create realtor_portal_sessions", """
+            CREATE TABLE IF NOT EXISTS realtor_portal_sessions (
+                id SERIAL PRIMARY KEY,
+                realtor_id INTEGER NOT NULL REFERENCES realtor_portal_users(id) ON DELETE CASCADE,
+                token VARCHAR(255) NOT NULL UNIQUE,
+                expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                ip_address VARCHAR(50),
+                user_agent TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """),
+
+        # Sessions index
+        ("Create sessions index", """
+            CREATE INDEX IF NOT EXISTS idx_realtor_sessions_token ON realtor_portal_sessions(token);
+        """),
+
+        # Realtor loan associations
+        ("Create realtor_loan_associations", """
+            CREATE TABLE IF NOT EXISTS realtor_loan_associations (
+                id SERIAL PRIMARY KEY,
+                realtor_id INTEGER NOT NULL REFERENCES realtor_portal_users(id) ON DELETE CASCADE,
+                loan_id INTEGER NOT NULL,
+                role VARCHAR(50) DEFAULT 'buyer_agent',
+                access_granted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                granted_by_user_id INTEGER,
+                access_revoked_at TIMESTAMP WITH TIME ZONE,
+                last_viewed_at TIMESTAMP WITH TIME ZONE,
+                view_count INTEGER DEFAULT 0,
+                notify_status_changes BOOLEAN DEFAULT TRUE,
+                notify_documents BOOLEAN DEFAULT TRUE,
+                notify_messages BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT unique_realtor_loan UNIQUE(realtor_id, loan_id)
+            );
+        """),
+
+        # Portal status actions
+        ("Create portal_status_actions", """
+            CREATE TABLE IF NOT EXISTS portal_status_actions (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER,
+                loan_status VARCHAR(50) NOT NULL,
+                can_view_status BOOLEAN DEFAULT TRUE,
+                can_view_timeline BOOLEAN DEFAULT TRUE,
+                can_view_documents BOOLEAN DEFAULT FALSE,
+                can_download_documents BOOLEAN DEFAULT FALSE,
+                can_upload_documents BOOLEAN DEFAULT FALSE,
+                can_send_messages BOOLEAN DEFAULT TRUE,
+                can_request_update BOOLEAN DEFAULT TRUE,
+                can_generate_prequal BOOLEAN DEFAULT FALSE,
+                can_generate_preapproval BOOLEAN DEFAULT FALSE,
+                can_view_conditions BOOLEAN DEFAULT FALSE,
+                can_schedule_meeting BOOLEAN DEFAULT TRUE,
+                visible_document_types TEXT[] DEFAULT ARRAY[]::TEXT[],
+                hidden_fields TEXT[] DEFAULT ARRAY[]::TEXT[],
+                ai_assistant_enabled BOOLEAN DEFAULT TRUE,
+                ai_allowed_topics TEXT[] DEFAULT ARRAY['status', 'timeline', 'general']::TEXT[],
+                priority INTEGER DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """),
+
+        # Letter templates
+        ("Create letter_templates", """
+            CREATE TABLE IF NOT EXISTS letter_templates (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                template_type VARCHAR(50) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                html_template TEXT NOT NULL,
+                css_styles TEXT,
+                header_html TEXT,
+                footer_html TEXT,
+                variables_schema JSONB NOT NULL DEFAULT '{}'::jsonb,
+                page_size VARCHAR(20) DEFAULT 'letter',
+                margins JSONB DEFAULT '{"top": "1in", "bottom": "1in", "left": "1in", "right": "1in"}'::jsonb,
+                is_active BOOLEAN DEFAULT TRUE,
+                is_default BOOLEAN DEFAULT FALSE,
+                requires_nmls BOOLEAN DEFAULT TRUE,
+                requires_signature BOOLEAN DEFAULT TRUE,
+                expiration_days INTEGER DEFAULT 90,
+                created_by INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """),
+
+        # Pre-approval letters
+        ("Create pre_approval_letters", """
+            CREATE TABLE IF NOT EXISTS pre_approval_letters (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                loan_id INTEGER NOT NULL,
+                template_id INTEGER,
+                letter_type VARCHAR(50) NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                generated_html TEXT NOT NULL,
+                generated_pdf_url TEXT,
+                variables_used JSONB NOT NULL DEFAULT '{}'::jsonb,
+                property_address TEXT,
+                purchase_price DECIMAL(15,2),
+                approved_amount DECIMAL(15,2) NOT NULL,
+                down_payment_percent DECIMAL(5,2),
+                loan_program VARCHAR(100),
+                interest_rate DECIMAL(6,4),
+                issued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                is_void BOOLEAN DEFAULT FALSE,
+                voided_at TIMESTAMP WITH TIME ZONE,
+                voided_by INTEGER,
+                void_reason TEXT,
+                generated_by INTEGER,
+                generated_by_realtor INTEGER,
+                generation_method VARCHAR(50) DEFAULT 'manual',
+                download_count INTEGER DEFAULT 0,
+                last_downloaded_at TIMESTAMP WITH TIME ZONE,
+                share_token VARCHAR(100) UNIQUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """),
+
+        # Communication events
+        ("Create portal_communication_events", """
+            CREATE TABLE IF NOT EXISTS portal_communication_events (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                realtor_id INTEGER,
+                loan_id INTEGER,
+                user_id INTEGER,
+                event_type VARCHAR(50) NOT NULL,
+                channel VARCHAR(50) NOT NULL,
+                direction VARCHAR(20) NOT NULL,
+                subject TEXT,
+                content TEXT,
+                content_html TEXT,
+                attachments JSONB DEFAULT '[]'::jsonb,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                status VARCHAR(50) DEFAULT 'sent',
+                delivered_at TIMESTAMP WITH TIME ZONE,
+                read_at TIMESTAMP WITH TIME ZONE,
+                failed_at TIMESTAMP WITH TIME ZONE,
+                failure_reason TEXT,
+                ai_generated BOOLEAN DEFAULT FALSE,
+                ai_model VARCHAR(100),
+                ai_prompt_tokens INTEGER,
+                ai_completion_tokens INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """),
+
+        # Seed default status actions
+        ("Seed default status actions", """
+            INSERT INTO portal_status_actions (
+                organization_id, loan_status,
+                can_view_status, can_view_timeline, can_view_documents, can_download_documents,
+                can_upload_documents, can_send_messages, can_request_update,
+                can_generate_prequal, can_generate_preapproval, can_view_conditions,
+                can_schedule_meeting, ai_assistant_enabled
+            ) VALUES
+            (NULL, 'lead', true, false, false, false, false, true, true, true, false, false, true, true),
+            (NULL, 'application', true, true, false, false, false, true, true, true, false, false, true, true),
+            (NULL, 'processing', true, true, true, true, true, true, true, false, true, false, true, true),
+            (NULL, 'submitted', true, true, true, true, true, true, true, false, true, true, true, true),
+            (NULL, 'underwriting', true, true, true, true, true, true, true, false, true, true, true, true),
+            (NULL, 'conditional_approval', true, true, true, true, true, true, true, false, true, true, true, true),
+            (NULL, 'clear_to_close', true, true, true, true, false, true, true, false, false, true, true, true),
+            (NULL, 'funded', true, true, true, true, false, false, false, false, false, false, false, true),
+            (NULL, 'denied', true, true, false, false, false, true, false, false, false, false, true, true),
+            (NULL, 'withdrawn', true, true, false, false, false, false, false, false, false, false, false, false)
+            ON CONFLICT DO NOTHING;
+        """),
+    ]
+
+    try:
+        for name, sql in sql_commands:
+            try:
+                logger.info(f"Running: {name}")
+                db.execute(text(sql))
+                db.commit()
+                results.append({"step": name, "status": "success"})
+            except Exception as e:
+                error_msg = str(e)
+                # Ignore "already exists" type errors
+                if "already exists" in error_msg.lower() or "duplicate" in error_msg.lower():
+                    results.append({"step": name, "status": "skipped", "reason": "already exists"})
+                    db.rollback()
+                else:
+                    results.append({"step": name, "status": "error", "error": error_msg})
+                    db.rollback()
+
+        return {
+            "success": True,
+            "message": "Migration completed",
+            "results": results,
+            "successful": len([r for r in results if r["status"] == "success"]),
+            "skipped": len([r for r in results if r["status"] == "skipped"]),
+            "failed": len([r for r in results if r["status"] == "error"])
+        }
+
+    except Exception as e:
+        db.rollback()
+        error_msg = str(e)
+        stack_trace = traceback.format_exc()
+        logger.error(f"Migration failed: {error_msg}\n{stack_trace}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": error_msg,
+                "results": results,
+                "traceback": stack_trace.split('\n')[-5:]
+            }
+        )
