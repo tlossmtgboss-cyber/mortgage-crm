@@ -5,30 +5,23 @@
  * Provides typed methods for all portal and integration endpoints.
  */
 
-// Determine API base URL:
-// - If env var is set, use it
-// - In production (Vercel), use empty string for relative URLs (Vercel rewrites handle proxying)
-// - In development, use localhost:8000
+// Determine API base URL at runtime (not build time)
+// In production: use empty string for relative URLs (Vercel rewrites handle proxying)
+// In development: use localhost:8000
 function getApiBaseUrl() {
-  // Check environment variables first
-  if (process.env.NEXT_PUBLIC_FASTAPI_URL) return process.env.NEXT_PUBLIC_FASTAPI_URL;
-  if (process.env.REACT_APP_FASTAPI_URL) return process.env.REACT_APP_FASTAPI_URL;
-  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
-
-  // Runtime detection for production vs development
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // Production: use relative URLs for Vercel rewrites
+    // Production: ALWAYS use relative URLs for Vercel rewrites
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
       return '';
     }
   }
-
   // Development default
-  return 'http://localhost:8000';
+  return process.env.REACT_APP_API_URL || 'http://localhost:8000';
 }
 
-const FASTAPI_BASE_URL = getApiBaseUrl();
+// Call at runtime, not module load time
+let FASTAPI_BASE_URL = null;
 
 class PerenniaAPIError extends Error {
   constructor(message, status, data) {
@@ -40,9 +33,11 @@ class PerenniaAPIError extends Error {
 }
 
 class PerenniaAPI {
-  constructor(baseUrl = FASTAPI_BASE_URL) {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl = null) {
+    // Lazy initialization of baseUrl at runtime
+    this.baseUrl = baseUrl !== null ? baseUrl : getApiBaseUrl();
     this.authToken = null;
+    console.log('[PerenniaAPI] Initialized with baseUrl:', this.baseUrl || '(empty - using relative URLs)');
   }
 
   /**
