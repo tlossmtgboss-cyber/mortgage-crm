@@ -116,6 +116,7 @@ const MicrositeWizard = lazy(() => import('./components/microsites/MicrositeWiza
 const MicrositeEditor = lazy(() => import('./pages/MicrositeEditor'));
 const LODashboard = lazy(() => import('./pages/LODashboard'));
 const RealtorDashboard = lazy(() => import('./pages/RealtorDashboard'));
+const RealtorPortal = lazy(() => import('./pages/RealtorPortal'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const AgentProfile = lazy(() => import('./pages/AgentProfile'));
@@ -266,6 +267,9 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+
+          {/* Realtor Portal (public - token-based auth) */}
+          <Route path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />
 
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />

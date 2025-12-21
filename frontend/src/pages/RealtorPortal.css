@@ -1,0 +1,602 @@
+/**
+ * RealtorPortal Styles
+ * Modern, clean design for the external realtor portal
+ */
+
+/* =============================================================================
+   BASE STYLES
+============================================================================= */
+
+.realtor-portal {
+  min-height: 100vh;
+  background: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+/* =============================================================================
+   LOGIN / NO TOKEN STATE
+============================================================================= */
+
+.portal-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+}
+
+.login-card {
+  background: white;
+  padding: 48px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  max-width: 400px;
+}
+
+.login-logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0 0 8px;
+}
+
+.login-logo p {
+  font-size: 16px;
+  color: #64748b;
+  margin: 0 0 32px;
+}
+
+.login-message p {
+  color: #475569;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.login-help {
+  font-size: 14px;
+  color: #94a3b8 !important;
+}
+
+/* =============================================================================
+   LOADING STATE
+============================================================================= */
+
+.portal-loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.spinner.small {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =============================================================================
+   ERROR STATE
+============================================================================= */
+
+.portal-error {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.portal-error h2 {
+  color: #ef4444;
+  margin: 0 0 16px;
+}
+
+.portal-error p {
+  color: #64748b;
+  margin: 0 0 24px;
+}
+
+.portal-error button {
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.portal-error button:hover {
+  background: #2563eb;
+}
+
+/* =============================================================================
+   HEADER
+============================================================================= */
+
+.portal-header {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+  color: white;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-left h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.header-subtitle {
+  font-size: 14px;
+  opacity: 0.8;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.user-brokerage {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.logout-button {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.logout-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.back-button {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* =============================================================================
+   NAVIGATION
+============================================================================= */
+
+.portal-nav {
+  background: white;
+  padding: 0 24px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.nav-tab {
+  padding: 16px 24px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.nav-tab:hover {
+  color: #1e3a5f;
+}
+
+.nav-tab.active {
+  color: #1e3a5f;
+  border-bottom-color: #3b82f6;
+}
+
+/* =============================================================================
+   MAIN CONTENT
+============================================================================= */
+
+.portal-main {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* =============================================================================
+   LOANS SECTION
+============================================================================= */
+
+.loans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.loan-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #e2e8f0;
+}
+
+.loan-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: #3b82f6;
+}
+
+.loan-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.loan-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}
+
+.loan-body {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.loan-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  text-transform: capitalize;
+}
+
+.loan-footer {
+  padding: 12px 20px;
+  background: #f8fafc;
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* =============================================================================
+   EMPTY STATE
+============================================================================= */
+
+.empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.empty-state h3 {
+  color: #1e293b;
+  margin: 0 0 8px;
+}
+
+.empty-state p {
+  color: #64748b;
+  margin: 0;
+}
+
+/* =============================================================================
+   PROFILE SECTION
+============================================================================= */
+
+.profile-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.profile-card h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 24px;
+}
+
+.profile-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-item label {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.profile-item span {
+  font-size: 16px;
+  color: #1e293b;
+}
+
+/* =============================================================================
+   LOAN DETAIL VIEW
+============================================================================= */
+
+.loan-detail-view {
+  max-width: 800px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.detail-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.detail-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+}
+
+.detail-card.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  gap: 12px;
+  color: #64748b;
+}
+
+.detail-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row span {
+  color: #64748b;
+}
+
+.detail-row strong {
+  color: #1e293b;
+}
+
+/* Timeline */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3b82f6;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-content strong {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.timeline-content span {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Permissions / Actions */
+.permissions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.action-button {
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-button:hover {
+  background: #2563eb;
+}
+
+.action-button.secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.action-button.secondary:hover {
+  background: #e2e8f0;
+}
+
+/* =============================================================================
+   FOOTER
+============================================================================= */
+
+.portal-footer {
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 48px;
+}
+
+/* =============================================================================
+   RESPONSIVE
+============================================================================= */
+
+@media (max-width: 768px) {
+  .portal-header {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .header-right {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .loans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-body {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .permissions-list {
+    flex-direction: column;
+  }
+
+  .action-button {
+    width: 100%;
+  }
+}
