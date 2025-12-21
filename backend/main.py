@@ -53578,6 +53578,182 @@ async def startup_event():
             except Exception as cd_e:
                 logger.warning(f"⚠️ Custom domains table migration skipped: {cd_e}")
 
+            # Create microsite_themes table for microsite marketplace
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_name = 'microsite_themes'
+                """))
+                if not result.fetchone():
+                    # Create enum types
+                    db_temp.execute(text("""
+                        DO $$ BEGIN
+                            CREATE TYPE microsite_theme_category AS ENUM (
+                                'professional', 'modern', 'classic', 'minimal', 'bold', 'elegant', 'custom'
+                            );
+                        EXCEPTION WHEN duplicate_object THEN NULL;
+                        END $$
+                    """))
+                    db_temp.execute(text("""
+                        DO $$ BEGIN
+                            CREATE TYPE microsite_theme_status AS ENUM (
+                                'active', 'draft', 'deprecated', 'archived'
+                            );
+                        EXCEPTION WHEN duplicate_object THEN NULL;
+                        END $$
+                    """))
+
+                    # Create microsite_themes table
+                    db_temp.execute(text("""
+                        CREATE TABLE microsite_themes (
+                            id SERIAL PRIMARY KEY,
+                            slug VARCHAR(100) NOT NULL UNIQUE,
+                            name VARCHAR(200) NOT NULL,
+                            description TEXT,
+                            category microsite_theme_category NOT NULL DEFAULT 'professional',
+                            status microsite_theme_status NOT NULL DEFAULT 'active',
+                            thumbnail_url VARCHAR(500),
+                            preview_url VARCHAR(500),
+                            preview_images JSONB DEFAULT '[]',
+                            component_name VARCHAR(100) NOT NULL,
+                            default_config JSONB DEFAULT '{}',
+                            features JSONB DEFAULT '[]',
+                            supports_custom_colors BOOLEAN NOT NULL DEFAULT TRUE,
+                            supports_custom_fonts BOOLEAN NOT NULL DEFAULT FALSE,
+                            layout_options JSONB DEFAULT '{}',
+                            is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+                            price_cents INTEGER DEFAULT 0,
+                            display_order INTEGER NOT NULL DEFAULT 0,
+                            is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+                            organization_id INTEGER,
+                            created_by_id INTEGER,
+                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    db_temp.commit()
+                    logger.info("✅ Created 'microsite_themes' table")
+
+                    # Seed default themes
+                    db_temp.execute(text("""
+                        INSERT INTO microsite_themes (slug, name, description, category, component_name, features, display_order, is_featured)
+                        VALUES
+                            ('bold-impact', 'Bold Impact', 'A bold, modern theme with strong call-to-actions.', 'bold', 'BoldImpact', '["hero_image", "contact_form", "rate_calculator", "testimonials", "about_section"]', 1, TRUE),
+                            ('professional-clean', 'Professional Clean', 'A clean, professional theme for established loan officers.', 'professional', 'ProfessionalClean', '["hero_image", "contact_form", "credentials", "about_section"]', 2, FALSE),
+                            ('modern-gradient', 'Modern Gradient', 'A contemporary theme with gradient backgrounds.', 'modern', 'ModernGradient', '["hero_gradient", "contact_form", "testimonials", "about_section"]', 3, FALSE),
+                            ('minimal-focus', 'Minimal Focus', 'A minimalist theme focused on lead capture.', 'minimal', 'MinimalFocus', '["contact_form", "about_section"]', 4, FALSE)
+                        ON CONFLICT (slug) DO NOTHING
+                    """))
+                    db_temp.commit()
+                    logger.info("✅ Seeded default microsite themes")
+                db_temp.close()
+            except Exception as mt_e:
+                logger.warning(f"⚠️ Microsite themes migration skipped: {mt_e}")
+
+            # Create microsites table
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_name = 'microsites'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("""
+                        CREATE TABLE microsites (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            organization_id INTEGER,
+                            theme_id INTEGER,
+                            theme_config JSONB DEFAULT '{}',
+                            meta_title VARCHAR(200),
+                            meta_description VARCHAR(500),
+                            og_image_url VARCHAR(500),
+                            custom_domain VARCHAR(200),
+                            custom_domain_verified BOOLEAN DEFAULT FALSE,
+                            is_published BOOLEAN NOT NULL DEFAULT FALSE,
+                            published_at TIMESTAMP WITH TIME ZONE,
+                            ga_tracking_id VARCHAR(50),
+                            fb_pixel_id VARCHAR(50),
+                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT uq_microsites_user UNIQUE (user_id)
+                        )
+                    """))
+                    db_temp.execute(text("CREATE INDEX IF NOT EXISTS ix_microsites_user ON microsites(user_id)"))
+                    db_temp.commit()
+                    logger.info("✅ Created 'microsites' table")
+                db_temp.close()
+            except Exception as ms_e:
+                logger.warning(f"⚠️ Microsites migration skipped: {ms_e}")
+
+            # Create microsite_profiles table
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_name = 'microsite_profiles'
+                """))
+                if not result.fetchone():
+                    db_temp.execute(text("""
+                        CREATE TABLE microsite_profiles (
+                            id SERIAL PRIMARY KEY,
+                            microsite_id INTEGER NOT NULL REFERENCES microsites(id) ON DELETE CASCADE,
+                            headline VARCHAR(200),
+                            tagline VARCHAR(300),
+                            bio_extended TEXT,
+                            hero_image_url VARCHAR(500),
+                            hero_video_url VARCHAR(500),
+                            hero_background_color VARCHAR(20),
+                            years_experience INTEGER,
+                            total_loans_funded INTEGER,
+                            total_volume_funded DECIMAL(15, 2),
+                            specialties JSONB DEFAULT '[]',
+                            certifications JSONB DEFAULT '[]',
+                            testimonials JSONB DEFAULT '[]',
+                            social_links JSONB DEFAULT '{}',
+                            calendly_url VARCHAR(500),
+                            contact_form_enabled BOOLEAN DEFAULT TRUE,
+                            show_phone BOOLEAN DEFAULT TRUE,
+                            show_email BOOLEAN DEFAULT TRUE,
+                            cta_text VARCHAR(100) DEFAULT 'Get Started Today',
+                            cta_secondary_text VARCHAR(100) DEFAULT 'Check Rates',
+                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT uq_microsite_profiles_microsite UNIQUE (microsite_id)
+                        )
+                    """))
+                    db_temp.commit()
+                    logger.info("✅ Created 'microsite_profiles' table")
+                db_temp.close()
+            except Exception as mp_e:
+                logger.warning(f"⚠️ Microsite profiles migration skipped: {mp_e}")
+
+            # Set slug for tim-loss user if not set
+            try:
+                db_temp = SessionLocal()
+                # Check if any user has slug 'tim-loss'
+                result = db_temp.execute(text("SELECT id FROM users WHERE slug = 'tim-loss'"))
+                if not result.fetchone():
+                    # Set slug on first admin/LO user
+                    db_temp.execute(text("""
+                        UPDATE users SET slug = 'tim-loss'
+                        WHERE id = (SELECT id FROM users WHERE email LIKE '%tim%' OR name ILIKE '%tim%' ORDER BY id LIMIT 1)
+                        AND slug IS NULL
+                    """))
+                    if db_temp.execute(text("SELECT changes()")).scalar() == 0:
+                        # Fallback: set on first active user
+                        db_temp.execute(text("""
+                            UPDATE users SET slug = 'tim-loss'
+                            WHERE id = (SELECT id FROM users WHERE is_active = true ORDER BY id LIMIT 1)
+                            AND slug IS NULL
+                        """))
+                    db_temp.commit()
+                    logger.info("✅ Set 'tim-loss' slug for user")
+                db_temp.close()
+            except Exception as slug_e:
+                logger.warning(f"⚠️ User slug migration skipped: {slug_e}")
+
             # Add owner_id column to referral_partners table (for user isolation)
             try:
                 db_temp = SessionLocal()
