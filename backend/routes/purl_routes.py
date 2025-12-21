@@ -242,16 +242,29 @@ async def get_workspace_data(
     Returns workspace info, contacts, application status, documents,
     tasks, milestones, and timeline events.
     """
-    # Verify access to this workspace
-    verify_workspace_access(context, slug)
+    import traceback
 
-    service = PURLWorkspaceService(db)
-    data = service.get_complete_workspace_data(context.organization_id, context.workspace_id)
+    try:
+        # Verify access to this workspace
+        verify_workspace_access(context, slug)
 
-    if not data:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+        service = PURLWorkspaceService(db)
+        data = service.get_complete_workspace_data(context.organization_id, context.workspace_id)
 
-    return WorkspaceDataResponse(**data)
+        if not data:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        logger.info(f"get_workspace_data: Successfully built response for {slug}")
+        return WorkspaceDataResponse(**data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_tb = traceback.format_exc()
+        logger.error(f"get_workspace_data failed for {slug}: {e}\n{error_tb}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get workspace data: {str(e)}"
+        )
 
 
 @purl_router.get(
