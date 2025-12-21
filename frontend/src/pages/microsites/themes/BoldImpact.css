@@ -75,6 +75,158 @@
   font-size: 14px;
 }
 
+.nav-login-btn {
+  padding: 8px 20px;
+  background: var(--theme-secondary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.nav-login-btn:hover {
+  background: #152a42;
+}
+
+/* Login Modal */
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.login-modal {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 400px;
+  width: 100%;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.login-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 50%;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.login-modal-close:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.login-modal-title {
+  margin: 0 0 24px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--theme-secondary);
+  text-align: center;
+}
+
+.login-modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-option {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 2px solid transparent;
+}
+
+.login-option:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.login-option.loan-officer {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.login-option.loan-officer:hover {
+  background: #bfdbfe;
+}
+
+.login-option.loan-officer .login-option-title {
+  color: #1e40af;
+}
+
+.login-option.loan-officer .login-option-desc {
+  color: #3b82f6;
+}
+
+.login-option.client {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.login-option.client:hover {
+  background: #a7f3d0;
+}
+
+.login-option.client .login-option-title {
+  color: #065f46;
+}
+
+.login-option.client .login-option-desc {
+  color: #059669;
+}
+
+.login-option.partner {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.login-option.partner:hover {
+  background: #fde68a;
+}
+
+.login-option.partner .login-option-title {
+  color: #92400e;
+}
+
+.login-option.partner .login-option-desc {
+  color: #d97706;
+}
+
+.login-option-title {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.login-option-desc {
+  font-size: 13px;
+}
+
 .nav-logo {
   height: 48px;
   max-width: 200px;

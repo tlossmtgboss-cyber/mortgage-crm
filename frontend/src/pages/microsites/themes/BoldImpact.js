@@ -6,11 +6,12 @@
  * comprehensive contact form.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import './BoldImpact.css';
 import EmbeddedAIChat from '../../../components/EmbeddedAIChat';
 
 const BoldImpact = ({ user, profile, themeConfig = {} }) => {
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Extract config with defaults
   const config = {
@@ -72,9 +73,41 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
                 📞 {loPhone}
               </a>
             )}
+            <button
+              className="nav-login-btn"
+              onClick={() => setShowLoginModal(true)}
+            >
+              Log In
+            </button>
           </div>
         </div>
       </nav>
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="login-modal-overlay" onClick={() => setShowLoginModal(false)}>
+          <div className="login-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="login-modal-close" onClick={() => setShowLoginModal(false)}>
+              ×
+            </button>
+            <h3 className="login-modal-title">Select Your Portal</h3>
+            <div className="login-modal-options">
+              <a href="/login" className="login-option loan-officer">
+                <span className="login-option-title">Loan Officer</span>
+                <span className="login-option-desc">Access the CRM dashboard</span>
+              </a>
+              <a href="/borrower-login" className="login-option client">
+                <span className="login-option-title">Client</span>
+                <span className="login-option-desc">View your loan status</span>
+              </a>
+              <a href="/realtor-portal" className="login-option partner">
+                <span className="login-option-title">Partner</span>
+                <span className="login-option-desc">Realtor & referral partners</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <section className={`bold-impact-hero ${config.heroStyle}`}>
