@@ -19598,6 +19598,9 @@ try:
     # Create smart scheduler models using our Base
     smart_scheduler_models = create_smart_scheduler_models(Base)
 
+    # Add User model so scheduler can lookup users by slug
+    smart_scheduler_models['User'] = User
+
     # Set dependencies for the routes
     set_scheduler_deps(get_db, get_current_user, smart_scheduler_models)
 
