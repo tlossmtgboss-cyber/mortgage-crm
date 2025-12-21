@@ -29,6 +29,7 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const loPhone = user?.phone || '';
   const loNmls = user?.nmls_id || user?.nmls_number || '';
   const loPhoto = profile?.heroImageUrl || user?.photo_url || user?.avatar_url;
+  const logoUrl = profile?.logoUrl || themeConfig?.logoUrl;
   const headline = profile?.headline || 'Your Path to Homeownership Starts Here';
   const tagline = profile?.tagline || 'Expert guidance for all your mortgage needs';
   const bioExtended = profile?.bioExtended || user?.bio || '';
@@ -53,11 +54,17 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
       <nav className={`bold-impact-nav ${config.headerStyle}`}>
         <div className="nav-container">
           <div className="nav-brand">
-            {loPhoto && <img src={loPhoto} alt={loName} className="nav-avatar" />}
-            <div className="nav-brand-text">
-              <span className="nav-name">{loName}</span>
-              {loNmls && <span className="nav-nmls">NMLS# {loNmls}</span>}
-            </div>
+            {logoUrl ? (
+              <img src={logoUrl} alt={loName} className="nav-logo" />
+            ) : (
+              <>
+                {loPhoto && <img src={loPhoto} alt={loName} className="nav-avatar" />}
+                <div className="nav-brand-text">
+                  <span className="nav-name">{loName}</span>
+                  {loNmls && <span className="nav-nmls">NMLS# {loNmls}</span>}
+                </div>
+              </>
+            )}
           </div>
           <div className="nav-contact">
             {loPhone && (
@@ -65,7 +72,10 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
                 📞 {loPhone}
               </a>
             )}
-            <a href="#contact-form" className="nav-cta">{ctaText}</a>
+            <div className="nav-cta-group">
+              <a href="/apply/purchase" className="nav-cta primary">{ctaText}</a>
+              <a href="/apply/refinance" className="nav-cta secondary">Refinance</a>
+            </div>
           </div>
         </div>
       </nav>
@@ -78,10 +88,8 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
             <h1>{headline}</h1>
             <p className="hero-tagline">{tagline}</p>
             <div className="hero-cta-group">
-              <a href="#contact-form" className="hero-cta primary">{ctaText}</a>
-              {config.showRateCalculator && (
-                <a href="#rate-check" className="hero-cta secondary">{ctaSecondaryText}</a>
-              )}
+              <a href="/apply/purchase" className="hero-cta primary">{ctaText}</a>
+              <a href="/apply/refinance" className="hero-cta secondary">Refinance</a>
             </div>
             {(yearsExperience || totalLoansFunded) && (
               <div className="hero-stats">

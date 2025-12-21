@@ -75,19 +75,44 @@
   font-size: 14px;
 }
 
+.nav-logo {
+  height: 48px;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+.nav-cta-group {
+  display: flex;
+  gap: 10px;
+}
+
 .nav-cta {
-  background: var(--theme-primary);
-  color: white;
   padding: 10px 20px;
   border-radius: 8px;
   text-decoration: none;
   font-weight: 600;
   font-size: 14px;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
-.nav-cta:hover {
+.nav-cta.primary {
+  background: var(--theme-primary);
+  color: white;
+}
+
+.nav-cta.primary:hover {
   background: #b91c1c;
+}
+
+.nav-cta.secondary {
+  background: transparent;
+  color: var(--theme-secondary);
+  border: 2px solid var(--theme-secondary);
+}
+
+.nav-cta.secondary:hover {
+  background: var(--theme-secondary);
+  color: white;
 }
 
 /* Hero Section */
@@ -622,6 +647,17 @@
   .nav-contact {
     width: 100%;
     justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .nav-cta-group {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .nav-logo {
+    height: 40px;
+    max-width: 160px;
   }
 
   .hero-content {
