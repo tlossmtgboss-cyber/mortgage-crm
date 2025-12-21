@@ -19853,6 +19853,44 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ User Invitation routes not loaded: {e}")
 
+# Include User Creation/Onboarding routes
+try:
+    from routes.user_creation_routes import router as user_creation_router_template, get_user_creation_routes
+    from models.user_onboarding import (
+        UserProfile, Role, Category, Responsibility, PermissionTemplate,
+        UserPermissions, UserCategory, UserResponsibility,
+        RoleDefaultCategory, RoleDefaultResponsibility,
+        KPIScorecard, BulkUploadSession, BulkUserDraft,
+        UserAuditLog, OnboardingSession
+    )
+    user_creation_router = get_user_creation_routes(
+        get_db=get_db,
+        get_current_user=get_current_user,
+        User=User,
+        UserProfile=UserProfile,
+        Role=Role,
+        Category=Category,
+        Responsibility=Responsibility,
+        PermissionTemplate=PermissionTemplate,
+        UserPermissions=UserPermissions,
+        UserCategory=UserCategory,
+        UserResponsibility=UserResponsibility,
+        RoleDefaultCategory=RoleDefaultCategory,
+        RoleDefaultResponsibility=RoleDefaultResponsibility,
+        KPIScorecard=KPIScorecard,
+        BulkUploadSession=BulkUploadSession,
+        BulkUserDraft=BulkUserDraft,
+        UserAuditLog=UserAuditLog,
+        OnboardingSession=OnboardingSession,
+        pwd_context=pwd_context,
+        create_access_token=create_access_token,
+        email_service=email_service
+    )
+    app.include_router(user_creation_router, tags=["User Creation & Onboarding"])
+    logger.info("✅ User Creation & Onboarding routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ User Creation routes not loaded: {e}")
+
 # Include Google Places API routes
 try:
     from routes.places_routes import router as places_router

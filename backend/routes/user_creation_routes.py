@@ -207,12 +207,15 @@ def get_user_creation_routes(
     UserAuditLog,
     OnboardingSession,
     pwd_context,
-    create_access_token
+    create_access_token,
+    email_service=None
 ):
     """
     Factory function that creates routes with injected dependencies
     This allows the routes to work with the existing main.py models
     """
+    import os
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
 
     # ========================================================================
     # UNIFIED USER CREATION ENDPOINT (All-in-one)
@@ -850,8 +853,24 @@ def get_user_creation_routes(
 
             db.commit()
 
-            # TODO: Send activation email
-            # await send_activation_email(user.email, user_profile.first_name, activation_token)
+            # Send activation email
+            email_sent = False
+            if email_service:
+                try:
+                    email_sent = email_service.send_activation_email(
+                        to_email=user.email,
+                        user_name=user_profile.first_name,
+                        activation_token=activation_token,
+                        base_url=FRONTEND_URL
+                    )
+                    if email_sent:
+                        logger.info(f"Activation email sent to {user.email}")
+                    else:
+                        logger.warning(f"Failed to send activation email to {user.email}")
+                except Exception as e:
+                    logger.error(f"Error sending activation email: {e}")
+            else:
+                logger.warning("Email service not configured - activation email not sent")
 
             return {
                 "success": True,
@@ -860,8 +879,9 @@ def get_user_creation_routes(
                     "email": user.email,
                     "status": "active_awaiting_setup",
                     "scorecard_id": scorecard.id,
-                    "activation_email_sent": True,  # TODO: Make this real
-                    "activation_token_expires_at": user_profile.activation_token_expires_at.isoformat()
+                    "activation_email_sent": email_sent,
+                    "activation_token_expires_at": user_profile.activation_token_expires_at.isoformat(),
+                    "activation_url": f"{FRONTEND_URL}/activate?token={activation_token}" if not email_sent else None
                 }
             }
 
