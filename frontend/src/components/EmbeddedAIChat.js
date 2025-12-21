@@ -141,30 +141,6 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
           </div>
         )}
 
-        {/* Input Area - Always visible at top */}
-        <div className="chat-input-area">
-          <div className="input-wrapper">
-            <textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your mortgage question here..."
-              rows="1"
-              disabled={isLoading}
-            />
-            <button
-              className="send-btn"
-              onClick={() => sendMessage()}
-              disabled={!inputValue.trim() || isLoading}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
         {/* Messages Area - Shows conversation */}
         {messages.length > 0 && (
           <div className="chat-messages-area">
@@ -207,6 +183,30 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
             </div>
           </div>
         )}
+
+        {/* Input Area - Always at bottom */}
+        <div className="chat-input-area">
+          <div className="input-wrapper">
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your mortgage question here..."
+              rows="1"
+              disabled={isLoading}
+            />
+            <button
+              className="send-btn"
+              onClick={() => sendMessage()}
+              disabled={!inputValue.trim() || isLoading}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );
