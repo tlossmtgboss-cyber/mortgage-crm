@@ -509,7 +509,19 @@ async def get_public_microsite(
                 "componentName": "LOMicrosite",
                 "features": ["contact_form"],
             }
+            # Merge theme_config with branding_json so logo and colors are available
             theme_config = microsite.theme_config or {}
+            branding = microsite.branding_json or {}
+            if branding:
+                # Map branding fields to themeConfig
+                if branding.get('logo_url'):
+                    theme_config['logoUrl'] = branding['logo_url']
+                if branding.get('primary_color'):
+                    theme_config['primaryColor'] = branding['primary_color']
+                if branding.get('secondary_color'):
+                    theme_config['secondaryColor'] = branding['secondary_color']
+                if branding.get('accent_color'):
+                    theme_config['accentColor'] = branding['accent_color']
             profile_data = microsite.profile.to_dict() if microsite.profile else {}
 
         # Build user data (public fields only)
