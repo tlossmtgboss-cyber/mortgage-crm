@@ -72,10 +72,6 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
                 📞 {loPhone}
               </a>
             )}
-            <div className="nav-cta-group">
-              <a href="/apply/purchase" className="nav-cta primary">{ctaText}</a>
-              <a href="/apply/refinance" className="nav-cta secondary">Refinance</a>
-            </div>
           </div>
         </div>
       </nav>
