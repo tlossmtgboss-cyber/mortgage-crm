@@ -151,6 +151,9 @@ function LoanDetail() {
     is_employee: false
   });
   const [teamMemberLoading, setTeamMemberLoading] = useState(false);
+  const [teamMemberSearchResults, setTeamMemberSearchResults] = useState([]);
+  const [showTeamMemberSearchResults, setShowTeamMemberSearchResults] = useState(false);
+  const [teamMemberSearchLoading, setTeamMemberSearchLoading] = useState(false);
 
   // Team member role options
   const teamMemberRoles = [
@@ -534,6 +537,53 @@ function LoanDetail() {
       is_employee: false
     });
     setShowTeamMemberModal(true);
+    setTeamMemberSearchResults([]);
+    setShowTeamMemberSearchResults(false);
+  };
+
+  const searchTeamMemberPartners = async (query) => {
+    if (query.length < 2) {
+      setTeamMemberSearchResults([]);
+      setShowTeamMemberSearchResults(false);
+      return;
+    }
+    setTeamMemberSearchLoading(true);
+    try {
+      const response = await partnersAPI.getAll({ search: query });
+      const partners = (response.partners || response || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        company: p.company,
+        type: 'partner'
+      }));
+      setTeamMemberSearchResults(partners);
+      setShowTeamMemberSearchResults(true);
+    } catch (error) {
+      console.error('Partner search error:', error);
+      setTeamMemberSearchResults([]);
+    } finally {
+      setTeamMemberSearchLoading(false);
+    }
+  };
+
+  const handleTeamMemberNameChange = (e) => {
+    const value = e.target.value;
+    setTeamMemberForm({ ...teamMemberForm, name: value });
+    searchTeamMemberPartners(value);
+  };
+
+  const selectTeamMemberSearchResult = (partner) => {
+    setTeamMemberForm({
+      ...teamMemberForm,
+      name: partner.name,
+      email: partner.email || '',
+      phone: partner.phone || '',
+      company: partner.company || ''
+    });
+    setShowTeamMemberSearchResults(false);
+    setTeamMemberSearchResults([]);
   };
 
   const handleEditTeamMember = (member) => {
@@ -3229,15 +3279,60 @@ function LoanDetail() {
               <button onClick={() => setShowTeamMemberModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#666' }}>×</button>
             </div>
 
-            <div className="form-group" style={{ marginBottom: '16px' }}>
+            <div className="form-group" style={{ marginBottom: '16px', position: 'relative' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Name *</label>
               <input
                 type="text"
                 value={teamMemberForm.name}
-                onChange={(e) => setTeamMemberForm({ ...teamMemberForm, name: e.target.value })}
-                placeholder="Full name"
+                onChange={handleTeamMemberNameChange}
+                onFocus={() => teamMemberForm.name.length >= 2 && setShowTeamMemberSearchResults(true)}
+                placeholder="Start typing to search partners..."
+                autoComplete="off"
                 style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
               />
+              {teamMemberSearchLoading && (
+                <div style={{ position: 'absolute', right: '10px', top: '35px', color: '#999', fontSize: '12px' }}>
+                  Searching...
+                </div>
+              )}
+              {showTeamMemberSearchResults && teamMemberSearchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 1000
+                }}>
+                  {teamMemberSearchResults.map(result => (
+                    <div
+                      key={result.id}
+                      onClick={() => selectTeamMemberSearchResult(result)}
+                      style={{
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee',
+                        transition: 'background-color 0.15s'
+                      }}
+                      onMouseEnter={e => e.target.style.backgroundColor = '#f5f5f5'}
+                      onMouseLeave={e => e.target.style.backgroundColor = 'white'}
+                    >
+                      <div style={{ fontWeight: '500' }}>{result.name}</div>
+                      {result.company && <div style={{ fontSize: '12px', color: '#888' }}>{result.company}</div>}
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {result.email && <span>{result.email}</span>}
+                        {result.email && result.phone && <span> • </span>}
+                        {result.phone && <span>{result.phone}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="form-group" style={{ marginBottom: '16px' }}>
