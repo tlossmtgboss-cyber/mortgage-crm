@@ -20617,16 +20617,16 @@ async def create_test_appointment(
         user_id = user[0] if user else None
         user_name = user[1] if user else "Test LO"
 
-        # Insert appointment
+        # Insert appointment (use uppercase enum values)
         result = db.execute(text("""
             INSERT INTO scheduler_appointments
             (title, scheduled_start, scheduled_end, duration_minutes, status,
              attendee_name, attendee_email, attendee_phone, assigned_user_id,
              meeting_type, timezone, created_at, updated_at)
             VALUES
-            (:title, :start, :end, 30, 'booked',
+            (:title, :start, :end, 30, 'BOOKED',
              :name, :email, :phone, :user_id,
-             'discovery_call', 'America/New_York', NOW(), NOW())
+             'DISCOVERY_CALL', 'America/New_York', NOW(), NOW())
             RETURNING id
         """), {
             "title": f"Test Call with {attendee_name}",
