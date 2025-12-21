@@ -851,3 +851,568 @@ async def get_microsite_preview_url(
         "previewUrl": f"/lo/{slug}",
         "slug": slug
     }
+
+
+# =============================================================================
+# MICROSITE PAGES ROUTES
+# =============================================================================
+
+class PageContentCreate(BaseModel):
+    """Create a new page"""
+    page_type: str = Field(..., description="Type of page: about, services, testimonials, blog, custom")
+    slug: str = Field(..., min_length=1, max_length=100)
+    title: str = Field(..., min_length=1, max_length=200)
+    content: Optional[Dict[str, Any]] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    is_enabled: bool = True
+    display_order: Optional[int] = 0
+    show_in_nav: bool = True
+
+
+class PageContentUpdate(BaseModel):
+    """Update an existing page"""
+    title: Optional[str] = None
+    content: Optional[Dict[str, Any]] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    is_enabled: Optional[bool] = None
+    display_order: Optional[int] = None
+    show_in_nav: Optional[bool] = None
+
+
+class PageContentResponse(BaseModel):
+    """Response model for page content"""
+    id: int
+    micrositeId: int
+    pageType: str
+    slug: str
+    title: str
+    content: Dict[str, Any] = {}
+    metaTitle: Optional[str] = None
+    metaDescription: Optional[str] = None
+    isEnabled: bool = True
+    displayOrder: int = 0
+    showInNav: bool = True
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Default page templates with suggested content structures
+DEFAULT_PAGE_TEMPLATES = {
+    "about": {
+        "title": "About Me",
+        "content": {
+            "sections": [
+                {
+                    "type": "bio",
+                    "heading": "About Me",
+                    "text": "",
+                    "image": ""
+                },
+                {
+                    "type": "experience",
+                    "heading": "My Experience",
+                    "yearsExperience": None,
+                    "loansFunded": None,
+                    "volumeFunded": None
+                },
+                {
+                    "type": "certifications",
+                    "heading": "Certifications & Credentials",
+                    "items": []
+                }
+            ]
+        }
+    },
+    "services": {
+        "title": "Loan Programs",
+        "content": {
+            "heading": "Loan Programs I Offer",
+            "description": "Find the right mortgage solution for your needs",
+            "programs": [
+                {
+                    "name": "Conventional Loans",
+                    "description": "Traditional financing with competitive rates",
+                    "icon": "home"
+                },
+                {
+                    "name": "FHA Loans",
+                    "description": "Low down payment options for first-time buyers",
+                    "icon": "key"
+                },
+                {
+                    "name": "VA Loans",
+                    "description": "Special financing for veterans and service members",
+                    "icon": "star"
+                },
+                {
+                    "name": "Jumbo Loans",
+                    "description": "Financing for high-value properties",
+                    "icon": "building"
+                }
+            ]
+        }
+    },
+    "testimonials": {
+        "title": "Client Reviews",
+        "content": {
+            "heading": "What My Clients Say",
+            "description": "Real stories from satisfied homeowners",
+            "testimonials": []
+        }
+    },
+    "blog": {
+        "title": "Blog",
+        "content": {
+            "heading": "Latest Insights",
+            "description": "Tips, news, and updates from the mortgage world",
+            "posts": []
+        }
+    }
+}
+
+
+@auth_router.get("/my-microsite/pages", response_model=List[PageContentResponse])
+async def get_my_pages(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get all pages for the current user's microsite.
+    """
+    try:
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            return []
+
+        pages = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id
+        ).order_by(MicrositeContentPage.display_order).all()
+
+        return [PageContentResponse(**page.to_dict()) for page in pages]
+
+    except Exception as e:
+        logger.error(f"Error fetching pages: {e}")
+        raise HTTPException(status_code=500, detail="Error loading pages")
+
+
+@auth_router.get("/my-microsite/pages/{page_slug}", response_model=PageContentResponse)
+async def get_page_by_slug(
+    page_slug: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get a specific page by slug.
+    """
+    try:
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found")
+
+        page = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == page_slug
+        ).first()
+
+        if not page:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        return PageContentResponse(**page.to_dict())
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching page: {e}")
+        raise HTTPException(status_code=500, detail="Error loading page")
+
+
+@auth_router.post("/my-microsite/pages", response_model=PageContentResponse, status_code=201)
+async def create_page(
+    page_data: PageContentCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Create a new page for the user's microsite.
+    """
+    try:
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
+
+        # Get or create microsite
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            microsite = Microsite(
+                user_id=current_user.id,
+                organization_id=current_user.organization_id
+            )
+            db.add(microsite)
+            db.flush()
+
+        # Check if slug already exists
+        existing = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == page_data.slug
+        ).first()
+
+        if existing:
+            raise HTTPException(status_code=400, detail="A page with this slug already exists")
+
+        # Get page type enum
+        try:
+            page_type = PageType(page_data.page_type.lower())
+        except ValueError:
+            page_type = PageType.CUSTOM
+
+        # Use template content if not provided
+        content = page_data.content
+        if not content and page_data.page_type.lower() in DEFAULT_PAGE_TEMPLATES:
+            content = DEFAULT_PAGE_TEMPLATES[page_data.page_type.lower()]["content"]
+
+        # Create page
+        page = MicrositeContentPage(
+            microsite_id=microsite.id,
+            page_type=page_type,
+            slug=page_data.slug,
+            title=page_data.title,
+            content=content or {},
+            meta_title=page_data.meta_title,
+            meta_description=page_data.meta_description,
+            is_enabled=page_data.is_enabled,
+            display_order=page_data.display_order or 0,
+            show_in_nav=page_data.show_in_nav
+        )
+
+        db.add(page)
+        db.commit()
+        db.refresh(page)
+
+        return PageContentResponse(**page.to_dict())
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating page: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating page: {str(e)}")
+
+
+@auth_router.put("/my-microsite/pages/{page_slug}", response_model=PageContentResponse)
+async def update_page(
+    page_slug: str,
+    page_data: PageContentUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Update an existing page.
+    """
+    try:
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found")
+
+        page = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == page_slug
+        ).first()
+
+        if not page:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        # Update fields
+        if page_data.title is not None:
+            page.title = page_data.title
+        if page_data.content is not None:
+            page.content = page_data.content
+        if page_data.meta_title is not None:
+            page.meta_title = page_data.meta_title
+        if page_data.meta_description is not None:
+            page.meta_description = page_data.meta_description
+        if page_data.is_enabled is not None:
+            page.is_enabled = page_data.is_enabled
+        if page_data.display_order is not None:
+            page.display_order = page_data.display_order
+        if page_data.show_in_nav is not None:
+            page.show_in_nav = page_data.show_in_nav
+
+        db.commit()
+        db.refresh(page)
+
+        return PageContentResponse(**page.to_dict())
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating page: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error updating page")
+
+
+@auth_router.delete("/my-microsite/pages/{page_slug}")
+async def delete_page(
+    page_slug: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Delete a page from the microsite.
+    """
+    try:
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found")
+
+        page = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == page_slug
+        ).first()
+
+        if not page:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        db.delete(page)
+        db.commit()
+
+        return {"success": True, "message": f"Page '{page_slug}' deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting page: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error deleting page")
+
+
+@auth_router.post("/my-microsite/pages/reorder")
+async def reorder_pages(
+    page_order: List[Dict[str, Any]],
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Reorder pages by updating display_order.
+
+    Expects: [{"slug": "about", "display_order": 0}, {"slug": "services", "display_order": 1}, ...]
+    """
+    try:
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found")
+
+        for item in page_order:
+            page = db.query(MicrositeContentPage).filter(
+                MicrositeContentPage.microsite_id == microsite.id,
+                MicrositeContentPage.slug == item.get("slug")
+            ).first()
+
+            if page:
+                page.display_order = item.get("display_order", 0)
+
+        db.commit()
+
+        return {"success": True, "message": "Pages reordered"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reordering pages: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error reordering pages")
+
+
+@auth_router.get("/my-microsite/page-templates")
+async def get_page_templates():
+    """
+    Get available page templates with default content structures.
+    """
+    return {
+        "templates": [
+            {
+                "type": "about",
+                "name": "About Me / Bio",
+                "description": "Showcase your background, experience, and credentials",
+                "defaultContent": DEFAULT_PAGE_TEMPLATES["about"]
+            },
+            {
+                "type": "services",
+                "name": "Services / Loan Programs",
+                "description": "Highlight the loan programs and services you offer",
+                "defaultContent": DEFAULT_PAGE_TEMPLATES["services"]
+            },
+            {
+                "type": "testimonials",
+                "name": "Testimonials / Reviews",
+                "description": "Display client reviews and success stories",
+                "defaultContent": DEFAULT_PAGE_TEMPLATES["testimonials"]
+            },
+            {
+                "type": "blog",
+                "name": "Blog",
+                "description": "Share articles, tips, and market updates",
+                "defaultContent": DEFAULT_PAGE_TEMPLATES["blog"]
+            }
+        ]
+    }
+
+
+# =============================================================================
+# PUBLIC PAGES ROUTE
+# =============================================================================
+
+@public_router.get("/render/{user_slug}/pages")
+async def get_public_microsite_pages(
+    user_slug: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all enabled pages for a public microsite.
+    """
+    try:
+        from main import User
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        # Find user by slug
+        user = db.query(User).filter(
+            User.slug == user_slug,
+            User.is_active == True
+        ).first()
+
+        if not user:
+            try:
+                user_id = int(user_slug)
+                user = db.query(User).filter(
+                    User.id == user_id,
+                    User.is_active == True
+                ).first()
+            except ValueError:
+                pass
+
+        if not user:
+            raise HTTPException(status_code=404, detail="Loan officer not found")
+
+        # Get microsite
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == user.id
+        ).first()
+
+        if not microsite:
+            return {"pages": [], "navigation": []}
+
+        # Get enabled pages
+        pages = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.is_enabled == True
+        ).order_by(MicrositeContentPage.display_order).all()
+
+        # Build navigation
+        navigation = [
+            {
+                "slug": page.slug,
+                "title": page.title,
+                "showInNav": page.show_in_nav
+            }
+            for page in pages if page.show_in_nav
+        ]
+
+        return {
+            "pages": [page.to_dict() for page in pages],
+            "navigation": navigation
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching public pages: {e}")
+        raise HTTPException(status_code=500, detail="Error loading pages")
+
+
+@public_router.get("/render/{user_slug}/pages/{page_slug}")
+async def get_public_page(
+    user_slug: str,
+    page_slug: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get a specific public page by slug.
+    """
+    try:
+        from main import User
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
+
+        # Find user by slug
+        user = db.query(User).filter(
+            User.slug == user_slug,
+            User.is_active == True
+        ).first()
+
+        if not user:
+            try:
+                user_id = int(user_slug)
+                user = db.query(User).filter(
+                    User.id == user_id,
+                    User.is_active == True
+                ).first()
+            except ValueError:
+                pass
+
+        if not user:
+            raise HTTPException(status_code=404, detail="Loan officer not found")
+
+        # Get microsite
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == user.id
+        ).first()
+
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        # Get page
+        page = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == page_slug,
+            MicrositeContentPage.is_enabled == True
+        ).first()
+
+        if not page:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        return page.to_dict()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching public page: {e}")
+        raise HTTPException(status_code=500, detail="Error loading page")

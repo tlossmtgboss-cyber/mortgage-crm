@@ -203,11 +203,12 @@ class UserMicrosite(Base):
     # Access via direct query when needed: db.query(User).get(microsite.user_id)
     theme = relationship("MicrositeTheme", back_populates="microsites")
     profile = relationship("MicrositeProfile", back_populates="microsite", uselist=False, cascade="all, delete-orphan")
+    pages = relationship("MicrositeContentPage", back_populates="microsite", cascade="all, delete-orphan", order_by="MicrositeContentPage.display_order")
 
     def __repr__(self):
         return f"<Microsite user_id={self.user_id} theme_id={self.theme_id}>"
 
-    def to_dict(self, include_theme=True, include_profile=True):
+    def to_dict(self, include_theme=True, include_profile=True, include_pages=False):
         """Convert to dictionary for API responses"""
         result = {
             "id": self.id,
@@ -232,6 +233,9 @@ class UserMicrosite(Base):
 
         if include_profile and self.profile:
             result["profile"] = self.profile.to_dict()
+
+        if include_pages and self.pages:
+            result["pages"] = [page.to_dict() for page in self.pages]
 
         return result
 
@@ -317,4 +321,89 @@ class MicrositeProfile(Base):
             "showEmail": self.show_email,
             "ctaText": self.cta_text,
             "ctaSecondaryText": self.cta_secondary_text,
+        }
+
+
+class PageType(str, enum.Enum):
+    """Types of microsite pages"""
+    HOME = "home"
+    ABOUT = "about"
+    SERVICES = "services"
+    TESTIMONIALS = "testimonials"
+    BLOG = "blog"
+    CONTACT = "contact"
+    CUSTOM = "custom"
+
+
+class MicrositeContentPage(Base):
+    """
+    Individual pages within a microsite.
+
+    Supports multi-page microsites with different content types:
+    - About Me / Bio
+    - Services / Loan Programs
+    - Testimonials / Reviews
+    - Blog
+    - Custom pages
+    """
+    __tablename__ = "microsite_content_pages"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Link to microsite
+    microsite_id = Column(Integer, ForeignKey("microsites.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Page identification
+    page_type = Column(
+        SQLEnum(
+            PageType,
+            name='microsite_page_type',
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x]
+        ),
+        nullable=False,
+        default=PageType.CUSTOM
+    )
+    slug = Column(String(100), nullable=False)  # URL slug for the page (e.g., "about", "services")
+    title = Column(String(200), nullable=False)  # Page title
+
+    # Page content (JSON structure varies by page type)
+    content = Column(JSONB, default=dict)
+
+    # SEO
+    meta_title = Column(String(200))
+    meta_description = Column(String(500))
+
+    # Display settings
+    is_enabled = Column(Boolean, nullable=False, default=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    show_in_nav = Column(Boolean, nullable=False, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    microsite = relationship("UserMicrosite", back_populates="pages")
+
+    def __repr__(self):
+        return f"<MicrositeContentPage microsite_id={self.microsite_id} type={self.page_type} slug={self.slug}>"
+
+    def to_dict(self):
+        """Convert to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "micrositeId": self.microsite_id,
+            "pageType": self.page_type.value if self.page_type else None,
+            "slug": self.slug,
+            "title": self.title,
+            "content": self.content or {},
+            "metaTitle": self.meta_title,
+            "metaDescription": self.meta_description,
+            "isEnabled": self.is_enabled,
+            "displayOrder": self.display_order,
+            "showInNav": self.show_in_nav,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ContentEditor from '../components/ContentEditor';
+import MicrositePageManager from '../components/MicrositePageManager';
 import './MicrositeEditor.css';
 
 // API base URL
@@ -538,6 +539,13 @@ const MicrositeEditor = () => {
           Template
         </button>
         <button
+          className={activeTab === 'pages' ? 'active' : ''}
+          onClick={() => setActiveTab('pages')}
+        >
+          <span className="tab-icon">📄</span>
+          Pages
+        </button>
+        <button
           className={activeTab === 'content' ? 'active' : ''}
           onClick={() => setActiveTab('content')}
         >
@@ -603,6 +611,16 @@ const MicrositeEditor = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Pages Tab */}
+          {activeTab === 'pages' && (
+            <div className="tab-panel">
+              <h2>Website Pages</h2>
+              <p>Add multiple pages to your microsite like About, Services, Testimonials, and Blog</p>
+
+              <MicrositePageManager onToast={showToast} />
             </div>
           )}
 

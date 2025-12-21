@@ -53738,6 +53738,51 @@ async def startup_event():
             except Exception as mp_e:
                 logger.warning(f"⚠️ Microsite profiles migration skipped: {mp_e}")
 
+            # Create microsite_content_pages table for multi-page microsites
+            try:
+                db_temp = SessionLocal()
+                result = db_temp.execute(text("""
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_name = 'microsite_content_pages'
+                """))
+                if not result.fetchone():
+                    # Create page type enum
+                    db_temp.execute(text("""
+                        DO $$ BEGIN
+                            CREATE TYPE microsite_page_type AS ENUM (
+                                'home', 'about', 'services', 'testimonials', 'blog', 'contact', 'custom'
+                            );
+                        EXCEPTION WHEN duplicate_object THEN NULL;
+                        END $$
+                    """))
+
+                    # Create microsite_content_pages table
+                    db_temp.execute(text("""
+                        CREATE TABLE microsite_content_pages (
+                            id SERIAL PRIMARY KEY,
+                            microsite_id INTEGER NOT NULL REFERENCES microsites(id) ON DELETE CASCADE,
+                            page_type microsite_page_type NOT NULL DEFAULT 'custom',
+                            slug VARCHAR(100) NOT NULL,
+                            title VARCHAR(200) NOT NULL,
+                            content JSONB DEFAULT '{}',
+                            meta_title VARCHAR(200),
+                            meta_description VARCHAR(500),
+                            is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                            display_order INTEGER NOT NULL DEFAULT 0,
+                            show_in_nav BOOLEAN NOT NULL DEFAULT TRUE,
+                            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT uq_microsite_page_slug UNIQUE (microsite_id, slug)
+                        )
+                    """))
+                    db_temp.execute(text("CREATE INDEX IF NOT EXISTS ix_content_pages_microsite ON microsite_content_pages(microsite_id)"))
+                    db_temp.execute(text("CREATE INDEX IF NOT EXISTS ix_content_pages_slug ON microsite_content_pages(slug)"))
+                    db_temp.commit()
+                    logger.info("✅ Created 'microsite_content_pages' table")
+                db_temp.close()
+            except Exception as mcp_e:
+                logger.warning(f"⚠️ Microsite content pages migration skipped: {mcp_e}")
+
             # Set slug for tim-loss user if not set
             try:
                 db_temp = SessionLocal()

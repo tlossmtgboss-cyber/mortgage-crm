@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import './LOMicrosite.css';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -7,8 +7,12 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
 const LOMicrosite = () => {
-  const { userId, slug } = useParams();
+  const { userId, slug, pageSlug } = useParams();
+  const [searchParams] = useSearchParams();
   const [loProfile, setLoProfile] = useState(null);
+  const [themeData, setThemeData] = useState(null);
+  const [pages, setPages] = useState([]);
+  const [activePage, setActivePage] = useState(pageSlug || 'home');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
@@ -29,7 +33,16 @@ const LOMicrosite = () => {
 
   useEffect(() => {
     fetchLoProfile();
+    fetchThemeData();
+    fetchPages();
   }, [userId, slug]);
+
+  // Update active page when URL changes
+  useEffect(() => {
+    if (pageSlug) {
+      setActivePage(pageSlug);
+    }
+  }, [pageSlug]);
 
   const fetchLoProfile = async () => {
     try {
@@ -54,6 +67,45 @@ const LOMicrosite = () => {
       setError('Unable to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchThemeData = async () => {
+    try {
+      const identifier = slug || userId;
+      if (!identifier) return;
+
+      const response = await fetch(`${API_BASE}/api/v1/public/themes/render/${identifier}`);
+      if (response.ok) {
+        const data = await response.json();
+        setThemeData(data);
+        // Apply theme colors as CSS variables
+        if (data.themeConfig) {
+          const root = document.documentElement;
+          if (data.themeConfig.primaryColor) root.style.setProperty('--lo-primary', data.themeConfig.primaryColor);
+          if (data.themeConfig.secondaryColor) root.style.setProperty('--lo-secondary', data.themeConfig.secondaryColor);
+          if (data.themeConfig.accentColor) root.style.setProperty('--lo-accent', data.themeConfig.accentColor);
+          if (data.themeConfig.backgroundColor) root.style.setProperty('--lo-background', data.themeConfig.backgroundColor);
+          if (data.themeConfig.textColor) root.style.setProperty('--lo-text', data.themeConfig.textColor);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching theme data:', err);
+    }
+  };
+
+  const fetchPages = async () => {
+    try {
+      const identifier = slug || userId;
+      if (!identifier) return;
+
+      const response = await fetch(`${API_BASE}/api/v1/public/themes/render/${identifier}/pages`);
+      if (response.ok) {
+        const data = await response.json();
+        setPages(data.pages || []);
+      }
+    } catch (err) {
+      console.error('Error fetching pages:', err);
     }
   };
 
@@ -133,18 +185,228 @@ const LOMicrosite = () => {
     );
   }
 
-  const loName = loProfile?.name || `${loProfile?.first_name || ''} ${loProfile?.last_name || ''}`.trim() || 'Loan Officer';
-  const loPhoto = loProfile?.photo_url || loProfile?.avatar_url || null;
-  const loCompany = loProfile?.company || 'Mortgage Lending';
-  const loNmls = loProfile?.nmls_id;
-  const loBio = loProfile?.bio || `Hi, I'm ${loName}. I'm dedicated to helping you find the perfect mortgage solution for your needs. Whether you're buying your first home or refinancing, I'm here to guide you every step of the way.`;
-  const loPhone = loProfile?.phone;
-  const loEmail = loProfile?.email;
+  const loName = loProfile?.name || themeData?.user?.name || `${loProfile?.first_name || ''} ${loProfile?.last_name || ''}`.trim() || 'Loan Officer';
+  const loPhoto = loProfile?.photo_url || loProfile?.avatar_url || themeData?.user?.photo_url || null;
+  const loCompany = loProfile?.company || themeData?.user?.company || 'Mortgage Lending';
+  const loNmls = loProfile?.nmls_id || themeData?.user?.nmls_id;
+  const loBio = loProfile?.bio || themeData?.user?.bio || themeData?.profile?.bioExtended || `Hi, I'm ${loName}. I'm dedicated to helping you find the perfect mortgage solution for your needs. Whether you're buying your first home or refinancing, I'm here to guide you every step of the way.`;
+  const loPhone = loProfile?.phone || themeData?.user?.phone;
+  const loEmail = loProfile?.email || themeData?.user?.email;
+
+  // Navigation items - only show pages that should be in nav
+  const navPages = pages.filter(p => p.showInNav);
+  const hasPages = navPages.length > 0;
+
+  // Get current page content
+  const currentPage = pages.find(p => p.slug === activePage);
+
+  // Handle page navigation
+  const navigateToPage = (pageSlug) => {
+    setActivePage(pageSlug);
+    // Update URL without full page reload
+    const identifier = slug || userId;
+    if (pageSlug === 'home') {
+      window.history.pushState({}, '', `/lo/${identifier}`);
+    } else {
+      window.history.pushState({}, '', `/lo/${identifier}/${pageSlug}`);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Render page-specific content
+  const renderPageContent = () => {
+    if (!currentPage) return null;
+
+    const content = currentPage.content || {};
+
+    switch (currentPage.pageType) {
+      case 'about':
+        return (
+          <section className="lo-page-content about-page">
+            <div className="container">
+              <h2>{currentPage.title}</h2>
+              {content.sections?.map((section, idx) => (
+                <div key={idx} className={`about-section ${section.type}`}>
+                  {section.type === 'bio' && (
+                    <>
+                      <h3>{section.heading}</h3>
+                      <p>{section.text || loBio}</p>
+                    </>
+                  )}
+                  {section.type === 'experience' && (
+                    <>
+                      <h3>{section.heading}</h3>
+                      <div className="experience-stats">
+                        {section.yearsExperience && (
+                          <div className="stat-card">
+                            <span className="stat-value">{section.yearsExperience}+</span>
+                            <span className="stat-label">Years Experience</span>
+                          </div>
+                        )}
+                        {section.loansFunded && (
+                          <div className="stat-card">
+                            <span className="stat-value">{section.loansFunded.toLocaleString()}</span>
+                            <span className="stat-label">Loans Funded</span>
+                          </div>
+                        )}
+                        {section.volumeFunded && (
+                          <div className="stat-card">
+                            <span className="stat-value">${(section.volumeFunded / 1000000).toFixed(0)}M+</span>
+                            <span className="stat-label">Volume Funded</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {section.type === 'certifications' && section.items?.length > 0 && (
+                    <>
+                      <h3>{section.heading}</h3>
+                      <ul className="certifications-list">
+                        {section.items.map((cert, i) => (
+                          <li key={i}>{cert}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+
+      case 'services':
+        return (
+          <section className="lo-page-content services-page">
+            <div className="container">
+              <h2>{content.heading || currentPage.title}</h2>
+              {content.description && <p className="section-subtitle">{content.description}</p>}
+              <div className="services-grid">
+                {content.programs?.map((program, idx) => (
+                  <div key={idx} className="service-card">
+                    <div className="service-icon">
+                      {program.icon === 'home' && '🏠'}
+                      {program.icon === 'key' && '🔑'}
+                      {program.icon === 'star' && '⭐'}
+                      {program.icon === 'building' && '🏢'}
+                      {!['home', 'key', 'star', 'building'].includes(program.icon) && '💰'}
+                    </div>
+                    <h3>{program.name}</h3>
+                    <p>{program.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+
+      case 'testimonials':
+        return (
+          <section className="lo-page-content testimonials-page">
+            <div className="container">
+              <h2>{content.heading || currentPage.title}</h2>
+              {content.description && <p className="section-subtitle">{content.description}</p>}
+              {content.testimonials?.length > 0 ? (
+                <div className="testimonials-grid">
+                  {content.testimonials.map((testimonial, idx) => (
+                    <div key={idx} className="testimonial-card">
+                      <div className="testimonial-quote">"</div>
+                      <p className="testimonial-text">{testimonial.text}</p>
+                      <div className="testimonial-author">
+                        <strong>{testimonial.name}</strong>
+                        {testimonial.location && <span>{testimonial.location}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-content">Client testimonials coming soon!</p>
+              )}
+            </div>
+          </section>
+        );
+
+      case 'blog':
+        return (
+          <section className="lo-page-content blog-page">
+            <div className="container">
+              <h2>{content.heading || currentPage.title}</h2>
+              {content.description && <p className="section-subtitle">{content.description}</p>}
+              {content.posts?.length > 0 ? (
+                <div className="blog-grid">
+                  {content.posts.map((post, idx) => (
+                    <div key={idx} className="blog-card">
+                      {post.image && <img src={post.image} alt={post.title} />}
+                      <div className="blog-content">
+                        <h3>{post.title}</h3>
+                        <p>{post.excerpt}</p>
+                        {post.date && <span className="blog-date">{post.date}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-content">Blog posts coming soon! Check back for mortgage tips and market updates.</p>
+              )}
+            </div>
+          </section>
+        );
+
+      default:
+        return (
+          <section className="lo-page-content custom-page">
+            <div className="container">
+              <h2>{currentPage.title}</h2>
+              {content.text && <div dangerouslySetInnerHTML={{ __html: content.text }} />}
+            </div>
+          </section>
+        );
+    }
+  };
 
   return (
-    <div className="lo-microsite">
-      {/* Hero Section */}
-      <header className="lo-hero">
+    <div className="lo-microsite" style={themeData?.themeConfig ? {
+      '--lo-primary': themeData.themeConfig.primaryColor || '#c9a227',
+      '--lo-secondary': themeData.themeConfig.secondaryColor || '#1f2937',
+      '--lo-accent': themeData.themeConfig.accentColor || '#059669',
+      '--lo-background': themeData.themeConfig.backgroundColor || '#ffffff',
+      '--lo-text': themeData.themeConfig.textColor || '#1a1a1a'
+    } : {}}>
+
+      {/* Navigation Bar - shown when pages exist */}
+      {hasPages && (
+        <nav className="lo-nav">
+          <div className="container">
+            <div className="nav-brand" onClick={() => navigateToPage('home')}>
+              {loName}
+            </div>
+            <ul className="nav-links">
+              <li>
+                <button
+                  className={activePage === 'home' ? 'active' : ''}
+                  onClick={() => navigateToPage('home')}
+                >
+                  Home
+                </button>
+              </li>
+              {navPages.map(page => (
+                <li key={page.id}>
+                  <button
+                    className={activePage === page.slug ? 'active' : ''}
+                    onClick={() => navigateToPage(page.slug)}
+                  >
+                    {page.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <a href="#contact-form" className="nav-cta">Get Started</a>
+          </div>
+        </nav>
+      )}
+
+      {/* Hero Section - only on home page */}
+      {activePage === 'home' && (
+        <header className="lo-hero">
         <div className="lo-hero-content">
           <div className="lo-hero-profile">
             {loPhoto ? (
@@ -167,8 +429,13 @@ const LOMicrosite = () => {
           </div>
         </div>
       </header>
+      )}
 
-      {/* About Section */}
+      {/* Render page content for non-home pages */}
+      {activePage !== 'home' && renderPageContent()}
+
+      {/* About Section - only on home page */}
+      {activePage === 'home' && (
       <section className="lo-about">
         <div className="container">
           <h2>About Me</h2>
@@ -194,8 +461,10 @@ const LOMicrosite = () => {
           </div>
         </div>
       </section>
+      )}
 
-      {/* Services Section */}
+      {/* Services Section - only on home page */}
+      {activePage === 'home' && (
       <section className="lo-services">
         <div className="container">
           <h2>Services I Offer</h2>
@@ -243,8 +512,9 @@ const LOMicrosite = () => {
           </div>
         </div>
       </section>
+      )}
 
-      {/* Contact Form Section */}
+      {/* Contact Form Section - always shown */}
       <section className="lo-contact" id="contact-form">
         <div className="container">
           <h2>Let's Get Started</h2>

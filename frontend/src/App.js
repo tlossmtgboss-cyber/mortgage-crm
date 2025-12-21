@@ -282,6 +282,7 @@ function App() {
 
           {/* Loan Officer Microsite (public) - Uses ThemeRenderer for dynamic themes */}
           <Route path="/lo/:slug" element={<LazyPage><ThemeRenderer /></LazyPage>} />
+          <Route path="/lo/:slug/:pageSlug" element={<LazyPage><ThemeRenderer /></LazyPage>} />
           <Route path="/microsite/loan-officer/:userId" element={<LazyPage><ThemeRenderer /></LazyPage>} />
           <Route path="/microsite/preview" element={<LazyPage><MicrositePreview /></LazyPage>} />
 

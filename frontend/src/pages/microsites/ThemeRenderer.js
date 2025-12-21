@@ -78,13 +78,15 @@ const ErrorState = ({ message }) => (
 );
 
 const ThemeRenderer = () => {
-  const { slug, userId } = useParams();
+  const { slug, userId, pageSlug } = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [micrositeData, setMicrositeData] = useState(null);
+  const [pages, setPages] = useState([]);
 
   useEffect(() => {
     fetchMicrositeData();
+    fetchPages();
   }, [slug, userId]);
 
   const fetchMicrositeData = async () => {
@@ -116,6 +118,21 @@ const ThemeRenderer = () => {
     }
   };
 
+  const fetchPages = async () => {
+    try {
+      const identifier = slug || userId;
+      if (!identifier) return;
+
+      const response = await fetch(`${API_BASE}/api/v1/public/themes/render/${identifier}/pages`);
+      if (response.ok) {
+        const data = await response.json();
+        setPages(data.pages || []);
+      }
+    } catch (err) {
+      console.error('Error fetching pages:', err);
+    }
+  };
+
   if (loading) {
     return <LoadingState />;
   }
@@ -141,6 +158,8 @@ const ThemeRenderer = () => {
         user={user}
         profile={profile}
         themeConfig={themeConfig}
+        pages={pages}
+        activePage={pageSlug || 'home'}
       />
     </Suspense>
   );
