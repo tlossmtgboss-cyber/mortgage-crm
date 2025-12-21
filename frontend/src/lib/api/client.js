@@ -467,6 +467,39 @@ class PerenniaAPI {
   }
 
   /**
+   * Direct document upload (fallback when S3 not configured)
+   * @param {string} slug
+   * @param {File} file
+   * @param {string} documentType
+   */
+  async uploadDocumentDirect(slug, file, documentType = '') {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (documentType) {
+      formData.append('document_type', documentType);
+    }
+
+    const url = `${this.baseUrl}/api/purl/workspace/${slug}/documents/upload-direct`;
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: this.authToken ? { 'Authorization': `Bearer ${this.authToken}` } : {},
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new PerenniaAPIError(
+        data?.detail || data?.message || `HTTP ${response.status}`,
+        response.status,
+        data
+      );
+    }
+
+    return response.json();
+  }
+
+  /**
    * Get workspace tasks
    * @param {string} slug
    * @param {Object} params

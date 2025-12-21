@@ -546,35 +546,46 @@ export default function PURLPortal() {
     try {
       for (const file of files) {
         try {
-          // Get upload URL
-          const uploadData = await api.getDocumentUploadUrl(slug, {
-            filename: file.name,
-            contentType: file.type,
-          });
+          // Try S3 presigned URL upload first
+          try {
+            const uploadData = await api.getDocumentUploadUrl(slug, {
+              filename: file.name,
+              contentType: file.type,
+            });
 
-          // Upload to S3
-          await fetch(uploadData.upload_url, {
-            method: 'PUT',
-            body: file,
-            headers: {
-              'Content-Type': file.type,
-            },
-          });
+            // Upload to S3
+            const s3Response = await fetch(uploadData.upload_url, {
+              method: 'PUT',
+              body: file,
+              headers: {
+                'Content-Type': file.type,
+              },
+            });
 
-          // Complete upload
-          await api.completeDocumentUpload(slug, {
-            documentKey: uploadData.document_key,
-            filename: file.name,
-            fileSize: file.size,
-            contentType: file.type,
-          });
+            if (!s3Response.ok) {
+              throw new Error(`S3 upload failed: ${s3Response.status}`);
+            }
+
+            // Complete upload
+            await api.completeDocumentUpload(slug, {
+              documentKey: uploadData.document_key,
+              filename: file.name,
+              fileSize: file.size,
+              contentType: file.type,
+            });
+          } catch (s3Error) {
+            console.warn('S3 upload failed, trying direct upload:', s3Error);
+
+            // Fallback to direct upload
+            await api.uploadDocumentDirect(slug, file);
+          }
 
           // Refresh documents
           const docsData = await api.getWorkspaceDocuments(slug);
           setDocuments(docsData.documents || []);
         } catch (err) {
           console.error('Upload failed:', err);
-          alert(`Failed to upload ${file.name}`);
+          alert(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
         }
       }
     } finally {

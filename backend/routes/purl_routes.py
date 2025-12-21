@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Path, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Path, UploadFile, File, Form, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -547,6 +547,85 @@ async def complete_document_upload(
         resource_type="document",
         resource_id=document.id,
         metadata={"filename": filename, "document_type": document_type}
+    )
+
+    return {
+        "success": True,
+        "document": {
+            "id": document.id,
+            "filename": document.file_name,
+            "document_type": document.doc_type,
+            "category": document.doc_category,
+            "status": document.status
+        }
+    }
+
+
+@purl_router.post(
+    "/workspace/{slug}/documents/upload-direct",
+    summary="Direct document upload",
+    description="Upload document directly to server (fallback when S3 unavailable)"
+)
+async def upload_document_direct(
+    slug: str = Path(..., description="Workspace slug"),
+    file: UploadFile = File(..., description="Document file"),
+    document_type: Optional[str] = Form(None, description="Document type"),
+    context: PURLAuthContext = Depends(require_purl_write_scope),
+    db: Session = Depends(get_db)
+):
+    """
+    Direct document upload endpoint.
+
+    This is a fallback for when S3 presigned URLs don't work.
+    Stores documents in local storage or S3 directly.
+    """
+    import os
+    import uuid
+    from pathlib import Path as FilePath
+
+    verify_workspace_access(context, slug)
+
+    # Create storage directory if needed
+    storage_dir = FilePath(os.getenv("LOCAL_UPLOAD_PATH", "uploads"))
+    doc_dir = storage_dir / "org" / str(context.organization_id) / "workspaces" / str(context.workspace_id) / "documents"
+    doc_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    upload_id = uuid.uuid4().hex
+    safe_filename = "".join(c for c in file.filename if c.isalnum() or c in "._- ")[:200]
+    storage_key = f"org/{context.organization_id}/workspaces/{context.workspace_id}/documents/{upload_id}/{safe_filename}"
+
+    # Save file locally
+    file_path = doc_dir / f"{upload_id}_{safe_filename}"
+    content = await file.read()
+    file_size = len(content)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    logger.info(f"Saved document locally: {file_path}")
+
+    # Create document record
+    service = PURLDocumentService(db)
+    document = service.complete_upload(
+        organization_id=context.organization_id,
+        workspace_id=context.workspace_id,
+        document_key=storage_key,
+        filename=file.filename,
+        file_size=file_size,
+        content_type=file.content_type or "application/octet-stream",
+        document_type=document_type,
+        uploaded_by_contact_id=context.contact_id
+    )
+
+    # Log the action
+    await log_purl_action(
+        db=db,
+        context=context,
+        action="document_upload",
+        resource_type="document",
+        resource_id=document.id,
+        metadata={"filename": file.filename, "document_type": document_type, "upload_method": "direct"}
     )
 
     return {
