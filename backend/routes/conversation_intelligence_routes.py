@@ -244,6 +244,7 @@ async def extract_data_from_text(request: ExtractDataRequest):
 @router.post("/conversation/{conversation_id}/create-lead")
 async def create_lead_from_conversation(
     conversation_id: str,
+    owner_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -251,7 +252,14 @@ async def create_lead_from_conversation(
 
     This should be called after qualification is complete (or at booking stage)
     to persist the collected data to the leads table.
+
+    Args:
+        conversation_id: The conversation ID to create a lead from
+        owner_id: Optional owner (loan officer) ID to assign the lead to
     """
+    # Lazy import to avoid circular import
+    from main import Lead, LeadStage
+
     try:
         agent = create_qualification_agent()
         lead_data = agent.generate_lead_from_qualification(conversation_id)
@@ -259,13 +267,125 @@ async def create_lead_from_conversation(
         if "error" in lead_data:
             raise HTTPException(status_code=404, detail=lead_data["error"])
 
-        # TODO: Actually insert into leads table
-        # For now, return the lead data that would be created
+        # Check if lead already exists by email or phone
+        existing_lead = None
+        if lead_data.get("email"):
+            existing_lead = db.query(Lead).filter(
+                Lead.email == lead_data["email"]
+            ).first()
+        if not existing_lead and lead_data.get("phone"):
+            # Clean phone and search
+            phone = lead_data["phone"]
+            phone_clean = ''.join(c for c in phone if c.isdigit())
+            if len(phone_clean) >= 10:
+                existing_lead = db.query(Lead).filter(
+                    Lead.phone.contains(phone_clean[-10:])
+                ).first()
+
+        if existing_lead:
+            # Update existing lead with new qualification data
+            if lead_data.get("first_name"):
+                existing_lead.first_name = lead_data["first_name"]
+            if lead_data.get("last_name"):
+                existing_lead.last_name = lead_data["last_name"]
+            if lead_data.get("first_name") and lead_data.get("last_name"):
+                existing_lead.name = f"{lead_data['first_name']} {lead_data['last_name']}"
+            if lead_data.get("email"):
+                existing_lead.email = lead_data["email"]
+            if lead_data.get("phone"):
+                existing_lead.phone = lead_data["phone"]
+            if lead_data.get("property_type"):
+                existing_lead.property_type = lead_data["property_type"]
+            if lead_data.get("estimated_amount"):
+                existing_lead.loan_amount = lead_data["estimated_amount"]
+            if lead_data.get("first_time_buyer") is not None:
+                existing_lead.first_time_buyer = lead_data["first_time_buyer"]
+            if lead_data.get("closing_timeline"):
+                existing_lead.notes = f"Timeline: {lead_data['closing_timeline']}\n{existing_lead.notes or ''}"
+
+            # Update stage if qualified
+            if lead_data.get("qualification_complete"):
+                if existing_lead.stage in [LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT]:
+                    existing_lead.stage = LeadStage.PRE_QUALIFIED
+
+            existing_lead.last_contact = datetime.utcnow()
+            existing_lead.ai_score = min(100, (existing_lead.ai_score or 50) + 10)
+
+            db.commit()
+            db.refresh(existing_lead)
+
+            logger.info(f"Updated existing lead {existing_lead.id} from conversation {conversation_id}")
+
+            return {
+                "status": "success",
+                "message": "Existing lead updated with qualification data",
+                "lead_id": existing_lead.id,
+                "is_new": False,
+                "lead": {
+                    "id": existing_lead.id,
+                    "name": existing_lead.name,
+                    "email": existing_lead.email,
+                    "phone": existing_lead.phone,
+                    "stage": existing_lead.stage.value if existing_lead.stage else None,
+                    "ai_score": existing_lead.ai_score,
+                    "qualification_percentage": lead_data.get("qualification_percentage", 0),
+                }
+            }
+
+        # Create new lead
+        first_name = lead_data.get("first_name") or ""
+        last_name = lead_data.get("last_name") or ""
+        name = f"{first_name} {last_name}".strip() or "Unknown"
+
+        # Determine initial stage based on qualification
+        if lead_data.get("qualification_complete"):
+            stage = LeadStage.PRE_QUALIFIED
+        elif lead_data.get("qualification_percentage", 0) >= 50:
+            stage = LeadStage.PROSPECT
+        else:
+            stage = LeadStage.NEW
+
+        new_lead = Lead(
+            name=name,
+            first_name=first_name or None,
+            last_name=last_name or None,
+            email=lead_data.get("email"),
+            phone=lead_data.get("phone"),
+            source=lead_data.get("source", "ai_conversation"),
+            stage=stage,
+            property_type=lead_data.get("property_type"),
+            loan_amount=lead_data.get("estimated_amount"),
+            first_time_buyer=lead_data.get("first_time_buyer", False),
+            owner_id=owner_id,
+            ai_score=70 if lead_data.get("qualification_complete") else 50,
+            notes=f"Created from AI conversation {conversation_id}\n"
+                  f"Channel: {lead_data.get('channel', 'unknown')}\n"
+                  f"Qualification: {lead_data.get('qualification_percentage', 0)}%\n"
+                  f"Timeline: {lead_data.get('closing_timeline', 'not specified')}",
+            lead_received_date=datetime.utcnow(),
+            last_contact=datetime.utcnow(),
+        )
+
+        db.add(new_lead)
+        db.commit()
+        db.refresh(new_lead)
+
+        logger.info(f"Created new lead {new_lead.id} from conversation {conversation_id}")
 
         return {
             "status": "success",
-            "message": "Lead data generated from conversation",
-            "lead": lead_data
+            "message": "Lead created from conversation",
+            "lead_id": new_lead.id,
+            "is_new": True,
+            "lead": {
+                "id": new_lead.id,
+                "name": new_lead.name,
+                "email": new_lead.email,
+                "phone": new_lead.phone,
+                "stage": new_lead.stage.value if new_lead.stage else None,
+                "ai_score": new_lead.ai_score,
+                "qualification_percentage": lead_data.get("qualification_percentage", 0),
+            }
         }
     except HTTPException:
         raise
