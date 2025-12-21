@@ -13,9 +13,12 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-// Lazy load theme components
+// Lazy load theme components with error handling
 const themeComponents = {
-  BoldImpact: lazy(() => import('./themes/BoldImpact')),
+  BoldImpact: lazy(() => import('./themes/BoldImpact').catch((err) => {
+    console.error('Failed to load BoldImpact theme:', err);
+    return import('./LOMicrosite');
+  })),
   ProfessionalClean: lazy(() => import('./themes/ProfessionalClean').catch(() => ({ default: FallbackTheme }))),
   ModernGradient: lazy(() => import('./themes/ModernGradient').catch(() => ({ default: FallbackTheme }))),
   MinimalFocus: lazy(() => import('./themes/MinimalFocus').catch(() => ({ default: FallbackTheme }))),
