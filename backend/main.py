@@ -53743,28 +53743,36 @@ async def startup_event():
                 # Check if any user has slug 'tim-loss'
                 result = db_temp.execute(text("SELECT id FROM users WHERE slug = 'tim-loss'"))
                 if not result.fetchone():
-                    # Set slug on first admin/LO user matching 'tim'
+                    # Force set slug on first user with 'tim' in email/name
                     result = db_temp.execute(text("""
                         UPDATE users SET slug = 'tim-loss'
-                        WHERE id = (SELECT id FROM users WHERE email ILIKE '%tim%' OR first_name ILIKE '%tim%' ORDER BY id LIMIT 1)
-                        AND (slug IS NULL OR slug = '')
-                        RETURNING id
+                        WHERE id = (SELECT id FROM users WHERE email ILIKE '%tim%' OR first_name ILIKE '%tim%' OR last_name ILIKE '%loss%' ORDER BY id LIMIT 1)
+                        RETURNING id, email
                     """))
                     updated = result.fetchone()
                     if not updated:
-                        # Fallback: set on first active user
+                        # Fallback: force set on first admin/management user
+                        result = db_temp.execute(text("""
+                            UPDATE users SET slug = 'tim-loss'
+                            WHERE id = (SELECT id FROM users WHERE role IN ('admin', 'management') AND is_active = true ORDER BY id LIMIT 1)
+                            RETURNING id, email
+                        """))
+                        updated = result.fetchone()
+                    if not updated:
+                        # Last resort: first active user
                         result = db_temp.execute(text("""
                             UPDATE users SET slug = 'tim-loss'
                             WHERE id = (SELECT id FROM users WHERE is_active = true ORDER BY id LIMIT 1)
-                            AND (slug IS NULL OR slug = '')
-                            RETURNING id
+                            RETURNING id, email
                         """))
                         updated = result.fetchone()
                     db_temp.commit()
                     if updated:
-                        logger.info(f"✅ Set 'tim-loss' slug for user id={updated[0]}")
+                        logger.info(f"✅ Set 'tim-loss' slug for user id={updated[0]}, email={updated[1]}")
                     else:
-                        logger.info("⚠️ No user updated with tim-loss slug")
+                        logger.info("⚠️ No user found to set tim-loss slug")
+                else:
+                    logger.info("ℹ️ User with 'tim-loss' slug already exists")
                 db_temp.close()
             except Exception as slug_e:
                 logger.warning(f"⚠️ User slug migration skipped: {slug_e}")
