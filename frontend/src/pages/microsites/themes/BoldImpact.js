@@ -9,9 +9,11 @@
 import React, { useState } from 'react';
 import './BoldImpact.css';
 import EmbeddedAIChat from '../../../components/EmbeddedAIChat';
+import SmartScheduler from '../../../components/SmartScheduler';
 
 const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showSchedulerModal, setShowSchedulerModal] = useState(false);
 
   // Extract config with defaults
   const config = {
@@ -109,6 +111,18 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
         </div>
       )}
 
+      {/* Scheduler Modal */}
+      {showSchedulerModal && (
+        <div className="scheduler-modal-overlay" onClick={() => setShowSchedulerModal(false)}>
+          <div className="scheduler-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="scheduler-modal-close" onClick={() => setShowSchedulerModal(false)}>
+              ×
+            </button>
+            <SmartScheduler onClose={() => setShowSchedulerModal(false)} />
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className={`bold-impact-hero ${config.heroStyle}`}>
         <div className="hero-background"></div>
@@ -157,9 +171,12 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
           {/* Schedule Appointment Card */}
           <div className="sidebar-card">
             <p className="sidebar-card-text">Have questions? Schedule a call with me.</p>
-            <a href={calendlyUrl || `/schedule/${user?.slug || ''}`} className="sidebar-card-btn schedule-btn-action">
+            <button
+              className="sidebar-card-btn schedule-btn-action"
+              onClick={() => setShowSchedulerModal(true)}
+            >
               Schedule with {loName.split(' ')[0]}
-            </a>
+            </button>
           </div>
 
           {/* Compare Estimates Card */}
