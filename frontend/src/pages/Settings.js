@@ -14,6 +14,7 @@ import PURLManager from '../components/admin/PURLManager';
 import MicrositeThemeSelector from '../components/MicrositeThemeSelector';
 import AIEmailTraining from '../components/AIEmailTraining';
 import AIEmailSetup from '../components/AIEmailSetup';
+import AIDailyBlog from './AIDailyBlog';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -2868,6 +2869,21 @@ const API_BASE_URL = isProduction
                 >
                   Microsite Theme
                 </button>
+                <button
+                  onClick={() => setMarketingTab('ai-blog')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'ai-blog' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'ai-blog' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'ai-blog' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  AI Blog
+                </button>
               </div>
 
               {/* Landing Pages Tab */}
@@ -3137,6 +3153,13 @@ const API_BASE_URL = isProduction
 
                   {/* Theme Selector */}
                   <MicrositeThemeSelector />
+                </div>
+              )}
+
+              {/* AI Blog Tab */}
+              {marketingTab === 'ai-blog' && (
+                <div className="marketing-section" style={{ padding: 0 }}>
+                  <AIDailyBlog />
                 </div>
               )}
             </div>
