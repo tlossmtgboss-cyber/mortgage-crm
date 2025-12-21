@@ -1,3 +1,7 @@
+/**
+ * LOMicrosite - Loan Officer Personal Microsite
+ * Clean home page with hero section only
+ */
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import './LOMicrosite.css';
@@ -16,21 +20,6 @@ const LOMicrosite = () => {
   const [activePage, setActivePage] = useState(pageSlug || 'home');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    property_type: '',
-    loan_type: 'purchase',
-    estimated_value: '',
-    down_payment: '',
-    credit_score_range: '',
-    timeline: '',
-    message: ''
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     fetchLoProfile();
@@ -107,43 +96,6 @@ const LOMicrosite = () => {
       }
     } catch (err) {
       console.error('Error fetching pages:', err);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/public/leads`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          source: 'microsite',
-          loan_officer_id: loProfile?.id,
-          referral_source: `lo_microsite_${loProfile?.id}`,
-          utm_source: 'microsite',
-          utm_medium: 'lo_page',
-          utm_campaign: loProfile?.slug || loProfile?.id
-        })
-      });
-
-      if (response.ok) {
-        setSubmitted(true);
-      } else {
-        throw new Error('Failed to submit');
-      }
-    } catch (err) {
-      console.error('Error submitting lead:', err);
-      alert('There was an error submitting your request. Please try again.');
-    } finally {
-      setSubmitting(false);
     }
   };
 
