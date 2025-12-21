@@ -132,13 +132,15 @@ class TwilioProvider(TelephonyProvider):
         url: str = None,
         status_callback: str = None,
         timeout: int = 30,
+        record: bool = True,
+        recording_status_callback: str = None,
         # Alternative parameter names
         to_number: str = None,
         from_number: str = None,
         callback_url: str = None,
         status_callback_url: str = None
     ) -> CallResult:
-        """Place an outbound call via Twilio"""
+        """Place an outbound call via Twilio with optional recording"""
         # Support both naming conventions
         to = to or to_number
         from_ = from_ or from_number
@@ -149,16 +151,25 @@ class TwilioProvider(TelephonyProvider):
         try:
             from twilio.base.exceptions import TwilioRestException
 
-            call = self.client.calls.create(
-                to=to,
-                from_=from_,
-                url=url,
-                status_callback=status_callback,
-                status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
-                status_callback_method='POST',
-                timeout=timeout,
-                record=False
-            )
+            # Build call parameters
+            call_params = {
+                "to": to,
+                "from_": from_,
+                "url": url,
+                "status_callback": status_callback,
+                "status_callback_event": ['initiated', 'ringing', 'answered', 'completed'],
+                "status_callback_method": 'POST',
+                "timeout": timeout,
+                "record": record
+            }
+
+            # Add recording callback if recording is enabled
+            if record and recording_status_callback:
+                call_params["recording_status_callback"] = recording_status_callback
+                call_params["recording_status_callback_event"] = ['completed']
+                call_params["recording_status_callback_method"] = 'POST'
+
+            call = self.client.calls.create(**call_params)
 
             logger.info(f"Call placed: {call.sid} from {from_} to {to}")
 
