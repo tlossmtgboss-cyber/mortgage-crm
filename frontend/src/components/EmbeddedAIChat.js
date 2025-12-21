@@ -123,34 +123,51 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
           </div>
         </div>
 
-        {/* Messages Area */}
-        <div className="chat-messages-area">
-          {messages.length === 0 ? (
-            <div className="chat-welcome">
-              <div className="welcome-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
-              </div>
-              <h3>Hi! I'm your AI mortgage assistant.</h3>
-              <p>Ask me anything about home loans, rates, qualifications, or the mortgage process. I'm here to help!</p>
-
-              <div className="suggested-questions">
-                <p className="suggestions-label">Try asking:</p>
-                <div className="suggestions-grid">
-                  {suggestedQuestions.map((question, idx) => (
-                    <button
-                      key={idx}
-                      className="suggestion-btn"
-                      onClick={() => sendMessage(question)}
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              </div>
+        {/* Suggested Questions - Show when no messages */}
+        {messages.length === 0 && (
+          <div className="suggested-questions">
+            <p className="suggestions-label">Popular questions:</p>
+            <div className="suggestions-grid">
+              {suggestedQuestions.map((question, idx) => (
+                <button
+                  key={idx}
+                  className="suggestion-btn"
+                  onClick={() => sendMessage(question)}
+                >
+                  {question}
+                </button>
+              ))}
             </div>
-          ) : (
+          </div>
+        )}
+
+        {/* Input Area - Always visible at top */}
+        <div className="chat-input-area">
+          <div className="input-wrapper">
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your mortgage question here..."
+              rows="1"
+              disabled={isLoading}
+            />
+            <button
+              className="send-btn"
+              onClick={() => sendMessage()}
+              disabled={!inputValue.trim() || isLoading}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Messages Area - Shows conversation */}
+        {messages.length > 0 && (
+          <div className="chat-messages-area">
             <div className="messages-list">
               {messages.map((message) => (
                 <div key={message.id} className={`message ${message.role}`}>
@@ -188,33 +205,8 @@ const EmbeddedAIChat = ({ userSlug, loName, themeConfig = {} }) => {
 
               <div ref={messagesEndRef} />
             </div>
-          )}
-        </div>
-
-        {/* Input Area */}
-        <div className="chat-input-area">
-          <div className="input-wrapper">
-            <textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask a question about mortgages..."
-              rows="1"
-              disabled={isLoading}
-            />
-            <button
-              className="send-btn"
-              onClick={() => sendMessage()}
-              disabled={!inputValue.trim() || isLoading}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-              </svg>
-            </button>
           </div>
-          <p className="input-hint">Press Enter to send, Shift+Enter for new line</p>
-        </div>
+        )}
       </div>
     </section>
   );
