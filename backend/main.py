@@ -19858,7 +19858,12 @@ except Exception as e:
     logger.warning(f"⚠️ User Invitation routes not loaded: {e}")
 
 # Include User Creation/Onboarding routes
+# NOTE: Temporarily disabled to fix SQLAlchemy mapper conflict with duplicate Responsibility model
+# The user_onboarding.py defines a Responsibility class with the same tablename but different schema
+# TODO: Reconcile the two Responsibility models or rename one of the tables
 try:
+    # Skip loading user_onboarding models to avoid mapper conflict
+    raise ImportError("Temporarily disabled due to Responsibility model conflict")
     from routes.user_creation_routes import router as user_creation_router_template, get_user_creation_routes
     from models.user_onboarding import (
         UserProfile, Role, Category, Responsibility, PermissionTemplate,
