@@ -631,8 +631,9 @@ async def add_about_page_for_user(user_slug: str, db: Session = Depends(get_db))
             return {"status": "exists", "message": "About page already exists", "page_id": existing.id}
 
         # Create About page content
+        user_name = user.full_name or user.slug.replace("-", " ").title()
         content = {
-            "headline": f"About {user.name}",
+            "headline": f"About {user_name}",
             "story": "With years of experience in the mortgage industry, I'm dedicated to helping families achieve their dream of homeownership. My approach combines deep market knowledge with personalized service to find the perfect loan solution for each client.",
             "values": [
                 {"title": "Integrity", "description": "Honest, transparent communication at every step"},
