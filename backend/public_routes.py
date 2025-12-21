@@ -1064,8 +1064,13 @@ async def search_partners_public(
         from main import ReferralPartner
         from sqlalchemy import or_, func
 
+        # Include active partners and those with null/unknown status
         query = db.query(ReferralPartner).filter(
-            ReferralPartner.status == "active"
+            or_(
+                ReferralPartner.status == "active",
+                ReferralPartner.status.is_(None),
+                ReferralPartner.status == ""
+            )
         )
 
         # Filter by partner type if specified
@@ -1116,18 +1121,25 @@ async def get_realtors_public(
 ):
     """
     Public endpoint to search specifically for realtors/real estate agents.
-    Convenience wrapper around the general partner search filtered to realtor types.
+    Now also includes all active partners with empty/unknown types to be more inclusive.
     """
     try:
         from main import ReferralPartner
         from sqlalchemy import or_, func
 
+        # Include realtor-type partners AND partners with empty/unknown types
         query = db.query(ReferralPartner).filter(
-            ReferralPartner.status == "active",
+            or_(
+                ReferralPartner.status == "active",
+                ReferralPartner.status.is_(None)
+            ),
             or_(
                 func.lower(ReferralPartner.type).contains("realtor"),
                 func.lower(ReferralPartner.type).contains("real estate"),
-                func.lower(ReferralPartner.type).contains("agent")
+                func.lower(ReferralPartner.type).contains("agent"),
+                ReferralPartner.type.is_(None),
+                ReferralPartner.type == "",
+                func.lower(ReferralPartner.type) == "other"
             )
         )
 
