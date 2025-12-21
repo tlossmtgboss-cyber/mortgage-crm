@@ -604,6 +604,69 @@ async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@public_router.post("/add-about-page/{user_slug}")
+async def add_about_page_for_user(user_slug: str, db: Session = Depends(get_db)):
+    """One-time endpoint to add an About page for a user's microsite."""
+    try:
+        from main import User
+        from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
+
+        # Find user
+        user = db.query(User).filter(User.slug == user_slug).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_slug} not found")
+
+        # Get microsite
+        microsite = db.query(Microsite).filter(Microsite.user_id == user.id).first()
+        if not microsite:
+            raise HTTPException(status_code=404, detail="Microsite not found for this user")
+
+        # Check if About page already exists
+        existing = db.query(MicrositeContentPage).filter(
+            MicrositeContentPage.microsite_id == microsite.id,
+            MicrositeContentPage.slug == "about"
+        ).first()
+
+        if existing:
+            return {"status": "exists", "message": "About page already exists", "page_id": existing.id}
+
+        # Create About page content
+        content = {
+            "headline": f"About {user.name}",
+            "story": "With years of experience in the mortgage industry, I'm dedicated to helping families achieve their dream of homeownership. My approach combines deep market knowledge with personalized service to find the perfect loan solution for each client.",
+            "values": [
+                {"title": "Integrity", "description": "Honest, transparent communication at every step"},
+                {"title": "Expertise", "description": "Deep knowledge of loan products and market conditions"},
+                {"title": "Service", "description": "Responsive, personalized attention to your needs"}
+            ],
+            "certifications": [],
+            "yearsExperience": "10+"
+        }
+
+        # Create the About page
+        about_page = MicrositeContentPage(
+            microsite_id=microsite.id,
+            page_type=PageType.ABOUT,
+            slug="about",
+            title="About Me",
+            content=content,
+            is_enabled=True,
+            display_order=1,
+            show_in_nav=True
+        )
+        db.add(about_page)
+        db.commit()
+        db.refresh(about_page)
+
+        return {"status": "success", "message": "About page created", "page_id": about_page.id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding about page: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # AUTHENTICATED ROUTES
 # =============================================================================
