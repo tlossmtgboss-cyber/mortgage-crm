@@ -203,51 +203,67 @@ export default function PartnerClientDetail() {
 
       let response;
 
+      // Try CRM authentication first if token exists
       if (jwtToken) {
-        // Internal CRM user - use leads API with JWT auth
-        response = await fetch(
-          `${API_BASE}/api/v1/leads/${clientId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${jwtToken}`,
-              'Content-Type': 'application/json'
+        try {
+          // Internal CRM user - use leads API with JWT auth
+          response = await fetch(
+            `${API_BASE}/api/v1/leads/${clientId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${jwtToken}`,
+                'Content-Type': 'application/json'
+              }
             }
-          }
-        );
+          );
 
-        if (response.ok) {
-          const leadData = await response.json();
-          // Transform lead data to match expected client data format
-          setClientData({
-            success: true,
-            client: {
-              id: leadData.id,
-              name: leadData.name,
-              email: leadData.email,
-              phone: leadData.phone,
-              status: leadData.stage,
-              loan_amount: leadData.loan_amount,
-              property_address: leadData.address,
-              property_city: leadData.city,
-              property_state: leadData.state,
-              property_zip: leadData.zip_code,
-              property_type: leadData.property_type,
-              loan_type: leadData.loan_type,
-              credit_score: leadData.credit_score,
-              created_at: leadData.created_at,
-              updated_at: leadData.updated_at
-            },
-            milestones: [],
-            documents: [],
-            conversations: []
-          });
-          return;
+          if (response.ok) {
+            const leadData = await response.json();
+            // Transform lead data to match expected client data format
+            setClientData({
+              success: true,
+              client: {
+                id: leadData.id,
+                name: leadData.name,
+                email: leadData.email,
+                phone: leadData.phone,
+                status: leadData.stage,
+                loan_amount: leadData.loan_amount,
+                property_address: leadData.address,
+                property_city: leadData.city,
+                property_state: leadData.state,
+                property_zip: leadData.zip_code,
+                property_type: leadData.property_type,
+                loan_type: leadData.loan_type,
+                credit_score: leadData.credit_score,
+                created_at: leadData.created_at,
+                updated_at: leadData.updated_at
+              },
+              milestones: [],
+              documents: [],
+              conversations: []
+            });
+            return;
+          } else if (response.status === 404) {
+            throw new Error('Lead not found');
+          } else if (response.status === 401) {
+            // Token expired, will try partner token next
+            console.log('JWT expired, trying partner token...');
+          } else {
+            throw new Error(`Failed to load lead: ${response.status}`);
+          }
+        } catch (jwtError) {
+          console.error('JWT auth failed:', jwtError);
+          // If it's a specific error (not auth), throw it
+          if (jwtError.message && !jwtError.message.includes('401')) {
+            throw jwtError;
+          }
         }
       }
 
       // Fall back to partner portal token
       if (!partnerToken) {
-        setError('Authentication required');
+        setError('Authentication required. Please log in.');
         return;
       }
 
