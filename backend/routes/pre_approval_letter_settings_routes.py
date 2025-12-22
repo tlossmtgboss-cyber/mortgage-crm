@@ -180,3 +180,294 @@ async def update_pre_approval_letter_settings(
         "created_at": settings.created_at,
         "updated_at": settings.updated_at
     }
+
+
+def generate_pre_approval_letter_html(settings: PreApprovalLetterSettings, sample_data: dict = None) -> str:
+    """Generate HTML for a pre-approval letter"""
+
+    # Use sample data or defaults
+    if sample_data is None:
+        sample_data = {
+            "borrower_names": "John Smith & Jane Smith",
+            "property_address": "123 Main Street, Anytown, CA 90210",
+            "pre_approved_amount": "$450,000",
+            "loan_type": "Conventional 30-Year Fixed",
+            "lo_name": "Tim Loss",
+            "lo_title": "Senior Loan Officer",
+            "lo_nmls": "123456",
+            "lo_phone": "(555) 123-4567",
+            "lo_email": "tim@perenniaai.com"
+        }
+
+    conditions = parse_conditions(settings)
+    conditions_html = "".join([f"<li style='margin-bottom: 8px;'>{c}</li>" for c in conditions if c])
+
+    letter_date = datetime.now().strftime("%B %d, %Y")
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #fff;
+        }}
+        .letterhead {{
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #1e40af;
+        }}
+        .company-name {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e40af;
+            margin: 0;
+        }}
+        .company-info {{
+            color: #666;
+            font-size: 14px;
+            margin-top: 8px;
+        }}
+        .nmls-badge {{
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }}
+        .letter-date {{
+            text-align: right;
+            color: #666;
+            margin-bottom: 30px;
+        }}
+        .letter-header {{
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: #1e40af;
+            margin: 30px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        .borrower-info {{
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }}
+        .borrower-info p {{
+            margin: 8px 0;
+        }}
+        .borrower-info strong {{
+            color: #1e40af;
+            display: inline-block;
+            width: 180px;
+        }}
+        .amount-highlight {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #059669;
+        }}
+        .paragraph {{
+            text-align: justify;
+            margin: 20px 0;
+        }}
+        .conditions {{
+            margin: 24px 0;
+        }}
+        .conditions-intro {{
+            margin-bottom: 12px;
+        }}
+        .conditions ul {{
+            margin: 0;
+            padding-left: 24px;
+        }}
+        .signature-block {{
+            margin-top: 50px;
+        }}
+        .signature-line {{
+            border-top: 1px solid #333;
+            width: 250px;
+            margin-top: 60px;
+            padding-top: 8px;
+        }}
+        .lo-name {{
+            font-weight: bold;
+            font-size: 16px;
+        }}
+        .lo-title {{
+            color: #666;
+            font-size: 14px;
+        }}
+        .lo-nmls {{
+            font-size: 12px;
+            color: #888;
+        }}
+        .lo-contact {{
+            font-size: 14px;
+            margin-top: 8px;
+        }}
+        .disclaimer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 11px;
+            color: #888;
+            font-style: italic;
+        }}
+        .footer {{
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+        }}
+        .equal-housing {{
+            margin-top: 16px;
+            font-size: 11px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="letterhead">
+        <div class="company-name">{settings.company_name or '[Company Name]'}</div>
+        <div class="company-info">{settings.company_address or '[Company Address]'}</div>
+        <div class="company-info">{settings.company_phone or '[Phone Number]'}</div>
+        {'<div class="nmls-badge">NMLS #' + (settings.company_nmls or '[NMLS]') + '</div>' if settings.show_nmls else ''}
+    </div>
+
+    <div class="letter-date">{letter_date}</div>
+
+    <div class="letter-header">{settings.letter_header or 'Pre-Approval Letter'}</div>
+
+    <div class="borrower-info">
+        <p><strong>Borrower(s):</strong> {sample_data['borrower_names']}</p>
+        <p><strong>Property Address:</strong> {sample_data['property_address']}</p>
+        <p><strong>Pre-Approved Amount:</strong> <span class="amount-highlight">{sample_data['pre_approved_amount']}</span></p>
+        <p><strong>Loan Type:</strong> {sample_data['loan_type']}</p>
+    </div>
+
+    <div class="paragraph">
+        {settings.opening_paragraph or 'This letter confirms pre-approval for a mortgage loan.'}
+    </div>
+
+    <div class="conditions">
+        <div class="conditions-intro">{settings.conditions_intro or 'This pre-approval is subject to the following conditions:'}</div>
+        <ul>
+            {conditions_html}
+        </ul>
+    </div>
+
+    <div class="paragraph">
+        {settings.closing_paragraph or 'This pre-approval is valid for 90 days.'}
+    </div>
+
+    <div class="signature-block">
+        <p>Sincerely,</p>
+        <div class="signature-line">
+            <div class="lo-name">{sample_data['lo_name']}</div>
+            <div class="lo-title">{sample_data['lo_title']}</div>
+            <div class="lo-nmls">NMLS #{sample_data['lo_nmls']}</div>
+            <div class="lo-contact">{sample_data['lo_phone']}</div>
+            <div class="lo-contact">{sample_data['lo_email']}</div>
+        </div>
+    </div>
+
+    <div class="disclaimer">
+        {settings.disclaimer or 'This pre-approval is subject to verification.'}
+    </div>
+
+    <div class="footer">
+        {'<div class="equal-housing">Equal Housing Lender</div>' if settings.show_equal_housing else ''}
+    </div>
+</body>
+</html>
+"""
+    return html
+
+
+class TestEmailRequest(BaseModel):
+    to_email: str
+    borrower_names: Optional[str] = "John Smith & Jane Smith"
+    property_address: Optional[str] = "123 Main Street, Anytown, CA 90210"
+    pre_approved_amount: Optional[str] = "$450,000"
+    loan_type: Optional[str] = "Conventional 30-Year Fixed"
+
+
+@router.post("/pre-approval-letter/send-test")
+async def send_test_pre_approval_letter(
+    request: TestEmailRequest,
+    db: Session = Depends(get_db)
+):
+    """Send a test pre-approval letter to the specified email"""
+    from email_service import EmailService
+
+    settings = get_or_create_settings(db)
+
+    sample_data = {
+        "borrower_names": request.borrower_names,
+        "property_address": request.property_address,
+        "pre_approved_amount": request.pre_approved_amount,
+        "loan_type": request.loan_type,
+        "lo_name": "Tim Loss",
+        "lo_title": "Senior Loan Officer",
+        "lo_nmls": "123456",
+        "lo_phone": "(555) 123-4567",
+        "lo_email": "tim@perenniaai.com"
+    }
+
+    html_content = generate_pre_approval_letter_html(settings, sample_data)
+
+    plain_text = f"""
+Pre-Approval Letter
+{settings.company_name or '[Company Name]'}
+{datetime.now().strftime("%B %d, %Y")}
+
+{settings.letter_header or 'Pre-Approval Letter'}
+
+Borrower(s): {sample_data['borrower_names']}
+Property Address: {sample_data['property_address']}
+Pre-Approved Amount: {sample_data['pre_approved_amount']}
+Loan Type: {sample_data['loan_type']}
+
+{settings.opening_paragraph or 'This letter confirms pre-approval for a mortgage loan.'}
+
+{settings.conditions_intro or 'Conditions:'}
+{chr(10).join(['- ' + c for c in parse_conditions(settings) if c])}
+
+{settings.closing_paragraph or 'This pre-approval is valid for 90 days.'}
+
+Sincerely,
+{sample_data['lo_name']}
+{sample_data['lo_title']}
+NMLS #{sample_data['lo_nmls']}
+
+{settings.disclaimer or ''}
+"""
+
+    try:
+        email_service = EmailService()
+        success = email_service.send_html_email(
+            to_email=request.to_email,
+            subject=f"Test Pre-Approval Letter - {sample_data['borrower_names']}",
+            html_body=html_content,
+            plain_text_body=plain_text
+        )
+
+        if success:
+            logger.info(f"Test pre-approval letter sent to {request.to_email}")
+            return {
+                "success": True,
+                "message": f"Test pre-approval letter sent to {request.to_email}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send email")
+
+    except Exception as e:
+        logger.error(f"Failed to send test pre-approval letter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
