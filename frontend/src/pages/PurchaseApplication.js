@@ -28,12 +28,16 @@ const STAGES = [
   { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
 ];
 
-// Generate documents needed based on user's declarations
-const getRequiredDocuments = (declarations = {}) => {
+// Generate documents needed based on user's declarations and asset data
+const getRequiredDocuments = (declarations = {}, assetData = {}) => {
   const docs = [];
   const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
   const hasGiftFunds = declarations.gift_funds === 'yes';
   const hasCoBorrower = ['2', '3', '4+'].includes(declarations.borrower_count);
+
+  // Parse asset values
+  const hasCheckingOrSavings = (parseFloat(assetData.checking) || 0) > 0 || (parseFloat(assetData.savings) || 0) > 0;
+  const hasInvestmentOrRetirement = (parseFloat(assetData.investments) || 0) > 0 || (parseFloat(assetData.retirement) || 0) > 0;
 
   // Identity documents (always required)
   docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
@@ -49,9 +53,13 @@ const getRequiredDocuments = (declarations = {}) => {
     docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
   }
 
-  // Asset documents
-  docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'assets' });
-  docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'assets' });
+  // Asset documents - only show based on what user entered
+  if (hasCheckingOrSavings) {
+    docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (checking/savings)', category: 'assets', stage: 'assets' });
+  }
+  if (hasInvestmentOrRetirement) {
+    docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'assets' });
+  }
 
   // Gift letter only if receiving gift funds
   if (hasGiftFunds) {
@@ -3524,7 +3532,7 @@ export default function PurchaseApplication() {
             <div className="calendar-placeholder">
               <span className="cal-icon"><Icon name="calendar" size={48} /></span>
               <h4>Pick a Time That Works For You</h4>
-              <p>Select an available time slot below for your 15-minute consultation call</p>
+              <p>We want to coordinate a time to review the application with you. Choose a time that is most convenient for you.</p>
 
               <div className="time-slots">
                 {timeSlots.map(slot => (
@@ -3894,8 +3902,8 @@ export default function PurchaseApplication() {
           <div className="documents-list">
             {(() => {
               const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-              // Get dynamic document list based on user's declarations
-              const requiredDocs = getRequiredDocuments(declarations);
+              // Get dynamic document list based on user's declarations and asset values
+              const requiredDocs = getRequiredDocuments(declarations, assetData);
 
               // Map category to the stage that unlocks it
               const categoryUnlockStage = {
