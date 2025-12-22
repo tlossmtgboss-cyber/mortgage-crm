@@ -735,6 +735,57 @@ const TaskDetailPanel = ({
           </div>
         </div>
 
+        {/* Action Buttons - Positioned after Send Via, before What to Accomplish */}
+        {showActionBar && (
+          <div className="detail-actions-inline">
+            <button
+              className="btn-detail-send"
+              onClick={() => onSend && onSend(task.id, communicationMethod, draftMessage)}
+            >
+              📤 Send via {communicationMethod}
+            </button>
+            {task.ai_action && (
+              <button
+                className="btn-detail-approve"
+                onClick={() => onApproveAi && onApproveAi(task.id)}
+              >
+                Approve AI Action
+              </button>
+            )}
+            <button
+              className="btn-detail-status"
+              onClick={() => setShowStatusModal(true)}
+            >
+              📊 Change Status
+            </button>
+            <button
+              className="btn-detail-secondary"
+              onClick={() => onSnooze && onSnooze(task.id)}
+            >
+              💤 Snooze
+            </button>
+            <button
+              className="btn-detail-secondary"
+              onClick={() => setShowDelegateModal(true)}
+            >
+              👥 Delegate
+            </button>
+            <button
+              className="btn-detail-complete"
+              onClick={() => onComplete && onComplete(task.id)}
+              disabled={completing}
+            >
+              {completing ? '⏳ Completing...' : '✓ Complete Task'}
+            </button>
+            <button
+              className="btn-detail-danger"
+              onClick={handleDeleteClick}
+            >
+              🗑️ Delete
+            </button>
+          </div>
+        )}
+
         {/* Task Description - What needs to be accomplished */}
         <div className="task-description-section">
           <div className="task-description-header">
@@ -1021,56 +1072,7 @@ const TaskDetailPanel = ({
         )}
       </div>
 
-      {/* Bottom Action Bar */}
-      {showActionBar && (
-        <div className="detail-footer">
-          <button
-            className="btn-detail-send"
-            onClick={() => onSend && onSend(task.id, communicationMethod, draftMessage)}
-          >
-            📤 Send via {communicationMethod}
-          </button>
-          {task.ai_action && (
-            <button
-              className="btn-detail-approve"
-              onClick={() => onApproveAi && onApproveAi(task.id)}
-            >
-              Approve AI Action
-            </button>
-          )}
-          <button
-            className="btn-detail-status"
-            onClick={() => setShowStatusModal(true)}
-          >
-            📊 Change Status
-          </button>
-          <button
-            className="btn-detail-secondary"
-            onClick={() => onSnooze && onSnooze(task.id)}
-          >
-            💤 Snooze
-          </button>
-          <button
-            className="btn-detail-secondary"
-            onClick={() => setShowDelegateModal(true)}
-          >
-            👥 Delegate
-          </button>
-          <button
-            className="btn-detail-complete"
-            onClick={() => onComplete && onComplete(task.id)}
-            disabled={completing}
-          >
-            {completing ? '⏳ Completing...' : '✓ Complete Task'}
-          </button>
-          <button
-            className="btn-detail-danger"
-            onClick={handleDeleteClick}
-          >
-            🗑️ Delete
-          </button>
-        </div>
-      )}
+      {/* Action buttons moved to inline position after Send Via */}
 
       {/* Change Status Modal */}
       {showStatusModal && (

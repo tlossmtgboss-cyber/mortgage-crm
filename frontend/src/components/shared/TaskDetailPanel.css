@@ -1536,7 +1536,25 @@
   line-height: 1.4;
 }
 
-/* Footer Action Bar */
+/* Inline Action Buttons (positioned after Send Via) */
+.task-detail-panel .detail-actions-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin: 0 16px 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.task-detail-panel.compact .detail-actions-inline {
+  padding: 12px;
+  gap: 6px;
+  margin: 0 12px 12px;
+}
+
+/* Footer Action Bar (legacy, kept for compatibility) */
 .task-detail-panel .detail-footer {
   display: flex;
   flex-wrap: wrap;
