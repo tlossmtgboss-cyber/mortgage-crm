@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI, partnersAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -109,6 +109,9 @@ function LeadDetail() {
   const [slaMeasures, setSlaMeasures] = useState([]);
   const [slaMilestones, setSlaMilestones] = useState([]);
   const [slaLoading, setSlaLoading] = useState(false);
+
+  // Referral Partners state (for assigning lead to a partner)
+  const [referralPartners, setReferralPartners] = useState([]);
 
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
@@ -313,8 +316,19 @@ function LeadDetail() {
     loadEmailDrafts();
     markLeadAsViewed();
     loadLeadsList();
+    loadReferralPartners();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Load referral partners for assignment dropdown
+  const loadReferralPartners = async () => {
+    try {
+      const partners = await partnersAPI.getAll();
+      setReferralPartners(partners || []);
+    } catch (error) {
+      console.error('Error loading referral partners:', error);
+    }
+  };
 
   // Load list of leads for navigation
   const loadLeadsList = async () => {
@@ -2210,6 +2224,21 @@ function LeadDetail() {
                   <option value="phone">Phone Call</option>
                   <option value="text">Text Message</option>
                   <option value="voicemail">Voicemail</option>
+                </select>
+              </div>
+              <div className="info-field">
+                <label>Referral Partner</label>
+                <select
+                  value={formData.referral_partner_id || ''}
+                  onChange={(e) => handleFieldChange('referral_partner_id', e.target.value ? parseInt(e.target.value) : null)}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                >
+                  <option value="">-- No Partner Assigned --</option>
+                  {referralPartners.map(partner => (
+                    <option key={partner.id} value={partner.id}>
+                      {partner.name} {partner.company ? `(${partner.company})` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
               {/* Custom Fields */}
