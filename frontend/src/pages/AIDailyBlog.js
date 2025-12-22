@@ -239,6 +239,8 @@ const AIDailyBlog = () => {
         errorMessage = 'Connection timed out. Please check your internet connection and refresh.';
       } else if (err.response?.status === 404) {
         errorMessage = 'Blog API not found. Please contact support.';
+      } else if (err.message?.includes('Network Error') || err.code === 'ERR_NETWORK') {
+        errorMessage = 'Cannot connect to server. This may be due to a deployment in progress. Please wait 2-3 minutes and refresh the page.';
       } else if (err.message) {
         errorMessage = `Failed to load: ${err.message}`;
       }
