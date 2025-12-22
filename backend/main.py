@@ -20862,6 +20862,18 @@ except Exception as e:
     perennia_portal_error = traceback.format_exc()
     logger.warning(f"⚠️ Perennia Portal routes not loaded: {e}")
 
+# Presentation Engine routes (equity scenarios and quote requests)
+presentation_error = None
+try:
+    from presentation_routes import router as presentation_router
+    app.include_router(presentation_router, tags=["Presentation Engine"])
+    logger.info("✅ Presentation Engine routes loaded")
+except Exception as e:
+    presentation_error = str(e)
+    import traceback
+    presentation_error = traceback.format_exc()
+    logger.warning(f"⚠️ Presentation Engine routes not loaded: {e}")
+
 # CRM Webhooks routes (real-time CRM integration)
 crm_webhooks_error = None
 try:
