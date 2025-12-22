@@ -26,6 +26,23 @@ const generateMockPartners = () => {
   ];
 };
 
+// Partner type options
+const PARTNER_TYPES = [
+  'Realtor',
+  'Real Estate Agent',
+  'Broker',
+  'Insurance Agent',
+  'Financial Advisor',
+  'CPA',
+  'Attorney',
+  'Builder',
+  'Title Company',
+  'Other',
+];
+
+// Tier options
+const TIER_OPTIONS = ['Bronze', 'Silver', 'Gold', 'Platinum'];
+
 function ReferralPartnerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -38,6 +55,11 @@ function ReferralPartnerDetail() {
   const [allLeads, setAllLeads] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
 
   // ROI Calculator states
   const [monthlyMarketingSpend, setMonthlyMarketingSpend] = useState(() => {
@@ -255,6 +277,44 @@ function ReferralPartnerDetail() {
     navigate(`/partner-portal/${id}/client/${leadId}`);
   };
 
+  // Edit partner functions
+  const handleOpenEdit = () => {
+    setEditForm({
+      name: partner.name || '',
+      company: partner.company || '',
+      email: partner.email || '',
+      phone: partner.phone || '',
+      type: partner.type || '',
+      title: partner.title || '',
+      loyalty_tier: partner.loyalty_tier || 'Bronze',
+      address: partner.address || '',
+      city: partner.city || '',
+      state: partner.state || '',
+      zip: partner.zip || '',
+      notes: partner.notes || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditFormChange = (field, value) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSavePartner = async () => {
+    try {
+      setSaving(true);
+      await partnersAPI.update(id, editForm);
+      setPartner(prev => ({ ...prev, ...editForm }));
+      setShowEditModal(false);
+      alert('Partner profile updated successfully!');
+    } catch (error) {
+      console.error('Failed to save partner:', error);
+      alert('Failed to save partner. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="partner-detail-container">
@@ -296,6 +356,12 @@ function ReferralPartnerDetail() {
 
       {/* Partner Info */}
       <div className="partner-info-card">
+        <div className="info-card-header">
+          <h3>Partner Information</h3>
+          <button className="btn-edit-partner" onClick={handleOpenEdit}>
+            Edit Profile
+          </button>
+        </div>
         <div className="info-grid">
           <div className="info-item">
             <span className="label">Company</span>
@@ -773,6 +839,191 @@ function ReferralPartnerDetail() {
                   <div className="no-results">No leads found matching "{searchQuery}"</div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Partner Modal */}
+      {showEditModal && (
+        <div className="edit-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="edit-modal-header">
+              <h2>Edit Partner Profile</h2>
+              <button
+                className="btn-close-modal"
+                onClick={() => setShowEditModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="edit-modal-body">
+              <div className="edit-form-grid">
+                {/* Basic Information */}
+                <div className="form-section">
+                  <h4>Basic Information</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Full Name *</label>
+                      <input
+                        type="text"
+                        value={editForm.name}
+                        onChange={(e) => handleEditFormChange('name', e.target.value)}
+                        placeholder="Partner's full name"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Company</label>
+                      <input
+                        type="text"
+                        value={editForm.company}
+                        onChange={(e) => handleEditFormChange('company', e.target.value)}
+                        placeholder="Company name"
+                      />
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Title</label>
+                      <input
+                        type="text"
+                        value={editForm.title}
+                        onChange={(e) => handleEditFormChange('title', e.target.value)}
+                        placeholder="Job title"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Partner Type</label>
+                      <select
+                        value={editForm.type}
+                        onChange={(e) => handleEditFormChange('type', e.target.value)}
+                      >
+                        <option value="">Select type...</option>
+                        {PARTNER_TYPES.map((type) => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                <div className="form-section">
+                  <h4>Contact Information</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Email</label>
+                      <input
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => handleEditFormChange('email', e.target.value)}
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Phone</label>
+                      <input
+                        type="tel"
+                        value={editForm.phone}
+                        onChange={(e) => handleEditFormChange('phone', e.target.value)}
+                        placeholder="(555) 123-4567"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div className="form-section">
+                  <h4>Address</h4>
+                  <div className="form-row">
+                    <div className="form-group full-width">
+                      <label>Street Address</label>
+                      <input
+                        type="text"
+                        value={editForm.address}
+                        onChange={(e) => handleEditFormChange('address', e.target.value)}
+                        placeholder="123 Main Street"
+                      />
+                    </div>
+                  </div>
+                  <div className="form-row three-col">
+                    <div className="form-group">
+                      <label>City</label>
+                      <input
+                        type="text"
+                        value={editForm.city}
+                        onChange={(e) => handleEditFormChange('city', e.target.value)}
+                        placeholder="City"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>State</label>
+                      <input
+                        type="text"
+                        value={editForm.state}
+                        onChange={(e) => handleEditFormChange('state', e.target.value)}
+                        placeholder="State"
+                        maxLength={2}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>ZIP Code</label>
+                      <input
+                        type="text"
+                        value={editForm.zip}
+                        onChange={(e) => handleEditFormChange('zip', e.target.value)}
+                        placeholder="12345"
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Partnership Details */}
+                <div className="form-section">
+                  <h4>Partnership Details</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Loyalty Tier</label>
+                      <select
+                        value={editForm.loyalty_tier}
+                        onChange={(e) => handleEditFormChange('loyalty_tier', e.target.value)}
+                      >
+                        {TIER_OPTIONS.map((tier) => (
+                          <option key={tier} value={tier}>{tier}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group full-width">
+                      <label>Notes</label>
+                      <textarea
+                        value={editForm.notes}
+                        onChange={(e) => handleEditFormChange('notes', e.target.value)}
+                        placeholder="Any additional notes about this partner..."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="edit-modal-footer">
+              <button
+                className="btn-cancel"
+                onClick={() => setShowEditModal(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-save"
+                onClick={handleSavePartner}
+                disabled={saving || !editForm.name}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>
