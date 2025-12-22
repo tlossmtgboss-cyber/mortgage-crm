@@ -20113,6 +20113,22 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Estimate Parser routes not loaded: {e}")
 
+# Chat State Machine routes (Phase-based microsite chat)
+try:
+    from chat_state_routes import router as chat_state_router
+    app.include_router(chat_state_router, tags=["Chat State Machine"])
+    logger.info("✅ Chat State Machine routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Chat State Machine routes not loaded: {e}")
+
+# Twilio Click-to-Call routes (for chat widget calling)
+try:
+    from services.twilio_click_to_call import twilio_router
+    app.include_router(twilio_router, tags=["Twilio Click-to-Call"])
+    logger.info("✅ Twilio Click-to-Call routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Twilio Click-to-Call routes not loaded: {e}")
+
 @app.get("/api/v1/debug/purl-routes-status")
 async def debug_purl_routes_status():
     """Debug endpoint to check PURL routes loading status"""
@@ -43481,7 +43497,7 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
         logger.error(f"Error creating referral partner: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create referral partner: {str(e)}")
 
-@app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
+@app.get("/api/v1/referral-partners/")
 async def get_referral_partners(
     skip: int = 0,
     limit: int = 100,
@@ -43506,7 +43522,52 @@ async def get_referral_partners(
         )
 
     partners = query.order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
-    return partners
+
+    # Calculate actual referral counts from leads table
+    result = []
+    for partner in partners:
+        # Count leads that have this partner as their referral_partner_id
+        actual_referrals_in = db.query(Lead).filter(
+            Lead.referral_partner_id == partner.id
+        ).count()
+
+        # Count closed loans by checking leads from this partner that have funded loans
+        # Use loan_team_members table to find loans associated with this partner
+        closed_loans_result = db.execute(text("""
+            SELECT COUNT(DISTINCT ltm.loan_id)
+            FROM loan_team_members ltm
+            JOIN loans l ON l.id = ltm.loan_id
+            WHERE ltm.referral_partner_id = :partner_id
+            AND l.stage = 'Funded'
+        """), {"partner_id": partner.id}).scalar()
+        actual_closed_loans = closed_loans_result or 0
+
+        # Calculate total volume from funded loans via loan_team_members
+        volume_result = db.execute(text("""
+            SELECT COALESCE(SUM(l.amount), 0)
+            FROM loan_team_members ltm
+            JOIN loans l ON l.id = ltm.loan_id
+            WHERE ltm.referral_partner_id = :partner_id
+            AND l.stage = 'Funded'
+        """), {"partner_id": partner.id}).scalar()
+        actual_volume = float(volume_result) if volume_result else 0.0
+
+        result.append({
+            "id": partner.id,
+            "name": partner.name,
+            "company": partner.company,
+            "type": partner.type,
+            "phone": partner.phone,
+            "email": partner.email,
+            "referrals_in": actual_referrals_in,
+            "closed_loans": actual_closed_loans,
+            "volume": actual_volume,
+            "loyalty_tier": partner.loyalty_tier,
+            "status": partner.status,
+            "created_at": partner.created_at
+        })
+
+    return result
 
 @app.get("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)
 async def get_referral_partner(partner_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
