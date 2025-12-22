@@ -441,9 +441,10 @@ class PublicMortgageChatService:
     def generate_response(
         self,
         user_message: str,
-        conversation_history: List[Dict] = None
+        conversation_history: List[Dict] = None,
+        session_id: str = None
     ) -> Dict[str, Any]:
-        """Generate AI response to user message"""
+        """Generate AI response to user message using Trust-First Architecture"""
 
         if not self.lo_info:
             return {
@@ -455,57 +456,29 @@ class PublicMortgageChatService:
         lo_name = self.lo_info["name"]
         lo_bio = self.lo_info.get("bio", "")
 
-        # Get available slots for context
-        available_slots = self.get_available_slots(days_ahead=5)
-        slots_text = ""
-        if available_slots:
-            slots_text = "\n".join([f"- {s['display']}" for s in available_slots[:8]])
-
         # Get current rate info for context
         rate_info = self._get_current_rate_info()
 
-        system_prompt = f"""You are a friendly and professional AI mortgage assistant for {lo_name}, a loan officer.
+        # Determine conversation phase based on history (Trust-First Architecture)
+        turn_count = len(conversation_history) if conversation_history else 0
+        phase = self._determine_phase(turn_count, conversation_history, user_message)
 
-About {lo_name}:
-{lo_bio if lo_bio else f"{lo_name} is an experienced mortgage professional dedicated to helping clients achieve their homeownership dreams."}
+        # Get available slots only for phase 4
+        slots_text = ""
+        if phase >= 4:
+            available_slots = self.get_available_slots(days_ahead=5)
+            if available_slots:
+                slots_text = "\n".join([f"- {s['display']}" for s in available_slots[:8]])
 
-CURRENT MARKET RATES (as of today):
-{rate_info}
-
-Your PRIMARY GOAL is to:
-1. Answer the user's mortgage question THOROUGHLY and HELPFULLY with specific information
-2. When asked about rates, PROVIDE the current rate ranges above - don't be vague
-3. After being helpful, offer to schedule a call with {lo_name} for personalized guidance
-
-{lo_name}'s available times for calls:
-{slots_text if slots_text else "Availability coming soon - please provide your contact info and we'll reach out."}
-
-WHEN ASKED ABOUT INTEREST RATES:
-- Share the current market rate ranges from the data above
-- Explain that exact rates depend on credit score, down payment, and loan type
-- Mention that rates change daily
-- THEN offer to schedule a call for a personalized rate quote
-
-RESPONSE GUIDELINES:
-1. Be genuinely helpful and informative FIRST
-2. Provide specific information, numbers, and context when available
-3. After answering thoroughly, you can offer to schedule a call for personalized advice
-4. Don't be pushy about scheduling - focus on being helpful
-
-COLLECTING INFO FOR SCHEDULING:
-- If they want to schedule, ask for: Full name, Phone number, Email address, and Preferred time
-- Once you have all info, confirm: "Perfect! I've scheduled your call with {lo_name} for [time]. You'll receive a confirmation at [email]. {lo_name} will call you at [phone]. Is there anything specific you'd like to discuss during the call?"
-
-TONE:
-- Knowledgeable and helpful first
-- Warm and professional
-- Focus on providing value before asking for anything
-
-Do NOT:
-- Be vague when you have specific information to share
-- Immediately deflect every question to "schedule a call"
-- Promise loan approval or guaranteed rates
-- Provide legal or tax advice"""
+        # Build phase-appropriate system prompt
+        system_prompt = self._build_trust_first_prompt(
+            phase=phase,
+            lo_name=lo_name,
+            lo_bio=lo_bio,
+            rate_info=rate_info,
+            slots_text=slots_text,
+            turn_count=turn_count
+        )
 
         # Build messages for API
         messages = [{"role": "system", "content": system_prompt}]
@@ -530,12 +503,17 @@ Do NOT:
                 logger.error(f"Anthropic call also failed: {e2}")
                 response_text = self._fallback_response(user_message)
 
-        # Check if user is trying to schedule
-        scheduling_intent = self._detect_scheduling_intent(user_message, response_text)
+        # Check if user is trying to schedule (only relevant in phase 4)
+        scheduling_intent = phase >= 4 and self._detect_scheduling_intent(user_message, response_text)
+
+        # Get available slots only if scheduling is appropriate
+        available_slots = self.get_available_slots(days_ahead=5) if scheduling_intent else []
 
         return {
             "response": response_text,
             "loan_officer": lo_name,
+            "phase": phase,
+            "turn_count": turn_count,
             "scheduling_intent": scheduling_intent,
             "available_slots": available_slots[:5] if scheduling_intent else None
         }
@@ -589,27 +567,68 @@ Do NOT:
         return response.content[0].text
 
     def _fallback_response(self, user_message: str) -> str:
-        """Fallback response if AI is unavailable"""
+        """Fallback response if AI is unavailable - follows Trust-First approach"""
         lo_name = self.lo_info.get("name", "the loan officer") if self.lo_info else "the loan officer"
 
         lower_message = user_message.lower()
 
-        if any(word in lower_message for word in ["schedule", "appointment", "call", "meet", "book", "talk"]):
-            return f"I'd love to help you schedule a conversation with {lo_name}! Please share your name and email, and I'll help you find a convenient time."
+        # Only offer scheduling if user explicitly asks for it (Trust-First)
+        if any(word in lower_message for word in ["schedule", "appointment", "call me", "talk to", "speak with"]):
+            return f"I'd be happy to help you connect with {lo_name}! Please share your name, email, and phone number, and I'll help you find a convenient time."
 
         if any(word in lower_message for word in ["rate", "rates", "interest"]):
-            return f"""Current mortgage rates are approximately:
+            return f"""Great question! Current mortgage rates are approximately:
+
 • 30-Year Fixed: 6.625% - 7.125%
 • 15-Year Fixed: 5.875% - 6.375%
 • FHA Loans: 6.375% - 6.875%
 • VA Loans: 6.250% - 6.750%
 
-Your actual rate depends on credit score, down payment, and loan type. {lo_name} can provide you with a personalized rate quote. Would you like to schedule a quick consultation?"""
+Your actual rate will depend on your credit score, down payment amount, and loan type. Rates also change daily based on market conditions.
+
+What type of loan are you considering, or would you like me to explain the differences between these options?"""
 
         if any(word in lower_message for word in ["preapproval", "pre-approval", "qualify", "approved"]):
-            return f"Getting pre-approved is a great first step! {lo_name} can walk you through the process and help you understand your buying power. Would you like to schedule a pre-approval consultation?"
+            return """Pre-approval is a smart first step! Here's what you should know:
 
-        return f"Thanks for reaching out! I'm here to help answer your mortgage questions. If you'd like personalized guidance, I can help you schedule a call with {lo_name}. What would you like to know?"
+**What pre-approval does:**
+• Shows sellers you're a serious buyer
+• Tells you your approximate budget
+• Locks in a rate for 60-90 days typically
+
+**What you'll need:**
+• Recent pay stubs (last 30 days)
+• W-2s or tax returns (last 2 years)
+• Bank statements (last 2-3 months)
+• ID and Social Security number
+
+Most pre-approvals take 24-48 hours once you have your documents ready. Are you buying soon, or just starting to explore your options?"""
+
+        if any(word in lower_message for word in ["down payment", "down", "how much"]):
+            return """Down payment requirements vary by loan type:
+
+• **Conventional**: 3-20% (avoid PMI at 20%)
+• **FHA**: 3.5% minimum
+• **VA**: 0% for eligible veterans
+• **USDA**: 0% for rural areas
+
+A larger down payment typically means:
+✓ Lower monthly payments
+✓ Better interest rates
+✓ More equity from day one
+
+What price range are you looking at? That'll help me give you more specific numbers."""
+
+        # Default trust-first response - helpful, no scheduling push
+        return """Thanks for reaching out! I'm here to help with any mortgage questions you have.
+
+I can help you understand:
+• Current interest rates and loan options
+• Down payment requirements
+• The pre-approval process
+• How much home you might qualify for
+
+What's on your mind?"""
 
     def _detect_scheduling_intent(self, user_message: str, ai_response: str) -> bool:
         """Detect if user wants to schedule"""
@@ -620,6 +639,164 @@ Your actual rate depends on credit score, down payment, and loan type. {lo_name}
 
         combined = (user_message + " " + ai_response).lower()
         return any(keyword in combined for keyword in scheduling_keywords)
+
+    def _determine_phase(self, turn_count: int, history: List[Dict], user_message: str) -> int:
+        """
+        Determine conversation phase based on Trust-First Architecture.
+
+        Phase 1 (Turns 0-2): Reassure & Orient - Be helpful, NO scheduling
+        Phase 2 (Turns 3-5): Educate with Tradeoffs - Demonstrate expertise, NO scheduling
+        Phase 3 (Turns 6-8): Personalize - Gather info naturally, NO scheduling
+        Phase 4 (Turns 9+): Earned Next Step - NOW can offer scheduling
+
+        Can also advance based on user explicitly asking to schedule/talk.
+        """
+        # Check if user explicitly wants to schedule (skip to phase 4)
+        schedule_keywords = ["schedule", "appointment", "call me", "talk to", "speak with", "contact me", "call back"]
+        if any(keyword in user_message.lower() for keyword in schedule_keywords):
+            return 4
+
+        # Phase based on conversation depth
+        if turn_count <= 2:
+            return 1  # Reassure & Orient
+        elif turn_count <= 5:
+            return 2  # Educate with Tradeoffs
+        elif turn_count <= 8:
+            return 3  # Personalize via Micro-Commitments
+        else:
+            return 4  # Earned Next Step - can offer scheduling
+
+    def _build_trust_first_prompt(
+        self,
+        phase: int,
+        lo_name: str,
+        lo_bio: str,
+        rate_info: str,
+        slots_text: str,
+        turn_count: int
+    ) -> str:
+        """Build phase-appropriate system prompt following Trust-First Architecture"""
+
+        base_context = f"""You are a friendly, knowledgeable mortgage assistant representing {lo_name}.
+
+About {lo_name}:
+{lo_bio if lo_bio else f"{lo_name} is an experienced mortgage professional dedicated to helping clients achieve their homeownership dreams."}
+
+CURRENT MARKET RATES (share when asked about rates):
+{rate_info}
+
+"""
+
+        if phase == 1:
+            return base_context + f"""## PHASE 1: REASSURE & ORIENT (Current Phase)
+
+YOUR GOAL: Create emotional safety and be genuinely helpful. The person may feel overwhelmed about mortgages.
+
+WHAT TO DO:
+1. Answer their question thoroughly and helpfully
+2. Use simple, jargon-free language
+3. Validate their concerns - mortgages ARE complex
+4. Be warm, patient, and approachable
+5. End with ONE follow-up question to learn more about their situation
+
+TONE: Warm, welcoming, patient, knowledgeable but not condescending
+
+⚠️ CRITICAL - DO NOT:
+- Offer to schedule a call or appointment
+- Ask for their phone number or email
+- Mention connecting them with {lo_name}
+- Say "when you're ready to talk" or anything about calls
+- Be salesy or transactional
+
+You must EARN trust first by being helpful. Right now, just answer their question well."""
+
+        elif phase == 2:
+            return base_context + f"""## PHASE 2: EDUCATE WITH TRADEOFFS (Current Phase)
+
+YOUR GOAL: Demonstrate expertise through education, not selling. Show you understand nuances.
+
+WHAT TO DO:
+1. Explain concepts clearly with the "why" behind things
+2. Present options with HONEST tradeoffs (pros AND cons)
+3. Reference current market conditions when relevant
+4. Use examples relevant to what they've shared
+5. Ask 1-2 natural questions to better understand their needs
+6. Continue building trust through valuable education
+
+TONE: Expert but accessible, balanced and honest, educational not promotional
+
+⚠️ CRITICAL - DO NOT:
+- Offer to schedule a call or appointment
+- Ask for their phone number or email
+- Mention connecting them with {lo_name}
+- Push one solution over another prematurely
+- Make promises about rates or approval
+
+You're still building credibility. Focus on being helpful, not pitching calls."""
+
+        elif phase == 3:
+            return base_context + f"""## PHASE 3: PERSONALIZE VIA MICRO-COMMITMENTS (Current Phase)
+
+YOUR GOAL: Gather information through natural conversation to provide personalized guidance.
+
+WHAT TO DO:
+1. Ask ONE relevant question at a time
+2. Explain WHY you're asking (shows you care)
+3. Provide value with each response
+4. Make info sharing feel like a conversation, not a form
+5. Respond with personalized insights based on their answers
+
+GOOD QUESTIONS TO ASK (one at a time):
+- "Are you looking to move within a specific timeframe?"
+- "What price range are you considering?"
+- "Is your credit in good shape, or is that a concern?"
+- "Do you have a sense of your down payment situation?"
+
+TONE: Consultative, naturally curious, patient
+
+⚠️ CRITICAL - DO NOT (not yet!):
+- Offer to schedule a call or appointment
+- Ask for their phone number yet
+- Push for exact numbers if they're not ready
+- Ask multiple questions at once
+
+You're gathering info to provide better guidance. Keep demonstrating value."""
+
+        else:  # Phase 4
+            return base_context + f"""## PHASE 4: EARNED NEXT STEP (Current Phase)
+
+YOU'VE BUILT TRUST through {turn_count} exchanges. Now you can suggest a next step.
+
+YOUR GOAL: Present ONE clear, helpful next step based on the conversation.
+
+WHAT TO DO:
+1. Briefly summarize what you've learned about their situation
+2. Recommend ONE specific next step (not multiple options)
+3. Make it easy to say yes
+4. If they decline, gracefully offer an alternative or continue being helpful
+
+AVAILABLE TIMES for {lo_name}:
+{slots_text if slots_text else "I can help coordinate a time that works."}
+
+NEXT STEP OPTIONS (pick ONE based on their situation):
+- High urgency: "Would you like me to have {lo_name} call you? I can set that up right now."
+- Medium urgency: "Would you like to schedule a quick 15-minute call with {lo_name} to go over your numbers?"
+- Lower urgency: "I can have {lo_name} send you a personalized rate quote based on what we discussed."
+
+TO SCHEDULE, collect:
+- Full name
+- Phone number
+- Email address
+- Preferred time
+
+TONE: Confident but not pushy, respectful of their decision
+
+If they decline, say: "No problem at all! I'm here if you have more questions."
+
+Do NOT:
+- Offer multiple CTAs - pick ONE
+- Be pushy if they decline
+- Lose the helpful tone you've built"""
 
     def _get_current_rate_info(self) -> str:
         """Get current market rate information for the AI context"""
