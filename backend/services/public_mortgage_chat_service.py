@@ -461,49 +461,51 @@ class PublicMortgageChatService:
         if available_slots:
             slots_text = "\n".join([f"- {s['display']}" for s in available_slots[:8]])
 
+        # Get current rate info for context
+        rate_info = self._get_current_rate_info()
+
         system_prompt = f"""You are a friendly and professional AI mortgage assistant for {lo_name}, a loan officer.
 
 About {lo_name}:
 {lo_bio if lo_bio else f"{lo_name} is an experienced mortgage professional dedicated to helping clients achieve their homeownership dreams."}
 
+CURRENT MARKET RATES (as of today):
+{rate_info}
+
 Your PRIMARY GOAL is to:
-1. Answer the user's mortgage question helpfully
-2. ALWAYS proactively offer to schedule a call with {lo_name} at the END of every response
-3. Collect the user's name, email, and phone number to schedule the appointment
+1. Answer the user's mortgage question THOROUGHLY and HELPFULLY with specific information
+2. When asked about rates, PROVIDE the current rate ranges above - don't be vague
+3. After being helpful, offer to schedule a call with {lo_name} for personalized guidance
 
 {lo_name}'s available times for calls:
 {slots_text if slots_text else "Availability coming soon - please provide your contact info and we'll reach out."}
 
-RESPONSE FORMAT - Follow this structure for EVERY response:
-1. Answer their question briefly (2-3 sentences)
-2. Add value or context if helpful
-3. ALWAYS end with a proactive scheduling offer like:
-   "Would you like me to have {lo_name} give you a call to discuss this further? Here are some times that work:
-   [list 3-4 available times]
-   Just share your name, phone number, and email, and I'll get that scheduled for you!"
+WHEN ASKED ABOUT INTEREST RATES:
+- Share the current market rate ranges from the data above
+- Explain that exact rates depend on credit score, down payment, and loan type
+- Mention that rates change daily
+- THEN offer to schedule a call for a personalized rate quote
 
-IMPORTANT - BE PROACTIVE:
-- Don't wait for them to ask about scheduling
-- After answering ANY question, proactively suggest a call
-- Make it easy - offer specific times from the available slots
-- Ask for: name, phone number, and email address
-- Once they provide contact info and choose a time, confirm the appointment
+RESPONSE GUIDELINES:
+1. Be genuinely helpful and informative FIRST
+2. Provide specific information, numbers, and context when available
+3. After answering thoroughly, you can offer to schedule a call for personalized advice
+4. Don't be pushy about scheduling - focus on being helpful
 
-COLLECTING INFO:
-- If they provide partial info (just name or just email), acknowledge it and ask for the missing pieces
-- You need: Full name, Phone number, Email address, and Preferred time
+COLLECTING INFO FOR SCHEDULING:
+- If they want to schedule, ask for: Full name, Phone number, Email address, and Preferred time
 - Once you have all info, confirm: "Perfect! I've scheduled your call with {lo_name} for [time]. You'll receive a confirmation at [email]. {lo_name} will call you at [phone]. Is there anything specific you'd like to discuss during the call?"
 
 TONE:
-- Warm, friendly, and helpful
-- Professional but not stiff
-- Enthusiastic about helping them connect with {lo_name}
+- Knowledgeable and helpful first
+- Warm and professional
+- Focus on providing value before asking for anything
 
 Do NOT:
-- Make up specific rates or terms
-- Promise approval or specific outcomes
-- Provide legal or tax advice
-- End a response without offering to schedule a call"""
+- Be vague when you have specific information to share
+- Immediately deflect every question to "schedule a call"
+- Promise loan approval or guaranteed rates
+- Provide legal or tax advice"""
 
         # Build messages for API
         messages = [{"role": "system", "content": system_prompt}]
@@ -596,7 +598,13 @@ Do NOT:
             return f"I'd love to help you schedule a conversation with {lo_name}! Please share your name and email, and I'll help you find a convenient time."
 
         if any(word in lower_message for word in ["rate", "rates", "interest"]):
-            return f"Mortgage rates vary based on several factors including loan type, credit score, and down payment. {lo_name} can provide you with a personalized rate quote during a quick consultation. Would you like to schedule a call?"
+            return f"""Current mortgage rates are approximately:
+• 30-Year Fixed: 6.625% - 7.125%
+• 15-Year Fixed: 5.875% - 6.375%
+• FHA Loans: 6.375% - 6.875%
+• VA Loans: 6.250% - 6.750%
+
+Your actual rate depends on credit score, down payment, and loan type. {lo_name} can provide you with a personalized rate quote. Would you like to schedule a quick consultation?"""
 
         if any(word in lower_message for word in ["preapproval", "pre-approval", "qualify", "approved"]):
             return f"Getting pre-approved is a great first step! {lo_name} can walk you through the process and help you understand your buying power. Would you like to schedule a pre-approval consultation?"
@@ -612,6 +620,38 @@ Do NOT:
 
         combined = (user_message + " " + ai_response).lower()
         return any(keyword in combined for keyword in scheduling_keywords)
+
+    def _get_current_rate_info(self) -> str:
+        """Get current market rate information for the AI context"""
+        try:
+            from sqlalchemy import text
+
+            # Try to get rates from the database
+            result = self.db.execute(text("""
+                SELECT loan_type, term_years, base_rate, apr
+                FROM rate_sheets
+                WHERE effective_date = (SELECT MAX(effective_date) FROM rate_sheets)
+                ORDER BY loan_type, term_years
+            """))
+            rates = result.fetchall()
+
+            if rates:
+                rate_text = []
+                for r in rates:
+                    rate_text.append(f"- {r.loan_type.title()} {r.term_years}yr: {float(r.base_rate):.3f}% (APR: {float(r.apr):.3f}%)")
+                return "\n".join(rate_text)
+        except Exception as e:
+            logger.warning(f"Could not fetch rates from database: {e}")
+
+        # Provide reasonable market rate ranges as fallback (updated periodically)
+        # These should be updated regularly to reflect actual market conditions
+        return """- 30-Year Fixed Conventional: 6.625% - 7.125% (depending on credit and down payment)
+- 15-Year Fixed Conventional: 5.875% - 6.375%
+- FHA 30-Year: 6.375% - 6.875% (lower credit requirements)
+- VA 30-Year: 6.250% - 6.750% (for eligible veterans)
+- Jumbo 30-Year: 6.875% - 7.375% (loans over $766,550)
+
+Note: Rates change daily based on market conditions. These are approximate ranges - your actual rate depends on credit score, down payment, property type, and other factors."""
 
 
 def get_public_chat_service(db: Session, user_slug: str) -> PublicMortgageChatService:
