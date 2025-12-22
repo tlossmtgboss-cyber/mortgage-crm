@@ -66,6 +66,22 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
         {
             "name": "Production Assistant 2",
             "description": "Mid-level support for loan production with expanded responsibilities"
+        },
+        {
+            "name": "Buyer Agent",
+            "description": "Real estate agent representing the buyer in a purchase transaction"
+        },
+        {
+            "name": "Buyers Agent Closing Coordinator",
+            "description": "Coordinates closing activities on behalf of the buyer's real estate agent"
+        },
+        {
+            "name": "Listing Agent",
+            "description": "Real estate agent representing the seller in a purchase transaction"
+        },
+        {
+            "name": "Listing Agent Closing Coordinator",
+            "description": "Coordinates closing activities on behalf of the listing agent"
         }
     ]
 
@@ -743,7 +759,11 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
         "Processing Assistant": ["Borrower Engagement", "Processing & Milestones", "Closing Coordination"],
         "Application Analysis": ["Application Review"],
         "Production Assistant 1": ["Lead Generation", "Borrower Engagement"],
-        "Production Assistant 2": ["Lead Generation", "Borrower Engagement", "Pre-Approval Workflow"]
+        "Production Assistant 2": ["Lead Generation", "Borrower Engagement", "Pre-Approval Workflow"],
+        "Buyer Agent": ["Partner Engagement", "Closing Coordination"],
+        "Buyers Agent Closing Coordinator": ["Partner Engagement", "Closing Coordination"],
+        "Listing Agent": ["Partner Engagement", "Closing Coordination"],
+        "Listing Agent Closing Coordinator": ["Partner Engagement", "Closing Coordination"]
     }
 
     for role_name, cat_names in role_default_categories.items():
@@ -800,6 +820,18 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
         ],
         "Production Assistant 2": [
             "Lead follow-up", "Pre-approval follow-up"
+        ],
+        "Buyer Agent": [
+            "Weekly partner updates", "Final walkthrough coordination"
+        ],
+        "Buyers Agent Closing Coordinator": [
+            "Closing scheduling", "Final walkthrough coordination"
+        ],
+        "Listing Agent": [
+            "Weekly partner updates"
+        ],
+        "Listing Agent Closing Coordinator": [
+            "Closing scheduling"
         ]
     }
 
@@ -826,7 +858,11 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
         "Processing Assistant": "Junior Staff - Limited",
         "Application Analysis": "Processor - Standard",
         "Production Assistant 1": "Junior Staff - Limited",
-        "Production Assistant 2": "Junior Staff - Limited"
+        "Production Assistant 2": "Junior Staff - Limited",
+        "Buyer Agent": "Junior Staff - Limited",
+        "Buyers Agent Closing Coordinator": "Junior Staff - Limited",
+        "Listing Agent": "Junior Staff - Limited",
+        "Listing Agent Closing Coordinator": "Junior Staff - Limited"
     }
 
     for role_name, template_name in role_template_mapping.items():
