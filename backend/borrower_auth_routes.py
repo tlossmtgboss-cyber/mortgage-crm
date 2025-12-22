@@ -1663,6 +1663,15 @@ async def submit_application(
         # Determine if first-time buyer
         first_time_buyer = submission.declarations.get("first_time_buyer", "no") == "yes"
 
+        # Extract referral partner ID from declarations (agent/realtor selection)
+        referral_partner_id = submission.declarations.get("agent_partner_id")
+        if referral_partner_id:
+            try:
+                referral_partner_id = int(referral_partner_id)
+                logger.info(f"Application linked to referral partner ID: {referral_partner_id}")
+            except (ValueError, TypeError):
+                referral_partner_id = None
+
         # Create lead in CRM (let database auto-generate ID)
         result = db.execute(text("""
             INSERT INTO leads (
@@ -1671,7 +1680,7 @@ async def submit_application(
                 property_type, property_value, down_payment, loan_amount,
                 annual_income, credit_score, employer_name,
                 stage, source, loan_type, first_time_buyer,
-                ltv, dti, owner_id,
+                ltv, dti, owner_id, referral_partner_id,
                 application_completed_date, stage_changed_at,
                 created_at, updated_at
             )
@@ -1681,7 +1690,7 @@ async def submit_application(
                 :property_type, :property_value, :down_payment, :loan_amount,
                 :annual_income, :credit_score, :employer_name,
                 :stage, :source, :loan_type, :first_time_buyer,
-                :ltv, :dti, :owner_id,
+                :ltv, :dti, :owner_id, :referral_partner_id,
                 :application_completed_date, :stage_changed_at,
                 :created_at, :updated_at
             )
@@ -1710,6 +1719,7 @@ async def submit_application(
             "ltv": round(ltv, 2),
             "dti": round(dti, 2),
             "owner_id": submission.loId,
+            "referral_partner_id": referral_partner_id,
             "application_completed_date": submission_date,
             "stage_changed_at": submission_date,
             "created_at": submission_date,
