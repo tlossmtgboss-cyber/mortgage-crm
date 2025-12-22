@@ -516,7 +516,7 @@ const AIDailyBlog = () => {
                   <>
                     <div className="trending-actions">
                       <button
-                        className="btn-select-all"
+                        className={`btn-select-all ${selectedTopics.length === trendingTopics.length ? 'all-selected' : ''}`}
                         onClick={() => {
                           if (selectedTopics.length === trendingTopics.length) {
                             setSelectedTopics([]);
@@ -525,10 +525,14 @@ const AIDailyBlog = () => {
                           }
                         }}
                       >
-                        {selectedTopics.length === trendingTopics.length ? 'Deselect All' : 'Select All 10'}
+                        {selectedTopics.length === trendingTopics.length ? (
+                          <>☑ Deselect All</>
+                        ) : (
+                          <>☐ Select All {trendingTopics.length}</>
+                        )}
                       </button>
-                      {selectedTopics.length > 0 && (
-                        <span className="selected-count">{selectedTopics.length} topic{selectedTopics.length > 1 ? 's' : ''} selected</span>
+                      {selectedTopics.length > 0 && selectedTopics.length < trendingTopics.length && (
+                        <span className="selected-count">{selectedTopics.length} of {trendingTopics.length} selected</span>
                       )}
                     </div>
 

@@ -1015,18 +1015,31 @@
 }
 
 .btn-select-all {
-  padding: 8px 16px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  padding: 10px 20px;
+  background: #c9a227;
+  border: none;
   border-radius: 6px;
   font-size: 14px;
-  color: #475569;
+  font-weight: 600;
+  color: white;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .btn-select-all:hover {
-  background: #e2e8f0;
+  background: #b8922a;
+  transform: translateY(-1px);
+}
+
+.btn-select-all.all-selected {
+  background: #475569;
+}
+
+.btn-select-all.all-selected:hover {
+  background: #374151;
 }
 
 .selected-count {
