@@ -935,6 +935,82 @@ async def get_document_dashboard_summary(
 
 
 # =============================================================================
+# Loans for Smart Docs (All Active Loans)
+# =============================================================================
+
+@router.get("/loans")
+async def get_smart_docs_loans(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    stage: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all loans for Smart Docs dashboard.
+
+    This endpoint returns all loans in active stages for document tracking purposes.
+    Unlike the main /api/v1/loans/ endpoint, this does NOT filter by loan_officer_id
+    because Smart Docs is a document management tool that should show all active loans.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Build WHERE clause for active loans (exclude funded, cancelled, denied)
+        where_clauses = ["stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED', 'DENIED')"]
+        params = {"skip": skip, "limit": limit}
+
+        # Filter by specific stage if provided
+        if stage:
+            where_clauses = [f"UPPER(stage) = :stage"]
+            params["stage"] = stage.upper()
+
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        sql = f"""
+            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
+                   coborrower_name, co_borrower_email,
+                   stage, program, amount, rate,
+                   closing_date, days_in_stage, sla_status, created_at,
+                   loan_officer_name, loan_officer_email, processor, processor_email,
+                   underwriter, underwriter_email, closer, closer_email,
+                   property_address, loan_type, purchase_price, down_payment
+            FROM loans
+            WHERE {where_sql}
+            ORDER BY created_at DESC
+            OFFSET :skip LIMIT :limit
+        """
+
+        results = db.execute(text(sql), params).fetchall()
+
+        # Convert to list of dicts
+        loans = []
+        for row in results:
+            row_dict = dict(row._mapping)
+            # Normalize stage
+            stage_val = row_dict.get('stage', '')
+            if stage_val:
+                row_dict['stage'] = str(stage_val).upper()
+            else:
+                row_dict['stage'] = 'PROCESSING'
+            loans.append(row_dict)
+
+        # Get total count for pagination
+        count_sql = f"SELECT COUNT(*) FROM loans WHERE {where_sql}"
+        total = db.execute(text(count_sql), params).scalar() or 0
+
+        return {
+            "loans": loans,
+            "total": total,
+            "page": skip // limit + 1 if limit > 0 else 1,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if limit > 0 else 1,
+        }
+    except Exception as e:
+        logger.exception(f"Error fetching loans for Smart Docs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Health Check
 # =============================================================================
 

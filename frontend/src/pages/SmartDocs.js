@@ -34,18 +34,18 @@ function SmartDocs() {
       // Try multiple endpoints
       let loans = [];
 
-      // Try the main loans endpoint
+      // Use the Smart Docs loans endpoint (shows all active loans without permission filtering)
       const token = localStorage.getItem('token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-      let response = await fetch('/api/v1/loans/', { headers });
+      let response = await fetch('/api/v1/smart-docs/loans', { headers });
 
       if (response.ok) {
         const data = await response.json();
-        loans = Array.isArray(data) ? data : (data.loans || []);
+        loans = data.loans || [];
       } else {
-        // Try without trailing slash
-        response = await fetch('/api/v1/loans', { headers });
+        // Fallback to main loans endpoint if smart-docs endpoint fails
+        response = await fetch('/api/v1/loans/', { headers });
         if (response.ok) {
           const data = await response.json();
           loans = Array.isArray(data) ? data : (data.loans || []);
