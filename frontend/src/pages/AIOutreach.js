@@ -17,7 +17,7 @@ const AIOutreach = () => {
   const [message, setMessage] = useState(null);
 
   // Form state
-  const [selectedContact, setSelectedContact] = useState(null);
+  const [selectedContacts, setSelectedContacts] = useState([]);
   const [channel, setChannel] = useState('email');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [customMessage, setCustomMessage] = useState('');
@@ -368,14 +368,43 @@ const AIOutreach = () => {
     return () => clearTimeout(delaySearch);
   }, [searchTerm, fetchContacts]);
 
+  // Helper functions for multi-select
+  const toggleContactSelection = (contact) => {
+    setSelectedContacts(prev => {
+      const isSelected = prev.some(c => c.id === contact.id);
+      if (isSelected) {
+        return prev.filter(c => c.id !== contact.id);
+      } else {
+        return [...prev, contact];
+      }
+    });
+  };
+
+  const selectAllContacts = () => {
+    const filteredContacts = contacts.filter(c =>
+      channel === 'email' ? c.email : c.phone
+    );
+    setSelectedContacts(filteredContacts);
+  };
+
+  const deselectAllContacts = () => {
+    setSelectedContacts([]);
+  };
+
+  const isAllSelected = () => {
+    const filteredContacts = contacts.filter(c =>
+      channel === 'email' ? c.email : c.phone
+    );
+    return filteredContacts.length > 0 && filteredContacts.every(c =>
+      selectedContacts.some(sc => sc.id === c.id)
+    );
+  };
+
   const handleSendOutreach = async () => {
     // Validate
-    if (channel === 'email' && !selectedContact?.email && !manualEmail) {
-      setMessage({ type: 'error', text: 'Please select a contact with email or enter an email address' });
-      return;
-    }
-    if (channel === 'sms' && !selectedContact?.phone && !manualPhone) {
-      setMessage({ type: 'error', text: 'Please select a contact with phone or enter a phone number' });
+    const hasManualRecipient = channel === 'email' ? manualEmail : manualPhone;
+    if (selectedContacts.length === 0 && !hasManualRecipient) {
+      setMessage({ type: 'error', text: `Please select at least one contact or enter ${channel === 'email' ? 'an email address' : 'a phone number'}` });
       return;
     }
     if (!selectedTemplate && !customMessage) {
@@ -387,35 +416,57 @@ const AIOutreach = () => {
     setMessage(null);
 
     try {
-      const payload = {
-        channel: channel,
-        template_id: selectedTemplate?.id || null,
-        custom_message: customMessage || null
-      };
+      let successCount = 0;
+      let failCount = 0;
+      const recipients = [...selectedContacts];
 
-      if (selectedContact) {
-        payload.contact_id = selectedContact.id;
-        payload.email = selectedContact.email;
-        payload.phone = selectedContact.phone;
-        payload.first_name = selectedContact.name?.split(' ')[0] || 'there';
-      } else {
-        payload.email = manualEmail;
-        payload.phone = manualPhone;
-        payload.first_name = manualName || 'there';
+      // Add manual entry if provided
+      if (hasManualRecipient) {
+        recipients.push({
+          id: null,
+          name: manualName || 'there',
+          email: manualEmail,
+          phone: manualPhone
+        });
       }
 
-      const response = await fetch(`${API_BASE}/api/v1/ai-outreach/start`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
+      // Send to each recipient
+      for (const contact of recipients) {
+        const payload = {
+          channel: channel,
+          template_id: selectedTemplate?.id || null,
+          custom_message: customMessage || null,
+          contact_id: contact.id,
+          email: contact.email,
+          phone: contact.phone,
+          first_name: contact.name?.split(' ')[0] || 'there'
+        };
 
-      const data = await response.json();
+        try {
+          const response = await fetch(`${API_BASE}/api/v1/ai-outreach/start`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(payload)
+          });
 
-      if (response.ok && data.success) {
-        setMessage({ type: 'success', text: data.message || 'Outreach sent successfully!' });
+          const data = await response.json();
+          if (response.ok && data.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        setMessage({
+          type: failCount > 0 ? 'warning' : 'success',
+          text: `Sent to ${successCount} recipient${successCount !== 1 ? 's' : ''}${failCount > 0 ? `, ${failCount} failed` : ''}`
+        });
         // Reset form
-        setSelectedContact(null);
+        setSelectedContacts([]);
         setSelectedTemplate(null);
         setCustomMessage('');
         setManualEmail('');
@@ -425,7 +476,7 @@ const AIOutreach = () => {
         fetchConversations();
         fetchStats();
       } else {
-        setMessage({ type: 'error', text: data.detail || data.message || 'Failed to send outreach' });
+        setMessage({ type: 'error', text: 'Failed to send outreach to any recipients' });
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Error sending outreach: ' + err.message });
@@ -511,7 +562,7 @@ const AIOutreach = () => {
 
             {/* Contact Selection */}
             <div className="form-section">
-              <h3>2. Select Recipient</h3>
+              <h3>2. Select Recipients {selectedContacts.length > 0 && <span className="selected-count">({selectedContacts.length} selected)</span>}</h3>
               <div className="contact-search">
                 <input
                   type="text"
@@ -521,23 +572,60 @@ const AIOutreach = () => {
                 />
               </div>
 
+              {/* Select All / Deselect All */}
+              {contacts.length > 0 && (
+                <div className="select-all-row">
+                  <label className="select-all-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected()}
+                      onChange={() => isAllSelected() ? deselectAllContacts() : selectAllContacts()}
+                    />
+                    <span>Select All ({contacts.filter(c => channel === 'email' ? c.email : c.phone).length})</span>
+                  </label>
+                  {selectedContacts.length > 0 && (
+                    <button className="clear-selection-btn" onClick={deselectAllContacts}>
+                      Clear Selection
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="contact-list">
                 {contacts.length === 0 ? (
                   <div className="no-contacts">No contacts found</div>
                 ) : (
-                  contacts.slice(0, 10).map(contact => (
-                    <div
-                      key={contact.id}
-                      className={`contact-item ${selectedContact?.id === contact.id ? 'selected' : ''}`}
-                      onClick={() => setSelectedContact(contact)}
-                    >
-                      <div className="contact-name">{contact.name || 'Unknown'}</div>
-                      <div className="contact-details">
-                        {contact.email && <span className="contact-email">{contact.email}</span>}
-                        {contact.phone && <span className="contact-phone">{contact.phone}</span>}
+                  contacts.map(contact => {
+                    const hasRequiredField = channel === 'email' ? contact.email : contact.phone;
+                    const isSelected = selectedContacts.some(c => c.id === contact.id);
+                    return (
+                      <div
+                        key={contact.id}
+                        className={`contact-item ${isSelected ? 'selected' : ''} ${!hasRequiredField ? 'disabled' : ''}`}
+                        onClick={() => hasRequiredField && toggleContactSelection(contact)}
+                      >
+                        <div className="contact-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={!hasRequiredField}
+                            onChange={() => hasRequiredField && toggleContactSelection(contact)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div className="contact-info">
+                          <div className="contact-name">{contact.name || 'Unknown'}</div>
+                          <div className="contact-details">
+                            {contact.email && <span className={`contact-email ${channel === 'email' ? 'highlight' : ''}`}>{contact.email}</span>}
+                            {contact.phone && <span className={`contact-phone ${channel === 'sms' ? 'highlight' : ''}`}>{contact.phone}</span>}
+                          </div>
+                        </div>
+                        {!hasRequiredField && (
+                          <div className="missing-field">No {channel === 'email' ? 'email' : 'phone'}</div>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
@@ -637,7 +725,20 @@ const AIOutreach = () => {
               <div className="preview-box">
                 <div className="preview-header">Preview</div>
                 <div className="preview-content">
-                  <p><strong>To:</strong> {selectedContact?.email || selectedContact?.phone || manualEmail || manualPhone || '(select recipient)'}</p>
+                  <p><strong>To:</strong> {
+                    selectedContacts.length > 0
+                      ? `${selectedContacts.length} recipient${selectedContacts.length !== 1 ? 's' : ''} selected`
+                      : (manualEmail || manualPhone || '(select recipients)')
+                  }</p>
+                  {selectedContacts.length > 0 && selectedContacts.length <= 5 && (
+                    <div className="recipients-preview">
+                      {selectedContacts.map(c => (
+                        <span key={c.id} className="recipient-chip">
+                          {c.name?.split(' ')[0] || (channel === 'email' ? c.email : c.phone)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <p><strong>Channel:</strong> {channel.toUpperCase()}</p>
                   {channel === 'email' && (
                     <p><strong>Subject:</strong> {customSubject || selectedTemplate?.subject || '(select template)'}</p>
@@ -645,7 +746,7 @@ const AIOutreach = () => {
                   <p><strong>Message:</strong></p>
                   <div className="preview-message">
                     {(customMessage || selectedTemplate?.message || selectedTemplate?.body || '(select template or write message)')
-                      .replace(/{first_name}/g, manualName || selectedContact?.name?.split(' ')[0] || 'there')}
+                      .replace(/{first_name}/g, '{first_name}')}
                   </div>
                 </div>
               </div>
@@ -655,7 +756,10 @@ const AIOutreach = () => {
                 onClick={handleSendOutreach}
                 disabled={sending}
               >
-                {sending ? 'Sending...' : `Send ${channel === 'email' ? 'Email' : 'SMS'}`}
+                {sending
+                  ? `Sending to ${selectedContacts.length + (manualEmail || manualPhone ? 1 : 0)} recipient${selectedContacts.length !== 1 ? 's' : ''}...`
+                  : `Send ${channel === 'email' ? 'Email' : 'SMS'} to ${selectedContacts.length + (manualEmail || manualPhone ? 1 : 0)} recipient${(selectedContacts.length + (manualEmail || manualPhone ? 1 : 0)) !== 1 ? 's' : ''}`
+                }
               </button>
             </div>
           </div>
