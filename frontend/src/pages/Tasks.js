@@ -1192,6 +1192,9 @@ function Tasks() {
         const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
         setSelectedTask(nextTask);
       }
+
+      // Emit event so other components (like ActionSidebar) can update
+      emitTaskCompleted(taskId, 'tasks-page');
     } catch (error) {
       console.error('Error deleting task:', error);
       alert('Failed to delete task. Please try again.');

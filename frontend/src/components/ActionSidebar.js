@@ -12,6 +12,7 @@ const API_BASE = process.env.REACT_APP_API_URL || '';
 const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [workflowTasks, setWorkflowTasks] = useState([]); // Workflow tasks from same source as Tasks page
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('tasks');
@@ -25,12 +26,96 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const [currentCallIndex, setCurrentCallIndex] = useState(0);
   const [callInProgress, setCallInProgress] = useState(false);
 
-  // Fetch command center data
+  // Fetch workflow tasks (same source as Tasks page) for Tasks tab
+  const fetchWorkflowTasks = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      // Fetch workflow tasks - SAME endpoint as Tasks page
+      const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      let wfTasks = [];
+      if (workflowResponse.ok) {
+        const workflowData = await workflowResponse.json();
+        wfTasks = (workflowData.tasks || []).map(task => ({
+          id: task.id,
+          title: task.title,
+          entity_name: task.client_name || 'Client',
+          stage: task.stage,
+          priority: task.urgency || 'medium',
+          type: 'workflow',
+          category: 'workflow',
+          due_date: task.due_date,
+          created_at: task.due_date,
+          description: task.description,
+          entity_type: task.client_type,
+          entity_id: task.client_id,
+          lead_id: task.client_type === 'lead' ? task.client_id : null,
+          loan_id: task.client_type === 'loan' ? task.client_id : null,
+          workflow_name: task.workflow_name,
+          workflow_color: task.workflow_color,
+          preferred_contact_method: task.communication_methods?.includes('phone') ? 'Phone'
+            : task.communication_methods?.includes('text') ? 'Text' : 'Email',
+          communication_methods: task.communication_methods || [],
+          days_until_due: task.days_until_due,
+          source: 'Workflow'
+        }));
+      }
+
+      // Also fetch manual tasks from unified-tasks - SAME as Tasks page
+      const unifiedResponse = await tasksAPI.getUnified();
+      const unifiedTasks = unifiedResponse?.tasks || [];
+
+      const manualTasks = unifiedTasks
+        .filter(t => t.source === 'task' && !t.email_from && !t.email_subject)
+        .map(task => ({
+          id: `task-${task.id}`,
+          title: task.title,
+          entity_name: task.client_name || 'Client',
+          stage: task.stage || 'Manual',
+          priority: task.priority || 'medium',
+          type: 'task',
+          category: 'manual',
+          due_date: task.due_date,
+          created_at: task.created_at,
+          description: task.description,
+          entity_type: task.entity_type,
+          entity_id: task.entity_id,
+          source: 'Manual'
+        }));
+
+      // Filter out phone-only workflow tasks (same as Tasks page)
+      const nonPhoneTasks = wfTasks.filter(task => task.preferred_contact_method !== 'Phone');
+
+      // Combine and dedupe (same as Tasks page)
+      const allTasks = [...nonPhoneTasks, ...manualTasks];
+      const seen = new Set();
+      const dedupedTasks = allTasks.filter(task => {
+        if (seen.has(task.id)) return false;
+        seen.add(task.id);
+        return true;
+      });
+
+      setWorkflowTasks(dedupedTasks);
+    } catch (err) {
+      console.error('Error fetching workflow tasks:', err);
+      setWorkflowTasks([]);
+    }
+  }, []);
+
+  // Fetch command center data (for emails and calls tabs)
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await commandCenterAPI.getAll();
-      setData(result);
+
+      // Fetch both workflow tasks and command center data in parallel
+      await Promise.all([
+        fetchWorkflowTasks(),
+        commandCenterAPI.getAll().then(result => setData(result))
+      ]);
+
       setError(null);
     } catch (err) {
       console.error('Action sidebar error:', err);
@@ -39,7 +124,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchWorkflowTasks]);
 
   useEffect(() => {
     fetchData();
@@ -104,22 +189,9 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
 
   // Get items for each tab
   const getTaskItems = () => {
-    if (!data) return [];
-    const items = [];
-    if (data.urgent?.length) {
-      items.push(...data.urgent.filter(item => !isPhoneTask(item) && !isEmailTask(item)).map(item => ({ ...item, category: 'urgent' })));
-    }
-    if (data.leads?.length) {
-      items.push(...data.leads.filter(item => !isPhoneTask(item) && !isEmailTask(item)).map(item => ({ ...item, category: 'leads' })));
-    }
-    if (data.loans?.length) {
-      items.push(...data.loans.filter(item => !isPhoneTask(item) && !isEmailTask(item)).map(item => ({ ...item, category: 'loans' })));
-    }
-    if (data.portfolio?.length) {
-      // Filter out non-actionable portfolio items (like funded_loan records)
-      items.push(...data.portfolio.filter(item => !isPhoneTask(item) && !isEmailTask(item) && isActionablePortfolioItem(item)).map(item => ({ ...item, category: 'portfolio' })));
-    }
-    return items;
+    // Use workflow tasks (same source as Tasks page) for the Tasks tab
+    // This ensures the count matches between Action Center and Tasks page
+    return workflowTasks;
   };
 
   const getEmailItems = () => {
@@ -256,15 +328,33 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     setCompletingTask(true);
     try {
       const itemId = item.id || '';
-      const itemType = item.type;
+      const itemIdStr = String(itemId);
 
-      // Only real tasks (task_XXX) can be completed via tasks API
-      if (itemId.startsWith('task_')) {
-        const taskId = itemId.replace('task_', '');
+      // Handle workflow tasks (numeric IDs from workflow endpoint)
+      if (typeof itemId === 'number' || (!itemIdStr.includes('-') && !isNaN(itemId))) {
+        // Workflow task - update lead's last_contact to mark as complete
+        if (item.lead_id) {
+          const token = localStorage.getItem('token');
+          await fetch(`${API_BASE}/api/v1/leads/${item.lead_id}`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ last_contact: new Date().toISOString() })
+          });
+        } else if (item.loan_id) {
+          // For loan tasks, we could update loan's last_activity
+          console.log(`Completing workflow task for loan: ${item.loan_id}`);
+        }
+      }
+      // Handle manual tasks (task-XXX format)
+      else if (itemIdStr.startsWith('task-')) {
+        const taskId = itemIdStr.replace('task-', '');
         await tasksAPI.update(taskId, { status: 'completed' });
       }
       // For follow-up items, update the lead's last_contact date
-      else if (itemId.startsWith('followup_lead_') && item.entity_id) {
+      else if (itemIdStr.startsWith('followup_lead_') && item.entity_id) {
         const token = localStorage.getItem('token');
         await fetch(`${API_BASE}/api/v1/leads/${item.entity_id}`, {
           method: 'PATCH',
@@ -276,18 +366,21 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
         });
       }
       // For deadline items and other types, just dismiss from UI
-      // (These don't have a "complete" action - they resolve when the loan progresses)
-      else if (itemId.startsWith('deadline_') || itemId.startsWith('sla_') || itemId.startsWith('active_loan_')) {
-        // These are informational - just remove from view
+      else if (itemIdStr.startsWith('deadline_') || itemIdStr.startsWith('sla_') || itemIdStr.startsWith('active_loan_')) {
         console.log(`Dismissing informational item: ${itemId}`);
       }
 
+      // Remove from local workflow tasks immediately for instant UI feedback
+      setWorkflowTasks(prev => prev.filter(t => t.id !== itemId));
+
       // Remove from selected and refresh
       setSelectedItem(null);
-      fetchData();
 
       // Emit event so other components (like Tasks page) can update
       emitTaskCompleted(itemId, 'action-sidebar');
+
+      // Refresh data after a short delay to get updated counts
+      setTimeout(() => fetchData(), 500);
     } catch (err) {
       console.error('Complete task error:', err);
       alert('Failed to complete task. Please try again.');
@@ -629,13 +722,11 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       </div>
 
       {/* Summary Footer */}
-      {data?.summary && (
-        <div className="action-footer">
-          <span className="total-count">
-            {data.summary.total_action_items || 0} total items
-          </span>
-        </div>
-      )}
+      <div className="action-footer">
+        <span className="total-count">
+          {totalItems} total items
+        </span>
+      </div>
     </div>
   );
 };
