@@ -1,0 +1,225 @@
+/**
+ * MilestoneProgressTracker Styles
+ */
+
+.milestone-progress-tracker {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.progress-bar-container {
+  position: relative;
+  padding: 1rem 0;
+}
+
+/* Background track */
+.progress-bar-container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #e2e8f0;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  z-index: 0;
+}
+
+/* Filled progress */
+.progress-bar-fill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  transform: translateY(-50%);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  z-index: 1;
+}
+
+/* Stage container */
+.progress-stages {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+}
+
+/* Individual stage */
+.progress-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 80px;
+}
+
+/* Stage indicator (the circle) */
+.stage-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 3px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+/* Completed stage */
+.progress-stage.completed .stage-indicator {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: white;
+}
+
+.progress-stage.completed .check-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Current stage */
+.progress-stage.current .stage-indicator {
+  background: white;
+  border-color: #3b82f6;
+  border-width: 3px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.progress-stage.current .current-dot {
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Upcoming stage */
+.progress-stage.upcoming .stage-indicator {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.progress-stage.upcoming .empty-dot {
+  width: 8px;
+  height: 8px;
+  background: #cbd5e1;
+  border-radius: 50%;
+}
+
+/* Stage label */
+.stage-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  text-align: center;
+  white-space: nowrap;
+  transition: color 0.3s ease;
+}
+
+.progress-stage.completed .stage-label {
+  color: #16a34a;
+}
+
+.progress-stage.current .stage-label {
+  color: #1e40af;
+  font-weight: 700;
+}
+
+/* Current stage info */
+.current-stage-info {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.current-label {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.current-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+  background: #eff6ff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  color: #1e40af;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .milestone-progress-tracker {
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .progress-bar-container {
+    min-width: 600px;
+  }
+
+  .stage-indicator {
+    width: 28px;
+    height: 28px;
+  }
+
+  .progress-stage.completed .check-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .stage-label {
+    font-size: 0.5rem;
+  }
+}
+
+/* Compact variant for smaller displays */
+.milestone-progress-tracker.compact .progress-stages {
+  display: flex;
+}
+
+.milestone-progress-tracker.compact .progress-stage:nth-child(n+7) {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .progress-stages {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .progress-stages::-webkit-scrollbar {
+    display: none;
+  }
+
+  .progress-stage {
+    min-width: 60px;
+  }
+}

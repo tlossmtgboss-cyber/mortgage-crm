@@ -596,6 +596,415 @@ async def get_shared_letter(
 
 
 # =============================================================================
+# PRE-APPROVAL LETTER ENDPOINTS (FOR PARTNER PORTAL)
+# =============================================================================
+
+class GeneratePreApprovalRequest(BaseModel):
+    """Request to generate a pre-approval letter."""
+    include_property_address: bool = False
+    property_address: Optional[str] = None
+    include_purchase_price: bool = False
+    purchase_price: Optional[float] = None
+    calculated_loan_amount: Optional[float] = None
+    partner_id: Optional[int] = None
+
+
+class NotifyOverLimitRequest(BaseModel):
+    """Request to notify LO about over-limit pre-approval request."""
+    lead_id: int
+    partner_id: Optional[int] = None
+    requested_purchase_price: float
+    max_approved_amount: float
+    max_purchase_price: float
+    borrower_name: Optional[str] = None
+
+
+@router.post("/leads/{lead_id}/generate-preapproval")
+async def generate_preapproval_for_lead(
+    lead_id: int,
+    request: GeneratePreApprovalRequest,
+    authorization: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a pre-approval letter for a lead.
+
+    This endpoint works with both CRM JWT tokens and partner portal tokens.
+    """
+    from services.realtor_letter_service import LetterGenerationService
+
+    # Get lead data
+    lead = db.execute(text("""
+        SELECT
+            l.id, l.name, l.email, l.phone, l.loan_amount, l.loan_type,
+            l.address, l.city, l.state, l.zip_code, l.credit_score,
+            l.property_type, l.ltv, l.down_payment, l.interest_rate,
+            l.stage, l.organization_id, l.assigned_to
+        FROM leads l
+        WHERE l.id = :lead_id
+    """), {"lead_id": lead_id}).fetchone()
+
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get organization info
+    org = db.execute(text("""
+        SELECT id, name, nmls_number, address, phone, logo_url
+        FROM organizations
+        WHERE id = :org_id
+    """), {"org_id": lead[16] or 1}).fetchone()
+
+    # Get LO info if assigned
+    lo_info = None
+    if lead[17]:
+        lo = db.execute(text("""
+            SELECT id, full_name, email, phone, nmls_id
+            FROM users
+            WHERE id = :user_id
+        """), {"user_id": lead[17]}).fetchone()
+        if lo:
+            lo_info = {
+                "name": lo[1],
+                "email": lo[2],
+                "phone": lo[3],
+                "nmls": lo[4]
+            }
+
+    # Calculate loan amount based on LTV if purchase price provided
+    approved_amount = lead[4] or 0
+    purchase_price = request.purchase_price
+    calculated_amount = request.calculated_loan_amount or approved_amount
+
+    # Format property address
+    property_address = request.property_address
+    if not property_address and (lead[6] or lead[7]):
+        parts = []
+        if lead[6]:
+            parts.append(lead[6])
+        if lead[7]:
+            parts.append(lead[7])
+        if lead[8]:
+            parts.append(lead[8])
+        if lead[9]:
+            parts.append(lead[9])
+        property_address = ", ".join(parts)
+
+    # Generate expiration date (90 days)
+    expiration_date = datetime.now(timezone.utc) + timedelta(days=90)
+
+    # Build letter HTML
+    letter_html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 40px; }}
+            .header {{ text-align: center; border-bottom: 2px solid #1e40af; padding-bottom: 20px; margin-bottom: 30px; }}
+            .header h1 {{ color: #1e40af; margin: 0; }}
+            .header p {{ color: #666; margin: 5px 0 0; }}
+            .date {{ text-align: right; color: #666; margin-bottom: 20px; }}
+            .salutation {{ margin-bottom: 20px; }}
+            .body-text {{ margin-bottom: 15px; }}
+            .amount-highlight {{ background: #f0f9ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            .amount-highlight strong {{ color: #1e40af; font-size: 1.2em; }}
+            .details {{ margin: 20px 0; }}
+            .details dt {{ font-weight: bold; color: #555; }}
+            .details dd {{ margin: 0 0 10px 20px; }}
+            .disclaimer {{ font-size: 0.85em; color: #666; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }}
+            .signature {{ margin-top: 40px; }}
+            .signature-name {{ font-weight: bold; }}
+            .signature-title {{ color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>{org[1] if org else 'Mortgage Company'}</h1>
+            <p>NMLS #{org[2] if org else 'N/A'}</p>
+        </div>
+
+        <div class="date">{datetime.now().strftime('%B %d, %Y')}</div>
+
+        <div class="salutation">
+            <p>To Whom It May Concern,</p>
+        </div>
+
+        <div class="body-text">
+            <p>This letter confirms that <strong>{lead[1]}</strong> has applied for a mortgage loan and has been pre-approved for financing, subject to the conditions stated below.</p>
+        </div>
+
+        <div class="amount-highlight">
+            <p>Pre-Approved Loan Amount: <strong>${calculated_amount:,.0f}</strong></p>
+            {f'<p>Purchase Price: <strong>${purchase_price:,.0f}</strong></p>' if purchase_price else ''}
+        </div>
+
+        {f'''<div class="details">
+            <dl>
+                <dt>Property Address:</dt>
+                <dd>{property_address}</dd>
+            </dl>
+        </div>''' if property_address and request.include_property_address else ''}
+
+        <div class="details">
+            <dl>
+                <dt>Loan Type:</dt>
+                <dd>{lead[5] or 'Conventional'}</dd>
+                <dt>Property Type:</dt>
+                <dd>{lead[11] or 'Single Family'}</dd>
+            </dl>
+        </div>
+
+        <div class="body-text">
+            <p>This pre-approval is subject to:</p>
+            <ul>
+                <li>Verification of information provided in the loan application</li>
+                <li>Satisfactory property appraisal and title review</li>
+                <li>No material change in the borrower's financial situation</li>
+                <li>Compliance with all program guidelines and underwriting requirements</li>
+            </ul>
+        </div>
+
+        <div class="body-text">
+            <p><strong>This pre-approval is valid until {expiration_date.strftime('%B %d, %Y')}.</strong></p>
+        </div>
+
+        <div class="disclaimer">
+            <p>This is not a commitment to lend. This pre-approval is based on information provided and is subject to verification. Interest rates, terms, and program availability are subject to change without notice. Additional conditions may apply based on specific program requirements.</p>
+        </div>
+
+        <div class="signature">
+            <p class="signature-name">{lo_info['name'] if lo_info else 'Loan Officer'}</p>
+            <p class="signature-title">Loan Officer | NMLS #{lo_info['nmls'] if lo_info and lo_info.get('nmls') else 'N/A'}</p>
+            <p>{lo_info['phone'] if lo_info and lo_info.get('phone') else ''}</p>
+            <p>{lo_info['email'] if lo_info and lo_info.get('email') else ''}</p>
+        </div>
+    </body>
+    </html>
+    """
+
+    # Store the letter in database
+    share_token = secrets.token_urlsafe(32)
+
+    try:
+        result = db.execute(text("""
+            INSERT INTO pre_approval_letters (
+                organization_id, loan_id, letter_type, version,
+                generated_html, variables_used, property_address, purchase_price,
+                approved_amount, expires_at, generated_by_realtor, share_token
+            ) VALUES (
+                :org_id, :lead_id, 'preapproval', 1,
+                :html, :variables, :property_address, :purchase_price,
+                :approved_amount, :expires_at, :partner_id, :share_token
+            )
+            RETURNING id
+        """), {
+            "org_id": lead[16] or 1,
+            "lead_id": lead_id,
+            "html": letter_html,
+            "variables": f'{{"borrower_name": "{lead[1]}", "loan_amount": {calculated_amount}}}',
+            "property_address": property_address if request.include_property_address else None,
+            "purchase_price": purchase_price,
+            "approved_amount": calculated_amount,
+            "expires_at": expiration_date,
+            "partner_id": request.partner_id,
+            "share_token": share_token
+        })
+        letter_id = result.fetchone()[0]
+        db.commit()
+
+        return {
+            "success": True,
+            "letter_id": letter_id,
+            "letter_html": letter_html,
+            "calculated_loan_amount": calculated_amount,
+            "purchase_price": purchase_price,
+            "property_address": property_address if request.include_property_address else None,
+            "expires_at": expiration_date.isoformat(),
+            "share_token": share_token,
+            "share_url": f"/letters/shared/{share_token}"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error generating pre-approval letter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/preapproval/notify-overlimit")
+async def notify_overlimit_request(
+    request: NotifyOverLimitRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Notify loan officer about an over-limit pre-approval request.
+
+    When a partner requests a pre-approval letter for a purchase price
+    that exceeds the approved terms, this endpoint notifies the LO.
+    """
+    # Get lead and LO info
+    lead = db.execute(text("""
+        SELECT
+            l.id, l.name, l.email, l.phone, l.assigned_to, l.organization_id
+        FROM leads l
+        WHERE l.id = :lead_id
+    """), {"lead_id": request.lead_id}).fetchone()
+
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get LO email
+    lo_email = None
+    lo_name = None
+    if lead[4]:
+        lo = db.execute(text("""
+            SELECT full_name, email FROM users WHERE id = :user_id
+        """), {"user_id": lead[4]}).fetchone()
+        if lo:
+            lo_name = lo[0]
+            lo_email = lo[1]
+
+    # Get partner info if provided
+    partner_name = "A referral partner"
+    if request.partner_id:
+        partner = db.execute(text("""
+            SELECT name, company FROM referral_partners WHERE id = :partner_id
+        """), {"partner_id": request.partner_id}).fetchone()
+        if partner:
+            partner_name = f"{partner[0]} ({partner[1]})" if partner[1] else partner[0]
+
+    # Send notification email
+    if lo_email:
+        try:
+            notification_service = NotificationService()
+            notification_service.send_email(
+                to_email=lo_email,
+                subject=f"Pre-Approval Request Exceeds Terms - {request.borrower_name or lead[1]}",
+                html_content=f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #d97706;">Pre-Approval Request Exceeds Terms</h2>
+                    <p>{partner_name} has requested a pre-approval letter with terms that exceed the current approval:</p>
+
+                    <div style="background: #fef3c7; border: 1px solid #fcd34d; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0;"><strong>Borrower:</strong> {request.borrower_name or lead[1]}</p>
+                        <p style="margin: 10px 0 0;"><strong>Requested Purchase Price:</strong> ${request.requested_purchase_price:,.0f}</p>
+                        <p style="margin: 10px 0 0;"><strong>Current Max Approved:</strong> ${request.max_approved_amount:,.0f}</p>
+                        <p style="margin: 10px 0 0;"><strong>Current Max Purchase Price:</strong> ${request.max_purchase_price:,.0f}</p>
+                        <p style="margin: 10px 0 0; color: #dc2626;"><strong>Over by:</strong> ${request.requested_purchase_price - request.max_purchase_price:,.0f}</p>
+                    </div>
+
+                    <p>Please review the file and contact the partner to discuss options for increasing the approval amount.</p>
+
+                    <p><a href="{os.getenv('FRONTEND_URL', 'https://mortgage-crm-nine.vercel.app')}/leads/{request.lead_id}"
+                          style="background: #1e40af; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                        View Lead Details
+                    </a></p>
+                </div>
+                """
+            )
+            logger.info(f"Sent over-limit notification to {lo_email} for lead {request.lead_id}")
+        except Exception as e:
+            logger.error(f"Failed to send over-limit notification: {e}")
+
+    # Create a task for the LO
+    try:
+        db.execute(text("""
+            INSERT INTO tasks (
+                organization_id, lead_id, assigned_to, title, description,
+                priority, status, created_at
+            ) VALUES (
+                :org_id, :lead_id, :assigned_to,
+                'Pre-Approval Request Exceeds Terms',
+                :description,
+                'HIGH', 'pending', CURRENT_TIMESTAMP
+            )
+        """), {
+            "org_id": lead[5] or 1,
+            "lead_id": request.lead_id,
+            "assigned_to": lead[4],
+            "description": f"Partner {partner_name} requested pre-approval at ${request.requested_purchase_price:,.0f}, which exceeds the max ${request.max_purchase_price:,.0f}. Please review and contact partner."
+        })
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to create task for over-limit request: {e}")
+        db.rollback()
+
+    return {
+        "success": True,
+        "message": "Loan officer has been notified",
+        "lo_notified": lo_email is not None
+    }
+
+
+@router.post("/letters/{letter_id}/email")
+async def email_letter(
+    letter_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Send a pre-approval letter via email.
+
+    Sends the letter to the borrower and optionally to the requesting partner.
+    """
+    from services.realtor_letter_service import LetterGenerationService
+
+    letter_service = LetterGenerationService(db)
+    letter = letter_service.get_letter(letter_id)
+
+    if not letter:
+        raise HTTPException(status_code=404, detail="Letter not found")
+
+    # Get lead/loan info for borrower email
+    lead_info = db.execute(text("""
+        SELECT name, email FROM leads WHERE id = :loan_id
+    """), {"loan_id": letter["loan_id"]}).fetchone()
+
+    if not lead_info or not lead_info[1]:
+        raise HTTPException(status_code=400, detail="Borrower email not found")
+
+    borrower_name = lead_info[0]
+    borrower_email = lead_info[1]
+
+    # Send email with letter
+    try:
+        notification_service = NotificationService()
+        notification_service.send_email(
+            to_email=borrower_email,
+            subject=f"Your Pre-Approval Letter - {borrower_name}",
+            html_content=f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #1e40af;">Your Pre-Approval Letter</h2>
+                <p>Dear {borrower_name},</p>
+                <p>Please find your pre-approval letter attached below. This letter confirms your pre-approval status and can be shared with real estate agents and sellers.</p>
+
+                <div style="background: #f0f9ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Pre-Approved Amount:</strong> ${letter.get('approved_amount', 0):,.0f}</p>
+                    {f"<p><strong>Property:</strong> {letter.get('property_address')}</p>" if letter.get('property_address') else ""}
+                    <p><strong>Valid Until:</strong> {letter.get('expires_at', 'N/A')}</p>
+                </div>
+
+                <p>You can also access your letter online:</p>
+                <p><a href="{os.getenv('FRONTEND_URL', 'https://mortgage-crm-nine.vercel.app')}/letters/shared/{letter.get('share_token')}"
+                      style="background: #1e40af; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    View Your Letter
+                </a></p>
+
+                <hr style="margin: 30px 0; border: none; border-top: 1px solid #e2e8f0;">
+                {letter.get('html', '')}
+            </div>
+            """
+        )
+        logger.info(f"Sent pre-approval letter {letter_id} to {borrower_email}")
+
+        return {
+            "success": True,
+            "message": "Letter sent successfully",
+            "sent_to": borrower_email
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to send letter email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
+
+
+# =============================================================================
 # MESSAGING ENDPOINTS
 # =============================================================================
 

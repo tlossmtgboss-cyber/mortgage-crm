@@ -4,7 +4,8 @@ import './Step1Registration.css';
 
 const Step1Registration = ({ data, onChange }) => {
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
     nmls_number: '',
@@ -78,8 +79,12 @@ const Step1Registration = ({ data, onChange }) => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.name || formData.name.trim().length === 0) {
-      newErrors.name = 'Name is required';
+    if (!formData.first_name || formData.first_name.trim().length === 0) {
+      newErrors.first_name = 'First name is required';
+    }
+
+    if (!formData.last_name || formData.last_name.trim().length === 0) {
+      newErrors.last_name = 'Last name is required';
     }
 
     if (!formData.email || !formData.email.includes('@')) {
@@ -220,17 +225,31 @@ const Step1Registration = ({ data, onChange }) => {
       </p>
 
       <div className="form-section">
-        <div className="form-group">
-          <label htmlFor="name">Full Name *</label>
-          <input
-            id="name"
-            type="text"
-            value={formData.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            className={errors.name ? 'error' : ''}
-            placeholder="Enter your full name"
-          />
-          {errors.name && <span className="error-message">{errors.name}</span>}
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="first_name">First Name *</label>
+            <input
+              id="first_name"
+              type="text"
+              value={formData.first_name}
+              onChange={(e) => handleChange('first_name', e.target.value)}
+              className={errors.first_name ? 'error' : ''}
+              placeholder="First name"
+            />
+            {errors.first_name && <span className="error-text">{errors.first_name}</span>}
+          </div>
+          <div className="form-group">
+            <label htmlFor="last_name">Last Name *</label>
+            <input
+              id="last_name"
+              type="text"
+              value={formData.last_name}
+              onChange={(e) => handleChange('last_name', e.target.value)}
+              className={errors.last_name ? 'error' : ''}
+              placeholder="Last name"
+            />
+            {errors.last_name && <span className="error-text">{errors.last_name}</span>}
+          </div>
         </div>
 
         <div className="form-group">

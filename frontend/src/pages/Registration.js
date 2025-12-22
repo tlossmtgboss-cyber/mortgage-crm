@@ -18,7 +18,8 @@ function Registration() {
     email: '',
     password: '',
     confirmPassword: '',
-    full_name: '',
+    first_name: '',
+    last_name: '',
     company_name: '',
     phone: '',
     plan: selectedPlan
@@ -52,7 +53,7 @@ function Registration() {
   };
 
   const validateStep1 = () => {
-    if (!formData.email || !formData.password || !formData.confirmPassword || !formData.full_name) {
+    if (!formData.email || !formData.password || !formData.confirmPassword || !formData.first_name || !formData.last_name) {
       setError('Please fill in all required fields');
       return false;
     }
@@ -111,7 +112,7 @@ function Registration() {
       const response = await axios.post(`${API_BASE_URL}/api/v1/register`, {
         email: formData.email,
         password: formData.password,
-        full_name: formData.full_name,
+        full_name: `${formData.first_name} ${formData.last_name}`.trim(),
         company_name: formData.company_name || '',
         phone: formData.phone || '',
         plan: formData.plan || 'professional'
@@ -128,7 +129,7 @@ function Registration() {
           state: {
             email: formData.email,
             phone: formData.phone,
-            full_name: formData.full_name,
+            full_name: `${formData.first_name} ${formData.last_name}`.trim(),
             userId: userId,
             token: token
           }
@@ -139,7 +140,7 @@ function Registration() {
           state: {
             email: formData.email,
             phone: formData.phone,
-            full_name: formData.full_name,
+            full_name: `${formData.first_name} ${formData.last_name}`.trim(),
             message: response.data.message
           }
         });
@@ -218,16 +219,29 @@ function Registration() {
             {/* Step 1: Account Information */}
             {step === 1 && (
               <div className="form-step">
-                <div className="form-group">
-                  <label>Full Name *</label>
-                  <input
-                    type="text"
-                    name="full_name"
-                    value={formData.full_name}
-                    onChange={handleInputChange}
-                    placeholder="John Smith"
-                    required
-                  />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>First Name *</label>
+                    <input
+                      type="text"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleInputChange}
+                      placeholder="John"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Last Name *</label>
+                    <input
+                      type="text"
+                      name="last_name"
+                      value={formData.last_name}
+                      onChange={handleInputChange}
+                      placeholder="Smith"
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -345,7 +359,7 @@ function Registration() {
 
                   <div className="summary-section">
                     <h4>Account</h4>
-                    <p><strong>Name:</strong> {formData.full_name}</p>
+                    <p><strong>Name:</strong> {formData.first_name} {formData.last_name}</p>
                     <p><strong>Email:</strong> {formData.email}</p>
                   </div>
 

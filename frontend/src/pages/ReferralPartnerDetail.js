@@ -279,8 +279,14 @@ function ReferralPartnerDetail() {
 
   // Edit partner functions
   const handleOpenEdit = () => {
+    // Split name into first and last name
+    const nameParts = (partner.name || '').trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     setEditForm({
-      name: partner.name || '',
+      first_name: firstName,
+      last_name: lastName,
       company: partner.company || '',
       email: partner.email || '',
       phone: partner.phone || '',
@@ -303,8 +309,16 @@ function ReferralPartnerDetail() {
   const handleSavePartner = async () => {
     try {
       setSaving(true);
-      await partnersAPI.update(id, editForm);
-      setPartner(prev => ({ ...prev, ...editForm }));
+      // Combine first_name and last_name into name for the backend
+      const dataToSave = {
+        ...editForm,
+        name: `${editForm.first_name} ${editForm.last_name}`.trim(),
+      };
+      delete dataToSave.first_name;
+      delete dataToSave.last_name;
+
+      await partnersAPI.update(id, dataToSave);
+      setPartner(prev => ({ ...prev, ...dataToSave }));
       setShowEditModal(false);
       alert('Partner profile updated successfully!');
     } catch (error) {
@@ -864,14 +878,25 @@ function ReferralPartnerDetail() {
                   <h4>Basic Information</h4>
                   <div className="form-row">
                     <div className="form-group">
-                      <label>Full Name *</label>
+                      <label>First Name *</label>
                       <input
                         type="text"
-                        value={editForm.name}
-                        onChange={(e) => handleEditFormChange('name', e.target.value)}
-                        placeholder="Partner's full name"
+                        value={editForm.first_name}
+                        onChange={(e) => handleEditFormChange('first_name', e.target.value)}
+                        placeholder="First name"
                       />
                     </div>
+                    <div className="form-group">
+                      <label>Last Name *</label>
+                      <input
+                        type="text"
+                        value={editForm.last_name}
+                        onChange={(e) => handleEditFormChange('last_name', e.target.value)}
+                        placeholder="Last name"
+                      />
+                    </div>
+                  </div>
+                  <div className="form-row">
                     <div className="form-group">
                       <label>Company</label>
                       <input
@@ -1020,7 +1045,7 @@ function ReferralPartnerDetail() {
               <button
                 className="btn-save"
                 onClick={handleSavePartner}
-                disabled={saving || !editForm.name}
+                disabled={saving || !editForm.first_name || !editForm.last_name}
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>

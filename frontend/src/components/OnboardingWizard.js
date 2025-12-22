@@ -16,7 +16,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [teamMembers, setTeamMembers] = useState([]);
   const [formData, setFormData] = useState({
     // Step 1: User Registration
-    userName: '',
+    firstName: '',
+    lastName: '',
     userEmail: '',
     userPhone: '',
     businessAddress: '',
@@ -846,7 +847,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     };
 
     const isFormValid = () => {
-      return formData.userName &&
+      return formData.firstName &&
+             formData.lastName &&
              formData.userEmail &&
              formData.userPhone &&
              formData.businessAddress &&
@@ -864,16 +866,29 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         </div>
 
         <div className="registration-form">
-          <div className="form-group">
-            <label htmlFor="userName">Full Name *</label>
-            <input
-              type="text"
-              id="userName"
-              placeholder="Enter your full name"
-              value={formData.userName}
-              onChange={(e) => handleInputChange('userName', e.target.value)}
-              className="form-input"
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="firstName">First Name *</label>
+              <input
+                type="text"
+                id="firstName"
+                placeholder="First name"
+                value={formData.firstName}
+                onChange={(e) => handleInputChange('firstName', e.target.value)}
+                className="form-input"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="lastName">Last Name *</label>
+              <input
+                type="text"
+                id="lastName"
+                placeholder="Last name"
+                value={formData.lastName}
+                onChange={(e) => handleInputChange('lastName', e.target.value)}
+                className="form-input"
+              />
+            </div>
           </div>
 
           <div className="form-group">

@@ -166,23 +166,32 @@ function EmailSignatureTab() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Full Name</label>
+                  <label>First Name</label>
                   <input
                     type="text"
-                    value={signature?.full_name || ''}
-                    onChange={(e) => handleChange('full_name', e.target.value)}
-                    placeholder="Tim Loss"
+                    value={signature?.first_name || ''}
+                    onChange={(e) => handleChange('first_name', e.target.value)}
+                    placeholder="Tim"
                   />
                 </div>
                 <div className="form-group">
-                  <label>Team Name</label>
+                  <label>Last Name</label>
                   <input
                     type="text"
-                    value={signature?.team_name || ''}
-                    onChange={(e) => handleChange('team_name', e.target.value)}
-                    placeholder="Tim Loss Team"
+                    value={signature?.last_name || ''}
+                    onChange={(e) => handleChange('last_name', e.target.value)}
+                    placeholder="Loss"
                   />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Team Name</label>
+                <input
+                  type="text"
+                  value={signature?.team_name || ''}
+                  onChange={(e) => handleChange('team_name', e.target.value)}
+                  placeholder="Tim Loss Team"
+                />
               </div>
 
               <div className="form-group">
