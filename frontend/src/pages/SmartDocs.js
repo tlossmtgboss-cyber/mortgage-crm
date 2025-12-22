@@ -62,9 +62,17 @@ function SmartDocs() {
           loan_id: loan.id,
           loan_number: loan.loan_number,
           borrower_name: loan.borrower_name || loan.primary_borrower_name || 'Unknown',
+          borrower_email: loan.borrower_email,
+          borrower_phone: loan.borrower_phone,
           loan_purpose: loan.loan_purpose || loan.purpose,
-          loan_amount: loan.loan_amount,
+          loan_amount: loan.amount || loan.loan_amount || 0,
+          program: loan.program || loan.loan_type,
+          stage: loan.stage,
+          property_address: loan.property_address,
+          closing_date: loan.closing_date,
+          rate: loan.rate,
           funded_at: loan.funded_at,
+          created_at: loan.created_at,
           outstanding_count: loan.outstanding_docs_count || 0,
           overdue_count: loan.overdue_docs_count || 0,
           pending_count: loan.pending_docs_count || 0,
@@ -76,12 +84,9 @@ function SmartDocs() {
         const stage = (loan.stage || loan.status || '').toLowerCase();
         if (stage === 'funded' || stage === 'closed') {
           completed.push(loanData);
-        } else if (stage === 'lead' || stage === 'application' || stage === 'processing' || stage === 'underwriting') {
-          // Active loans need documents
-          owed.push({ ...loanData, outstanding_count: 1 });
         } else {
-          // Default to owed for active statuses
-          owed.push(loanData);
+          // All non-funded loans go to "owed" (active pipeline)
+          owed.push({ ...loanData, outstanding_count: 1 });
         }
       });
 
@@ -451,49 +456,66 @@ function SmartDocs() {
                   <div className="applicant-header">
                     <div className="applicant-info">
                       <h3>{applicant.borrower_name}</h3>
-                      <span className="loan-info">
-                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
-                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
-                      </span>
+                      <span className="loan-number">{applicant.loan_number || `Loan #${applicant.loan_id}`}</span>
                     </div>
-                    <div className="outstanding-badges">
-                      <span className="outstanding-badge">
-                        {applicant.outstanding_count} needed
+                    <div className="header-right">
+                      <span className={`stage-badge stage-${(applicant.stage || 'processing').toLowerCase().replace(/\s+/g, '-')}`}>
+                        {applicant.stage || 'Processing'}
                       </span>
-                      {applicant.overdue_count > 0 && (
-                        <span className="overdue-badge">
-                          {applicant.overdue_count} overdue
-                        </span>
-                      )}
                     </div>
                   </div>
-                  <div className="requests-preview">
-                    {(applicant.requests || []).slice(0, 4).map((req) => {
-                      const dueInfo = formatDueDate(req.due_date);
-                      return (
-                        <div key={req.id} className={`request-chip ${req.is_overdue ? 'overdue' : ''}`}>
-                          <span className={`priority-dot ${getPriorityClass(req.priority)}`} />
-                          <span className="request-title">{req.title}</span>
-                          {req.due_date && (
-                            <span className={`due-date ${dueInfo.class}`}>
-                              {dueInfo.text}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {(applicant.requests || []).length > 4 && (
-                      <div className="request-chip more">
-                        +{applicant.requests.length - 4} more
+
+                  <div className="loan-details-grid">
+                    <div className="loan-detail">
+                      <span className="detail-label">Loan Amount</span>
+                      <span className="detail-value">{formatCurrency(applicant.loan_amount)}</span>
+                    </div>
+                    <div className="loan-detail">
+                      <span className="detail-label">Program</span>
+                      <span className="detail-value">{applicant.program || 'Not Set'}</span>
+                    </div>
+                    {applicant.property_address && (
+                      <div className="loan-detail address">
+                        <span className="detail-label">Property</span>
+                        <span className="detail-value">{applicant.property_address}</span>
+                      </div>
+                    )}
+                    {applicant.borrower_email && (
+                      <div className="loan-detail">
+                        <span className="detail-label">Email</span>
+                        <span className="detail-value email">{applicant.borrower_email}</span>
                       </div>
                     )}
                   </div>
+
+                  {(applicant.requests || []).length > 0 && (
+                    <div className="requests-preview">
+                      {applicant.requests.slice(0, 4).map((req) => {
+                        const dueInfo = formatDueDate(req.due_date);
+                        return (
+                          <div key={req.id} className={`request-chip ${req.is_overdue ? 'overdue' : ''}`}>
+                            <span className={`priority-dot ${getPriorityClass(req.priority)}`} />
+                            <span className="request-title">{req.title}</span>
+                            {req.due_date && (
+                              <span className={`due-date ${dueInfo.class}`}>
+                                {dueInfo.text}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {applicant.requests.length > 4 && (
+                        <div className="request-chip more">
+                          +{applicant.requests.length - 4} more
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="card-footer">
-                    {applicant.nearest_due && (
-                      <span className={`nearest-due ${formatDueDate(applicant.nearest_due).class}`}>
-                        Next due: {formatDueDate(applicant.nearest_due).text}
-                      </span>
-                    )}
+                    <span className="created-date">
+                      Added {formatDate(applicant.created_at)}
+                    </span>
                     <button className="btn-view">View Details →</button>
                   </div>
                 </div>

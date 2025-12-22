@@ -4,7 +4,7 @@
 
 .smart-docs-page {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -344,21 +344,22 @@
 .applicants-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .applicant-card {
-  padding: 20px;
+  padding: 24px;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .applicant-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   border-color: #d1d5db;
+  transform: translateY(-1px);
 }
 
 .applicant-card.has-overdue {
@@ -378,8 +379,119 @@
 
 .applicant-info h3 {
   margin: 0 0 4px;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: #1f2937;
+}
+
+.loan-number {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Stage Badges */
+.stage-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stage-badge.stage-disclosed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.stage-badge.stage-processing {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.stage-badge.stage-submitted {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.stage-badge.stage-uw_received,
+.stage-badge.stage-uw-received {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.stage-badge.stage-approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.stage-badge.stage-suspended {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.stage-badge.stage-ctc {
+  background: #cffafe;
+  color: #0e7490;
+}
+
+.stage-badge.stage-docs,
+.stage-badge.stage-docs-out {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+/* Loan Details Grid */
+.loan-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.loan-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.loan-detail.address {
+  grid-column: span 2;
+}
+
+.loan-detail .detail-label {
+  font-size: 0.7rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.loan-detail .detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.loan-detail .detail-value.email {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.created-date {
+  font-size: 0.8rem;
+  color: #9ca3af;
 }
 
 .loan-info {
@@ -676,6 +788,14 @@
     gap: 12px;
   }
 
+  .loan-details-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .loan-detail.address {
+    grid-column: span 2;
+  }
+
   .completed-details {
     flex-direction: column;
     gap: 12px;
@@ -690,5 +810,15 @@
   .btn-review,
   .btn-view {
     text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .loan-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-detail.address {
+    grid-column: span 1;
   }
 }
