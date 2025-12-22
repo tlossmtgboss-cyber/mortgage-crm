@@ -572,55 +572,68 @@ const AIDailyBlog = () => {
                     </div>
 
                     {selectedTopics.length > 0 && (
-                      <button
-                        className="btn-generate-selected"
-                        onClick={async () => {
-                          const topicsToGenerate = trendingTopics.filter(t => selectedTopics.includes(t.rank));
-                          setLoading(true);
-                          setError(null);
-                          let successCount = 0;
+                      <div className="generate-selected-section">
+                        <button
+                          className="btn-generate-selected"
+                          onClick={async () => {
+                            const topicsToGenerate = trendingTopics.filter(t => selectedTopics.includes(t.rank));
+                            setLoading(true);
+                            setError(null);
+                            setSuccess(null);
+                            let successCount = 0;
+                            const totalCount = topicsToGenerate.length;
 
-                          let lastError = null;
-                          for (const topic of topicsToGenerate) {
-                            try {
-                              await blogAPI.generateContent({
-                                topic: topic.topic,
-                                archetype: topic.archetype,
-                                keyword: topic.keyword,
-                                generate_social: generateForm.generateSocial,
-                                platforms: generateForm.platforms,
-                              });
-                              successCount++;
-                            } catch (err) {
-                              console.error(`Failed to generate: ${topic.topic}`, err);
-                              lastError = err;
-                            }
-                          }
+                            let lastError = null;
+                            for (let i = 0; i < topicsToGenerate.length; i++) {
+                              const topic = topicsToGenerate[i];
+                              // Update progress message
+                              setSuccess(`Generating post ${i + 1} of ${totalCount}: "${topic.topic.substring(0, 40)}..."`);
 
-                          setLoading(false);
-                          if (successCount > 0) {
-                            setSuccess(`Successfully generated ${successCount} blog post${successCount > 1 ? 's' : ''}!`);
-                            setSelectedTopics([]);
-                            // Refresh content list
-                            try {
-                              const contentRes = await blogAPI.getContentList({ limit: 20 });
-                              setContentList(contentRes.items || []);
-                            } catch (e) {}
-                          } else {
-                            // Show detailed error message
-                            let errorMessage = 'Failed to generate content. Please try again.';
-                            if (lastError?.response?.data?.detail) {
-                              errorMessage = lastError.response.data.detail;
-                            } else if (lastError?.message) {
-                              errorMessage = lastError.message;
+                              try {
+                                await blogAPI.generateContent({
+                                  topic: topic.topic,
+                                  archetype: topic.archetype,
+                                  keyword: topic.keyword,
+                                  generate_social: generateForm.generateSocial,
+                                  platforms: generateForm.platforms,
+                                });
+                                successCount++;
+                              } catch (err) {
+                                console.error(`Failed to generate: ${topic.topic}`, err);
+                                lastError = err;
+                                // Continue with next topic even if one fails
+                              }
                             }
-                            setError(errorMessage);
-                          }
-                        }}
-                        disabled={loading}
-                      >
-                        {loading ? 'Generating...' : `Generate ${selectedTopics.length} Post${selectedTopics.length > 1 ? 's' : ''}`}
-                      </button>
+
+                            setLoading(false);
+                            if (successCount > 0) {
+                              setSuccess(`Successfully generated ${successCount} of ${totalCount} blog post${successCount > 1 ? 's' : ''}!`);
+                              setSelectedTopics([]);
+                              // Refresh content list
+                              try {
+                                const contentRes = await blogAPI.getContentList({ limit: 20 });
+                                setContentList(contentRes.items || []);
+                              } catch (e) {}
+                            } else {
+                              setSuccess(null);
+                              // Show detailed error message
+                              let errorMessage = 'Failed to generate content. Please try again.';
+                              if (lastError?.response?.data?.detail) {
+                                errorMessage = lastError.response.data.detail;
+                              } else if (lastError?.message) {
+                                errorMessage = lastError.message;
+                              }
+                              setError(errorMessage);
+                            }
+                          }}
+                          disabled={loading}
+                        >
+                          {loading ? 'Generating...' : `Generate ${selectedTopics.length} Post${selectedTopics.length > 1 ? 's' : ''}`}
+                        </button>
+                        {selectedTopics.length > 3 && !loading && (
+                          <span className="generation-warning">Generating multiple posts may take several minutes</span>
+                        )}
+                      </div>
                     )}
                   </>
                 ) : (

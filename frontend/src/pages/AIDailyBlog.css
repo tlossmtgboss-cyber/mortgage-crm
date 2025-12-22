@@ -1162,6 +1162,22 @@
   cursor: not-allowed;
 }
 
+.generate-selected-section {
+  margin-top: 16px;
+}
+
+.generate-selected-section .btn-generate-selected {
+  margin-top: 0;
+}
+
+.generation-warning {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #f59e0b;
+  text-align: center;
+}
+
 .divider-or {
   display: flex;
   align-items: center;
