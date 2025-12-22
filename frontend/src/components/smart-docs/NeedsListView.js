@@ -30,7 +30,8 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
     try {
       setLoading(true);
       const data = await smartDocsAPI.getNeedsList(loanId);
-      setNeedsList(data.requests || []);
+      // Backend returns all_requests (array) and requests_by_status (object by status)
+      setNeedsList(data.all_requests || []);
     } catch (err) {
       console.error('Error fetching needs list:', err);
       setError('Failed to load needs list');
@@ -139,11 +140,13 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
   };
 
   const getPriorityLabel = (priority) => {
-    switch (priority) {
-      case 1: return { label: 'Critical', class: 'critical' };
-      case 2: return { label: 'High', class: 'high' };
-      case 3: return { label: 'Medium', class: 'medium' };
-      default: return { label: 'Low', class: 'low' };
+    // Handle both string and number priority values
+    const priorityStr = String(priority).toUpperCase();
+    switch (priorityStr) {
+      case 'CRITICAL': case '1': return { label: 'Critical', class: 'critical' };
+      case 'HIGH': case '2': return { label: 'High', class: 'high' };
+      case 'NORMAL': case 'MEDIUM': case '3': return { label: 'Normal', class: 'medium' };
+      case 'LOW': default: return { label: 'Low', class: 'low' };
     }
   };
 
@@ -300,23 +303,37 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
         <div className="needs-list-items">
           {needsList.map((request) => {
             const priority = getPriorityLabel(request.priority);
+            // Map backend status values (OPEN, PENDING_REVIEW, ACCEPTED, etc.) to display
+            const statusDisplay = (request.status || 'OPEN').toLowerCase().replace('_', '-');
+            const isOpen = ['open', 'pending_review'].includes((request.status || '').toLowerCase());
             return (
-              <div key={request.id} className={`needs-item status-${request.status}`}>
+              <div key={request.id} className={`needs-item status-${statusDisplay}`}>
                 <div className="needs-item-header">
                   <span className={`priority-badge ${priority.class}`}>{priority.label}</span>
-                  <span className={`status-badge ${request.status}`}>{request.status}</span>
+                  <span className={`status-badge ${statusDisplay}`}>
+                    {(request.status || 'OPEN').replace('_', ' ')}
+                  </span>
                 </div>
-                <h4>{request.document_category}</h4>
+                <h4>{request.title || request.doc_type}</h4>
                 <p className="description">{request.description}</p>
+                {request.instructions && (
+                  <p className="instructions"><em>Instructions: {request.instructions}</em></p>
+                )}
                 <div className="needs-item-meta">
+                  {request.doc_type && (
+                    <span className="doc-type">Type: {request.doc_type}</span>
+                  )}
+                  {request.required_count > 1 && (
+                    <span className="required-count">Required: {request.required_count}</span>
+                  )}
+                  {request.freshness_days && (
+                    <span className="freshness">Freshness: {request.freshness_days} days</span>
+                  )}
                   {request.due_date && (
                     <span className="due-date">Due: {new Date(request.due_date).toLocaleDateString()}</span>
                   )}
-                  {request.requested_at && (
-                    <span className="requested-date">Requested: {new Date(request.requested_at).toLocaleDateString()}</span>
-                  )}
                 </div>
-                {request.status === 'pending' && (
+                {isOpen && (
                   <div className="needs-item-actions">
                     <button
                       className="btn-small btn-fulfill"

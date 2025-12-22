@@ -68,6 +68,8 @@ function ClientProfile() {
   const [circleContacts, setCircleContacts] = useState([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [milestones, setMilestones] = useState([]);
+  const [milestonesLoading, setMilestonesLoading] = useState(false);
 
   const handleAddCustomField = () => {
     if (!newFieldName.trim()) return;
@@ -86,6 +88,7 @@ function ClientProfile() {
     loadEmails();
     loadCircleContacts();
     loadUpcomingAppointments();
+    loadMilestones();
     markLoanAsViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -243,6 +246,26 @@ function ClientProfile() {
       setUpcomingAppointments([]);
     } finally {
       setAppointmentsLoading(false);
+    }
+  };
+
+  const loadMilestones = async () => {
+    try {
+      setMilestonesLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/portal/loans/${id}/milestones`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMilestones(data.milestones || []);
+      }
+    } catch (error) {
+      console.error('Failed to load milestones:', error);
+      setMilestones([]);
+    } finally {
+      setMilestonesLoading(false);
     }
   };
 
@@ -866,6 +889,12 @@ function ClientProfile() {
         >
           Important Dates
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'milestones' ? 'active' : ''}`}
+          onClick={() => setActiveTab('milestones')}
+        >
+          Milestones
+        </button>
       </div>
 
       <div className="detail-content">
@@ -1437,6 +1466,152 @@ function ClientProfile() {
                   <small className="field-hint">For shopping-phase automation</small>
                 </div>
               </div>
+            </div>
+          </div>
+          )}
+
+          {/* Milestones Tab */}
+          {activeTab === 'milestones' && (
+          <div className="tab-content">
+            <div className="info-section">
+              <h2>Loan Milestones</h2>
+              <p className="section-subtitle">Track progress through key milestones in the loan process</p>
+
+              {milestonesLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  Loading milestones...
+                </div>
+              ) : milestones.length > 0 ? (
+                <div className="milestones-timeline" style={{
+                  position: 'relative',
+                  paddingLeft: '2rem',
+                  marginTop: '1.5rem'
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    left: '15px',
+                    top: 0,
+                    bottom: 0,
+                    width: '2px',
+                    background: '#e2e8f0'
+                  }} />
+
+                  {milestones.map((milestone, index) => {
+                    const isCompleted = milestone.completed_at || milestone.status === 'completed';
+                    const isCurrent = !isCompleted && index === milestones.findIndex(m => !m.completed_at && m.status !== 'completed');
+
+                    return (
+                      <div
+                        key={milestone.id || index}
+                        style={{
+                          position: 'relative',
+                          paddingBottom: '1.5rem',
+                          paddingLeft: '1.5rem'
+                        }}
+                      >
+                        <div style={{
+                          position: 'absolute',
+                          left: '-2rem',
+                          width: '30px',
+                          height: '30px',
+                          background: isCompleted ? '#22c55e' : isCurrent ? '#3b82f6' : 'white',
+                          border: `2px solid ${isCompleted ? '#22c55e' : isCurrent ? '#3b82f6' : '#e2e8f0'}`,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          color: isCompleted || isCurrent ? 'white' : '#64748b',
+                          zIndex: 1
+                        }}>
+                          {isCompleted ? '✓' : index + 1}
+                        </div>
+
+                        <div style={{
+                          background: isCurrent ? '#eff6ff' : 'white',
+                          border: `1px solid ${isCurrent ? '#3b82f6' : '#e2e8f0'}`,
+                          borderRadius: '8px',
+                          padding: '1rem'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '0.5rem'
+                          }}>
+                            <h4 style={{ margin: 0, fontSize: '0.875rem', color: '#1e293b' }}>
+                              {milestone.milestone_name || milestone.name}
+                            </h4>
+                            <span style={{
+                              fontSize: '0.625rem',
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: '4px',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                              background: isCompleted ? '#dcfce7' : isCurrent ? '#dbeafe' : '#f3f4f6',
+                              color: isCompleted ? '#166534' : isCurrent ? '#1e40af' : '#64748b'
+                            }}>
+                              {isCompleted ? 'Completed' : isCurrent ? 'In Progress' : 'Pending'}
+                            </span>
+                          </div>
+
+                          {milestone.description && (
+                            <p style={{
+                              margin: '0.5rem 0',
+                              fontSize: '0.75rem',
+                              color: '#64748b'
+                            }}>
+                              {milestone.description}
+                            </p>
+                          )}
+
+                          <div style={{
+                            display: 'flex',
+                            gap: '1rem',
+                            fontSize: '0.75rem',
+                            color: '#64748b',
+                            marginTop: '0.5rem'
+                          }}>
+                            {milestone.target_date && (
+                              <span>
+                                Target: {new Date(milestone.target_date).toLocaleDateString()}
+                              </span>
+                            )}
+                            {milestone.completed_at && (
+                              <span style={{ color: '#166534' }}>
+                                Completed: {new Date(milestone.completed_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+
+                          {milestone.notes && (
+                            <p style={{
+                              margin: '0.5rem 0 0',
+                              fontSize: '0.75rem',
+                              color: '#94a3b8',
+                              fontStyle: 'italic'
+                            }}>
+                              {milestone.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '40px',
+                  background: '#f8fafc',
+                  borderRadius: '8px',
+                  color: '#64748b'
+                }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📋</div>
+                  <p>No milestones have been set up for this loan yet.</p>
+                </div>
+              )}
             </div>
           </div>
           )}

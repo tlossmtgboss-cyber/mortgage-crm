@@ -44,6 +44,7 @@ const ClientProfile = lazy(() => import('./pages/ClientProfile'));
 const ReferralPartners = lazy(() => import('./pages/ReferralPartners'));
 const ReferralPartnerDetail = lazy(() => import('./pages/ReferralPartnerDetail'));
 const PartnerDashboardPortal = lazy(() => import('./pages/PartnerDashboardPortal'));
+const PartnerClientDetail = lazy(() => import('./pages/PartnerClientDetail'));
 const AIUnderwriter = lazy(() => import('./pages/AIUnderwriter'));
 const GoalTracker = lazy(() => import('./pages/GoalTracker'));
 const Coach = lazy(() => import('./pages/Coach'));
@@ -1288,6 +1289,14 @@ function App() {
             element={
               <PrivateRoute>
                 <LazyPage><PartnerDashboardPortal /></LazyPage>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/partner-portal/:partnerId/client/:clientId"
+            element={
+              <PrivateRoute>
+                <LazyPage><PartnerClientDetail /></LazyPage>
               </PrivateRoute>
             }
           />

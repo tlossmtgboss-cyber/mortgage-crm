@@ -38268,19 +38268,21 @@ async def get_scorecard(
     from decimal import Decimal
 
     try:
-        # Date range setup - convert to datetime for proper comparison with DateTime columns
+        # Date range setup - use timezone-naive datetimes for database compatibility
         if start_date and end_date:
-            start = dt.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0, tzinfo=timezone.utc)
-            end = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+            start = dt.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+            end = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
         else:
             # Default to current month
             today = date.today()
-            start = dt(today.year, today.month, 1, 0, 0, 0, tzinfo=timezone.utc)
-            end = dt(today.year, today.month, today.day, 23, 59, 59, tzinfo=timezone.utc)
+            start = dt(today.year, today.month, 1, 0, 0, 0)
+            end = dt(today.year, today.month, today.day, 23, 59, 59)
 
         # Store date-only versions for the response
         start_date_str = start.strftime("%Y-%m-%d")
         end_date_str = end.strftime("%Y-%m-%d")
+
+        logger.info(f"Scorecard request: {start_date_str} to {end_date_str} for user {current_user.id}")
     except Exception as e:
         logger.error(f"Error in scorecard endpoint (date setup): {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error processing scorecard data: {str(e)}")
@@ -38291,67 +38293,99 @@ async def get_scorecard(
         # ============================================================================
 
         # Get all relevant loans and leads for the period
-        all_leads = db.query(Lead).filter(
-            Lead.owner_id == current_user.id,
-            Lead.created_at >= start,
-            Lead.created_at <= end
-        ).all()
+        try:
+            all_leads = db.query(Lead).filter(
+                Lead.owner_id == current_user.id,
+                Lead.created_at >= start,
+                Lead.created_at <= end
+            ).all()
+        except Exception as e:
+            logger.error(f"Error querying leads: {str(e)}")
+            all_leads = []
 
-        all_loans = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id
-        ).all()
+        try:
+            all_loans = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id
+            ).all()
+        except Exception as e:
+            logger.error(f"Error querying loans: {str(e)}")
+            all_loans = []
 
         # Calculate counts
         starts_count = len(all_leads)  # Total leads
 
         # Applications (leads that became loans)
-        apps_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.created_at >= start,
-            Loan.created_at <= end
-        ).scalar() or 0
+        try:
+            apps_count = db.query(func.count(Loan.id)).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.created_at >= start,
+                Loan.created_at <= end
+            ).scalar() or 0
+        except Exception as e:
+            logger.error(f"Error counting applications: {str(e)}")
+            apps_count = 0
 
         # Funded loans
-        funded_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date >= start,
-            Loan.funded_date <= end
-        ).scalar() or 0
+        try:
+            funded_count = db.query(func.count(Loan.id)).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.FUNDED,
+                Loan.funded_date >= start,
+                Loan.funded_date <= end
+            ).scalar() or 0
+        except Exception as e:
+            logger.error(f"Error counting funded loans: {str(e)}")
+            funded_count = 0
 
         # Credit pulls (assuming leads with credit_score indicate credit pulled)
-        credit_pulls = db.query(func.count(Lead.id)).filter(
-            Lead.owner_id == current_user.id,
-            Lead.created_at >= start,
-            Lead.created_at <= end,
-            Lead.credit_score.isnot(None)
-        ).scalar() or 0
+        try:
+            credit_pulls = db.query(func.count(Lead.id)).filter(
+                Lead.owner_id == current_user.id,
+                Lead.created_at >= start,
+                Lead.created_at <= end,
+                Lead.credit_score.isnot(None)
+            ).scalar() or 0
+        except Exception as e:
+            logger.error(f"Error counting credit pulls: {str(e)}")
+            credit_pulls = 0
 
         # Cancelled/Suspended loans
-        cancelled_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.SUSPENDED,
-            Loan.created_at >= start,
-            Loan.created_at <= end
-        ).scalar() or 0
+        try:
+            cancelled_count = db.query(func.count(Loan.id)).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.SUSPENDED,
+                Loan.created_at >= start,
+                Loan.created_at <= end
+            ).scalar() or 0
+        except Exception as e:
+            logger.error(f"Error counting cancelled loans: {str(e)}")
+            cancelled_count = 0
 
         # Denied loans (not tracked in current stages, set to 0)
         denied_count = 0
 
         # UW to TBDs (underwriting to clear to close)
-        uw_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.UW_RECEIVED,
-            Loan.created_at >= start,
-            Loan.created_at <= end
-        ).scalar() or 0
+        try:
+            uw_count = db.query(func.count(Loan.id)).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.UW_RECEIVED,
+                Loan.created_at >= start,
+                Loan.created_at <= end
+            ).scalar() or 0
+        except Exception as e:
+            logger.error(f"Error counting UW loans: {str(e)}")
+            uw_count = 0
 
-        ctc_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.CTC,
-            Loan.created_at >= start,
-            Loan.created_at <= end
-        ).scalar() or 0
+        try:
+            ctc_count = db.query(func.count(Loan.id)).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.CTC,
+                Loan.created_at >= start,
+                Loan.created_at <= end
+            ).scalar() or 0
+        except Exception as e:
+            logger.error(f"Error counting CTC loans: {str(e)}")
+            ctc_count = 0
 
         # Initial lock to funded (loans that locked and funded)
         locked_funded = funded_count  # Simplified - all funded loans were locked
@@ -38442,15 +38476,19 @@ async def get_scorecard(
         target_pull_thru_pct = current_pull_thru_pct + 10  # 10% improvement
 
         # Get funded loans for volume calculations
-        funded_loans = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date >= start,
-            Loan.funded_date <= end
-        ).all()
+        try:
+            funded_loans = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.FUNDED,
+                Loan.funded_date >= start,
+                Loan.funded_date <= end
+            ).all()
+        except Exception as e:
+            logger.error(f"Error querying funded loans for volume: {str(e)}")
+            funded_loans = []
 
         current_avg_amount = sum(loan.amount for loan in funded_loans if loan.amount) / len(funded_loans) if funded_loans else 0
-        current_volume = sum(loan.amount for loan in funded_loans if loan.amount)
+        current_volume = sum(loan.amount for loan in funded_loans if loan.amount) if funded_loans else 0
 
         # Project 10% increase
         target_funded_count = int(funded_count * 1.1)
@@ -38484,16 +38522,20 @@ async def get_scorecard(
         # ============================================================================
 
         # Get all funded loans
-        funded_loans_all = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date >= start,
-            Loan.funded_date <= end
-        ).all()
+        try:
+            funded_loans_all = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.stage == LoanStage.FUNDED,
+                Loan.funded_date >= start,
+                Loan.funded_date <= end
+            ).all()
+        except Exception as e:
+            logger.error(f"Error querying all funded loans: {str(e)}")
+            funded_loans_all = []
 
         # Calculate totals
         total_funded_units = len(funded_loans_all)
-        total_funded_volume = sum(loan.amount for loan in funded_loans_all if loan.amount)
+        total_funded_volume = sum(loan.amount for loan in funded_loans_all if loan.amount) if funded_loans_all else 0
 
         # Break down by loan type
         loan_type_breakdown = {}
@@ -38552,7 +38594,7 @@ async def get_scorecard(
             "conversion_metrics": conversion_metrics,
             "conversion_upswing": conversion_upswing,
             "funding_totals": funding_totals,
-            "generated_at": dt.now(timezone.utc).isoformat()
+            "generated_at": dt.utcnow().isoformat()
         }
     except Exception as e:
         logger.error(f"Error in scorecard endpoint: {str(e)}", exc_info=True)

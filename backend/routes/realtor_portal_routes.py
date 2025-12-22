@@ -767,6 +767,247 @@ async def ai_assistant(
 
 
 # =============================================================================
+# COMPREHENSIVE CLIENT DETAIL ENDPOINT
+# =============================================================================
+
+@router.get("/clients/{loan_id}/full-details")
+async def get_client_full_details(
+    loan_id: int,
+    token: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Get comprehensive client details for partner portal view.
+
+    Returns all information a partner needs about a referred client:
+    - Lead/loan information
+    - Outstanding documents needed
+    - Milestones with dates
+    - Third-party orders (Appraisal, Title, Insurance)
+    - Conversation history
+    """
+    realtor = await get_current_realtor(token, db)
+
+    from services.realtor_permission_service import RealtorAccessValidator
+
+    # Validate access
+    validator = RealtorAccessValidator(db)
+    access = validator.validate_access(realtor["realtor_id"], loan_id)
+    if not access["valid"]:
+        raise HTTPException(status_code=403, detail=access["reason"])
+
+    # Record view
+    validator.record_view(realtor["realtor_id"], loan_id)
+
+    # 1. Get loan/lead details
+    loan = db.execute(text("""
+        SELECT
+            l.id, l.loan_number, l.stage as status, l.amount as loan_amount,
+            l.loan_type, l.property_address, l.closing_date as expected_close_date,
+            l.borrower_name, l.created_at, l.updated_at,
+            l.interest_rate, l.loan_term, l.property_type,
+            l.credit_score, l.dti_ratio, l.ltv_ratio,
+            u.full_name as lo_name, u.email as lo_email, u.phone as lo_phone,
+            l.property_city, l.property_state, l.property_zip
+        FROM loans l
+        LEFT JOIN users u ON u.id = l.loan_officer_id
+        WHERE l.id = :loan_id
+    """), {"loan_id": loan_id}).fetchone()
+
+    if not loan:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # 2. Get outstanding documents
+    documents = db.execute(text("""
+        SELECT
+            sdr.id, sdr.doc_type, sdr.title, sdr.status, sdr.due_date,
+            sdr.priority, sdr.created_at, sdr.upload_date,
+            sdr.rejection_reason, sdr.applies_to
+        FROM smart_document_requests sdr
+        WHERE sdr.loan_id = :loan_id
+        ORDER BY
+            CASE sdr.status WHEN 'OPEN' THEN 0 WHEN 'PENDING_REVIEW' THEN 1 ELSE 2 END,
+            sdr.priority DESC,
+            sdr.due_date NULLS LAST
+    """), {"loan_id": loan_id}).fetchall()
+
+    outstanding_docs = []
+    received_docs = []
+    for doc in documents:
+        doc_info = {
+            "id": doc[0],
+            "type": doc[1],
+            "title": doc[2],
+            "status": doc[3],
+            "due_date": format_date(doc[4]),
+            "priority": doc[5],
+            "requested_date": format_date(doc[6]),
+            "received_date": format_date(doc[7]),
+            "rejection_reason": doc[8],
+            "applies_to": doc[9]
+        }
+        if doc[3] in ['OPEN', 'REJECTED']:
+            outstanding_docs.append(doc_info)
+        else:
+            received_docs.append(doc_info)
+
+    # 3. Get milestones
+    milestones = db.execute(text("""
+        SELECT
+            pm.id, pm.milestone_name, pm.is_completed, pm.completed_at,
+            pm.target_date, pm.display_order, pm.status, pm.notes
+        FROM portal_milestones pm
+        WHERE pm.loan_id = :loan_id
+        ORDER BY pm.display_order
+    """), {"loan_id": loan_id}).fetchall()
+
+    # 4. Get third-party orders (Appraisal, Title, Insurance)
+    third_party_orders = db.execute(text("""
+        SELECT
+            tpo.id, tpo.order_type, tpo.vendor_name, tpo.status,
+            tpo.ordered_at, tpo.due_date, tpo.received_at,
+            tpo.amount, tpo.notes
+        FROM third_party_orders tpo
+        WHERE tpo.loan_id = :loan_id
+        ORDER BY tpo.ordered_at DESC
+    """), {"loan_id": loan_id}).fetchall()
+
+    # Format third-party orders by type
+    appraisal = None
+    title = None
+    insurance = None
+    other_orders = []
+
+    for order in third_party_orders:
+        order_info = {
+            "id": order[0],
+            "type": order[1],
+            "vendor": order[2],
+            "status": order[3],
+            "ordered_date": format_date(order[4]),
+            "due_date": format_date(order[5]),
+            "received_date": format_date(order[6]),
+            "amount": float(order[7]) if order[7] else None,
+            "notes": order[8]
+        }
+        if order[1] and 'appraisal' in order[1].lower():
+            appraisal = order_info
+        elif order[1] and 'title' in order[1].lower():
+            title = order_info
+        elif order[1] and 'insurance' in order[1].lower():
+            insurance = order_info
+        else:
+            other_orders.append(order_info)
+
+    # 5. Get conversation log
+    conversations = db.execute(text("""
+        SELECT
+            pce.id, pce.event_type, pce.channel, pce.direction,
+            pce.content, pce.created_at, pce.metadata
+        FROM portal_communication_events pce
+        WHERE pce.loan_id = :loan_id
+        ORDER BY pce.created_at DESC
+        LIMIT 50
+    """), {"loan_id": loan_id}).fetchall()
+
+    # 6. Get important dates
+    important_dates = db.execute(text("""
+        SELECT
+            lid.id, lid.date_type, lid.date_value, lid.description,
+            lid.is_completed, lid.completed_at
+        FROM loan_important_dates lid
+        WHERE lid.loan_id = :loan_id
+        ORDER BY lid.date_value
+    """), {"loan_id": loan_id}).fetchall()
+
+    # Build response
+    return {
+        "success": True,
+        "client": {
+            "loan_id": loan[0],
+            "loan_number": loan[1],
+            "status": loan[2],
+            "status_display": (loan[2] or "unknown").replace("_", " ").title(),
+            "loan_amount": float(loan[3]) if loan[3] else None,
+            "loan_type": loan[4],
+            "interest_rate": float(loan[10]) if loan[10] else None,
+            "loan_term": loan[11],
+            "borrower_name": loan[7],
+            "property": {
+                "address": loan[5],
+                "city": loan[18],
+                "state": loan[19],
+                "zip": loan[20],
+                "type": loan[12]
+            },
+            "expected_close_date": format_date(loan[6]),
+            "created_at": format_date(loan[8]),
+            "updated_at": format_date(loan[9]),
+            "financials": {
+                "credit_score": loan[13],
+                "dti_ratio": float(loan[14]) if loan[14] else None,
+                "ltv_ratio": float(loan[15]) if loan[15] else None
+            },
+            "loan_officer": {
+                "name": loan[16],
+                "email": loan[17],
+                "phone": loan[18] if len(loan) > 18 else None
+            }
+        },
+        "documents": {
+            "outstanding": outstanding_docs,
+            "outstanding_count": len(outstanding_docs),
+            "received": received_docs,
+            "received_count": len(received_docs),
+            "total": len(documents)
+        },
+        "milestones": [
+            {
+                "id": m[0],
+                "name": m[1],
+                "is_completed": m[2],
+                "completed_at": format_date(m[3]),
+                "target_date": format_date(m[4]),
+                "order": m[5],
+                "status": m[6],
+                "notes": m[7]
+            }
+            for m in milestones
+        ],
+        "third_party_orders": {
+            "appraisal": appraisal,
+            "title": title,
+            "homeowners_insurance": insurance,
+            "other": other_orders
+        },
+        "conversation_log": [
+            {
+                "id": c[0],
+                "type": c[1],
+                "channel": c[2],
+                "direction": c[3],
+                "content": c[4],
+                "created_at": format_date(c[5]),
+                "metadata": c[6]
+            }
+            for c in conversations
+        ],
+        "important_dates": [
+            {
+                "id": d[0],
+                "type": d[1],
+                "date": format_date(d[2]),
+                "description": d[3],
+                "is_completed": d[4],
+                "completed_at": format_date(d[5])
+            }
+            for d in important_dates
+        ],
+        "role": access["role"]
+    }
+
+
+# =============================================================================
 # SMS WEBHOOK ENDPOINT
 # =============================================================================
 

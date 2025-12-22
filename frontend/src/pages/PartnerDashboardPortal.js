@@ -56,7 +56,7 @@ const StatsCard = ({ icon, value, label, color }) => (
 );
 
 // Lead card component with expandable details
-const LeadCard = ({ lead, onExpand, isExpanded }) => {
+const LeadCard = ({ lead, onExpand, isExpanded, onViewDetails }) => {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -160,6 +160,19 @@ const LeadCard = ({ lead, onExpand, isExpanded }) => {
               <p>{lead.notes}</p>
             </div>
           )}
+
+          {/* View Full Details Button */}
+          <div className="lead-actions">
+            <button
+              className="view-details-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails && onViewDetails(lead);
+              }}
+            >
+              View Full Details →
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -167,7 +180,7 @@ const LeadCard = ({ lead, onExpand, isExpanded }) => {
 };
 
 // Category section component
-const CategorySection = ({ title, leads, emptyMessage, defaultExpanded = false }) => {
+const CategorySection = ({ title, leads, emptyMessage, defaultExpanded = false, onViewDetails }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [expandedLeadId, setExpandedLeadId] = useState(null);
 
@@ -197,6 +210,7 @@ const CategorySection = ({ title, leads, emptyMessage, defaultExpanded = false }
                   lead={lead}
                   isExpanded={expandedLeadId === lead.id}
                   onExpand={() => setExpandedLeadId(expandedLeadId === lead.id ? null : lead.id)}
+                  onViewDetails={onViewDetails}
                 />
               ))}
             </div>
@@ -290,6 +304,13 @@ export default function PartnerDashboardPortal() {
     ? ((categories.closed.length / referrals.length) * 100).toFixed(1)
     : 0;
 
+  // Handle navigation to client detail page
+  const handleViewDetails = (lead) => {
+    // Use lead.loan_id if available, otherwise use lead.id
+    const clientId = lead.loan_id || lead.id;
+    navigate(`/partner-portal/${id}/client/${clientId}`);
+  };
+
   return (
     <div className="partner-dashboard-portal">
       {/* Header */}
@@ -364,6 +385,7 @@ export default function PartnerDashboardPortal() {
             leads={categories.leads}
             emptyMessage="No active leads at this time. New referrals will appear here."
             defaultExpanded={true}
+            onViewDetails={handleViewDetails}
           />
 
           {/* Active Clients Section */}
@@ -372,6 +394,7 @@ export default function PartnerDashboardPortal() {
             leads={categories.active}
             emptyMessage="No clients currently in the loan process."
             defaultExpanded={true}
+            onViewDetails={handleViewDetails}
           />
 
           {/* Closed Clients Section */}
@@ -380,6 +403,7 @@ export default function PartnerDashboardPortal() {
             leads={categories.closed}
             emptyMessage="Completed loans will appear here."
             defaultExpanded={false}
+            onViewDetails={handleViewDetails}
           />
         </div>
       </main>
