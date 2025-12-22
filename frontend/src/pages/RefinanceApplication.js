@@ -469,34 +469,143 @@ const STAGES = [
   { id: 'schedule', label: 'Submit', icon: 'check', description: 'Complete application' },
 ];
 
-// Generate documents needed based on user's declarations (refinance-specific)
-const getRequiredDocuments = (declarations = {}) => {
+// Generate documents needed based on user's declarations (refinance-specific) - DYNAMIC based on answers
+const getRequiredDocuments = (declarations = {}, assetData = {}) => {
   const docs = [];
   const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
   const hasCoBorrower = ['2', '3', '4+'].includes(declarations.borrower_count);
   const isCashOut = declarations.refi_goal === 'cash_out';
+  const maximizesDeductions = declarations.write_off_expenses === 'yes';
 
-  // Identity documents (always required)
-  docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
+  // Parse asset values (for refinance, may come from income stage)
+  const hasCheckingOrSavings = (parseFloat(assetData.checking) || 0) > 0 || (parseFloat(assetData.savings) || 0) > 0;
+  const hasInvestmentOrRetirement = (parseFloat(assetData.investments) || 0) > 0 || (parseFloat(assetData.retirement) || 0) > 0;
 
-  // Income documents (varies based on employment type)
+  // === IDENTITY DOCUMENTS ===
+  // Always require government ID (driver's license or passport)
+  docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'declarations' });
+
+  // Citizenship-based documents
+  if (declarations.citizenship_status === 'permanent_resident') {
+    docs.push({ id: 'green_card', name: 'Green Card', description: 'Unexpired Permanent Resident Card', category: 'identity', stage: 'declarations' });
+  }
+  if (declarations.citizenship_status === 'non_permanent_resident' || declarations.citizenship_status === 'non_resident') {
+    docs.push({ id: 'visa_docs', name: 'Visa Documents', description: 'Current visa and work authorization', category: 'identity', stage: 'declarations' });
+  }
+
+  // === INCOME DOCUMENTS ===
   if (isSelfEmployed) {
-    docs.push({ id: 'tax_returns', name: 'Tax Returns', description: 'Personal returns (last 2 years)', category: 'income', stage: 'income' });
-    docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: 'Business returns (last 2 years)', category: 'income', stage: 'income' });
-    docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: 'Year-to-date P&L', category: 'income', stage: 'income' });
+    // Date-based logic for self-employment documents
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const priorYear = currentYear - 1;
+    const jan28 = new Date(currentYear, 0, 28); // January 28th
+    const apr15 = new Date(currentYear, 3, 15); // April 15th
+    const isBeforeJan28 = today < jan28;
+
+    if (maximizesDeductions) {
+      // Heavy deductions - use bank statement program instead of tax returns
+      docs.push({ id: 'business_bank_statements', name: 'Business Bank Statements', description: '12 months of business bank statements', category: 'income', stage: 'income' });
+    } else {
+      // Standard self-employed documentation
+      if (isBeforeJan28) {
+        // Before Jan 28 - prior year taxes can't be filed yet, need P&L
+        docs.push({ id: 'tax_returns', name: 'Tax Returns', description: `Personal returns (${priorYear - 1})`, category: 'income', stage: 'income' });
+        docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: `Business returns (${priorYear - 1})`, category: 'income', stage: 'income' });
+        docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: `${priorYear} P&L (signed by applicant)`, category: 'income', stage: 'income' });
+      } else if (declarations.prior_year_taxes_filed === 'yes') {
+        // After Jan 28 and taxes filed - request full tax returns
+        docs.push({ id: 'tax_returns', name: 'Tax Returns', description: 'Personal returns (last 2 years)', category: 'income', stage: 'income' });
+        docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: 'Business returns (last 2 years)', category: 'income', stage: 'income' });
+      } else {
+        // After Jan 28 but taxes not filed - need prior year P&L
+        docs.push({ id: 'tax_returns', name: 'Tax Returns', description: `Personal returns (${priorYear - 1})`, category: 'income', stage: 'income' });
+        docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: `Business returns (${priorYear - 1})`, category: 'income', stage: 'income' });
+        docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: `${priorYear} P&L (signed by applicant)`, category: 'income', stage: 'income' });
+      }
+    }
+
+    // Articles of Incorporation for S-Corp or C-Corp
+    if (declarations.business_type === 's_corp' || declarations.business_type === 'c_corp') {
+      docs.push({ id: 'articles_incorporation', name: 'Articles of Incorporation', description: 'Corporate formation documents', category: 'income', stage: 'income' });
+    }
   } else {
+    // W-2 employee
     docs.push({ id: 'paystubs', name: 'Pay Stubs', description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
     docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
   }
 
-  // Asset documents - only needed for cash-out refinances (to verify reserves)
-  if (isCashOut) {
-    docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'income' });
+  // === DIVORCE / CHILD SUPPORT DOCUMENTS ===
+  if ((declarations.marital_status === 'divorced' || declarations.marital_status === 'separated') &&
+      declarations.child_support_alimony && declarations.child_support_alimony !== 'neither') {
+    docs.push({ id: 'divorce_decree', name: 'Divorce Decree', description: 'Final divorce decree', category: 'income', stage: 'declarations' });
+    docs.push({ id: 'property_settlement', name: 'Property Settlement Agreement', description: 'Marital settlement agreement', category: 'income', stage: 'declarations' });
   }
 
-  // Note: Property documents not required for pre-approval stage
+  // === VETERAN DOCUMENTS ===
+  if (declarations.veteran === 'yes' || declarations.veteran === 'active' || declarations.veteran === 'spouse') {
+    docs.push({ id: 'va_coe', name: 'Certificate of Eligibility', description: 'VA Certificate of Eligibility (COE)', category: 'identity', stage: 'declarations' });
+  }
+  if (declarations.va_disability === 'pending') {
+    docs.push({ id: 'va_pending_claim', name: 'VA Pending Claim', description: 'Pending VA disability claim paperwork', category: 'identity', stage: 'declarations' });
+  }
 
-  // Co-borrower documents
+  // === IRS DOCUMENTS ===
+  if (declarations.irs_balance_owed === 'payment_plan') {
+    docs.push({ id: 'irs_payment_arrangement', name: 'IRS Payment Arrangement', description: 'IRS installment agreement letter', category: 'income', stage: 'declarations' });
+  } else if (declarations.irs_balance_owed === 'yes') {
+    docs.push({ id: 'irs_payoff', name: 'IRS Payoff Statement', description: 'Current IRS balance and payoff amount', category: 'income', stage: 'declarations' });
+  }
+
+  // === RENTAL PROPERTY DOCUMENTS (for investment properties being refinanced) ===
+  if (declarations.property_use === 'investment' || declarations.has_rental_income === 'yes') {
+    docs.push({ id: 'rental_tax_returns', name: 'Tax Returns with Schedule E', description: 'Most recent tax returns showing rental income', category: 'income', stage: 'declarations' });
+    docs.push({ id: 'lease_agreement', name: 'Lease Agreement', description: 'Current signed lease agreement', category: 'assets', stage: 'declarations' });
+  }
+
+  // === CREDIT APPLICATION DOCUMENTS ===
+  if (declarations.recent_credit_applications === 'yes' && declarations.credit_application_approved === 'yes') {
+    const creditType = declarations.credit_application_type;
+    const creditLabels = {
+      'auto_loan': 'Auto Loan Statement',
+      'credit_card': 'Credit Card Statement',
+      'personal_loan': 'Personal Loan Statement',
+      'other': 'New Account Statement'
+    };
+    const label = creditLabels[creditType] || 'New Account Statement';
+    docs.push({ id: 'new_credit_statement', name: label, description: 'Statement for recently opened account', category: 'assets', stage: 'declarations' });
+  }
+
+  // === BANKRUPTCY DOCUMENTS ===
+  if (declarations.credit_issues === 'bankruptcy') {
+    if (declarations.bankruptcy_type === 'chapter_7') {
+      // Chapter 7 - only need docs if within 7 years
+      if (declarations.bankruptcy_discharge_ch7 !== '8_years_or_more') {
+        docs.push({ id: 'bankruptcy_docs', name: 'Bankruptcy Documents', description: 'Chapter 7 discharge papers', category: 'identity', stage: 'declarations' });
+      }
+    } else if (declarations.bankruptcy_type === 'chapter_13') {
+      if (declarations.chapter_13_status === 'active_paying') {
+        docs.push({ id: 'ch13_payment_history', name: 'Payment History', description: 'Chapter 13 trustee payment history', category: 'identity', stage: 'declarations' });
+        docs.push({ id: 'ch13_court_approval', name: 'Court Approval Letter', description: 'Court approval for new mortgage', category: 'identity', stage: 'declarations' });
+      } else {
+        docs.push({ id: 'bankruptcy_discharge', name: 'Discharge Paperwork', description: 'Chapter 13 discharge documents', category: 'identity', stage: 'declarations' });
+      }
+    } else if (declarations.bankruptcy_type === 'chapter_12') {
+      docs.push({ id: 'ch12_payment_history', name: '12-Month Payment History', description: 'Chapter 12 payment history', category: 'identity', stage: 'declarations' });
+      docs.push({ id: 'ch12_court_approval', name: 'Court Approval Letter', description: 'Court approval letter for financing', category: 'identity', stage: 'declarations' });
+    }
+  }
+
+  // === ASSET DOCUMENTS ===
+  // For cash-out refinances or if user has entered asset values
+  if (isCashOut || hasCheckingOrSavings) {
+    docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (checking/savings)', category: 'assets', stage: 'income' });
+  }
+  if (hasInvestmentOrRetirement) {
+    docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'income' });
+  }
+
+  // === CO-BORROWER DOCUMENTS ===
   if (hasCoBorrower) {
     docs.push({ id: 'coborrower_id', name: 'Co-Borrower ID', description: "Co-borrower's government ID", category: 'identity', stage: 'profile' });
     docs.push({ id: 'coborrower_income', name: 'Co-Borrower Income Docs', description: 'Pay stubs & W-2s for co-borrower', category: 'income', stage: 'income' });
@@ -789,9 +898,22 @@ const DECLARATION_QUESTIONS = [
       { value: 'sole_proprietor', label: 'Sole proprietor', icon: 'user' },
       { value: 'llc', label: 'LLC', icon: 'building' },
       { value: 's_corp', label: 'S-Corp', icon: 'briefcase' },
+      { value: 'c_corp', label: 'C-Corp', icon: 'building' },
       { value: 'partnership', label: 'Partnership', icon: 'users' },
     ],
     hint: 'This determines what tax documents we\'ll need.',
+    showIf: { field: 'self_employed', values: ['yes', 'side_business'] },
+  },
+  {
+    id: 'prior_year_taxes_filed',
+    question: 'Have you filed your prior year tax returns?',
+    type: 'choice',
+    options: [
+      { value: 'yes', label: 'Yes, taxes are filed', icon: 'check' },
+      { value: 'no', label: 'No, not filed yet', icon: 'clock' },
+      { value: 'extension', label: 'Filed an extension', icon: 'calendar' },
+    ],
+    hint: 'If taxes are not yet filed, we\'ll need a year-to-date Profit & Loss statement.',
     showIf: { field: 'self_employed', values: ['yes', 'side_business'] },
   },
   {
@@ -949,21 +1071,57 @@ const DECLARATION_QUESTIONS = [
     options: [
       { value: 'chapter_7', label: 'Chapter 7', icon: 'document' },
       { value: 'chapter_13', label: 'Chapter 13', icon: 'document' },
+      { value: 'chapter_12', label: 'Chapter 12 (Farm/Fisherman)', icon: 'document' },
     ],
     hint: 'Different waiting periods apply for each type.',
     showIf: { field: 'credit_issues', values: ['bankruptcy'] },
   },
   {
-    id: 'bankruptcy_discharge',
-    question: 'When was your bankruptcy discharged?',
+    id: 'bankruptcy_discharge_ch7',
+    question: 'When was your Chapter 7 bankruptcy discharged?',
     type: 'choice',
     options: [
       { value: 'less_than_2_years', label: 'Less than 2 years ago', icon: 'clock' },
       { value: '2_to_4_years', label: '2-4 years ago', icon: 'calendar' },
-      { value: 'more_than_4_years', label: 'More than 4 years ago', icon: 'checkCircle' },
+      { value: '4_to_7_years', label: '4-7 years ago', icon: 'calendar' },
+      { value: '8_years_or_more', label: '8 years ago or more', icon: 'check' },
     ],
-    hint: 'FHA allows financing 2 years after Chapter 7 discharge.',
-    showIf: { field: 'credit_issues', values: ['bankruptcy'] },
+    hint: 'Chapter 7 typically has a 2-4 year waiting period depending on loan type.',
+    showIf: { field: 'bankruptcy_type', values: ['chapter_7'] },
+  },
+  {
+    id: 'chapter_13_status',
+    question: 'What is the status of your Chapter 13 bankruptcy?',
+    type: 'choice',
+    options: [
+      { value: 'active_paying', label: 'Actively paying to trustee', icon: 'clock' },
+      { value: 'completed', label: 'Completed/Discharged', icon: 'check' },
+    ],
+    hint: 'Active Chapter 13 plans may still qualify with court approval.',
+    showIf: { field: 'bankruptcy_type', values: ['chapter_13'] },
+  },
+  {
+    id: 'bankruptcy_discharge_ch13',
+    question: 'When was your Chapter 13 bankruptcy discharged?',
+    type: 'choice',
+    options: [
+      { value: 'less_than_2_years', label: 'Less than 2 years ago', icon: 'clock' },
+      { value: '2_to_4_years', label: '2-4 years ago', icon: 'calendar' },
+      { value: 'more_than_4_years', label: 'More than 4 years ago', icon: 'calendar' },
+    ],
+    hint: 'Chapter 13 discharge typically requires 2-4 year waiting period.',
+    showIf: { field: 'chapter_13_status', values: ['completed'] },
+  },
+  {
+    id: 'chapter_12_status',
+    question: 'What is the status of your Chapter 12 bankruptcy?',
+    type: 'choice',
+    options: [
+      { value: 'active_paying', label: 'Actively in repayment plan', icon: 'clock' },
+      { value: 'completed', label: 'Completed/Discharged', icon: 'check' },
+    ],
+    hint: 'Chapter 12 bankruptcies require payment history and court documentation.',
+    showIf: { field: 'bankruptcy_type', values: ['chapter_12'] },
   },
   {
     id: 'late_mortgage_payments',
@@ -3080,13 +3238,13 @@ export default function RefinanceApplication() {
         <div className="documents-list">
           {(() => {
             const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-            // Get dynamic document list based on user's declarations
-            const requiredDocs = getRequiredDocuments(declarations);
+            // Get dynamic document list based on user's declarations and asset values
+            const requiredDocs = getRequiredDocuments(declarations, {});
 
-            // Map category to the stage that unlocks it
+            // Map category to the stage that unlocks it - now showing from declarations
             const categoryUnlockStage = {
-              identity: 'profile',
-              income: 'income',
+              identity: 'declarations',
+              income: 'declarations',
               assets: 'income',  // Assets unlock with income stage for refinance
               property: 'property'
             };
@@ -3098,12 +3256,13 @@ export default function RefinanceApplication() {
               property: 'Property Documents'
             };
 
-            // Filter categories to only show those that have been unlocked
+            // Filter categories to only show those that have been unlocked AND have documents
             const visibleCategories = ['identity', 'income', 'assets', 'property'].filter(category => {
               const unlockStage = categoryUnlockStage[category];
               const unlockIndex = STAGES.findIndex(s => s.id === unlockStage);
-              // Show category if user has reached or passed its unlock stage
-              return currentIndex >= unlockIndex;
+              const categoryDocs = requiredDocs.filter(d => d.category === category);
+              // Show category if user has reached or passed its unlock stage AND has documents
+              return currentIndex >= unlockIndex && categoryDocs.length > 0;
             });
 
             return visibleCategories.map(category => {
