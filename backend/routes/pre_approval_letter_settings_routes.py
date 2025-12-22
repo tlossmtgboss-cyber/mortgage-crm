@@ -10,10 +10,19 @@ from sqlalchemy.dialects.postgresql import JSONB
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
+from io import BytesIO
 import logging
 import json
 
 from database import get_db, Base
+
+# PDF Generation imports
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
@@ -391,6 +400,252 @@ def generate_pre_approval_letter_html(settings: PreApprovalLetterSettings, sampl
     return html
 
 
+def generate_pre_approval_letter_pdf(settings: PreApprovalLetterSettings, sample_data: dict = None) -> bytes:
+    """Generate PDF for a pre-approval letter using reportlab"""
+
+    # Use sample data or defaults
+    if sample_data is None:
+        sample_data = {
+            "borrower_names": "John Smith & Jane Smith",
+            "property_address": "123 Main Street, Anytown, CA 90210",
+            "pre_approved_amount": "$450,000",
+            "loan_type": "Conventional 30-Year Fixed",
+            "lo_name": "Tim Loss",
+            "lo_title": "Senior Loan Officer",
+            "lo_nmls": "123456",
+            "lo_phone": "(555) 123-4567",
+            "lo_email": "tim@perenniaai.com"
+        }
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.75*inch,
+        leftMargin=0.75*inch,
+        topMargin=0.5*inch,
+        bottomMargin=0.5*inch
+    )
+
+    # Create custom styles
+    styles = getSampleStyleSheet()
+
+    # Company name style
+    company_style = ParagraphStyle(
+        'CompanyName',
+        parent=styles['Heading1'],
+        fontSize=20,
+        textColor=colors.HexColor('#1e40af'),
+        alignment=TA_CENTER,
+        spaceAfter=6
+    )
+
+    # Company info style
+    company_info_style = ParagraphStyle(
+        'CompanyInfo',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        alignment=TA_CENTER,
+        spaceAfter=2
+    )
+
+    # NMLS style
+    nmls_style = ParagraphStyle(
+        'NMLS',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.HexColor('#888888'),
+        alignment=TA_CENTER,
+        spaceAfter=12
+    )
+
+    # Date style
+    date_style = ParagraphStyle(
+        'Date',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        alignment=TA_RIGHT,
+        spaceAfter=20
+    )
+
+    # Letter header style
+    header_style = ParagraphStyle(
+        'LetterHeader',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.HexColor('#1e40af'),
+        alignment=TA_CENTER,
+        spaceAfter=20,
+        spaceBefore=10
+    )
+
+    # Body text style
+    body_style = ParagraphStyle(
+        'BodyText',
+        parent=styles['Normal'],
+        fontSize=11,
+        leading=16,
+        alignment=TA_JUSTIFY,
+        spaceAfter=12
+    )
+
+    # Label style for borrower info
+    label_style = ParagraphStyle(
+        'Label',
+        parent=styles['Normal'],
+        fontSize=11,
+        textColor=colors.HexColor('#1e40af'),
+        fontName='Helvetica-Bold'
+    )
+
+    # Amount highlight style
+    amount_style = ParagraphStyle(
+        'Amount',
+        parent=styles['Normal'],
+        fontSize=14,
+        textColor=colors.HexColor('#059669'),
+        fontName='Helvetica-Bold'
+    )
+
+    # Conditions intro style
+    conditions_intro_style = ParagraphStyle(
+        'ConditionsIntro',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=8
+    )
+
+    # Bullet style
+    bullet_style = ParagraphStyle(
+        'Bullet',
+        parent=styles['Normal'],
+        fontSize=11,
+        leftIndent=20,
+        spaceAfter=4
+    )
+
+    # Signature style
+    signature_style = ParagraphStyle(
+        'Signature',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=4
+    )
+
+    # Disclaimer style
+    disclaimer_style = ParagraphStyle(
+        'Disclaimer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#888888'),
+        alignment=TA_JUSTIFY,
+        fontName='Helvetica-Oblique',
+        spaceBefore=20
+    )
+
+    # Footer style
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.HexColor('#888888'),
+        alignment=TA_CENTER,
+        spaceBefore=15
+    )
+
+    # Build document content
+    story = []
+
+    # Letterhead
+    story.append(Paragraph(settings.company_name or '[Company Name]', company_style))
+    story.append(Paragraph(settings.company_address or '[Company Address]', company_info_style))
+    story.append(Paragraph(settings.company_phone or '[Phone Number]', company_info_style))
+
+    if settings.show_nmls:
+        story.append(Paragraph(f"NMLS #{settings.company_nmls or '[NMLS]'}", nmls_style))
+
+    # Horizontal line
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#1e40af'), spaceAfter=20))
+
+    # Date
+    letter_date = datetime.now().strftime("%B %d, %Y")
+    story.append(Paragraph(letter_date, date_style))
+
+    # Letter header
+    story.append(Paragraph(settings.letter_header or 'PRE-APPROVAL LETTER', header_style))
+
+    # Borrower information box
+    borrower_data = [
+        [Paragraph("<b>Borrower(s):</b>", label_style), Paragraph(sample_data['borrower_names'], body_style)],
+        [Paragraph("<b>Property Address:</b>", label_style), Paragraph(sample_data['property_address'], body_style)],
+        [Paragraph("<b>Pre-Approved Amount:</b>", label_style), Paragraph(f"<b>{sample_data['pre_approved_amount']}</b>", amount_style)],
+        [Paragraph("<b>Loan Type:</b>", label_style), Paragraph(sample_data['loan_type'], body_style)],
+    ]
+
+    borrower_table = Table(borrower_data, colWidths=[1.8*inch, 4.5*inch])
+    borrower_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    story.append(borrower_table)
+    story.append(Spacer(1, 20))
+
+    # Opening paragraph
+    opening = settings.opening_paragraph or 'This letter confirms pre-approval for a mortgage loan.'
+    story.append(Paragraph(opening, body_style))
+
+    # Conditions
+    conditions_intro = settings.conditions_intro or 'This pre-approval is subject to the following conditions:'
+    story.append(Paragraph(conditions_intro, conditions_intro_style))
+
+    conditions = parse_conditions(settings)
+    for condition in conditions:
+        if condition:
+            story.append(Paragraph(f"• {condition}", bullet_style))
+
+    story.append(Spacer(1, 12))
+
+    # Closing paragraph
+    closing = settings.closing_paragraph or 'This pre-approval is valid for 90 days.'
+    story.append(Paragraph(closing, body_style))
+
+    # Signature block
+    story.append(Spacer(1, 30))
+    story.append(Paragraph("Sincerely,", signature_style))
+    story.append(Spacer(1, 40))
+    story.append(HRFlowable(width=2.5*inch, thickness=1, color=colors.black, spaceAfter=6))
+    story.append(Paragraph(f"<b>{sample_data['lo_name']}</b>", signature_style))
+    story.append(Paragraph(sample_data['lo_title'], signature_style))
+    story.append(Paragraph(f"NMLS #{sample_data['lo_nmls']}", ParagraphStyle('SmallText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#888888'))))
+    story.append(Paragraph(sample_data['lo_phone'], signature_style))
+    story.append(Paragraph(sample_data['lo_email'], signature_style))
+
+    # Disclaimer
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e2e8f0'), spaceBefore=30, spaceAfter=10))
+    disclaimer = settings.disclaimer or 'This pre-approval is subject to verification.'
+    story.append(Paragraph(disclaimer, disclaimer_style))
+
+    # Equal Housing
+    if settings.show_equal_housing:
+        story.append(Paragraph("Equal Housing Lender", footer_style))
+
+    # Build PDF
+    doc.build(story)
+
+    # Get PDF bytes
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
+
+
 class TestEmailRequest(BaseModel):
     to_email: str
     borrower_names: Optional[str] = "John Smith & Jane Smith"
@@ -404,7 +659,7 @@ async def send_test_pre_approval_letter(
     request: TestEmailRequest,
     db: Session = Depends(get_db)
 ):
-    """Send a test pre-approval letter to the specified email"""
+    """Send a test pre-approval letter PDF attachment to the specified email"""
     from email_service import EmailService
 
     settings = get_or_create_settings(db)
@@ -421,49 +676,154 @@ async def send_test_pre_approval_letter(
         "lo_email": "tim@perenniaai.com"
     }
 
-    html_content = generate_pre_approval_letter_html(settings, sample_data)
+    # Generate PDF
+    pdf_bytes = generate_pre_approval_letter_pdf(settings, sample_data)
+
+    # Create a clean filename from borrower names
+    borrower_filename = sample_data['borrower_names'].replace(' & ', '_').replace(' ', '_')
+    pdf_filename = f"Pre_Approval_Letter_{borrower_filename}.pdf"
+
+    # Email body (simple notification that PDF is attached)
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px 12px 0 0;
+            text-align: center;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 24px;
+        }}
+        .content {{
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 30px;
+        }}
+        .info-box {{
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }}
+        .attachment-note {{
+            background: #ecfdf5;
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            text-align: center;
+        }}
+        .attachment-note .icon {{
+            font-size: 32px;
+            margin-bottom: 8px;
+        }}
+        .footer {{
+            text-align: center;
+            color: #6b7280;
+            font-size: 12px;
+            margin-top: 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Pre-Approval Letter</h1>
+    </div>
+    <div class="content">
+        <p>Hello,</p>
+        <p>Please find attached the pre-approval letter for the following borrower(s):</p>
+
+        <div class="info-box">
+            <p><strong>Borrower(s):</strong> {sample_data['borrower_names']}</p>
+            <p><strong>Property:</strong> {sample_data['property_address']}</p>
+            <p><strong>Pre-Approved Amount:</strong> {sample_data['pre_approved_amount']}</p>
+            <p><strong>Loan Type:</strong> {sample_data['loan_type']}</p>
+        </div>
+
+        <div class="attachment-note">
+            <div class="icon">📎</div>
+            <strong>PDF Attachment</strong><br>
+            <span style="color: #6b7280;">{pdf_filename}</span>
+        </div>
+
+        <p>If you have any questions, please don't hesitate to reach out.</p>
+
+        <p>
+            Best regards,<br>
+            <strong>{sample_data['lo_name']}</strong><br>
+            {sample_data['lo_title']}<br>
+            NMLS #{sample_data['lo_nmls']}<br>
+            {sample_data['lo_phone']}<br>
+            {sample_data['lo_email']}
+        </p>
+    </div>
+    <div class="footer">
+        <p>This email was sent from Perennia AI CRM</p>
+        {f'<p>Equal Housing Lender</p>' if settings.show_equal_housing else ''}
+    </div>
+</body>
+</html>
+"""
 
     plain_text = f"""
 Pre-Approval Letter
-{settings.company_name or '[Company Name]'}
-{datetime.now().strftime("%B %d, %Y")}
-
-{settings.letter_header or 'Pre-Approval Letter'}
 
 Borrower(s): {sample_data['borrower_names']}
-Property Address: {sample_data['property_address']}
+Property: {sample_data['property_address']}
 Pre-Approved Amount: {sample_data['pre_approved_amount']}
 Loan Type: {sample_data['loan_type']}
 
-{settings.opening_paragraph or 'This letter confirms pre-approval for a mortgage loan.'}
+Please see the attached PDF for the full pre-approval letter.
 
-{settings.conditions_intro or 'Conditions:'}
-{chr(10).join(['- ' + c for c in parse_conditions(settings) if c])}
-
-{settings.closing_paragraph or 'This pre-approval is valid for 90 days.'}
-
-Sincerely,
+Best regards,
 {sample_data['lo_name']}
 {sample_data['lo_title']}
 NMLS #{sample_data['lo_nmls']}
-
-{settings.disclaimer or ''}
+{sample_data['lo_phone']}
+{sample_data['lo_email']}
 """
 
     try:
         email_service = EmailService()
+
+        # Create attachment
+        attachments = [{
+            'content': pdf_bytes,
+            'filename': pdf_filename,
+            'type': 'application/pdf'
+        }]
+
         success = email_service.send_html_email(
             to_email=request.to_email,
-            subject=f"Test Pre-Approval Letter - {sample_data['borrower_names']}",
+            subject=f"Pre-Approval Letter - {sample_data['borrower_names']}",
             html_body=html_content,
-            plain_text_body=plain_text
+            plain_text_body=plain_text,
+            attachments=attachments
         )
 
         if success:
-            logger.info(f"Test pre-approval letter sent to {request.to_email}")
+            logger.info(f"Test pre-approval letter PDF sent to {request.to_email}")
             return {
                 "success": True,
-                "message": f"Test pre-approval letter sent to {request.to_email}"
+                "message": f"Pre-approval letter PDF sent to {request.to_email}",
+                "filename": pdf_filename
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to send email")
