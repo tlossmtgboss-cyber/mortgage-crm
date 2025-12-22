@@ -251,7 +251,8 @@ function ReferralPartnerDetail() {
   };
 
   const handleLeadClick = (leadId) => {
-    navigate(`/leads/${leadId}`);
+    // Navigate to partner portal client view
+    navigate(`/partner-portal/${id}/client/${leadId}`);
   };
 
   if (loading) {
