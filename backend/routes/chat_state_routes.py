@@ -707,9 +707,10 @@ async def get_session_quality(
 # =============================================================================
 
 def _generate_fallback_response(user_message: str, phase: Any) -> str:
-    """Generate fallback response when AI is unavailable."""
+    """Generate fallback response when AI is unavailable - follows trust-first approach."""
     phase_value = phase.value if hasattr(phase, 'value') else phase
 
+    # IMPORTANT: Only Phase 4 should mention scheduling calls
     if phase_value == 1:
         return (
             "Thanks for reaching out! I'm here to help you explore your mortgage options. "
@@ -718,18 +719,17 @@ def _generate_fallback_response(user_message: str, phase: Any) -> str:
     elif phase_value == 2:
         return (
             "Great question! There are several factors that go into mortgage rates and options. "
-            "Can you tell me a bit more about what you're looking for?"
+            "Can you tell me a bit more about what you're looking for so I can give you more relevant information?"
         )
     elif phase_value == 3:
         return (
-            "Thanks for sharing those details. Based on what you've told me, "
-            "it sounds like you might benefit from speaking with Tim directly. "
-            "Would you like to schedule a quick call?"
+            "Thanks for sharing those details! To give you the most accurate guidance, "
+            "I'd love to learn a bit more. What's your timeline looking like for this?"
         )
-    else:
+    else:  # Phase 4 only
         return (
-            "I'd love to help you take the next step! Would you prefer to speak with Tim now, "
-            "or would you like to schedule a call at a time that works better for you?"
+            "Based on our conversation, I think Tim could really help you take the next step. "
+            "Would you prefer to speak with him now, or schedule a call at a time that works better?"
         )
 
 

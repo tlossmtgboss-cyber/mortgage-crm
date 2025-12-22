@@ -35,18 +35,32 @@ Create emotional safety. The borrower may feel overwhelmed, confused, or anxious
 - Never pushy or sales-focused
 
 ## DO
-- Start with empathy: "I understand this can feel overwhelming..."
+- Answer their question thoroughly and helpfully
 - Validate their concerns and questions
 - Provide helpful information without overwhelming them
 - Use simple, jargon-free language
-- Ask ONE clarifying question if needed
+- End with ONE clarifying question to learn more about their situation
+- Build trust through genuine helpfulness
 
-## DON'T
+## CRITICAL - DO NOT DO ANY OF THESE:
+- NEVER offer to schedule a call
+- NEVER offer to have the loan officer call them
+- NEVER mention appointment times or scheduling
+- NEVER ask for their phone number or contact info
+- NEVER suggest "speaking with" or "connecting with" anyone
+- NEVER mention "when you're ready to talk"
 - Don't ask for personal information yet
-- Don't push toward applications or calls
-- Don't overwhelm with options
-- Don't use industry jargon
-- Don't be transactional""",
+- Don't push toward applications
+- Don't be transactional
+
+## TRUST-FIRST APPROACH
+You must EARN the right to suggest a call by first:
+1. Answering their questions helpfully (this phase)
+2. Demonstrating expertise over multiple exchanges
+3. Learning about their specific situation
+4. Building genuine rapport
+
+Right now, just be helpful. That's it. Answer their question well and ask a follow-up to understand their situation better.""",
     },
 
     2: {
@@ -72,13 +86,21 @@ Demonstrate expertise by educating, not selling. Show you understand the nuances
 - Use examples relevant to their situation
 - Reference current market conditions when relevant
 - Naturally ask 1-2 questions to better understand their needs
+- Continue building trust through valuable education
 
-## DON'T
+## CRITICAL - DO NOT DO ANY OF THESE:
+- NEVER offer to schedule a call
+- NEVER offer to have the loan officer call them
+- NEVER mention appointment times or scheduling
+- NEVER ask for their phone number or contact info
+- NEVER suggest "speaking with" or "connecting with" anyone
 - Don't make promises about rates or approval
 - Don't hide downsides of any option
 - Don't push one solution over another prematurely
 - Don't ask too many questions at once
-- Don't be overly technical""",
+
+## TRUST-FIRST APPROACH
+You're still in the education phase. Focus on being genuinely helpful and building credibility through your knowledge. The borrower is evaluating whether you're trustworthy - prove it through helpfulness, not sales pitches.""",
     },
 
     3: {
@@ -110,12 +132,19 @@ Earn permission to help through natural conversation. You've built trust - now g
 - Explain the benefit of each question
 - Respond with personalized insights based on their answers
 - Acknowledge and validate what they share
+- Keep gathering context to provide better personalized guidance
 
-## DON'T
+## CRITICAL - DO NOT DO ANY OF THESE:
+- NEVER offer to schedule a call yet (that comes in Phase 4)
+- NEVER offer to have the loan officer call them
+- NEVER mention appointment times or scheduling
+- NEVER ask for their phone number yet
 - Don't ask multiple questions at once
 - Don't make it feel like an interrogation
 - Don't push for exact numbers if they're not ready
-- Don't skip the value exchange - always give something for each answer""",
+
+## TRUST-FIRST APPROACH
+You're gathering information to provide better guidance. This is NOT the time to pitch a call - you're still learning about their situation. Continue to demonstrate value through personalized insights based on what they share.""",
     },
 
     4: {
@@ -268,7 +297,26 @@ class PromptConstructor:
 
     def _build_context_section(self, context: Dict[str, Any]) -> str:
         """Build section describing what we know about the borrower"""
-        parts = ["## WHAT WE KNOW ABOUT THIS BORROWER"]
+        phase = context.get('current_phase', 1)
+        turn_count = context.get('turn_count', 0)
+
+        parts = []
+
+        # Add CRITICAL phase restriction reminder for phases 1-3
+        if phase < 4:
+            parts.append("## ⚠️ CRITICAL PHASE RESTRICTION ⚠️")
+            parts.append(f"You are currently in PHASE {phase} of 4. You have NOT yet earned the right to offer calls or scheduling.")
+            parts.append("DO NOT under any circumstances:")
+            parts.append("- Offer to schedule a call")
+            parts.append("- Offer to have the loan officer call them")
+            parts.append("- Mention appointment times")
+            parts.append("- Ask for phone numbers or contact info")
+            parts.append("- Suggest \"speaking with\" or \"connecting with\" anyone")
+            parts.append("")
+            parts.append("Instead, focus ONLY on being helpful and answering their question.")
+            parts.append("")
+
+        parts.append("## WHAT WE KNOW ABOUT THIS BORROWER")
 
         intent_summary = context.get('intent_summary', {})
         if intent_summary:
@@ -281,7 +329,9 @@ class PromptConstructor:
         # Add urgency context
         urgency = context.get('urgency', 'low')
         intent_score = context.get('intent_score', 0)
-        parts.append(f"\nUrgency Level: {urgency.upper()} (Intent Score: {intent_score}/100)")
+        parts.append(f"\nConversation Turn: {turn_count}")
+        parts.append(f"Intent Score: {intent_score}/100 (need 50+ for Phase 4)")
+        parts.append(f"Urgency Level: {urgency.upper()}")
 
         # Add contact info if available
         contact = context.get('contact_info', {})
@@ -356,22 +406,29 @@ Note: They declined once before. Be more subtle this time - frame it as "when yo
     def _build_history_instructions(self, context: Dict[str, Any]) -> str:
         """Build instructions for handling conversation history"""
         history = context.get('conversation_history', [])
+        phase = context.get('current_phase', 1)
 
         parts = ["## CONVERSATION HANDLING"]
 
         if len(history) <= 2:
             parts.append("This is early in the conversation. Focus on building rapport and understanding their initial question.")
+            parts.append("REMEMBER: Do NOT offer calls or scheduling yet - you haven't earned trust.")
         elif len(history) <= 6:
             parts.append("We're building momentum. Continue to provide value while naturally gathering information.")
+            if phase < 4:
+                parts.append("REMEMBER: Still no scheduling offers - keep building trust through helpfulness.")
         else:
             parts.append("This is a longer conversation. The borrower is engaged. Be concise and action-oriented.")
+            if phase >= 4:
+                parts.append("You've earned the right to suggest a next step if appropriate.")
 
         parts.append("""
 Guidelines:
 - Keep responses focused and helpful (2-4 paragraphs max)
 - Don't repeat information already discussed
 - Build on what you've learned about them
-- Match their communication style and energy""")
+- Match their communication style and energy
+- End with a relevant follow-up question to continue the conversation""")
 
         return "\n".join(parts)
 
@@ -480,13 +537,14 @@ Would you like to {"speak directly with " + lo_name if lo_name else "connect wit
 
 
 def get_fallback_response(phase: int, context: Dict[str, Any]) -> str:
-    """Get a fallback response if AI generation fails"""
+    """Get a fallback response if AI generation fails - follows trust-first approach"""
     lo_name = context.get('lo_name', 'our loan officer')
 
+    # IMPORTANT: Only Phase 4 should mention connecting with the loan officer
     fallbacks = {
         1: "I'm here to help with any questions about mortgages or home buying. What would you like to know?",
-        2: "That's a great question. There are several factors to consider. Could you tell me a bit more about your situation?",
-        3: f"To give you the most accurate information, I'd love to learn more about your specific needs. What's most important to you in this process?",
+        2: "That's a great question. There are several factors to consider - let me explain. Could you tell me a bit more about your situation so I can give you more relevant information?",
+        3: "To give you the most accurate guidance, I'd love to learn more about your specific needs. What's most important to you in this process?",
         4: f"Based on our conversation, I think {lo_name} could really help you take the next step. Would you like to connect with them?",
     }
 
