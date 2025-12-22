@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { partnersAPI, leadsAPI } from '../services/api';
+import { partnersAPI } from '../services/api';
 import './PartnerDashboardPortal.css';
 
 // Status badge component
@@ -239,9 +239,10 @@ export default function PartnerDashboardPortal() {
       setLoading(true);
       setError(null);
 
-      const [partnerData, allLeadsData] = await Promise.all([
+      // Fetch partner info and referrals (including application-selected realtors)
+      const [partnerData, referralsData] = await Promise.all([
         partnersAPI.getById(id),
-        leadsAPI.getAll()
+        partnersAPI.getReferrals(id)
       ]);
 
       if (!partnerData) {
@@ -250,13 +251,11 @@ export default function PartnerDashboardPortal() {
 
       setPartner(partnerData);
 
-      // Filter leads that were referred by this partner
-      const partnerReferrals = allLeadsData.filter(lead =>
-        lead.referral_partner_id === parseInt(id) ||
-        lead.source?.toLowerCase().includes(partnerData.name?.toLowerCase())
-      );
-
-      setReferrals(partnerReferrals);
+      // Use the referrals from the new endpoint which includes:
+      // 1. Direct referrals (referral_partner_id)
+      // 2. Source matches (lead source contains partner name)
+      // 3. Application-selected realtors (borrower chose this partner as realtor)
+      setReferrals(referralsData.referrals || []);
     } catch (err) {
       console.error('Failed to load partner data:', err);
       setError(err.message || 'Failed to load partner portal');

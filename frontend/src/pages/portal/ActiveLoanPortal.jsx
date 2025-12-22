@@ -20,6 +20,7 @@ import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../../components/PaymentCalculator';
 import ApplicantTasks from '../../components/portal/ApplicantTasks';
+import PortalDocumentRequirements from '../../components/portal/PortalDocumentRequirements';
 import '../PURLPortal.css';
 
 // Tab components - Arrow/chevron style with notification dots
@@ -1074,6 +1075,8 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const [tasks, setTasks] = useState(data?.tasks || []);
   const [conditions, setConditions] = useState([]);
   const [conditionsLoading, setConditionsLoading] = useState(false);
+  const [smartDocsRequirements, setSmartDocsRequirements] = useState([]);
+  const [smartDocsLoading, setSmartDocsLoading] = useState(false);
   const [milestones, setMilestones] = useState(data?.milestones || []);
   const [timeline, setTimeline] = useState(data?.timeline || []);
   const [messages, setMessages] = useState([]);
@@ -1119,6 +1122,28 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   useEffect(() => {
     loadConditions();
   }, [loadConditions]);
+
+  // Load Smart Docs requirements
+  const loadSmartDocsRequirements = useCallback(async () => {
+    if (!slug) return;
+    setSmartDocsLoading(true);
+    try {
+      const response = await fetch(`/api/portal/smart-docs/${slug}/requirements`);
+      if (response.ok) {
+        const data = await response.json();
+        setSmartDocsRequirements(data.requirements || []);
+      }
+    } catch (err) {
+      console.error('Failed to load Smart Docs requirements:', err);
+    } finally {
+      setSmartDocsLoading(false);
+    }
+  }, [slug]);
+
+  // Load Smart Docs requirements on mount
+  useEffect(() => {
+    loadSmartDocsRequirements();
+  }, [loadSmartDocsRequirements]);
 
   // Load messages
   const loadMessages = useCallback(async () => {
@@ -1412,7 +1437,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                 <ApplicantTasks
                   workspaceId={workspace?.id}
                   conditions={conditions}
-                  documentRequirements={data?.document_requirements || []}
+                  documentRequirements={[...(data?.document_requirements || []), ...smartDocsRequirements]}
                   onUploadForCondition={handleUploadForCondition}
                   uploading={conditionUploading}
                 />
@@ -1474,7 +1499,24 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
               </label>
             </div>
 
-            <DocumentsTable documents={documents} onDownload={handleDownload} />
+            {/* Smart Docs Requirements - Documents needed from application */}
+            {slug && (
+              <div className="documents-requirements-section">
+                <PortalDocumentRequirements
+                  workspaceSlug={slug}
+                  onProgressUpdate={(progress) => {
+                    // Could update parent state if needed
+                    console.log('Document progress:', progress);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Uploaded Documents */}
+            <div className="uploaded-documents-section">
+              <h3>Uploaded Documents</h3>
+              <DocumentsTable documents={documents} onDownload={handleDownload} />
+            </div>
           </div>
         )}
 

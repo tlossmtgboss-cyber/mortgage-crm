@@ -790,13 +790,52 @@ async def get_applicants_with_outstanding_docs(
 
     applicants = []
     for loan_id, outstanding_count, overdue_count, nearest_due in outstanding_loans:
-        # Get loan/workspace info
+        # Get loan/workspace info - try PURLLoan first
         loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
         workspace = None
-        if loan and loan.workspace_id:
-            workspace = db.query(PURLWorkspace).filter(
-                PURLWorkspace.id == loan.workspace_id
-            ).first()
+        borrower_name = None
+        loan_number = None
+        loan_purpose = None
+
+        if loan:
+            loan_number = loan.loan_number
+            loan_purpose = loan.loan_purpose
+            if loan.workspace_id:
+                workspace = db.query(PURLWorkspace).filter(
+                    PURLWorkspace.id == loan.workspace_id
+                ).first()
+
+        # Try to get borrower name from various sources
+        if workspace and workspace.display_name:
+            borrower_name = workspace.display_name
+        else:
+            # Try to get borrower from purl_contacts
+            from models.purl import PURLContact
+            if loan and loan.workspace_id:
+                borrower_contact = db.query(PURLContact).filter(
+                    PURLContact.workspace_id == loan.workspace_id,
+                    PURLContact.contact_type == 'borrower'
+                ).first()
+                if borrower_contact:
+                    borrower_name = f"{borrower_contact.first_name or ''} {borrower_contact.last_name or ''}".strip()
+
+            # If still no borrower name, try the main loans table
+            if not borrower_name:
+                from models.leads import Lead
+                try:
+                    # Check if there's a lead associated
+                    if workspace and workspace.meta_data:
+                        lead_id = workspace.meta_data.get('lead_id')
+                        if lead_id:
+                            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                            if lead:
+                                borrower_name = lead.name
+                except Exception:
+                    pass
+
+        # Fallback to loan ID if no name found
+        if not borrower_name:
+            borrower_name = f"Loan {loan_id}"
 
         # Get outstanding requests
         requests = db.query(DocumentRequest).filter(
@@ -809,9 +848,9 @@ async def get_applicants_with_outstanding_docs(
 
         applicants.append({
             "loan_id": loan_id,
-            "loan_number": loan.loan_number if loan else None,
-            "borrower_name": workspace.display_name if workspace else f"Loan {loan_id}",
-            "loan_purpose": loan.loan_purpose if loan else None,
+            "loan_number": loan_number,
+            "borrower_name": borrower_name,
+            "loan_purpose": loan_purpose,
             "outstanding_count": outstanding_count,
             "overdue_count": overdue_count or 0,
             "nearest_due": nearest_due.isoformat() if nearest_due else None,

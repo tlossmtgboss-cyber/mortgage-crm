@@ -43542,6 +43542,166 @@ async def delete_referral_partner(partner_id: int, db: Session = Depends(get_db)
     return None
 
 
+@app.get("/api/v1/referral-partners/{partner_id}/referrals")
+async def get_partner_referrals(
+    partner_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all referrals for a partner including:
+    1. Leads where referral_partner_id matches the partner
+    2. Leads/Loans from applications where the borrower selected this partner as their realtor
+    """
+    from models.purl import PURLApplication, PURLWorkspace, PURLLoan
+
+    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+    if not partner:
+        raise HTTPException(status_code=404, detail="Referral partner not found")
+
+    referrals = []
+    seen_ids = set()
+
+    # 1. Get leads with referral_partner_id matching this partner
+    leads_query = db.query(Lead).filter(Lead.referral_partner_id == partner_id).all()
+    for lead in leads_query:
+        if lead.id not in seen_ids:
+            seen_ids.add(lead.id)
+            referrals.append({
+                "id": lead.id,
+                "name": lead.name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
+                "source": lead.source,
+                "loan_purpose": lead.loan_type,
+                "loan_amount": lead.loan_amount,
+                "property_type": lead.property_type,
+                "credit_score": lead.credit_score,
+                "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                "updated_at": lead.updated_at.isoformat() if hasattr(lead, 'updated_at') and lead.updated_at else None,
+                "referral_type": "direct",  # Direct referral partner assignment
+                "loan_id": None
+            })
+
+    # 2. Get leads where source contains partner name
+    if partner.name:
+        source_leads = db.query(Lead).filter(
+            Lead.source.ilike(f"%{partner.name}%"),
+            Lead.referral_partner_id != partner_id  # Avoid duplicates
+        ).all()
+        for lead in source_leads:
+            if lead.id not in seen_ids:
+                seen_ids.add(lead.id)
+                referrals.append({
+                    "id": lead.id,
+                    "name": lead.name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
+                    "source": lead.source,
+                    "loan_purpose": lead.loan_type,
+                    "loan_amount": lead.loan_amount,
+                    "property_type": lead.property_type,
+                    "credit_score": lead.credit_score,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                    "updated_at": lead.updated_at.isoformat() if hasattr(lead, 'updated_at') and lead.updated_at else None,
+                    "referral_type": "source_match",
+                    "loan_id": None
+                })
+
+    # 3. Get applications where agent_partner_id in declarations matches this partner
+    try:
+        # Query applications with agent_partner_id in data->declarations
+        applications = db.execute(text("""
+            SELECT
+                pa.id as app_id,
+                pa.workspace_id,
+                pa.data,
+                pw.display_name,
+                pw.slug,
+                pl.id as loan_id,
+                pl.loan_number,
+                pl.status as loan_status,
+                pl.loan_amount,
+                pl.property_address,
+                pc.first_name,
+                pc.last_name,
+                pc.email,
+                pc.phone,
+                pw.created_at
+            FROM purl_applications pa
+            JOIN purl_workspaces pw ON pw.id = pa.workspace_id
+            LEFT JOIN purl_loans pl ON pl.workspace_id = pa.workspace_id
+            LEFT JOIN purl_contacts pc ON pc.workspace_id = pa.workspace_id AND pc.contact_type = 'borrower'
+            WHERE pa.data IS NOT NULL
+            AND pa.status IN ('submitted', 'in_progress')
+        """)).fetchall()
+
+        for app in applications:
+            try:
+                import json
+                data = app.data if isinstance(app.data, dict) else json.loads(app.data) if app.data else {}
+                declarations = data.get('declarations', {})
+                agent_partner_id = declarations.get('agent_partner_id')
+
+                # Check if this application selected this partner as their realtor
+                if agent_partner_id and int(agent_partner_id) == partner_id:
+                    # Use a unique key for deduplication
+                    unique_key = f"app_{app.app_id}"
+                    if unique_key not in seen_ids:
+                        seen_ids.add(unique_key)
+
+                        # Build borrower name
+                        borrower_name = None
+                        if app.first_name or app.last_name:
+                            borrower_name = f"{app.first_name or ''} {app.last_name or ''}".strip()
+                        if not borrower_name:
+                            borrower_name = app.display_name
+
+                        # Get loan status
+                        loan_status = app.loan_status or 'Application'
+
+                        referrals.append({
+                            "id": app.app_id,
+                            "name": borrower_name or "Borrower",
+                            "email": app.email,
+                            "phone": app.phone,
+                            "stage": loan_status,
+                            "source": "Application - Selected Realtor",
+                            "loan_purpose": data.get('loanDetails', {}).get('loanPurpose'),
+                            "loan_amount": float(app.loan_amount) if app.loan_amount else data.get('loanDetails', {}).get('loanAmount'),
+                            "property_type": data.get('propertyDetails', {}).get('propertyType'),
+                            "credit_score": None,
+                            "created_at": app.created_at.isoformat() if app.created_at else None,
+                            "updated_at": None,
+                            "referral_type": "application_selected",  # Borrower selected this realtor in application
+                            "loan_id": app.loan_id,
+                            "workspace_slug": app.slug
+                        })
+            except Exception as e:
+                logger.warning(f"Error processing application {app.app_id}: {e}")
+                continue
+
+    except Exception as e:
+        logger.warning(f"Error querying applications for partner referrals: {e}")
+
+    # Sort by created_at descending
+    referrals.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+
+    return {
+        "partner_id": partner_id,
+        "partner_name": partner.name,
+        "referrals": referrals,
+        "total": len(referrals),
+        "by_type": {
+            "direct": len([r for r in referrals if r.get('referral_type') == 'direct']),
+            "source_match": len([r for r in referrals if r.get('referral_type') == 'source_match']),
+            "application_selected": len([r for r in referrals if r.get('referral_type') == 'application_selected'])
+        }
+    }
+
+
 # ============================================================================
 # LOAN TEAM MEMBERS CRUD
 # ============================================================================

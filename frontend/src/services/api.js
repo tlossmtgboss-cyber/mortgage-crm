@@ -242,6 +242,10 @@ export const partnersAPI = {
     const response = await api.get(`/api/v1/referral-partners/${id}`);
     return response.data;
   },
+  getReferrals: async (id) => {
+    const response = await api.get(`/api/v1/referral-partners/${id}/referrals`);
+    return response.data;
+  },
   create: async (data) => {
     const response = await api.post('/api/v1/referral-partners/', data);
     return response.data;
