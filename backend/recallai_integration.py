@@ -16,8 +16,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Recall.ai Configuration
-RECALLAI_API_KEY = "2710d1a040a03295045e0ad6bb2535997da8acd0"
-RECALLAI_WEBHOOK_SECRET = os.getenv("RECALLAI_WEBHOOK_SECRET", "whsec_suIiYYXb7fgjFjOtVWT0spOfalxNKtldS/MI13wAGV3thi5JbpPjpCUYU2Y0BcxN")
+RECALLAI_API_KEY = os.getenv("RECALLAI_API_KEY", "")
+RECALLAI_WEBHOOK_SECRET = os.getenv("RECALLAI_WEBHOOK_SECRET", "")
 RECALLAI_API_BASE = "https://us-west-2.recall.ai/api/v1"
 
 # Import get_db from main

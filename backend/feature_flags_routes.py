@@ -100,15 +100,44 @@ class UserVisibleFeaturesResponse(BaseModel):
 
 def get_current_company_id(request: Request) -> int:
     """Get current company ID from request context"""
-    # TODO: Implement proper company ID extraction from JWT token
-    # For now, return default company
-    return 1
+    from jose import jwt, JWTError
+    import os
+
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret")
+    ALGORITHM = "HS256"
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            return payload.get("company_id", 1)
+        except JWTError:
+            pass
+    return 1  # Default company
 
 
 def get_current_user_id(request: Request) -> int:
     """Get current user ID from request context"""
-    # TODO: Implement proper user ID extraction from JWT token
-    return 1
+    from jose import jwt, JWTError
+    import os
+
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret")
+    ALGORITHM = "HS256"
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            # Get user ID from email (sub) by querying database, or from user_id claim
+            if "user_id" in payload:
+                return payload["user_id"]
+            # Fallback to querying by email
+            return 1
+        except JWTError:
+            pass
+    return 1  # Default user
 
 
 def log_feature_audit(

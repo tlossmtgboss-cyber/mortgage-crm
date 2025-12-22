@@ -4,10 +4,11 @@ Test Vapi Setup - Verify assistant and webhook endpoint
 """
 import requests
 import json
+import os
 
-# Vapi credentials from Railway
-VAPI_API_KEY = "13af9bfd-8639-4a4a-90d9-fe5fdd8ec886"
-VAPI_ASSISTANT_ID = "120e239e-4d19-4e43-ad92-1f8b07d08c8c"
+# Vapi credentials from environment
+VAPI_API_KEY = os.getenv("VAPI_API_KEY", "")
+VAPI_ASSISTANT_ID = os.getenv("VAPI_ASSISTANT_ID", "")
 CRM_WEBHOOK_URL = "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook"
 
 print("=" * 80)

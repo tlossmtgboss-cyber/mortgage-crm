@@ -213,9 +213,10 @@ class BlogLLMService:
             ContentGenerationResult with the generated content
         """
         if not self.enabled:
+            logger.error("LLM service not configured - ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable not set")
             return ContentGenerationResult(
                 success=False,
-                error="LLM service not configured"
+                error="LLM service not configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable."
             )
 
         archetype_info = self.ARCHETYPES.get(archetype, self.ARCHETYPES["informative"])
@@ -503,7 +504,9 @@ Respond with just the image prompt text, no explanation."""
             )
 
             if response.status_code != 200:
-                raise Exception(f"Anthropic API error: {response.status_code}")
+                error_detail = response.text[:500] if response.text else "No response body"
+                logger.error(f"Anthropic API error {response.status_code}: {error_detail}")
+                raise Exception(f"Anthropic API error: {response.status_code} - {error_detail}")
 
             result = response.json()
             return result["content"][0]["text"]
@@ -529,7 +532,9 @@ Respond with just the image prompt text, no explanation."""
             )
 
             if response.status_code != 200:
-                raise Exception(f"OpenAI API error: {response.status_code}")
+                error_detail = response.text[:500] if response.text else "No response body"
+                logger.error(f"OpenAI API error {response.status_code}: {error_detail}")
+                raise Exception(f"OpenAI API error: {response.status_code} - {error_detail}")
 
             result = response.json()
             return result["choices"][0]["message"]["content"]

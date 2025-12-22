@@ -21,6 +21,7 @@ from sqlalchemy import desc
 from pydantic import BaseModel, Field
 
 from database import get_db
+from main import get_current_user_flexible
 from models.ai_daily_blog import (
     BlogVoiceProfile, BlogComplianceProfile, BlogSourceDocument,
     BlogCampaign, BlogContentItem, BlogContentJob, BlogTopicQueue,
@@ -42,10 +43,11 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ============ Helper Functions ============
 
-def get_current_user_id(db: Session) -> int:
+def get_current_user_id(db: Session, current_user=None) -> int:
     """Get current user ID from auth context."""
-    # TODO: Integrate with actual auth system
-    return 1
+    if current_user and hasattr(current_user, 'id'):
+        return current_user.id
+    return 1  # Fallback for system operations
 
 
 def log_audit(

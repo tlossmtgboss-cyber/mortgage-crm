@@ -83,9 +83,14 @@ async def get_current_user(
 
 
 def get_company_id_for_user(user):
-    """Get company ID for user - placeholder for multi-tenant"""
-    # TODO: Get actual company from user or context
-    return "00000000-0000-0000-0000-000000000001"
+    """Get company ID for user - generates UUID from user's company or ID"""
+    if hasattr(user, 'company') and user.company:
+        # Hash company name to consistent UUID
+        import hashlib
+        company_hash = hashlib.md5(user.company.encode()).hexdigest()
+        return f"{company_hash[:8]}-{company_hash[8:12]}-{company_hash[12:16]}-{company_hash[16:20]}-{company_hash[20:32]}"
+    # Fallback: derive from user ID
+    return f"00000000-0000-0000-0000-{str(user.id).zfill(12)}"
 
 
 def int_to_uuid(integer_id):

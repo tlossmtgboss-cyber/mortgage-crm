@@ -8174,7 +8174,7 @@ The Team menu item appears for managers and management roles.
             mbs_change = 0.08
 
             # Try to fetch real Treasury data from FRED API
-            fred_api_key = "1dc7b79a0de274ac6198c520405425a0"
+            fred_api_key = os.getenv("FRED_API_KEY", "")
             try:
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     # Fetch 10-Year Treasury
@@ -14013,7 +14013,7 @@ async def orchestrator_chat_stream(
         mortgage_30yr = 6.875
 
         # Try to fetch real Treasury data from FRED API
-        fred_api_key = "1dc7b79a0de274ac6198c520405425a0"
+        fred_api_key = os.getenv("FRED_API_KEY", "")
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp_10yr = await client.get(
@@ -35906,16 +35906,17 @@ async def create_zapier_api_key(db: Session = Depends(get_db)):
                 content={"status": "error", "message": "No users found. Please create a user first."}
             )
 
-        # Check if the Zapier API key already exists
-        zapier_api_key = "185b7101-9435-44da-87ab-b7582c4e4607"
-        existing_key = db.query(ApiKey).filter(ApiKey.key == zapier_api_key).first()
+        # Check if the Zapier API key already exists - get from env or generate new
+        import uuid
+        zapier_api_key = os.getenv("ZAPIER_API_KEY", str(uuid.uuid4()))
+        existing_key = db.query(ApiKey).filter(ApiKey.name == "Zapier Integration").first()
 
         if existing_key:
             logger.info("✅ Zapier API key already exists")
             return {
                 "status": "success",
                 "message": "Zapier API key already exists",
-                "key": zapier_api_key,
+                "key": existing_key.key,
                 "user_email": user.email
             }
 

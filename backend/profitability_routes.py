@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import get_db
+from fastapi import Request
 
 from models.profitability import (
     Expense, ExpenseCategory, EmployeeCost, ProfitabilityRole,
@@ -30,11 +31,26 @@ from services.profitability_service import ProfitabilityService
 router = APIRouter(prefix="/api/v1/profitability", tags=["profitability"])
 
 
-# Helper to get current user's organization (simplified - integrate with your auth)
-def get_organization_id(db: Session) -> int:
-    # TODO: Get from authenticated user's organization
-    # For now, return default organization
-    return 1
+# Helper to get current user's organization
+def get_organization_id(db: Session, request: Request = None) -> int:
+    """Get organization ID from authenticated user's context"""
+    if request:
+        from jose import jwt, JWTError
+        import os
+        SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret")
+
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                if "org_id" in payload:
+                    return payload["org_id"]
+                if "company_id" in payload:
+                    return payload["company_id"]
+            except JWTError:
+                pass
+    return 1  # Default organization
 
 
 # ============ Dashboard Endpoints ============

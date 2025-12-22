@@ -91,6 +91,14 @@ class VerifyResponseRequest(BaseModel):
 # Import get_db from main database module
 from database import get_db
 
+# Import authentication dependency
+try:
+    from main import get_current_user_flexible
+except ImportError:
+    # Fallback if main not available
+    async def get_current_user_flexible():
+        return None
+
 
 # =============================================================================
 # Endpoints
@@ -299,7 +307,8 @@ async def get_business_metrics(
 @router.post("/verify-response")
 async def manually_verify_response(
     request: VerifyResponseRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
 ):
     """
     Manually trigger hallucination verification on a response.
@@ -326,9 +335,10 @@ async def manually_verify_response(
         )
 
         # Record to database for metrics tracking
+        user_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
         await AIMetricsService.record_hallucination_report(
             db=db,
-            user_id=1,  # Admin/test user
+            user_id=user_id,
             report=report
         )
 

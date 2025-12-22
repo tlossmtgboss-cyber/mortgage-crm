@@ -4017,25 +4017,17 @@ def generate_mock_response(message: str, db: Session, user_id: int) -> Dict[str,
 @router.post("/process-command", response_model=AICommandResponse)
 async def process_command(
     request: AICommandRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dependency)
 ):
     """
     Process a natural language command and return intent with preview.
     """
-    # Get current user from main module
-    main = get_main_module()
-    get_current_user = get_current_user_dependency()
-
-    # Get actual user from token - try to authenticate
-    from fastapi import Request
+    # Get current user ID from authenticated user
     try:
-        # Get user from database based on demo user for now
-        # In a real implementation, this would use proper token auth
-        User = main.User
-        demo_user = db.query(User).filter(User.email == "admin@perenniaai.com").first()
-        current_user_id = demo_user.id if demo_user else 1
+        current_user_id = current_user.id if hasattr(current_user, 'id') else 1
     except Exception:
-        current_user_id = 1  # Fallback
+        current_user_id = 1  # Fallback for unauthenticated requests
 
     # Get or create session ID for permanent memory
     session_id = request.session_id or str(uuid.uuid4())

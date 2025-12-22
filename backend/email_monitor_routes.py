@@ -15,6 +15,7 @@ import json
 import os
 
 from database import get_db
+from main import get_current_user_flexible
 from models.email_monitor import (
     EmailMonitorCaptured,
     EmailCRMLink,
@@ -445,7 +446,8 @@ async def get_whitelist(db: Session = Depends(get_db)):
 @router.post("/whitelist")
 async def add_to_whitelist(
     request: WhitelistRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
 ):
     """Add email pattern to whitelist"""
 
@@ -455,7 +457,7 @@ async def add_to_whitelist(
         whitelist_type=request.whitelist_type,
         auto_assign_category=request.auto_assign_category,
         is_active=True,
-        created_by=1  # TODO: Get from current user
+        created_by=current_user.id
     )
 
     db.add(whitelist_entry)
@@ -504,7 +506,8 @@ async def get_blacklist(db: Session = Depends(get_db)):
 @router.post("/blacklist")
 async def add_to_blacklist(
     request: BlacklistRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
 ):
     """Add email pattern to blacklist"""
 
@@ -514,7 +517,7 @@ async def add_to_blacklist(
         blacklist_type=request.blacklist_type,
         reason=request.reason,
         is_active=True,
-        created_by=1  # TODO: Get from current user
+        created_by=current_user.id
     )
 
     db.add(blacklist_entry)

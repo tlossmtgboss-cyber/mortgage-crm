@@ -221,8 +221,16 @@ const AIDailyBlog = () => {
         console.log('Some data failed to load:', innerErr);
       }
     } catch (err) {
-      setError('Failed to load trending topics. Please try again.');
-      console.error(err);
+      console.error('Failed to load initial data:', err);
+      let errorMessage = 'Failed to load data. Please refresh the page.';
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = 'Connection timed out. Please check your internet connection and refresh.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Blog API not found. Please contact support.';
+      } else if (err.message) {
+        errorMessage = `Failed to load: ${err.message}`;
+      }
+      setError(errorMessage);
     }
     setLoading(false);
   };
@@ -270,7 +278,16 @@ const AIDailyBlog = () => {
       setContentList(contentRes.items || []);
 
     } catch (err) {
-      setError(err.response?.data?.detail || 'Generation failed. Please try again.');
+      console.error('Blog generation error:', err);
+      let errorMessage = 'Generation failed. Please try again.';
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. The AI generation is taking too long. Please try again.';
+      } else if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
     }
     setLoading(false);
   };
