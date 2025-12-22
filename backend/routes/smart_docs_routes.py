@@ -955,14 +955,15 @@ async def get_smart_docs_loans(
     from sqlalchemy import text
 
     try:
-        # Build WHERE clause for active loans (exclude funded, cancelled, denied)
-        where_clauses = ["stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED', 'DENIED')"]
+        # Build WHERE clause for active loans (exclude funded)
+        # LoanStage enum values: DISCLOSED, PROCESSING, SUBMITTED, UW_RECEIVED, APPROVED, SUSPENDED, CTC, DOCS, FUNDED
+        where_clauses = ["stage != 'FUNDED'"]
         params = {"skip": skip, "limit": limit}
 
         # Filter by specific stage if provided
         if stage:
-            where_clauses = [f"UPPER(stage) = :stage"]
-            params["stage"] = stage.upper()
+            where_clauses = ["stage = :stage"]
+            params["stage"] = stage
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
