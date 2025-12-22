@@ -276,6 +276,225 @@ class ApplicationSubmissionService:
         doc.build(story)
         return buffer.getvalue()
 
+    def generate_application_summary_pdf(self, submission_data: Dict[str, Any]) -> bytes:
+        """Generate Application Summary PDF with all Q&A data"""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=0.5*inch,
+            leftMargin=0.5*inch,
+            topMargin=0.5*inch,
+            bottomMargin=0.5*inch
+        )
+
+        story = []
+
+        # Title
+        story.append(Paragraph("Mortgage Application Summary", self.styles['DocumentTitle']))
+        story.append(Spacer(1, 10))
+
+        submission_date = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+        story.append(Paragraph(f"<i>Submitted: {submission_date}</i>", self.styles['Normal']))
+        story.append(Spacer(1, 20))
+
+        # Profile Data Section
+        profile_data = submission_data.get('profileData', {})
+        if profile_data:
+            story.append(Paragraph("Personal Information", self.styles['SectionHeader']))
+            profile_items = [
+                ["Full Name:", f"{profile_data.get('firstName', '')} {profile_data.get('middleName', '')} {profile_data.get('lastName', '')}".strip()],
+                ["Email:", profile_data.get('email', 'N/A')],
+                ["Phone:", profile_data.get('phone', 'N/A')],
+                ["Date of Birth:", profile_data.get('dateOfBirth', 'N/A')],
+                ["SSN (Last 4):", f"XXX-XX-{profile_data.get('ssn', '')[-4:]}" if profile_data.get('ssn') else 'N/A'],
+                ["Current Address:", profile_data.get('address', 'N/A')],
+                ["City, State, ZIP:", f"{profile_data.get('city', '')}, {profile_data.get('state', '')} {profile_data.get('zip', '')}"],
+                ["How Long at Address:", profile_data.get('timeAtAddress', 'N/A')],
+            ]
+            profile_table = Table(profile_items, colWidths=[2*inch, 5*inch])
+            profile_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f9f9')),
+            ]))
+            story.append(profile_table)
+            story.append(Spacer(1, 15))
+
+        # Income Data Section
+        income_data = submission_data.get('incomeData', {})
+        if income_data:
+            story.append(Paragraph("Employment & Income", self.styles['SectionHeader']))
+            income_items = [
+                ["Employer Name:", income_data.get('employerName', 'N/A')],
+                ["Job Title:", income_data.get('jobTitle', 'N/A')],
+                ["Employment Start Date:", income_data.get('startDate', 'N/A')],
+                ["Annual Salary:", f"${float(income_data.get('annualSalary', 0) or 0):,.0f}"],
+                ["Pay Frequency:", income_data.get('payFrequency', 'N/A')],
+                ["Employer Address:", income_data.get('employerAddress', 'N/A')],
+                ["Employer Phone:", income_data.get('employerPhone', 'N/A')],
+            ]
+            income_table = Table(income_items, colWidths=[2*inch, 5*inch])
+            income_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            story.append(income_table)
+            story.append(Spacer(1, 15))
+
+        # Asset Data Section
+        asset_data = submission_data.get('assetData', {})
+        if asset_data:
+            story.append(Paragraph("Assets", self.styles['SectionHeader']))
+            asset_items = [
+                ["Checking Account:", f"${float(asset_data.get('checking', 0) or 0):,.0f}"],
+                ["Savings Account:", f"${float(asset_data.get('savings', 0) or 0):,.0f}"],
+                ["Investments/Retirement:", f"${float(asset_data.get('investments', 0) or 0):,.0f}"],
+                ["Gift Funds:", f"${float(asset_data.get('giftAmount', 0) or 0):,.0f}"],
+            ]
+            asset_table = Table(asset_items, colWidths=[2*inch, 5*inch])
+            asset_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+            ]))
+            story.append(asset_table)
+            story.append(Spacer(1, 15))
+
+        # Property Data Section
+        property_data = submission_data.get('propertyData', {})
+        if property_data:
+            story.append(Paragraph("Property & Loan Details", self.styles['SectionHeader']))
+            purchase_price = float(property_data.get('purchasePrice', 0) or 0)
+            down_payment = float(property_data.get('downPayment', 0) or 0)
+            loan_amount = purchase_price - down_payment
+            ltv = (loan_amount / purchase_price * 100) if purchase_price > 0 else 0
+
+            property_items = [
+                ["Property Address:", property_data.get('address', 'N/A')],
+                ["City, State, ZIP:", f"{property_data.get('city', '')}, {property_data.get('state', '')} {property_data.get('zip', '')}"],
+                ["Property Type:", property_data.get('propertyType', 'N/A')],
+                ["Occupancy:", property_data.get('occupancy', 'N/A')],
+                ["Loan Program:", property_data.get('loanProgram', 'Conventional')],
+                ["Purchase Price:", f"${purchase_price:,.0f}"],
+                ["Down Payment:", f"${down_payment:,.0f}"],
+                ["Loan Amount:", f"${loan_amount:,.0f}"],
+                ["LTV:", f"{ltv:.1f}%"],
+            ]
+            property_table = Table(property_items, colWidths=[2*inch, 5*inch])
+            property_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+            ]))
+            story.append(property_table)
+            story.append(Spacer(1, 15))
+
+        # Declarations Section
+        declarations = submission_data.get('declarations', {})
+        if declarations:
+            story.append(Paragraph("Declarations", self.styles['SectionHeader']))
+
+            # Map declaration values to readable format
+            def format_declaration(key, value):
+                if value is None or value == '':
+                    return 'Not Answered'
+                if isinstance(value, bool):
+                    return 'Yes' if value else 'No'
+                value_maps = {
+                    'us_citizen': 'U.S. Citizen',
+                    'permanent_resident': 'Permanent Resident',
+                    'non_permanent_resident': 'Non-Permanent Resident',
+                    'work_visa': 'Work Visa',
+                    'yes': 'Yes',
+                    'no': 'No',
+                    'active_duty': 'Active Duty',
+                    'veteran': 'Veteran',
+                    'reserves': 'Reserves/National Guard',
+                    'surviving_spouse': 'Surviving Spouse',
+                    'side_business': 'Yes (Side Business)',
+                    'sold': 'Sold',
+                    'second_home': 'Keeping as Second Home',
+                    'rental': 'Converting to Rental',
+                    'chapter_7': 'Chapter 7',
+                    'chapter_13': 'Chapter 13',
+                    'chapter_12': 'Chapter 12',
+                    'conventional': 'Conventional',
+                    'fha': 'FHA',
+                    'va': 'VA',
+                    'usda': 'USDA',
+                }
+                return value_maps.get(str(value).lower(), str(value).replace('_', ' ').title())
+
+            declaration_labels = {
+                'citizenship_status': 'Citizenship Status',
+                'first_time_buyer': 'First-Time Homebuyer',
+                'veteran': 'Military/Veteran Status',
+                'self_employed': 'Self-Employed',
+                'business_type': 'Business Type',
+                'write_off_expenses': 'Maximizes Business Deductions',
+                'prior_year_taxes_filed': 'Prior Year Taxes Filed',
+                'gift_funds': 'Receiving Gift Funds',
+                'gift_amount': 'Gift Amount',
+                'gift_donor': 'Gift Donor Relationship',
+                'previous_home': 'Previously Owned Home',
+                'previous_home_status': 'Previous Home Status',
+                'previous_home_mortgage': 'Has Mortgage on Previous Home',
+                'divorce_alimony': 'Divorce/Alimony/Child Support',
+                'irs_balance_owed': 'IRS Balance Owed',
+                'credit_applications': 'Recent Credit Applications',
+                'credit_application_type': 'Credit Application Type',
+                'credit_application_approved': 'Credit Application Approved',
+                'bankruptcy': 'Bankruptcy History',
+                'bankruptcy_type': 'Bankruptcy Type',
+                'bankruptcy_years': 'Years Since Bankruptcy',
+                'bankruptcy_status': 'Bankruptcy Status',
+                'found_property': 'Property Found',
+                'working_with_agent': 'Working with Agent',
+                'has_co_borrower': 'Has Co-Borrower',
+            }
+
+            decl_items = []
+            for key, label in declaration_labels.items():
+                if key in declarations:
+                    decl_items.append([f"{label}:", format_declaration(key, declarations.get(key))])
+
+            if decl_items:
+                decl_table = Table(decl_items, colWidths=[2.5*inch, 4.5*inch])
+                decl_table.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                    ('TOPPADDING', (0, 0), (-1, -1), 5),
+                    ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                story.append(decl_table)
+
+        story.append(Spacer(1, 30))
+
+        # Footer
+        story.append(Paragraph(
+            "<i>This application summary was electronically generated. "
+            "All information is subject to verification.</i>",
+            self.styles['Normal']
+        ))
+
+        doc.build(story)
+        return buffer.getvalue()
+
     def generate_fannie_mae_34(self, application_data: Dict[str, Any]) -> str:
         """
         Generate Fannie Mae 3.4 file (MISMO 2.3.1 format)

@@ -1410,6 +1410,7 @@ async def submit_application(
         pdf_generation_error = None
 
         # Try to generate PDFs (non-critical - lead creation still works without them)
+        application_summary_pdf = None
         try:
             # Prepare borrower data for PDFs
             borrower_data = {
@@ -1423,6 +1424,16 @@ async def submit_application(
             # Generate PDFs
             econsent_pdf = application_submission_service.generate_econsent_pdf(borrower_data)
             credit_auth_pdf = application_submission_service.generate_credit_auth_pdf(borrower_data)
+
+            # Generate Application Summary PDF with all Q&A data
+            submission_data_for_pdf = {
+                "profileData": submission.profileData,
+                "incomeData": submission.incomeData,
+                "assetData": submission.assetData,
+                "propertyData": submission.propertyData,
+                "declarations": submission.declarations,
+            }
+            application_summary_pdf = application_submission_service.generate_application_summary_pdf(submission_data_for_pdf)
         except Exception as pdf_error:
             logger.warning(f"PDF generation failed (non-critical): {pdf_error}")
             pdf_generation_error = str(pdf_error)
@@ -1515,14 +1526,29 @@ async def submit_application(
         date_str = submission_date.strftime("%Y%m%d_%H%M%S")
         fannie_mae_bytes = fannie_mae_xml.encode('utf-8') if fannie_mae_xml else None
 
-        # Get loan officer email to send Fannie Mae file
+        # Get loan officer email and all team members to send Fannie Mae file
         lo_email = None
+        team_emails = []
         if submission.loId:
+            # Get LO email
             lo_result = db.execute(text("""
-                SELECT email FROM users WHERE id = :lo_id
+                SELECT email, organization_id FROM users WHERE id = :lo_id
             """), {"lo_id": submission.loId}).fetchone()
             if lo_result:
                 lo_email = lo_result[0]
+                org_id_for_team = lo_result[1]
+
+                # Get all team members from the same organization
+                if org_id_for_team:
+                    team_result = db.execute(text("""
+                        SELECT email FROM users
+                        WHERE organization_id = :org_id
+                        AND email IS NOT NULL
+                        AND email != ''
+                        AND is_active = true
+                    """), {"org_id": org_id_for_team}).fetchall()
+                    team_emails = [row[0] for row in team_result if row[0]]
+                    logger.info(f"Found {len(team_emails)} team members to notify")
 
         # Fallback to default application email if no LO assigned
         if not lo_email:
@@ -1595,6 +1621,7 @@ async def submit_application(
 
                         <h3 style="color: #218D8D; margin-top: 25px;">📎 ATTACHED DOCUMENTS</h3>
                         <ul style="background: #f8f9fa; padding: 15px 30px; border-radius: 5px;">
+                            <li>Application Summary (complete Q&A)</li>
                             <li>E-Consent Agreement (signed)</li>
                             <li>Credit Authorization (signed)</li>
                             <li>Fannie Mae 3.4 File (for LOS import)</li>
@@ -1610,32 +1637,55 @@ async def submit_application(
                 """
 
                 safe_borrower_name = borrower_name.replace(' ', '_').replace('/', '_')
-                email_sent = email_service.send_html_email(
-                    to_email=lo_email,
-                    subject=f"New Application: {borrower_name}",
-                    html_body=email_html,
-                    attachments=[
-                        {
-                            "filename": f"E-Consent_{safe_borrower_name}_{date_str}.pdf",
-                            "content": base64.b64encode(econsent_pdf).decode('utf-8'),
-                            "type": "application/pdf",
-                        },
-                        {
-                            "filename": f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf",
-                            "content": base64.b64encode(credit_auth_pdf).decode('utf-8'),
-                            "type": "application/pdf",
-                        },
-                        {
-                            "filename": f"FannieMae34_{safe_borrower_name}_{date_str}.xml",
-                            "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
-                            "type": "application/xml",
-                        }
-                    ]
-                )
-                if email_sent:
-                    logger.info(f"Email sent successfully to {lo_email} for {borrower_name}")
-                else:
-                    logger.warning(f"Email send returned False for {lo_email}")
+
+                # Build attachments list
+                email_attachments = [
+                    {
+                        "filename": f"E-Consent_{safe_borrower_name}_{date_str}.pdf",
+                        "content": base64.b64encode(econsent_pdf).decode('utf-8'),
+                        "type": "application/pdf",
+                    },
+                    {
+                        "filename": f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf",
+                        "content": base64.b64encode(credit_auth_pdf).decode('utf-8'),
+                        "type": "application/pdf",
+                    },
+                    {
+                        "filename": f"FannieMae34_{safe_borrower_name}_{date_str}.xml",
+                        "content": base64.b64encode(fannie_mae_bytes).decode('utf-8'),
+                        "type": "application/xml",
+                    }
+                ]
+
+                # Add application summary PDF if generated
+                if application_summary_pdf:
+                    email_attachments.append({
+                        "filename": f"Application_Summary_{safe_borrower_name}_{date_str}.pdf",
+                        "content": base64.b64encode(application_summary_pdf).decode('utf-8'),
+                        "type": "application/pdf",
+                    })
+
+                # Combine LO email with team emails, removing duplicates
+                all_recipients = list(set([lo_email] + team_emails))
+
+                # Send email to all recipients
+                emails_sent_count = 0
+                for recipient_email in all_recipients:
+                    try:
+                        sent = email_service.send_html_email(
+                            to_email=recipient_email,
+                            subject=f"New Application: {borrower_name}",
+                            html_body=email_html,
+                            attachments=email_attachments
+                        )
+                        if sent:
+                            emails_sent_count += 1
+                            logger.info(f"Email sent successfully to {recipient_email} for {borrower_name}")
+                    except Exception as single_email_error:
+                        logger.warning(f"Failed to send email to {recipient_email}: {single_email_error}")
+
+                email_sent = emails_sent_count > 0
+                logger.info(f"Sent {emails_sent_count}/{len(all_recipients)} emails for {borrower_name}")
             except Exception as email_error:
                 logger.error(f"Email sending failed: {email_error}")
 
@@ -1874,6 +1924,28 @@ async def submit_application(
                     documents_stored.append("Fannie Mae 3.4")
                     logger.info(f"Stored Fannie Mae 3.4 document for lead {lead_id}")
 
+                # Store Application Summary PDF
+                if application_summary_pdf:
+                    app_summary_filename = f"Application_Summary_{safe_borrower_name}_{date_str}.pdf"
+                    app_summary_b64 = base64.b64encode(application_summary_pdf).decode('utf-8')
+
+                    db.execute(text("""
+                        INSERT INTO documents (borrower_id, doc_type, doc_category, filename, original_filename,
+                            file_size, mime_type, file_location, source, status, notes, uploaded_at)
+                        VALUES (:borrower_id, 'Application Summary', 'Application', :filename, :original_filename,
+                            :file_size, 'application/pdf', :file_location, 'APPLICATION', 'active', :notes, :uploaded_at)
+                    """), {
+                        "borrower_id": lead_id,
+                        "filename": app_summary_filename,
+                        "original_filename": app_summary_filename,
+                        "file_size": len(application_summary_pdf),
+                        "file_location": f"db://documents/application/{lead_id}/{app_summary_filename}",
+                        "notes": app_summary_b64,
+                        "uploaded_at": submission_date,
+                    })
+                    documents_stored.append("Application Summary")
+                    logger.info(f"Stored Application Summary document for lead {lead_id}")
+
                 db.commit()
                 logger.info(f"Stored {len(documents_stored)} documents for lead {lead_id}: {documents_stored}")
 
@@ -1954,6 +2026,16 @@ async def submit_application(
                         "phone": submission.profileData.get("phone", ""),
                         "loan_amount": loan_amount,
                         "property_value": purchase_price,
+                        # Full application Q&A data for portal display
+                        "application_data": {
+                            "profileData": submission.profileData,
+                            "incomeData": submission.incomeData,
+                            "assetData": submission.assetData,
+                            "propertyData": submission.propertyData,
+                            "declarations": submission.declarations,
+                            "applicationType": submission.applicationType if hasattr(submission, 'applicationType') else 'purchase',
+                            "submittedAt": submission_date.isoformat(),
+                        },
                     }),
                     "created_at": submission_date,
                     "updated_at": submission_date,
@@ -2102,6 +2184,75 @@ async def submit_application(
                         logger.info(f"Created PURL loan record {purl_loan_id} for workspace {workspace_id}")
                     except Exception as loan_error:
                         logger.warning(f"Failed to create PURL loan: {loan_error}")
+
+                    # =================================================================
+                    # STORE DOCUMENTS IN PURL_DOCUMENTS FOR PORTAL SMART DOCS
+                    # =================================================================
+                    if purl_loan_id and workspace_id:
+                        try:
+                            import hashlib
+                            import base64 as b64
+
+                            # Helper function to generate storage key and insert document
+                            def store_purl_document(doc_type, doc_category, filename, content_bytes, mime_type):
+                                storage_key = f"purl/{org_id}/{workspace_id}/{purl_loan_id}/{filename}"
+                                sha256_hash = hashlib.sha256(content_bytes).hexdigest()
+
+                                db.execute(text("""
+                                    INSERT INTO purl_documents (
+                                        organization_id, workspace_id, loan_id,
+                                        doc_type, doc_category, status,
+                                        file_name, storage_key, size_bytes, mime_type, sha256,
+                                        created_at, updated_at
+                                    )
+                                    VALUES (
+                                        :org_id, :workspace_id, :loan_id,
+                                        :doc_type, :doc_category, 'approved',
+                                        :file_name, :storage_key, :size_bytes, :mime_type, :sha256,
+                                        :created_at, :updated_at
+                                    )
+                                """), {
+                                    "org_id": org_id,
+                                    "workspace_id": workspace_id,
+                                    "loan_id": purl_loan_id,
+                                    "doc_type": doc_type,
+                                    "doc_category": doc_category,
+                                    "file_name": filename,
+                                    "storage_key": storage_key,
+                                    "size_bytes": len(content_bytes),
+                                    "mime_type": mime_type,
+                                    "sha256": sha256_hash,
+                                    "created_at": submission_date,
+                                    "updated_at": submission_date,
+                                })
+
+                            # Store E-Consent in purl_documents
+                            if econsent_pdf:
+                                econsent_filename = f"E-Consent_{safe_borrower_name}_{date_str}.pdf"
+                                store_purl_document("E-Consent Agreement", "Disclosures", econsent_filename, econsent_pdf, "application/pdf")
+
+                            # Store Credit Authorization in purl_documents
+                            if credit_auth_pdf:
+                                credit_auth_filename = f"Credit_Authorization_{safe_borrower_name}_{date_str}.pdf"
+                                store_purl_document("Credit Authorization", "Disclosures", credit_auth_filename, credit_auth_pdf, "application/pdf")
+
+                            # Store Application Summary in purl_documents
+                            if application_summary_pdf:
+                                app_summary_filename = f"Application_Summary_{safe_borrower_name}_{date_str}.pdf"
+                                store_purl_document("Application Summary", "Application", app_summary_filename, application_summary_pdf, "application/pdf")
+
+                            # Store Fannie Mae 3.4 file in purl_documents
+                            if fannie_mae_xml:
+                                fannie_filename = f"FannieMae34_{safe_borrower_name}_{date_str}.xml"
+                                store_purl_document("Fannie Mae 3.4 File", "Application", fannie_filename, fannie_mae_xml.encode('utf-8'), "application/xml")
+
+                            db.commit()
+                            logger.info(f"Stored documents in purl_documents for portal Smart Docs (workspace={workspace_id}, loan={purl_loan_id})")
+
+                        except Exception as purl_doc_error:
+                            logger.warning(f"Failed to store documents in purl_documents: {purl_doc_error}")
+                            import traceback
+                            logger.warning(traceback.format_exc())
 
                     # =================================================================
                     # GENERATE SMART DOCS NEEDS LIST
