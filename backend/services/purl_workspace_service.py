@@ -121,10 +121,11 @@ def calculate_document_requirements_from_application(application_data: Dict[str,
         application_data: The application data containing declarations
 
     Returns:
-        List of document requirement dictionaries
+        List of document requirement dictionaries (always returns at least base documents)
     """
+    # Always initialize with empty dict if no data
     if not application_data:
-        return []
+        application_data = {}
 
     docs = []
     declarations = application_data.get('declarations', {})
@@ -569,15 +570,27 @@ class PURLWorkspaceService:
                     logger.warning(f"Failed to load document requirements: {e}")
 
             # If no document requirements from database, generate from application data
-            if not document_requirements and application:
+            if not document_requirements:
                 try:
-                    app_data = application.data if hasattr(application, 'data') else {}
+                    app_data = {}
+                    if application:
+                        app_data = application.data if hasattr(application, 'data') else {}
+                        logger.info(f"Generating document requirements from application data: {app_data.get('declarations', {})}")
+                    else:
+                        logger.info("No application found, generating default document requirements")
                     document_requirements = calculate_document_requirements_from_application(app_data)
                     logger.info(f"Generated {len(document_requirements)} document requirements from application data")
                 except Exception as e:
-                    logger.warning(f"Failed to generate document requirements from application: {e}")
+                    logger.error(f"Failed to generate document requirements from application: {e}", exc_info=True)
                     # Rollback to clear the failed transaction state so subsequent queries can proceed
                     self.db.rollback()
+                    # Provide default documents as ultimate fallback
+                    document_requirements = [
+                        {'id': 'id', 'name': 'Government ID', 'description': "Driver's license or passport", 'category': 'identity', 'status': 'pending'},
+                        {'id': 'paystubs', 'name': 'Pay Stubs', 'description': 'Last 30 days (most recent)', 'category': 'income_verification', 'status': 'pending'},
+                        {'id': 'w2', 'name': 'W-2 Forms', 'description': 'Last 2 years', 'category': 'income_verification', 'status': 'pending'},
+                        {'id': 'bank_statements', 'name': 'Bank Statements', 'description': 'Last 2 months (all pages)', 'category': 'asset_verification', 'status': 'pending'},
+                    ]
 
             # Get milestones if loan exists
             milestones = []
