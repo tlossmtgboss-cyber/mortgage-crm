@@ -1,11 +1,11 @@
 /**
- * MicrositeThemeSelector - Choose Layout Component
+ * MicrositeThemeSelector - Microsite Customization Component
  *
- * Allows users to browse and select microsite themes from the marketplace.
- * Displays theme previews, features, and configuration options.
+ * Single template design based on the master template at /lo/tim-loss
+ * Allows users to customize colors and content for their microsite.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import './MicrositeThemeSelector.css';
 import MicrositeThemeCustomizer from './MicrositeThemeCustomizer';
 
@@ -14,39 +14,15 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-// Theme categories for filtering
-const CATEGORIES = [
-  { value: 'all', label: 'All Themes' },
-  { value: 'professional', label: 'Professional' },
-  { value: 'modern', label: 'Modern' },
-  { value: 'bold', label: 'Bold' },
-  { value: 'minimal', label: 'Minimal' },
-  { value: 'elegant', label: 'Elegant' },
-];
-
-// Feature icons mapping
-const FEATURE_ICONS = {
-  hero_image: '🖼️',
-  hero_gradient: '🌈',
-  contact_form: '📝',
-  rate_calculator: '🧮',
-  testimonials: '💬',
-  about_section: '👤',
-  credentials: '🏆',
-};
-
-const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
-  const [themes, setThemes] = useState([]);
+const MicrositeThemeSelector = ({ onThemeSelect }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedTheme, setSelectedTheme] = useState(null);
-  const [previewTheme, setPreviewTheme] = useState(null);
   const [microsite, setMicrosite] = useState(null);
   const [saving, setSaving] = useState(false);
   const [userSlug, setUserSlug] = useState(null);
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [themeConfig, setThemeConfig] = useState({});
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Get auth headers
   const getAuthHeaders = () => ({
@@ -54,31 +30,10 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
     'Content-Type': 'application/json'
   });
 
-  // Fetch available themes
   useEffect(() => {
-    fetchThemes();
     fetchMicrosite();
     fetchUserSlug();
   }, []);
-
-  const fetchThemes = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/public/themes`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setThemes(data.themes || []);
-      } else {
-        throw new Error(`Failed to fetch themes: ${response.status}`);
-      }
-    } catch (err) {
-      console.error('Error fetching themes:', err);
-      setError('Failed to load themes');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchMicrosite = async () => {
     try {
@@ -88,15 +43,14 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
       if (response.ok) {
         const data = await response.json();
         setMicrosite(data);
-        if (data.themeId) {
-          setSelectedTheme(data.themeId);
-        }
         if (data.themeConfig) {
           setThemeConfig(data.themeConfig);
         }
       }
     } catch (err) {
       console.error('Error fetching microsite:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -114,42 +68,6 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
     }
   };
 
-  // Filter themes by category
-  const filteredThemes = useMemo(() => {
-    if (selectedCategory === 'all') {
-      return themes;
-    }
-    return themes.filter(theme => theme.category === selectedCategory);
-  }, [themes, selectedCategory]);
-
-  // Save selected theme
-  const handleSaveTheme = async (themeId) => {
-    setSaving(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ theme_id: themeId })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMicrosite(data);
-        setSelectedTheme(themeId);
-        if (onThemeSelect) {
-          onThemeSelect(themeId);
-        }
-      } else {
-        throw new Error('Failed to save theme');
-      }
-    } catch (err) {
-      console.error('Error saving theme:', err);
-      setError('Failed to save theme selection');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Publish microsite
   const handlePublish = async () => {
     setSaving(true);
@@ -161,6 +79,8 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
 
       if (response.ok) {
         await fetchMicrosite();
+        setSuccessMessage('Microsite published successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         const err = await response.json();
         setError(err.detail || 'Failed to publish');
@@ -173,302 +93,227 @@ const MicrositeThemeSelector = ({ onThemeSelect, currentThemeId }) => {
     }
   };
 
-  // Preview theme - opens in new browser tab
-  const handlePreview = (theme) => {
-    // Open theme preview in a new browser tab
-    window.open(`/preview/theme/${theme.slug}`, '_blank', 'noopener,noreferrer');
-  };
-
-  // Quick preview (modal) - for viewing details without leaving page
-  const handleQuickPreview = (theme) => {
-    setPreviewTheme(theme);
-  };
-
-  // Close preview modal
-  const closePreview = () => {
-    setPreviewTheme(null);
-  };
-
   if (loading) {
     return (
       <div className="theme-selector-loading">
         <div className="loading-spinner"></div>
-        <p>Loading themes...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="theme-selector-error">
-        <p>{error}</p>
-        <button onClick={fetchThemes}>Retry</button>
+        <p>Loading your microsite...</p>
       </div>
     );
   }
 
   return (
     <div className="theme-selector">
-      {/* Header */}
-      <div className="theme-selector-header">
-        <div className="header-content">
-          <h2>Choose Your Microsite Theme</h2>
-          <p>Select a professional theme for your loan officer microsite</p>
+      {/* Success Message */}
+      {successMessage && (
+        <div style={{
+          background: '#d1fae5',
+          color: '#065f46',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>✓</span> {successMessage}
         </div>
-        <div className="header-actions">
-          {selectedTheme && (
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div style={{
+          background: '#fee2e2',
+          color: '#991b1b',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          {error}
+          <button
+            onClick={() => setError(null)}
+            style={{ marginLeft: '12px', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="theme-selector-header" style={{ marginBottom: '24px' }}>
+        <div className="header-content">
+          <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '600' }}>Your Microsite</h2>
+          <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
+            Customize your professional loan officer microsite
+          </p>
+        </div>
+      </div>
+
+      {/* Microsite Preview Card */}
+      <div style={{
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        marginBottom: '24px'
+      }}>
+        {/* Preview Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%)',
+          padding: '32px',
+          color: 'white',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '50%',
+            margin: '0 auto 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '32px'
+          }}>
+            🏠
+          </div>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>Professional Microsite Template</h3>
+          <p style={{ margin: 0, opacity: 0.9, fontSize: '14px' }}>
+            Clean, modern design optimized for lead generation
+          </p>
+        </div>
+
+        {/* Features List */}
+        <div style={{ padding: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '24px' }}>
+            {[
+              { icon: '👤', label: 'Professional Profile' },
+              { icon: '📝', label: 'Lead Capture Form' },
+              { icon: '🤖', label: 'AI Chat Assistant' },
+              { icon: '📱', label: 'Mobile Responsive' },
+              { icon: '🎨', label: 'Custom Colors' },
+              { icon: '🔗', label: 'Social Links' },
+            ].map((feature, idx) => (
+              <div key={idx} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                background: '#f9fafb',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}>
+                <span>{feature.icon}</span>
+                <span>{feature.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {userSlug && (
+              <a
+                href={`/lo/${userSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  flex: 1,
+                  minWidth: '140px',
+                  padding: '12px 20px',
+                  background: '#c9a227',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  textDecoration: 'none',
+                  textAlign: 'center',
+                  display: 'inline-block'
+                }}
+              >
+                View Live Microsite
+              </a>
+            )}
             <button
-              className="customize-btn"
               onClick={() => setShowCustomizer(!showCustomizer)}
+              style={{
+                flex: 1,
+                minWidth: '140px',
+                padding: '12px 20px',
+                background: showCustomizer ? '#374151' : '#f3f4f6',
+                color: showCustomizer ? 'white' : '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                fontSize: '14px'
+              }}
             >
-              {showCustomizer ? 'Hide Customizer' : 'Customize Theme'}
+              {showCustomizer ? 'Hide Customizer' : 'Customize Colors'}
             </button>
-          )}
-          {userSlug && (
-            <a
-              href={`/lo/${userSlug}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="preview-link"
-            >
-              Preview Your Microsite
-            </a>
-          )}
-          {microsite && !microsite.isPublished && selectedTheme && (
-            <button
-              className="publish-btn"
-              onClick={handlePublish}
-              disabled={saving}
-            >
-              {saving ? 'Publishing...' : 'Publish Microsite'}
-            </button>
-          )}
+            {microsite && !microsite.isPublished && (
+              <button
+                onClick={handlePublish}
+                disabled={saving}
+                style={{
+                  flex: 1,
+                  minWidth: '140px',
+                  padding: '12px 20px',
+                  background: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  opacity: saving ? 0.7 : 1
+                }}
+              >
+                {saving ? 'Publishing...' : 'Publish Microsite'}
+              </button>
+            )}
+          </div>
+
+          {/* Published Status */}
           {microsite && microsite.isPublished && (
-            <span className="published-badge">Published</span>
+            <div style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: '#d1fae5',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#065f46',
+              fontSize: '14px'
+            }}>
+              <span>✓</span>
+              <span>Your microsite is live and published</span>
+            </div>
           )}
         </div>
       </div>
 
       {/* Theme Customizer */}
-      {showCustomizer && selectedTheme && (
-        <div className="customizer-container">
+      {showCustomizer && (
+        <div style={{
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '24px'
+        }}>
           <MicrositeThemeCustomizer
-            theme={themes.find(t => t.id === selectedTheme)}
+            theme={{ id: 'default', name: 'Professional Template' }}
             currentConfig={themeConfig}
             onConfigChange={(newConfig) => setThemeConfig(newConfig)}
             onSave={(savedConfig) => {
               setThemeConfig(savedConfig);
               fetchMicrosite();
+              setSuccessMessage('Customization saved!');
+              setTimeout(() => setSuccessMessage(''), 3000);
             }}
           />
-        </div>
-      )}
-
-      {/* Category Filter */}
-      <div className="category-filter">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat.value}
-            className={`category-btn ${selectedCategory === cat.value ? 'active' : ''}`}
-            onClick={() => setSelectedCategory(cat.value)}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Theme Grid */}
-      <div className="theme-grid">
-        {filteredThemes.map(theme => (
-          <div
-            key={theme.id}
-            className={`theme-card ${selectedTheme === theme.id ? 'selected' : ''}`}
-            onClick={() => handleQuickPreview(theme)}
-          >
-            {/* Theme Thumbnail */}
-            <div className="theme-thumbnail">
-              {theme.thumbnailUrl ? (
-                <img src={theme.thumbnailUrl} alt={theme.name} />
-              ) : (
-                <div className="placeholder-thumbnail">
-                  <span className="theme-icon">
-                    {theme.category === 'bold' ? '🔥' :
-                     theme.category === 'professional' ? '💼' :
-                     theme.category === 'modern' ? '✨' :
-                     theme.category === 'minimal' ? '⚡' : '🎨'}
-                  </span>
-                </div>
-              )}
-              {selectedTheme === theme.id && (
-                <div className="selected-overlay">
-                  <span className="checkmark">✓</span>
-                  <span>Current Theme</span>
-                </div>
-              )}
-              {theme.isFeatured && (
-                <span className="featured-badge">Featured</span>
-              )}
-            </div>
-
-            {/* Theme Info */}
-            <div className="theme-info">
-              <h3>{theme.name}</h3>
-              <p className="theme-description">{theme.description}</p>
-
-              {/* Features */}
-              <div className="theme-features">
-                {(theme.features || []).slice(0, 4).map(feature => (
-                  <span key={feature} className="feature-tag">
-                    {FEATURE_ICONS[feature] || '📦'} {feature.replace(/_/g, ' ')}
-                  </span>
-                ))}
-                {(theme.features || []).length > 4 && (
-                  <span className="feature-tag more">+{theme.features.length - 4} more</span>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="theme-actions">
-                <button
-                  className="preview-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePreview(theme);
-                  }}
-                >
-                  Preview
-                </button>
-                <button
-                  className={`select-btn ${selectedTheme === theme.id ? 'selected' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSaveTheme(theme.id);
-                  }}
-                  disabled={saving || selectedTheme === theme.id}
-                >
-                  {selectedTheme === theme.id ? 'Selected' : 'Select Theme'}
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* No themes found */}
-      {filteredThemes.length === 0 && (
-        <div className="no-themes">
-          <p>No themes found in this category</p>
-        </div>
-      )}
-
-      {/* Preview Modal */}
-      {previewTheme && (
-        <div className="theme-preview-modal" onClick={closePreview}>
-          <div className="preview-content" onClick={(e) => e.stopPropagation()}>
-            <button className="close-preview" onClick={closePreview}>×</button>
-
-            <div className="preview-header">
-              <h2>{previewTheme.name}</h2>
-              <span className={`category-badge ${previewTheme.category}`}>
-                {previewTheme.category}
-              </span>
-            </div>
-
-            <div className="preview-body">
-              {/* Preview Image */}
-              <div className="preview-image-container">
-                {previewTheme.previewUrl ? (
-                  <img src={previewTheme.previewUrl} alt={previewTheme.name} />
-                ) : previewTheme.thumbnailUrl ? (
-                  <img src={previewTheme.thumbnailUrl} alt={previewTheme.name} />
-                ) : (
-                  <div className="preview-placeholder">
-                    <span className="theme-icon large">
-                      {previewTheme.category === 'bold' ? '🔥' :
-                       previewTheme.category === 'professional' ? '💼' :
-                       previewTheme.category === 'modern' ? '✨' :
-                       previewTheme.category === 'minimal' ? '⚡' : '🎨'}
-                    </span>
-                    <p>Click below to see live preview</p>
-                  </div>
-                )}
-                <button
-                  className="open-preview-btn"
-                  onClick={() => handlePreview(previewTheme)}
-                  style={{
-                    marginTop: '12px',
-                    padding: '10px 20px',
-                    background: 'var(--color-primary, #c9a227)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    margin: '12px auto 0'
-                  }}
-                >
-                  🔗 Open Live Preview
-                </button>
-              </div>
-
-              {/* Theme Details */}
-              <div className="preview-details">
-                <p className="description">{previewTheme.description}</p>
-
-                <div className="detail-section">
-                  <h4>Features</h4>
-                  <div className="features-list">
-                    {(previewTheme.features || []).map(feature => (
-                      <div key={feature} className="feature-item">
-                        <span className="icon">{FEATURE_ICONS[feature] || '📦'}</span>
-                        <span className="label">{feature.replace(/_/g, ' ')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {previewTheme.supportsCustomColors && (
-                  <div className="detail-section">
-                    <h4>Customization</h4>
-                    <p>This theme supports custom colors to match your brand.</p>
-                  </div>
-                )}
-
-                {Object.keys(previewTheme.layoutOptions || {}).length > 0 && (
-                  <div className="detail-section">
-                    <h4>Layout Options</h4>
-                    <div className="layout-options">
-                      {Object.entries(previewTheme.layoutOptions).map(([key, values]) => (
-                        <div key={key} className="layout-option">
-                          <span className="option-label">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                          <span className="option-values">{values.join(', ')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="preview-footer">
-              <button className="cancel-btn" onClick={closePreview}>
-                Cancel
-              </button>
-              <button
-                className={`select-btn ${selectedTheme === previewTheme.id ? 'selected' : ''}`}
-                onClick={() => {
-                  handleSaveTheme(previewTheme.id);
-                  closePreview();
-                }}
-                disabled={saving || selectedTheme === previewTheme.id}
-              >
-                {selectedTheme === previewTheme.id ? 'Currently Selected' : 'Select This Theme'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
