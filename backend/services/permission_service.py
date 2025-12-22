@@ -629,19 +629,21 @@ def require_data_scope(resource_type: str, action: str = 'view'):
 
 
 # ============================================================================
-# PLACEHOLDER DEPENDENCIES (implement these in main app)
+# DEPENDENCY INJECTION FUNCTIONS
 # ============================================================================
 
-def get_current_user():
-    """Placeholder - implement in main app to get current authenticated user"""
-    raise NotImplementedError("get_current_user dependency not implemented")
-
-
 def get_db():
-    """Placeholder - implement in main app to get database session"""
-    raise NotImplementedError("get_db dependency not implemented")
+    """Get database session from canonical database module"""
+    from database import get_db as db_getter
+    return db_getter()
+
+
+def get_current_user():
+    """Get current authenticated user from main app"""
+    from main import get_current_user as main_get_current_user
+    return main_get_current_user
 
 
 def get_permission_service(db: Session = Depends(get_db)):
-    """Placeholder - implement in main app to get permission service instance"""
-    raise NotImplementedError("get_permission_service dependency not implemented")
+    """Get permission service instance with database session"""
+    return PermissionService(db)

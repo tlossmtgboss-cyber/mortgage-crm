@@ -261,7 +261,39 @@ async def handle_send_sms(args: Dict[str, Any], request: Request) -> Dict[str, A
 
     # If recipient_name provided but no phone, look up the contact
     if recipient_name and not to_phone:
-        return {"success": False, "error": "Contact lookup not yet implemented. Please provide to_phone."}
+        from database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            # Search in leads and contacts tables
+            query = text("""
+                SELECT phone FROM leads
+                WHERE LOWER(name) LIKE LOWER(:name) OR LOWER(first_name || ' ' || last_name) LIKE LOWER(:name)
+                AND phone IS NOT NULL
+                LIMIT 1
+            """)
+            result = db.execute(query, {"name": f"%{recipient_name}%"}).fetchone()
+
+            if result and result[0]:
+                to_phone = result[0]
+            else:
+                # Try contacts table
+                query = text("""
+                    SELECT phone FROM contacts
+                    WHERE LOWER(first_name || ' ' || last_name) LIKE LOWER(:name)
+                    AND phone IS NOT NULL
+                    LIMIT 1
+                """)
+                result = db.execute(query, {"name": f"%{recipient_name}%"}).fetchone()
+
+                if result and result[0]:
+                    to_phone = result[0]
+                else:
+                    return {"success": False, "error": f"No contact found with name matching '{recipient_name}'"}
+        except Exception as e:
+            return {"success": False, "error": f"Contact lookup failed: {str(e)}"}
+        finally:
+            db.close()
 
     if not to_phone:
         return {"success": False, "error": "Either to_phone or recipient_name is required"}

@@ -237,8 +237,11 @@ const ThemePreview = () => {
   const componentName = themeData.componentName || 'BoldImpact';
   const ThemeComponent = themeComponents[componentName];
 
-  if (!ThemeComponent) {
-    return <ErrorState message={`Theme component "${componentName}" not implemented yet`} />;
+  // Fallback to BoldImpact if requested theme doesn't exist
+  const FinalThemeComponent = ThemeComponent || themeComponents.BoldImpact;
+
+  if (!FinalThemeComponent) {
+    return <ErrorState message={`No theme components available`} />;
   }
 
   // Build theme config from URL params or defaults
@@ -252,7 +255,7 @@ const ThemePreview = () => {
     <>
       <PreviewBanner themeName={themeData.name} onClose={handleClose} />
       <div style={{ paddingTop: '52px' }}>
-        <ThemeComponent
+        <FinalThemeComponent
           user={DEMO_USER}
           profile={DEMO_PROFILE}
           themeConfig={themeConfig}

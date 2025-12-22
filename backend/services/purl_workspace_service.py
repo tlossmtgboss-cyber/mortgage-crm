@@ -110,6 +110,132 @@ DEFAULT_PORTAL_MODULES = [
 ]
 
 
+def calculate_document_requirements_from_application(application_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Calculate required documents based on application declarations.
+
+    This mirrors the frontend logic in PurchaseApplication.js to generate
+    a dynamic document checklist based on borrower circumstances.
+
+    Args:
+        application_data: The application data containing declarations
+
+    Returns:
+        List of document requirement dictionaries
+    """
+    if not application_data:
+        return []
+
+    docs = []
+    declarations = application_data.get('declarations', {})
+
+    # Check employment type
+    is_self_employed = declarations.get('self_employed') in ['yes', 'side_business']
+    has_gift_funds = declarations.get('gift_funds') == 'yes'
+    borrower_count = declarations.get('borrower_count', '1')
+    has_co_borrower = borrower_count in ['2', '3', '4+']
+
+    # Identity documents (always required) - Government ID only
+    docs.append({
+        'id': 'id',
+        'name': 'Government ID',
+        'description': "Driver's license or passport",
+        'category': 'identity',
+        'status': 'pending'
+    })
+
+    # Income documents (varies based on employment type)
+    if is_self_employed:
+        docs.append({
+            'id': 'tax_returns',
+            'name': 'Tax Returns',
+            'description': 'Personal returns (last 2 years)',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+        docs.append({
+            'id': 'business_tax_returns',
+            'name': 'Business Tax Returns',
+            'description': 'Business returns (last 2 years)',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+        docs.append({
+            'id': 'profit_loss',
+            'name': 'Profit & Loss Statement',
+            'description': 'Year-to-date P&L',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+        docs.append({
+            'id': 'business_license',
+            'name': 'Business License',
+            'description': 'Current business license',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+    else:
+        docs.append({
+            'id': 'paystubs',
+            'name': 'Pay Stubs',
+            'description': 'Last 30 days (most recent)',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+        docs.append({
+            'id': 'w2',
+            'name': 'W-2 Forms',
+            'description': 'Last 2 years',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+
+    # Asset documents (always required)
+    docs.append({
+        'id': 'bank_statements',
+        'name': 'Bank Statements',
+        'description': 'Last 2 months (all pages)',
+        'category': 'asset_verification',
+        'status': 'pending'
+    })
+
+    # Gift letter if applicable
+    if has_gift_funds:
+        docs.append({
+            'id': 'gift_letter',
+            'name': 'Gift Letter',
+            'description': 'Signed gift letter from donor',
+            'category': 'asset_verification',
+            'status': 'pending'
+        })
+        docs.append({
+            'id': 'gift_donor_statements',
+            'name': 'Gift Donor Bank Statements',
+            'description': 'Donor bank statements showing funds',
+            'category': 'asset_verification',
+            'status': 'pending'
+        })
+
+    # Co-borrower documents if applicable
+    if has_co_borrower:
+        docs.append({
+            'id': 'coborrower_id',
+            'name': 'Co-Borrower Government ID',
+            'description': "Co-borrower's driver's license or passport",
+            'category': 'identity',
+            'status': 'pending'
+        })
+        docs.append({
+            'id': 'coborrower_income',
+            'name': 'Co-Borrower Income Documents',
+            'description': 'Pay stubs and W-2s for co-borrower',
+            'category': 'income_verification',
+            'status': 'pending'
+        })
+
+    return docs
+
+
 class PURLWorkspaceService:
     """
     Service for PURL workspace operations.
@@ -441,6 +567,15 @@ class PURLWorkspaceService:
                     logger.info(f"Loaded {len(document_requirements)} document requirements for loan {current_loan.id}")
                 except Exception as e:
                     logger.warning(f"Failed to load document requirements: {e}")
+
+            # If no document requirements from database, generate from application data
+            if not document_requirements and application:
+                try:
+                    app_data = application.data if hasattr(application, 'data') else {}
+                    document_requirements = calculate_document_requirements_from_application(app_data)
+                    logger.info(f"Generated {len(document_requirements)} document requirements from application data")
+                except Exception as e:
+                    logger.warning(f"Failed to generate document requirements from application: {e}")
                     # Rollback to clear the failed transaction state so subsequent queries can proceed
                     self.db.rollback()
 

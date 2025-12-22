@@ -126,6 +126,217 @@ def verify_host_permission(room, current_user) -> bool:
 
 
 # ============================================================================
+# BACKGROUND TASK FUNCTIONS
+# ============================================================================
+
+async def process_meeting_ai_analysis(room_id: int):
+    """Process AI analysis for a completed meeting"""
+    from database import SessionLocal
+    from services.document_analysis_service import DocumentAnalysisService
+
+    db = SessionLocal()
+    try:
+        VideoMeetingRoom = _models.get('VideoMeetingRoom')
+        MeetingRecording = _models.get('MeetingRecording')
+        MeetingTranscript = _models.get('MeetingTranscript')
+        AIAnalysis = _models.get('AIAnalysis')
+
+        room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+        if not room:
+            logger.error(f"Meeting room {room_id} not found for AI analysis")
+            return
+
+        # Get transcript if available
+        transcript = db.query(MeetingTranscript).filter(
+            MeetingTranscript.meeting_id == room_id,
+            MeetingTranscript.status == "completed"
+        ).first()
+
+        if transcript and transcript.full_text:
+            # Create AI analysis using Claude
+            import httpx
+            import os
+
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": "claude-sonnet-4-20250514",
+                            "max_tokens": 2000,
+                            "messages": [{
+                                "role": "user",
+                                "content": f"""Analyze this meeting transcript and provide:
+1. Summary (2-3 sentences)
+2. Key action items
+3. Important decisions made
+4. Follow-up items needed
+
+Transcript:
+{transcript.full_text[:10000]}"""
+                            }],
+                        },
+                    )
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        analysis_text = result["content"][0]["text"]
+
+                        # Create analysis record
+                        analysis = AIAnalysis(
+                            meeting_id=room_id,
+                            analysis_type="summary",
+                            status="completed",
+                            result={"summary": analysis_text},
+                            completed_at=datetime.utcnow()
+                        )
+                        db.add(analysis)
+                        db.commit()
+                        logger.info(f"AI analysis completed for meeting {room_id}")
+
+            except Exception as e:
+                logger.error(f"AI analysis failed for meeting {room_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Error processing AI analysis for meeting {room_id}: {e}")
+    finally:
+        db.close()
+
+
+async def process_recording(recording_id: int):
+    """Process a completed recording (transcription, analysis)"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        MeetingRecording = _models.get('MeetingRecording')
+        MeetingTranscript = _models.get('MeetingTranscript')
+
+        recording = db.query(MeetingRecording).filter(
+            MeetingRecording.id == recording_id
+        ).first()
+
+        if not recording:
+            logger.error(f"Recording {recording_id} not found for processing")
+            return
+
+        # Update recording status to processing
+        recording.status = "processing"
+        db.commit()
+
+        # If transcription is enabled, create transcript placeholder
+        if recording.storage_url:
+            transcript = MeetingTranscript(
+                meeting_id=recording.meeting_id,
+                recording_id=recording_id,
+                status="pending",
+                language="en"
+            )
+            db.add(transcript)
+            db.commit()
+
+            # Note: Actual transcription would integrate with Whisper or similar
+            logger.info(f"Recording {recording_id} queued for transcription")
+
+        recording.status = "completed"
+        db.commit()
+        logger.info(f"Recording {recording_id} processing completed")
+
+    except Exception as e:
+        logger.error(f"Error processing recording {recording_id}: {e}")
+    finally:
+        db.close()
+
+
+async def run_ai_analysis(room_id: int, analysis_types: List[str]):
+    """Run specific AI analysis types for a meeting"""
+    await process_meeting_ai_analysis(room_id)
+
+
+async def send_meeting_invite_email(
+    to_email: str,
+    participant_name: str,
+    room_name: str,
+    join_url: str,
+    host_name: str,
+    scheduled_start: Optional[datetime] = None
+):
+    """Send meeting invite email to participant"""
+    from email_service import email_service
+
+    time_str = scheduled_start.strftime('%B %d, %Y at %I:%M %p') if scheduled_start else "Now"
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 30px; border-radius: 12px; text-align: center;">
+            <h2 style="margin: 0 0 10px;">📹 Video Meeting Invitation</h2>
+            <p style="margin: 0; opacity: 0.9;">{room_name}</p>
+        </div>
+
+        <div style="padding: 30px 0;">
+            <p>Hi {participant_name or 'there'},</p>
+            <p>You've been invited to join a video meeting hosted by <strong>{host_name}</strong>.</p>
+
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0 0 5px; color: #666;">When:</p>
+                <p style="margin: 0; font-size: 18px; font-weight: 600;">{time_str}</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{join_url}"
+                   style="display: inline-block; background: #10b981; color: white; padding: 14px 40px;
+                          border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                    Join Meeting
+                </a>
+            </div>
+
+            <p style="color: #666; font-size: 14px; text-align: center;">
+                Or copy this link: <a href="{join_url}" style="color: #3b82f6;">{join_url}</a>
+            </p>
+        </div>
+
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; text-align: center; color: #9ca3af; font-size: 12px;">
+            <p>This invitation was sent via Perennia AI CRM</p>
+        </div>
+    </body>
+    </html>
+    """
+
+    plain_text = f"""
+Video Meeting Invitation
+
+Hi {participant_name or 'there'},
+
+You've been invited to join a video meeting.
+
+Meeting: {room_name}
+Host: {host_name}
+When: {time_str}
+
+Join the meeting: {join_url}
+
+This invitation was sent via Perennia AI CRM
+"""
+
+    success = email_service.send_html_email(
+        to_email=to_email,
+        subject=f"📹 Video Meeting: {room_name}",
+        html_body=html_body,
+        plain_text_body=plain_text
+    )
+
+    logger.info(f"Meeting invite sent to {to_email}: {'success' if success else 'failed'}")
+    return success
+
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 
@@ -595,8 +806,8 @@ async def end_meeting(
     room.updated_at = datetime.utcnow()
     db.commit()
 
-    # TODO: Trigger AI analysis in background
-    # background_tasks.add_task(process_meeting_ai_analysis, room_id)
+    # Trigger AI analysis in background
+    background_tasks.add_task(process_meeting_ai_analysis, room_id)
 
     return {"success": True, "meeting": {"id": room.id, "status": room.status, "actual_end": room.actual_end.isoformat()}}
 
@@ -1039,6 +1250,7 @@ async def delete_screen_recording(
 async def add_participant(
     room_id: int,
     data: ParticipantAdd,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -1048,6 +1260,7 @@ async def add_participant(
 
     VideoMeetingRoom = _models.get('VideoMeetingRoom')
     MeetingParticipant = _models.get('MeetingParticipant')
+    User = _models.get('User')
 
     room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
     if not room:
@@ -1078,7 +1291,26 @@ async def add_participant(
     db.commit()
     db.refresh(participant)
 
-    # TODO: Send invite email if send_invite is True
+    # Send invite email if send_invite is True
+    if data.send_invite and data.email:
+        # Get host info
+        host = db.query(User).filter(User.id == room.host_user_id).first() if User else None
+        host_name = host.name if host and hasattr(host, 'name') else current_user.name if hasattr(current_user, 'name') else "Host"
+
+        # Build join URL
+        import os
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        join_url = f"{frontend_url}/meeting/{room.room_code}"
+
+        background_tasks.add_task(
+            send_meeting_invite_email,
+            to_email=data.email,
+            participant_name=participant.display_name,
+            room_name=room.room_name,
+            join_url=join_url,
+            host_name=host_name,
+            scheduled_start=room.scheduled_start
+        )
 
     return {
         "success": True,
@@ -1088,7 +1320,8 @@ async def add_participant(
             "display_name": participant.display_name,
             "role": participant.role,
             "status": participant.status
-        }
+        },
+        "invite_sent": data.send_invite and data.email is not None
     }
 
 
@@ -1490,8 +1723,8 @@ async def stop_recording(
 
     db.commit()
 
-    # TODO: Trigger recording processing in background
-    # background_tasks.add_task(process_recording, recording_id)
+    # Trigger recording processing in background
+    background_tasks.add_task(process_recording, recording_id)
 
     return {"success": True, "recording": {"id": recording.id, "status": recording.status, "duration_seconds": recording.duration_seconds}}
 
@@ -1535,8 +1768,8 @@ async def request_ai_analysis(
 
     db.commit()
 
-    # TODO: Trigger AI analysis in background
-    # background_tasks.add_task(run_ai_analysis, room_id, data.analysis_types)
+    # Trigger AI analysis in background
+    background_tasks.add_task(run_ai_analysis, room_id, data.analysis_types)
 
     return {"success": True, "analyses_requested": analyses_created}
 

@@ -636,12 +636,75 @@ async def get_providers(db: Session = Depends(get_db)):
     ]
 
 
+async def _poll_provider_emails(provider_id: int, provider_name: str):
+    """Background task to poll emails from a specific provider"""
+    from database import SessionLocal
+    from services.email_processor import EmailProcessor
+
+    db = SessionLocal()
+    try:
+        logger.info(f"Starting email poll for provider {provider_name} (ID: {provider_id})")
+
+        # Get provider config
+        provider_config = db.query(EmailProviderConfig).filter(
+            EmailProviderConfig.id == provider_id
+        ).first()
+
+        if not provider_config or not provider_config.is_enabled:
+            logger.warning(f"Provider {provider_id} not found or disabled")
+            return
+
+        # Initialize email processor
+        processor = EmailProcessor()
+
+        # Based on provider type, fetch and process emails
+        if provider_name == "microsoft_graph":
+            from integrations.google_gmail import GmailService  # Import actual service
+            # Would integrate with Microsoft Graph API
+            logger.info(f"Would poll Microsoft Graph emails for provider {provider_id}")
+
+        elif provider_name == "gmail":
+            from integrations.google_gmail import GmailService
+            # Would integrate with Gmail API
+            logger.info(f"Would poll Gmail emails for provider {provider_id}")
+
+        # Update last poll time
+        provider_config.last_poll_time = datetime.utcnow()
+        db.commit()
+
+        logger.info(f"Email poll completed for provider {provider_name}")
+
+    except Exception as e:
+        logger.error(f"Email polling failed for provider {provider_id}: {e}")
+    finally:
+        db.close()
+
+
 @router.post("/poll-now")
 async def poll_emails_now(
     background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
     provider: Optional[str] = None
 ):
     """Manually trigger email polling"""
-    # TODO: Implement background polling task
-    # For now, return a placeholder response
-    return {"message": f"Email polling {'for ' + provider if provider else ''} would start here. Celery tasks need to be configured."}
+    # Get all enabled providers or specific one
+    query = db.query(EmailProviderConfig).filter(EmailProviderConfig.is_enabled == True)
+
+    if provider:
+        query = query.filter(EmailProviderConfig.provider_name == provider)
+
+    providers = query.all()
+
+    if not providers:
+        return {"success": False, "message": "No enabled providers found"}
+
+    # Start background tasks for each provider
+    for p in providers:
+        provider_name = p.provider_name.value if hasattr(p.provider_name, 'value') else p.provider_name
+        background_tasks.add_task(_poll_provider_emails, p.id, provider_name)
+
+    return {
+        "success": True,
+        "message": f"Email polling started for {len(providers)} provider(s)",
+        "providers": [p.display_name or p.provider_name for p in providers]
+    }

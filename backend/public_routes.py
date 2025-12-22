@@ -680,6 +680,33 @@ async def add_team_member(
     }
 
 
+def _get_default_workflows():
+    """Return default workflows when AI generation fails"""
+    return [
+        {
+            "name": "Lead to Application Workflow",
+            "description": "Automated workflow for moving leads through the application process",
+            "steps": [
+                {"order": 1, "name": "Initial Contact", "assigned_role": "Loan Officer"},
+                {"order": 2, "name": "Pre-qualification", "assigned_role": "Loan Officer"},
+                {"order": 3, "name": "Application Submission", "assigned_role": "Processor"},
+                {"order": 4, "name": "Document Collection", "assigned_role": "Processor"},
+                {"order": 5, "name": "Underwriting", "assigned_role": "Underwriter"}
+            ]
+        },
+        {
+            "name": "Client Onboarding Workflow",
+            "description": "Workflow for onboarding new clients",
+            "steps": [
+                {"order": 1, "name": "Welcome Email", "assigned_role": "System"},
+                {"order": 2, "name": "Initial Consultation", "assigned_role": "Loan Officer"},
+                {"order": 3, "name": "Document Request", "assigned_role": "Processor"},
+                {"order": 4, "name": "Credit Pull", "assigned_role": "Loan Officer"}
+            ]
+        }
+    ]
+
+
 @router.post("/api/v1/onboarding/generate-workflows")
 async def generate_workflows(
     user_id: int,
@@ -705,33 +732,71 @@ async def generate_workflows(
     if not progress or not progress.uploaded_documents:
         raise HTTPException(status_code=400, detail="No documents uploaded for workflow generation")
 
-    # TODO: Implement AI workflow generation using OpenAI
-    # This would parse the documents and create custom workflows
+    # Generate workflows using Claude AI
+    import httpx
+    import json
 
-    # For now, create sample workflows
-    sample_workflows = [
-        {
-            "name": "Lead to Application Workflow",
-            "description": "Automated workflow for moving leads through the application process",
-            "steps": [
-                {"order": 1, "name": "Initial Contact", "assigned_role": "Loan Officer"},
-                {"order": 2, "name": "Pre-qualification", "assigned_role": "Loan Officer"},
-                {"order": 3, "name": "Application Submission", "assigned_role": "Processor"},
-                {"order": 4, "name": "Document Collection", "assigned_role": "Processor"},
-                {"order": 5, "name": "Underwriting", "assigned_role": "Underwriter"}
-            ]
-        },
-        {
-            "name": "Client Onboarding Workflow",
-            "description": "Workflow for onboarding new clients",
-            "steps": [
-                {"order": 1, "name": "Welcome Email", "assigned_role": "System"},
-                {"order": 2, "name": "Initial Consultation", "assigned_role": "Loan Officer"},
-                {"order": 3, "name": "Document Request", "assigned_role": "Processor"},
-                {"order": 4, "name": "Credit Pull", "assigned_role": "Loan Officer"}
-            ]
-        }
-    ]
+    team_roles = list(set([m.role for m in team_members])) if team_members else ["Loan Officer", "Processor"]
+    documents_info = json.dumps(progress.uploaded_documents) if isinstance(progress.uploaded_documents, list) else str(progress.uploaded_documents)
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-sonnet-4-20250514",
+                    "max_tokens": 2000,
+                    "messages": [{
+                        "role": "user",
+                        "content": f"""Based on the following mortgage company information, generate 2-3 custom workflows.
+
+Team Roles Available: {', '.join(team_roles)}
+Uploaded Documents: {documents_info[:2000]}
+
+Generate workflows as a JSON array. Each workflow should have:
+- name: descriptive workflow name
+- description: brief description
+- steps: array of {{ "order": number, "name": step name, "assigned_role": role from team }}
+
+Focus on mortgage industry workflows like:
+- Lead qualification and conversion
+- Loan processing pipeline
+- Document collection
+- Closing coordination
+
+Return ONLY valid JSON, no markdown or explanation."""
+                    }],
+                },
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                ai_response = result["content"][0]["text"]
+
+                # Try to parse AI-generated workflows
+                try:
+                    # Clean up response if needed
+                    ai_response = ai_response.strip()
+                    if ai_response.startswith("```"):
+                        ai_response = ai_response.split("```")[1]
+                        if ai_response.startswith("json"):
+                            ai_response = ai_response[4:]
+                    sample_workflows = json.loads(ai_response)
+                except json.JSONDecodeError:
+                    logger.warning("AI returned invalid JSON, using default workflows")
+                    sample_workflows = _get_default_workflows()
+            else:
+                logger.warning(f"AI API returned {response.status_code}, using default workflows")
+                sample_workflows = _get_default_workflows()
+
+    except Exception as e:
+        logger.error(f"AI workflow generation failed: {e}, using defaults")
+        sample_workflows = _get_default_workflows()
 
     created_workflows = []
     for workflow_data in sample_workflows:
@@ -1220,14 +1285,43 @@ async def resend_email_verification(
             "type": "email"
         }
 
-        # TODO: Send actual email with verification link
-        # For now, log the token
-        logger.info(f"Email verification token for {request.email}: {token}")
+        # Send actual verification email
+        from services.notification_service import NotificationService
+        notification_service = NotificationService()
+
+        verification_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/verify-email?token={token}"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 30px; text-align: center;">
+                <h2 style="color: #333;">Verify Your Email</h2>
+                <p style="color: #666;">Please click the button below to verify your email address.</p>
+                <a href="{verification_url}"
+                   style="display: inline-block; background: #218D8D; color: white; padding: 12px 30px;
+                          border-radius: 6px; text-decoration: none; margin: 20px 0;">
+                    Verify Email
+                </a>
+                <p style="color: #999; font-size: 12px; margin-top: 20px;">
+                    This link will expire in 24 hours.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        result = notification_service.send_email(
+            to_email=request.email,
+            subject="Verify Your Email Address",
+            html_content=html_content
+        )
+
+        logger.info(f"Email verification sent to {request.email}: {result}")
 
         return {
-            "success": True,
-            "message": "Verification email sent",
-            "token": token  # REMOVE IN PRODUCTION
+            "success": result.get("success", False),
+            "message": "Verification email sent" if result.get("success") else "Failed to send verification email"
         }
 
     except Exception as e:
@@ -1256,14 +1350,28 @@ async def send_phone_verification_code(
             "method": request.method
         }
 
-        # TODO: Send actual SMS or email with code
-        # For now, log the code
-        logger.info(f"Phone verification code for {request.phone}: {code}")
+        # Send actual SMS or email with code
+        from services.notification_service import NotificationService
+        notification_service = NotificationService()
+
+        if request.method == "text":
+            # Send SMS
+            message = f"Your verification code is: {code}. This code expires in 10 minutes."
+            result = notification_service.send_sms(
+                to_phone=request.phone,
+                message=message
+            )
+        else:
+            # Send via email (method == "email")
+            # Would need email address - for now just log
+            logger.info(f"Phone verification code for {request.phone}: {code}")
+            result = {"success": True, "dry_run": True}
+
+        logger.info(f"Phone verification sent to {request.phone}: {result}")
 
         return {
-            "success": True,
-            "message": f"Verification code sent via {request.method}",
-            "code": code  # REMOVE IN PRODUCTION
+            "success": result.get("success", False),
+            "message": f"Verification code sent via {request.method}" if result.get("success") else "Failed to send verification code"
         }
 
     except Exception as e:

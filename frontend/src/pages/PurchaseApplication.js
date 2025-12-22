@@ -37,7 +37,6 @@ const getRequiredDocuments = (declarations = {}) => {
 
   // Identity documents (always required)
   docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
-  docs.push({ id: 'ssn', name: 'Social Security Card', description: 'Or other SSN verification', category: 'identity', stage: 'profile' });
 
   // Income documents (varies based on employment type)
   if (isSelfEmployed) {
@@ -1072,6 +1071,22 @@ export default function PurchaseApplication() {
   const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null); // Portal URL after submission
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
+
+  // Auto-redirect to client portal after successful submission
+  useEffect(() => {
+    if (showSubmissionSuccess && portalUrlForRedirect) {
+      const redirectTimer = setTimeout(() => {
+        // Signal to parent iframe that submission is complete (if embedded)
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: portalUrlForRedirect }, '*');
+        }
+        // Redirect to the client portal
+        window.location.href = portalUrlForRedirect;
+      }, 3000); // 3 second delay to show success message
+
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [showSubmissionSuccess, portalUrlForRedirect]);
 
   // Handle SSN input with masking - shows XXX-XX-1234 format
   const handleSsnChange = (input, isCoBorrower = false) => {
@@ -3951,21 +3966,6 @@ export default function PurchaseApplication() {
             <h2>Application Submitted!</h2>
             <p>Your mortgage application has been successfully submitted.</p>
             <p className="redirect-message">You will be redirected to your client portal...</p>
-            <button
-              className="btn-view-portal"
-              onClick={() => {
-                if (portalUrlForRedirect) {
-                  window.open(portalUrlForRedirect, '_blank');
-                }
-                setShowSubmissionSuccess(false);
-                // Signal to parent iframe that submission is complete (if embedded)
-                if (window.parent !== window) {
-                  window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: portalUrlForRedirect }, '*');
-                }
-              }}
-            >
-              View Your Portal
-            </button>
           </div>
         </div>
       )}

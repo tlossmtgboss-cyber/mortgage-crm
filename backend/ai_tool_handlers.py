@@ -371,31 +371,57 @@ async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> D
 
 
 async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
-    """Send email message"""
-    # This would integrate with your email service
+    """Send email message using the configured email service"""
+    from email_service import email_service
+    from database import SessionLocal
+
     to_email = input_data["to_email"]
     subject = input_data["subject"]
     body = input_data["body"]
     lead_id = input_data.get("lead_id")
+    is_html = input_data.get("is_html", False)
 
-    # TODO: Implement actual email sending
-    # For now, just log it
+    # Send the actual email
+    try:
+        if is_html:
+            success = email_service.send_html_email(
+                to_email=to_email,
+                subject=subject,
+                html_body=body,
+                plain_text_body=input_data.get("plain_text_body")
+            )
+        else:
+            # Convert plain text to simple HTML
+            html_body = f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
+            success = email_service.send_html_email(
+                to_email=to_email,
+                subject=subject,
+                html_body=html_body,
+                plain_text_body=body
+            )
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to send email: {str(e)}",
+            "error": str(e)
+        }
 
+    # Log the communication if associated with a lead
     if lead_id:
-        from database import SessionLocal
         db = SessionLocal()
         try:
             query = text("""
                 INSERT INTO communications (
                     lead_id, type, direction, content, status, created_by
                 ) VALUES (
-                    :lead_id, 'email', 'outbound', :content, 'sent', :created_by
+                    :lead_id, 'email', 'outbound', :content, :status, :created_by
                 )
             """)
 
             db.execute(query, {
                 "lead_id": lead_id,
                 "content": f"{subject}\n\n{body}",
+                "status": "sent" if success else "failed",
                 "created_by": context.user_id or 1
             })
             db.commit()
@@ -403,8 +429,10 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
             db.close()
 
     return {
-        "success": True,
-        "message": "Email sent (simulated)"
+        "success": success,
+        "message": "Email sent successfully" if success else "Email delivery failed",
+        "to": to_email,
+        "subject": subject
     }
 
 
@@ -678,28 +706,39 @@ async def handle_find_stale_loans(input_data: Dict[str, Any], context: ToolConte
 # ============================================================================
 
 async def handle_classify_document(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
-    """Classify document type using AI"""
+    """Classify document type using Claude Vision AI"""
+    from services.document_analysis_service import DocumentAnalysisService
+
     document_id = input_data["document_id"]
     file_path = input_data.get("file_path", "")
+    claimed_type = input_data.get("claimed_type")
+    borrower_name = input_data.get("borrower_name")
 
-    # TODO: Implement actual document classification using OpenAI Vision
-    # For now, return simulated result
+    if not file_path:
+        return {
+            "success": False,
+            "document_id": document_id,
+            "error": "No file path provided for document classification"
+        }
 
-    # In production, you would:
-    # 1. Load the document
-    # 2. Use OpenAI Vision API to analyze
-    # 3. Return classification with confidence
+    # Use the document analysis service
+    service = DocumentAnalysisService()
+    result = await service.analyze_document(
+        file_path=file_path,
+        claimed_type=claimed_type,
+        borrower_name=borrower_name,
+        additional_context=input_data.get("context")
+    )
 
     return {
-        "success": True,
+        "success": result.verified or result.confidence > 0,
         "document_id": document_id,
-        "document_type": "paystub",  # Simulated
-        "confidence": 0.92,
-        "extracted_data": {
-            "employer": "ABC Company",
-            "ytd_income": 45000,
-            "pay_period": "2024-01-15 to 2024-01-31"
-        }
+        "document_type": result.document_type,
+        "confidence": result.confidence,
+        "verified": result.verified,
+        "extracted_data": result.extracted_data,
+        "issues": result.issues,
+        "suggestions": result.suggestions
     }
 
 
