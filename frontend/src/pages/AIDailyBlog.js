@@ -68,6 +68,228 @@ const VoiceProfileToggles = ({ toggles, onChange }) => {
   );
 };
 
+// ============ Batch Review Modal Component ============
+const BatchReviewModal = ({ posts, onApprove, onDiscard, onApproveAll, onDiscardAll, onClose, onEdit }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [activePreview, setActivePreview] = useState('blog');
+  const [editedPosts, setEditedPosts] = useState(posts.map(p => ({ ...p })));
+
+  const currentPost = editedPosts[currentIndex];
+  const approvedCount = editedPosts.filter(p => p._approved).length;
+  const discardedCount = editedPosts.filter(p => p._discarded).length;
+  const pendingCount = editedPosts.filter(p => !p._approved && !p._discarded).length;
+
+  const updateCurrentPost = (updates) => {
+    const newPosts = [...editedPosts];
+    newPosts[currentIndex] = { ...newPosts[currentIndex], ...updates };
+    setEditedPosts(newPosts);
+  };
+
+  const handleApprove = (index) => {
+    const newPosts = [...editedPosts];
+    newPosts[index] = { ...newPosts[index], _approved: true, _discarded: false };
+    setEditedPosts(newPosts);
+    // Move to next pending post
+    const nextPending = newPosts.findIndex((p, i) => i > index && !p._approved && !p._discarded);
+    if (nextPending !== -1) {
+      setCurrentIndex(nextPending);
+    }
+  };
+
+  const handleDiscard = (index) => {
+    const newPosts = [...editedPosts];
+    newPosts[index] = { ...newPosts[index], _approved: false, _discarded: true };
+    setEditedPosts(newPosts);
+    // Move to next pending post
+    const nextPending = newPosts.findIndex((p, i) => i > index && !p._approved && !p._discarded);
+    if (nextPending !== -1) {
+      setCurrentIndex(nextPending);
+    }
+  };
+
+  const handleApproveAll = () => {
+    const approved = editedPosts.filter(p => !p._discarded).map(p => ({ ...p, _approved: true }));
+    onApproveAll(approved);
+  };
+
+  const handleSaveApproved = () => {
+    const approved = editedPosts.filter(p => p._approved);
+    onApproveAll(approved);
+  };
+
+  return (
+    <div className="modal-overlay batch-review-overlay" onClick={onClose}>
+      <div className="modal batch-review-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header batch-review-header">
+          <h3>Review Generated Posts ({editedPosts.length})</h3>
+          <div className="review-stats">
+            <span className="stat approved">{approvedCount} Approved</span>
+            <span className="stat discarded">{discardedCount} Discarded</span>
+            <span className="stat pending">{pendingCount} Pending</span>
+          </div>
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="batch-review-body">
+          {/* Post Navigation Sidebar */}
+          <div className="review-sidebar">
+            <h4>Posts</h4>
+            <div className="post-list">
+              {editedPosts.map((post, index) => (
+                <div
+                  key={index}
+                  className={`post-item ${currentIndex === index ? 'active' : ''} ${post._approved ? 'approved' : ''} ${post._discarded ? 'discarded' : ''}`}
+                  onClick={() => setCurrentIndex(index)}
+                >
+                  <span className="post-number">#{index + 1}</span>
+                  <span className="post-title">{post.title?.substring(0, 30) || 'Untitled'}...</span>
+                  <span className={`status-dot ${post._approved ? 'approved' : post._discarded ? 'discarded' : 'pending'}`}></span>
+                </div>
+              ))}
+            </div>
+            <div className="sidebar-actions">
+              <button className="btn-approve-all" onClick={handleApproveAll}>
+                Approve All
+              </button>
+              <button className="btn-discard-all" onClick={onDiscardAll}>
+                Discard All
+              </button>
+            </div>
+          </div>
+
+          {/* Post Preview/Edit */}
+          <div className="review-content">
+            {currentPost && (
+              <>
+                <div className="review-content-header">
+                  <input
+                    type="text"
+                    className="title-input"
+                    value={currentPost.title || ''}
+                    onChange={(e) => updateCurrentPost({ title: e.target.value })}
+                    placeholder="Enter title..."
+                  />
+                </div>
+
+                <div className="editor-tabs">
+                  <button
+                    className={`tab ${activePreview === 'blog' ? 'active' : ''}`}
+                    onClick={() => setActivePreview('blog')}
+                  >
+                    Blog Post
+                  </button>
+                  <button
+                    className={`tab ${activePreview === 'linkedin' ? 'active' : ''}`}
+                    onClick={() => setActivePreview('linkedin')}
+                  >
+                    LinkedIn
+                  </button>
+                  <button
+                    className={`tab ${activePreview === 'facebook' ? 'active' : ''}`}
+                    onClick={() => setActivePreview('facebook')}
+                  >
+                    Facebook
+                  </button>
+                  <button
+                    className={`tab ${activePreview === 'instagram' ? 'active' : ''}`}
+                    onClick={() => setActivePreview('instagram')}
+                  >
+                    Instagram
+                  </button>
+                </div>
+
+                <div className="editor-content">
+                  {activePreview === 'blog' ? (
+                    <textarea
+                      className="blog-editor"
+                      value={currentPost.blog_md || ''}
+                      onChange={(e) => updateCurrentPost({ blog_md: e.target.value })}
+                      placeholder="Blog content in Markdown..."
+                    />
+                  ) : (
+                    <textarea
+                      className="social-editor"
+                      value={currentPost.social?.[activePreview] || ''}
+                      onChange={(e) => updateCurrentPost({
+                        social: { ...currentPost.social, [activePreview]: e.target.value }
+                      })}
+                      placeholder={`${activePreview} post content...`}
+                    />
+                  )}
+                </div>
+
+                {/* Compliance and Uniqueness Info */}
+                <div className="review-meta">
+                  {currentPost.compliance && (
+                    <div className={`compliance-badge ${currentPost.compliance.is_compliant ? 'compliant' : 'not-compliant'}`}>
+                      {currentPost.compliance.is_compliant ? '✓ Compliant' : `⚠ ${currentPost.compliance.issues?.length || 0} Issues`}
+                    </div>
+                  )}
+                  {currentPost.uniqueness_score !== undefined && (
+                    <div className="uniqueness-badge">
+                      Uniqueness: {Math.round((currentPost.uniqueness_score || 0) * 100)}%
+                    </div>
+                  )}
+                </div>
+
+                {/* Post Actions */}
+                <div className="review-actions">
+                  <button
+                    className={`btn-discard ${currentPost._discarded ? 'active' : ''}`}
+                    onClick={() => handleDiscard(currentIndex)}
+                    disabled={currentPost._approved}
+                  >
+                    {currentPost._discarded ? '✗ Discarded' : 'Discard'}
+                  </button>
+                  <button
+                    className={`btn-approve ${currentPost._approved ? 'active' : ''}`}
+                    onClick={() => handleApprove(currentIndex)}
+                    disabled={currentPost._discarded}
+                  >
+                    {currentPost._approved ? '✓ Approved' : 'Approve'}
+                  </button>
+                </div>
+
+                {/* Navigation */}
+                <div className="review-navigation">
+                  <button
+                    className="btn-prev"
+                    onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                    disabled={currentIndex === 0}
+                  >
+                    ← Previous
+                  </button>
+                  <span className="nav-indicator">{currentIndex + 1} of {editedPosts.length}</span>
+                  <button
+                    className="btn-next"
+                    onClick={() => setCurrentIndex(Math.min(editedPosts.length - 1, currentIndex + 1))}
+                    disabled={currentIndex === editedPosts.length - 1}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="modal-footer batch-review-footer">
+          <button className="btn-cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn-save-approved"
+            onClick={handleSaveApproved}
+            disabled={approvedCount === 0}
+          >
+            Save {approvedCount} Approved Post{approvedCount !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============ Content Editor Component ============
 const ContentEditor = ({ content, onChange, onSave }) => {
   const [activePreview, setActivePreview] = useState('blog');
@@ -176,6 +398,11 @@ const AIDailyBlog = () => {
   // Generated content state
   const [generatedContent, setGeneratedContent] = useState(null);
 
+  // Batch review state
+  const [pendingReviewPosts, setPendingReviewPosts] = useState([]);
+  const [showBatchReview, setShowBatchReview] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0, topic: '' });
+
   // Voice profile modal state
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [voiceModalData, setVoiceModalData] = useState({
@@ -249,7 +476,7 @@ const AIDailyBlog = () => {
     setLoading(false);
   };
 
-  // Generate content
+  // Generate content - uses same review flow as batch generation for consistency
   const handleGenerate = async () => {
     if (!generateForm.topic.trim()) {
       setError('Please enter a topic');
@@ -259,6 +486,7 @@ const AIDailyBlog = () => {
     setLoading(true);
     setError(null);
     setGeneratedContent(null);
+    setGenerationProgress({ current: 1, total: 1, topic: generateForm.topic });
 
     try {
       const result = await blogAPI.generateContent({
@@ -272,7 +500,8 @@ const AIDailyBlog = () => {
         platforms: generateForm.platforms,
       });
 
-      setGeneratedContent({
+      // Use same review flow as batch generation for consistent UX
+      const generatedPost = {
         id: result.id,
         title: result.title,
         slug: result.slug,
@@ -281,15 +510,17 @@ const AIDailyBlog = () => {
         social: result.social,
         compliance: result.compliance,
         similarity: result.similarity,
+        uniqueness_score: result.similarity?.uniqueness_score,
         metadata: result.metadata,
-      });
+        _topic: generateForm.topic,
+        _approved: false,
+        _discarded: false,
+      };
 
-      setSuccess('Content generated successfully!');
-      setTimeout(() => setSuccess(null), 3000);
-
-      // Refresh content list
-      const contentRes = await blogAPI.getContentList({ limit: 20 });
-      setContentList(contentRes.items || []);
+      // Show batch review modal (works for 1 or multiple posts)
+      setPendingReviewPosts([generatedPost]);
+      setShowBatchReview(true);
+      setGenerateForm({ ...generateForm, topic: '' }); // Clear topic input
 
     } catch (err) {
       console.error('Blog generation error:', err);
@@ -304,6 +535,7 @@ const AIDailyBlog = () => {
       setError(errorMessage);
     }
     setLoading(false);
+    setGenerationProgress({ current: 0, total: 0, topic: '' });
   };
 
   // Upload document
@@ -580,24 +812,40 @@ const AIDailyBlog = () => {
                             setLoading(true);
                             setError(null);
                             setSuccess(null);
-                            let successCount = 0;
                             const totalCount = topicsToGenerate.length;
+                            const generatedPosts = [];
 
                             let lastError = null;
                             for (let i = 0; i < topicsToGenerate.length; i++) {
                               const topic = topicsToGenerate[i];
                               // Update progress message
+                              setGenerationProgress({ current: i + 1, total: totalCount, topic: topic.topic });
                               setSuccess(`Generating post ${i + 1} of ${totalCount}: "${topic.topic.substring(0, 40)}..."`);
 
                               try {
-                                await blogAPI.generateContent({
+                                const result = await blogAPI.generateContent({
                                   topic: topic.topic,
-                                  archetype: topic.archetype,
+                                  archetype: topic.archetype || 'informative',
                                   keyword: topic.keyword,
                                   generate_social: generateForm.generateSocial,
                                   platforms: generateForm.platforms,
                                 });
-                                successCount++;
+                                // Store generated post for review
+                                generatedPosts.push({
+                                  id: result.id,
+                                  title: result.title,
+                                  slug: result.slug,
+                                  blog_md: result.blog_md,
+                                  blog_html: result.blog_html,
+                                  social: result.social,
+                                  compliance: result.compliance,
+                                  similarity: result.similarity,
+                                  uniqueness_score: result.similarity?.uniqueness_score,
+                                  metadata: result.metadata,
+                                  _topic: topic.topic,
+                                  _approved: false,
+                                  _discarded: false,
+                                });
                               } catch (err) {
                                 console.error(`Failed to generate: ${topic.topic}`, err);
                                 lastError = err;
@@ -606,14 +854,14 @@ const AIDailyBlog = () => {
                             }
 
                             setLoading(false);
-                            if (successCount > 0) {
-                              setSuccess(`Successfully generated ${successCount} of ${totalCount} blog post${successCount > 1 ? 's' : ''}!`);
+                            setGenerationProgress({ current: 0, total: 0, topic: '' });
+
+                            if (generatedPosts.length > 0) {
+                              // Show batch review modal
+                              setPendingReviewPosts(generatedPosts);
+                              setShowBatchReview(true);
+                              setSuccess(null);
                               setSelectedTopics([]);
-                              // Refresh content list
-                              try {
-                                const contentRes = await blogAPI.getContentList({ limit: 20 });
-                                setContentList(contentRes.items || []);
-                              } catch (e) {}
                             } else {
                               setSuccess(null);
                               // Show detailed error message
@@ -628,7 +876,11 @@ const AIDailyBlog = () => {
                           }}
                           disabled={loading}
                         >
-                          {loading ? 'Generating...' : `Generate ${selectedTopics.length} Post${selectedTopics.length > 1 ? 's' : ''}`}
+                          {loading && generationProgress.total > 0
+                            ? `Generating ${generationProgress.current}/${generationProgress.total}...`
+                            : loading
+                            ? 'Generating...'
+                            : `Generate ${selectedTopics.length} Post${selectedTopics.length > 1 ? 's' : ''}`}
                         </button>
                         {selectedTopics.length > 3 && !loading && (
                           <span className="generation-warning">Generating multiple posts may take several minutes</span>
@@ -744,60 +996,7 @@ const AIDailyBlog = () => {
               </button>
             </div>
 
-            {/* Generated Content Preview */}
-            {generatedContent && (
-              <div className="generated-preview">
-                <h3>Generated Content</h3>
-                <ContentEditor
-                  content={generatedContent}
-                  onChange={setGeneratedContent}
-                  onSave={async (content) => {
-                    try {
-                      await blogAPI.updateContent(content.id, {
-                        title: content.title,
-                        blog_md: content.blog_md,
-                        social_json: content.social,
-                      });
-                      setSuccess('Content saved!');
-                    } catch (err) {
-                      setError('Failed to save content');
-                    }
-                  }}
-                />
-
-                {/* Compliance Check Results */}
-                {generatedContent.compliance && (
-                  <div className={`compliance-result ${generatedContent.compliance.is_compliant ? 'compliant' : 'not-compliant'}`}>
-                    <h4>Compliance Check</h4>
-                    <p>
-                      {generatedContent.compliance.is_compliant
-                        ? 'Content is compliant'
-                        : `${generatedContent.compliance.issues?.length || 0} issues found`}
-                    </p>
-                    {generatedContent.compliance.issues?.map((issue, i) => (
-                      <div key={i} className="issue-item">
-                        <span className="issue-type">{issue.type}</span>
-                        <span className="issue-message">{issue.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Similarity Check Results */}
-                {generatedContent.similarity && (
-                  <div className={`similarity-result ${generatedContent.similarity.is_unique ? 'unique' : 'not-unique'}`}>
-                    <h4>Uniqueness Score</h4>
-                    <div className="score-bar">
-                      <div
-                        className="score-fill"
-                        style={{ width: `${(generatedContent.similarity.uniqueness_score || 0) * 100}%` }}
-                      ></div>
-                    </div>
-                    <p>{Math.round((generatedContent.similarity.uniqueness_score || 0) * 100)}% unique</p>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Note: Generated content is now shown in the Batch Review Modal for consistent UX */}
           </div>
         )}
 
@@ -1109,6 +1308,105 @@ const AIDailyBlog = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Batch Review Modal */}
+      {showBatchReview && pendingReviewPosts.length > 0 && (
+        <BatchReviewModal
+          posts={pendingReviewPosts}
+          onApprove={async (post, index) => {
+            // Individual approve - mark in state
+            const newPosts = [...pendingReviewPosts];
+            newPosts[index] = { ...post, _approved: true };
+            setPendingReviewPosts(newPosts);
+          }}
+          onDiscard={async (post, index) => {
+            // Individual discard - delete from DB and mark in state
+            try {
+              await blogAPI.deleteContent(post.id);
+            } catch (err) {
+              console.error('Failed to delete discarded post:', err);
+            }
+            const newPosts = [...pendingReviewPosts];
+            newPosts[index] = { ...post, _discarded: true };
+            setPendingReviewPosts(newPosts);
+          }}
+          onApproveAll={async (approvedPosts) => {
+            // Save approved posts (update any edits) and delete discarded
+            setLoading(true);
+            try {
+              // Update approved posts with any edits
+              for (const post of approvedPosts) {
+                if (post._approved) {
+                  await blogAPI.updateContent(post.id, {
+                    title: post.title,
+                    blog_md: post.blog_md,
+                    social_json: post.social,
+                  });
+                }
+              }
+
+              // Delete discarded posts
+              const discardedPosts = pendingReviewPosts.filter(p => p._discarded);
+              for (const post of discardedPosts) {
+                try {
+                  await blogAPI.deleteContent(post.id);
+                } catch (err) {
+                  console.error('Failed to delete discarded post:', err);
+                }
+              }
+
+              // Refresh content list
+              const contentRes = await blogAPI.getContentList({ limit: 20 });
+              setContentList(contentRes.items || []);
+
+              const savedCount = approvedPosts.filter(p => p._approved).length;
+              setSuccess(`Saved ${savedCount} blog post${savedCount !== 1 ? 's' : ''}!`);
+              setTimeout(() => setSuccess(null), 3000);
+            } catch (err) {
+              setError('Failed to save posts. Please try again.');
+            }
+            setLoading(false);
+            setShowBatchReview(false);
+            setPendingReviewPosts([]);
+          }}
+          onDiscardAll={async () => {
+            // Delete all generated posts
+            setLoading(true);
+            try {
+              for (const post of pendingReviewPosts) {
+                try {
+                  await blogAPI.deleteContent(post.id);
+                } catch (err) {
+                  console.error('Failed to delete post:', err);
+                }
+              }
+              setSuccess('All posts discarded');
+              setTimeout(() => setSuccess(null), 3000);
+            } catch (err) {
+              setError('Failed to discard posts');
+            }
+            setLoading(false);
+            setShowBatchReview(false);
+            setPendingReviewPosts([]);
+          }}
+          onClose={() => {
+            // Cancel - ask user what to do with generated posts
+            if (window.confirm('Close without saving? Generated posts will remain as drafts in your content library.')) {
+              setShowBatchReview(false);
+              setPendingReviewPosts([]);
+              // Refresh content list to show the drafts
+              blogAPI.getContentList({ limit: 20 }).then(res => {
+                setContentList(res.items || []);
+              }).catch(() => {});
+            }
+          }}
+          onEdit={(post, index) => {
+            const newPosts = [...pendingReviewPosts];
+            newPosts[index] = post;
+            setPendingReviewPosts(newPosts);
+          }}
+        />
       )}
     </div>
   );
