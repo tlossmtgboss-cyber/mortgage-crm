@@ -36,6 +36,73 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/blog", tags=["ai-blog"])
 
+
+def ensure_blog_tables_exist():
+    """Ensure all blog tables exist in the database."""
+    try:
+        from database import engine
+        from sqlalchemy import inspect, text
+
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+
+        if 'blog_voice_profiles' not in existing_tables:
+            logger.info("Creating blog tables...")
+            with engine.connect() as conn:
+                # Voice Profiles
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS blog_voice_profiles (
+                        id TEXT PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id),
+                        name VARCHAR(255) NOT NULL,
+                        sliders_json JSONB DEFAULT '{}',
+                        toggles_json JSONB DEFAULT '{}',
+                        examples_json JSONB DEFAULT '{}',
+                        active BOOLEAN DEFAULT true,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Compliance Profiles
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS blog_compliance_profiles (
+                        id TEXT PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id),
+                        name VARCHAR(255) NOT NULL,
+                        required_disclosures_json JSONB DEFAULT '[]',
+                        banned_phrases_json JSONB DEFAULT '[]',
+                        overrides_json JSONB DEFAULT '{}',
+                        active BOOLEAN DEFAULT true,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Audit Logs
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS blog_audit_logs (
+                        id TEXT PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id),
+                        action VARCHAR(100) NOT NULL,
+                        entity_type VARCHAR(100) NOT NULL,
+                        entity_id TEXT NOT NULL,
+                        before_json JSONB DEFAULT '{}',
+                        after_json JSONB DEFAULT '{}',
+                        ip_address VARCHAR(50),
+                        user_agent TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                conn.commit()
+                logger.info("Blog tables created successfully")
+    except Exception as e:
+        logger.warning(f"Could not ensure blog tables exist: {e}")
+
+
+# Ensure tables exist on module load
+ensure_blog_tables_exist()
+
 # S3/Storage configuration
 UPLOAD_DIR = os.getenv("BLOG_UPLOAD_DIR", "/tmp/blog_uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -174,20 +241,25 @@ async def create_voice_profile(
     """Create a new voice profile."""
     user_id = get_current_user_id(db)
 
-    profile = BlogVoiceProfile(
-        user_id=user_id,
-        name=request.name,
-        sliders_json=request.sliders_json,
-        toggles_json=request.toggles_json,
-        examples_json=request.examples_json,
-    )
-    db.add(profile)
-    db.commit()
-    db.refresh(profile)
+    try:
+        profile = BlogVoiceProfile(
+            user_id=user_id,
+            name=request.name,
+            sliders_json=request.sliders_json,
+            toggles_json=request.toggles_json,
+            examples_json=request.examples_json,
+        )
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
 
-    log_audit(db, user_id, "create", "voice_profile", profile.id, after=request.dict())
+        log_audit(db, user_id, "create", "voice_profile", profile.id, after=request.dict())
 
-    return {"id": profile.id, "message": "Voice profile created"}
+        return {"id": profile.id, "message": "Voice profile created"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create voice profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create voice profile: {str(e)}")
 
 
 @router.put("/voice-profiles/{profile_id}")
@@ -287,6 +359,24 @@ async def create_compliance_profile(
     db.refresh(profile)
 
     return {"id": profile.id, "message": "Compliance profile created"}
+
+
+# ============ Status Check Endpoint ============
+
+@router.get("/status")
+async def get_blog_status():
+    """Check blog service status and configuration."""
+    import os
+    anthropic_configured = bool(os.getenv("ANTHROPIC_API_KEY"))
+    openai_configured = bool(os.getenv("OPENAI_API_KEY"))
+
+    return {
+        "status": "ok" if (anthropic_configured or openai_configured) else "unconfigured",
+        "llm_service_enabled": blog_llm_service.enabled,
+        "anthropic_configured": anthropic_configured,
+        "openai_configured": openai_configured,
+        "message": "LLM service ready" if blog_llm_service.enabled else "No API keys configured - set ANTHROPIC_API_KEY or OPENAI_API_KEY"
+    }
 
 
 # ============ Trending Topics Endpoint ============
@@ -565,6 +655,12 @@ async def generate_content(
     db: Session = Depends(get_db),
 ):
     """Generate a new blog post with AI."""
+    logger.info(f"Blog generation request received: topic='{request.topic}', archetype='{request.archetype}'")
+
+    if not blog_llm_service.enabled:
+        logger.error("Blog generation failed: LLM service not enabled")
+        raise HTTPException(status_code=503, detail="LLM service not configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.")
+
     user_id = get_current_user_id(db)
 
     # Get voice and compliance profiles
@@ -606,14 +702,18 @@ async def generate_content(
             source_content = doc.extracted_text[:5000]
 
     # Generate content
-    result = await blog_llm_service.generate_blog_post(
-        topic=request.topic,
-        archetype=request.archetype,
-        keyword=request.keyword,
-        source_content=source_content,
-        voice_profile=voice_profile,
-        compliance_profile=compliance_profile,
-    )
+    try:
+        result = await blog_llm_service.generate_blog_post(
+            topic=request.topic,
+            archetype=request.archetype,
+            keyword=request.keyword,
+            source_content=source_content,
+            voice_profile=voice_profile,
+            compliance_profile=compliance_profile,
+        )
+    except Exception as e:
+        logger.error(f"Blog generation exception: {e}")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
     if not result.success:
         raise HTTPException(status_code=500, detail=f"Generation failed: {result.error}")

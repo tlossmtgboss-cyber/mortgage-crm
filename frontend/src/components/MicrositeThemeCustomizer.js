@@ -266,7 +266,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('type', 'logo');
+      formData.append('asset_type', 'logo');
 
       const response = await fetch(`${API_BASE}/api/v1/microsites/my/assets/upload`, {
         method: 'POST',
@@ -282,11 +282,12 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
         showMessage('success', 'Logo uploaded successfully');
         setHasChanges(true);
       } else {
-        throw new Error('Upload failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
       }
     } catch (err) {
       console.error('Logo upload error:', err);
-      showMessage('error', 'Failed to upload logo');
+      showMessage('error', err.message || 'Failed to upload logo');
     } finally {
       setUploadingLogo(false);
     }
@@ -311,7 +312,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('type', 'headshot');
+      formData.append('asset_type', 'headshot');
 
       const response = await fetch(`${API_BASE}/api/v1/microsites/my/assets/upload`, {
         method: 'POST',
@@ -327,11 +328,12 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
         showMessage('success', 'Photo uploaded successfully');
         setHasChanges(true);
       } else {
-        throw new Error('Upload failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
       }
     } catch (err) {
       console.error('Headshot upload error:', err);
-      showMessage('error', 'Failed to upload photo');
+      showMessage('error', err.message || 'Failed to upload photo');
     } finally {
       setUploadingHeadshot(false);
     }

@@ -159,6 +159,7 @@ const AIDailyBlog = () => {
   const [trendingTopics, setTrendingTopics] = useState([]);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [trendingDate, setTrendingDate] = useState('');
+  const [serviceStatus, setServiceStatus] = useState(null);
 
   // Generation form state
   const [generateForm, setGenerateForm] = useState({
@@ -197,6 +198,17 @@ const AIDailyBlog = () => {
   const loadInitialData = async () => {
     setLoading(true);
     try {
+      // Check service status first
+      try {
+        const statusRes = await blogAPI.getStatus();
+        setServiceStatus(statusRes);
+        if (!statusRes.llm_service_enabled) {
+          setError('AI service not configured. Please contact your administrator to set up API keys.');
+        }
+      } catch (statusErr) {
+        console.error('Failed to check service status:', statusErr);
+      }
+
       // Load trending topics first - this is the main feature
       const trendingRes = await blogAPI.getTrendingTopics();
       setTrendingTopics(trendingRes.topics || []);
@@ -414,6 +426,16 @@ const AIDailyBlog = () => {
         <p className="subtitle">Content Factory powered by AI</p>
       </div>
 
+      {/* Service Status Warning */}
+      {serviceStatus && !serviceStatus.llm_service_enabled && (
+        <div className="alert alert-warning" style={{ backgroundColor: '#fef3cd', borderColor: '#ffc107', color: '#856404', marginBottom: '1rem', padding: '12px 16px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '18px' }}>⚠️</span>
+          <span>
+            <strong>AI Service Not Configured:</strong> {serviceStatus.message}
+          </span>
+        </div>
+      )}
+
       {/* Alerts */}
       {error && (
         <div className="alert alert-error">
@@ -552,6 +574,7 @@ const AIDailyBlog = () => {
                           setError(null);
                           let successCount = 0;
 
+                          let lastError = null;
                           for (const topic of topicsToGenerate) {
                             try {
                               await blogAPI.generateContent({
@@ -564,6 +587,7 @@ const AIDailyBlog = () => {
                               successCount++;
                             } catch (err) {
                               console.error(`Failed to generate: ${topic.topic}`, err);
+                              lastError = err;
                             }
                           }
 
@@ -577,7 +601,14 @@ const AIDailyBlog = () => {
                               setContentList(contentRes.items || []);
                             } catch (e) {}
                           } else {
-                            setError('Failed to generate content. Please try again.');
+                            // Show detailed error message
+                            let errorMessage = 'Failed to generate content. Please try again.';
+                            if (lastError?.response?.data?.detail) {
+                              errorMessage = lastError.response.data.detail;
+                            } else if (lastError?.message) {
+                              errorMessage = lastError.message;
+                            }
+                            setError(errorMessage);
                           }
                         }}
                         disabled={loading}

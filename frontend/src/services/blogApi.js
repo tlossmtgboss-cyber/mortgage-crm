@@ -203,6 +203,13 @@ export const getContentPerformance = async (contentId) => {
   return response.data;
 };
 
+// ============ Status Check ============
+
+export const getStatus = async () => {
+  const response = await quickClient.get(`${API_BASE}/status`);
+  return response.data;
+};
+
 // Export all functions as a named object for convenience
 export const blogAPI = {
   // Voice Profiles
@@ -239,6 +246,8 @@ export const blogAPI = {
   // Analytics
   getAnalyticsOverview,
   getContentPerformance,
+  // Status
+  getStatus,
 };
 
 export default blogAPI;
