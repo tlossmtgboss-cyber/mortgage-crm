@@ -214,6 +214,73 @@
   font-weight: 600;
 }
 
+/* Navigation Arrow for expandable items */
+.nav-arrow {
+  font-size: 16px;
+  transition: transform 0.2s;
+  color: #64748b;
+}
+
+.nav-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+/* Navigation Item Wrapper */
+.nav-item-wrapper {
+  margin-bottom: 2px;
+}
+
+/* Submenu Styles */
+.nav-submenu {
+  margin-left: 16px;
+  padding: 8px 0;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.submenu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.submenu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.submenu-item.active {
+  background: rgba(14, 165, 233, 0.2);
+  color: #0ea5e9;
+  border-left: 2px solid #0ea5e9;
+  margin-left: -2px;
+}
+
+.submenu-label {
+  flex: 1;
+}
+
+.submenu-count {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.submenu-item.active .submenu-count {
+  background: rgba(14, 165, 233, 0.3);
+  color: #0ea5e9;
+}
+
 /* Sidebar Footer */
 .sidebar-footer {
   padding: 20px 16px;
@@ -1148,6 +1215,11 @@
   border-radius: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   min-width: 280px;
+}
+
+.search-box.full-width {
+  flex: 1;
+  max-width: 500px;
 }
 
 .search-icon {

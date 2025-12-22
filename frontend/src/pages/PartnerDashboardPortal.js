@@ -20,7 +20,19 @@ const TABS = [
   { id: 'programs', label: 'Programs' },
   { id: 'marketing', label: 'Marketing' },
   { id: 'assistant', label: 'AI Assistant' },
-  { id: 'clients', label: 'Clients' },
+  { id: 'clients', label: 'Clients', hasSubmenu: true },
+];
+
+// Client submenu categories
+const CLIENT_CATEGORIES = [
+  { id: 'all', label: 'All Clients' },
+  { id: 'leads', label: 'Leads' },
+  { id: 'active', label: 'Active Loans' },
+  { id: 'closed', label: 'Closed Clients' },
+  { id: 'nurtured', label: 'Nurtured Clients' },
+  { id: 'credit_challenged', label: 'Credit Challenged' },
+  { id: 'another_lender', label: 'Went with Another Lender' },
+  { id: 'not_interested', label: 'Not Interested' },
 ];
 
 // Loan program data
@@ -115,6 +127,8 @@ export default function PartnerDashboardPortal() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [clientsExpanded, setClientsExpanded] = useState(false);
+  const [activeClientCategory, setActiveClientCategory] = useState('all');
   const [partner, setPartner] = useState(null);
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +165,7 @@ export default function PartnerDashboardPortal() {
 
   const categorizeReferrals = () => {
     return {
+      all: referrals,
       leads: referrals.filter((r) =>
         ['New', 'Attempted Contact', 'Prospect'].includes(r.stage)
       ),
@@ -158,6 +173,10 @@ export default function PartnerDashboardPortal() {
         ['Application', 'Pre-Qualified', 'Pre-Approved', 'Processing', 'Under Contract'].includes(r.stage)
       ),
       closed: referrals.filter((r) => r.stage === 'Completed' || r.stage === 'Funded'),
+      nurtured: referrals.filter((r) => r.stage === 'Nurturing' || r.stage === 'Long Term'),
+      credit_challenged: referrals.filter((r) => r.stage === 'Credit Challenged' || r.stage === 'Credit Repair'),
+      another_lender: referrals.filter((r) => r.stage === 'Went with Another Lender' || r.stage === 'Lost'),
+      not_interested: referrals.filter((r) => r.stage === 'Not Interested' || r.stage === 'Withdrawn'),
     };
   };
 
@@ -214,16 +233,49 @@ export default function PartnerDashboardPortal() {
 
         <nav className="sidebar-nav">
           {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="nav-label">{tab.label}</span>
-              {tab.id === 'clients' && categories.leads.length > 0 && (
-                <span className="nav-badge">{categories.leads.length}</span>
+            <div key={tab.id} className="nav-item-wrapper">
+              <button
+                className={`nav-item ${activeTab === tab.id ? 'active' : ''} ${tab.hasSubmenu && clientsExpanded ? 'expanded' : ''}`}
+                onClick={() => {
+                  if (tab.hasSubmenu) {
+                    setClientsExpanded(!clientsExpanded);
+                    setActiveTab(tab.id);
+                  } else {
+                    setActiveTab(tab.id);
+                    setClientsExpanded(false);
+                  }
+                }}
+              >
+                <span className="nav-label">{tab.label}</span>
+                {tab.id === 'clients' && referrals.length > 0 && (
+                  <span className="nav-badge">{referrals.length}</span>
+                )}
+                {tab.hasSubmenu && (
+                  <span className={`nav-arrow ${clientsExpanded ? 'expanded' : ''}`}>
+                    ›
+                  </span>
+                )}
+              </button>
+
+              {/* Client Submenu */}
+              {tab.hasSubmenu && clientsExpanded && (
+                <div className="nav-submenu">
+                  {CLIENT_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      className={`submenu-item ${activeClientCategory === cat.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setActiveClientCategory(cat.id);
+                        setActiveTab('clients');
+                      }}
+                    >
+                      <span className="submenu-label">{cat.label}</span>
+                      <span className="submenu-count">{categories[cat.id]?.length || 0}</span>
+                    </button>
+                  ))}
+                </div>
               )}
-            </button>
+            </div>
           ))}
         </nav>
 
@@ -247,7 +299,13 @@ export default function PartnerDashboardPortal() {
         {activeTab === 'marketing' && <MarketingTab partner={partner} />}
         {activeTab === 'assistant' && <AIAssistantTab partner={partner} />}
         {activeTab === 'clients' && (
-          <ClientsTab categories={categories} partnerId={id} navigate={navigate} />
+          <ClientsTab
+            categories={categories}
+            partnerId={id}
+            navigate={navigate}
+            activeCategory={activeClientCategory}
+            setActiveCategory={setActiveClientCategory}
+          />
         )}
       </main>
     </div>
@@ -711,23 +769,24 @@ function AIAssistantTab({ partner }) {
 // ============================================================================
 // CLIENTS TAB
 // ============================================================================
-function ClientsTab({ categories, partnerId, navigate }) {
-  const [activeFilter, setActiveFilter] = useState('all');
+function ClientsTab({ categories, partnerId, navigate, activeCategory, setActiveCategory }) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const allClients = [
-    ...categories.leads.map((c) => ({ ...c, category: 'lead' })),
-    ...categories.active.map((c) => ({ ...c, category: 'active' })),
-    ...categories.closed.map((c) => ({ ...c, category: 'closed' })),
-  ];
+  // Get the category label for display
+  const getCategoryLabel = (catId) => {
+    const cat = CLIENT_CATEGORIES.find(c => c.id === catId);
+    return cat?.label || 'All Clients';
+  };
 
-  const filteredClients = allClients.filter((client) => {
-    const matchesFilter = activeFilter === 'all' || client.category === activeFilter;
+  // Get clients based on the active category
+  const categoryClients = categories[activeCategory] || [];
+
+  const filteredClients = categoryClients.filter((client) => {
     const matchesSearch =
       !searchTerm ||
       client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
+    return matchesSearch;
   });
 
   const handleViewDetails = (client) => {
@@ -738,42 +797,20 @@ function ClientsTab({ categories, partnerId, navigate }) {
   return (
     <div className="tab-content clients-tab">
       <div className="tab-header">
-        <h1>Client Pipeline</h1>
-        <p>Track all your referrals from lead to close</p>
+        <h1>{getCategoryLabel(activeCategory)}</h1>
+        <p>
+          {activeCategory === 'all'
+            ? 'Track all your referrals from lead to close'
+            : `${filteredClients.length} client${filteredClients.length !== 1 ? 's' : ''} in this category`}
+        </p>
       </div>
 
-      {/* Filter Bar */}
+      {/* Search Bar */}
       <div className="clients-toolbar">
-        <div className="filter-tabs">
-          <button
-            className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('all')}
-          >
-            All ({allClients.length})
-          </button>
-          <button
-            className={`filter-tab ${activeFilter === 'lead' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('lead')}
-          >
-            Leads ({categories.leads.length})
-          </button>
-          <button
-            className={`filter-tab ${activeFilter === 'active' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('active')}
-          >
-            Active ({categories.active.length})
-          </button>
-          <button
-            className={`filter-tab ${activeFilter === 'closed' ? 'active' : ''}`}
-            onClick={() => setActiveFilter('closed')}
-          >
-            Closed ({categories.closed.length})
-          </button>
-        </div>
-        <div className="search-box">
+        <div className="search-box full-width">
           <input
             type="text"
-            placeholder="Search clients..."
+            placeholder="Search clients by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -786,9 +823,11 @@ function ClientsTab({ categories, partnerId, navigate }) {
           <div className="empty-clients">
             <h3>No clients found</h3>
             <p>
-              {activeFilter === 'all'
-                ? 'Submit a referral to get started!'
-                : `No ${activeFilter} clients at this time.`}
+              {searchTerm
+                ? `No clients match "${searchTerm}"`
+                : activeCategory === 'all'
+                  ? 'Submit a referral to get started!'
+                  : `No clients in ${getCategoryLabel(activeCategory).toLowerCase()} at this time.`}
             </p>
           </div>
         ) : (
@@ -797,6 +836,7 @@ function ClientsTab({ categories, partnerId, navigate }) {
               key={client.id}
               client={client}
               onViewDetails={() => handleViewDetails(client)}
+              categoryId={activeCategory}
             />
           ))
         )}
@@ -805,7 +845,7 @@ function ClientsTab({ categories, partnerId, navigate }) {
   );
 }
 
-function ClientCard({ client, onViewDetails }) {
+function ClientCard({ client, onViewDetails, categoryId }) {
   const formatCurrency = (amount) => {
     if (!amount) return 'TBD';
     return new Intl.NumberFormat('en-US', {
@@ -825,15 +865,20 @@ function ClientCard({ client, onViewDetails }) {
   };
 
   const categoryColors = {
-    lead: '#f59e0b',
+    all: '#64748b',
+    leads: '#f59e0b',
     active: '#3b82f6',
     closed: '#10b981',
+    nurtured: '#8b5cf6',
+    credit_challenged: '#ef4444',
+    another_lender: '#6b7280',
+    not_interested: '#9ca3af',
   };
 
   return (
     <div
       className="client-card"
-      style={{ '--category-color': categoryColors[client.category] || '#64748b' }}
+      style={{ '--category-color': categoryColors[categoryId] || '#64748b' }}
     >
       <div className="client-avatar">{client.name?.charAt(0)?.toUpperCase() || '?'}</div>
       <div className="client-info">
