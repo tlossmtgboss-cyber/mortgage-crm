@@ -11,7 +11,8 @@
 }
 
 .partner-client-detail.single-page {
-  background: linear-gradient(180deg, #1e40af 0%, #1e40af 200px, #f8fafc 200px);
+  background: linear-gradient(180deg, #1e40af 0%, #1e40af 220px, #f8fafc 220px);
+  overflow: visible;
 }
 
 .partner-client-detail.loading,
@@ -68,6 +69,7 @@
 .client-header-new {
   padding: 1.5rem 2rem 2rem;
   color: white;
+  overflow: visible;
 }
 
 .back-btn {
@@ -129,6 +131,8 @@
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.5rem;
 }
 
 .btn-primary {
@@ -144,6 +148,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  white-space: nowrap;
 }
 
 .btn-primary:hover {
@@ -153,19 +158,21 @@
 }
 
 .btn-secondary {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.2);
   color: white;
-  border: 1px solid rgba(255,255,255,0.3);
+  border: 1px solid rgba(255,255,255,0.5);
   padding: 0.75rem 1.5rem;
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.9375rem;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-secondary:hover {
-  background: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.35);
+  border-color: rgba(255,255,255,0.7);
 }
 
 /* Status Badge */

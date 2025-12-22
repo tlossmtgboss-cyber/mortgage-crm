@@ -447,79 +447,53 @@ function SmartDocs() {
                 <p>{searchQuery ? 'Try a different search term' : 'No outstanding document requests'}</p>
               </div>
             ) : (
-              filteredData.map((applicant) => (
-                <div
-                  key={applicant.loan_id}
-                  className={`applicant-card ${applicant.overdue_count > 0 ? 'has-overdue' : ''}`}
-                  onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
-                >
-                  <div className="applicant-header">
-                    <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
-                      <span className="loan-number">{applicant.loan_number || `Loan #${applicant.loan_id}`}</span>
-                    </div>
-                    <div className="header-right">
-                      <span className={`stage-badge stage-${(applicant.stage || 'processing').toLowerCase().replace(/\s+/g, '-')}`}>
-                        {applicant.stage || 'Processing'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="loan-details-grid">
-                    <div className="loan-detail">
-                      <span className="detail-label">Loan Amount</span>
-                      <span className="detail-value">{formatCurrency(applicant.loan_amount)}</span>
-                    </div>
-                    <div className="loan-detail">
-                      <span className="detail-label">Program</span>
-                      <span className="detail-value">{applicant.program || 'Not Set'}</span>
-                    </div>
-                    {applicant.property_address && (
-                      <div className="loan-detail address">
-                        <span className="detail-label">Property</span>
-                        <span className="detail-value">{applicant.property_address}</span>
-                      </div>
-                    )}
-                    {applicant.borrower_email && (
-                      <div className="loan-detail">
-                        <span className="detail-label">Email</span>
-                        <span className="detail-value email">{applicant.borrower_email}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {(applicant.requests || []).length > 0 && (
-                    <div className="requests-preview">
-                      {applicant.requests.slice(0, 4).map((req) => {
-                        const dueInfo = formatDueDate(req.due_date);
-                        return (
-                          <div key={req.id} className={`request-chip ${req.is_overdue ? 'overdue' : ''}`}>
-                            <span className={`priority-dot ${getPriorityClass(req.priority)}`} />
-                            <span className="request-title">{req.title}</span>
-                            {req.due_date && (
-                              <span className={`due-date ${dueInfo.class}`}>
-                                {dueInfo.text}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {applicant.requests.length > 4 && (
-                        <div className="request-chip more">
-                          +{applicant.requests.length - 4} more
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="card-footer">
-                    <span className="created-date">
-                      Added {formatDate(applicant.created_at)}
-                    </span>
-                    <button className="btn-view">View Details →</button>
-                  </div>
-                </div>
-              ))
+              <div className="table-container">
+                <table className="smart-docs-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Loan #</th>
+                      <th>Amount</th>
+                      <th>Program</th>
+                      <th>Stage</th>
+                      <th>Property</th>
+                      <th>Added</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.map((applicant) => (
+                      <tr
+                        key={applicant.loan_id}
+                        className={applicant.overdue_count > 0 ? 'has-overdue' : ''}
+                        onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                      >
+                        <td>
+                          <span className="borrower-name">{applicant.borrower_name}</span>
+                          {applicant.borrower_email && (
+                            <span className="borrower-email">{applicant.borrower_email}</span>
+                          )}
+                        </td>
+                        <td className="loan-number">{applicant.loan_number || `#${applicant.loan_id}`}</td>
+                        <td className="loan-amount">{formatCurrency(applicant.loan_amount)}</td>
+                        <td>{applicant.program || '-'}</td>
+                        <td>
+                          <span className={`stage-badge stage-${(applicant.stage || 'processing').toLowerCase().replace(/\s+/g, '-')}`}>
+                            {applicant.stage || 'Processing'}
+                          </span>
+                        </td>
+                        <td className="property-cell">{applicant.property_address || '-'}</td>
+                        <td className="date-cell">{formatDate(applicant.created_at)}</td>
+                        <td>
+                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/client/loan/${applicant.loan_id}?tab=documents`); }}>
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         ) : activeTab === 'documents-uploaded' ? (
@@ -532,45 +506,43 @@ function SmartDocs() {
                 <p>{searchQuery ? 'Try a different search term' : 'No documents pending review'}</p>
               </div>
             ) : (
-              filteredData.map((applicant) => (
-                <div
-                  key={applicant.loan_id}
-                  className="applicant-card"
-                  onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
-                >
-                  <div className="applicant-header">
-                    <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
-                      <span className="loan-info">
-                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
-                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
-                      </span>
-                    </div>
-                    <div className="pending-badge">
-                      {applicant.pending_count} pending
-                    </div>
-                  </div>
-                  <div className="documents-preview">
-                    {(applicant.documents || []).slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="doc-chip">
-                        <span className="doc-type">{doc.doc_type || 'Document'}</span>
-                        <span className="doc-date">{formatDate(doc.uploaded_at)}</span>
-                      </div>
+              <div className="table-container">
+                <table className="smart-docs-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Loan #</th>
+                      <th>Purpose</th>
+                      <th>Pending Docs</th>
+                      <th>Oldest Upload</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.map((applicant) => (
+                      <tr
+                        key={applicant.loan_id}
+                        onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                      >
+                        <td>
+                          <span className="borrower-name">{applicant.borrower_name}</span>
+                        </td>
+                        <td className="loan-number">{applicant.loan_number || `#${applicant.loan_id}`}</td>
+                        <td>{applicant.loan_purpose || '-'}</td>
+                        <td>
+                          <span className="pending-badge">{applicant.pending_count} pending</span>
+                        </td>
+                        <td className="date-cell">{formatDate(applicant.oldest_upload)}</td>
+                        <td>
+                          <button className="btn-review-sm" onClick={(e) => { e.stopPropagation(); navigate(`/client/loan/${applicant.loan_id}?tab=documents`); }}>
+                            Review
+                          </button>
+                        </td>
+                      </tr>
                     ))}
-                    {(applicant.documents || []).length > 3 && (
-                      <div className="doc-chip more">
-                        +{applicant.documents.length - 3} more
-                      </div>
-                    )}
-                  </div>
-                  <div className="card-footer">
-                    <span className="oldest-upload">
-                      Oldest: {formatDate(applicant.oldest_upload)}
-                    </span>
-                    <button className="btn-review">Review Documents →</button>
-                  </div>
-                </div>
-              ))
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         ) : (
@@ -583,40 +555,46 @@ function SmartDocs() {
                 <p>{searchQuery ? 'Try a different search term' : 'Funded loans will appear here'}</p>
               </div>
             ) : (
-              filteredData.map((applicant) => (
-                <div
-                  key={applicant.loan_id}
-                  className="applicant-card completed-card"
-                  onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
-                >
-                  <div className="applicant-header">
-                    <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
-                      <span className="loan-info">
-                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
-                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
-                      </span>
-                    </div>
-                    <div className="completed-badge">
-                      ✓ Completed
-                    </div>
-                  </div>
-                  <div className="completed-details">
-                    <div className="completed-detail">
-                      <span className="detail-label">Loan Amount</span>
-                      <span className="detail-value">{formatCurrency(applicant.loan_amount)}</span>
-                    </div>
-                    <div className="completed-detail">
-                      <span className="detail-label">Funded</span>
-                      <span className="detail-value">{formatDate(applicant.funded_at)}</span>
-                    </div>
-                  </div>
-                  <div className="card-footer">
-                    <span className="loan-complete-status">All documents collected</span>
-                    <button className="btn-view">View Archive →</button>
-                  </div>
-                </div>
-              ))
+              <div className="table-container">
+                <table className="smart-docs-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Loan #</th>
+                      <th>Purpose</th>
+                      <th>Amount</th>
+                      <th>Funded</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.map((applicant) => (
+                      <tr
+                        key={applicant.loan_id}
+                        className="completed-row"
+                        onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                      >
+                        <td>
+                          <span className="borrower-name">{applicant.borrower_name}</span>
+                        </td>
+                        <td className="loan-number">{applicant.loan_number || `#${applicant.loan_id}`}</td>
+                        <td>{applicant.loan_purpose || '-'}</td>
+                        <td className="loan-amount">{formatCurrency(applicant.loan_amount)}</td>
+                        <td className="date-cell">{formatDate(applicant.funded_at)}</td>
+                        <td>
+                          <span className="completed-badge">Completed</span>
+                        </td>
+                        <td>
+                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/client/loan/${applicant.loan_id}?tab=documents`); }}>
+                            Archive
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}

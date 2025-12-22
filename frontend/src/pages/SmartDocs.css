@@ -347,6 +347,141 @@
   gap: 16px;
 }
 
+/* Table Container */
+.table-container {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Smart Docs Table */
+.smart-docs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.smart-docs-table thead {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.smart-docs-table th {
+  text-align: left;
+  padding: 14px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.smart-docs-table td {
+  padding: 14px 16px;
+  font-size: 0.9rem;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.smart-docs-table tbody tr {
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.smart-docs-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.smart-docs-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.smart-docs-table tbody tr.has-overdue {
+  background: rgba(239, 68, 68, 0.04);
+  border-left: 3px solid #ef4444;
+}
+
+.smart-docs-table tbody tr.has-overdue:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.smart-docs-table tbody tr.completed-row {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.smart-docs-table tbody tr.completed-row:hover {
+  background: rgba(16, 185, 129, 0.08);
+}
+
+/* Table Cell Styles */
+.borrower-name {
+  display: block;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.borrower-email {
+  display: block;
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.loan-number {
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.loan-amount {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.property-cell {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date-cell {
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* Table Action Buttons */
+.btn-view-sm,
+.btn-review-sm {
+  padding: 6px 14px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.btn-view-sm:hover,
+.btn-review-sm:hover {
+  background: #1d4ed8;
+}
+
+.btn-review-sm {
+  background: #f59e0b;
+}
+
+.btn-review-sm:hover {
+  background: #d97706;
+}
+
+/* Legacy Card Styles - kept for reference */
 .applicant-card {
   padding: 24px;
   background: white;
@@ -382,12 +517,6 @@
   font-size: 1.25rem;
   font-weight: 600;
   color: #1f2937;
-}
-
-.loan-number {
-  font-size: 0.85rem;
-  color: #6b7280;
-  font-family: 'SF Mono', Monaco, 'Courier New', monospace;
 }
 
 .header-right {
@@ -757,6 +886,13 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .smart-docs-table th:nth-child(6),
+  .smart-docs-table td:nth-child(6) {
+    display: none; /* Hide Property column on smaller screens */
+  }
+}
+
 @media (max-width: 768px) {
   .smart-docs-page {
     padding: 16px;
@@ -781,6 +917,28 @@
 
   .smart-docs-tabs {
     flex-wrap: wrap;
+  }
+
+  /* Table responsive */
+  .table-container {
+    border-radius: 8px;
+  }
+
+  .smart-docs-table th,
+  .smart-docs-table td {
+    padding: 12px 10px;
+    font-size: 0.85rem;
+  }
+
+  .smart-docs-table th:nth-child(4),
+  .smart-docs-table td:nth-child(4),
+  .smart-docs-table th:nth-child(7),
+  .smart-docs-table td:nth-child(7) {
+    display: none; /* Hide Program and Added columns */
+  }
+
+  .borrower-email {
+    display: none;
   }
 
   .applicant-header {
@@ -814,6 +972,11 @@
 }
 
 @media (max-width: 480px) {
+  .smart-docs-table th:nth-child(3),
+  .smart-docs-table td:nth-child(3) {
+    display: none; /* Hide Amount column on mobile */
+  }
+
   .loan-details-grid {
     grid-template-columns: 1fr;
   }

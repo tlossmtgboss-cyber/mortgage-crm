@@ -171,6 +171,7 @@ class PromptConstructor:
     - Collected information
     - CTA history
     - Loan officer context
+    - Returning user continuity
     """
 
     def __init__(self, lo_context: Optional[Dict[str, Any]] = None):
@@ -181,6 +182,23 @@ class PromptConstructor:
             lo_context: Dict with LO info (name, nmls_id, specialties, etc.)
         """
         self.lo_context = lo_context or {}
+        self.is_returning_user = False
+        self.session_context_summary = None
+
+    def set_returning_user_context(
+        self,
+        is_returning: bool,
+        context_summary: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Set returning user context for continuity messaging.
+
+        Args:
+            is_returning: Whether this is a returning user
+            context_summary: Summary from SessionRecoveryService.get_session_context_summary()
+        """
+        self.is_returning_user = is_returning
+        self.session_context_summary = context_summary
 
     def build_system_prompt(self, context: Dict[str, Any]) -> str:
         """
@@ -198,6 +216,10 @@ class PromptConstructor:
         # Start with base phase prompt
         prompt_parts = [phase_config['system_prompt']]
 
+        # Add returning user continuity section (important for UX)
+        if self.is_returning_user and context.get('turn_count', 0) > 0:
+            prompt_parts.append(self._build_continuity_section(context))
+
         # Add context section
         prompt_parts.append(self._build_context_section(context))
 
@@ -213,6 +235,36 @@ class PromptConstructor:
         prompt_parts.append(self._build_history_instructions(context))
 
         return "\n\n".join(filter(None, prompt_parts))
+
+    def _build_continuity_section(self, context: Dict[str, Any]) -> str:
+        """Build section for returning user continuity"""
+        parts = ["## SESSION CONTINUITY NOTE"]
+        parts.append("This borrower is returning to a previous conversation. You should:")
+        parts.append("1. Acknowledge the continuation naturally: \"Welcome back! Let's pick up where we left off...\"")
+        parts.append("2. Reference the context you have without re-asking questions you already know answers to")
+        parts.append("3. Offer to continue OR allow them to change direction: \"Want to keep exploring that, or is there something else on your mind?\"")
+
+        # Add last interaction time if available
+        if self.session_context_summary:
+            last_msg = self.session_context_summary.get('last_message_at')
+            if last_msg:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(last_msg.replace('Z', '+00:00'))
+                    parts.append(f"\nLast interaction: {dt.strftime('%B %d at %I:%M %p')}")
+                except:
+                    pass
+
+            known_context = self.session_context_summary.get('context_summary', 'General mortgage questions')
+            parts.append(f"Known context: {known_context}")
+
+        parts.append("\nDO NOT:")
+        parts.append("- Ask questions you already have answers to")
+        parts.append("- Restart from Phase 1 if you're past it")
+        parts.append("- Ignore the existing relationship you've built")
+        parts.append("- Be overly formal - you already know them")
+
+        return "\n".join(parts)
 
     def _build_context_section(self, context: Dict[str, Any]) -> str:
         """Build section describing what we know about the borrower"""

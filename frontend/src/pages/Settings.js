@@ -15,6 +15,7 @@ import MicrositeThemeSelector from '../components/MicrositeThemeSelector';
 import AIEmailTraining from '../components/AIEmailTraining';
 import AIEmailSetup from '../components/AIEmailSetup';
 import AIDailyBlog from './AIDailyBlog';
+import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -2884,6 +2885,21 @@ const API_BASE_URL = isProduction
                 >
                   AI Blog
                 </button>
+                <button
+                  onClick={() => setMarketingTab('pre-approval-letter')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'pre-approval-letter' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'pre-approval-letter' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'pre-approval-letter' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Pre-Approval Letter
+                </button>
               </div>
 
               {/* Landing Pages Tab */}
@@ -3185,6 +3201,11 @@ const API_BASE_URL = isProduction
                 <div className="marketing-section" style={{ padding: 0 }}>
                   <AIDailyBlog />
                 </div>
+              )}
+
+              {/* Pre-Approval Letter Tab */}
+              {marketingTab === 'pre-approval-letter' && (
+                <PreApprovalLetterSettings />
               )}
             </div>
           )}

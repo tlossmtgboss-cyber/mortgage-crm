@@ -1722,6 +1722,18 @@ function LeadDetail() {
             <button className="btn-back" onClick={() => navigate('/leads')}>
               ← Back to Leads
             </button>
+            <h2 className="client-name-header" style={{
+              margin: '0 20px',
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#1a1a2e'
+            }}>
+              {formData.first_name || formData.last_name
+                ? `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
+                : lead?.first_name || lead?.last_name
+                  ? `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim()
+                  : 'Unknown Client'}
+            </h2>
           <button className="btn-next" onClick={handleViewNextLead} disabled={leadsList.length === 0}>
             View Next Lead →
           </button>
