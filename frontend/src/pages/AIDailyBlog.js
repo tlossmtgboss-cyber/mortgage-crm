@@ -489,6 +489,20 @@ const AIDailyBlog = () => {
     setGenerationProgress({ current: 1, total: 1, topic: generateForm.topic });
 
     try {
+      // Check service status before generating
+      try {
+        const statusCheck = await blogAPI.getStatus();
+        if (!statusCheck.llm_service_enabled) {
+          setError('AI service is not configured. The ANTHROPIC_API_KEY environment variable needs to be set in Railway. Please contact your administrator.');
+          setLoading(false);
+          setGenerationProgress({ current: 0, total: 0, topic: '' });
+          return;
+        }
+      } catch (statusErr) {
+        console.error('Status check failed:', statusErr);
+        // Continue anyway - the generate call will fail with a better error
+      }
+
       const result = await blogAPI.generateContent({
         topic: generateForm.topic,
         archetype: generateForm.archetype,
@@ -525,8 +539,15 @@ const AIDailyBlog = () => {
     } catch (err) {
       console.error('Blog generation error:', err);
       let errorMessage = 'Generation failed. Please try again.';
+
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
         errorMessage = 'Request timed out. The AI generation is taking too long. Please try again.';
+      } else if (err.message?.includes('Network Error') || err.code === 'ERR_NETWORK') {
+        errorMessage = 'Cannot connect to the server. Please check:\n1. Your internet connection\n2. The backend service is running on Railway\n3. Try refreshing the page in a few minutes';
+      } else if (err.response?.status === 503) {
+        errorMessage = 'AI service is not available. The ANTHROPIC_API_KEY environment variable needs to be configured in Railway.';
+      } else if (err.response?.status === 500) {
+        errorMessage = 'Server error during generation. Please check Railway logs for details.';
       } else if (err.response?.data?.detail) {
         errorMessage = err.response.data.detail;
       } else if (err.message) {
@@ -662,17 +683,30 @@ const AIDailyBlog = () => {
 
       {/* Service Status Warning */}
       {serviceStatus && !serviceStatus.llm_service_enabled && (
-        <div className="alert alert-warning" style={{ backgroundColor: '#fef3cd', borderColor: '#ffc107', color: '#856404', marginBottom: '1rem', padding: '12px 16px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>⚠️</span>
-          <span>
-            <strong>AI Service Not Configured:</strong> {serviceStatus.message}
-          </span>
+        <div className="alert alert-warning" style={{ backgroundColor: '#fef3cd', border: '2px solid #ffc107', color: '#856404', marginBottom: '1rem', padding: '16px 20px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>⚠️</span>
+            <div>
+              <strong style={{ fontSize: '16px', display: 'block', marginBottom: '8px' }}>AI Content Generation Not Available</strong>
+              <p style={{ margin: '0 0 12px 0' }}>The AI service needs to be configured before you can generate blog posts.</p>
+              <div style={{ backgroundColor: '#fff8e6', padding: '12px', borderRadius: '4px', fontSize: '13px' }}>
+                <strong>To fix this (Administrator):</strong>
+                <ol style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                  <li>Go to your <a href="https://railway.app" target="_blank" rel="noopener noreferrer" style={{ color: '#0066cc' }}>Railway dashboard</a></li>
+                  <li>Select your mortgage-crm service</li>
+                  <li>Go to Variables tab</li>
+                  <li>Add: <code style={{ backgroundColor: '#f0f0f0', padding: '2px 6px', borderRadius: '3px' }}>ANTHROPIC_API_KEY</code> with your Anthropic API key</li>
+                  <li>Redeploy the service</li>
+                </ol>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Alerts */}
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>
           {error}
           <button onClick={() => setError(null)}>×</button>
         </div>
@@ -812,6 +846,20 @@ const AIDailyBlog = () => {
                             setLoading(true);
                             setError(null);
                             setSuccess(null);
+
+                            // Check service status before batch generation
+                            try {
+                              const statusCheck = await blogAPI.getStatus();
+                              if (!statusCheck.llm_service_enabled) {
+                                setError('AI service is not configured. The ANTHROPIC_API_KEY environment variable needs to be set in Railway. Please contact your administrator.');
+                                setLoading(false);
+                                return;
+                              }
+                            } catch (statusErr) {
+                              console.error('Status check failed:', statusErr);
+                              // Continue anyway - the generate call will fail with a better error
+                            }
+
                             const totalCount = topicsToGenerate.length;
                             const generatedPosts = [];
 
@@ -866,7 +914,11 @@ const AIDailyBlog = () => {
                               setSuccess(null);
                               // Show detailed error message
                               let errorMessage = 'Failed to generate content. Please try again.';
-                              if (lastError?.response?.data?.detail) {
+                              if (lastError?.message?.includes('Network Error') || lastError?.code === 'ERR_NETWORK') {
+                                errorMessage = 'Cannot connect to the server. Please check your internet connection and try again.';
+                              } else if (lastError?.response?.status === 503) {
+                                errorMessage = 'AI service is not available. The ANTHROPIC_API_KEY environment variable needs to be configured in Railway.';
+                              } else if (lastError?.response?.data?.detail) {
                                 errorMessage = lastError.response.data.detail;
                               } else if (lastError?.message) {
                                 errorMessage = lastError.message;
