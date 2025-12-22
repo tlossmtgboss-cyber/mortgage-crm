@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """
 Test Production Database Connection
+
+Usage: Set DATABASE_URL environment variable before running.
 """
+import os
 import sys
 from sqlalchemy import create_engine, text
-from urllib.parse import quote_plus
 
 
 def main():
-    # Production database URL
-    # Note: The @ symbol was missing in the original URL
-    password = "RzXRIwJsZINuRwMQybDbZYqfFoHBaXRw"
-    encoded_password = quote_plus(password)
-    PROD_DB_URL = f"postgresql://postgres:{encoded_password}@d3svitchback.proxy.rlwy.net:38467/railway"
+    # Production database URL from environment variable
+    PROD_DB_URL = os.getenv("DATABASE_URL") or os.getenv("PROD_DATABASE_URL")
+
+    if not PROD_DB_URL:
+        print("❌ ERROR: DATABASE_URL or PROD_DATABASE_URL environment variable not set")
+        print("Set it with: export DATABASE_URL='postgresql://...'")
+        sys.exit(1)
 
     print("="*70)
     print("TESTING PRODUCTION DATABASE CONNECTION")
     print("="*70)
-    print(f"Host: d3svitchback.proxy.rlwy.net:38467")
-    print(f"Database: railway")
+    print("Using DATABASE_URL from environment")
     print()
 
     try:

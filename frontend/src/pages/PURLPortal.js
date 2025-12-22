@@ -766,12 +766,9 @@ export default function PURLPortal() {
   // Set API token on mount and when token changes - BEFORE data fetching
   React.useEffect(() => {
     if (token) {
-      console.log('[PURLPortal] Setting auth token:', token.substring(0, 20) + '...');
       api.setAuthToken(token);
       // Small delay to ensure token is set before fetch
       setTokenReady(true);
-    } else {
-      console.log('[PURLPortal] No token found for slug:', slug);
     }
   }, [token, slug]);
 

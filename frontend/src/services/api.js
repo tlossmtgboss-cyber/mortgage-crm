@@ -2359,7 +2359,6 @@ if (typeof window !== 'undefined') {
     console.log('=== PURL API Debug ===');
     console.log('API Base URL:', API_BASE_URL);
     console.log('Token exists:', !!localStorage.getItem('token'));
-    console.log('Token (first 20 chars):', localStorage.getItem('token')?.substring(0, 20) + '...');
 
     console.log('\nTesting PURL health endpoint...');
     const result = await purlAPI.healthCheck();

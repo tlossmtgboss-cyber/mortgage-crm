@@ -562,7 +562,6 @@ export default function PURLApplication() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Navigate to portal with success message (include token to maintain auth)
-      console.log('[PURLApplication] Redirecting to portal with token:', token.substring(0, 20) + '...');
       navigate(`/portal/${slug}?token=${token}&submitted=true`, { replace: true });
 
     } catch (err) {

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { sanitizeHTML } from '../utils/sanitize';
 import './AI1003Concierge.css';
 
 /**
@@ -213,16 +214,13 @@ Let's start with the basics. Are you looking to **purchase** a new home, or **re
 
   // Format message content with markdown-like formatting
   const formatMessage = (content) => {
-    // Bold
+    // Bold - convert markdown bold to HTML
     let formatted = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Line breaks
-    formatted = formatted.split('\n').map((line, i) => (
-      <span key={i}>
-        {i > 0 && <br />}
-        <span dangerouslySetInnerHTML={{ __html: line }} />
-      </span>
-    ));
-    return formatted;
+    // Line breaks - convert newlines to br tags
+    formatted = formatted.replace(/\n/g, '<br />');
+    // Sanitize the HTML to prevent XSS
+    const sanitized = sanitizeHTML(formatted, { allowedTags: ['strong', 'br', 'em', 'b', 'i'] });
+    return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
   };
 
   return (

@@ -37,7 +37,9 @@ def get_organization_id(db: Session, request: Request = None) -> int:
     if request:
         from jose import jwt, JWTError
         import os
-        SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret")
+        SECRET_KEY = os.getenv("SECRET_KEY")
+        if not SECRET_KEY:
+            raise ValueError("SECRET_KEY environment variable is not set")
 
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):

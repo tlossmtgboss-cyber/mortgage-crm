@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { sanitizeHTML } from '../../utils/sanitize';
 import './LOMicrosite.css';
 import MortgageAIChat from '../../components/MortgageAIChat';
 
@@ -416,7 +417,7 @@ const LOMicrosite = () => {
           <section className="lo-page-content custom-page">
             <div className="container">
               <h2>{currentPage.title}</h2>
-              {content.text && <div dangerouslySetInnerHTML={{ __html: content.text }} />}
+              {content.text && <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(content.text, { allowedTags: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'span', 'div'] }) }} />}
             </div>
           </section>
         );

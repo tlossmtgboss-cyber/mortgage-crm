@@ -103,7 +103,9 @@ def get_current_company_id(request: Request) -> int:
     from jose import jwt, JWTError
     import os
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret")
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        raise ValueError("SECRET_KEY environment variable is not set")
     ALGORITHM = "HS256"
 
     auth_header = request.headers.get("Authorization", "")
@@ -122,7 +124,9 @@ def get_current_user_id(request: Request) -> int:
     from jose import jwt, JWTError
     import os
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret")
+    SECRET_KEY = os.getenv("SECRET_KEY")
+    if not SECRET_KEY:
+        raise ValueError("SECRET_KEY environment variable is not set")
     ALGORITHM = "HS256"
 
     auth_header = request.headers.get("Authorization", "")

@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { sanitizeHTML } from '../utils/sanitize';
 import './PreApprovalLetterModal.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -435,7 +436,7 @@ const PreApprovalLetterModal = ({
                 <h4>Letter Preview</h4>
                 <div
                   className="letter-preview"
-                  dangerouslySetInnerHTML={{ __html: letterData.letter_html }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHTML(letterData.letter_html, { allowedTags: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'span', 'div', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'hr', 'img'] }) }}
                 />
               </div>
             )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { aiAPI, tasksAPI } from '../../services/api';
+import { sanitizeHTML } from '../../utils/sanitize';
 import './TaskDetailPanel.css';
 
 /**
@@ -900,9 +901,12 @@ const TaskDetailPanel = ({
                   <div
                     className="ai-response-content"
                     dangerouslySetInnerHTML={{
-                      __html: aiAcknowledgment
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\n/g, '<br />')
+                      __html: sanitizeHTML(
+                        aiAcknowledgment
+                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\n/g, '<br />'),
+                        { allowedTags: ['strong', 'br', 'em', 'b', 'i'] }
+                      )
                     }}
                   />
                 </div>
@@ -956,7 +960,10 @@ const TaskDetailPanel = ({
                   <div
                     className="message-preview"
                     dangerouslySetInnerHTML={{
-                      __html: draftMessage.replace(/\n/g, '<br />')
+                      __html: sanitizeHTML(
+                        draftMessage.replace(/\n/g, '<br />'),
+                        { allowedTags: ['br'] }
+                      )
                     }}
                   />
                 )}

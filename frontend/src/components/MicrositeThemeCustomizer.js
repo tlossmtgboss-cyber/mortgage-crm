@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { sanitizeHTML } from '../utils/sanitize';
 import './MicrositeThemeCustomizer.css';
 
 // API base URL
@@ -1325,7 +1326,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
                     ref={contentEditableRef}
                     className="editor-content"
                     contentEditable
-                    dangerouslySetInnerHTML={{ __html: pageForm.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHTML(pageForm.content, { allowedTags: ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'span', 'div'] }) }}
                     onInput={(e) => handlePageFormChange('content', e.currentTarget.innerHTML)}
                     onBlur={(e) => handlePageFormChange('content', e.currentTarget.innerHTML)}
                     style={{ minHeight: '200px' }}

@@ -46,7 +46,9 @@ def get_borrower_from_token(request: Request, db: Session = Depends(get_db)) -> 
     import jwt
     import os
 
-    JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+    JWT_SECRET = os.getenv("JWT_SECRET")
+    if not JWT_SECRET:
+        raise HTTPException(status_code=500, detail="JWT_SECRET not configured")
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):

@@ -311,7 +311,10 @@ async def voice_agent_websocket(
         if token:
             try:
                 from jose import jwt, JWTError
-                SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+                SECRET_KEY = os.getenv("SECRET_KEY")
+                if not SECRET_KEY:
+                    logger.error("[VoiceAgent] SECRET_KEY not configured")
+                    raise ValueError("SECRET_KEY not set")
                 payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
                 user_id = payload.get("sub", user_id)
                 logger.info(f"[VoiceAgent] Authenticated user: {user_id}")

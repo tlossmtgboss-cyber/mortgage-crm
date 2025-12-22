@@ -1150,7 +1150,6 @@ function Settings() {
       }
 
       const data = await response.json();
-      console.log('API Keys response:', data);
 
       // Ensure data is an array
       if (Array.isArray(data)) {
@@ -1183,11 +1182,8 @@ function Settings() {
         body: JSON.stringify({ name: newApiKeyName })
       });
 
-      console.log('Create API key response status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('API key created:', data);
         setCreatedKey(data.key);
         setNewApiKeyName('');
         fetchApiKeys();

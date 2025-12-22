@@ -37,7 +37,10 @@ router = APIRouter(prefix="/api/v1/borrower-auth", tags=["borrower-auth"])
 # =============================================================================
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    logger.critical("JWT_SECRET environment variable is not set! Authentication will fail.")
+    JWT_SECRET = None  # Will cause explicit failures rather than silent insecurity
 JWT_ALGORITHM = "HS256"
 BORROWER_TOKEN_EXPIRY_DAYS = 90
 

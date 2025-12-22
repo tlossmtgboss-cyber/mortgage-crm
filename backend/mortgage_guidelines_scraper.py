@@ -3,6 +3,7 @@
 Mortgage Guidelines Scraper - Real-time scraping from my.mortgageguidelines.com
 Automatically logs in and retrieves the latest guideline updates
 """
+import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
@@ -52,9 +53,12 @@ class MortgageGuidelinesScraper:
     LOGIN_PAGE_URL = f"{BASE_URL}/account-login/"
     LOGIN_POST_URL = f"{BASE_URL}/mg-admin/"
 
-    # Credentials
-    USERNAME = "tloss@cmghomeloans.com"
-    PASSWORD = "Woodwindow00!"
+    # Credentials - MUST be set via environment variables
+    USERNAME = os.getenv("MORTGAGE_GUIDELINES_USERNAME")
+    PASSWORD = os.getenv("MORTGAGE_GUIDELINES_PASSWORD")
+
+    if not USERNAME or not PASSWORD:
+        logger.warning("MORTGAGE_GUIDELINES_USERNAME and MORTGAGE_GUIDELINES_PASSWORD environment variables not set")
 
     # Source URLs after login (using events/category structure)
     SOURCES = {

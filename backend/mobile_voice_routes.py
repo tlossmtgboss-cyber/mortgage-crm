@@ -544,7 +544,10 @@ async def mobile_voice_websocket(
                 # Validate token and extract user using jose JWT
                 from jose import jwt, JWTError
                 import os
-                SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+                SECRET_KEY = os.getenv("SECRET_KEY")
+                if not SECRET_KEY:
+                    logger.error("[MobileVoice] SECRET_KEY not configured")
+                    raise ValueError("SECRET_KEY not set")
                 ALGORITHM = "HS256"
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
                 user_id = payload.get("sub", user_id)
