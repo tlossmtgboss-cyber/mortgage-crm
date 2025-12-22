@@ -177,6 +177,10 @@ class UserMicrosite(Base):
     # Custom configuration (overrides theme defaults)
     theme_config = Column(JSONB, default=dict)
 
+    # Extended content storage
+    content_json = Column(JSONB, default=dict)  # Profile content, social links, footer
+    branding_json = Column(JSONB, default=dict)  # Colors, fonts, logo URL, headshot
+
     # SEO & metadata
     meta_title = Column(String(200))
     meta_description = Column(String(500))
@@ -215,6 +219,8 @@ class UserMicrosite(Base):
             "userId": self.user_id,
             "themeId": self.theme_id,
             "themeConfig": self.theme_config or {},
+            "content_json": self.content_json or {},
+            "branding_json": self.branding_json or {},
             "metaTitle": self.meta_title,
             "metaDescription": self.meta_description,
             "ogImageUrl": self.og_image_url,

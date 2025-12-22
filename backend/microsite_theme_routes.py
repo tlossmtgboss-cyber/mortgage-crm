@@ -24,6 +24,47 @@ logger = logging.getLogger(__name__)
 # Security scheme
 security = HTTPBearer(auto_error=False)
 
+
+def ensure_microsite_columns_exist():
+    """Ensure content_json and branding_json columns exist in microsites table."""
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        with engine.connect() as conn:
+            # Check if columns already exist
+            result = conn.execute(text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'microsites'
+                AND column_name IN ('content_json', 'branding_json')
+            """))
+            existing_columns = [row[0] for row in result.fetchall()]
+
+            if 'content_json' not in existing_columns:
+                logger.info("Adding content_json column to microsites table...")
+                conn.execute(text("""
+                    ALTER TABLE microsites
+                    ADD COLUMN content_json JSONB DEFAULT '{}'::jsonb
+                """))
+                logger.info("content_json column added successfully")
+
+            if 'branding_json' not in existing_columns:
+                logger.info("Adding branding_json column to microsites table...")
+                conn.execute(text("""
+                    ALTER TABLE microsites
+                    ADD COLUMN branding_json JSONB DEFAULT '{}'::jsonb
+                """))
+                logger.info("branding_json column added successfully")
+
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Could not ensure microsite columns exist: {e}")
+
+
+# Run migration on module load
+ensure_microsite_columns_exist()
+
 # Lazy imports to avoid circular dependencies
 def get_db():
     """Wrapper for get_db to avoid circular import."""
@@ -96,6 +137,8 @@ class MicrositeConfigUpdate(BaseModel):
     """Update microsite configuration"""
     theme_id: Optional[int] = None
     theme_config: Optional[Dict[str, Any]] = None
+    content_json: Optional[Dict[str, Any]] = None
+    branding_json: Optional[Dict[str, Any]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
     og_image_url: Optional[str] = None
@@ -977,6 +1020,10 @@ async def update_my_microsite(
             microsite.theme_id = update_data.theme_id
         if update_data.theme_config is not None:
             microsite.theme_config = update_data.theme_config
+        if update_data.content_json is not None:
+            microsite.content_json = update_data.content_json
+        if update_data.branding_json is not None:
+            microsite.branding_json = update_data.branding_json
         if update_data.meta_title is not None:
             microsite.meta_title = update_data.meta_title
         if update_data.meta_description is not None:
@@ -1064,6 +1111,117 @@ async def update_my_microsite_profile(
         logger.error(f"Error updating microsite profile: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Error updating profile")
+
+
+# =============================================================================
+# ASSET UPLOAD ENDPOINTS
+# =============================================================================
+
+class AssetUploadResponse(BaseModel):
+    """Response for asset upload"""
+    url: str
+    asset_type: str
+    file_name: str
+    file_size: int
+
+
+@auth_router.post("/my-microsite/assets/upload", response_model=AssetUploadResponse)
+async def upload_microsite_asset(
+    file: bytes = None,
+    asset_type: str = "image",
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Upload an image asset (logo or headshot) for the user's microsite.
+    """
+    from fastapi import UploadFile, File, Form
+    import os
+    import base64
+
+    # This endpoint needs to be reimplemented with proper file handling
+    # For now, return a placeholder response
+    raise HTTPException(
+        status_code=501,
+        detail="Asset upload endpoint not yet implemented. Please use the profile update endpoint with base64 encoded images."
+    )
+
+
+@auth_router.post("/my-microsite/upload-image")
+async def upload_microsite_image(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Upload an image for the user's microsite (logo or headshot).
+    Accepts multipart/form-data with 'file' and 'asset_type' fields.
+    """
+    import os
+    import base64
+
+    try:
+        from microsite_models import UserMicrosite as Microsite
+
+        # Parse the multipart form data
+        form = await request.form()
+        file = form.get('file')
+        asset_type = form.get('asset_type', 'image')
+
+        if not file:
+            raise HTTPException(status_code=400, detail="No file provided")
+
+        # Read file content
+        file_content = await file.read()
+
+        # Validate file size (max 5MB)
+        if len(file_content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+
+        # Validate file type
+        content_type = file.content_type or ''
+        if not content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+
+        # Get or create microsite
+        microsite = db.query(Microsite).filter(
+            Microsite.user_id == current_user.id
+        ).first()
+
+        if not microsite:
+            raise HTTPException(status_code=404, detail="No microsite found for this user")
+
+        # Convert to base64 for storage
+        file_base64 = base64.b64encode(file_content).decode('utf-8')
+        data_url = f"data:{content_type};base64,{file_base64}"
+
+        # Update the appropriate field based on asset_type
+        branding = microsite.branding_json or {}
+
+        if asset_type == 'logo':
+            branding['logoUrl'] = data_url
+        elif asset_type == 'headshot':
+            branding['heroImageUrl'] = data_url
+        else:
+            branding[f'{asset_type}Url'] = data_url
+
+        microsite.branding_json = branding
+        db.commit()
+
+        return {
+            "url": data_url,
+            "asset_type": asset_type,
+            "file_name": file.filename,
+            "file_size": len(file_content),
+            "message": f"{asset_type.capitalize()} uploaded successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading asset: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
 
 @auth_router.post("/my-microsite/publish")
