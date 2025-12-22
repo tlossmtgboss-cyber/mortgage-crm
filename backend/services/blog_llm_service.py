@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # API Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-3-5-sonnet-20241022"  # Current Claude 3.5 Sonnet model
 
 
 class ContentGenerationResult:
