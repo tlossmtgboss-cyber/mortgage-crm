@@ -33,7 +33,7 @@ const getRequiredDocuments = (declarations = {}) => {
   const docs = [];
   const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
   const hasGiftFunds = declarations.gift_funds === 'yes';
-  const hasCoBorrower = declarations.borrower_count && declarations.borrower_count !== 'one';
+  const hasCoBorrower = ['2', '3', '4+'].includes(declarations.borrower_count);
 
   // Identity documents (always required)
   docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
