@@ -20940,6 +20940,20 @@ except Exception as e:
     ai_email_settings_error = traceback.format_exc()
     logger.warning(f"⚠️ AI Email Settings routes not loaded: {e}")
 
+# Pre-Approval Letter Settings routes (configure pre-approval letter content)
+pre_approval_letter_settings_error = None
+try:
+    from routes.pre_approval_letter_settings_routes import router as pre_approval_letter_settings_router, PreApprovalLetterSettings
+    app.include_router(pre_approval_letter_settings_router, tags=["Pre-Approval Letter Settings"])
+    # Create table if not exists
+    PreApprovalLetterSettings.__table__.create(bind=engine, checkfirst=True)
+    logger.info("✅ Pre-Approval Letter Settings routes loaded")
+except Exception as e:
+    pre_approval_letter_settings_error = str(e)
+    import traceback
+    pre_approval_letter_settings_error = traceback.format_exc()
+    logger.warning(f"⚠️ Pre-Approval Letter Settings routes not loaded: {e}")
+
 # AI Outreach routes (send AI-powered emails/SMS to leads)
 ai_outreach_error = None
 try:
