@@ -11,8 +11,38 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { partnersAPI } from '../services/api';
+import { partnersAPI, activitiesAPI } from '../services/api';
 import './PartnerDashboardPortal.css';
+
+// Activity type configuration
+const ACTIVITY_TYPE_CONFIG = {
+  note: { label: 'Note', color: '#6366f1' },
+  call: { label: 'Call', color: '#10b981' },
+  email: { label: 'Email', color: '#3b82f6' },
+  sms: { label: 'SMS', color: '#8b5cf6' },
+  meeting: { label: 'Meeting', color: '#f59e0b' },
+  stage_change: { label: 'Status Update', color: '#218D8D' },
+  new_lead: { label: 'New Lead', color: '#10b981' },
+  progress: { label: 'In Progress', color: '#3b82f6' },
+  closed: { label: 'Closed', color: '#22c55e' },
+};
+
+// Format relative time
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 // Tab configuration
 const TABS = [
@@ -131,6 +161,7 @@ export default function PartnerDashboardPortal() {
   const [activeClientCategory, setActiveClientCategory] = useState('all');
   const [partner, setPartner] = useState(null);
   const [referrals, setReferrals] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -138,6 +169,77 @@ export default function PartnerDashboardPortal() {
     loadPartnerData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Load activities when referrals are available
+  useEffect(() => {
+    if (referrals.length > 0) {
+      loadActivitiesForReferrals();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [referrals]);
+
+  const loadActivitiesForReferrals = async () => {
+    try {
+      const jwtToken = localStorage.getItem('token');
+      if (!jwtToken) return; // Only fetch if CRM user is logged in
+
+      // Get activities for all referrals (limit to recent ones)
+      const allActivities = [];
+
+      // Fetch activities and stage history for each referral (batch up to 5 for performance)
+      const referralIds = referrals.slice(0, 10).map(r => r.id);
+
+      for (const leadId of referralIds) {
+        try {
+          // Fetch activities
+          const leadActivities = await activitiesAPI.getAll({ lead_id: leadId, limit: 5 });
+          if (leadActivities?.length > 0) {
+            const referral = referrals.find(r => r.id === leadId);
+            leadActivities.forEach(activity => {
+              allActivities.push({
+                ...activity,
+                lead_name: referral?.name || 'Unknown',
+                lead_id: leadId,
+              });
+            });
+          }
+
+          // Fetch stage history
+          const response = await fetch(
+            `${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${leadId}/stage-history`,
+            {
+              headers: {
+                'Authorization': `Bearer ${jwtToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          if (response.ok) {
+            const data = await response.json();
+            const referral = referrals.find(r => r.id === leadId);
+            (data.stage_history || []).forEach(history => {
+              allActivities.push({
+                id: `stage-${history.id}`,
+                type: 'stage_change',
+                content: `Status changed from "${history.from_stage || 'New'}" to "${history.to_stage}"`,
+                created_at: history.changed_at,
+                lead_name: referral?.name || 'Unknown',
+                lead_id: leadId,
+              });
+            });
+          }
+        } catch (err) {
+          console.error(`Error loading activities for lead ${leadId}:`, err);
+        }
+      }
+
+      // Sort all activities by date (newest first)
+      allActivities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setActivities(allActivities.slice(0, 20)); // Keep top 20
+    } catch (err) {
+      console.error('Error loading activities:', err);
+    }
+  };
 
   const loadPartnerData = async () => {
     try {
@@ -293,7 +395,7 @@ export default function PartnerDashboardPortal() {
       {/* Main Content */}
       <main className="portal-main-content">
         {activeTab === 'dashboard' && (
-          <DashboardTab partner={partner} stats={stats} categories={categories} />
+          <DashboardTab partner={partner} stats={stats} categories={categories} activities={activities} />
         )}
         {activeTab === 'programs' && <ProgramsTab />}
         {activeTab === 'marketing' && <MarketingTab partner={partner} />}
@@ -315,7 +417,7 @@ export default function PartnerDashboardPortal() {
 // ============================================================================
 // DASHBOARD TAB
 // ============================================================================
-function DashboardTab({ partner, stats, categories }) {
+function DashboardTab({ partner, stats, categories, activities = [] }) {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -403,13 +505,22 @@ function DashboardTab({ partner, stats, categories }) {
       <section className="dashboard-section">
         <h2>Recent Activity</h2>
         <div className="activity-list">
-          {categories.leads.slice(0, 3).map((lead) => (
-            <ActivityItem key={lead.id} lead={lead} type="new_lead" />
-          ))}
-          {categories.active.slice(0, 2).map((client) => (
-            <ActivityItem key={client.id} lead={client} type="progress" />
-          ))}
-          {categories.leads.length === 0 && categories.active.length === 0 && (
+          {/* Show real activities if available, otherwise fall back to lead-based activities */}
+          {activities.length > 0 ? (
+            activities.slice(0, 8).map((activity, idx) => (
+              <EnhancedActivityItem key={activity.id || idx} activity={activity} />
+            ))
+          ) : (
+            <>
+              {categories.leads.slice(0, 3).map((lead) => (
+                <ActivityItem key={lead.id} lead={lead} type="new_lead" />
+              ))}
+              {categories.active.slice(0, 2).map((client) => (
+                <ActivityItem key={client.id} lead={client} type="progress" />
+              ))}
+            </>
+          )}
+          {activities.length === 0 && categories.leads.length === 0 && categories.active.length === 0 && (
             <div className="empty-activity">
               <p>No recent activity. Submit a referral to get started!</p>
             </div>
@@ -429,6 +540,33 @@ function QuickActionCard({ title, description, color }) {
   );
 }
 
+// Enhanced activity item that shows real CRM activities
+function EnhancedActivityItem({ activity }) {
+  const config = ACTIVITY_TYPE_CONFIG[activity.type?.toLowerCase()] || { label: activity.type || 'Update', color: '#6b7280' };
+
+  return (
+    <div className="activity-item enhanced">
+      <div
+        className="activity-dot"
+        style={{ backgroundColor: config.color }}
+      />
+      <div className="activity-details">
+        <div className="activity-header-row">
+          <span
+            className="activity-type-badge"
+            style={{ backgroundColor: `${config.color}15`, color: config.color }}
+          >
+            {config.label}
+          </span>
+          <span className="activity-time">{formatRelativeTime(activity.created_at)}</span>
+        </div>
+        <span className="activity-name">{activity.lead_name}</span>
+        <span className="activity-content">{activity.content}</span>
+      </div>
+    </div>
+  );
+}
+
 function ActivityItem({ lead, type }) {
   const typeConfig = {
     new_lead: { label: 'New Lead' },
@@ -445,7 +583,7 @@ function ActivityItem({ lead, type }) {
         <span className="activity-status">{lead.stage}</span>
       </div>
       <span className="activity-time">
-        {new Date(lead.updated_at || lead.created_at).toLocaleDateString()}
+        {formatRelativeTime(lead.updated_at || lead.created_at)}
       </span>
     </div>
   );
