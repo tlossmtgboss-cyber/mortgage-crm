@@ -197,16 +197,62 @@ export default function PartnerClientDetail() {
       setLoading(true);
       setError(null);
 
-      // Get token from localStorage or URL params
-      const token = localStorage.getItem('partnerToken') || new URLSearchParams(window.location.search).get('token');
+      // Check for CRM JWT token first (internal user), then partner token (external partner)
+      const jwtToken = localStorage.getItem('token');
+      const partnerToken = localStorage.getItem('partnerToken') || new URLSearchParams(window.location.search).get('token');
 
-      if (!token) {
+      let response;
+
+      if (jwtToken) {
+        // Internal CRM user - use leads API with JWT auth
+        response = await fetch(
+          `${API_BASE}/api/v1/leads/${clientId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${jwtToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (response.ok) {
+          const leadData = await response.json();
+          // Transform lead data to match expected client data format
+          setClientData({
+            success: true,
+            client: {
+              id: leadData.id,
+              name: leadData.name,
+              email: leadData.email,
+              phone: leadData.phone,
+              status: leadData.stage,
+              loan_amount: leadData.loan_amount,
+              property_address: leadData.address,
+              property_city: leadData.city,
+              property_state: leadData.state,
+              property_zip: leadData.zip_code,
+              property_type: leadData.property_type,
+              loan_type: leadData.loan_type,
+              credit_score: leadData.credit_score,
+              created_at: leadData.created_at,
+              updated_at: leadData.updated_at
+            },
+            milestones: [],
+            documents: [],
+            conversations: []
+          });
+          return;
+        }
+      }
+
+      // Fall back to partner portal token
+      if (!partnerToken) {
         setError('Authentication required');
         return;
       }
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/realtor-portal/clients/${clientId}/full-details?token=${token}`
+      response = await fetch(
+        `${API_BASE}/api/v1/realtor-portal/clients/${clientId}/full-details?token=${partnerToken}`
       );
 
       if (!response.ok) {
