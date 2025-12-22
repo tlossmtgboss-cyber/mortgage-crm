@@ -466,7 +466,7 @@ function SmartDocs() {
                       <tr
                         key={applicant.loan_id}
                         className={applicant.overdue_count > 0 ? 'has-overdue' : ''}
-                        onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                        onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
                       >
                         <td>
                           <span className="borrower-name">{applicant.borrower_name}</span>
@@ -485,7 +485,7 @@ function SmartDocs() {
                         <td className="property-cell">{applicant.property_address || '-'}</td>
                         <td className="date-cell">{formatDate(applicant.created_at)}</td>
                         <td>
-                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/client/loan/${applicant.loan_id}?tab=documents`); }}>
+                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/loans/${applicant.loan_id}?tab=documents`); }}>
                             View
                           </button>
                         </td>
@@ -522,7 +522,7 @@ function SmartDocs() {
                     {filteredData.map((applicant) => (
                       <tr
                         key={applicant.loan_id}
-                        onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                        onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
                       >
                         <td>
                           <span className="borrower-name">{applicant.borrower_name}</span>
@@ -534,7 +534,7 @@ function SmartDocs() {
                         </td>
                         <td className="date-cell">{formatDate(applicant.oldest_upload)}</td>
                         <td>
-                          <button className="btn-review-sm" onClick={(e) => { e.stopPropagation(); navigate(`/client/loan/${applicant.loan_id}?tab=documents`); }}>
+                          <button className="btn-review-sm" onClick={(e) => { e.stopPropagation(); navigate(`/loans/${applicant.loan_id}?tab=documents`); }}>
                             Review
                           </button>
                         </td>
@@ -573,7 +573,7 @@ function SmartDocs() {
                       <tr
                         key={applicant.loan_id}
                         className="completed-row"
-                        onClick={() => navigate(`/client/loan/${applicant.loan_id}?tab=documents`)}
+                        onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
                       >
                         <td>
                           <span className="borrower-name">{applicant.borrower_name}</span>
@@ -586,7 +586,7 @@ function SmartDocs() {
                           <span className="completed-badge">Completed</span>
                         </td>
                         <td>
-                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/client/loan/${applicant.loan_id}?tab=documents`); }}>
+                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/loans/${applicant.loan_id}?tab=documents`); }}>
                             Archive
                           </button>
                         </td>
