@@ -94,7 +94,16 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
   const [pages, setPages] = useState([]);
   const [editingPage, setEditingPage] = useState(null);
   const [showPageModal, setShowPageModal] = useState(false);
-  const [pageForm, setPageForm] = useState({ title: '', slug: '', content: '', isPublished: true });
+  const [pageForm, setPageForm] = useState({
+    title: '',
+    slug: '',
+    content: '',
+    isPublished: true,
+    metaTitle: '',
+    metaDescription: '',
+  });
+  const [seoScore, setSeoScore] = useState(null);
+  const contentEditableRef = useRef(null);
 
   // Profile content state
   const [profileContent, setProfileContent] = useState({
@@ -118,8 +127,8 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      // Fetch microsite profile
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my`, {
+      // Fetch microsite profile (use /my-microsite endpoint)
+      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         }
@@ -178,7 +187,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
 
       // Pages are managed separately - skip for now if endpoint doesn't exist
       try {
-        const pagesResponse = await fetch(`${API_BASE}/api/v1/microsites/my/pages`, {
+        const pagesResponse = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           }
@@ -194,6 +203,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+      showMessage('error', 'Unable to load microsite settings. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -268,7 +278,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       formData.append('file', file);
       formData.append('asset_type', 'logo');
 
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my/assets/upload`, {
+      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/upload-image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -314,7 +324,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       formData.append('file', file);
       formData.append('asset_type', 'headshot');
 
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my/assets/upload`, {
+      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/upload-image`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -405,7 +415,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       };
 
       // Save profile data using backend's expected structure
-      const profileResponse = await fetch(`${API_BASE}/api/v1/microsites/my`, {
+      const profileResponse = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -438,23 +448,145 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
   const openPageModal = (page = null) => {
     if (page) {
       setEditingPage(page);
+      const bodyContent = typeof page.content === 'object' ? (page.content.body || '') : (page.content || '');
       setPageForm({
         title: page.title,
         slug: page.slug,
-        content: page.content,
-        isPublished: page.is_published !== false
+        content: bodyContent,
+        isPublished: page.is_enabled !== false,
+        metaTitle: page.meta_title || page.title || '',
+        metaDescription: page.meta_description || '',
       });
     } else {
       setEditingPage(null);
-      setPageForm({ title: '', slug: '', content: '', isPublished: true });
+      setPageForm({
+        title: '',
+        slug: '',
+        content: '',
+        isPublished: true,
+        metaTitle: '',
+        metaDescription: '',
+      });
     }
+    setSeoScore(null);
     setShowPageModal(true);
   };
 
   const closePageModal = () => {
     setShowPageModal(false);
     setEditingPage(null);
-    setPageForm({ title: '', slug: '', content: '', isPublished: true });
+    setPageForm({
+      title: '',
+      slug: '',
+      content: '',
+      isPublished: true,
+      metaTitle: '',
+      metaDescription: '',
+    });
+    setSeoScore(null);
+  };
+
+  // Rich text formatting commands
+  const execCommand = (command, value = null) => {
+    document.execCommand(command, false, value);
+    if (contentEditableRef.current) {
+      handlePageFormChange('content', contentEditableRef.current.innerHTML);
+    }
+  };
+
+  const insertLink = () => {
+    const url = prompt('Enter URL:', 'https://');
+    if (url) {
+      execCommand('createLink', url);
+    }
+  };
+
+  // SEO Analysis
+  const analyzeSEO = () => {
+    const title = pageForm.metaTitle || pageForm.title;
+    const description = pageForm.metaDescription;
+    const content = pageForm.content;
+
+    let score = 0;
+    const issues = [];
+    const suggestions = [];
+
+    // Title analysis (20 points max)
+    if (title) {
+      if (title.length >= 30 && title.length <= 60) {
+        score += 20;
+      } else if (title.length > 0) {
+        score += 10;
+        if (title.length < 30) issues.push('Title is too short (aim for 30-60 characters)');
+        if (title.length > 60) issues.push('Title is too long (keep under 60 characters)');
+      }
+    } else {
+      issues.push('Missing page title');
+    }
+
+    // Meta description (20 points max)
+    if (description) {
+      if (description.length >= 120 && description.length <= 160) {
+        score += 20;
+      } else if (description.length > 0) {
+        score += 10;
+        if (description.length < 120) issues.push('Meta description is too short (aim for 120-160 characters)');
+        if (description.length > 160) issues.push('Meta description is too long (keep under 160 characters)');
+      }
+    } else {
+      issues.push('Missing meta description - important for search results');
+    }
+
+    // Content analysis (30 points max)
+    const plainContent = content.replace(/<[^>]*>/g, '');
+    const wordCount = plainContent.split(/\s+/).filter(w => w.length > 0).length;
+
+    if (wordCount >= 300) {
+      score += 30;
+    } else if (wordCount >= 150) {
+      score += 20;
+      suggestions.push('Add more content (300+ words recommended for SEO)');
+    } else if (wordCount > 0) {
+      score += 10;
+      issues.push('Content is too short - aim for at least 300 words');
+    } else {
+      issues.push('Page has no content');
+    }
+
+    // Headings check (10 points)
+    if (content.includes('<h') || content.includes('<strong>')) {
+      score += 10;
+    } else {
+      suggestions.push('Add headings or bold text to structure content');
+    }
+
+    // Links check (10 points)
+    if (content.includes('<a ')) {
+      score += 10;
+    } else {
+      suggestions.push('Add internal or external links to improve engagement');
+    }
+
+    // AI Search Optimization (10 points)
+    const hasQuestions = /\?/.test(plainContent);
+    const hasLists = /<li>|<ul>|<ol>/.test(content) || /\n-\s/.test(plainContent);
+    const hasStructuredContent = hasQuestions || hasLists;
+
+    if (hasStructuredContent) {
+      score += 10;
+    } else {
+      suggestions.push('AI Search: Add questions, lists, or structured content for better AI indexing');
+    }
+
+    setSeoScore({
+      score: Math.min(score, 100),
+      grade: score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D',
+      issues,
+      suggestions,
+      wordCount,
+      titleLength: title?.length || 0,
+      descriptionLength: description?.length || 0,
+    });
   };
 
   const generateSlug = (title) => {
@@ -482,8 +614,33 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
     try {
       const token = localStorage.getItem('token');
       const url = editingPage
-        ? `${API_BASE}/api/v1/microsites/my/pages/${editingPage.id}`
-        : `${API_BASE}/api/v1/microsites/my/pages`;
+        ? `${API_BASE}/api/v1/microsites/my-microsite/pages/${editingPage.slug}`
+        : `${API_BASE}/api/v1/microsites/my-microsite/pages`;
+
+      // Build content object with HTML content
+      const contentData = {
+        body: pageForm.content || '',
+        heading: pageForm.title,
+      };
+
+      const payload = editingPage ? {
+        // Update payload
+        title: pageForm.title,
+        content: contentData,
+        meta_title: pageForm.metaTitle || pageForm.title,
+        meta_description: pageForm.metaDescription || '',
+        is_enabled: pageForm.isPublished,
+      } : {
+        // Create payload - requires page_type
+        page_type: 'custom',
+        slug: pageForm.slug || generateSlug(pageForm.title),
+        title: pageForm.title,
+        content: contentData,
+        meta_title: pageForm.metaTitle || pageForm.title,
+        meta_description: pageForm.metaDescription || '',
+        is_enabled: pageForm.isPublished,
+        show_in_nav: true,
+      };
 
       const response = await fetch(url, {
         method: editingPage ? 'PUT' : 'POST',
@@ -491,32 +648,28 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          title: pageForm.title,
-          slug: pageForm.slug || generateSlug(pageForm.title),
-          content: pageForm.content,
-          is_published: pageForm.isPublished
-        })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
-        showMessage('success', editingPage ? 'Page updated' : 'Page created');
+        showMessage('success', editingPage ? 'Page updated' : 'Page created successfully!');
         closePageModal();
         fetchProfileData(); // Refresh pages
       } else {
-        throw new Error('Failed to save page');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to save page');
       }
     } catch (err) {
       console.error('Error saving page:', err);
-      showMessage('error', 'Failed to save page');
+      showMessage('error', err.message || 'Failed to save page');
     }
   };
 
-  const deletePage = async (pageId) => {
-    if (!window.confirm('Are you sure you want to delete this page?')) return;
+  const deletePage = async (page) => {
+    if (!window.confirm(`Are you sure you want to delete "${page.title}"?`)) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my/pages/${pageId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/${page.slug}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -1007,11 +1160,11 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
             {pages.length > 0 ? (
               <div className="pages-list">
                 {pages.map((page) => (
-                  <div key={page.id} className="page-item">
+                  <div key={page.id || page.slug} className="page-item">
                     <div className="page-info">
                       <span className="page-title">{page.title}</span>
                       <span className="page-slug">/{page.slug}</span>
-                      {!page.is_published && (
+                      {page.is_enabled === false && (
                         <span className="page-draft">Draft</span>
                       )}
                     </div>
@@ -1024,7 +1177,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
                       </button>
                       <button
                         className="delete-btn"
-                        onClick={() => deletePage(page.id)}
+                        onClick={() => deletePage(page)}
                       >
                         Delete
                       </button>
@@ -1044,12 +1197,13 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       {/* Page Modal */}
       {showPageModal && (
         <div className="page-modal-overlay" onClick={closePageModal}>
-          <div className="page-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="page-modal page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="page-modal-header">
               <h4>{editingPage ? 'Edit Page' : 'Add New Page'}</h4>
-              <button className="modal-close" onClick={closePageModal}>x</button>
+              <button className="modal-close" onClick={closePageModal}>×</button>
             </div>
             <div className="page-modal-body">
+              {/* Basic Info */}
               <div className="field-group">
                 <label>Page Title</label>
                 <input
@@ -1070,19 +1224,193 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
                     onChange={(e) => handlePageFormChange('slug', e.target.value)}
                     placeholder="about-me"
                     className="text-input slug-input"
+                    disabled={!!editingPage}
                   />
                 </div>
               </div>
+
+              {/* Rich Text Editor */}
               <div className="field-group">
                 <label>Content</label>
-                <textarea
-                  value={pageForm.content}
-                  onChange={(e) => handlePageFormChange('content', e.target.value)}
-                  placeholder="Write your page content here..."
-                  className="textarea-input"
-                  rows={8}
-                />
+                <div className="rich-text-editor">
+                  {/* Formatting Toolbar */}
+                  <div className="editor-toolbar">
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('bold')}
+                      title="Bold (Ctrl+B)"
+                    >
+                      <strong>B</strong>
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('italic')}
+                      title="Italic (Ctrl+I)"
+                    >
+                      <em>I</em>
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('underline')}
+                      title="Underline (Ctrl+U)"
+                    >
+                      <u>U</u>
+                    </button>
+                    <span className="toolbar-divider" />
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('formatBlock', '<h2>')}
+                      title="Heading"
+                    >
+                      H2
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('formatBlock', '<h3>')}
+                      title="Subheading"
+                    >
+                      H3
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('formatBlock', '<p>')}
+                      title="Paragraph"
+                    >
+                      P
+                    </button>
+                    <span className="toolbar-divider" />
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('insertUnorderedList')}
+                      title="Bullet List"
+                    >
+                      • List
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('insertOrderedList')}
+                      title="Numbered List"
+                    >
+                      1. List
+                    </button>
+                    <span className="toolbar-divider" />
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={insertLink}
+                      title="Insert Link"
+                    >
+                      🔗 Link
+                    </button>
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => execCommand('removeFormat')}
+                      title="Clear Formatting"
+                    >
+                      ✕ Clear
+                    </button>
+                  </div>
+
+                  {/* Editable Content Area */}
+                  <div
+                    ref={contentEditableRef}
+                    className="editor-content"
+                    contentEditable
+                    dangerouslySetInnerHTML={{ __html: pageForm.content }}
+                    onInput={(e) => handlePageFormChange('content', e.currentTarget.innerHTML)}
+                    onBlur={(e) => handlePageFormChange('content', e.currentTarget.innerHTML)}
+                    style={{ minHeight: '200px' }}
+                  />
+                </div>
               </div>
+
+              {/* SEO Section */}
+              <div className="seo-section">
+                <div className="seo-header">
+                  <h5>SEO Settings</h5>
+                  <button
+                    type="button"
+                    className="analyze-seo-btn"
+                    onClick={analyzeSEO}
+                  >
+                    🔍 Analyze SEO
+                  </button>
+                </div>
+
+                {/* SEO Score Display */}
+                {seoScore && (
+                  <div className={`seo-score-card grade-${seoScore.grade.toLowerCase()}`}>
+                    <div className="score-header">
+                      <span className="score-value">{seoScore.score}/100</span>
+                      <span className="score-grade">Grade: {seoScore.grade}</span>
+                    </div>
+                    <div className="score-stats">
+                      <span>Words: {seoScore.wordCount}</span>
+                      <span>Title: {seoScore.titleLength} chars</span>
+                      <span>Description: {seoScore.descriptionLength} chars</span>
+                    </div>
+                    {seoScore.issues.length > 0 && (
+                      <div className="seo-issues">
+                        <strong>Issues:</strong>
+                        <ul>
+                          {seoScore.issues.map((issue, i) => (
+                            <li key={i} className="issue-item">❌ {issue}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {seoScore.suggestions.length > 0 && (
+                      <div className="seo-suggestions">
+                        <strong>Suggestions:</strong>
+                        <ul>
+                          {seoScore.suggestions.map((suggestion, i) => (
+                            <li key={i} className="suggestion-item">💡 {suggestion}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="field-group">
+                  <label>
+                    SEO Title
+                    <span className="char-count">{(pageForm.metaTitle || pageForm.title || '').length}/60</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={pageForm.metaTitle}
+                    onChange={(e) => handlePageFormChange('metaTitle', e.target.value)}
+                    placeholder={pageForm.title || 'Page title for search engines'}
+                    className="text-input"
+                    maxLength={70}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>
+                    Meta Description
+                    <span className="char-count">{(pageForm.metaDescription || '').length}/160</span>
+                  </label>
+                  <textarea
+                    value={pageForm.metaDescription}
+                    onChange={(e) => handlePageFormChange('metaDescription', e.target.value)}
+                    placeholder="Brief description for search results (120-160 characters ideal)"
+                    className="textarea-input"
+                    rows={3}
+                    maxLength={200}
+                  />
+                </div>
+              </div>
+
               <div className="toggle-option">
                 <label className="toggle-label-wrapper">
                   <input

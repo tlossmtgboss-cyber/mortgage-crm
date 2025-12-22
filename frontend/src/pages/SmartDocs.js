@@ -72,11 +72,11 @@ function SmartDocs() {
           documents: [],
         };
 
-        // Categorize based on status
-        const status = (loan.status || '').toLowerCase();
-        if (status === 'funded' || status === 'closed') {
+        // Categorize based on stage (API returns 'stage' not 'status')
+        const stage = (loan.stage || loan.status || '').toLowerCase();
+        if (stage === 'funded' || stage === 'closed') {
           completed.push(loanData);
-        } else if (status === 'lead' || status === 'application' || status === 'processing' || status === 'underwriting') {
+        } else if (stage === 'lead' || stage === 'application' || stage === 'processing' || stage === 'underwriting') {
           // Active loans need documents
           owed.push({ ...loanData, outstanding_count: 1 });
         } else {

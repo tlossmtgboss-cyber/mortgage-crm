@@ -474,6 +474,7 @@ const getRequiredDocuments = (declarations = {}) => {
   const docs = [];
   const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
   const hasCoBorrower = ['2', '3', '4+'].includes(declarations.borrower_count);
+  const isCashOut = declarations.refi_goal === 'cash_out';
 
   // Identity documents (always required)
   docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'profile' });
@@ -488,14 +489,12 @@ const getRequiredDocuments = (declarations = {}) => {
     docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
   }
 
-  // Asset documents
-  docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'income' });
-  docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'income' });
+  // Asset documents - only needed for cash-out refinances (to verify reserves)
+  if (isCashOut) {
+    docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (all accounts)', category: 'assets', stage: 'income' });
+  }
 
-  // Property documents (refinance-specific)
-  docs.push({ id: 'mortgage_statement', name: 'Mortgage Statement', description: 'Current mortgage statement', category: 'property', stage: 'property' });
-  docs.push({ id: 'homeowners_insurance', name: 'Homeowners Insurance', description: 'Current declaration page', category: 'property', stage: 'property' });
-  docs.push({ id: 'property_tax', name: 'Property Tax Bill', description: 'Most recent tax statement', category: 'property', stage: 'property' });
+  // Note: Property documents not required for pre-approval stage
 
   // Co-borrower documents
   if (hasCoBorrower) {

@@ -59,16 +59,16 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Tasks {taskCounts.urgentTasks > 0 && <span className="nav-badge urgent">({taskCounts.urgentTasks})</span>}
           </Link>
           <Link
-            to="/smart-docs"
-            className={`nav-link ${isActive('/smart-docs') || location.pathname.startsWith('/smart-docs/') ? 'active' : ''}`}
-          >
-            Smart Docs
-          </Link>
-          <Link
             to="/reconciliation"
             className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
           >
             Reconciliation {renderBadge(taskCounts.reconciliation)}
+          </Link>
+          <Link
+            to="/smart-docs"
+            className={`nav-link ${isActive('/smart-docs') || location.pathname.startsWith('/smart-docs/') ? 'active' : ''}`}
+          >
+            Smart Docs
           </Link>
           <Link
             to="/communication-intelligence"

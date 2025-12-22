@@ -1723,6 +1723,73 @@ async def submit_application(
         logger.info(f"Created lead {lead_id} in CRM for {borrower_name}")
 
         # =================================================================
+        # CREATE LOAN RECORD FOR SMART DOCS
+        # =================================================================
+        loan_id = None
+        if lead_id:
+            try:
+                # Generate a unique loan number based on lead_id
+                loan_number = f"APP-{str(lead_id).zfill(6)}"
+
+                # Build property address string
+                property_address_str = submission.propertyData.get("address", "")
+                if submission.propertyData.get("city"):
+                    property_address_str += f", {submission.propertyData.get('city')}"
+                if submission.propertyData.get("state"):
+                    property_address_str += f", {submission.propertyData.get('state')}"
+                if submission.propertyData.get("zip"):
+                    property_address_str += f" {submission.propertyData.get('zip')}"
+
+                # Determine loan type/program
+                loan_program = submission.propertyData.get("loanProgram", "Conventional")
+
+                # Create loan record
+                loan_result = db.execute(text("""
+                    INSERT INTO loans (
+                        loan_number, borrower_name, borrower_email, borrower_phone,
+                        stage, program, loan_type, amount,
+                        purchase_price, down_payment, rate, term,
+                        property_address, loan_officer_id,
+                        days_in_stage, sla_status,
+                        created_at, updated_at
+                    )
+                    VALUES (
+                        :loan_number, :borrower_name, :borrower_email, :borrower_phone,
+                        'Processing', :program, :loan_type, :amount,
+                        :purchase_price, :down_payment, NULL, 360,
+                        :property_address, :loan_officer_id,
+                        0, 'on-track',
+                        :created_at, :updated_at
+                    )
+                    RETURNING id
+                """), {
+                    "loan_number": loan_number,
+                    "borrower_name": borrower_name,
+                    "borrower_email": borrower_email,
+                    "borrower_phone": submission.profileData.get("phone", ""),
+                    "program": loan_program,
+                    "loan_type": loan_program,
+                    "amount": loan_amount,
+                    "purchase_price": purchase_price,
+                    "down_payment": down_payment,
+                    "property_address": property_address_str.strip(", ") if property_address_str else None,
+                    "loan_officer_id": submission.loId if submission.loId else None,
+                    "created_at": submission_date,
+                    "updated_at": submission_date,
+                })
+
+                loan_row = loan_result.fetchone()
+                if loan_row:
+                    loan_id = loan_row[0]
+
+                db.commit()
+                logger.info(f"Created loan {loan_id} (number: {loan_number}) for lead {lead_id}")
+
+            except Exception as loan_error:
+                logger.warning(f"Failed to create loan record: {loan_error}")
+                # Non-critical - continue without loan record
+
+        # =================================================================
         # STORE E-SIGN DOCUMENTS IN DATABASE
         # =================================================================
         documents_stored = []

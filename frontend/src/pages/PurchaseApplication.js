@@ -66,9 +66,7 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
     docs.push({ id: 'gift_letter', name: 'Gift Letter', description: 'Signed gift letter from donor', category: 'assets', stage: 'assets' });
   }
 
-  // Property documents
-  docs.push({ id: 'purchase_contract', name: 'Purchase Contract', description: 'Signed purchase agreement', category: 'property', stage: 'property' });
-  docs.push({ id: 'homeowners_insurance', name: 'Homeowners Insurance', description: 'Quote or declaration page', category: 'property', stage: 'property' });
+  // Note: Property documents not required for pre-approval stage
 
   // Co-borrower documents
   if (hasCoBorrower) {
@@ -2377,17 +2375,6 @@ export default function PurchaseApplication() {
           <p>Let's see what you have saved for your new home</p>
         </div>
         <div className="form-card">
-          <div className="connect-bank-section">
-            <div className="connect-bank-card">
-              <span className="bank-icon"><Icon name="bank" size={40} /></span>
-              <h3>Connect Your Bank</h3>
-              <p>Securely link your accounts to auto-fill your balances</p>
-              <button className="btn-connect-bank">Connect with Plaid</button>
-              <span className="security-note"><Icon name="lock" size={14} /> Bank-level encryption</span>
-            </div>
-            <div className="or-divider"><span>or enter manually</span></div>
-          </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Checking Accounts</label>
