@@ -549,13 +549,25 @@ Respond with just the image prompt text, no explanation."""
             elif "```" in json_text:
                 json_text = json_text.split("```")[1].split("```")[0]
 
-            data = json.loads(json_text.strip())
+            json_text = json_text.strip()
+
+            # Clean control characters that break JSON parsing
+            # Replace carriage returns
+            json_text = json_text.replace('\r\n', '\\n').replace('\r', '\\n')
+
+            # Handle unescaped newlines within JSON string values
+            # This is tricky - we need to escape newlines inside strings but not the JSON structure
+            def escape_newlines_in_strings(match):
+                return match.group(0).replace('\n', '\\n')
+            json_text = re.sub(r'"(?:[^"\\]|\\.)*"', escape_newlines_in_strings, json_text, flags=re.DOTALL)
+
+            data = json.loads(json_text)
 
             return ContentGenerationResult(
                 success=True,
                 title=data.get("title", ""),
                 slug=data.get("slug", self._generate_slug(data.get("title", ""))),
-                blog_md=data.get("blog_md", ""),
+                blog_md=data.get("blog_md", "").replace('\\n', '\n'),  # Convert back to actual newlines
                 blog_html="",  # Will be converted after
                 image_prompt=data.get("image_prompt", ""),
                 metadata={
@@ -568,6 +580,7 @@ Respond with just the image prompt text, no explanation."""
             )
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse blog response: {e}")
+            logger.debug(f"Response preview: {response_text[:500]}")
             return ContentGenerationResult(
                 success=False,
                 error=f"Failed to parse response: {e}"
@@ -581,15 +594,47 @@ Respond with just the image prompt text, no explanation."""
         """Parse the social content response."""
         try:
             json_text = response_text
+
+            # Try to extract JSON from code blocks
             if "```json" in json_text:
                 json_text = json_text.split("```json")[1].split("```")[0]
             elif "```" in json_text:
                 json_text = json_text.split("```")[1].split("```")[0]
 
-            data = json.loads(json_text.strip())
+            # Try to find JSON object in the text
+            json_text = json_text.strip()
+            if not json_text.startswith("{"):
+                # Try to find the first { and last }
+                start = json_text.find("{")
+                end = json_text.rfind("}") + 1
+                if start >= 0 and end > start:
+                    json_text = json_text[start:end]
+
+            # Clean up control characters that break JSON parsing
+            # Replace actual newlines within strings with \n escape
+            json_text = json_text.replace('\r\n', '\\n').replace('\r', '\\n')
+            # Handle unescaped newlines in JSON string values
+            import re
+            # This regex finds newlines that are inside JSON strings and escapes them
+            def escape_newlines_in_strings(match):
+                return match.group(0).replace('\n', '\\n')
+            json_text = re.sub(r'"[^"]*"', escape_newlines_in_strings, json_text)
+
+            data = json.loads(json_text)
             return {p: data.get(p, "") for p in platforms if p in data}
-        except json.JSONDecodeError:
-            logger.error("Failed to parse social response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse social response: {e}")
+            # Fallback: try to extract content manually
+            result = {}
+            for platform in platforms:
+                # Try to find "platform": "content" pattern
+                pattern = rf'"{platform}"\s*:\s*"((?:[^"\\]|\\.)*)"'
+                match = re.search(pattern, response_text, re.DOTALL)
+                if match:
+                    result[platform] = match.group(1).replace('\\n', '\n').replace('\\"', '"')
+            if result:
+                logger.info(f"Recovered social content via regex for {list(result.keys())}")
+                return result
             return {}
 
     def _parse_topics_response(self, response_text: str) -> List[Dict[str, Any]]:
