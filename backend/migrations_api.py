@@ -862,3 +862,29 @@ async def run_microsite_themes_migration(
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/fix-referral-partner-links")
+async def fix_referral_partner_links(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Fix referral partner links for existing leads and loans.
+    Links leads/loans to their correct referral partners based on application declarations.
+    Specifically fixes Steve Latterson -> Timothy Loss (partner ID 22) link.
+    """
+    try:
+        from migrations.fix_referral_partner_links import run_migration
+
+        logger.info("Starting referral partner link fix migration...")
+        result = run_migration()
+
+        return {
+            "status": "success",
+            "message": f"Fixed {result['updated_leads']} leads and {result['updated_loans']} loans",
+            **result
+        }
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
