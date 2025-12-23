@@ -3080,3 +3080,149 @@
     height: 64px;
   }
 }
+
+/* ============================================
+   RESIDENCE HISTORY SECTION
+   ============================================ */
+
+.residence-history-section {
+  margin-top: 24px;
+}
+
+.residence-address-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.residence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.residence-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.btn-remove-address {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.btn-remove-address:hover {
+  background: #fee2e2;
+}
+
+/* 3-column row for city/state/zip */
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Duration inputs */
+.duration-inputs {
+  display: flex;
+  gap: 16px;
+}
+
+.duration-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duration-input {
+  width: 70px !important;
+  text-align: center;
+}
+
+.duration-label {
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Residence Progress */
+.residence-progress {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 16px;
+}
+
+.residence-progress-bar {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.residence-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.residence-progress-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.warning-text {
+  color: #d97706;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.success-text {
+  color: #059669;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.progress-detail {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.btn-add-address {
+  margin-top: 12px;
+  background: #f1f5f9;
+  border: 2px dashed #cbd5e1;
+  color: #475569;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-add-address:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #1e293b;
+}

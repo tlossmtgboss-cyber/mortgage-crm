@@ -1184,6 +1184,12 @@ export default function PurchaseApplication() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [declarations, setDeclarations] = useState({});
   const [profileData, setProfileData] = useState({});
+  const [residenceHistory, setResidenceHistory] = useState([
+    { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' }
+  ]);
+  const [coBorrowerResidenceHistory, setCoBorrowerResidenceHistory] = useState([
+    { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' }
+  ]);
   const [incomeData, setIncomeData] = useState({});
   const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
 
@@ -1242,6 +1248,74 @@ export default function PurchaseApplication() {
   const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null); // Portal URL after submission
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
+
+  // US States for dropdown
+  const US_STATES = [
+    { value: '', label: 'Select State...' },
+    { value: 'AL', label: 'Alabama' }, { value: 'AK', label: 'Alaska' }, { value: 'AZ', label: 'Arizona' },
+    { value: 'AR', label: 'Arkansas' }, { value: 'CA', label: 'California' }, { value: 'CO', label: 'Colorado' },
+    { value: 'CT', label: 'Connecticut' }, { value: 'DE', label: 'Delaware' }, { value: 'FL', label: 'Florida' },
+    { value: 'GA', label: 'Georgia' }, { value: 'HI', label: 'Hawaii' }, { value: 'ID', label: 'Idaho' },
+    { value: 'IL', label: 'Illinois' }, { value: 'IN', label: 'Indiana' }, { value: 'IA', label: 'Iowa' },
+    { value: 'KS', label: 'Kansas' }, { value: 'KY', label: 'Kentucky' }, { value: 'LA', label: 'Louisiana' },
+    { value: 'ME', label: 'Maine' }, { value: 'MD', label: 'Maryland' }, { value: 'MA', label: 'Massachusetts' },
+    { value: 'MI', label: 'Michigan' }, { value: 'MN', label: 'Minnesota' }, { value: 'MS', label: 'Mississippi' },
+    { value: 'MO', label: 'Missouri' }, { value: 'MT', label: 'Montana' }, { value: 'NE', label: 'Nebraska' },
+    { value: 'NV', label: 'Nevada' }, { value: 'NH', label: 'New Hampshire' }, { value: 'NJ', label: 'New Jersey' },
+    { value: 'NM', label: 'New Mexico' }, { value: 'NY', label: 'New York' }, { value: 'NC', label: 'North Carolina' },
+    { value: 'ND', label: 'North Dakota' }, { value: 'OH', label: 'Ohio' }, { value: 'OK', label: 'Oklahoma' },
+    { value: 'OR', label: 'Oregon' }, { value: 'PA', label: 'Pennsylvania' }, { value: 'RI', label: 'Rhode Island' },
+    { value: 'SC', label: 'South Carolina' }, { value: 'SD', label: 'South Dakota' }, { value: 'TN', label: 'Tennessee' },
+    { value: 'TX', label: 'Texas' }, { value: 'UT', label: 'Utah' }, { value: 'VT', label: 'Vermont' },
+    { value: 'VA', label: 'Virginia' }, { value: 'WA', label: 'Washington' }, { value: 'WV', label: 'West Virginia' },
+    { value: 'WI', label: 'Wisconsin' }, { value: 'WY', label: 'Wyoming' }, { value: 'DC', label: 'Washington DC' }
+  ];
+
+  // Calculate total months of residence history
+  const calculateTotalResidenceMonths = (history) => {
+    return history.reduce((total, addr) => {
+      const years = parseInt(addr.years) || 0;
+      const months = parseInt(addr.months) || 0;
+      return total + (years * 12) + months;
+    }, 0);
+  };
+
+  // Check if we need more residence history (< 24 months)
+  const needsMoreResidenceHistory = (history) => {
+    return calculateTotalResidenceMonths(history) < 24;
+  };
+
+  // Add a new address to residence history
+  const addResidenceAddress = (isCoBorrower = false) => {
+    const newAddress = { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' };
+    if (isCoBorrower) {
+      setCoBorrowerResidenceHistory(prev => [...prev, newAddress]);
+    } else {
+      setResidenceHistory(prev => [...prev, newAddress]);
+    }
+  };
+
+  // Remove an address from residence history
+  const removeResidenceAddress = (index, isCoBorrower = false) => {
+    if (isCoBorrower) {
+      setCoBorrowerResidenceHistory(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setResidenceHistory(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  // Update a specific address in residence history
+  const updateResidenceAddress = (index, field, value, isCoBorrower = false) => {
+    if (isCoBorrower) {
+      setCoBorrowerResidenceHistory(prev => prev.map((addr, i) =>
+        i === index ? { ...addr, [field]: value } : addr
+      ));
+    } else {
+      setResidenceHistory(prev => prev.map((addr, i) =>
+        i === index ? { ...addr, [field]: value } : addr
+      ));
+    }
+  };
 
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
@@ -2128,15 +2202,154 @@ export default function PurchaseApplication() {
             <span className="input-hint">Only the last 4 digits will be visible</span>
           </div>
         </div>
-        <div className="form-group">
-          <label>Current Address</label>
-          <input
-            type="text"
-            value={borrowerData.address || ''}
-            onChange={(e) => setBorrowerData(prev => ({ ...prev, address: e.target.value }))}
-            placeholder="Start typing your address..."
-            className="fun-input"
-          />
+        {/* Residence History Section */}
+        <div className="residence-history-section">
+          {(isCollectingCoBorrower ? coBorrowerResidenceHistory : residenceHistory).map((address, index) => (
+            <div key={index} className="residence-address-card">
+              <div className="residence-header">
+                <h4>{index === 0 ? '🏠 Current Address' : `📍 Previous Address ${index}`}</h4>
+                {index > 0 && (
+                  <button
+                    type="button"
+                    className="btn-remove-address"
+                    onClick={() => removeResidenceAddress(index, isCollectingCoBorrower)}
+                  >
+                    ✕ Remove
+                  </button>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Street Address</label>
+                <input
+                  type="text"
+                  value={address.street || ''}
+                  onChange={(e) => updateResidenceAddress(index, 'street', e.target.value, isCollectingCoBorrower)}
+                  placeholder="123 Main Street, Apt 4B"
+                  className="fun-input"
+                />
+              </div>
+              <div className="form-row form-row-3">
+                <div className="form-group">
+                  <label>City</label>
+                  <input
+                    type="text"
+                    value={address.city || ''}
+                    onChange={(e) => updateResidenceAddress(index, 'city', e.target.value, isCollectingCoBorrower)}
+                    placeholder="City"
+                    className="fun-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>State</label>
+                  <select
+                    value={address.state || ''}
+                    onChange={(e) => updateResidenceAddress(index, 'state', e.target.value, isCollectingCoBorrower)}
+                    className="fun-input"
+                  >
+                    {US_STATES.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>ZIP Code</label>
+                  <input
+                    type="text"
+                    value={address.zip || ''}
+                    onChange={(e) => updateResidenceAddress(index, 'zip', e.target.value.replace(/\D/g, '').slice(0, 5), isCollectingCoBorrower)}
+                    placeholder="12345"
+                    className="fun-input"
+                    maxLength={5}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>How long at this address?</label>
+                  <div className="duration-inputs">
+                    <div className="duration-field">
+                      <input
+                        type="number"
+                        min="0"
+                        max="99"
+                        value={address.years || ''}
+                        onChange={(e) => updateResidenceAddress(index, 'years', e.target.value, isCollectingCoBorrower)}
+                        placeholder="0"
+                        className="fun-input duration-input"
+                      />
+                      <span className="duration-label">Years</span>
+                    </div>
+                    <div className="duration-field">
+                      <input
+                        type="number"
+                        min="0"
+                        max="11"
+                        value={address.months || ''}
+                        onChange={(e) => updateResidenceAddress(index, 'months', e.target.value, isCollectingCoBorrower)}
+                        placeholder="0"
+                        className="fun-input duration-input"
+                      />
+                      <span className="duration-label">Months</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Housing Status</label>
+                  <select
+                    value={address.housingStatus || ''}
+                    onChange={(e) => updateResidenceAddress(index, 'housingStatus', e.target.value, isCollectingCoBorrower)}
+                    className="fun-input"
+                  >
+                    <option value="">Select...</option>
+                    <option value="own">Own</option>
+                    <option value="rent">Rent</option>
+                    <option value="living_rent_free">Living Rent Free</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Residence History Progress */}
+          {(() => {
+            const currentHistory = isCollectingCoBorrower ? coBorrowerResidenceHistory : residenceHistory;
+            const totalMonths = calculateTotalResidenceMonths(currentHistory);
+            const needsMore = totalMonths < 24;
+            const progressPercent = Math.min((totalMonths / 24) * 100, 100);
+
+            return (
+              <div className="residence-progress">
+                <div className="residence-progress-bar">
+                  <div
+                    className="residence-progress-fill"
+                    style={{ width: `${progressPercent}%`, backgroundColor: needsMore ? '#f59e0b' : '#10b981' }}
+                  />
+                </div>
+                <div className="residence-progress-text">
+                  {needsMore ? (
+                    <>
+                      <span className="warning-text">⚠️ We need 2 years of residence history</span>
+                      <span className="progress-detail">
+                        {Math.floor(totalMonths / 12)} year{Math.floor(totalMonths / 12) !== 1 ? 's' : ''}, {totalMonths % 12} month{totalMonths % 12 !== 1 ? 's' : ''} provided
+                        — need {24 - totalMonths} more month{24 - totalMonths !== 1 ? 's' : ''}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="success-text">✓ 2-year residence history complete</span>
+                  )}
+                </div>
+                {needsMore && (
+                  <button
+                    type="button"
+                    className="btn-add-address"
+                    onClick={() => addResidenceAddress(isCollectingCoBorrower)}
+                  >
+                    + Add Previous Address
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
         {!isCollectingCoBorrower && declarations.marital_status === 'married' && (
           <div className="spouse-section">
@@ -4057,10 +4270,10 @@ export default function PurchaseApplication() {
               // Get dynamic document list based on user's declarations and asset values
               const requiredDocs = getRequiredDocuments(declarations, assetData);
 
-              // Map category to the stage that unlocks it - now showing from declarations
+              // Map category to the stage that unlocks it
               const categoryUnlockStage = {
                 identity: 'declarations',
-                income: 'declarations',
+                income: 'income',
                 assets: 'assets',
                 property: 'property'
               };

@@ -3241,10 +3241,10 @@ export default function RefinanceApplication() {
             // Get dynamic document list based on user's declarations and asset values
             const requiredDocs = getRequiredDocuments(declarations, {});
 
-            // Map category to the stage that unlocks it - now showing from declarations
+            // Map category to the stage that unlocks it
             const categoryUnlockStage = {
               identity: 'declarations',
-              income: 'declarations',
+              income: 'income',
               assets: 'income',  // Assets unlock with income stage for refinance
               property: 'property'
             };
