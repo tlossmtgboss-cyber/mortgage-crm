@@ -530,7 +530,7 @@ class PublicMortgageChatService:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            max_tokens=500,
+            max_tokens=200,
             temperature=0.7
         )
 
@@ -559,7 +559,7 @@ class PublicMortgageChatService:
 
         response = client.messages.create(
             model="claude-3-haiku-20240307",
-            max_tokens=500,
+            max_tokens=200,
             system=system_content,
             messages=api_messages
         )
@@ -567,68 +567,26 @@ class PublicMortgageChatService:
         return response.content[0].text
 
     def _fallback_response(self, user_message: str) -> str:
-        """Fallback response if AI is unavailable - follows Trust-First approach"""
+        """Fallback response if AI is unavailable - follows Trust-First approach with SHORT responses"""
         lo_name = self.lo_info.get("name", "the loan officer") if self.lo_info else "the loan officer"
 
         lower_message = user_message.lower()
 
         # Only offer scheduling if user explicitly asks for it (Trust-First)
         if any(word in lower_message for word in ["schedule", "appointment", "call me", "talk to", "speak with"]):
-            return f"I'd be happy to help you connect with {lo_name}! Please share your name, email, and phone number, and I'll help you find a convenient time."
+            return f"Happy to help you connect with {lo_name}! What's your name and best phone number?"
 
         if any(word in lower_message for word in ["rate", "rates", "interest"]):
-            return f"""Great question! Current mortgage rates are approximately:
-
-• 30-Year Fixed: 6.625% - 7.125%
-• 15-Year Fixed: 5.875% - 6.375%
-• FHA Loans: 6.375% - 6.875%
-• VA Loans: 6.250% - 6.750%
-
-Your actual rate will depend on your credit score, down payment amount, and loan type. Rates also change daily based on market conditions.
-
-What type of loan are you considering, or would you like me to explain the differences between these options?"""
+            return "Current 30-year fixed rates are around 6.75-7% for most borrowers. Your exact rate depends on credit score and down payment. What's your situation looking like?"
 
         if any(word in lower_message for word in ["preapproval", "pre-approval", "qualify", "approved"]):
-            return """Pre-approval is a smart first step! Here's what you should know:
-
-**What pre-approval does:**
-• Shows sellers you're a serious buyer
-• Tells you your approximate budget
-• Locks in a rate for 60-90 days typically
-
-**What you'll need:**
-• Recent pay stubs (last 30 days)
-• W-2s or tax returns (last 2 years)
-• Bank statements (last 2-3 months)
-• ID and Social Security number
-
-Most pre-approvals take 24-48 hours once you have your documents ready. Are you buying soon, or just starting to explore your options?"""
+            return "Pre-approval is a great first step! It takes about 24-48 hours and shows sellers you're serious. Are you actively house hunting, or just exploring?"
 
         if any(word in lower_message for word in ["down payment", "down", "how much"]):
-            return """Down payment requirements vary by loan type:
-
-• **Conventional**: 3-20% (avoid PMI at 20%)
-• **FHA**: 3.5% minimum
-• **VA**: 0% for eligible veterans
-• **USDA**: 0% for rural areas
-
-A larger down payment typically means:
-✓ Lower monthly payments
-✓ Better interest rates
-✓ More equity from day one
-
-What price range are you looking at? That'll help me give you more specific numbers."""
+            return "Down payments range from 0% (VA/USDA) to 3.5% (FHA) to 3-20% (conventional). What price range are you looking at?"
 
         # Default trust-first response - helpful, no scheduling push
-        return """Thanks for reaching out! I'm here to help with any mortgage questions you have.
-
-I can help you understand:
-• Current interest rates and loan options
-• Down payment requirements
-• The pre-approval process
-• How much home you might qualify for
-
-What's on your mind?"""
+        return "Hey! I can help with rates, loan options, or pre-approval questions. What's on your mind?"
 
     def _detect_scheduling_intent(self, user_message: str, ai_response: str) -> bool:
         """Detect if user wants to schedule"""
@@ -685,118 +643,68 @@ About {lo_name}:
 CURRENT MARKET RATES (share when asked about rates):
 {rate_info}
 
+## CRITICAL: KEEP RESPONSES SHORT AND CONVERSATIONAL
+
+⚠️ RESPONSE LENGTH RULES - FOLLOW STRICTLY:
+- Keep responses to 2-4 SHORT sentences maximum
+- Answer ONE question at a time, then ask a follow-up
+- NO walls of text or long explanations
+- NO numbered lists with 5+ items
+- Use bullet points sparingly (max 3-4 bullets if needed)
+- Write like you're texting a friend, not writing an essay
+- If they ask a complex question, give a brief answer and offer to explain more
+
+BAD EXAMPLE (too long):
+"Rates depend on many factors including your credit score, down payment amount, loan type, property type, occupancy status, debt-to-income ratio, and current market conditions. Here are the current rate ranges: [lists 10 different scenarios]..."
+
+GOOD EXAMPLE (conversational):
+"Current 30-year fixed rates are around 6.75-7% for most borrowers. Your exact rate depends mainly on your credit score and down payment. What's your situation looking like?"
+
 """
 
         if phase == 1:
-            return base_context + f"""## PHASE 1: REASSURE & ORIENT (Current Phase)
+            return base_context + f"""## PHASE 1: REASSURE & ORIENT
 
-YOUR GOAL: Create emotional safety and be genuinely helpful. The person may feel overwhelmed about mortgages.
+Be friendly and helpful. Answer briefly, then ask ONE follow-up question.
 
-WHAT TO DO:
-1. Answer their question thoroughly and helpfully
-2. Use simple, jargon-free language
-3. Validate their concerns - mortgages ARE complex
-4. Be warm, patient, and approachable
-5. End with ONE follow-up question to learn more about their situation
+DO: Be warm, use simple language, keep it short
+DON'T: Offer calls/appointments, ask for contact info, be salesy
 
-TONE: Warm, welcoming, patient, knowledgeable but not condescending
-
-⚠️ CRITICAL - DO NOT:
-- Offer to schedule a call or appointment
-- Ask for their phone number or email
-- Mention connecting them with {lo_name}
-- Say "when you're ready to talk" or anything about calls
-- Be salesy or transactional
-
-You must EARN trust first by being helpful. Right now, just answer their question well."""
+Just be helpful - earn their trust first."""
 
         elif phase == 2:
-            return base_context + f"""## PHASE 2: EDUCATE WITH TRADEOFFS (Current Phase)
+            return base_context + f"""## PHASE 2: EDUCATE
 
-YOUR GOAL: Demonstrate expertise through education, not selling. Show you understand nuances.
+Share expertise briefly. Give honest tradeoffs when comparing options.
 
-WHAT TO DO:
-1. Explain concepts clearly with the "why" behind things
-2. Present options with HONEST tradeoffs (pros AND cons)
-3. Reference current market conditions when relevant
-4. Use examples relevant to what they've shared
-5. Ask 1-2 natural questions to better understand their needs
-6. Continue building trust through valuable education
+DO: Explain the "why", be balanced, ask follow-up questions
+DON'T: Offer calls/appointments, ask for contact info, push solutions
 
-TONE: Expert but accessible, balanced and honest, educational not promotional
-
-⚠️ CRITICAL - DO NOT:
-- Offer to schedule a call or appointment
-- Ask for their phone number or email
-- Mention connecting them with {lo_name}
-- Push one solution over another prematurely
-- Make promises about rates or approval
-
-You're still building credibility. Focus on being helpful, not pitching calls."""
+Keep building credibility through helpful, SHORT answers."""
 
         elif phase == 3:
-            return base_context + f"""## PHASE 3: PERSONALIZE VIA MICRO-COMMITMENTS (Current Phase)
+            return base_context + f"""## PHASE 3: PERSONALIZE
 
-YOUR GOAL: Gather information through natural conversation to provide personalized guidance.
+Ask ONE question at a time to understand their situation better.
 
-WHAT TO DO:
-1. Ask ONE relevant question at a time
-2. Explain WHY you're asking (shows you care)
-3. Provide value with each response
-4. Make info sharing feel like a conversation, not a form
-5. Respond with personalized insights based on their answers
+Good questions: timeline, price range, credit situation, down payment
+DO: Be conversational, explain why you're asking
+DON'T: Offer calls yet, ask multiple questions at once
 
-GOOD QUESTIONS TO ASK (one at a time):
-- "Are you looking to move within a specific timeframe?"
-- "What price range are you considering?"
-- "Is your credit in good shape, or is that a concern?"
-- "Do you have a sense of your down payment situation?"
-
-TONE: Consultative, naturally curious, patient
-
-⚠️ CRITICAL - DO NOT (not yet!):
-- Offer to schedule a call or appointment
-- Ask for their phone number yet
-- Push for exact numbers if they're not ready
-- Ask multiple questions at once
-
-You're gathering info to provide better guidance. Keep demonstrating value."""
+Keep responses SHORT - you're having a conversation, not giving a lecture."""
 
         else:  # Phase 4
-            return base_context + f"""## PHASE 4: EARNED NEXT STEP (Current Phase)
+            return base_context + f"""## PHASE 4: OFFER NEXT STEP
 
-YOU'VE BUILT TRUST through {turn_count} exchanges. Now you can suggest a next step.
+You've built trust. Now you CAN offer to connect them with {lo_name}.
 
-YOUR GOAL: Present ONE clear, helpful next step based on the conversation.
+{f"Available times: {slots_text}" if slots_text else ""}
 
-WHAT TO DO:
-1. Briefly summarize what you've learned about their situation
-2. Recommend ONE specific next step (not multiple options)
-3. Make it easy to say yes
-4. If they decline, gracefully offer an alternative or continue being helpful
+Keep it simple: "Want me to have {lo_name} give you a call? Just need your name and number."
 
-AVAILABLE TIMES for {lo_name}:
-{slots_text if slots_text else "I can help coordinate a time that works."}
+If they say no: "No worries! I'm here if you have more questions."
 
-NEXT STEP OPTIONS (pick ONE based on their situation):
-- High urgency: "Would you like me to have {lo_name} call you? I can set that up right now."
-- Medium urgency: "Would you like to schedule a quick 15-minute call with {lo_name} to go over your numbers?"
-- Lower urgency: "I can have {lo_name} send you a personalized rate quote based on what we discussed."
-
-TO SCHEDULE, collect:
-- Full name
-- Phone number
-- Email address
-- Preferred time
-
-TONE: Confident but not pushy, respectful of their decision
-
-If they decline, say: "No problem at all! I'm here if you have more questions."
-
-Do NOT:
-- Offer multiple CTAs - pick ONE
-- Be pushy if they decline
-- Lose the helpful tone you've built"""
+Still keep responses SHORT - don't over-explain."""
 
     def _get_current_rate_info(self) -> str:
         """Get current market rate information for the AI context"""
