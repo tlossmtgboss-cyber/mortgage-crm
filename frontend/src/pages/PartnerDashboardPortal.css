@@ -1600,3 +1600,567 @@
     margin-top: 12px;
   }
 }
+
+/* ============================================================================
+   CLICKABLE ACTIVITY NAMES
+   ============================================================================ */
+.activity-name.clickable {
+  cursor: pointer;
+  color: #0ea5e9;
+  transition: color 0.2s;
+}
+
+.activity-name.clickable:hover {
+  color: #0284c7;
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   REFERRAL MODAL
+   ============================================================================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content.referral-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #1e293b;
+}
+
+.referral-modal form {
+  padding: 24px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.form-row .form-group {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-error {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 8px;
+}
+
+.modal-actions .btn-secondary {
+  padding: 10px 20px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-actions .btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.modal-actions .btn-primary {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-actions .btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+.modal-actions .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-success {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.modal-success .success-icon {
+  width: 64px;
+  height: 64px;
+  background: #10b981;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin: 0 auto 20px;
+}
+
+.modal-success h2 {
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.modal-success p {
+  color: #64748b;
+}
+
+/* ============================================================================
+   MICROPAGE TAB
+   ============================================================================ */
+.micropage-tab {
+  max-width: 900px;
+}
+
+.micropage-status-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.micropage-status-banner.live {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border: 1px solid #10b981;
+}
+
+.micropage-status-banner.draft {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-dot.live {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.status-dot.draft {
+  background: #94a3b8;
+}
+
+.status-text {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.view-page-link {
+  color: #10b981;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.view-page-link:hover {
+  text-decoration: underline;
+}
+
+.micropage-url-section {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.micropage-url-section > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.url-preview {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.url-base {
+  padding: 12px 0 12px 14px;
+  color: #64748b;
+  background: #f1f5f9;
+  border-right: 1px solid #e2e8f0;
+  font-size: 14px;
+}
+
+.url-preview input {
+  flex: 1;
+  padding: 12px 14px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  background: transparent;
+}
+
+.url-preview input:focus {
+  outline: none;
+}
+
+.url-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
+
+.micropage-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.settings-section {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.settings-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  color: #1e293b;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.toggle-group {
+  margin-bottom: 16px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #0ea5e9;
+}
+
+.toggle-text {
+  font-size: 14px;
+  color: #475569;
+}
+
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-picker-row input[type="color"] {
+  width: 40px;
+  height: 40px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.color-value {
+  font-size: 14px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.micropage-preview-section {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.micropage-preview-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.preview-card {
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.preview-header {
+  margin-bottom: 16px;
+}
+
+.preview-avatar {
+  width: 72px;
+  height: 72px;
+  background: var(--preview-color, #218D8D);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 auto 16px;
+}
+
+.preview-header h4 {
+  font-size: 20px;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.preview-name {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+.preview-bio {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.preview-cta {
+  display: inline-block;
+  padding: 12px 32px;
+  background: var(--preview-color, #218D8D);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.micropage-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+}
+
+.micropage-actions .btn-secondary,
+.micropage-actions .btn-primary,
+.micropage-actions .btn-danger {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.micropage-actions .btn-secondary {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.micropage-actions .btn-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.micropage-actions .btn-primary {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  border: none;
+  color: white;
+}
+
+.micropage-actions .btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+.micropage-actions .btn-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.micropage-actions .btn-danger:hover {
+  background: #fee2e2;
+}
+
+.micropage-share-section {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.micropage-share-section h3 {
+  margin: 0 0 8px 0;
+  color: #0369a1;
+  font-size: 16px;
+}
+
+.micropage-share-section p {
+  color: #0284c7;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.share-url-box {
+  display: flex;
+  gap: 8px;
+}
+
+.share-url-box input {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  color: #1e293b;
+}
+
+.share-url-box .copy-btn {
+  padding: 12px 20px;
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.share-url-box .copy-btn:hover {
+  background: #0284c7;
+}
+
+/* Micropage responsive */
+@media (max-width: 768px) {
+  .micropage-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .micropage-actions {
+    flex-direction: column;
+  }
+
+  .micropage-actions button {
+    width: 100%;
+  }
+}

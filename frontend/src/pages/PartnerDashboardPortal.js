@@ -51,6 +51,7 @@ const TABS = [
   { id: 'marketing', label: 'Marketing' },
   { id: 'assistant', label: 'AI Assistant' },
   { id: 'clients', label: 'Clients', hasSubmenu: true },
+  { id: 'micropage', label: 'My Micropage' },
 ];
 
 // Client submenu categories
@@ -395,7 +396,15 @@ export default function PartnerDashboardPortal() {
       {/* Main Content */}
       <main className="portal-main-content">
         {activeTab === 'dashboard' && (
-          <DashboardTab partner={partner} stats={stats} categories={categories} activities={activities} />
+          <DashboardTab
+            partner={partner}
+            stats={stats}
+            categories={categories}
+            activities={activities}
+            partnerId={id}
+            navigate={navigate}
+            onTabChange={setActiveTab}
+          />
         )}
         {activeTab === 'programs' && <ProgramsTab />}
         {activeTab === 'marketing' && <MarketingTab partner={partner} />}
@@ -409,6 +418,9 @@ export default function PartnerDashboardPortal() {
             setActiveCategory={setActiveClientCategory}
           />
         )}
+        {activeTab === 'micropage' && (
+          <MicropageTab partner={partner} partnerId={id} />
+        )}
       </main>
     </div>
   );
@@ -417,7 +429,9 @@ export default function PartnerDashboardPortal() {
 // ============================================================================
 // DASHBOARD TAB
 // ============================================================================
-function DashboardTab({ partner, stats, categories, activities = [] }) {
+function DashboardTab({ partner, stats, categories, activities = [], partnerId, navigate, onTabChange }) {
+  const [showReferralModal, setShowReferralModal] = useState(false);
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -425,6 +439,34 @@ function DashboardTab({ partner, stats, categories, activities = [] }) {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const handleQuickAction = (action) => {
+    switch (action) {
+      case 'referral':
+        setShowReferralModal(true);
+        break;
+      case 'preapproval':
+        onTabChange('assistant');
+        break;
+      case 'marketing':
+        onTabChange('marketing');
+        break;
+      case 'contact':
+        // Open email to LO
+        if (partner.assigned_lo_email) {
+          window.location.href = `mailto:${partner.assigned_lo_email}?subject=Partner Portal Message from ${partner.name}`;
+        } else {
+          alert('Loan officer contact information not available. Please contact support.');
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleViewClient = (clientId) => {
+    navigate(`/partner-portal/${partnerId}/client/${clientId}`);
   };
 
   return (
@@ -482,21 +524,25 @@ function DashboardTab({ partner, stats, categories, activities = [] }) {
             title="Submit a Referral"
             description="Send us a new client referral"
             color="#3b82f6"
+            onClick={() => handleQuickAction('referral')}
           />
           <QuickActionCard
             title="Request Pre-Approval"
             description="Generate a pre-approval letter"
             color="#10b981"
+            onClick={() => handleQuickAction('preapproval')}
           />
           <QuickActionCard
             title="Order Marketing"
             description="Request co-branded materials"
             color="#f59e0b"
+            onClick={() => handleQuickAction('marketing')}
           />
           <QuickActionCard
             title="Contact LO"
             description="Message your loan officer"
             color="#8b5cf6"
+            onClick={() => handleQuickAction('contact')}
           />
         </div>
       </section>
@@ -508,15 +554,29 @@ function DashboardTab({ partner, stats, categories, activities = [] }) {
           {/* Show real activities if available, otherwise fall back to lead-based activities */}
           {activities.length > 0 ? (
             activities.slice(0, 8).map((activity, idx) => (
-              <EnhancedActivityItem key={activity.id || idx} activity={activity} />
+              <EnhancedActivityItem
+                key={activity.id || idx}
+                activity={activity}
+                onClickClient={() => handleViewClient(activity.lead_id)}
+              />
             ))
           ) : (
             <>
               {categories.leads.slice(0, 3).map((lead) => (
-                <ActivityItem key={lead.id} lead={lead} type="new_lead" />
+                <ActivityItem
+                  key={lead.id}
+                  lead={lead}
+                  type="new_lead"
+                  onClick={() => handleViewClient(lead.id)}
+                />
               ))}
               {categories.active.slice(0, 2).map((client) => (
-                <ActivityItem key={client.id} lead={client} type="progress" />
+                <ActivityItem
+                  key={client.id}
+                  lead={client}
+                  type="progress"
+                  onClick={() => handleViewClient(client.id)}
+                />
               ))}
             </>
           )}
@@ -527,13 +587,22 @@ function DashboardTab({ partner, stats, categories, activities = [] }) {
           )}
         </div>
       </section>
+
+      {/* Submit Referral Modal */}
+      {showReferralModal && (
+        <SubmitReferralModal
+          partner={partner}
+          partnerId={partnerId}
+          onClose={() => setShowReferralModal(false)}
+        />
+      )}
     </div>
   );
 }
 
-function QuickActionCard({ title, description, color }) {
+function QuickActionCard({ title, description, color, onClick }) {
   return (
-    <button className="quick-action-card" style={{ '--accent-color': color }}>
+    <button className="quick-action-card" style={{ '--accent-color': color }} onClick={onClick}>
       <h3>{title}</h3>
       <p>{description}</p>
     </button>
@@ -541,7 +610,7 @@ function QuickActionCard({ title, description, color }) {
 }
 
 // Enhanced activity item that shows real CRM activities
-function EnhancedActivityItem({ activity }) {
+function EnhancedActivityItem({ activity, onClickClient }) {
   const config = ACTIVITY_TYPE_CONFIG[activity.type?.toLowerCase()] || { label: activity.type || 'Update', color: '#6b7280' };
 
   return (
@@ -560,14 +629,16 @@ function EnhancedActivityItem({ activity }) {
           </span>
           <span className="activity-time">{formatRelativeTime(activity.created_at)}</span>
         </div>
-        <span className="activity-name">{activity.lead_name}</span>
+        <span className="activity-name clickable" onClick={onClickClient}>
+          {activity.lead_name}
+        </span>
         <span className="activity-content">{activity.content}</span>
       </div>
     </div>
   );
 }
 
-function ActivityItem({ lead, type }) {
+function ActivityItem({ lead, type, onClick }) {
   const typeConfig = {
     new_lead: { label: 'New Lead' },
     progress: { label: 'In Progress' },
@@ -579,7 +650,7 @@ function ActivityItem({ lead, type }) {
     <div className="activity-item">
       <div className="activity-type-badge">{config.label}</div>
       <div className="activity-details">
-        <span className="activity-name">{lead.name}</span>
+        <span className="activity-name clickable" onClick={onClick}>{lead.name}</span>
         <span className="activity-status">{lead.stage}</span>
       </div>
       <span className="activity-time">
@@ -1053,5 +1124,444 @@ function TierBadge({ tier }) {
     <span className={`tier-badge-v2 tier-${tierClass}`}>
       {tier || 'Bronze'}
     </span>
+  );
+}
+
+// ============================================================================
+// SUBMIT REFERRAL MODAL
+// ============================================================================
+function SubmitReferralModal({ partner, partnerId, onClose }) {
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    loanPurpose: 'purchase',
+    propertyAddress: '',
+    estimatedAmount: '',
+    notes: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await partnersAPI.submitReferral(partnerId, {
+        name: `${formData.firstName} ${formData.lastName}`.trim(),
+        email: formData.email,
+        phone: formData.phone,
+        loan_purpose: formData.loanPurpose,
+        property_address: formData.propertyAddress,
+        loan_amount: formData.estimatedAmount ? parseFloat(formData.estimatedAmount) : null,
+        notes: formData.notes,
+        source: 'Partner Portal',
+      });
+
+      if (response) {
+        setSubmitted(true);
+        setTimeout(() => {
+          onClose();
+          window.location.reload(); // Refresh to show new referral
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Error submitting referral:', err);
+      setError(err.message || 'Failed to submit referral. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content referral-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-success">
+            <div className="success-icon">✓</div>
+            <h2>Referral Submitted!</h2>
+            <p>Thank you for your referral. We'll reach out to your client within 24 hours.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content referral-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Submit a Referral</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {error && <div className="form-error">{error}</div>}
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>First Name *</label>
+              <input
+                type="text"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                required
+                placeholder="John"
+              />
+            </div>
+            <div className="form-group">
+              <label>Last Name *</label>
+              <input
+                type="text"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                required
+                placeholder="Smith"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Email *</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                placeholder="john@email.com"
+              />
+            </div>
+            <div className="form-group">
+              <label>Phone *</label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                placeholder="(555) 123-4567"
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Loan Purpose</label>
+              <select name="loanPurpose" value={formData.loanPurpose} onChange={handleChange}>
+                <option value="purchase">Purchase</option>
+                <option value="refinance">Refinance</option>
+                <option value="cash_out">Cash-Out Refinance</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Estimated Loan Amount</label>
+              <input
+                type="number"
+                name="estimatedAmount"
+                value={formData.estimatedAmount}
+                onChange={handleChange}
+                placeholder="450000"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Property Address (if known)</label>
+            <input
+              type="text"
+              name="propertyAddress"
+              value={formData.propertyAddress}
+              onChange={handleChange}
+              placeholder="123 Main St, City, State ZIP"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Notes</label>
+            <textarea
+              name="notes"
+              value={formData.notes}
+              onChange={handleChange}
+              rows={3}
+              placeholder="Any additional information about the client..."
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Submit Referral'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MICROPAGE TAB
+// ============================================================================
+function MicropageTab({ partner, partnerId }) {
+  const [settings, setSettings] = useState({
+    isEnabled: partner.micropage_enabled || false,
+    slug: partner.micropage_slug || partner.name?.toLowerCase().replace(/\s+/g, '-') || '',
+    headline: partner.micropage_headline || `Work with ${partner.name}`,
+    bio: partner.micropage_bio || '',
+    showPhoto: partner.micropage_show_photo !== false,
+    showTestimonials: partner.micropage_show_testimonials !== false,
+    primaryColor: partner.micropage_primary_color || '#218D8D',
+    phoneNumber: partner.phone || '',
+    email: partner.email || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [deployed, setDeployed] = useState(partner.micropage_enabled || false);
+
+  const micropageUrl = `https://perenniaai.com/partner/${settings.slug}`;
+
+  const handleChange = (field, value) => {
+    setSettings((prev) => ({ ...prev, [field]: value }));
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Save settings via API
+      await partnersAPI.updateMicropage(partnerId, settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error('Error saving micropage settings:', err);
+      alert('Failed to save settings. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeploy = async () => {
+    setDeploying(true);
+    try {
+      // Deploy/Enable micropage
+      await partnersAPI.updateMicropage(partnerId, { ...settings, isEnabled: true });
+      setSettings((prev) => ({ ...prev, isEnabled: true }));
+      setDeployed(true);
+    } catch (err) {
+      console.error('Error deploying micropage:', err);
+      alert('Failed to deploy micropage. Please try again.');
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const handleDisable = async () => {
+    if (!window.confirm('Are you sure you want to disable your micropage?')) return;
+
+    try {
+      await partnersAPI.updateMicropage(partnerId, { ...settings, isEnabled: false });
+      setSettings((prev) => ({ ...prev, isEnabled: false }));
+      setDeployed(false);
+    } catch (err) {
+      console.error('Error disabling micropage:', err);
+      alert('Failed to disable micropage. Please try again.');
+    }
+  };
+
+  return (
+    <div className="tab-content micropage-tab">
+      <div className="tab-header">
+        <h1>My Micropage</h1>
+        <p>Set up and manage your personal referral landing page</p>
+      </div>
+
+      {/* Status Banner */}
+      <div className={`micropage-status-banner ${settings.isEnabled ? 'live' : 'draft'}`}>
+        <div className="status-info">
+          <span className={`status-dot ${settings.isEnabled ? 'live' : 'draft'}`} />
+          <span className="status-text">
+            {settings.isEnabled ? 'Your micropage is live!' : 'Your micropage is not yet published'}
+          </span>
+        </div>
+        {settings.isEnabled && (
+          <a href={micropageUrl} target="_blank" rel="noopener noreferrer" className="view-page-link">
+            View Page →
+          </a>
+        )}
+      </div>
+
+      {/* URL Preview */}
+      <div className="micropage-url-section">
+        <label>Your Micropage URL</label>
+        <div className="url-preview">
+          <span className="url-base">perenniaai.com/partner/</span>
+          <input
+            type="text"
+            value={settings.slug}
+            onChange={(e) => handleChange('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+            placeholder="your-name"
+          />
+        </div>
+        <p className="url-hint">Use lowercase letters, numbers, and hyphens only</p>
+      </div>
+
+      {/* Settings Form */}
+      <div className="micropage-settings-grid">
+        <div className="settings-section">
+          <h3>Page Content</h3>
+
+          <div className="form-group">
+            <label>Headline</label>
+            <input
+              type="text"
+              value={settings.headline}
+              onChange={(e) => handleChange('headline', e.target.value)}
+              placeholder="Your catchy headline..."
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Bio / About</label>
+            <textarea
+              value={settings.bio}
+              onChange={(e) => handleChange('bio', e.target.value)}
+              rows={4}
+              placeholder="Tell visitors about yourself and why they should work with you..."
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Contact Phone</label>
+            <input
+              type="tel"
+              value={settings.phoneNumber}
+              onChange={(e) => handleChange('phoneNumber', e.target.value)}
+              placeholder="(555) 123-4567"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Contact Email</label>
+            <input
+              type="email"
+              value={settings.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              placeholder="you@email.com"
+            />
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h3>Display Options</h3>
+
+          <div className="toggle-group">
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={settings.showPhoto}
+                onChange={(e) => handleChange('showPhoto', e.target.checked)}
+              />
+              <span className="toggle-text">Show Profile Photo</span>
+            </label>
+          </div>
+
+          <div className="toggle-group">
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={settings.showTestimonials}
+                onChange={(e) => handleChange('showTestimonials', e.target.checked)}
+              />
+              <span className="toggle-text">Show Client Testimonials</span>
+            </label>
+          </div>
+
+          <div className="form-group">
+            <label>Primary Color</label>
+            <div className="color-picker-row">
+              <input
+                type="color"
+                value={settings.primaryColor}
+                onChange={(e) => handleChange('primaryColor', e.target.value)}
+              />
+              <span className="color-value">{settings.primaryColor}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Preview Section */}
+      <div className="micropage-preview-section">
+        <h3>Preview</h3>
+        <div className="preview-card" style={{ '--preview-color': settings.primaryColor }}>
+          <div className="preview-header">
+            {settings.showPhoto && (
+              <div className="preview-avatar">{partner.name?.charAt(0)?.toUpperCase() || 'P'}</div>
+            )}
+            <h4>{settings.headline || `Work with ${partner.name}`}</h4>
+            <p className="preview-name">{partner.name}</p>
+          </div>
+          <p className="preview-bio">
+            {settings.bio || 'Your bio will appear here...'}
+          </p>
+          <div className="preview-cta" style={{ backgroundColor: settings.primaryColor }}>
+            Get Started
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="micropage-actions">
+        <button className="btn-secondary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Changes'}
+        </button>
+
+        {settings.isEnabled ? (
+          <button className="btn-danger" onClick={handleDisable}>
+            Disable Micropage
+          </button>
+        ) : (
+          <button className="btn-primary" onClick={handleDeploy} disabled={deploying}>
+            {deploying ? 'Deploying...' : 'Deploy Micropage'}
+          </button>
+        )}
+      </div>
+
+      {/* Share Section */}
+      {settings.isEnabled && (
+        <div className="micropage-share-section">
+          <h3>Share Your Page</h3>
+          <p>Copy this link and share it with potential clients:</p>
+          <div className="share-url-box">
+            <input type="text" readOnly value={micropageUrl} />
+            <button
+              className="copy-btn"
+              onClick={() => {
+                navigator.clipboard.writeText(micropageUrl);
+                alert('Link copied to clipboard!');
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
