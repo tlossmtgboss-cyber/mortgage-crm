@@ -27,6 +27,13 @@ function SmartDocs() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [docTypeFilter, setDocTypeFilter] = useState('all');
+  const [duplicateMap, setDuplicateMap] = useState({});  // Map of email -> list of loan IDs
+  const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
+
+  // Queue view state
+  const [queueData, setQueueData] = useState({ queue: [], total: 0, summary: {} });
+  const [queueSummary, setQueueSummary] = useState(null);
+  const [slaFilter, setSlaFilter] = useState('all');
 
   // Fetch all loans and categorize them
   const fetchAllLoans = useCallback(async () => {
@@ -113,6 +120,38 @@ function SmartDocs() {
         pending_review: { applicants: uploaded.length, documents: 0 },
       });
 
+      // Detect duplicates based on borrower_email
+      const emailGroups = {};
+      [...owed, ...uploaded, ...completed].forEach(loan => {
+        if (loan.borrower_email) {
+          const email = loan.borrower_email.toLowerCase();
+          if (!emailGroups[email]) {
+            emailGroups[email] = [];
+          }
+          emailGroups[email].push({
+            loan_id: loan.loan_id,
+            loan_number: loan.loan_number,
+            borrower_name: loan.borrower_name,
+            stage: loan.stage,
+          });
+        }
+      });
+
+      // Only keep entries with duplicates (more than 1 loan per email)
+      const duplicates = {};
+      Object.entries(emailGroups).forEach(([email, loanList]) => {
+        if (loanList.length > 1) {
+          loanList.forEach(loan => {
+            duplicates[loan.loan_id] = {
+              email,
+              count: loanList.length,
+              otherLoans: loanList.filter(l => l.loan_id !== loan.loan_id),
+            };
+          });
+        }
+      });
+      setDuplicateMap(duplicates);
+
       // Don't show error even if no loans - just show empty state
     } catch (err) {
       console.error('Error fetching loans:', err);
@@ -193,16 +232,68 @@ function SmartDocs() {
     }
   }, [pagination]);
 
-  // Initial load - only use fetchAllLoans
+  // Fetch queue data
+  const fetchQueue = useCallback(async () => {
+    try {
+      const slaStatus = slaFilter !== 'all' ? slaFilter : null;
+      const data = await smartDocsAPI.getQueue(
+        pagination.page,
+        pagination.limit,
+        slaStatus,
+        searchQuery || null
+      );
+      setQueueData(data);
+    } catch (err) {
+      console.error('Error fetching queue:', err);
+    }
+  }, [pagination, slaFilter, searchQuery]);
+
+  // Fetch queue summary
+  const fetchQueueSummary = useCallback(async () => {
+    try {
+      const data = await smartDocsAPI.getQueueSummary();
+      setQueueSummary(data);
+    } catch (err) {
+      console.error('Error fetching queue summary:', err);
+    }
+  }, []);
+
+  // Handle sending reminder
+  const handleSendReminder = async (loanId) => {
+    try {
+      const result = await smartDocsAPI.sendReminder(loanId);
+      if (result.sent) {
+        alert(`Reminder sent for ${result.documents_reminded} documents`);
+        fetchQueue(); // Refresh queue
+      } else {
+        alert(result.message || 'Could not send reminder');
+      }
+    } catch (err) {
+      console.error('Error sending reminder:', err);
+      alert('Failed to send reminder');
+    }
+  };
+
+  // Initial load - fetch all data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       setError(null);
-      await fetchAllLoans();
+      await Promise.all([
+        fetchAllLoans(),
+        fetchQueueSummary(),
+      ]);
       setLoading(false);
     };
     loadData();
-  }, [fetchAllLoans]);
+  }, [fetchAllLoans, fetchQueueSummary]);
+
+  // Fetch queue when tab is active
+  useEffect(() => {
+    if (activeTab === 'queue') {
+      fetchQueue();
+    }
+  }, [activeTab, fetchQueue]);
 
   // Handle tab change
   const handleTabChange = (tab) => {
@@ -286,6 +377,48 @@ function SmartDocs() {
     }
   };
 
+  // Check if a loan has duplicates
+  const hasDuplicate = (loanId) => {
+    return duplicateMap[loanId] !== undefined;
+  };
+
+  // Get duplicate info for a loan
+  const getDuplicateInfo = (loanId) => {
+    return duplicateMap[loanId];
+  };
+
+  // Get total duplicate count
+  const getTotalDuplicates = () => {
+    const uniqueEmails = new Set(Object.values(duplicateMap).map(d => d.email));
+    return uniqueEmails.size;
+  };
+
+  // Create tasks for all duplicates
+  const handleCreateDuplicateTasks = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/duplicates/create-tasks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDuplicateTasksCreated(true);
+        alert(`Created ${data.tasks_created} tasks to review duplicate records.`);
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to create tasks'}`);
+      }
+    } catch (err) {
+      console.error('Error creating duplicate tasks:', err);
+      alert('Failed to create duplicate tasks');
+    }
+  };
+
   const filteredData = getFilteredData();
 
   return (
@@ -297,6 +430,30 @@ function SmartDocs() {
           <p className="subtitle">Track and manage document collection across all clients</p>
         </div>
       </div>
+
+      {/* Duplicate Warning Banner */}
+      {getTotalDuplicates() > 0 && (
+        <div className="duplicate-warning-banner">
+          <div className="duplicate-warning-content">
+            <span className="duplicate-icon">⚠️</span>
+            <span className="duplicate-text">
+              <strong>{getTotalDuplicates()} potential duplicate{getTotalDuplicates() > 1 ? 's' : ''} detected</strong>
+              {' '}- Records with the same email address found. Review and merge to avoid confusion.
+            </span>
+          </div>
+          {!duplicateTasksCreated && (
+            <button
+              className="create-tasks-btn"
+              onClick={handleCreateDuplicateTasks}
+            >
+              Create Merge Tasks
+            </button>
+          )}
+          {duplicateTasksCreated && (
+            <span className="tasks-created-badge">✓ Tasks Created</span>
+          )}
+        </div>
+      )}
 
       {/* Filters Bar */}
       <div className="filters-bar">
@@ -418,6 +575,15 @@ function SmartDocs() {
             <span className="tab-badge completed">{completedClients.total}</span>
           )}
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
+          onClick={() => handleTabChange('queue')}
+        >
+          Queue View
+          {queueSummary?.by_sla_status?.breached > 0 && (
+            <span className="tab-badge breached">{queueSummary.by_sla_status.breached}</span>
+          )}
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -465,11 +631,21 @@ function SmartDocs() {
                     {filteredData.map((applicant) => (
                       <tr
                         key={applicant.loan_id}
-                        className={applicant.overdue_count > 0 ? 'has-overdue' : ''}
+                        className={`${applicant.overdue_count > 0 ? 'has-overdue' : ''} ${hasDuplicate(applicant.loan_id) ? 'has-duplicate' : ''}`}
                         onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
                       >
                         <td>
-                          <span className="borrower-name">{applicant.borrower_name}</span>
+                          <div className="borrower-info">
+                            <span className="borrower-name">{applicant.borrower_name}</span>
+                            {hasDuplicate(applicant.loan_id) && (
+                              <span
+                                className="duplicate-badge"
+                                title={`Duplicate: Same email as ${getDuplicateInfo(applicant.loan_id).otherLoans.map(l => l.loan_number || l.borrower_name).join(', ')}`}
+                              >
+                                DUPLICATE
+                              </span>
+                            )}
+                          </div>
                           {applicant.borrower_email && (
                             <span className="borrower-email">{applicant.borrower_email}</span>
                           )}
@@ -545,7 +721,7 @@ function SmartDocs() {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'completed' ? (
           /* Completed Tab */
           <div className="applicants-list">
             {filteredData.length === 0 ? (
@@ -597,13 +773,131 @@ function SmartDocs() {
               </div>
             )}
           </div>
+        ) : (
+          /* Queue View Tab */
+          <div className="queue-view">
+            {/* SLA Filter */}
+            <div className="queue-filters">
+              <select
+                className="filter-select"
+                value={slaFilter}
+                onChange={(e) => setSlaFilter(e.target.value)}
+              >
+                <option value="all">All SLA Status</option>
+                <option value="BREACHED">Breached</option>
+                <option value="AT_RISK">At Risk</option>
+                <option value="GOOD">Good</option>
+              </select>
+            </div>
+
+            {/* Queue Summary Cards */}
+            {queueSummary && (
+              <div className="queue-summary-cards">
+                <div className="queue-summary-card breached">
+                  <div className="card-value">{queueSummary.by_sla_status?.breached || 0}</div>
+                  <div className="card-label">SLA Breached</div>
+                </div>
+                <div className="queue-summary-card at-risk">
+                  <div className="card-value">{queueSummary.by_sla_status?.at_risk || 0}</div>
+                  <div className="card-label">At Risk</div>
+                </div>
+                <div className="queue-summary-card good">
+                  <div className="card-value">{queueSummary.by_sla_status?.good || 0}</div>
+                  <div className="card-label">On Track</div>
+                </div>
+              </div>
+            )}
+
+            {/* Queue Table */}
+            {queueData.queue.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-icon">✓</span>
+                <h3>No clients in queue</h3>
+                <p>All document requests have been fulfilled</p>
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="smart-docs-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Loan #</th>
+                      <th>Completion</th>
+                      <th>SLA Status</th>
+                      <th>Last Activity</th>
+                      <th>Reminders</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queueData.queue.map((item) => (
+                      <tr
+                        key={item.loan_id}
+                        className={`queue-row ${item.has_sla_breach ? 'has-breach' : ''}`}
+                        onClick={() => navigate(`/loans/${item.loan_id}?tab=documents`)}
+                      >
+                        <td>
+                          <div className="borrower-info">
+                            <span className="borrower-name">{item.borrower_name}</span>
+                            {item.borrower_email && (
+                              <span className="borrower-email">{item.borrower_email}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="loan-number">{item.loan_number || `#${item.loan_id}`}</td>
+                        <td>
+                          <div className="completion-cell">
+                            <div className="progress-bar">
+                              <div
+                                className="progress-fill"
+                                style={{ width: `${item.completion_percentage}%` }}
+                              />
+                            </div>
+                            <span className="completion-text">
+                              {item.received_valid}/{item.total_requested} ({item.completion_percentage}%)
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`sla-badge sla-${item.sla_status.toLowerCase()}`}>
+                            {item.sla_status}
+                            {item.breached_count > 0 && ` (${item.breached_count})`}
+                          </span>
+                        </td>
+                        <td className="date-cell">{formatDate(item.last_activity)}</td>
+                        <td>
+                          {item.reminders_enabled ? (
+                            <span className="reminder-enabled">On</span>
+                          ) : (
+                            <span className="reminder-disabled">Off</span>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            className="btn-send-reminder"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendReminder(item.loan_id);
+                            }}
+                          >
+                            Send Reminder
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* Pagination */}
       {((activeTab === 'documents-uploaded' && pendingReview.total_pages > 1) ||
         (activeTab === 'documents-owed' && outstandingDocs.total_pages > 1) ||
-        (activeTab === 'completed' && completedClients.total_pages > 1)) && (
+        (activeTab === 'completed' && completedClients.total_pages > 1) ||
+        (activeTab === 'queue' && queueData.total_pages > 1)) && (
         <div className="pagination">
           <button
             disabled={pagination.page === 1}
@@ -617,7 +911,9 @@ function SmartDocs() {
               ? pendingReview.total_pages
               : activeTab === 'documents-owed'
                 ? outstandingDocs.total_pages
-                : completedClients.total_pages}
+                : activeTab === 'queue'
+                  ? queueData.total_pages
+                  : completedClients.total_pages}
           </span>
           <button
             disabled={
@@ -626,7 +922,9 @@ function SmartDocs() {
                 ? pendingReview.total_pages
                 : activeTab === 'documents-owed'
                   ? outstandingDocs.total_pages
-                  : completedClients.total_pages)
+                  : activeTab === 'queue'
+                    ? queueData.total_pages
+                    : completedClients.total_pages)
             }
             onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
           >

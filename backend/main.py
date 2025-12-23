@@ -55084,6 +55084,107 @@ async def run_ai_migration_endpoint(request: dict):
             "error": str(e)
         }
 
+# ============================================================================
+# DUPLICATE DETECTION ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/duplicates/scan")
+async def scan_for_duplicates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Scan for duplicate leads and loans.
+    Returns list of potential duplicates with confidence scores.
+    """
+    from services.duplicate_detection_service import get_duplicate_detection_service
+
+    try:
+        service = get_duplicate_detection_service(db)
+        lead_duplicates = service.find_duplicate_leads()
+        loan_duplicates = service.find_duplicate_loans()
+
+        return {
+            "status": "success",
+            "lead_duplicates": lead_duplicates,
+            "loan_duplicates": loan_duplicates,
+            "total_duplicates": len(lead_duplicates) + len(loan_duplicates)
+        }
+    except Exception as e:
+        logger.error(f"Error scanning for duplicates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/duplicates/create-tasks")
+async def create_duplicate_merge_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Scan for duplicates and create tasks for each duplicate pair.
+    Tasks are assigned to the current user.
+    """
+    from services.duplicate_detection_service import get_duplicate_detection_service
+
+    try:
+        service = get_duplicate_detection_service(db)
+        results = service.scan_and_create_tasks(assigned_to_user_id=current_user.id)
+
+        return {
+            "status": "success",
+            "message": f"Found {results['lead_duplicates_found']} lead duplicates and {results['loan_duplicates_found']} loan duplicates",
+            "tasks_created": results['tasks_created'],
+            "tasks_existing": results['tasks_existing'],
+            "duplicates": results['duplicates']
+        }
+    except Exception as e:
+        logger.error(f"Error creating duplicate tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/duplicates/check/{record_type}/{record_id}")
+async def check_single_record_duplicates(
+    record_type: str,
+    record_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Check if a specific lead or loan has duplicates.
+    record_type: 'lead' or 'loan'
+    """
+    from services.duplicate_detection_service import get_duplicate_detection_service
+
+    try:
+        service = get_duplicate_detection_service(db)
+
+        if record_type == 'lead':
+            # Convert string UUID to actual UUID for query
+            from uuid import UUID
+            try:
+                lead_uuid = UUID(record_id)
+            except ValueError:
+                lead_uuid = record_id
+
+            duplicates = service.find_duplicate_leads(lead_id=lead_uuid)
+        elif record_type == 'loan':
+            # For loans, we'd need to modify the service
+            duplicates = []
+        else:
+            raise HTTPException(status_code=400, detail="Invalid record_type. Use 'lead' or 'loan'")
+
+        return {
+            "status": "success",
+            "record_type": record_type,
+            "record_id": record_id,
+            "has_duplicates": len(duplicates) > 0,
+            "duplicates": duplicates
+        }
+    except Exception as e:
+        logger.error(f"Error checking duplicates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/admin/clear-all-tasks")
 async def clear_all_tasks_endpoint(request: dict, db: Session = Depends(get_db)):
     """

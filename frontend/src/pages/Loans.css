@@ -537,3 +537,99 @@
   background: #fee2e2;
   color: #dc2626;
 }
+
+/* Duplicate Detection Styles */
+.duplicate-warning-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #fef3cd 0%, #ffeaa7 100%);
+  border: 1px solid #f0c674;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.duplicate-warning-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.duplicate-icon {
+  font-size: 1.25rem;
+}
+
+.duplicate-text {
+  font-size: 0.9rem;
+  color: #856404;
+}
+
+.duplicate-text strong {
+  color: #664d03;
+}
+
+.create-tasks-btn {
+  background: #d68910;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.create-tasks-btn:hover {
+  background: #b9770e;
+}
+
+.tasks-created-badge {
+  background: #d4edda;
+  color: #155724;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.borrower-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duplicate-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.has-duplicate {
+  background-color: #fff5f5;
+}
+
+.has-duplicate:hover {
+  background-color: #fee2e2 !important;
+}
+
+@media (max-width: 768px) {
+  .duplicate-warning-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .create-tasks-btn {
+    width: 100%;
+  }
+}

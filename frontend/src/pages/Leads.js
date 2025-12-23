@@ -23,6 +23,8 @@ function Leads() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [selectedLeadForSMS, setSelectedLeadForSMS] = useState(null);
   const [statusDropdown, setStatusDropdown] = useState({ show: false, leadId: null, position: { top: 0, left: 0 } });
+  const [duplicateMap, setDuplicateMap] = useState({});  // Map of lead_id -> duplicate info
+  const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -100,6 +102,7 @@ function Leads() {
       if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30000) {
         const data = JSON.parse(cachedData);
         setLeads(data);
+        detectDuplicates(data);
         setLoading(false);
         return;
       }
@@ -108,6 +111,7 @@ function Leads() {
       // Use API data if available
       if (Array.isArray(data)) {
         setLeads(data);
+        detectDuplicates(data);
         // Cache the response
         localStorage.setItem(cacheKey, JSON.stringify(data));
         localStorage.setItem(cacheTimeKey, now.toString());
@@ -119,6 +123,73 @@ function Leads() {
       setLeads([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Detect duplicates based on email
+  const detectDuplicates = (leadsList) => {
+    const emailGroups = {};
+    leadsList.forEach(lead => {
+      if (lead.email) {
+        const email = lead.email.toLowerCase();
+        if (!emailGroups[email]) {
+          emailGroups[email] = [];
+        }
+        emailGroups[email].push({
+          id: lead.id,
+          name: lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
+          stage: lead.stage,
+        });
+      }
+    });
+
+    // Only keep entries with duplicates
+    const duplicates = {};
+    Object.entries(emailGroups).forEach(([email, leads]) => {
+      if (leads.length > 1) {
+        leads.forEach(lead => {
+          duplicates[lead.id] = {
+            email,
+            count: leads.length,
+            otherLeads: leads.filter(l => l.id !== lead.id),
+          };
+        });
+      }
+    });
+    setDuplicateMap(duplicates);
+  };
+
+  // Check if lead has duplicates
+  const hasDuplicate = (leadId) => duplicateMap[leadId] !== undefined;
+  const getDuplicateInfo = (leadId) => duplicateMap[leadId];
+  const getTotalDuplicates = () => {
+    const uniqueEmails = new Set(Object.values(duplicateMap).map(d => d.email));
+    return uniqueEmails.size;
+  };
+
+  // Create tasks for duplicates
+  const handleCreateDuplicateTasks = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/duplicates/create-tasks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDuplicateTasksCreated(true);
+        alert(`Created ${data.tasks_created} tasks to review duplicate records.`);
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to create tasks'}`);
+      }
+    } catch (err) {
+      console.error('Error creating duplicate tasks:', err);
+      alert('Failed to create duplicate tasks');
     }
   };
 
@@ -477,6 +548,27 @@ function Leads() {
         )}
       </div>
 
+      {/* Duplicate Warning Banner */}
+      {getTotalDuplicates() > 0 && (
+        <div className="duplicate-warning-banner">
+          <div className="duplicate-warning-content">
+            <span className="duplicate-icon">⚠️</span>
+            <span className="duplicate-text">
+              <strong>{getTotalDuplicates()} potential duplicate{getTotalDuplicates() > 1 ? 's' : ''} detected</strong>
+              {' '}- Leads with the same email address found. Review and merge to avoid confusion.
+            </span>
+          </div>
+          {!duplicateTasksCreated && (
+            <button className="create-tasks-btn" onClick={handleCreateDuplicateTasks}>
+              Create Merge Tasks
+            </button>
+          )}
+          {duplicateTasksCreated && (
+            <span className="tasks-created-badge">✓ Tasks Created</span>
+          )}
+        </div>
+      )}
+
       <div className="table-container">
         <table className="leads-table">
           <thead>
@@ -494,12 +586,22 @@ function Leads() {
             {filteredLeads.map((lead) => (
               <tr
                 key={lead.id}
-                className={isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''}
+                className={`${isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''} ${hasDuplicate(lead.id) ? 'has-duplicate' : ''}`}
                 onClick={() => handleLeadClick(lead.id)}
               >
                 <td className="lead-name">
-                  {lead.name}
-                  {isNewLead(lead.created_at) && isLeadUnviewed(lead.id) && <span className="new-lead-badge">NEW</span>}
+                  <div className="borrower-info">
+                    <span>{lead.name}</span>
+                    {isNewLead(lead.created_at) && isLeadUnviewed(lead.id) && <span className="new-lead-badge">NEW</span>}
+                    {hasDuplicate(lead.id) && (
+                      <span
+                        className="duplicate-badge"
+                        title={`Duplicate: Same email as ${getDuplicateInfo(lead.id).otherLeads.map(l => l.name).join(', ')}`}
+                      >
+                        DUPLICATE
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td><ClickableEmail email={lead.email} /></td>
                 <td>

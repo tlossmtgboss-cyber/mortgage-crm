@@ -28,6 +28,8 @@ function Loans() {
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusDropdown, setStatusDropdown] = useState({ show: false, loanId: null, position: { top: 0, left: 0 } });
+  const [duplicateMap, setDuplicateMap] = useState({});
+  const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -124,6 +126,7 @@ function Loans() {
       // Use API data if available
       if (Array.isArray(data)) {
         setLoans(data);
+        detectDuplicates(data);
       } else {
         setLoans([]);
       }
@@ -132,6 +135,74 @@ function Loans() {
       setLoans([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Detect duplicates based on borrower email
+  const detectDuplicates = (loansList) => {
+    const emailGroups = {};
+    loansList.forEach(loan => {
+      if (loan.borrower_email) {
+        const email = loan.borrower_email.toLowerCase();
+        if (!emailGroups[email]) {
+          emailGroups[email] = [];
+        }
+        emailGroups[email].push({
+          id: loan.id,
+          loan_number: loan.loan_number,
+          borrower_name: loan.borrower_name,
+          stage: loan.stage,
+        });
+      }
+    });
+
+    // Only keep entries with duplicates
+    const duplicates = {};
+    Object.entries(emailGroups).forEach(([email, loans]) => {
+      if (loans.length > 1) {
+        loans.forEach(loan => {
+          duplicates[loan.id] = {
+            email,
+            count: loans.length,
+            otherLoans: loans.filter(l => l.id !== loan.id),
+          };
+        });
+      }
+    });
+    setDuplicateMap(duplicates);
+  };
+
+  // Check if loan has duplicates
+  const hasDuplicate = (loanId) => duplicateMap[loanId] !== undefined;
+  const getDuplicateInfo = (loanId) => duplicateMap[loanId];
+  const getTotalDuplicates = () => {
+    const uniqueEmails = new Set(Object.values(duplicateMap).map(d => d.email));
+    return uniqueEmails.size;
+  };
+
+  // Create tasks for duplicates
+  const handleCreateDuplicateTasks = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/duplicates/create-tasks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDuplicateTasksCreated(true);
+        alert(`Created ${data.tasks_created} tasks to review duplicate records.`);
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to create tasks'}`);
+      }
+    } catch (err) {
+      console.error('Error creating duplicate tasks:', err);
+      alert('Failed to create duplicate tasks');
     }
   };
 
@@ -459,6 +530,27 @@ function Loans() {
         )}
       </div>
 
+      {/* Duplicate Warning Banner */}
+      {getTotalDuplicates() > 0 && (
+        <div className="duplicate-warning-banner">
+          <div className="duplicate-warning-content">
+            <span className="duplicate-icon">⚠️</span>
+            <span className="duplicate-text">
+              <strong>{getTotalDuplicates()} potential duplicate{getTotalDuplicates() > 1 ? 's' : ''} detected</strong>
+              {' '}- Loans with the same borrower email found. Review and merge to avoid confusion.
+            </span>
+          </div>
+          {!duplicateTasksCreated && (
+            <button className="create-tasks-btn" onClick={handleCreateDuplicateTasks}>
+              Create Merge Tasks
+            </button>
+          )}
+          {duplicateTasksCreated && (
+            <span className="tasks-created-badge">✓ Tasks Created</span>
+          )}
+        </div>
+      )}
+
       <div className="table-container">
         <table className="loans-table">
           <thead>
@@ -476,10 +568,23 @@ function Loans() {
             {filteredLoans.map((loan) => (
               <tr
                 key={loan.id}
+                className={hasDuplicate(loan.id) ? 'has-duplicate' : ''}
                 onClick={() => navigate(`/loans/${loan.id}`)}
                 style={{ cursor: 'pointer' }}
               >
-                <td className="borrower-name">{loan.borrower || loan.borrower_name}</td>
+                <td className="borrower-name">
+                  <div className="borrower-info">
+                    <span>{loan.borrower || loan.borrower_name}</span>
+                    {hasDuplicate(loan.id) && (
+                      <span
+                        className="duplicate-badge"
+                        title={`Duplicate: Same email as ${getDuplicateInfo(loan.id).otherLoans.map(l => l.loan_number || l.borrower_name).join(', ')}`}
+                      >
+                        DUPLICATE
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="loan-amount">${(loan.amount || 0).toLocaleString()}</td>
                 <td>
                   {loan.rate_locked ? (
