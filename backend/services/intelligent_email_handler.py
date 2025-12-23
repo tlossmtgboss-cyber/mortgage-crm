@@ -67,7 +67,7 @@ class IntelligentEmailHandler:
 
         # 1. Check if sender is a team member (user)
         user = self.db.execute(text("""
-            SELECT id, email, name, role, phone
+            SELECT id, email, full_name, role, phone
             FROM users
             WHERE LOWER(email) = :email AND is_active = true
         """), {"email": email_lower}).fetchone()
@@ -95,7 +95,7 @@ class IntelligentEmailHandler:
                 l.status as loan_status,
                 l.loan_amount,
                 l.property_address,
-                u.name as lo_name,
+                u.full_name as lo_name,
                 u.email as lo_email
             FROM contacts c
             JOIN loans l ON (l.borrower_id = c.id OR l.co_borrower_id = c.id)
@@ -133,7 +133,7 @@ class IntelligentEmailHandler:
                 l.stage,
                 l.loan_purpose,
                 l.estimated_loan_amount,
-                u.name as lo_name,
+                u.full_name as lo_name,
                 u.email as lo_email
             FROM leads l
             LEFT JOIN users u ON u.id = l.assigned_to
@@ -1184,8 +1184,8 @@ AI Mortgage Assistant | Perennia AI"""
                     l.interest_rate,
                     c.first_name,
                     c.last_name,
-                    u.name as lo_name,
-                    u.nmls_id as lo_nmls
+                    u.full_name as lo_name,
+                    u.nmls_number as lo_nmls
                 FROM loans l
                 JOIN contacts c ON c.id = l.borrower_id
                 LEFT JOIN users u ON u.id = l.loan_officer_id
