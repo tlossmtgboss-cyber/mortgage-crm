@@ -144,7 +144,7 @@ class IntelligentEmailHandler:
                 u.full_name as lo_name,
                 u.email as lo_email
             FROM leads l
-            LEFT JOIN users u ON u.id = l.assigned_to
+            LEFT JOIN users u ON u.id = l.owner_id
             WHERE LOWER(l.email) = :email
             ORDER BY l.created_at DESC
             LIMIT 1
