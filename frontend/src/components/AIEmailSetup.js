@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './AIEmailSetup.css';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -15,11 +16,6 @@ const AIEmailSetup = () => {
   const [message, setMessage] = useState(null);
   const [showDnsInstructions, setShowDnsInstructions] = useState(false);
   const [dnsInstructions, setDnsInstructions] = useState(null);
-
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  });
 
   const fetchSettings = useCallback(async () => {
     try {

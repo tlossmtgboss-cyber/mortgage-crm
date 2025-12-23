@@ -13,6 +13,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ContentEditor from '../components/ContentEditor';
 import MicrositePageManager from '../components/MicrositePageManager';
+import { getAuthHeaders } from '../utils/auth';
 import './MicrositeEditor.css';
 
 // API base URL
@@ -39,12 +40,6 @@ const MicrositeEditor = () => {
   const [complianceJson, setComplianceJson] = useState({});
   const [orgSettings, setOrgSettings] = useState(null);
   const [analytics, setAnalytics] = useState(null);
-
-  // Get auth headers
-  const getAuthHeaders = useCallback(() => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  }), []);
 
   // Show toast message
   const showToast = useCallback((message, type = 'success') => {

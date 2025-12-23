@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { getAuthHeaders } from '../utils/auth';
 import './EmailIntelligence.css';
 
 function EmailIntelligence() {
@@ -60,14 +61,6 @@ function EmailIntelligence() {
     { value: 'closing_related', label: 'Closing Related', icon: '🏠' },
     { value: 'skip', label: 'Skip/Archive', icon: '⏭️' }
   ];
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
 
   // Load data based on active tab
   useEffect(() => {

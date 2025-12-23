@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../../utils/auth';
 import './PURLManager.css';
 
 // =============================================================================
@@ -17,11 +18,6 @@ const isProduction = window.location.hostname !== 'localhost' && window.location
 const API_BASE = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
-
-const getAuthHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('token')}`,
-  'Content-Type': 'application/json'
-});
 
 const purlAdminApi = {
   baseUrl: `${API_BASE}/api/v1/purl-admin`,

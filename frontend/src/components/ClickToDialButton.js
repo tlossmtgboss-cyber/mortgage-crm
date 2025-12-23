@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './ClickToDialButton.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -17,14 +18,6 @@ const ClickToDialButton = ({
 }) => {
   const [calling, setCalling] = useState(false);
   const [callSid, setCallSid] = useState(null);
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
 
   const initiateCall = async () => {
     if (!phoneNumber) {

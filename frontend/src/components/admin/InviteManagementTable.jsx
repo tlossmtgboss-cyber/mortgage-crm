@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../../utils/auth';
 import './InviteManagementTable.css';
 
 const InviteManagementTable = ({ onInviteNew }) => {
@@ -9,14 +10,6 @@ const InviteManagementTable = ({ onInviteNew }) => {
   const [actionLoading, setActionLoading] = useState(null);
 
   const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api';
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
 
   useEffect(() => {
     loadInvites();

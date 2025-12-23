@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI, agentAPI } from '../services/api';
+import { getAuthHeaders } from '../utils/auth';
 import AIReceptionist from '../components/AIReceptionist';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
@@ -41,11 +42,6 @@ const DialerSettingsSection = () => {
   const [verifyName, setVerifyName] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [message, setMessage] = useState(null);
-
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  });
 
   useEffect(() => {
     fetchSettings();

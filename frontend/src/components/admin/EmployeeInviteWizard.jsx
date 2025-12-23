@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../../utils/auth';
 import './EmployeeInviteWizard.css';
 
 const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
@@ -30,14 +31,6 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
   const [errors, setErrors] = useState({});
 
   const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api';
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
 
   // Load options on mount
   useEffect(() => {

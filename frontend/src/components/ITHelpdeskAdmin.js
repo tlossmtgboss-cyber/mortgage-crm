@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './ITHelpdeskAdmin.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -25,11 +26,6 @@ function ITHelpdeskAdmin() {
   const [adminNotes, setAdminNotes] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [teamMembers, setTeamMembers] = useState([]);
-
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  });
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);

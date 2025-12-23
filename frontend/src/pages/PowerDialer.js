@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuthHeaders } from '../utils/auth';
 import './PowerDialer.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -121,14 +122,6 @@ const PowerDialer = () => {
     emails: 0,
     voicemails: 0
   });
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
 
   // Fetch dialer settings
   const fetchSettings = useCallback(async () => {

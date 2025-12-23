@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import PowerDialer from './PowerDialer';
 import { useLayoutFix } from '../hooks/useLayoutFix';
+import { getAuthHeaders } from '../utils/auth';
 import './CommunicationIntelligence.css';
 
 function CommunicationIntelligence() {
@@ -78,14 +79,6 @@ function CommunicationIntelligence() {
     { value: 'processed', label: 'Processed' },
     { value: 'skip', label: 'Skip' }
   ];
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
 
   // Reset tab when switching modes
   useEffect(() => {

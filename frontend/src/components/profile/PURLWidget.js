@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getAuthHeaders } from '../../utils/auth';
 import './PURLWidget.css';
 
 /**
@@ -20,11 +21,6 @@ function PURLWidget({ leadId, loanId, contactData }) {
   useEffect(() => {
     loadPURLData();
   }, [leadId, loanId]);
-
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-    'Content-Type': 'application/json'
-  });
 
   const loadPURLData = async () => {
     try {

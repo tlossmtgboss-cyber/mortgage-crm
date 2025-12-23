@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './AIEmailTraining.css';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -20,11 +21,6 @@ const AIEmailTraining = () => {
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  });
 
   const fetchEmails = useCallback(async () => {
     try {

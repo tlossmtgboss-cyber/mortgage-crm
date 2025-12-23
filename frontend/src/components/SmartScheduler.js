@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './SmartScheduler.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -113,14 +114,6 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     buffer_before_minutes: 5,
     buffer_after_minutes: 5
   });
-
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  }, []);
 
   // Fetch initial data
   useEffect(() => {

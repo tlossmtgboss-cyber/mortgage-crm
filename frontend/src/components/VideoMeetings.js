@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import './SmartScheduler.css';
 import RecordingPlayer from './VideoMeetings/RecordingPlayer';
 import { sanitizeText, SafeHTML } from '../utils/sanitize';
+import { getAuthHeaders } from '../utils/auth';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -124,13 +125,6 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
     ai_assistant_enabled: true
   });
 
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  }, []);
 
   // Fetch initial data
   useEffect(() => {

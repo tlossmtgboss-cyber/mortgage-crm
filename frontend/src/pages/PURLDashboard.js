@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { getAuthHeaders } from '../utils/auth';
 import './PURLDashboard.css';
 
 /**
@@ -28,11 +29,6 @@ function PURLDashboard() {
   useEffect(() => {
     loadData();
   }, [filter]);
-
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-    'Content-Type': 'application/json'
-  });
 
   const loadData = async () => {
     setIsLoading(true);

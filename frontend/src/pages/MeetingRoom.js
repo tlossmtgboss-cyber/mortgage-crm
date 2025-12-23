@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { sanitizeText } from '../utils/sanitize';
+import { getAuthHeaders } from '../utils/auth';
 import './MeetingRoom.css';
 
 // API Base URL
@@ -93,14 +94,6 @@ const MeetingRoom = () => {
       { urls: 'stun:stun2.l.google.com:19302' },
     ]
   };
-
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  }, []);
 
   // Fetch meeting info
   useEffect(() => {

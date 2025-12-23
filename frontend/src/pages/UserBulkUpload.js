@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { getAuthHeaders } from '../utils/auth';
 import './UserBulkUpload.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -57,16 +58,6 @@ function UserBulkUpload() {
   // Role assignment state
   const [defaultRoleId, setDefaultRoleId] = useState(null);
   const [roles, setRoles] = useState([]);
-
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
-    return {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    };
-  }, []);
 
   const handleFileSelect = async (e) => {
     const selectedFile = e.target.files[0];
@@ -130,7 +121,7 @@ function UserBulkUpload() {
       // Load roles for assignment
       const rolesRes = await axios.get(
         `${API_BASE_URL}/api/v1/admin/users/roles`,
-        getAuthHeaders()
+        { headers: getAuthHeaders() }
       );
       setRoles(rolesRes.data || []);
 

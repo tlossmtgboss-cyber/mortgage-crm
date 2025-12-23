@@ -3,6 +3,7 @@ import axios from 'axios';
 import CategoryTasksModal from '../components/CategoryTasksModal';
 import PermissionsStep from '../components/onboarding/steps/PermissionsStep';
 import FeatureSelection from '../components/FeatureSelection';
+import { getAuthHeaders } from '../utils/auth';
 import './UserCreationWizard.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -88,16 +89,6 @@ function UserCreationWizard() {
     activation_token: null
   });
 
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
-    return {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    };
-  }, []);
-
   // Load reference data on mount
   useEffect(() => {
     loadReferenceData();
@@ -149,10 +140,10 @@ function UserCreationWizard() {
     setLoading(true);
     try {
       const [rolesRes, categoriesRes, responsibilitiesRes, templatesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/roles`, getAuthHeaders()).catch(() => ({ data: null })),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/categories`, getAuthHeaders()).catch(() => ({ data: null })),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/responsibilities`, getAuthHeaders()).catch(() => ({ data: null })),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/permission-templates`, getAuthHeaders()).catch(() => ({ data: null }))
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/roles`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/categories`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/responsibilities`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/permission-templates`, { headers: getAuthHeaders() }).catch(() => ({ data: null }))
       ]);
 
       // Handle nested response structure: { success: true, data: { roles: [...] } }
@@ -230,7 +221,7 @@ function UserCreationWizard() {
       try {
         const response = await axios.get(
           `${API_BASE_URL}/api/v1/admin/users/roles/${roleId}/defaults`,
-          getAuthHeaders()
+          { headers: getAuthHeaders() }
         );
         const defaults = response.data;
         updateFormData({
@@ -266,7 +257,7 @@ function UserCreationWizard() {
       const response = await axios.post(
         `${API_BASE_URL}/api/v1/admin/users/create`,
         payload,
-        getAuthHeaders()
+        { headers: getAuthHeaders() }
       );
 
       const result = response.data;
@@ -294,7 +285,7 @@ function UserCreationWizard() {
       await axios.post(
         `${API_BASE_URL}/api/v1/admin/users/${formData.created_user_id}/resend-activation`,
         {},
-        getAuthHeaders()
+        { headers: getAuthHeaders() }
       );
 
       nextStep(); // Move to activation confirmation

@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './MicrositePageManager.css';
 
 // API base URL
@@ -68,12 +69,6 @@ const MicrositePageManager = ({ onToast }) => {
     is_enabled: true,
     show_in_nav: true
   });
-
-  // Get auth headers
-  const getAuthHeaders = useCallback(() => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  }), []);
 
   // Fetch pages
   const fetchPages = useCallback(async () => {

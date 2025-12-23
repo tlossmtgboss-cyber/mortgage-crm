@@ -8,6 +8,7 @@ import ReconciliationDetailPanel from '../components/shared/ReconciliationDetail
 import CallDetailPanel from '../components/shared/CallDetailPanel';
 import TasksSkeleton from '../components/shared/TasksSkeleton';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
+import { getAuthHeaders } from '../utils/auth';
 import './Tasks.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -746,15 +747,6 @@ function Tasks() {
       return () => clearTimeout(timer);
     }
   }, [loading, activeTab, selectedTask]);
-
-  // Auth headers helper
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  }, []);
 
   // Load reconciliation data when tab is active
   const loadReconciliationData = useCallback(async () => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../../utils/auth';
 import './ScheduleMeetingButton.css';
 
 // API base URL
@@ -88,16 +89,6 @@ const ScheduleMeetingButton = ({
       loadAvailableSlots();
     }
   }, [selectedDate, selectedType]);
-
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return token ? {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    } : {
-      'Content-Type': 'application/json'
-    };
-  };
 
   const loadBookingLink = async () => {
     setLoading(true);

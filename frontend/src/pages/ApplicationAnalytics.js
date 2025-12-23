@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   FunnelChart, Funnel, LabelList
 } from 'recharts';
+import { getAuthHeaders } from '../utils/auth';
 import './ApplicationAnalytics.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -24,15 +25,6 @@ export default function ApplicationAnalytics() {
   const [byDevice, setByDevice] = useState(null);
   const [loPerformance, setLoPerformance] = useState(null);
   const [dropOff, setDropOff] = useState(null);
-
-  // Get auth token
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  };
 
   // Fetch all analytics data
   const fetchAnalytics = async () => {

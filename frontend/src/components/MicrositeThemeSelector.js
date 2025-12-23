@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { getAuthHeaders } from '../utils/auth';
 import './MicrositeThemeSelector.css';
 import MicrositeThemeCustomizer from './MicrositeThemeCustomizer';
 
@@ -23,12 +24,6 @@ const MicrositeThemeSelector = ({ onThemeSelect }) => {
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [themeConfig, setThemeConfig] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
-
-  // Get auth headers
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-    'Content-Type': 'application/json'
-  });
 
   useEffect(() => {
     fetchMicrosite();
