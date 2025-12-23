@@ -506,6 +506,9 @@ class PublicMortgageChatService:
         # Check if user is trying to schedule (only relevant in phase 4)
         scheduling_intent = phase >= 4 and self._detect_scheduling_intent(user_message, response_text)
 
+        # Check if user is asking about budget/affordability
+        budget_intent = self._detect_budget_intent(user_message, response_text)
+
         # Get available slots only if scheduling is appropriate
         available_slots = self.get_available_slots(days_ahead=5) if scheduling_intent else []
 
@@ -515,6 +518,7 @@ class PublicMortgageChatService:
             "phase": phase,
             "turn_count": turn_count,
             "scheduling_intent": scheduling_intent,
+            "budget_intent": budget_intent,
             "available_slots": available_slots[:5] if scheduling_intent else None
         }
 
@@ -597,6 +601,19 @@ class PublicMortgageChatService:
 
         combined = (user_message + " " + ai_response).lower()
         return any(keyword in combined for keyword in scheduling_keywords)
+
+    def _detect_budget_intent(self, user_message: str, ai_response: str) -> bool:
+        """Detect if user is asking about budget, affordability, or payment amounts"""
+        budget_keywords = [
+            "afford", "budget", "payment", "monthly", "how much",
+            "price range", "income", "debt", "dti", "can i buy",
+            "qualify for", "what can i", "home price", "house price",
+            "down payment", "calculate", "no more than", "max budget",
+            "comfortable", "expensive", "cheaper"
+        ]
+
+        combined = (user_message + " " + ai_response).lower()
+        return any(keyword in combined for keyword in budget_keywords)
 
     def _determine_phase(self, turn_count: int, history: List[Dict], user_message: str) -> int:
         """

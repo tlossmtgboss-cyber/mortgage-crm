@@ -154,14 +154,59 @@ const AIOutreach = () => {
 
   const fetchConversations = useCallback(async () => {
     try {
-      // Use SMS conversations endpoint which has proper two-way conversation data
-      const response = await fetch(`${API_BASE}/api/v1/sms/conversations`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(data.conversations || []);
+      const allConversations = [];
+
+      // Fetch SMS conversations
+      try {
+        const smsResponse = await fetch(`${API_BASE}/api/v1/sms/conversations`, {
+          headers: getAuthHeaders()
+        });
+        if (smsResponse.ok) {
+          const smsData = await smsResponse.json();
+          const smsConvs = (smsData.conversations || []).map(conv => ({
+            ...conv,
+            channel: 'sms',
+            contact_email: null
+          }));
+          allConversations.push(...smsConvs);
+        }
+      } catch (err) {
+        console.error('Error fetching SMS conversations:', err);
       }
+
+      // Fetch Email conversations from ai_email_conversations
+      try {
+        const emailResponse = await fetch(`${API_BASE}/api/v1/ai-email/conversations`, {
+          headers: getAuthHeaders()
+        });
+        if (emailResponse.ok) {
+          const emailData = await emailResponse.json();
+          const emailConvs = (emailData || []).map(conv => ({
+            id: conv.conversation_id,
+            conversation_id: conv.conversation_id,
+            contact_name: conv.recipient_name || 'Unknown',
+            contact_email: conv.recipient_email,
+            phone_number: null,
+            channel: 'email',
+            message_count: conv.message_count || 0,
+            last_message_at: conv.last_message_at,
+            ai_enabled: true,
+            status: conv.status
+          }));
+          allConversations.push(...emailConvs);
+        }
+      } catch (err) {
+        console.error('Error fetching email conversations:', err);
+      }
+
+      // Sort by last message date (most recent first)
+      allConversations.sort((a, b) => {
+        const dateA = a.last_message_at ? new Date(a.last_message_at) : new Date(0);
+        const dateB = b.last_message_at ? new Date(b.last_message_at) : new Date(0);
+        return dateB - dateA;
+      });
+
+      setConversations(allConversations);
     } catch (err) {
       console.error('Error fetching conversations:', err);
     }
@@ -181,14 +226,48 @@ const AIOutreach = () => {
     }
   }, []);
 
-  const fetchConversationDetail = async (convId) => {
+  const fetchConversationDetail = async (convId, channel = 'sms') => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/sms/conversations/${convId}/messages`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setConversationDetail(data);
+      // Determine which endpoint to use based on channel or conversation ID format
+      const isEmailConv = channel === 'email' || convId.startsWith('conv_');
+
+      let response;
+      if (isEmailConv) {
+        // Fetch from email conversations endpoint
+        response = await fetch(`${API_BASE}/api/v1/ai-email/conversations/${convId}/messages`, {
+          headers: getAuthHeaders()
+        });
+        if (response.ok) {
+          const messages = await response.json();
+          // Find the conversation from state
+          const conv = conversations.find(c => c.id === convId || c.conversation_id === convId);
+          setConversationDetail({
+            conversation: {
+              id: convId,
+              contact_name: conv?.contact_name || 'Unknown',
+              contact_email: conv?.contact_email,
+              channel: 'email',
+              ai_enabled: true
+            },
+            messages: messages.map(msg => ({
+              id: msg.id,
+              direction: msg.direction,
+              message: msg.body_text,
+              created_at: msg.created_at,
+              ai_generated: msg.ai_generated,
+              status: 'delivered'
+            }))
+          });
+        }
+      } else {
+        // Fetch from SMS conversations endpoint
+        response = await fetch(`${API_BASE}/api/v1/sms/conversations/${convId}/messages`, {
+          headers: getAuthHeaders()
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setConversationDetail(data);
+        }
       }
     } catch (err) {
       console.error('Error fetching conversation detail:', err);
@@ -779,22 +858,25 @@ const AIOutreach = () => {
             ) : (
               conversations.map(conv => (
                 <div
-                  key={conv.id}
-                  className={`conversation-item ${selectedConversation === conv.id ? 'selected' : ''}`}
+                  key={conv.id || conv.conversation_id}
+                  className={`conversation-item ${selectedConversation === (conv.id || conv.conversation_id) ? 'selected' : ''}`}
                   onClick={() => {
-                    setSelectedConversation(conv.id);
-                    fetchConversationDetail(conv.id);
+                    const convId = conv.id || conv.conversation_id;
+                    setSelectedConversation(convId);
+                    fetchConversationDetail(convId, conv.channel);
                   }}
                 >
                   <div className="conv-header">
                     <span className="conv-name">{conv.contact_name || 'Unknown'}</span>
-                    <span className="conv-channel sms">SMS</span>
+                    <span className={`conv-channel ${conv.channel || 'sms'}`}>
+                      {conv.channel === 'email' ? '📧 Email' : '💬 SMS'}
+                    </span>
                   </div>
                   <div className="conv-contact">
-                    {conv.phone_number}
+                    {conv.channel === 'email' ? conv.contact_email : conv.phone_number}
                   </div>
                   <div className="conv-meta">
-                    <span className="conv-messages">{conv.message_count} messages</span>
+                    <span className="conv-messages">{conv.message_count || 0} messages</span>
                     <span className="conv-date">{formatDate(conv.last_message_at)}</span>
                   </div>
                   {conv.ai_enabled && (
@@ -811,7 +893,14 @@ const AIOutreach = () => {
                 <div className="detail-header">
                   <h3>{conversationDetail.conversation?.contact_name || 'Conversation'}</h3>
                   <div className="detail-meta">
-                    <span className="detail-phone">{conversationDetail.conversation?.phone_number}</span>
+                    <span className="detail-contact">
+                      {conversationDetail.conversation?.channel === 'email'
+                        ? conversationDetail.conversation?.contact_email
+                        : conversationDetail.conversation?.phone_number}
+                    </span>
+                    <span className={`channel-badge ${conversationDetail.conversation?.channel || 'sms'}`}>
+                      {conversationDetail.conversation?.channel === 'email' ? '📧 Email' : '💬 SMS'}
+                    </span>
                     {conversationDetail.conversation?.ai_enabled && (
                       <span className="ai-badge">AI Enabled</span>
                     )}

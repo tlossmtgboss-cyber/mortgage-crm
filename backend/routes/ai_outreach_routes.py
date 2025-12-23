@@ -333,17 +333,18 @@ async def start_ai_outreach(
 
 
 async def _send_email_outreach(email: str, first_name: str, subject: str, message: str, db: Session):
-    """Send email outreach"""
+    """Send email outreach with proper conversation tracking for two-way AI replies"""
     try:
         from email_service import EmailService
         from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
+        import uuid
 
         email_service = EmailService()
 
-        # Create conversation ID
-        conv_id = f"email_{email.replace('@', '_').replace('.', '_')}"
+        # Create unique conversation ID (format matches ai_email_conversation system)
+        conv_id = f"conv_{uuid.uuid4().hex[:16]}"
 
-        # Initialize conversation state
+        # Initialize conversation state (in-memory)
         conv_service = get_conversation_service()
         state = conv_service.get_or_create_conversation(conv_id, Channel.EMAIL)
 
@@ -355,27 +356,137 @@ async def _send_email_outreach(email: str, first_name: str, subject: str, messag
         })
         state.stage = ConversationStage.QUALIFICATION
 
-        # Format HTML email
+        # Format HTML email with conversation footer
         html_body = f"""<!DOCTYPE html>
 <html>
 <body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px;">
 {message.replace(chr(10), '<br>')}
+
+<br><br>
+<p style="color: #666; font-size: 10pt;">---<br>
+This is an AI-assisted conversation. Simply reply to this email to continue chatting with Sarah, your mortgage assistant.</p>
 </body>
 </html>"""
 
-        # Get reply-to from settings or env
-        reply_to = os.getenv("REPLY_TO_EMAIL", email_service.from_email)
+        # Build tagged reply-to for conversation tracking
+        # Format: ai-reply+{conv_id}@domain
+        ai_reply_base = os.getenv("AI_REPLY_EMAIL", "ai-reply@perenniaai.com")
+        domain = ai_reply_base.split('@')[1] if '@' in ai_reply_base else "perenniaai.com"
+        tagged_reply_to = f"ai-reply+{conv_id}@{domain}"
 
-        # Send email
+        # Generate message ID for threading
+        message_id = f"<{conv_id}@mortgagecrm.ai>"
+
+        # Get user ID (demo user for now)
+        user_id = 1
+        try:
+            import main
+            demo_user = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1")).fetchone()
+            if demo_user:
+                user_id = demo_user.id
+        except:
+            pass
+
+        # Ensure conversation tables exist
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS ai_email_conversations (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id VARCHAR(255) UNIQUE NOT NULL,
+                    user_id INTEGER,
+                    recipient_email VARCHAR(255),
+                    recipient_name VARCHAR(255),
+                    loan_id INTEGER,
+                    lead_id INTEGER,
+                    conversation_type VARCHAR(50) DEFAULT 'outreach',
+                    status VARCHAR(50) DEFAULT 'active',
+                    context JSONB,
+                    message_count INTEGER DEFAULT 0,
+                    last_message_at TIMESTAMP,
+                    closed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS ai_email_messages (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id VARCHAR(255) NOT NULL,
+                    direction VARCHAR(20) NOT NULL,
+                    from_email VARCHAR(255),
+                    to_email VARCHAR(255),
+                    subject VARCHAR(500),
+                    body_text TEXT,
+                    body_html TEXT,
+                    message_id VARCHAR(255),
+                    in_reply_to VARCHAR(255),
+                    ai_generated BOOLEAN DEFAULT FALSE,
+                    ai_model VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.commit()
+        except Exception as table_err:
+            logger.warning(f"Table creation note: {table_err}")
+
+        # Create conversation record in ai_email_conversations
+        try:
+            db.execute(text("""
+                INSERT INTO ai_email_conversations
+                (conversation_id, user_id, recipient_email, recipient_name,
+                 conversation_type, status, message_count, created_at)
+                VALUES (:conv_id, :user_id, :email, :name,
+                        'outreach', 'active', 1, NOW())
+                ON CONFLICT (conversation_id) DO UPDATE
+                SET message_count = ai_email_conversations.message_count + 1,
+                    last_message_at = NOW()
+            """), {
+                "conv_id": conv_id,
+                "user_id": user_id,
+                "email": email,
+                "name": first_name
+            })
+            db.commit()
+        except Exception as conv_err:
+            logger.warning(f"Conversation record note: {conv_err}")
+            db.rollback()
+
+        # Send email with tracking headers
         result = email_service.send_html_email(
             to_email=email,
             subject=subject,
             html_body=html_body,
             plain_text_body=message,
-            reply_to=reply_to
+            headers={
+                "Message-ID": message_id,
+                "Reply-To": tagged_reply_to,
+                "X-Conversation-ID": conv_id,
+                "X-AI-Conversation": "true"
+            }
         )
 
-        # Log to database
+        # Store outbound message in ai_email_messages
+        if result:
+            try:
+                db.execute(text("""
+                    INSERT INTO ai_email_messages
+                    (conversation_id, direction, from_email, to_email, subject,
+                     body_text, body_html, message_id, ai_generated, created_at)
+                    VALUES (:conv_id, 'outbound', :from_email, :to_email, :subject,
+                            :body_text, :body_html, :msg_id, true, NOW())
+                """), {
+                    "conv_id": conv_id,
+                    "from_email": os.getenv("SENDGRID_FROM_EMAIL", "noreply@perenniaai.com"),
+                    "to_email": email,
+                    "subject": subject,
+                    "body_text": message,
+                    "body_html": html_body,
+                    "msg_id": message_id
+                })
+                db.commit()
+            except Exception as msg_err:
+                logger.warning(f"Message record note: {msg_err}")
+
+        # Also log to outreach log for statistics
         try:
             db.execute(text("""
                 INSERT INTO ai_outreach_log (
@@ -397,12 +508,15 @@ async def _send_email_outreach(email: str, first_name: str, subject: str, messag
         except Exception as log_err:
             logger.warning(f"Failed to log outreach: {log_err}")
 
+        logger.info(f"Started AI outreach conversation {conv_id} with {email}, reply-to: {tagged_reply_to}")
+
         return {
             "success": result,
             "channel": "email",
             "conversation_id": conv_id,
             "recipient": email,
             "subject": subject,
+            "reply_to": tagged_reply_to,
             "message": "Email sent successfully! AI will handle replies automatically." if result else "Failed to send email"
         }
 
