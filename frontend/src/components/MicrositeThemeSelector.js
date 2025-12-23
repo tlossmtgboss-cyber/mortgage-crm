@@ -245,7 +245,7 @@ const MicrositeThemeSelector = ({ onThemeSelect }) => {
                 fontSize: '14px'
               }}
             >
-              {showCustomizer ? 'Hide Customizer' : 'Customize Colors'}
+              {showCustomizer ? 'Hide Customizer' : 'Customize Site'}
             </button>
             {microsite && !microsite.isPublished && (
               <button
