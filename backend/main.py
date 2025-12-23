@@ -34775,13 +34775,36 @@ async def sendgrid_inbound_webhook(request: Request):
 
         logger.info(f"Inbound email from {sender_email}: {clean_message[:100]}...")
 
-        # Process through AI qualification agent
-        result = process_qualification_message(
-            conversation_id=conv_id,
-            message=clean_message,
-            channel="email",
-            sender_info={"email": sender_email, "first_name": sender_name}
-        )
+        # =====================================================================
+        # INTELLIGENT EMAIL ROUTING
+        # First identify sender and classify intent, then route appropriately
+        # =====================================================================
+        from services.intelligent_email_handler import get_intelligent_email_handler
+
+        db = SessionLocal()
+        try:
+            intelligent_handler = get_intelligent_email_handler(db)
+            result = intelligent_handler.process_email(
+                sender_email=sender_email,
+                sender_name=sender_name,
+                subject=subject,
+                message=clean_message,
+            )
+
+            # If handler says to use qualification agent, fall back to that
+            if result.get("use_qualification_agent"):
+                logger.info(f"Routing to qualification agent for {result.get('sender_type', 'unknown')} sender")
+                result = process_qualification_message(
+                    conversation_id=conv_id,
+                    message=clean_message,
+                    channel="email",
+                    sender_info=result.get("sender_info", {"email": sender_email, "first_name": sender_name})
+                )
+            else:
+                logger.info(f"Intelligent handler processed: sender_type={result.get('sender_type')}, action={result.get('action')}")
+
+        finally:
+            db.close()
 
         # Only send response if AI has one
         if result["should_send"] and result.get("response"):
