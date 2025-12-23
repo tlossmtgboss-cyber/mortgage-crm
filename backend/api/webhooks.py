@@ -808,13 +808,13 @@ AI Mortgage Assistant | Perennia AI"""
             # Determine reply subject
             reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
 
-            # Send AI response
+            # Send AI response (reply-to uses SendGrid Inbound Parse subdomain)
             email_sent = email_service.send_html_email(
                 to_email=from_email,
                 subject=reply_subject,
                 html_body=html_response,
                 plain_text_body=plain_text_response,
-                reply_to=os.getenv("REPLY_TO_EMAIL", "sarah@perenniaai.com")
+                reply_to=os.getenv("REPLY_TO_EMAIL", "sarah@reply.perenniaai.com")
             )
 
             # Update conversation in database
