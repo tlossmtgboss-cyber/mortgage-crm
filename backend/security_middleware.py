@@ -210,6 +210,8 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                 allowed_origins = [
                     "https://www.pipeline360.io",
                     "https://pipeline360.io",
+                    "https://www.perenniaai.com",
+                    "https://perenniaai.com",
                     "https://mortgage-crm-nine.vercel.app",  # Production Vercel
                     "https://mortgage-crm",  # Vercel preview deployments
                     "https://frontend-",  # Vercel preview deployments (legacy)
