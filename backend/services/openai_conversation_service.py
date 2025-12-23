@@ -355,6 +355,190 @@ DO NOT just say "I recommend reaching out to your loan officer" - always include
                 "error": str(e)
             }
 
+    def generate_email_response_sync(
+        self,
+        conversation_id: str,
+        user_message: str,
+        conversation_history: List[Dict],
+        loan_context: str = "",
+        additional_context: str = "",
+        lo_name: str = "Tim",
+        lo_available_times: str = "Monday-Friday 9am-5pm, Saturday 10am-2pm"
+    ) -> Dict[str, Any]:
+        """
+        Generate an AI response for email conversations (synchronous version).
+
+        This is the consolidated method for all email AI responses.
+        Uses Trust-First Architecture to determine appropriate phase.
+
+        Args:
+            conversation_id: Unique conversation identifier
+            user_message: The user's current message
+            conversation_history: List of previous messages [{role, content}]
+            loan_context: Optional loan information context
+            additional_context: Any additional context
+            lo_name: Loan officer name for value pitch
+            lo_available_times: Available appointment times
+
+        Returns:
+            Dict with response text and metadata
+        """
+        if not self.enabled:
+            logger.warning("OpenAI not enabled - returning fallback response")
+            return {
+                "text": "Thank you for your message. A mortgage specialist will get back to you shortly.",
+                "ai_generated": False,
+                "error": "OpenAI not configured"
+            }
+
+        try:
+            # Calculate turn count from conversation history
+            turn_count = len([m for m in conversation_history if m.get("role") == "user"])
+
+            # Determine conversation phase based on Trust-First Architecture
+            phase = self._determine_phase(turn_count, user_message)
+
+            # Build the system prompt with Trust-First phases
+            system_prompt = self._build_email_system_prompt(
+                phase=phase,
+                turn_count=turn_count,
+                loan_context=loan_context,
+                additional_context=additional_context,
+                lo_name=lo_name,
+                lo_available_times=lo_available_times
+            )
+
+            # Build messages array
+            messages = [{"role": "system", "content": system_prompt}]
+
+            # Add conversation history (last 10 messages for context)
+            for msg in conversation_history[-10:]:
+                role = "assistant" if msg.get("role") == "assistant" else "user"
+                messages.append({"role": role, "content": msg.get("content", "")})
+
+            # Add current user message
+            messages.append({"role": "user", "content": user_message})
+
+            # Call OpenAI
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=300,
+                temperature=0.7
+            )
+
+            ai_response = response.choices[0].message.content.strip()
+
+            logger.info(f"Email response generated for {conversation_id} (phase {phase}, turn {turn_count}, {len(ai_response)} chars)")
+
+            return {
+                "text": ai_response,
+                "ai_generated": True,
+                "model": self.model,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "trust_phase": phase,
+                "turn_count": turn_count
+            }
+
+        except Exception as e:
+            logger.error(f"Email response generation failed: {e}")
+            return {
+                "text": "Thank you for your message. Let me look into that and get back to you shortly.",
+                "ai_generated": False,
+                "error": str(e)
+            }
+
+    def _build_email_system_prompt(
+        self,
+        phase: int,
+        turn_count: int,
+        loan_context: str = "",
+        additional_context: str = "",
+        lo_name: str = "Tim",
+        lo_available_times: str = "Monday-Friday 9am-5pm, Saturday 10am-2pm"
+    ) -> str:
+        """Build phase-appropriate system prompt for email responses."""
+
+        base_prompt = f"""You are Sarah, an AI Mortgage Assistant for Perennia AI, responding to email inquiries.
+
+PERSONALITY & TONE:
+- Warm, friendly, and professional
+- Genuinely helpful and empathetic
+- Knowledgeable about mortgages but explain things simply
+- Never pushy or salesy
+
+{loan_context}
+
+{f"Additional Context: {additional_context}" if additional_context else ""}
+
+## CRITICAL: KEEP RESPONSES SHORT AND CONVERSATIONAL
+
+⚠️ RESPONSE LENGTH RULES - FOLLOW STRICTLY:
+- Keep responses to 2-4 SHORT sentences maximum
+- Answer ONE question at a time
+- NO walls of text or long explanations
+- NO numbered lists with 5+ items
+
+IMPORTANT:
+- Never share sensitive financial details in email
+- Do NOT make up information about rates or programs
+- Never promise specific rates or approval
+"""
+
+        # Phase-specific instructions
+        if phase == 1:
+            phase_instructions = f"""
+## PHASE 1: REASSURE & ORIENT (Turn {turn_count})
+
+You're in the early trust-building phase. Be friendly and helpful.
+
+DO: Answer their questions briefly, be warm, ask ONE follow-up question
+DON'T: Offer calls/appointments, ask for contact info, be salesy
+
+Just be genuinely helpful - earn their trust first."""
+
+        elif phase == 2:
+            phase_instructions = f"""
+## PHASE 2: EDUCATE (Turn {turn_count})
+
+Share your expertise briefly. Give honest tradeoffs when comparing options.
+
+DO: Explain the "why", be balanced, ask follow-up questions
+DON'T: Offer calls/appointments, ask for contact info, push solutions
+
+Keep building credibility through helpful, SHORT answers."""
+
+        elif phase == 3:
+            phase_instructions = f"""
+## PHASE 3: PERSONALIZE (Turn {turn_count})
+
+Ask questions to understand their specific situation better.
+
+DO: Be conversational, tailor advice to what they've shared
+DON'T: Offer calls/appointments yet, ask multiple questions at once
+
+Keep responses SHORT - you're having a conversation, not conducting an interview."""
+
+        else:  # Phase 4
+            phase_instructions = f"""
+## PHASE 4: OFFER NEXT STEP - WITH VALUE PITCH (Turn {turn_count})
+
+You've built trust through the conversation. Now you CAN offer to connect them with {lo_name}.
+
+WHEN RECOMMENDING THE LOAN OFFICER - USE THIS VALUE PITCH:
+"I'd recommend setting up a quick call with {lo_name}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years. Here are some times that work: {lo_available_times}"
+
+If they're not ready: "No problem! I'm here whenever you have more questions."
+
+DO NOT just say "I recommend reaching out to your loan officer" - always include the value pitch and specific times."""
+
+        return base_prompt + phase_instructions + """
+
+Sign off as:
+Best regards,
+Sarah
+AI Mortgage Assistant | Perennia AI"""
+
     async def analyze_message(
         self,
         message: str,

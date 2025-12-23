@@ -689,13 +689,15 @@ async def generate_ai_response(
     """
     Generate and send AI response to an email reply.
     Runs as a background task.
+
+    Uses the consolidated OpenAIConversationService for Trust-First Architecture.
     """
     try:
-        from openai import OpenAI
+        # Import the consolidated AI service
+        from services.openai_conversation_service import get_openai_service
+        ai_service = get_openai_service()
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-        # Get conversation history
+        # Get conversation history from database
         messages_result = db.execute(text("""
             SELECT direction, body_text, created_at
             FROM ai_email_messages
@@ -704,7 +706,7 @@ async def generate_ai_response(
             LIMIT 10
         """), {"conv_id": conversation_id}).fetchall()
 
-        # Build conversation history for context
+        # Build conversation history for the AI service
         conversation_history = []
         for msg in messages_result:
             role = "assistant" if msg.direction == "outbound" else "user"
@@ -713,7 +715,7 @@ async def generate_ai_response(
                 "content": msg.body_text or ""
             })
 
-        # Get loan/lead context if available
+        # Get loan context if available
         loan_context = ""
         if loan_id:
             loan = db.execute(text("""
@@ -723,13 +725,13 @@ async def generate_ai_response(
             """), {"loan_id": loan_id}).fetchone()
             if loan:
                 loan_context = f"""
-                Loan Information:
-                - Borrower: {loan.borrower_name}
-                - Property: {loan.property_address}
-                - Loan Type: {loan.loan_type}
-                - Stage: {loan.current_stage}
-                - Closing Date: {loan.closing_date}
-                """
+Loan Information:
+- Borrower: {loan.borrower_name}
+- Property: {loan.property_address}
+- Loan Type: {loan.loan_type}
+- Stage: {loan.current_stage}
+- Closing Date: {loan.closing_date}
+"""
 
         # Get LO info for value pitch
         lo_name = "Tim"  # Default LO name
@@ -745,121 +747,21 @@ async def generate_ai_response(
                 lo_name = lo_result.first_name
 
         # =================================================================
-        # TRUST-FIRST ARCHITECTURE - Determine conversation phase
+        # Use consolidated AI service with Trust-First Architecture
         # =================================================================
-        # Count user messages (inbound) to determine trust phase
-        turn_count = len([m for m in conversation_history if m.get("role") == "user"])
-
-        # Check if user explicitly wants to schedule (skip to phase 4)
-        schedule_keywords = ["schedule", "appointment", "call me", "talk to", "speak with", "contact me", "call back"]
-        user_wants_scheduling = any(keyword in user_message.lower() for keyword in schedule_keywords)
-
-        if user_wants_scheduling:
-            phase = 4
-        elif turn_count <= 2:
-            phase = 1  # Reassure & Orient
-        elif turn_count <= 5:
-            phase = 2  # Educate with Tradeoffs
-        elif turn_count <= 8:
-            phase = 3  # Personalize
-        else:
-            phase = 4  # Earned Next Step
-
-        # =================================================================
-        # Build phase-appropriate system prompt
-        # =================================================================
-        base_prompt = f"""You are Sarah, an AI Mortgage Assistant for Perennia AI, responding to email inquiries.
-
-PERSONALITY & TONE:
-- Warm, friendly, and professional
-- Genuinely helpful and empathetic
-- Knowledgeable about mortgages but explain things simply
-- Never pushy or salesy
-
-{loan_context}
-
-Additional Context: {context or 'None'}
-
-## CRITICAL: KEEP RESPONSES SHORT AND CONVERSATIONAL
-
-⚠️ RESPONSE LENGTH RULES - FOLLOW STRICTLY:
-- Keep responses to 2-4 SHORT sentences maximum
-- Answer ONE question at a time
-- NO walls of text or long explanations
-- NO numbered lists with 5+ items
-
-IMPORTANT:
-- Never share sensitive financial details in email
-- Do NOT make up information about rates or programs
-- Never promise specific rates or approval
-"""
-
-        # Phase-specific instructions
-        if phase == 1:
-            phase_instructions = f"""
-## PHASE 1: REASSURE & ORIENT (Current Phase - Turn {turn_count})
-
-You're in the early trust-building phase. Be friendly and helpful.
-
-DO: Answer their questions briefly, be warm, ask ONE follow-up question
-DON'T: Offer calls/appointments, ask for contact info, be salesy
-
-Just be genuinely helpful - earn their trust first."""
-
-        elif phase == 2:
-            phase_instructions = f"""
-## PHASE 2: EDUCATE (Current Phase - Turn {turn_count})
-
-Share your expertise briefly. Give honest tradeoffs when comparing options.
-
-DO: Explain the "why", be balanced, ask follow-up questions
-DON'T: Offer calls/appointments, ask for contact info, push solutions
-
-Keep building credibility through helpful, SHORT answers."""
-
-        elif phase == 3:
-            phase_instructions = f"""
-## PHASE 3: PERSONALIZE (Current Phase - Turn {turn_count})
-
-Ask questions to understand their specific situation better.
-
-DO: Be conversational, tailor advice to what they've shared
-DON'T: Offer calls/appointments yet, ask multiple questions at once
-
-Keep responses SHORT - you're having a conversation, not conducting an interview."""
-
-        else:  # Phase 4
-            phase_instructions = f"""
-## PHASE 4: OFFER NEXT STEP - WITH VALUE PITCH (Current Phase - Turn {turn_count})
-
-You've built trust through the conversation. Now you CAN offer to connect them with {lo_name}.
-
-WHEN RECOMMENDING THE LOAN OFFICER - USE THIS VALUE PITCH:
-"I'd recommend setting up a quick call with {lo_name}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years. Here are some times that work: {lo_available_times}"
-
-If they're not ready: "No problem! I'm here whenever you have more questions."
-
-DO NOT just say "I recommend reaching out to your loan officer" - always include the value pitch and specific times."""
-
-        system_prompt = base_prompt + phase_instructions + """
-
-Sign off as:
-Best regards,
-Sarah
-AI Mortgage Assistant | Perennia AI"""
-
-        # Generate response
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(conversation_history)
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=500,
-            temperature=0.7
+        result = ai_service.generate_email_response_sync(
+            conversation_id=conversation_id,
+            user_message=user_message,
+            conversation_history=conversation_history,
+            loan_context=loan_context,
+            additional_context=context or "",
+            lo_name=lo_name,
+            lo_available_times=lo_available_times
         )
 
-        ai_response = response.choices[0].message.content
+        ai_response = result.get("text", "Thank you for your message.")
+        phase = result.get("trust_phase", 1)
+        turn_count = result.get("turn_count", 0)
 
         # Format response email
         reply_subject = f"Re: {subject}" if not subject.startswith("Re:") else subject
