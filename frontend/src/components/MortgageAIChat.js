@@ -368,7 +368,7 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
                 {/* Budget Calculator Button - shown when discussing affordability/payments */}
                 {message.budgetIntent && !message.schedulingIntent && (
                   <a
-                    href={`/lo/${userSlug}?stage=calculator`}
+                    href="/apply/purchase?stage=calculator"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="budget-calculator-btn"

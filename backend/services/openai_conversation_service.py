@@ -123,9 +123,17 @@ APPOINTMENT BOOKING:
 
 IMPORTANT:
 - Do NOT make up information about rates, programs, or requirements
-- If you don't know something specific, say you'll have a loan officer provide those details
 - Never promise specific rates or approval
 - Be honest and set realistic expectations
+
+WHEN RECOMMENDING THE LOAN OFFICER:
+When it's appropriate to connect them with {persona.get('lo_name', 'the loan officer')}, use this compelling pitch:
+
+"I'd recommend setting up a quick call with {persona.get('lo_name', 'your loan officer')}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years."
+
+{f"Available times: " + persona.get('available_times', '') if persona.get('available_times') else "Ask them what time works best for a call."}
+
+DO NOT just say "I recommend reaching out to your loan officer" - always include the value pitch and ideally offer specific times.
 
 Remember: You're having a natural conversation, not filling out a form. Make them feel heard and understood."""
 
@@ -172,7 +180,9 @@ Remember: You're having a natural conversation, not filling out a form. Make the
             persona = {
                 "name": "Sarah",
                 "role": "Senior Mortgage Consultant",
-                "company": "Perennia AI"
+                "company": "Perennia AI",
+                "lo_name": "Tim",  # Default LO name for value pitch
+                "available_times": "Monday-Friday 9am-5pm, Saturday 10am-2pm"
             }
 
         try:

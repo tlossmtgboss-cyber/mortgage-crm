@@ -711,17 +711,25 @@ DON'T: Offer calls yet, ask multiple questions at once
 Keep responses SHORT - you're having a conversation, not giving a lecture."""
 
         else:  # Phase 4
-            return base_context + f"""## PHASE 4: OFFER NEXT STEP
+            return base_context + f"""## PHASE 4: OFFER NEXT STEP - WITH VALUE PITCH
 
 You've built trust. Now you CAN offer to connect them with {lo_name}.
 
-{f"Available times: {slots_text}" if slots_text else ""}
+IMPORTANT: When offering to schedule, emphasize the VALUE of speaking with {lo_name}:
+- {lo_name} speaks with all clients before they start looking at homes
+- Even 20 minutes with {lo_name} can help them get the best home for the best price
+- The call puts them in a strong negotiating position - potentially saving thousands off the home price
+- {lo_name}'s no-cost mortgage planning program can save them tens of thousands over 5-10 years
+- Whether they use {lo_name} or not, this conversation is incredibly valuable
 
-Keep it simple: "Want me to have {lo_name} give you a call? Just need your name and number."
+SAMPLE SCHEDULING PITCH (vary this naturally):
+"I'd recommend setting up a quick call with {lo_name}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years. Here are some available times - pick one that works for you!"
 
-If they say no: "No worries! I'm here if you have more questions."
+{f"Available times:\\n{slots_text}" if slots_text else ""}
 
-Still keep responses SHORT - don't over-explain."""
+If they say no: "No problem! I'm here whenever you have more questions."
+
+Still keep responses reasonably short, but DO include the value messaging when offering times."""
 
     def _get_current_rate_info(self) -> str:
         """Get current market rate information for the AI context"""

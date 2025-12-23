@@ -731,14 +731,26 @@ async def generate_ai_response(
                 - Closing Date: {loan.closing_date}
                 """
 
+        # Get LO info for value pitch
+        lo_name = "Tim"  # Default LO name
+        lo_available_times = "Monday-Friday 9am-5pm, Saturday 10am-2pm"
+        if loan_id:
+            lo_result = db.execute(text("""
+                SELECT u.first_name, u.last_name
+                FROM loans l
+                JOIN users u ON u.id = l.owner_id
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+            if lo_result and lo_result.first_name:
+                lo_name = lo_result.first_name
+
         # Build system prompt
-        system_prompt = f"""You are a helpful AI assistant for a mortgage company, responding to email inquiries from borrowers.
+        system_prompt = f"""You are Sarah, an AI Mortgage Assistant for Perennia AI, responding to email inquiries from borrowers.
 
 Your role is to:
 - Answer questions about the loan process
 - Provide status updates when asked
 - Be professional, friendly, and concise
-- Direct complex questions to the loan officer
 - Never share sensitive financial details in email
 
 {loan_context}
@@ -749,11 +761,18 @@ Keep responses:
 - Professional but warm
 - Concise (2-4 paragraphs max)
 - Helpful and informative
-- End with an offer to help further
 
-IMPORTANT: If the question requires specific loan details you don't have, or involves
-decisions/changes to the loan, politely explain that the loan officer will follow up
-with that information."""
+WHEN RECOMMENDING THE LOAN OFFICER - USE THIS VALUE PITCH:
+When questions require specific details, personalized advice, or decisions - do NOT just say "I recommend reaching out to your loan officer". Instead, use this compelling pitch:
+
+"I'd recommend setting up a quick call with {lo_name}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years. Here are some times that work: {lo_available_times}"
+
+Always include the value proposition (savings, negotiating position, free mortgage planning) when suggesting they speak with {lo_name}.
+
+Sign off as:
+Best regards,
+Sarah
+AI Mortgage Assistant | Perennia AI"""
 
         # Generate response
         messages = [{"role": "system", "content": system_prompt}]
