@@ -142,21 +142,24 @@ function Calendar() {
   // Convert scheduler appointment to calendar event format
   const appointmentToEvent = (appt) => ({
     id: `appt-${appt.id}`,
-    title: appt.title || `Appointment with ${appt.attendee_name || 'Client'}`,
-    description: appt.description || appt.attendee_notes || '',
-    start_time: appt.scheduled_start,
-    end_time: appt.scheduled_end,
-    event_type: appt.meeting_mode === 'VIDEO' ? 'video_call' :
+    title: appt.title || `Appointment with ${appt.contact_name || appt.attendee_name || 'Client'}`,
+    description: appt.description || appt.notes || appt.attendee_notes || '',
+    start_time: appt.start_time || appt.scheduled_start,
+    end_time: appt.end_time || appt.scheduled_end,
+    event_type: appt.appointment_type === 'consultation' ? 'consultation' :
+                appt.meeting_mode === 'VIDEO' ? 'video_call' :
                 appt.meeting_mode === 'PHONE' ? 'phone_call' : 'meeting',
     location: appt.meeting_mode === 'VIDEO' ? 'Video Call' :
               appt.meeting_mode === 'PHONE' ? 'Phone Call' :
-              appt.meeting_mode === 'IN_PERSON' ? 'In Person' : '',
-    related_lead_id: appt.lead_id,
+              appt.meeting_mode === 'IN_PERSON' ? 'In Person' :
+              appt.booked_via === 'ai_assistant' ? 'Phone Call' : '',
+    related_lead_id: appt.lead_id || appt.contact_id,
     isAppointment: true,
-    appointmentId: appt.id,
-    attendee_name: appt.attendee_name,
-    attendee_email: appt.attendee_email,
-    status: appt.status
+    appointmentId: appt.appointment_id || appt.id,
+    attendee_name: appt.contact_name || appt.attendee_name,
+    attendee_email: appt.contact_email || appt.attendee_email,
+    status: appt.status,
+    booked_via: appt.booked_via
   });
 
   const loadEvents = async () => {

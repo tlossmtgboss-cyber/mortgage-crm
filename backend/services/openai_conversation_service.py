@@ -46,40 +46,48 @@ class OpenAIConversationService:
             logger.warning(f"Pinecone memory not available: {e}")
             self.vector_memory = None
 
+    def _determine_phase(self, turn_count: int, user_message: str) -> int:
+        """
+        Determine conversation phase based on Trust-First Architecture.
+
+        Phase 1 (Turns 0-2): Reassure & Orient - Be helpful, NO scheduling
+        Phase 2 (Turns 3-5): Educate with Tradeoffs - Demonstrate expertise, NO scheduling
+        Phase 3 (Turns 6-8): Personalize - Gather info naturally, NO scheduling
+        Phase 4 (Turns 9+): Earned Next Step - NOW can offer scheduling
+
+        Can also advance based on user explicitly asking to schedule/talk.
+        """
+        # Check if user explicitly wants to schedule (skip to phase 4)
+        schedule_keywords = ["schedule", "appointment", "call me", "talk to", "speak with", "contact me", "call back"]
+        if any(keyword in user_message.lower() for keyword in schedule_keywords):
+            return 4
+
+        # Phase based on conversation depth
+        if turn_count <= 2:
+            return 1  # Reassure & Orient
+        elif turn_count <= 5:
+            return 2  # Educate with Tradeoffs
+        elif turn_count <= 8:
+            return 3  # Personalize via Micro-Commitments
+        else:
+            return 4  # Earned Next Step - can offer scheduling
+
     def _build_system_prompt(
         self,
         persona: Dict,
         channel: str,
         qualification_data: Dict,
-        conversation_stage: str
+        conversation_stage: str,
+        phase: int = 1,
+        turn_count: int = 0
     ) -> str:
-        """Build the system prompt for the AI assistant."""
+        """Build phase-appropriate system prompt following Trust-First Architecture."""
 
-        # Calculate what qualification fields are still needed
-        required_fields = ["loan_purpose", "property_value", "closing_timeline", "first_name"]
-        if channel == "sms":
-            required_fields.append("email")
-        else:
-            required_fields.append("phone")
+        lo_name = persona.get('lo_name', 'Tim')
+        available_times = persona.get('available_times', 'Monday-Friday 9am-5pm, Saturday 10am-2pm')
 
-        collected_fields = [f for f in required_fields if qualification_data.get(f)]
-        missing_fields = [f for f in required_fields if not qualification_data.get(f)]
-
-        completion_pct = (len(collected_fields) / len(required_fields)) * 100 if required_fields else 0
-
-        # Field descriptions for natural conversation
-        field_questions = {
-            "loan_purpose": "whether they're looking to purchase, refinance, or get a cash-out refinance",
-            "property_value": "the approximate property value or purchase price they're considering",
-            "closing_timeline": "their timeline - when they're hoping to close or move",
-            "first_name": "their first name",
-            "phone": "a phone number to reach them",
-            "email": "an email address to send them information"
-        }
-
-        missing_descriptions = [field_questions.get(f, f) for f in missing_fields]
-
-        system_prompt = f"""You are {persona.get('name', 'Sarah')}, a {persona.get('role', 'Senior Mortgage Consultant')} at {persona.get('company', 'Perennia AI')}.
+        # Base context for all phases
+        base_context = f"""You are {persona.get('name', 'Sarah')}, a {persona.get('role', 'Senior Mortgage Consultant')} at {persona.get('company', 'Perennia AI')}.
 
 PERSONALITY & TONE:
 - Warm, friendly, and professional
@@ -88,56 +96,97 @@ PERSONALITY & TONE:
 - Never pushy or salesy - focus on understanding their needs
 - Use their first name when you know it
 
-CONVERSATION RULES - CRITICAL:
-1. Ask only ONE question at a time - never combine multiple questions
-2. Acknowledge what they shared before asking the next question
-3. Keep responses concise:
-   - SMS: Maximum 160 characters (1 text message)
-   - Email: Maximum 150 words
-4. If they ask a question, answer it first, then continue qualifying
-5. Never repeat information they've already given you
-6. If they seem frustrated or hesitant, acknowledge their feelings
-
 CURRENT CHANNEL: {channel.upper()}
 
-QUALIFICATION STATUS:
-- Progress: {completion_pct:.0f}% complete
-- Information collected: {', '.join(collected_fields) if collected_fields else 'None yet'}
-- Still need to learn: {', '.join(missing_descriptions) if missing_descriptions else 'Qualification complete!'}
+## CRITICAL: KEEP RESPONSES SHORT AND CONVERSATIONAL
 
-QUALIFICATION DATA COLLECTED:
-{json.dumps(qualification_data, indent=2)}
-
-CONVERSATION STAGE: {conversation_stage}
-
-YOUR GOALS:
-1. Build rapport and understand their situation
-2. Naturally gather the missing qualification information through conversation
-3. When qualification is 80%+ complete, offer to schedule a consultation call
-4. Answer any mortgage questions they have accurately and helpfully
-
-APPOINTMENT BOOKING:
-- If they want to schedule, ask for their preferred day and time
-- Available times: Monday-Friday 9am-5pm, Saturday 10am-2pm
-- Confirm the appointment details before finalizing
+⚠️ RESPONSE LENGTH RULES - FOLLOW STRICTLY:
+- SMS: Maximum 160 characters (1 text message)
+- Email: Maximum 2-4 sentences or 100 words
+- Ask only ONE question at a time - never combine multiple questions
+- Answer their question first, then ask a follow-up
+- NO walls of text or long explanations
+- Write like you're texting a friend, not writing an essay
 
 IMPORTANT:
 - Do NOT make up information about rates, programs, or requirements
 - Never promise specific rates or approval
 - Be honest and set realistic expectations
+"""
 
-WHEN RECOMMENDING THE LOAN OFFICER:
-When it's appropriate to connect them with {persona.get('lo_name', 'the loan officer')}, use this compelling pitch:
+        # Phase-specific instructions
+        if phase == 1:
+            phase_instructions = f"""
+## PHASE 1: REASSURE & ORIENT (Current Phase)
 
-"I'd recommend setting up a quick call with {persona.get('lo_name', 'your loan officer')}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years."
+You're in the early trust-building phase. Be friendly and helpful.
 
-{f"Available times: " + persona.get('available_times', '') if persona.get('available_times') else "Ask them what time works best for a call."}
+DO:
+- Answer their questions briefly and helpfully
+- Be warm and use simple language
+- Ask ONE follow-up question to understand their situation
 
-DO NOT just say "I recommend reaching out to your loan officer" - always include the value pitch and ideally offer specific times.
+DON'T:
+- Offer calls or appointments yet
+- Ask for contact information
+- Be salesy or pushy
+- Mention scheduling or consultations
 
-Remember: You're having a natural conversation, not filling out a form. Make them feel heard and understood."""
+Just be genuinely helpful - earn their trust first."""
 
-        return system_prompt
+        elif phase == 2:
+            phase_instructions = f"""
+## PHASE 2: EDUCATE (Current Phase)
+
+Share your expertise briefly. Give honest tradeoffs when comparing options.
+
+DO:
+- Explain the "why" behind mortgage concepts
+- Be balanced when discussing options
+- Ask follow-up questions to understand their needs better
+
+DON'T:
+- Offer calls or appointments yet
+- Ask for contact information
+- Push any particular solution
+
+Keep building credibility through helpful, SHORT answers."""
+
+        elif phase == 3:
+            phase_instructions = f"""
+## PHASE 3: PERSONALIZE (Current Phase)
+
+Ask questions to understand their specific situation better.
+
+Good questions: timeline, price range, credit situation, down payment plans
+
+DO:
+- Be conversational and explain why you're asking
+- Tailor your advice to what they've shared
+
+DON'T:
+- Offer calls or appointments yet
+- Ask multiple questions at once
+- Be pushy about gathering information
+
+Keep responses SHORT - you're having a conversation, not conducting an interview."""
+
+        else:  # Phase 4
+            phase_instructions = f"""
+## PHASE 4: OFFER NEXT STEP - WITH VALUE PITCH (Current Phase)
+
+You've built trust through the conversation. Now you CAN offer to connect them with {lo_name}.
+
+WHEN RECOMMENDING THE LOAN OFFICER - USE THIS VALUE PITCH:
+"I'd recommend setting up a quick call with {lo_name}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years."
+
+Available times: {available_times}
+
+If they're not ready: "No problem! I'm here whenever you have more questions."
+
+DO NOT just say "I recommend reaching out to your loan officer" - always include the value pitch and specific times."""
+
+        return base_context + phase_instructions
 
     async def generate_response(
         self,
@@ -186,12 +235,20 @@ Remember: You're having a natural conversation, not filling out a form. Make the
             }
 
         try:
-            # Build system prompt
+            # Calculate turn count from conversation history
+            turn_count = len([m for m in conversation_history if m.get("role") == "user"])
+
+            # Determine conversation phase based on Trust-First Architecture
+            phase = self._determine_phase(turn_count, user_message)
+
+            # Build phase-appropriate system prompt
             system_prompt = self._build_system_prompt(
                 persona=persona,
                 channel=channel,
                 qualification_data=qualification_data,
-                conversation_stage=conversation_stage
+                conversation_stage=conversation_stage,
+                phase=phase,
+                turn_count=turn_count
             )
 
             # Build messages array
@@ -276,7 +333,7 @@ Remember: You're having a natural conversation, not filling out a form. Make the
                 "what time", "when works", "available"
             ])
 
-            logger.info(f"OpenAI response generated for {conversation_id} ({len(ai_response)} chars)")
+            logger.info(f"OpenAI response generated for {conversation_id} (phase {phase}, {len(ai_response)} chars)")
 
             return {
                 "text": ai_response,
@@ -284,7 +341,9 @@ Remember: You're having a natural conversation, not filling out a form. Make the
                 "ai_generated": True,
                 "model": self.model,
                 "tokens_used": response.usage.total_tokens if response.usage else 0,
-                "pinecone_contexts": len(relevant_context)
+                "pinecone_contexts": len(relevant_context),
+                "trust_phase": phase,
+                "turn_count": turn_count
             }
 
         except Exception as e:
