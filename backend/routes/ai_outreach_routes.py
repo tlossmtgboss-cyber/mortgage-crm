@@ -368,9 +368,9 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
 </body>
 </html>"""
 
-        # Use admin@perenniaai.com for Microsoft Graph webhook processing
-        # When user replies, Graph webhook detects AI conversation and routes to AI agent
-        reply_to = os.getenv("REPLY_TO_EMAIL", "admin@perenniaai.com")
+        # Use sarah@perenniaai.com for AI email conversations
+        # Replies are processed via Microsoft Graph webhook or SendGrid Inbound Parse
+        reply_to = os.getenv("REPLY_TO_EMAIL", "sarah@perenniaai.com")
 
         # Generate message ID for threading
         message_id = f"<{conv_id}@mortgagecrm.ai>"

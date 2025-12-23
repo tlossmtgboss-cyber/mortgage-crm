@@ -814,7 +814,7 @@ AI Mortgage Assistant | Perennia AI"""
                 subject=reply_subject,
                 html_body=html_response,
                 plain_text_body=plain_text_response,
-                reply_to="admin@perenniaai.com"  # Reply back to admin mailbox for continued conversation
+                reply_to=os.getenv("REPLY_TO_EMAIL", "sarah@perenniaai.com")
             )
 
             # Update conversation in database
@@ -826,13 +826,15 @@ AI Mortgage Assistant | Perennia AI"""
             """), {"conv_id": conv_id, "now": datetime.utcnow()})
 
             # Log the message exchange
+            ai_email = os.getenv("FROM_EMAIL", "sarah@perenniaai.com")
             await db.execute(text("""
                 INSERT INTO ai_email_messages
                 (conversation_id, direction, from_email, to_email, subject, body_text, ai_generated, created_at)
-                VALUES (:conv_id, 'inbound', :from_email, 'admin@perenniaai.com', :subject, :body, false, :now)
+                VALUES (:conv_id, 'inbound', :from_email, :ai_email, :subject, :body, false, :now)
             """), {
                 "conv_id": conv_id,
                 "from_email": from_email,
+                "ai_email": ai_email,
                 "subject": subject,
                 "body": clean_message,
                 "now": datetime.utcnow(),
@@ -841,9 +843,10 @@ AI Mortgage Assistant | Perennia AI"""
             await db.execute(text("""
                 INSERT INTO ai_email_messages
                 (conversation_id, direction, from_email, to_email, subject, body_text, ai_generated, created_at)
-                VALUES (:conv_id, 'outbound', 'admin@perenniaai.com', :to_email, :subject, :body, true, :now)
+                VALUES (:conv_id, 'outbound', :ai_email, :to_email, :subject, :body, true, :now)
             """), {
                 "conv_id": conv_id,
+                "ai_email": ai_email,
                 "to_email": from_email,
                 "subject": reply_subject,
                 "body": result['response'],
