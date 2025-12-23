@@ -3543,6 +3543,18 @@ class EstimateComparison(Base):
 
 
 # ============================================================================
+# CONFIGURE MAPPERS
+# ============================================================================
+# Explicitly configure all mappers after all models are defined
+# This ensures relationships with string references resolve correctly
+from sqlalchemy.orm import configure_mappers
+try:
+    configure_mappers()
+except Exception as e:
+    logger.warning(f"Mapper configuration warning (may be handled later): {e}")
+
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 

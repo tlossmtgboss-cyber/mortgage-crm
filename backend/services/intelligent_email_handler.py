@@ -39,6 +39,11 @@ class EmailIntent(str, Enum):
     NEW_INQUIRY = "new_inquiry"
     COMPLAINT = "complaint"
     THANK_YOU = "thank_you"
+    # Reporting intents (LO only)
+    PIPELINE_REPORT = "pipeline_report"
+    BOTTLENECK_ANALYSIS = "bottleneck_analysis"
+    STALE_FILES_REPORT = "stale_files_report"
+    PERFORMANCE_REPORT = "performance_report"
     OTHER = "other"
 
 
@@ -264,6 +269,63 @@ class IntelligentEmailHandler:
         for pattern in complaint_patterns:
             if re.search(pattern, text):
                 return EmailIntent.COMPLAINT, 0.85
+
+        # =================================================================
+        # REPORTING INTENTS (for LOs/team members)
+        # =================================================================
+
+        # Pipeline report
+        pipeline_patterns = [
+            r"(show|give|send|what('s| is))\s*(me\s*)?(my\s*)?pipeline",
+            r"my\s*pipeline",
+            r"pipeline\s*(report|summary|overview|status)",
+            r"how\s*(many|much)\s*(loans?|files?|deals?)\s*(do\s*i\s*have|in\s*pipeline)",
+            r"(current|active)\s*(loans?|files?|pipeline)",
+        ]
+        for pattern in pipeline_patterns:
+            if re.search(pattern, text):
+                return EmailIntent.PIPELINE_REPORT, 0.95
+
+        # Bottleneck analysis
+        bottleneck_patterns = [
+            r"(where\s*(are|is)\s*(my|the)?\s*)?bottleneck",
+            r"what('s| is)\s*(stuck|stalled|delayed)",
+            r"(pipeline\s*)?bottleneck",
+            r"where\s*(am\s*i|are\s*we)\s*(stuck|blocked|delayed)",
+            r"what('s| is)\s*holding\s*(things?|us|me)\s*(up|back)",
+            r"(identify|find|show)\s*(my\s*)?(the\s*)?bottleneck",
+        ]
+        for pattern in bottleneck_patterns:
+            if re.search(pattern, text):
+                return EmailIntent.BOTTLENECK_ANALYSIS, 0.95
+
+        # Stale/falling behind files
+        stale_patterns = [
+            r"(files?|loans?)\s*(falling|fall)\s*behind",
+            r"(stale|aging|old|stuck)\s*(files?|loans?)",
+            r"what('s| is)\s*(falling|fall)\s*behind",
+            r"(files?|loans?)\s*(at\s*risk|overdue|past\s*due)",
+            r"which\s*(files?|loans?)\s*(need|require)\s*attention",
+            r"(aging|stale)\s*report",
+            r"what\s*(files?|loans?)\s*(are\s*)?(stuck|stale|behind)",
+        ]
+        for pattern in stale_patterns:
+            if re.search(pattern, text):
+                return EmailIntent.STALE_FILES_REPORT, 0.95
+
+        # Performance report
+        performance_patterns = [
+            r"(my|team)\s*performance",
+            r"how\s*(am\s*i|are\s*we)\s*(doing|performing)",
+            r"(production|volume|units)\s*(report|numbers?|stats?)",
+            r"(this|last)\s*(month|week|quarter)('s)?\s*(numbers?|production|volume)",
+            r"(ytd|year\s*to\s*date)\s*(numbers?|production|stats?)",
+            r"conversion\s*rate",
+            r"pull[\s-]?through\s*rate",
+        ]
+        for pattern in performance_patterns:
+            if re.search(pattern, text):
+                return EmailIntent.PERFORMANCE_REPORT, 0.90
 
         # General question (has question marks or question words)
         if "?" in text or re.search(r"\b(what|how|when|where|why|can|could|would|should|is|are|do|does)\b.*\?", text):
@@ -641,16 +703,38 @@ AI Mortgage Assistant | Perennia AI"""
                     "intent": intent.value,
                 }
 
+        # =================================================================
+        # REPORTING HANDLERS
+        # =================================================================
+
+        elif intent == EmailIntent.PIPELINE_REPORT:
+            return self._handle_pipeline_report(lo_id, lo_name)
+
+        elif intent == EmailIntent.BOTTLENECK_ANALYSIS:
+            return self._handle_bottleneck_analysis(lo_id, lo_name)
+
+        elif intent == EmailIntent.STALE_FILES_REPORT:
+            return self._handle_stale_files_report(lo_id, lo_name)
+
+        elif intent == EmailIntent.PERFORMANCE_REPORT:
+            return self._handle_performance_report(lo_id, lo_name)
+
         else:
             # General request from team member
             response = f"""Hi {lo_name},
 
 I received your request. Here's what I can help with via email:
 
-• **Pre-approval letters**: "Send pre-approval letter to [client name]"
-• **Loan status**: "What's the status of [client name]'s loan?"
-• **Document status**: "What documents are needed for [client name]?"
-• **Pipeline report**: "Show me my pipeline"
+**Client Actions:**
+• "Send pre-approval letter to [client name]"
+• "What's the status of [client name]'s loan?"
+• "What documents are needed for [client name]?"
+
+**Reports & Analytics:**
+• "Show me my pipeline"
+• "Where are my bottlenecks?"
+• "What files are falling behind?"
+• "How am I doing this month?"
 
 Just reply with what you need!
 
@@ -1275,6 +1359,466 @@ AI Mortgage Assistant | Perennia AI"""
 
         except Exception as e:
             logger.error(f"Error notifying LO: {e}")
+
+    # =========================================================================
+    # REPORTING HANDLERS
+    # =========================================================================
+
+    def _handle_pipeline_report(self, lo_id: int, lo_name: str) -> Dict[str, Any]:
+        """Generate pipeline report for loan officer."""
+        try:
+            # Get pipeline summary by status
+            pipeline = self.db.execute(text("""
+                SELECT
+                    status,
+                    COUNT(*) as count,
+                    COALESCE(SUM(loan_amount), 0) as volume
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                GROUP BY status
+                ORDER BY
+                    CASE status
+                        WHEN 'application' THEN 1
+                        WHEN 'processing' THEN 2
+                        WHEN 'submitted' THEN 3
+                        WHEN 'underwriting' THEN 4
+                        WHEN 'approved' THEN 5
+                        WHEN 'clear_to_close' THEN 6
+                        WHEN 'docs_out' THEN 7
+                        WHEN 'docs_back' THEN 8
+                        ELSE 9
+                    END
+            """), {"lo_id": lo_id}).fetchall()
+
+            # Get total counts
+            totals = self.db.execute(text("""
+                SELECT
+                    COUNT(*) as total_count,
+                    COALESCE(SUM(loan_amount), 0) as total_volume,
+                    COUNT(CASE WHEN status IN ('clear_to_close', 'docs_out', 'docs_back') THEN 1 END) as closing_soon
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+            """), {"lo_id": lo_id}).fetchone()
+
+            # Get closing this month
+            closing_month = self.db.execute(text("""
+                SELECT COUNT(*), COALESCE(SUM(loan_amount), 0)
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status = 'funded'
+                AND funded_at >= DATE_TRUNC('month', CURRENT_DATE)
+            """), {"lo_id": lo_id}).fetchone()
+
+            # Format pipeline by stage
+            pipeline_lines = []
+            for row in pipeline:
+                status_display = row[0].replace('_', ' ').title() if row[0] else 'Unknown'
+                count = row[1]
+                volume = float(row[2]) if row[2] else 0
+                pipeline_lines.append(f"• **{status_display}**: {count} loans (${volume:,.0f})")
+
+            pipeline_text = "\n".join(pipeline_lines) if pipeline_lines else "• No active loans in pipeline"
+
+            total_count = totals[0] if totals else 0
+            total_volume = float(totals[1]) if totals and totals[1] else 0
+            closing_soon = totals[2] if totals else 0
+
+            funded_count = closing_month[0] if closing_month else 0
+            funded_volume = float(closing_month[1]) if closing_month and closing_month[1] else 0
+
+            response = f"""Hi {lo_name},
+
+Here's your pipeline report:
+
+**📊 PIPELINE SUMMARY**
+────────────────────
+**Total Active Loans:** {total_count}
+**Total Volume:** ${total_volume:,.0f}
+**Closing Soon:** {closing_soon} loans
+
+**📈 BY STAGE:**
+{pipeline_text}
+
+**💰 THIS MONTH:**
+• Funded: {funded_count} loans (${funded_volume:,.0f})
+
+Need more details on any stage? Just ask!
+
+Best regards,
+Sarah"""
+
+            return {
+                "response": response,
+                "action": "pipeline_report_sent",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "pipeline_report",
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating pipeline report: {e}")
+            return {
+                "response": f"Hi {lo_name},\n\nI encountered an error generating your pipeline report. Please try again or check the CRM dashboard.\n\nBest regards,\nSarah",
+                "action": "pipeline_report_error",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "pipeline_report",
+            }
+
+    def _handle_bottleneck_analysis(self, lo_id: int, lo_name: str) -> Dict[str, Any]:
+        """Analyze pipeline bottlenecks for loan officer."""
+        try:
+            # Get loans stuck in each stage (over SLA thresholds)
+            bottlenecks = self.db.execute(text("""
+                SELECT
+                    l.status,
+                    l.loan_number,
+                    c.first_name || ' ' || c.last_name as borrower_name,
+                    l.loan_amount,
+                    EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) as days_in_stage,
+                    l.status_changed_at
+                FROM loans l
+                LEFT JOIN contacts c ON c.id = l.borrower_id
+                WHERE l.loan_officer_id = :lo_id
+                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) > 5
+                ORDER BY EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) DESC
+                LIMIT 10
+            """), {"lo_id": lo_id}).fetchall()
+
+            # Get stage averages
+            stage_avgs = self.db.execute(text("""
+                SELECT
+                    status,
+                    COUNT(*) as count,
+                    AVG(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - status_changed_at))) as avg_days
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                GROUP BY status
+                HAVING AVG(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - status_changed_at))) > 3
+                ORDER BY avg_days DESC
+            """), {"lo_id": lo_id}).fetchall()
+
+            # Format bottleneck loans
+            bottleneck_lines = []
+            for row in bottlenecks:
+                status = row[0].replace('_', ' ').title() if row[0] else 'Unknown'
+                loan_num = row[1] or 'N/A'
+                borrower = row[2] or 'Unknown'
+                days = int(row[4]) if row[4] else 0
+                bottleneck_lines.append(f"• **{borrower}** (#{loan_num}) - {status} for **{days} days**")
+
+            bottleneck_text = "\n".join(bottleneck_lines) if bottleneck_lines else "• No significant bottlenecks found! 🎉"
+
+            # Format stage analysis
+            stage_lines = []
+            for row in stage_avgs:
+                status = row[0].replace('_', ' ').title() if row[0] else 'Unknown'
+                count = row[1]
+                avg_days = round(float(row[2]), 1) if row[2] else 0
+                severity = "🔴" if avg_days > 10 else "🟡" if avg_days > 5 else "🟢"
+                stage_lines.append(f"{severity} **{status}**: {count} loans, avg {avg_days} days")
+
+            stage_text = "\n".join(stage_lines) if stage_lines else "• All stages flowing smoothly!"
+
+            response = f"""Hi {lo_name},
+
+Here's your bottleneck analysis:
+
+**🚨 LOANS NEEDING ATTENTION:**
+{bottleneck_text}
+
+**📊 STAGE ANALYSIS:**
+{stage_text}
+
+**💡 RECOMMENDATIONS:**
+"""
+            # Add recommendations based on bottlenecks
+            if bottlenecks:
+                if any(r[0] == 'underwriting' for r in bottlenecks):
+                    response += "• Follow up with underwriting on pending files\n"
+                if any(r[0] == 'processing' for r in bottlenecks):
+                    response += "• Check with processor on document collection\n"
+                if any(int(r[4] or 0) > 14 for r in bottlenecks):
+                    response += "• Escalate loans over 14 days to management\n"
+            else:
+                response += "• Pipeline is flowing well - keep it up!\n"
+
+            response += "\nBest regards,\nSarah"
+
+            return {
+                "response": response,
+                "action": "bottleneck_analysis_sent",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "bottleneck_analysis",
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating bottleneck analysis: {e}")
+            return {
+                "response": f"Hi {lo_name},\n\nI encountered an error analyzing bottlenecks. Please try again or check the CRM dashboard.\n\nBest regards,\nSarah",
+                "action": "bottleneck_analysis_error",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "bottleneck_analysis",
+            }
+
+    def _handle_stale_files_report(self, lo_id: int, lo_name: str) -> Dict[str, Any]:
+        """Get report of files falling behind / at risk."""
+        try:
+            # Get stale files (no activity in 7+ days)
+            stale_files = self.db.execute(text("""
+                SELECT
+                    l.loan_number,
+                    c.first_name || ' ' || c.last_name as borrower_name,
+                    l.status,
+                    l.loan_amount,
+                    EXTRACT(DAY FROM (CURRENT_TIMESTAMP - COALESCE(l.updated_at, l.status_changed_at))) as days_stale,
+                    l.expected_close_date,
+                    l.lock_expiration_date
+                FROM loans l
+                LEFT JOIN contacts c ON c.id = l.borrower_id
+                WHERE l.loan_officer_id = :lo_id
+                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND EXTRACT(DAY FROM (CURRENT_TIMESTAMP - COALESCE(l.updated_at, l.status_changed_at))) > 7
+                ORDER BY days_stale DESC
+                LIMIT 15
+            """), {"lo_id": lo_id}).fetchall()
+
+            # Get loans with expiring rate locks
+            expiring_locks = self.db.execute(text("""
+                SELECT
+                    l.loan_number,
+                    c.first_name || ' ' || c.last_name as borrower_name,
+                    l.lock_expiration_date,
+                    EXTRACT(DAY FROM (l.lock_expiration_date - CURRENT_DATE)) as days_until_expiry
+                FROM loans l
+                LEFT JOIN contacts c ON c.id = l.borrower_id
+                WHERE l.loan_officer_id = :lo_id
+                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.lock_expiration_date IS NOT NULL
+                AND l.lock_expiration_date <= CURRENT_DATE + INTERVAL '14 days'
+                ORDER BY l.lock_expiration_date
+                LIMIT 10
+            """), {"lo_id": lo_id}).fetchall()
+
+            # Get loans past expected close
+            past_close = self.db.execute(text("""
+                SELECT
+                    l.loan_number,
+                    c.first_name || ' ' || c.last_name as borrower_name,
+                    l.expected_close_date,
+                    EXTRACT(DAY FROM (CURRENT_DATE - l.expected_close_date)) as days_past
+                FROM loans l
+                LEFT JOIN contacts c ON c.id = l.borrower_id
+                WHERE l.loan_officer_id = :lo_id
+                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.expected_close_date < CURRENT_DATE
+                ORDER BY l.expected_close_date
+                LIMIT 10
+            """), {"lo_id": lo_id}).fetchall()
+
+            # Format stale files
+            stale_lines = []
+            for row in stale_files:
+                borrower = row[1] or 'Unknown'
+                loan_num = row[0] or 'N/A'
+                status = row[2].replace('_', ' ').title() if row[2] else 'Unknown'
+                days = int(row[4]) if row[4] else 0
+                stale_lines.append(f"• **{borrower}** (#{loan_num}) - {status}, no activity for {days} days")
+
+            stale_text = "\n".join(stale_lines[:8]) if stale_lines else "• No stale files! 🎉"
+
+            # Format expiring locks
+            lock_lines = []
+            for row in expiring_locks:
+                borrower = row[1] or 'Unknown'
+                loan_num = row[0] or 'N/A'
+                days = int(row[3]) if row[3] else 0
+                if days <= 0:
+                    lock_lines.append(f"🔴 **{borrower}** (#{loan_num}) - **LOCK EXPIRED**")
+                elif days <= 7:
+                    lock_lines.append(f"🟡 **{borrower}** (#{loan_num}) - Lock expires in {days} days")
+                else:
+                    lock_lines.append(f"🟢 **{borrower}** (#{loan_num}) - Lock expires in {days} days")
+
+            lock_text = "\n".join(lock_lines) if lock_lines else "• No rate locks expiring soon"
+
+            # Format past close
+            past_lines = []
+            for row in past_close:
+                borrower = row[1] or 'Unknown'
+                loan_num = row[0] or 'N/A'
+                days_past = int(row[3]) if row[3] else 0
+                past_lines.append(f"• **{borrower}** (#{loan_num}) - {days_past} days past expected close")
+
+            past_text = "\n".join(past_lines) if past_lines else "• No loans past expected close date"
+
+            response = f"""Hi {lo_name},
+
+Here's your **Files at Risk** report:
+
+**🕐 STALE FILES** (No activity 7+ days):
+{stale_text}
+
+**🔒 EXPIRING RATE LOCKS:**
+{lock_text}
+
+**📅 PAST EXPECTED CLOSE:**
+{past_text}
+
+**📊 SUMMARY:**
+• Stale files: {len(stale_files)}
+• Expiring locks: {len(expiring_locks)}
+• Past close date: {len(past_close)}
+
+Need to take action on any of these? Just reply!
+
+Best regards,
+Sarah"""
+
+            return {
+                "response": response,
+                "action": "stale_files_report_sent",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "stale_files_report",
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating stale files report: {e}")
+            return {
+                "response": f"Hi {lo_name},\n\nI encountered an error generating the stale files report. Please try again or check the CRM dashboard.\n\nBest regards,\nSarah",
+                "action": "stale_files_report_error",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "stale_files_report",
+            }
+
+    def _handle_performance_report(self, lo_id: int, lo_name: str) -> Dict[str, Any]:
+        """Generate performance report for loan officer."""
+        try:
+            # This month's production
+            this_month = self.db.execute(text("""
+                SELECT
+                    COUNT(*) as funded_count,
+                    COALESCE(SUM(loan_amount), 0) as funded_volume
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status = 'funded'
+                AND funded_at >= DATE_TRUNC('month', CURRENT_DATE)
+            """), {"lo_id": lo_id}).fetchone()
+
+            # Last month's production
+            last_month = self.db.execute(text("""
+                SELECT
+                    COUNT(*) as funded_count,
+                    COALESCE(SUM(loan_amount), 0) as funded_volume
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status = 'funded'
+                AND funded_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                AND funded_at < DATE_TRUNC('month', CURRENT_DATE)
+            """), {"lo_id": lo_id}).fetchone()
+
+            # YTD production
+            ytd = self.db.execute(text("""
+                SELECT
+                    COUNT(*) as funded_count,
+                    COALESCE(SUM(loan_amount), 0) as funded_volume
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status = 'funded'
+                AND funded_at >= DATE_TRUNC('year', CURRENT_DATE)
+            """), {"lo_id": lo_id}).fetchone()
+
+            # Conversion rate (apps to funded)
+            conversion = self.db.execute(text("""
+                SELECT
+                    COUNT(*) as total_apps,
+                    COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND application_date >= CURRENT_DATE - INTERVAL '90 days'
+            """), {"lo_id": lo_id}).fetchone()
+
+            # Average cycle time
+            cycle_time = self.db.execute(text("""
+                SELECT AVG(EXTRACT(DAY FROM (funded_at - application_date))) as avg_days
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND status = 'funded'
+                AND funded_at >= CURRENT_DATE - INTERVAL '90 days'
+            """), {"lo_id": lo_id}).fetchone()
+
+            # Format numbers
+            this_month_count = this_month[0] if this_month else 0
+            this_month_vol = float(this_month[1]) if this_month and this_month[1] else 0
+
+            last_month_count = last_month[0] if last_month else 0
+            last_month_vol = float(last_month[1]) if last_month and last_month[1] else 0
+
+            ytd_count = ytd[0] if ytd else 0
+            ytd_vol = float(ytd[1]) if ytd and ytd[1] else 0
+
+            total_apps = conversion[0] if conversion else 0
+            funded_apps = conversion[1] if conversion else 0
+            conversion_rate = (funded_apps / total_apps * 100) if total_apps > 0 else 0
+
+            avg_cycle = round(float(cycle_time[0]), 1) if cycle_time and cycle_time[0] else 0
+
+            # Month over month change
+            vol_change = ((this_month_vol - last_month_vol) / last_month_vol * 100) if last_month_vol > 0 else 0
+            vol_emoji = "📈" if vol_change > 0 else "📉" if vol_change < 0 else "➡️"
+
+            response = f"""Hi {lo_name},
+
+Here's your performance report:
+
+**📅 THIS MONTH:**
+• Funded: {this_month_count} loans
+• Volume: ${this_month_vol:,.0f}
+
+**📅 LAST MONTH:**
+• Funded: {last_month_count} loans
+• Volume: ${last_month_vol:,.0f}
+
+{vol_emoji} **Month-over-Month:** {vol_change:+.1f}%
+
+**📊 YEAR-TO-DATE:**
+• Funded: {ytd_count} loans
+• Volume: ${ytd_vol:,.0f}
+
+**📈 KEY METRICS (90 days):**
+• Pull-through rate: {conversion_rate:.1f}%
+• Avg cycle time: {avg_cycle} days
+
+Keep up the great work!
+
+Best regards,
+Sarah"""
+
+            return {
+                "response": response,
+                "action": "performance_report_sent",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "performance_report",
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating performance report: {e}")
+            return {
+                "response": f"Hi {lo_name},\n\nI encountered an error generating your performance report. Please try again or check the CRM dashboard.\n\nBest regards,\nSarah",
+                "action": "performance_report_error",
+                "should_send": True,
+                "sender_type": "team_member",
+                "intent": "performance_report",
+            }
 
 
 def get_intelligent_email_handler(db: Session) -> IntelligentEmailHandler:
