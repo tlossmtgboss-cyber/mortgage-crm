@@ -368,11 +368,8 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
 </body>
 </html>"""
 
-        # Build tagged reply-to for conversation tracking
-        # Format: ai-reply+{conv_id}@domain
-        ai_reply_base = os.getenv("AI_REPLY_EMAIL", "ai-reply@perenniaai.com")
-        domain = ai_reply_base.split('@')[1] if '@' in ai_reply_base else "perenniaai.com"
-        tagged_reply_to = f"ai-reply+{conv_id}@{domain}"
+        # Use FROM_EMAIL as reply-to (replies go to admin mailbox, processed by Graph webhook)
+        reply_to = os.getenv("REPLY_TO_EMAIL", email_service.from_email)
 
         # Generate message ID for threading
         message_id = f"<{conv_id}@mortgagecrm.ai>"
@@ -456,9 +453,9 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
             subject=subject,
             html_body=html_body,
             plain_text_body=message,
+            reply_to=reply_to,
             headers={
                 "Message-ID": message_id,
-                "Reply-To": tagged_reply_to,
                 "X-Conversation-ID": conv_id,
                 "X-AI-Conversation": "true"
             }
@@ -508,7 +505,7 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
         except Exception as log_err:
             logger.warning(f"Failed to log outreach: {log_err}")
 
-        logger.info(f"Started AI outreach conversation {conv_id} with {email}, reply-to: {tagged_reply_to}")
+        logger.info(f"Started AI outreach conversation {conv_id} with {email}, reply-to: {reply_to}")
 
         return {
             "success": result,
@@ -516,7 +513,7 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
             "conversation_id": conv_id,
             "recipient": email,
             "subject": subject,
-            "reply_to": tagged_reply_to,
+            "reply_to": reply_to,
             "message": "Email sent successfully! AI will handle replies automatically." if result else "Failed to send email"
         }
 
