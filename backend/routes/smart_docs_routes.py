@@ -1050,10 +1050,14 @@ async def get_queue_summary(
     db: Session = Depends(get_db),
 ):
     """Get summary statistics for the document queue."""
-    from services.smart_docs.queue_service import QueueService
+    try:
+        from services.smart_docs.queue_service import QueueService
 
-    queue_service = QueueService(db)
-    return queue_service.get_queue_summary()
+        queue_service = QueueService(db)
+        return queue_service.get_queue_summary()
+    except Exception as e:
+        logger.error(f"Queue summary error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Queue service error: {str(e)}")
 
 
 @router.get("/queue/{loan_id}")
