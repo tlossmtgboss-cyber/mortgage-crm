@@ -365,6 +365,35 @@
   height: 16px;
 }
 
+/* Budget Calculator CTA Button */
+.budget-calculator-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.budget-calculator-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  color: white;
+}
+
+.budget-calculator-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* ============================================
    SCHEDULER PANEL
    ============================================ */

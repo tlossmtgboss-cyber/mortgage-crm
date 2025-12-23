@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
 import PaymentCalculator from '../components/PaymentCalculator';
@@ -1170,6 +1170,7 @@ const PLANNING_QUESTIONS = {
 export default function PurchaseApplication() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // Only show demo mode for explicit /apply/start - /apply/purchase is a real application entry point
   const isDemoMode = token === 'start';
 
@@ -1316,6 +1317,16 @@ export default function PurchaseApplication() {
       ));
     }
   };
+
+  // Handle URL query parameters - navigate to specific stage if requested
+  useEffect(() => {
+    const stageParam = searchParams.get('stage');
+    if (stageParam === 'calculator') {
+      // Navigate to the planning stage which contains the payment calculator
+      setCurrentStage('planning');
+      setPlanningStep(1); // Step 1 is the payment calculator
+    }
+  }, [searchParams]);
 
   // Auto-redirect to client portal after successful submission
   useEffect(() => {

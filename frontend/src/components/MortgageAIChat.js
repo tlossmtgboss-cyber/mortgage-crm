@@ -146,6 +146,7 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
         content: data.response || "I'm sorry, I couldn't process that. Please try again.",
         timestamp: new Date(),
         schedulingIntent: data.scheduling_intent,
+        budgetIntent: data.budget_intent,
         phase: data.phase,
         availableSlots: data.available_slots
       };
@@ -362,6 +363,27 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
                     </svg>
                     Schedule a Call
                   </button>
+                )}
+
+                {/* Budget Calculator Button - shown when discussing affordability/payments */}
+                {message.budgetIntent && !message.schedulingIntent && (
+                  <a
+                    href={`/lo/${userSlug}?stage=calculator`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="budget-calculator-btn"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="4" y="2" width="16" height="20" rx="2"/>
+                      <line x1="8" y1="6" x2="16" y2="6"/>
+                      <line x1="8" y1="10" x2="10" y2="10"/>
+                      <line x1="14" y1="10" x2="16" y2="10"/>
+                      <line x1="8" y1="14" x2="10" y2="14"/>
+                      <line x1="14" y1="14" x2="16" y2="14"/>
+                      <line x1="8" y1="18" x2="16" y2="18"/>
+                    </svg>
+                    Try Our Budget Calculator
+                  </a>
                 )}
               </div>
             </div>
