@@ -368,9 +368,9 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
 </body>
 </html>"""
 
-        # Use reply.perenniaai.com subdomain for SendGrid Inbound Parse
-        # When user replies, SendGrid forwards to /api/v1/webhook/sendgrid-inbound
-        reply_to = os.getenv("REPLY_TO_EMAIL", "sarah@reply.perenniaai.com")
+        # Use admin@perenniaai.com for Microsoft Graph webhook processing
+        # When user replies, Graph webhook detects AI conversation and routes to AI agent
+        reply_to = os.getenv("REPLY_TO_EMAIL", "admin@perenniaai.com")
 
         # Generate message ID for threading
         message_id = f"<{conv_id}@mortgagecrm.ai>"

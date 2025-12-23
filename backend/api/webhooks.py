@@ -253,6 +253,7 @@ async def process_incoming_email(email: Dict[str, Any], db: Any):
     Process an incoming email through the reconciliation system.
 
     FLOW:
+    0. CHECK FOR AI CONVERSATION - if sender has active AI conversation, process with AI agent
     1. Create IncomingDataEvent for the email
     2. Classify email intent and recommended action
     3. Check for matching response patterns (learned behavior)
@@ -264,6 +265,7 @@ async def process_incoming_email(email: Dict[str, Any], db: Any):
     try:
         from sqlalchemy import text
         import json
+        import re
 
         email_id = email.get("id")
         subject = email.get("subject", "")
@@ -279,6 +281,25 @@ async def process_incoming_email(email: Dict[str, Any], db: Any):
         sender_domain = from_email.split("@")[1] if "@" in from_email else ""
 
         logger.info(f"[GRAPH WEBHOOK] Processing email for reconciliation: {subject} from {from_email}")
+
+        # =================================================================
+        # STEP 0: Check if this is a reply to an AI conversation
+        # =================================================================
+        conv_id = f"email_{from_email.replace('@', '_').replace('.', '_')}"
+
+        # Check if sender has an active AI conversation
+        conv_check = await db.execute(text("""
+            SELECT conversation_id, recipient_name, status
+            FROM ai_email_conversations
+            WHERE conversation_id = :conv_id AND status = 'active'
+            LIMIT 1
+        """), {"conv_id": conv_id})
+        ai_conversation = conv_check.fetchone()
+
+        if ai_conversation:
+            logger.info(f"[GRAPH WEBHOOK] Found active AI conversation {conv_id} - routing to AI agent")
+            await process_ai_conversation_reply(email, from_email, from_name, conv_id, db)
+            return  # Skip normal reconciliation flow
 
         # Get the user_id from recipient (for multi-tenant support)
         # For now, we'll get the first user or use a system user
@@ -668,6 +689,175 @@ async def execute_email_response_pattern(
 
     except Exception as e:
         logger.error(f"[GRAPH WEBHOOK] Error executing pattern: {e}", exc_info=True)
+
+
+async def process_ai_conversation_reply(
+    email: Dict[str, Any],
+    from_email: str,
+    from_name: str,
+    conv_id: str,
+    db: Any
+):
+    """
+    Process a reply to an AI outreach conversation.
+    Routes through the AI qualification agent and sends AI response.
+    """
+    try:
+        from sqlalchemy import text
+        import re
+        from agents.qualification_agent import process_qualification_message
+        from email_service import email_service
+
+        subject = email.get("subject", "")
+        body_content = email.get("body", {}).get("content", "")
+        body_preview = email.get("body_preview", "")
+
+        # Get message content - prefer plain text or strip HTML
+        message_body = body_preview or body_content
+        if body_content and not body_preview:
+            # Strip HTML tags
+            message_body = re.sub(r'<[^>]+>', ' ', body_content)
+            message_body = re.sub(r'\s+', ' ', message_body)
+
+        # Clean up quoted replies
+        lines = message_body.split('\n')
+        clean_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            if line.strip().startswith('>'):
+                break
+            if 'wrote:' in line_lower and ('@' in line_lower or 'on ' in line_lower):
+                break
+            if line_lower.startswith('from:') and '@' in line_lower:
+                break
+            if '-------- original message --------' in line_lower:
+                break
+            if 'sent from my iphone' in line_lower or 'sent from my ipad' in line_lower:
+                break
+            clean_lines.append(line)
+
+        clean_message = '\n'.join(clean_lines).strip()
+
+        if not clean_message:
+            clean_message = message_body[:500].strip() if message_body else ""
+
+        if not clean_message:
+            logger.warning(f"[GRAPH WEBHOOK] Empty AI conversation reply from {from_email}")
+            return
+
+        logger.info(f"[GRAPH WEBHOOK] Processing AI conversation reply from {from_email}: {clean_message[:100]}...")
+
+        # Process through AI qualification agent
+        result = process_qualification_message(
+            conversation_id=conv_id,
+            message=clean_message,
+            channel="email",
+            sender_info={"email": from_email, "first_name": from_name}
+        )
+
+        # Only send response if AI has one
+        if result.get("should_send") and result.get("response"):
+            # Get conversation state for threading
+            from services.conversation_intelligence import get_conversation_service, Channel
+            conv_service = get_conversation_service()
+            state = conv_service.get_or_create_conversation(conv_id, Channel.EMAIL)
+
+            # Record user message in history
+            state.message_history.append({
+                "role": "user",
+                "content": clean_message,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
+            # Record AI response in history
+            state.message_history.append({
+                "role": "assistant",
+                "content": result['response'],
+                "timestamp": datetime.utcnow().isoformat()
+            })
+
+            # Format response email
+            html_response = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px; }}
+    </style>
+</head>
+<body>
+<div style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000;">
+<p>Hi {from_name or 'there'},</p>
+
+<p>{result['response'].replace(chr(10), '<br>')}</p>
+
+<p>Best regards,<br>
+<b>Sarah</b><br>
+<span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+</div>
+</body>
+</html>"""
+
+            plain_text_response = f"""Hi {from_name or 'there'},
+
+{result['response']}
+
+Best regards,
+Sarah
+AI Mortgage Assistant | Perennia AI"""
+
+            # Determine reply subject
+            reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
+
+            # Send AI response
+            email_sent = email_service.send_html_email(
+                to_email=from_email,
+                subject=reply_subject,
+                html_body=html_response,
+                plain_text_body=plain_text_response,
+                reply_to="admin@perenniaai.com"  # Reply back to admin mailbox for continued conversation
+            )
+
+            # Update conversation in database
+            await db.execute(text("""
+                UPDATE ai_email_conversations
+                SET message_count = message_count + 2,
+                    last_message_at = :now
+                WHERE conversation_id = :conv_id
+            """), {"conv_id": conv_id, "now": datetime.utcnow()})
+
+            # Log the message exchange
+            await db.execute(text("""
+                INSERT INTO ai_email_messages
+                (conversation_id, direction, from_email, to_email, subject, body_text, ai_generated, created_at)
+                VALUES (:conv_id, 'inbound', :from_email, 'admin@perenniaai.com', :subject, :body, false, :now)
+            """), {
+                "conv_id": conv_id,
+                "from_email": from_email,
+                "subject": subject,
+                "body": clean_message,
+                "now": datetime.utcnow(),
+            })
+
+            await db.execute(text("""
+                INSERT INTO ai_email_messages
+                (conversation_id, direction, from_email, to_email, subject, body_text, ai_generated, created_at)
+                VALUES (:conv_id, 'outbound', 'admin@perenniaai.com', :to_email, :subject, :body, true, :now)
+            """), {
+                "conv_id": conv_id,
+                "to_email": from_email,
+                "subject": reply_subject,
+                "body": result['response'],
+                "now": datetime.utcnow(),
+            })
+
+            await db.commit()
+
+            logger.info(f"[GRAPH WEBHOOK] Sent AI response to {from_email}, email_sent={email_sent}")
+        else:
+            logger.info(f"[GRAPH WEBHOOK] AI chose not to respond to {from_email}")
+
+    except Exception as e:
+        logger.error(f"[GRAPH WEBHOOK] Error processing AI conversation reply: {e}", exc_info=True)
 
 
 def classify_email_type(subject: str, body: str, from_email: str) -> str:
