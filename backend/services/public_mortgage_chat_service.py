@@ -362,6 +362,65 @@ class PublicMortgageChatService:
             self.db.rollback()
             return {"success": False, "error": str(e)}
 
+    def _create_calendar_event(
+        self,
+        contact_name: str,
+        contact_email: str,
+        contact_phone: Optional[str],
+        appointment_time: datetime,
+        duration: int
+    ):
+        """Create calendar event on the loan officer's calendar via Microsoft Graph"""
+        try:
+            import asyncio
+            from services.microsoft_graph import create_event_via_graph
+
+            lo_id = self.lo_info['id']
+            lo_name = self.lo_info['name']
+            end_time = appointment_time + timedelta(minutes=duration)
+
+            # Build event subject and body
+            subject = f"Appointment: {contact_name} - Mortgage Consultation"
+            body = f"""
+            <div style="font-family: Arial, sans-serif;">
+                <h3>Mortgage Consultation Appointment</h3>
+                <p><strong>Contact:</strong> {contact_name}</p>
+                <p><strong>Email:</strong> {contact_email or 'Not provided'}</p>
+                <p><strong>Phone:</strong> {contact_phone or 'Not provided'}</p>
+                <p><strong>Duration:</strong> {duration} minutes</p>
+                <hr>
+                <p style="color: #666;">This appointment was scheduled through the AI mortgage assistant on your website.</p>
+            </div>
+            """
+
+            # Run the async function synchronously
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    create_event_via_graph(
+                        user_id=lo_id,
+                        subject=subject,
+                        start=appointment_time,
+                        end=end_time,
+                        db=self.db,
+                        attendees=[contact_email] if contact_email else None,
+                        body=body
+                    )
+                )
+
+                if result.success:
+                    logger.info(f"Calendar event created for LO {lo_id}: {result.event_id}")
+                else:
+                    logger.warning(f"Failed to create calendar event: {result.error}")
+
+            finally:
+                loop.close()
+
+        except Exception as e:
+            logger.warning(f"Failed to create calendar event: {e}")
+            # Don't fail the appointment booking if calendar fails
+
     def _send_appointment_notifications(
         self,
         appointment_id: str,
@@ -371,10 +430,19 @@ class PublicMortgageChatService:
         appointment_time: datetime,
         duration: int
     ):
-        """Send notifications for the appointment"""
+        """Send notifications for the appointment and create calendar event"""
         try:
             from services.notification_service import NotificationService
             notification_service = NotificationService()
+
+            # Create calendar event on LO's calendar
+            self._create_calendar_event(
+                contact_name=contact_name,
+                contact_email=contact_email,
+                contact_phone=contact_phone,
+                appointment_time=appointment_time,
+                duration=duration
+            )
 
             lo_name = self.lo_info['name']
             lo_email = self.lo_info['email']
