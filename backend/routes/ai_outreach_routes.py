@@ -337,12 +337,12 @@ async def _send_email_outreach(email: str, first_name: str, subject: str, messag
     try:
         from email_service import EmailService
         from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
-        import uuid
 
         email_service = EmailService()
 
-        # Create unique conversation ID (format matches ai_email_conversation system)
-        conv_id = f"conv_{uuid.uuid4().hex[:16]}"
+        # Create conversation ID using email format (matches main.py webhook handler)
+        # Format: email_tlossmtgboss_gmail_com (email with @ and . replaced)
+        conv_id = f"email_{email.replace('@', '_').replace('.', '_')}"
 
         # Initialize conversation state (in-memory)
         conv_service = get_conversation_service()

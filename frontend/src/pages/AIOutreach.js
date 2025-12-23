@@ -229,7 +229,7 @@ const AIOutreach = () => {
   const fetchConversationDetail = async (convId, channel = 'sms') => {
     try {
       // Determine which endpoint to use based on channel or conversation ID format
-      const isEmailConv = channel === 'email' || convId.startsWith('conv_');
+      const isEmailConv = channel === 'email' || convId.startsWith('conv_') || convId.startsWith('email_');
 
       let response;
       if (isEmailConv) {
