@@ -68,6 +68,225 @@ def index_exists(conn, index_name, is_pg=False):
     return result.fetchone() is not None
 
 
+def create_smart_docs_tables(engine, is_pg):
+    """Create Smart Docs tables if they don't exist."""
+    from sqlalchemy.orm import Session
+
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        existing_tables = inspector.get_table_names()
+
+        # Check if smart_document_requests exists
+        if 'smart_document_requests' not in existing_tables:
+            print("  Creating Smart Docs tables...")
+            try:
+                # Import the models to register them with Base
+                import sys
+                import os
+                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+                from database import Base
+                from models.smart_docs_models import (
+                    DocumentRequest, SmartDocument, DocPolicyEvent,
+                    NeedsListTemplate, ClientReminderSettings
+                )
+
+                # Create only the Smart Docs tables
+                smart_docs_tables = [
+                    DocumentRequest.__table__,
+                    SmartDocument.__table__,
+                    DocPolicyEvent.__table__,
+                    NeedsListTemplate.__table__,
+                    ClientReminderSettings.__table__,
+                ]
+
+                for table in smart_docs_tables:
+                    if table.name not in existing_tables:
+                        table.create(engine, checkfirst=True)
+                        print(f"    Created table: {table.name}")
+
+                return True
+            except Exception as e:
+                print(f"  Warning: Could not create tables via ORM: {e}")
+                # Fall back to raw SQL
+                return create_smart_docs_tables_sql(conn, is_pg)
+        else:
+            print("  Smart Docs tables already exist")
+            return True
+
+
+def create_smart_docs_tables_sql(conn, is_pg):
+    """Create Smart Docs tables using raw SQL as fallback."""
+    try:
+        if is_pg:
+            # PostgreSQL version
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS smart_document_requests (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER NOT NULL,
+                    borrower_id INTEGER,
+                    doc_type VARCHAR(100),
+                    title VARCHAR(255),
+                    description TEXT,
+                    instructions TEXT,
+                    status VARCHAR(50) DEFAULT 'OPEN',
+                    priority VARCHAR(50) DEFAULT 'NORMAL',
+                    due_date TIMESTAMP,
+                    applies_to VARCHAR(50),
+                    source VARCHAR(50),
+                    auto_renew BOOLEAN DEFAULT FALSE,
+                    freshness_period_days INTEGER,
+                    next_expected_available_at TIMESTAMP,
+                    sla_due_at TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    superseded_by INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS smart_documents (
+                    id SERIAL PRIMARY KEY,
+                    request_id INTEGER REFERENCES smart_document_requests(id),
+                    loan_id INTEGER NOT NULL,
+                    borrower_id INTEGER,
+                    doc_type VARCHAR(100),
+                    filename VARCHAR(255),
+                    file_path VARCHAR(512),
+                    file_size INTEGER,
+                    mime_type VARCHAR(100),
+                    s3_key VARCHAR(512),
+                    status VARCHAR(50) DEFAULT 'PENDING_REVIEW',
+                    decision VARCHAR(50),
+                    confidence_score REAL,
+                    review_notes TEXT,
+                    reviewed_by INTEGER,
+                    reviewed_at TIMESTAMP,
+                    is_screenshot BOOLEAN DEFAULT FALSE,
+                    doc_date DATE,
+                    expiration_date DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS doc_policy_events (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER NOT NULL,
+                    request_id INTEGER REFERENCES smart_document_requests(id),
+                    document_id INTEGER REFERENCES smart_documents(id),
+                    event_type VARCHAR(100),
+                    description TEXT,
+                    metadata JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS needs_list_templates (
+                    id SERIAL PRIMARY KEY,
+                    slug VARCHAR(100) UNIQUE,
+                    name VARCHAR(255),
+                    doc_type VARCHAR(100),
+                    loan_programs JSONB,
+                    description TEXT,
+                    instructions TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    version VARCHAR(16) DEFAULT '1',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+        else:
+            # SQLite version
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS smart_document_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    loan_id INTEGER NOT NULL,
+                    borrower_id INTEGER,
+                    doc_type VARCHAR(100),
+                    title VARCHAR(255),
+                    description TEXT,
+                    instructions TEXT,
+                    status VARCHAR(50) DEFAULT 'OPEN',
+                    priority VARCHAR(50) DEFAULT 'NORMAL',
+                    due_date TIMESTAMP,
+                    applies_to VARCHAR(50),
+                    source VARCHAR(50),
+                    auto_renew BOOLEAN DEFAULT 0,
+                    freshness_period_days INTEGER,
+                    next_expected_available_at TIMESTAMP,
+                    sla_due_at TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1,
+                    superseded_by INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS smart_documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id INTEGER REFERENCES smart_document_requests(id),
+                    loan_id INTEGER NOT NULL,
+                    borrower_id INTEGER,
+                    doc_type VARCHAR(100),
+                    filename VARCHAR(255),
+                    file_path VARCHAR(512),
+                    file_size INTEGER,
+                    mime_type VARCHAR(100),
+                    s3_key VARCHAR(512),
+                    status VARCHAR(50) DEFAULT 'PENDING_REVIEW',
+                    decision VARCHAR(50),
+                    confidence_score REAL,
+                    review_notes TEXT,
+                    reviewed_by INTEGER,
+                    reviewed_at TIMESTAMP,
+                    is_screenshot BOOLEAN DEFAULT 0,
+                    doc_date DATE,
+                    expiration_date DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS doc_policy_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    loan_id INTEGER NOT NULL,
+                    request_id INTEGER REFERENCES smart_document_requests(id),
+                    document_id INTEGER REFERENCES smart_documents(id),
+                    event_type VARCHAR(100),
+                    description TEXT,
+                    metadata TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS needs_list_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    slug VARCHAR(100) UNIQUE,
+                    name VARCHAR(255),
+                    doc_type VARCHAR(100),
+                    loan_programs TEXT,
+                    description TEXT,
+                    instructions TEXT,
+                    is_active BOOLEAN DEFAULT 1,
+                    version VARCHAR(16) DEFAULT '1',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
+        conn.commit()
+        print("  Created Smart Docs tables via SQL")
+        return True
+    except Exception as e:
+        print(f"  Error creating tables via SQL: {e}")
+        return False
+
+
 def run_migration():
     """Execute the migration."""
     database_url = get_database_url()
@@ -80,13 +299,16 @@ def run_migration():
 
     print("Running Smart Docs SLA migration...")
 
+    # Step 0: Create Smart Docs tables if they don't exist
+    create_smart_docs_tables(engine, is_pg)
+
     with engine.connect() as conn:
         # =========================================================================
         # STEP 1: Add SLA tracking columns to smart_document_requests table
         # =========================================================================
 
         if not table_exists(conn, 'smart_document_requests'):
-            print("WARNING: smart_document_requests table does not exist. Skipping column additions.")
+            print("WARNING: smart_document_requests table still does not exist. Migration incomplete.")
         else:
             # Add sla_due_at column
             if not column_exists(conn, 'smart_document_requests', 'sla_due_at'):
