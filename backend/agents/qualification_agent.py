@@ -355,8 +355,13 @@ class QualificationAgent:
                 # Build conversation history for OpenAI
                 conversation_history = []
                 for msg in state.message_history[-10:]:  # Last 10 messages
+                    # Handle both 'role' key (from main.py) and 'direction' key (legacy)
+                    if msg.get("role"):
+                        role = msg.get("role")  # Already "user" or "assistant"
+                    else:
+                        role = "assistant" if msg.get("direction") == "outbound" else "user"
                     conversation_history.append({
-                        "role": "assistant" if msg.get("direction") == "outbound" else "user",
+                        "role": role,
                         "content": msg.get("content", "")
                     })
 

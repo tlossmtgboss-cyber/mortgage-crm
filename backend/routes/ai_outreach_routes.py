@@ -661,13 +661,31 @@ async def get_conversation_detail(
         conv_service = get_conversation_service()
         state = conv_service.get_or_create_conversation(conversation_id, channel)
 
+        # Build collected info from qualification_data
+        collected_info = {}
+        if state.qualification_data:
+            qual_data = state.qualification_data
+            if qual_data.loan_purpose:
+                collected_info["loan_purpose"] = qual_data.loan_purpose
+            if qual_data.property_value:
+                collected_info["property_value"] = qual_data.property_value
+            if qual_data.closing_timeline:
+                collected_info["closing_timeline"] = qual_data.closing_timeline
+            if qual_data.first_name:
+                collected_info["first_name"] = qual_data.first_name
+            if qual_data.email:
+                collected_info["email"] = qual_data.email
+            if qual_data.phone:
+                collected_info["phone"] = qual_data.phone
+
         return {
             "conversation_id": conversation_id,
             "channel": channel.value,
             "stage": state.stage.value if hasattr(state.stage, 'value') else str(state.stage),
             "messages": state.message_history,
-            "collected_info": state.collected_info,
-            "appointment_booked": state.appointment_booked
+            "collected_info": collected_info,
+            "qualification_status": state.qualification_status.value if hasattr(state.qualification_status, 'value') else str(state.qualification_status),
+            "message_count": state.message_count
         }
     except Exception as e:
         logger.error(f"Error fetching conversation: {e}")

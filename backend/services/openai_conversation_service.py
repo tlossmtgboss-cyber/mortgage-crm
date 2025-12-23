@@ -86,6 +86,36 @@ class OpenAIConversationService:
         lo_name = persona.get('lo_name', 'Tim')
         available_times = persona.get('available_times', 'Monday-Friday 9am-5pm, Saturday 10am-2pm')
 
+        # Build collected info string from qualification data
+        collected_items = []
+        if qualification_data:
+            field_labels = {
+                'loan_purpose': 'Loan Purpose',
+                'property_value': 'Property Value',
+                'loan_amount': 'Loan Amount',
+                'closing_timeline': 'Timeline',
+                'first_name': 'First Name',
+                'last_name': 'Last Name',
+                'email': 'Email',
+                'phone': 'Phone',
+                'credit_score_range': 'Credit Score',
+                'employment_status': 'Employment',
+                'annual_income': 'Annual Income',
+                'down_payment': 'Down Payment',
+                'property_type': 'Property Type',
+                'first_time_buyer': 'First Time Buyer',
+                'pre_approved_elsewhere': 'Pre-Approved Elsewhere',
+            }
+            for field, label in field_labels.items():
+                value = qualification_data.get(field)
+                if value is not None and value != '':
+                    collected_items.append(f"- {label}: {value}")
+
+        if collected_items:
+            collected_info = "\n".join(collected_items)
+        else:
+            collected_info = "- (No information collected yet - ask about their loan purpose first)"
+
         # Base context for all phases
         base_context = f"""You are {persona.get('name', 'Sarah')}, a {persona.get('role', 'Senior Mortgage Consultant')} at {persona.get('company', 'Perennia AI')}.
 
@@ -121,6 +151,12 @@ IMPORTANT:
 - Never promise specific rates or approval
 - Be honest and set realistic expectations
 - NEVER pretend to be a customer or ask for mortgage help - you ARE the helper
+
+## ALREADY COLLECTED INFORMATION (DO NOT RE-ASK THESE):
+{collected_info}
+
+CRITICAL: If information is listed above as "already collected", DO NOT ask for it again.
+Move to the NEXT unanswered question instead. Acknowledge what they shared and continue forward.
 """
 
         # Phase-specific instructions

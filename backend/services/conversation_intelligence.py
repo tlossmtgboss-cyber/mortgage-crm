@@ -629,10 +629,17 @@ def extract_qualification_data(text: str, existing: Optional[QualificationData] 
 
     # Loan purpose detection
     if data.loan_purpose is None:
-        if any(word in text_lower for word in ["purchase", "buying", "buy a home", "first home", "new home"]):
+        # Purchase intent keywords - check longer phrases first to avoid false positives
+        purchase_phrases = [
+            "buy a home", "buy a house", "buying a home", "buying a house",
+            "purchase a home", "purchase a house", "looking to buy", "want to buy",
+            "first home", "new home", "home purchase", "house purchase",
+            "purchasing", "purchase", "buying", "to buy"
+        ]
+        if any(phrase in text_lower for phrase in purchase_phrases):
             data.loan_purpose = "purchase"
             data.collected_at["loan_purpose"] = datetime.now().isoformat()
-        elif any(word in text_lower for word in ["refinance", "refi", "refinancing", "lower rate", "cash out"]):
+        elif any(word in text_lower for word in ["refinance", "refi", "refinancing", "lower rate", "cash out", "cash-out"]):
             data.loan_purpose = "refinance"
             data.collected_at["loan_purpose"] = datetime.now().isoformat()
 
