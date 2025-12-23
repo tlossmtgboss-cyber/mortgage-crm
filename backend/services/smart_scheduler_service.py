@@ -518,6 +518,42 @@ class SmartSchedulerService:
 
         return query.order_by(ScheduledAppointment.start_time).all()
 
+    def get_appointments_in_range(self, loan_officer_id: int = None,
+                                   start_date: str = None,
+                                   end_date: str = None,
+                                   days_ahead: int = 30) -> List[ScheduledAppointment]:
+        """Get appointments within a date range"""
+        # Parse date strings if provided
+        if start_date:
+            try:
+                start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            except ValueError:
+                start_dt = datetime.utcnow()
+        else:
+            start_dt = datetime.utcnow()
+
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except ValueError:
+                end_dt = datetime.utcnow() + timedelta(days=days_ahead)
+        else:
+            end_dt = datetime.utcnow() + timedelta(days=days_ahead)
+
+        query = self.db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.start_time >= start_dt,
+            ScheduledAppointment.start_time <= end_dt,
+            ScheduledAppointment.status.in_([
+                AppointmentStatus.SCHEDULED.value,
+                AppointmentStatus.CONFIRMED.value
+            ])
+        )
+
+        if loan_officer_id:
+            query = query.filter(ScheduledAppointment.loan_officer_id == loan_officer_id)
+
+        return query.order_by(ScheduledAppointment.start_time).all()
+
 
 # Global service instance
 _scheduler_service = None

@@ -423,12 +423,19 @@ def book_appointment(
 def get_appointments(
     loan_officer_id: Optional[int] = Query(None, description="Filter by loan officer"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    days_ahead: int = Query(7, description="Days to look ahead"),
+    days_ahead: int = Query(30, description="Days to look ahead (default 30)"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     db: Session = Depends(get_db)
 ):
     """Get upcoming appointments"""
     service = get_scheduler_service(db)
-    appointments = service.get_upcoming_appointments(loan_officer_id, days_ahead)
+    appointments = service.get_appointments_in_range(
+        loan_officer_id=loan_officer_id,
+        start_date=start_date,
+        end_date=end_date,
+        days_ahead=days_ahead
+    )
 
     if status:
         appointments = [a for a in appointments if a.status == status]
@@ -436,21 +443,21 @@ def get_appointments(
     return [AppointmentResponse(
         id=a.id,
         appointment_id=a.appointment_id,
-        lo_name=a.lo_name,
-        lo_email=a.lo_email,
-        contact_name=a.contact_name,
-        contact_email=a.contact_email,
+        lo_name=a.lo_name or '',
+        lo_email=a.lo_email or '',
+        contact_name=a.contact_name or '',
+        contact_email=a.contact_email or '',
         contact_phone=a.contact_phone,
-        appointment_type=a.appointment_type,
+        appointment_type=a.appointment_type or 'consultation',
         start_time=a.start_time,
         end_time=a.end_time,
-        duration_minutes=a.duration_minutes,
-        status=a.status,
+        duration_minutes=a.duration_minutes or 30,
+        status=a.status or 'scheduled',
         meeting_link=a.meeting_link,
         notes=a.notes,
-        booked_via=a.booked_via,
-        customer_invite_sent=a.customer_invite_sent,
-        lo_invite_sent=a.lo_invite_sent,
+        booked_via=a.booked_via or 'unknown',
+        customer_invite_sent=bool(a.customer_invite_sent),
+        lo_invite_sent=bool(a.lo_invite_sent),
         created_at=a.created_at
     ) for a in appointments]
 

@@ -3485,6 +3485,21 @@ async def process_with_claude(
     # Build enhanced system prompt with memory context
     system = SYSTEM_PROMPT
 
+    # Add current date to system prompt so AI knows what day it is
+    current_date = datetime.now()
+    system += f"""
+
+=== CURRENT DATE AND TIME ===
+Today is: {current_date.strftime('%B %d, %Y')} ({current_date.strftime('%A')})
+Current time: {current_date.strftime('%I:%M %p')}
+
+IMPORTANT: Use this date when evaluating any deadlines, closing dates, or due dates.
+- Dates BEFORE today are in the PAST
+- If a closing date has already passed, the loan either CLOSED or was DELAYED
+- Never say a past closing date is "on track" - it has already passed
+=== END DATE INFO ===
+"""
+
     # CHECK IF THIS IS A DAILY_VIEW OR COACHING REQUEST - add explicit summary numbers
     message_lower = message.lower()
 
@@ -3576,6 +3591,14 @@ IMPORTANT: When answering questions about SLAs or turnaround times:
         system += f"""
 
 === DAILY VIEW DATA (YOU MUST USE THESE EXACT NUMBERS) ===
+TODAY'S DATE: {today.strftime('%B %d, %Y')} ({today.strftime('%A')})
+
+CRITICAL DATE RULES:
+- Any closing date, due date, or deadline BEFORE {today.strftime('%B %d, %Y')} is IN THE PAST
+- If a loan's closing date has passed, it either ALREADY CLOSED or was DELAYED - do NOT say "on track"
+- Only say "on track" for FUTURE dates that haven't passed yet
+- For past dates, say "was scheduled for [date]" or "should have closed on [date]"
+
 ACTUAL CRM DATA FOR TODAY:
 - Active Leads: {summary.get('active_leads', 0)}
 - Loans in Pipeline: {summary.get('loans_in_pipeline', 0)}
