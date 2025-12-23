@@ -5,17 +5,9 @@
  */
 
 import { ensureArray } from '../utils/arrayHelpers';
+import { getAuthHeaders } from '../utils/auth';
 
 const API_BASE = '/api/v1';
-
-// Helper to get auth headers
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
-};
 
 // Helper to handle API errors
 const handleResponse = async (response) => {

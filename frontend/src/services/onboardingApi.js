@@ -3,16 +3,9 @@
  * Handles all API calls related to employee onboarding and invites
  */
 
-const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app';
+import { getAuthHeaders } from '../utils/auth';
 
-// Helper to get auth headers
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
-};
+const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app';
 
 // ============== ONBOARDING WIZARD ==============
 
