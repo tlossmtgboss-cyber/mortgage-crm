@@ -102,7 +102,7 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
               className="nav-calculator-btn"
               onClick={() => setShowCalculatorModal(true)}
             >
-              🧮 Calculator
+              Calculator
             </button>
             <button
               className="nav-login-btn"
