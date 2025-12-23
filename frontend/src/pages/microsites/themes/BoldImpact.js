@@ -16,6 +16,7 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showRefinanceModal, setShowRefinanceModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [showCalculatorModal, setShowCalculatorModal] = useState(false);
 
   // Listen for messages from embedded iframes (application submissions)
   useEffect(() => {
@@ -97,6 +98,12 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
                 📞 {loPhone}
               </a>
             )}
+            <button
+              className="nav-calculator-btn"
+              onClick={() => setShowCalculatorModal(true)}
+            >
+              🧮 Calculator
+            </button>
             <button
               className="nav-login-btn"
               onClick={() => setShowLoginModal(true)}
@@ -192,6 +199,25 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
               src="/apply/purchase?embedded=true"
               title="Purchase Application"
               className="embedded-modal-iframe"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Calculator Modal */}
+      {showCalculatorModal && (
+        <div className="embedded-modal-overlay" onClick={() => setShowCalculatorModal(false)}>
+          <div className="embedded-modal calculator-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="embedded-modal-close" onClick={() => setShowCalculatorModal(false)}>
+              ×
+            </button>
+            <iframe
+              src="https://lendtelligent.replit.app/embed?partnerId=bbf8c77c-1add-4922-bb7a-f3779b6e8d06"
+              title="Mortgage Calculator"
+              className="embedded-modal-iframe calculator-iframe"
+              scrolling="yes"
+              frameBorder="0"
+              allowFullScreen
             />
           </div>
         </div>

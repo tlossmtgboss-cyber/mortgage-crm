@@ -91,6 +91,39 @@
   background: #152a42;
 }
 
+.nav-calculator-btn {
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-calculator-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Calculator Modal - wider for the calculator embed */
+.calculator-modal {
+  width: 95vw !important;
+  max-width: 1450px !important;
+  height: 90vh !important;
+}
+
+.calculator-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 900px;
+}
+
 /* Login Modal */
 .login-modal-overlay {
   position: fixed;
