@@ -166,23 +166,29 @@ class IntelligentEmailHandler:
             }
 
         # 4. Check if sender is a referral partner
-        partner = self.db.execute(text("""
-            SELECT
-                id, first_name, last_name, email, company_name, partner_type
-            FROM referral_partners
-            WHERE LOWER(email) = :email AND status = 'active'
-        """), {"email": email_lower}).fetchone()
+        try:
+            partner = self.db.execute(text("""
+                SELECT
+                    id, name, contact_name, email, company, type
+                FROM referral_partners
+                WHERE LOWER(email) = :email
+            """), {"email": email_lower}).fetchone()
 
-        if partner:
-            return {
-                "sender_type": SenderType.REFERRAL_PARTNER,
-                "partner_id": partner[0],
-                "first_name": partner[1],
-                "last_name": partner[2],
-                "email": partner[3],
-                "company": partner[4],
-                "partner_type": partner[5],
-            }
+            if partner:
+                # Parse name into first/last
+                name_parts = (partner[2] or partner[1] or "").split(" ", 1)
+                return {
+                    "sender_type": SenderType.REFERRAL_PARTNER,
+                    "partner_id": partner[0],
+                    "first_name": name_parts[0] if name_parts else "",
+                    "last_name": name_parts[1] if len(name_parts) > 1 else "",
+                    "email": partner[3],
+                    "company": partner[4],
+                    "partner_type": partner[5],
+                }
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Referral partner lookup failed: {e}")
 
         # 5. Unknown sender - new prospect
         return {
