@@ -282,6 +282,81 @@ export async function getDashboardSummary() {
 }
 
 // =============================================================================
+// Queue View
+// =============================================================================
+
+/**
+ * Get the prioritized document queue
+ */
+export async function getQueue(page = 1, limit = 20, slaStatus = null, search = null) {
+  const params = new URLSearchParams({ page, limit });
+  if (slaStatus) params.append('sla_status', slaStatus);
+  if (search) params.append('search', search);
+
+  const response = await fetch(`${API_BASE}/queue?${params}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Get queue summary statistics
+ */
+export async function getQueueSummary() {
+  const response = await fetch(`${API_BASE}/queue/summary`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Get detailed queue info for a client
+ */
+export async function getQueueDetail(loanId) {
+  const response = await fetch(`${API_BASE}/queue/${loanId}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+// =============================================================================
+// Reminder Settings
+// =============================================================================
+
+/**
+ * Get reminder settings for a loan
+ */
+export async function getReminderSettings(loanId) {
+  const response = await fetch(`${API_BASE}/reminders/${loanId}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Update reminder settings for a loan
+ */
+export async function updateReminderSettings(loanId, settings) {
+  const response = await fetch(`${API_BASE}/reminders/${loanId}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(settings),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Manually send a reminder for a loan
+ */
+export async function sendReminder(loanId) {
+  const response = await fetch(`${API_BASE}/reminders/${loanId}/send`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+// =============================================================================
 // Export all functions
 // =============================================================================
 
@@ -312,6 +387,14 @@ export const smartDocsAPI = {
   getApplicantsPendingReview,
   getApplicantsOutstandingDocs,
   getDashboardSummary,
+  // Queue
+  getQueue,
+  getQueueSummary,
+  getQueueDetail,
+  // Reminders
+  getReminderSettings,
+  updateReminderSettings,
+  sendReminder,
 };
 
 export default smartDocsAPI;

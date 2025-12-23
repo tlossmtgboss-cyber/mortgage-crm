@@ -150,6 +150,11 @@ class DocumentRequest(Base):
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
 
+    # SLA Tracking
+    sla_due_at = Column(DateTime, nullable=True)  # 3 business days from created_at
+    is_active = Column(Boolean, default=True)  # For superseding logic
+    superseded_by = Column(Integer, nullable=True)  # FK to replacement request
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -162,6 +167,8 @@ class DocumentRequest(Base):
         Index("ix_smart_doc_requests_status", "status"),
         Index("ix_smart_doc_requests_auto_renew", "auto_renew"),
         Index("ix_smart_doc_requests_next_expected", "next_expected_available_at"),
+        Index("ix_smart_doc_requests_sla_due", "sla_due_at"),
+        Index("ix_smart_doc_requests_is_active", "is_active"),
     )
 
 
@@ -307,4 +314,34 @@ class NeedsListTemplate(Base):
     __table_args__ = (
         Index("ix_needs_list_templates_slug", "slug"),
         Index("ix_needs_list_templates_is_active", "is_active"),
+    )
+
+
+class ClientReminderSettings(Base):
+    """
+    Per-client reminder settings for document collection.
+    Controls whether and how often reminders are sent.
+    """
+    __tablename__ = "client_reminder_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Client identification (loan_id is the unique key)
+    loan_id = Column(Integer, nullable=False, unique=True)
+
+    # Reminder preferences
+    reminders_enabled = Column(Boolean, default=True)
+    reminder_frequency_hours = Column(Integer, default=72)  # 3 days default
+
+    # Tracking
+    last_reminder_sent_at = Column(DateTime, nullable=True)
+    reminder_count = Column(Integer, default=0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Indexes
+    __table_args__ = (
+        Index("ix_client_reminder_settings_loan_id", "loan_id"),
     )

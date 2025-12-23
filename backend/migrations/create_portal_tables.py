@@ -30,7 +30,7 @@ from models.portal_models import (
     HomePriceIndex, PropertyValueBaseline, PropertyValuation, HomeValueInsight,
     NotificationTemplate, NotificationQueue,
     LoanActivityLog, RiskFlag, PartnerAccessToken,
-    AnnualRefreshCycle, PresentationSession, PresentationScenario, PresentationCitation
+    AnnualRefreshCycle, PresentationSession, PortalPresentationScenario, PresentationCitation
 )
 
 
@@ -66,7 +66,7 @@ def create_tables(engine):
         PartnerAccessToken.__table__,
         AnnualRefreshCycle.__table__,
         PresentationSession.__table__,
-        PresentationScenario.__table__,
+        PortalPresentationScenario.__table__,
         PresentationCitation.__table__,
     ]
 

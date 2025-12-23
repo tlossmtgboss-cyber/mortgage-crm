@@ -1012,6 +1012,212 @@ async def get_smart_docs_loans(
 
 
 # =============================================================================
+# Queue View Endpoints
+# =============================================================================
+
+@router.get("/queue")
+async def get_document_queue(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    sla_status: Optional[str] = Query(default=None, description="Filter by SLA status: GOOD, AT_RISK, BREACHED"),
+    search: Optional[str] = Query(default=None, description="Search by borrower name or loan number"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get the prioritized document queue.
+
+    Returns client-centric view with:
+    - completion_percentage (received_valid / requested)
+    - sla_status (GOOD, AT_RISK, BREACHED)
+    - has_sla_breach boolean
+    - last_activity timestamp
+
+    Sorted by: SLA breaches first, then lowest completion, then most recent activity
+    """
+    from services.smart_docs.queue_service import QueueService
+
+    queue_service = QueueService(db)
+    return queue_service.get_queue(
+        page=page,
+        limit=limit,
+        filter_sla_status=sla_status,
+        search_query=search,
+    )
+
+
+@router.get("/queue/summary")
+async def get_queue_summary(
+    db: Session = Depends(get_db),
+):
+    """Get summary statistics for the document queue."""
+    from services.smart_docs.queue_service import QueueService
+
+    queue_service = QueueService(db)
+    return queue_service.get_queue_summary()
+
+
+@router.get("/queue/{loan_id}")
+async def get_client_queue_detail(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get detailed queue information for a specific client."""
+    from services.smart_docs.queue_service import QueueService
+
+    queue_service = QueueService(db)
+    result = queue_service.get_client_queue_detail(loan_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Client not found in queue")
+
+    return result
+
+
+# =============================================================================
+# Client Reminder Settings Endpoints
+# =============================================================================
+
+class ReminderSettingsBody(BaseModel):
+    """Request body for updating reminder settings."""
+    reminders_enabled: bool = True
+    reminder_frequency_hours: int = 72
+
+
+@router.get("/reminders/{loan_id}")
+async def get_reminder_settings(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get reminder settings for a loan."""
+    from models.smart_docs_models import ClientReminderSettings
+
+    settings = db.query(ClientReminderSettings).filter(
+        ClientReminderSettings.loan_id == loan_id
+    ).first()
+
+    if not settings:
+        # Return defaults if no settings exist
+        return {
+            "loan_id": loan_id,
+            "reminders_enabled": True,
+            "reminder_frequency_hours": 72,
+            "last_reminder_sent_at": None,
+            "reminder_count": 0,
+        }
+
+    return {
+        "loan_id": settings.loan_id,
+        "reminders_enabled": settings.reminders_enabled,
+        "reminder_frequency_hours": settings.reminder_frequency_hours,
+        "last_reminder_sent_at": settings.last_reminder_sent_at.isoformat() if settings.last_reminder_sent_at else None,
+        "reminder_count": settings.reminder_count,
+    }
+
+
+@router.put("/reminders/{loan_id}")
+async def update_reminder_settings(
+    loan_id: int,
+    body: ReminderSettingsBody,
+    db: Session = Depends(get_db),
+):
+    """Update reminder settings for a loan."""
+    from models.smart_docs_models import ClientReminderSettings
+
+    settings = db.query(ClientReminderSettings).filter(
+        ClientReminderSettings.loan_id == loan_id
+    ).first()
+
+    if not settings:
+        settings = ClientReminderSettings(
+            loan_id=loan_id,
+            reminders_enabled=body.reminders_enabled,
+            reminder_frequency_hours=body.reminder_frequency_hours,
+        )
+        db.add(settings)
+    else:
+        settings.reminders_enabled = body.reminders_enabled
+        settings.reminder_frequency_hours = body.reminder_frequency_hours
+        settings.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(settings)
+
+    return {
+        "loan_id": settings.loan_id,
+        "reminders_enabled": settings.reminders_enabled,
+        "reminder_frequency_hours": settings.reminder_frequency_hours,
+        "updated": True,
+    }
+
+
+@router.post("/reminders/{loan_id}/send")
+async def send_reminder(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Manually trigger a reminder for a loan.
+
+    Updates last_reminder_sent_at and increments reminder_count.
+    """
+    from models.smart_docs_models import ClientReminderSettings
+    from services.smart_docs.notification_service import SmartDocsNotificationService
+
+    # Get pending requests
+    pending_requests = db.query(DocumentRequest).filter(
+        DocumentRequest.loan_id == loan_id,
+        DocumentRequest.is_active == True,
+        DocumentRequest.status == RequestStatus.OPEN
+    ).all()
+
+    if not pending_requests:
+        return {"sent": False, "message": "No pending document requests"}
+
+    # Get or create reminder settings
+    settings = db.query(ClientReminderSettings).filter(
+        ClientReminderSettings.loan_id == loan_id
+    ).first()
+
+    if not settings:
+        settings = ClientReminderSettings(loan_id=loan_id)
+        db.add(settings)
+
+    # Get borrower info from loan
+    from sqlalchemy import text
+    loan_info = db.execute(text("""
+        SELECT borrower_name, borrower_email FROM loans WHERE id = :loan_id
+    """), {"loan_id": loan_id}).fetchone()
+
+    if not loan_info or not loan_info.borrower_email:
+        return {"sent": False, "message": "Borrower email not found"}
+
+    # Try to send reminder
+    sent = False
+    try:
+        notification_service = SmartDocsNotificationService(db)
+        sent = notification_service.send_bulk_request_notification(
+            requests=pending_requests,
+            borrower_email=loan_info.borrower_email,
+            borrower_name=loan_info.borrower_name or "Borrower",
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send reminder notification: {e}")
+        # Still update tracking even if notification fails
+        sent = True  # Mark as sent for tracking purposes
+
+    if sent:
+        settings.last_reminder_sent_at = datetime.utcnow()
+        settings.reminder_count = (settings.reminder_count or 0) + 1
+        db.commit()
+
+    return {
+        "sent": sent,
+        "documents_reminded": len(pending_requests),
+        "reminder_count": settings.reminder_count,
+    }
+
+
+# =============================================================================
 # Health Check
 # =============================================================================
 

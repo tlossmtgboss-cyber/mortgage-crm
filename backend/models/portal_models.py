@@ -981,12 +981,12 @@ class PresentationSession(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    scenarios = relationship("PresentationScenario", back_populates="session", cascade="all, delete-orphan")
+    scenarios = relationship("PortalPresentationScenario", back_populates="session", cascade="all, delete-orphan")
 
 
-class PresentationScenario(Base):
-    """Individual scenarios explored in a presentation"""
-    __tablename__ = "presentation_scenarios"
+class PortalPresentationScenario(Base):
+    """Individual scenarios explored in a presentation (portal version)"""
+    __tablename__ = "portal_presentation_scenarios"
 
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("presentation_sessions.id", ondelete="CASCADE"), nullable=False)
@@ -1015,7 +1015,7 @@ class PresentationCitation(Base):
     __tablename__ = "presentation_citations"
 
     id = Column(Integer, primary_key=True, index=True)
-    scenario_id = Column(Integer, ForeignKey("presentation_scenarios.id", ondelete="CASCADE"), nullable=False)
+    scenario_id = Column(Integer, ForeignKey("portal_presentation_scenarios.id", ondelete="CASCADE"), nullable=False)
 
     metric_key = Column(String(100), nullable=False)
     metric_value = Column(Numeric)
@@ -1028,4 +1028,4 @@ class PresentationCitation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    scenario = relationship("PresentationScenario", back_populates="citations")
+    scenario = relationship("PortalPresentationScenario", back_populates="citations")
