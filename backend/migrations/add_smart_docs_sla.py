@@ -37,6 +37,11 @@ def get_database_url():
     return "sqlite:///./mortgage_crm.db"
 
 
+def is_postgresql(database_url):
+    """Check if database is PostgreSQL."""
+    return database_url.startswith('postgresql') or database_url.startswith('postgres')
+
+
 def column_exists(conn, table_name, column_name):
     """Check if a column exists in a table."""
     inspector = inspect(conn)
@@ -50,18 +55,26 @@ def table_exists(conn, table_name):
     return table_name in inspector.get_table_names()
 
 
-def index_exists(conn, index_name):
-    """Check if an index exists (SQLite compatible)."""
-    result = conn.execute(text(
-        "SELECT name FROM sqlite_master WHERE type='index' AND name=:name"
-    ), {"name": index_name})
+def index_exists(conn, index_name, is_pg=False):
+    """Check if an index exists."""
+    if is_pg:
+        result = conn.execute(text(
+            "SELECT indexname FROM pg_indexes WHERE indexname = :name"
+        ), {"name": index_name})
+    else:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name=:name"
+        ), {"name": index_name})
     return result.fetchone() is not None
 
 
 def run_migration():
     """Execute the migration."""
     database_url = get_database_url()
-    print(f"Using database: {database_url}")
+    print(f"Using database: {database_url[:50]}...")  # Truncate for security
+
+    is_pg = is_postgresql(database_url)
+    print(f"Database type: {'PostgreSQL' if is_pg else 'SQLite'}")
 
     engine = create_engine(database_url)
 
@@ -86,8 +99,9 @@ def run_migration():
 
             # Add is_active column
             if not column_exists(conn, 'smart_document_requests', 'is_active'):
+                default_val = "TRUE" if is_pg else "1"
                 conn.execute(text(
-                    "ALTER TABLE smart_document_requests ADD COLUMN is_active BOOLEAN DEFAULT 1"
+                    f"ALTER TABLE smart_document_requests ADD COLUMN is_active BOOLEAN DEFAULT {default_val}"
                 ))
                 print("  Added is_active column")
             else:
@@ -107,19 +121,29 @@ def run_migration():
             # =========================================================================
 
             # Backfill sla_due_at (5 days from created_at)
-            result = conn.execute(text("""
-                UPDATE smart_document_requests
-                SET sla_due_at = datetime(created_at, '+5 days')
-                WHERE sla_due_at IS NULL
-                  AND status IN ('OPEN', 'PENDING_REVIEW')
-            """))
+            if is_pg:
+                backfill_sql = """
+                    UPDATE smart_document_requests
+                    SET sla_due_at = created_at + INTERVAL '5 days'
+                    WHERE sla_due_at IS NULL
+                      AND status IN ('OPEN', 'PENDING_REVIEW')
+                """
+            else:
+                backfill_sql = """
+                    UPDATE smart_document_requests
+                    SET sla_due_at = datetime(created_at, '+5 days')
+                    WHERE sla_due_at IS NULL
+                      AND status IN ('OPEN', 'PENDING_REVIEW')
+                """
+            result = conn.execute(text(backfill_sql))
             if result.rowcount > 0:
                 print(f"  Backfilled sla_due_at for {result.rowcount} rows")
 
             # Mark completed requests as inactive
-            result = conn.execute(text("""
+            inactive_val = "FALSE" if is_pg else "0"
+            result = conn.execute(text(f"""
                 UPDATE smart_document_requests
-                SET is_active = 0
+                SET is_active = {inactive_val}
                 WHERE is_active IS NULL
                   AND status IN ('ACCEPTED', 'REJECTED', 'WAIVED')
             """))
@@ -127,9 +151,10 @@ def run_migration():
                 print(f"  Marked {result.rowcount} completed requests as inactive")
 
             # Ensure OPEN/PENDING_REVIEW are active
-            result = conn.execute(text("""
+            active_val = "TRUE" if is_pg else "1"
+            result = conn.execute(text(f"""
                 UPDATE smart_document_requests
-                SET is_active = 1
+                SET is_active = {active_val}
                 WHERE is_active IS NULL
                   AND status IN ('OPEN', 'PENDING_REVIEW')
             """))
@@ -141,18 +166,33 @@ def run_migration():
         # =========================================================================
 
         if not table_exists(conn, 'client_reminder_settings'):
-            conn.execute(text("""
-                CREATE TABLE client_reminder_settings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    loan_id INTEGER NOT NULL UNIQUE,
-                    reminders_enabled BOOLEAN DEFAULT 1,
-                    reminder_frequency_hours INTEGER DEFAULT 72,
-                    last_reminder_sent_at TIMESTAMP,
-                    reminder_count INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
+            if is_pg:
+                create_table_sql = """
+                    CREATE TABLE client_reminder_settings (
+                        id SERIAL PRIMARY KEY,
+                        loan_id INTEGER NOT NULL UNIQUE,
+                        reminders_enabled BOOLEAN DEFAULT TRUE,
+                        reminder_frequency_hours INTEGER DEFAULT 72,
+                        last_reminder_sent_at TIMESTAMP,
+                        reminder_count INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """
+            else:
+                create_table_sql = """
+                    CREATE TABLE client_reminder_settings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        loan_id INTEGER NOT NULL UNIQUE,
+                        reminders_enabled BOOLEAN DEFAULT 1,
+                        reminder_frequency_hours INTEGER DEFAULT 72,
+                        last_reminder_sent_at TIMESTAMP,
+                        reminder_count INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """
+            conn.execute(text(create_table_sql))
             print("  Created client_reminder_settings table")
         else:
             print("  client_reminder_settings table already exists")
@@ -162,25 +202,25 @@ def run_migration():
         # =========================================================================
 
         if table_exists(conn, 'smart_document_requests'):
-            if not index_exists(conn, 'ix_smart_doc_requests_sla_due'):
+            if not index_exists(conn, 'ix_smart_doc_requests_sla_due', is_pg):
                 conn.execute(text(
                     "CREATE INDEX ix_smart_doc_requests_sla_due ON smart_document_requests(sla_due_at)"
                 ))
                 print("  Created ix_smart_doc_requests_sla_due index")
 
-            if not index_exists(conn, 'ix_smart_doc_requests_is_active'):
+            if not index_exists(conn, 'ix_smart_doc_requests_is_active', is_pg):
                 conn.execute(text(
                     "CREATE INDEX ix_smart_doc_requests_is_active ON smart_document_requests(is_active)"
                 ))
                 print("  Created ix_smart_doc_requests_is_active index")
 
-        if not index_exists(conn, 'ix_client_reminder_settings_loan_id'):
+        if not index_exists(conn, 'ix_client_reminder_settings_loan_id', is_pg):
             conn.execute(text(
                 "CREATE INDEX ix_client_reminder_settings_loan_id ON client_reminder_settings(loan_id)"
             ))
             print("  Created ix_client_reminder_settings_loan_id index")
 
-        if not index_exists(conn, 'ix_client_reminder_due_for_reminder'):
+        if not index_exists(conn, 'ix_client_reminder_due_for_reminder', is_pg):
             conn.execute(text(
                 "CREATE INDEX ix_client_reminder_due_for_reminder ON client_reminder_settings(last_reminder_sent_at)"
             ))
@@ -200,8 +240,6 @@ def rollback_migration():
     print("Rolling back Smart Docs SLA migration...")
 
     with engine.connect() as conn:
-        # SQLite doesn't support DROP COLUMN easily, so we just drop indexes and table
-
         # Drop indexes
         for idx in ['ix_smart_doc_requests_sla_due', 'ix_smart_doc_requests_is_active',
                     'ix_client_reminder_settings_loan_id', 'ix_client_reminder_due_for_reminder']:
