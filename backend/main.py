@@ -35045,7 +35045,6 @@ Subject: {subject}
             # Log for training review
             try:
                 from routes.email_training_routes import EmailTrainingLog
-                from database import SessionLocal
                 training_db = SessionLocal()
                 training_log = EmailTrainingLog(
                     conversation_id=conv_id,
