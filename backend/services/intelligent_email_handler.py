@@ -83,44 +83,52 @@ class IntelligentEmailHandler:
             }
 
         # 2. Check if sender is a borrower (has a loan as primary or co-borrower)
-        borrower = self.db.execute(text("""
-            SELECT
-                c.id as contact_id,
-                c.first_name,
-                c.last_name,
-                c.email,
-                c.phone,
-                l.id as loan_id,
-                l.loan_number,
-                l.status as loan_status,
-                l.loan_amount,
-                l.property_address,
-                u.full_name as lo_name,
-                u.email as lo_email
-            FROM contacts c
-            JOIN loans l ON (l.borrower_id = c.id OR l.co_borrower_id = c.id)
-            LEFT JOIN users u ON u.id = l.loan_officer_id
-            WHERE LOWER(c.email) = :email
-            ORDER BY l.created_at DESC
-            LIMIT 1
-        """), {"email": email_lower}).fetchone()
+        # Borrower info is stored directly on the loans table (borrower_email, borrower_name, etc.)
+        try:
+            borrower = self.db.execute(text("""
+                SELECT
+                    l.id as loan_id,
+                    l.borrower_name,
+                    l.borrower_email,
+                    l.borrower_phone,
+                    l.loan_number,
+                    l.stage as loan_status,
+                    l.amount as loan_amount,
+                    l.property_address,
+                    u.full_name as lo_name,
+                    u.email as lo_email,
+                    CASE WHEN LOWER(l.borrower_email) = :email THEN 'primary' ELSE 'co-borrower' END as borrower_type
+                FROM loans l
+                LEFT JOIN users u ON u.id = l.loan_officer_id
+                WHERE LOWER(l.borrower_email) = :email OR LOWER(l.co_borrower_email) = :email
+                ORDER BY l.created_at DESC
+                LIMIT 1
+            """), {"email": email_lower}).fetchone()
 
-        if borrower:
-            return {
-                "sender_type": SenderType.BORROWER,
-                "contact_id": borrower[0],
-                "first_name": borrower[1],
-                "last_name": borrower[2],
-                "email": borrower[3],
-                "phone": borrower[4],
-                "loan_id": borrower[5],
-                "loan_number": borrower[6],
-                "loan_status": borrower[7],
-                "loan_amount": float(borrower[8]) if borrower[8] else None,
-                "property_address": borrower[9],
-                "lo_name": borrower[10],
-                "lo_email": borrower[11],
-            }
+            if borrower:
+                # Parse name into first/last
+                name_parts = (borrower[1] or "").split(" ", 1) if borrower[1] else ["", ""]
+                first_name = name_parts[0] if name_parts else ""
+                last_name = name_parts[1] if len(name_parts) > 1 else ""
+                return {
+                    "sender_type": SenderType.BORROWER,
+                    "loan_id": borrower[0],
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": borrower[2],
+                    "phone": borrower[3],
+                    "loan_number": borrower[4],
+                    "loan_status": borrower[5],
+                    "loan_amount": float(borrower[6]) if borrower[6] else None,
+                    "property_address": borrower[7],
+                    "lo_name": borrower[8],
+                    "lo_email": borrower[9],
+                    "borrower_type": borrower[10],
+                }
+        except Exception as e:
+            # Log but continue to check leads
+            import logging
+            logging.getLogger(__name__).warning(f"Borrower lookup failed: {e}")
 
         # 3. Check if sender is a lead
         lead = self.db.execute(text("""
@@ -806,46 +814,38 @@ AI Mortgage Assistant | Perennia AI"""
                 first_name = name_parts[0]
                 last_name = ""
 
-            # Search in contacts (borrowers)
+            # Search in loans by borrower name
             query = """
                 SELECT
-                    c.id as contact_id,
-                    c.first_name,
-                    c.last_name,
-                    c.email,
                     l.id as loan_id,
+                    l.borrower_name,
+                    l.borrower_email,
                     l.loan_number,
-                    l.status as loan_status,
-                    l.loan_amount,
+                    l.stage as loan_status,
+                    l.amount as loan_amount,
                     l.property_address
-                FROM contacts c
-                LEFT JOIN loans l ON (l.borrower_id = c.id OR l.co_borrower_id = c.id)
-                WHERE (
-                    LOWER(c.first_name) LIKE :first_name
-                    AND (LOWER(c.last_name) LIKE :last_name OR :last_name = '')
-                )
-                OR LOWER(CONCAT(c.first_name, ' ', c.last_name)) LIKE :full_name
+                FROM loans l
+                WHERE LOWER(l.borrower_name) LIKE :full_name
                 ORDER BY l.created_at DESC NULLS LAST
                 LIMIT 1
             """
 
             result = self.db.execute(text(query), {
-                "first_name": f"{first_name.lower()}%",
-                "last_name": f"{last_name.lower()}%" if last_name else "",
                 "full_name": f"%{name.lower()}%",
             }).fetchone()
 
             if result:
+                # Parse borrower_name into first/last
+                name_parts = (result[1] or "").split(" ", 1) if result[1] else ["", ""]
                 return {
-                    "contact_id": result[0],
-                    "first_name": result[1],
-                    "last_name": result[2],
-                    "email": result[3],
-                    "loan_id": result[4],
-                    "loan_number": result[5],
-                    "loan_status": result[6],
-                    "loan_amount": float(result[7]) if result[7] else None,
-                    "property_address": result[8],
+                    "loan_id": result[0],
+                    "first_name": name_parts[0] if name_parts else "",
+                    "last_name": name_parts[1] if len(name_parts) > 1 else "",
+                    "email": result[2],
+                    "loan_number": result[3],
+                    "loan_status": result[4],
+                    "loan_amount": float(result[5]) if result[5] else None,
+                    "property_address": result[6],
                 }
 
             # Also search in leads
@@ -886,33 +886,31 @@ AI Mortgage Assistant | Perennia AI"""
         try:
             result = self.db.execute(text("""
                 SELECT
-                    c.id as contact_id,
-                    c.first_name,
-                    c.last_name,
-                    c.email,
                     l.id as loan_id,
+                    l.borrower_name,
+                    l.borrower_email,
                     l.loan_number,
-                    l.status as loan_status,
-                    l.loan_amount,
+                    l.stage as loan_status,
+                    l.amount as loan_amount,
                     l.property_address
                 FROM loans l
-                JOIN contacts c ON c.id = l.borrower_id
                 WHERE l.loan_number LIKE :loan_number
                    OR CAST(l.id AS VARCHAR) = :loan_number
                 LIMIT 1
             """), {"loan_number": f"%{loan_number}%"}).fetchone()
 
             if result:
+                # Parse borrower_name into first/last
+                name_parts = (result[1] or "").split(" ", 1) if result[1] else ["", ""]
                 return {
-                    "contact_id": result[0],
-                    "first_name": result[1],
-                    "last_name": result[2],
-                    "email": result[3],
-                    "loan_id": result[4],
-                    "loan_number": result[5],
-                    "loan_status": result[6],
-                    "loan_amount": float(result[7]) if result[7] else None,
-                    "property_address": result[8],
+                    "loan_id": result[0],
+                    "first_name": name_parts[0] if name_parts else "",
+                    "last_name": name_parts[1] if len(name_parts) > 1 else "",
+                    "email": result[2],
+                    "loan_number": result[3],
+                    "loan_status": result[4],
+                    "loan_amount": float(result[5]) if result[5] else None,
+                    "property_address": result[6],
                 }
             return None
         except Exception as e:
@@ -1178,16 +1176,14 @@ AI Mortgage Assistant | Perennia AI"""
             loan = self.db.execute(text("""
                 SELECT
                     l.loan_number,
-                    l.loan_amount,
+                    l.amount as loan_amount,
                     l.property_address,
                     l.loan_type,
                     l.interest_rate,
-                    c.first_name,
-                    c.last_name,
+                    l.borrower_name,
                     u.full_name as lo_name,
                     u.nmls_number as lo_nmls
                 FROM loans l
-                JOIN contacts c ON c.id = l.borrower_id
                 LEFT JOIN users u ON u.id = l.loan_officer_id
                 WHERE l.id = :loan_id
             """), {"loan_id": loan_id}).fetchone()
@@ -1200,12 +1196,12 @@ AI Mortgage Assistant | Perennia AI"""
             return {
                 "success": True,
                 "letter_data": {
-                    "borrower_name": f"{loan[5]} {loan[6]}",
+                    "borrower_name": loan[5] or "Borrower",
                     "loan_amount": float(loan[1]) if loan[1] else 0,
                     "property_address": loan[2],
                     "loan_type": loan[3],
-                    "lo_name": loan[7],
-                    "lo_nmls": loan[8],
+                    "lo_name": loan[6],
+                    "lo_nmls": loan[7],
                 },
                 "attachment": None,  # Would be PDF bytes in production
             }
@@ -1473,16 +1469,15 @@ Sarah"""
             # Get loans stuck in each stage (over SLA thresholds)
             bottlenecks = self.db.execute(text("""
                 SELECT
-                    l.status,
+                    l.stage as status,
                     l.loan_number,
-                    c.first_name || ' ' || c.last_name as borrower_name,
-                    l.loan_amount,
+                    l.borrower_name,
+                    l.amount as loan_amount,
                     EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) as days_in_stage,
                     l.status_changed_at
                 FROM loans l
-                LEFT JOIN contacts c ON c.id = l.borrower_id
                 WHERE l.loan_officer_id = :lo_id
-                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
                 AND EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) > 5
                 ORDER BY EXTRACT(DAY FROM (CURRENT_TIMESTAMP - l.status_changed_at)) DESC
                 LIMIT 10
@@ -1574,16 +1569,15 @@ Here's your bottleneck analysis:
             stale_files = self.db.execute(text("""
                 SELECT
                     l.loan_number,
-                    c.first_name || ' ' || c.last_name as borrower_name,
-                    l.status,
-                    l.loan_amount,
+                    l.borrower_name,
+                    l.stage as status,
+                    l.amount as loan_amount,
                     EXTRACT(DAY FROM (CURRENT_TIMESTAMP - COALESCE(l.updated_at, l.status_changed_at))) as days_stale,
                     l.expected_close_date,
                     l.lock_expiration_date
                 FROM loans l
-                LEFT JOIN contacts c ON c.id = l.borrower_id
                 WHERE l.loan_officer_id = :lo_id
-                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
                 AND EXTRACT(DAY FROM (CURRENT_TIMESTAMP - COALESCE(l.updated_at, l.status_changed_at))) > 7
                 ORDER BY days_stale DESC
                 LIMIT 15
@@ -1593,13 +1587,12 @@ Here's your bottleneck analysis:
             expiring_locks = self.db.execute(text("""
                 SELECT
                     l.loan_number,
-                    c.first_name || ' ' || c.last_name as borrower_name,
+                    l.borrower_name,
                     l.lock_expiration_date,
                     EXTRACT(DAY FROM (l.lock_expiration_date - CURRENT_DATE)) as days_until_expiry
                 FROM loans l
-                LEFT JOIN contacts c ON c.id = l.borrower_id
                 WHERE l.loan_officer_id = :lo_id
-                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
                 AND l.lock_expiration_date IS NOT NULL
                 AND l.lock_expiration_date <= CURRENT_DATE + INTERVAL '14 days'
                 ORDER BY l.lock_expiration_date
@@ -1610,13 +1603,12 @@ Here's your bottleneck analysis:
             past_close = self.db.execute(text("""
                 SELECT
                     l.loan_number,
-                    c.first_name || ' ' || c.last_name as borrower_name,
+                    l.borrower_name,
                     l.expected_close_date,
                     EXTRACT(DAY FROM (CURRENT_DATE - l.expected_close_date)) as days_past
                 FROM loans l
-                LEFT JOIN contacts c ON c.id = l.borrower_id
                 WHERE l.loan_officer_id = :lo_id
-                AND l.status NOT IN ('funded', 'cancelled', 'denied', 'closed')
+                AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'closed')
                 AND l.expected_close_date < CURRENT_DATE
                 ORDER BY l.expected_close_date
                 LIMIT 10
