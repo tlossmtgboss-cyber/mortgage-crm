@@ -248,6 +248,10 @@
   border-radius: 18px 18px 4px 18px;
 }
 
+.chat-message.user .message-bubble p {
+  color: white;
+}
+
 .message-bubble p {
   margin: 0;
   font-size: 15px;
