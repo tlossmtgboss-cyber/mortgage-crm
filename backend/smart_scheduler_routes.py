@@ -1767,11 +1767,12 @@ async def list_appointments(
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
-    """List appointments with filters"""
+    """List appointments with filters - includes both Appointment and ScheduledAppointment tables"""
     user = await get_current_user(request, db)
 
     Appointment = _models['Appointment']
 
+    # Query main Appointment table
     query = db.query(Appointment).filter(
         or_(
             Appointment.assigned_user_id == user.id,
@@ -1798,31 +1799,90 @@ async def list_appointments(
     if loan_id:
         query = query.filter(Appointment.loan_id == loan_id)
 
-    total = query.count()
     appointments = query.order_by(Appointment.scheduled_start.desc()).offset(offset).limit(limit).all()
 
-    return {
-        "appointments": [
-            {
-                "id": a.id,
-                "title": a.title,
-                "description": a.description,
-                "meeting_type": a.meeting_type.value if a.meeting_type else None,
-                "meeting_mode": a.meeting_mode.value if a.meeting_mode else None,
-                "scheduled_start": a.scheduled_start.isoformat(),
-                "scheduled_end": a.scheduled_end.isoformat(),
+    # Convert main appointments to response format
+    result_appointments = [
+        {
+            "id": a.id,
+            "title": a.title,
+            "description": a.description,
+            "meeting_type": a.meeting_type.value if a.meeting_type else None,
+            "meeting_mode": a.meeting_mode.value if a.meeting_mode else None,
+            "scheduled_start": a.scheduled_start.isoformat(),
+            "scheduled_end": a.scheduled_end.isoformat(),
+            "duration_minutes": a.duration_minutes,
+            "status": a.status.value if a.status else None,
+            "attendee_name": a.attendee_name,
+            "attendee_email": a.attendee_email,
+            "video_link": a.video_link,
+            "lead_id": a.lead_id,
+            "loan_id": a.loan_id,
+            "booked_by_ai": a.booked_by_ai,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        }
+        for a in appointments
+    ]
+
+    # Also query ScheduledAppointment table (AI-booked appointments)
+    try:
+        from services.smart_scheduler_service import ScheduledAppointment
+
+        ai_query = db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.loan_officer_id == user.id
+        )
+
+        if start_date:
+            ai_query = ai_query.filter(ScheduledAppointment.start_time >= datetime.combine(start_date, time.min))
+
+        if end_date:
+            ai_query = ai_query.filter(ScheduledAppointment.start_time <= datetime.combine(end_date, time.max))
+
+        if status:
+            ai_query = ai_query.filter(ScheduledAppointment.status == status)
+
+        ai_appointments = ai_query.order_by(ScheduledAppointment.start_time.desc()).all()
+
+        # Convert AI appointments to same response format
+        for a in ai_appointments:
+            result_appointments.append({
+                "id": f"ai-{a.id}",
+                "appointment_id": a.appointment_id,
+                "title": f"Appointment with {a.contact_name}",
+                "description": a.notes,
+                "meeting_type": a.appointment_type,
+                "meeting_mode": "PHONE",
+                "scheduled_start": a.start_time.isoformat() if a.start_time else None,
+                "scheduled_end": a.end_time.isoformat() if a.end_time else None,
+                "start_time": a.start_time.isoformat() if a.start_time else None,
+                "end_time": a.end_time.isoformat() if a.end_time else None,
                 "duration_minutes": a.duration_minutes,
-                "status": a.status.value if a.status else None,
-                "attendee_name": a.attendee_name,
-                "attendee_email": a.attendee_email,
-                "video_link": a.video_link,
-                "lead_id": a.lead_id,
-                "loan_id": a.loan_id,
-                "booked_by_ai": a.booked_by_ai,
+                "status": a.status.upper() if a.status else "BOOKED",
+                "attendee_name": a.contact_name,
+                "contact_name": a.contact_name,
+                "attendee_email": a.contact_email,
+                "contact_email": a.contact_email,
+                "contact_phone": a.contact_phone,
+                "video_link": a.meeting_link,
+                "lead_id": a.contact_id,
+                "loan_id": None,
+                "booked_by_ai": True,
+                "booked_via": a.booked_via,
                 "created_at": a.created_at.isoformat() if a.created_at else None
-            }
-            for a in appointments
-        ],
+            })
+    except Exception as e:
+        logger.warning(f"Could not fetch ScheduledAppointments: {e}")
+
+    # Sort combined results by scheduled_start
+    result_appointments.sort(
+        key=lambda x: x.get('scheduled_start') or x.get('start_time') or '',
+        reverse=True
+    )
+
+    total = len(result_appointments)
+
+    return {
+        "appointments": result_appointments,
         "total": total,
         "limit": limit,
         "offset": offset
