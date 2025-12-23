@@ -22,7 +22,9 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
   const [sessionId, setSessionId] = useState(null);
   const [loanOfficer, setLoanOfficer] = useState(null);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [showInlineCalendar, setShowInlineCalendar] = useState(false);
   const [availableSlots, setAvailableSlots] = useState([]);
+  const [trustPhase, setTrustPhase] = useState(1);
   const [bookingForm, setBookingForm] = useState({
     name: '',
     email: '',
@@ -132,18 +134,28 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
         setSessionId(data.session_id);
       }
 
+      // Track trust phase
+      if (data.phase) {
+        setTrustPhase(data.phase);
+      }
+
       // Add assistant response
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: data.response || "I'm sorry, I couldn't process that. Please try again.",
         timestamp: new Date(),
-        schedulingIntent: data.scheduling_intent
+        schedulingIntent: data.scheduling_intent,
+        phase: data.phase,
+        availableSlots: data.available_slots
       };
       setMessages(prev => [...prev, assistantMessage]);
 
-      // If scheduling intent detected, fetch availability
-      if (data.scheduling_intent) {
+      // If scheduling intent detected, show inline calendar with slots
+      if (data.scheduling_intent && data.available_slots?.length > 0) {
+        setAvailableSlots(data.available_slots);
+        setShowInlineCalendar(true);
+      } else if (data.scheduling_intent) {
         fetchAvailability();
       }
 
@@ -281,9 +293,16 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
           </button>
         </div>
 
+        {/* Trust Progress Indicator - subtle indicator of conversation progress */}
+        {trustPhase > 1 && trustPhase < 4 && (
+          <div className="trust-progress-bar">
+            <div className="trust-progress-fill" style={{ width: `${(trustPhase / 4) * 100}%` }} />
+          </div>
+        )}
+
         {/* Messages Area */}
         <div className="chat-messages">
-          {messages.map((message) => (
+          {messages.map((message, index) => (
             <div
               key={message.id}
               className={`chat-message ${message.role} ${message.isError ? 'error' : ''}`}
@@ -297,7 +316,40 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
               )}
               <div className="message-bubble">
                 <p>{message.content}</p>
-                {message.schedulingIntent && !showScheduler && (
+
+                {/* Inline Calendar - shown when AI offers to schedule */}
+                {message.schedulingIntent && message.availableSlots?.length > 0 && !showScheduler && !bookingStatus && (
+                  <div className="inline-calendar">
+                    <div className="inline-calendar-header">
+                      <span className="calendar-icon">📅</span>
+                      <span>Pick a time that works for you:</span>
+                    </div>
+                    <div className="inline-slots">
+                      {message.availableSlots.slice(0, 4).map((slot, idx) => (
+                        <button
+                          key={idx}
+                          className={`inline-slot-btn ${bookingForm.selectedSlot === slot ? 'selected' : ''}`}
+                          onClick={() => {
+                            setBookingForm(prev => ({ ...prev, selectedSlot: slot }));
+                            setShowScheduler(true);
+                          }}
+                        >
+                          <span className="slot-day">{slot.day}</span>
+                          <span className="slot-time">{slot.start_time}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="view-more-times"
+                      onClick={handleScheduleClick}
+                    >
+                      View more times →
+                    </button>
+                  </div>
+                )}
+
+                {/* Fallback schedule button if no inline slots */}
+                {message.schedulingIntent && !message.availableSlots?.length && !showScheduler && (
                   <button
                     className="schedule-cta-btn"
                     onClick={handleScheduleClick}

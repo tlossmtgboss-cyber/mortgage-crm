@@ -708,3 +708,127 @@
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: #ccc;
 }
+
+/* ============================================
+   TRUST PROGRESS INDICATOR
+   ============================================ */
+
+.trust-progress-bar {
+  height: 3px;
+  background: #e5e7eb;
+  margin: 0;
+}
+
+.trust-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color, #8bc34a), var(--primary-color, #2d5a27));
+  transition: width 0.5s ease;
+}
+
+/* ============================================
+   INLINE CALENDAR (Inside Chat Messages)
+   ============================================ */
+
+.inline-calendar {
+  margin-top: 12px;
+  padding: 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.inline-calendar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 12px;
+}
+
+.calendar-icon {
+  font-size: 16px;
+}
+
+.inline-slots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.inline-slot-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.inline-slot-btn:hover {
+  border-color: var(--primary-color, #2d5a27);
+  background: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.inline-slot-btn.selected {
+  border-color: var(--primary-color, #2d5a27);
+  background: var(--primary-color, #2d5a27);
+  color: white;
+}
+
+.inline-slot-btn .slot-day {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.inline-slot-btn .slot-time {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.view-more-times {
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--primary-color, #2d5a27);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+
+.view-more-times:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* Responsive adjustments */
+@media (max-width: 400px) {
+  .inline-slots {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .inline-slot-btn {
+    padding: 8px 6px;
+  }
+
+  .inline-slot-btn .slot-day {
+    font-size: 10px;
+  }
+
+  .inline-slot-btn .slot-time {
+    font-size: 12px;
+  }
+}
