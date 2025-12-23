@@ -1319,14 +1319,39 @@ export default function PurchaseApplication() {
 
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
-    if (showSubmissionSuccess && portalUrlForRedirect) {
+    if (showSubmissionSuccess) {
       const redirectTimer = setTimeout(() => {
+        // Determine the redirect URL
+        let redirectUrl = portalUrlForRedirect;
+
+        // If no portal URL provided, construct one from current location
+        if (!redirectUrl) {
+          // Use perenniaai.com for production, current host for dev
+          const isProduction = window.location.hostname === 'perenniaai.com' ||
+                               window.location.hostname.includes('vercel.app');
+          const baseHost = isProduction ? 'perenniaai.com' : window.location.host;
+          const protocol = isProduction ? 'https' : window.location.protocol.replace(':', '');
+
+          // Try to get the LO slug from the current URL (e.g., /lo/tim-loss or /apply/tim-loss)
+          const pathMatch = window.location.pathname.match(/\/(?:lo|apply)\/([^/]+)/);
+          const loSlug = pathMatch ? pathMatch[1] : null;
+
+          if (loSlug) {
+            // Redirect to the LO's microsite (which has client portal features)
+            redirectUrl = `${protocol}://${baseHost}/lo/${loSlug}`;
+          } else {
+            // Fallback: redirect to home with success message
+            redirectUrl = `${protocol}://${baseHost}/?application=submitted`;
+          }
+        }
+
         // Signal to parent iframe that submission is complete (if embedded)
         if (window.parent !== window) {
-          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: portalUrlForRedirect }, '*');
+          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: redirectUrl }, '*');
         }
+
         // Redirect to the client portal
-        window.location.href = portalUrlForRedirect;
+        window.location.href = redirectUrl;
       }, 3000); // 3 second delay to show success message
 
       return () => clearTimeout(redirectTimer);
