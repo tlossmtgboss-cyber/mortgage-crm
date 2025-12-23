@@ -1783,6 +1783,50 @@ AI_TOOLS = [
         "name": "query_processor_lo_quality_ranking",
         "description": "Rank loan officers by file quality",
         "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Pre-Approval Letter Tool
+    {
+        "name": "send_pre_approval_letter",
+        "description": "Generate and send a pre-approval letter for a lead/borrower. Use this when the user asks to send, create, or generate a pre-approval letter. If any required fields are missing, ask follow-up questions to gather: borrower name, property address (or 'TBD'), loan amount, loan type, and recipient email.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {
+                    "type": "integer",
+                    "description": "The lead's ID (can look up by name if not provided)"
+                },
+                "borrower_names": {
+                    "type": "string",
+                    "description": "Full name(s) of the borrower(s)"
+                },
+                "property_address": {
+                    "type": "string",
+                    "description": "Property address or 'To Be Determined'"
+                },
+                "loan_amount": {
+                    "type": "number",
+                    "description": "Approved loan amount"
+                },
+                "loan_type": {
+                    "type": "string",
+                    "enum": ["Conventional", "FHA", "VA", "USDA", "Jumbo"],
+                    "description": "Type of loan program"
+                },
+                "recipient_email": {
+                    "type": "string",
+                    "description": "Email address to send the pre-approval letter to"
+                },
+                "interest_rate": {
+                    "type": "number",
+                    "description": "Optional interest rate (will use current market rate if not provided)"
+                },
+                "expiration_days": {
+                    "type": "integer",
+                    "description": "Days until letter expires (default 90)"
+                }
+            },
+            "required": ["borrower_names", "loan_amount", "loan_type", "recipient_email"]
+        }
     }
 ]
 
@@ -2612,6 +2656,7 @@ INTENT MATCHING RULES (FOLLOW STRICTLY):
 - When user explicitly asks about "voicemail", "drop voicemail" → return VOICEMAIL_DROP
 - When user explicitly asks for "report", "pipeline report" → return PIPELINE_REPORT
 - When user asks about specific lead/client by name → return SEARCH
+- When user asks to "send pre-approval letter", "generate pre-approval", "create pre-approval letter" → return PRE_APPROVAL_LETTER
 - DO NOT suggest actions the user didn't ask for. If they ask about leads, show the lead data from CRM context.
 
 CRITICAL: When answering questions about CRM data (leads, loans, clients, pipeline):
@@ -2631,6 +2676,8 @@ User: "How many leads do I have?" → intent: "GENERAL_QUERY" (provide count)
 User: "Show me my pipeline" → intent: "GENERAL_QUERY" (show pipeline data)
 User: "Send an email to my pre-approved clients" → intent: "EMAIL_CAMPAIGN"
 User: "Find John Smith" → intent: "SEARCH"
+User: "Send a pre-approval letter for Steve Latterson" → intent: "PRE_APPROVAL_LETTER" (ask for missing details)
+User: "Generate pre-approval for Jane Doe, $400k conventional to agent@email.com" → intent: "PRE_APPROVAL_LETTER" (has all info)
 
 For GENERAL_QUERY about data, your response should include:
 - explanation: A summary of the requested data with actual numbers and names from CRM context
@@ -2647,6 +2694,7 @@ You can perform the following actions:
 7. GENERAL_QUERY - Answer questions about the CRM data
 8. ANALYTICAL_QUERY - Run advanced analytics on CRM data
 9. MARKET_INTELLIGENCE - Get rate lock recommendations and market conditions
+10. PRE_APPROVAL_LETTER - Generate and send pre-approval letters to borrowers or their agents
 
 MARKET INTELLIGENCE QUERIES:
 When user asks about rate locks, market conditions, rates, or whether to lock:
@@ -2736,6 +2784,78 @@ For PIPELINE_REPORT, preview should include:
 - report_type: Type of report
 - date_range: Date range covered
 - metrics: Key metrics to include
+
+PRE-APPROVAL LETTER HANDLING:
+When user asks to send, create, or generate a pre-approval letter:
+- "send pre-approval letter for John Smith" → intent: "PRE_APPROVAL_LETTER"
+- "create pre-approval for Jane Doe" → intent: "PRE_APPROVAL_LETTER"
+- "generate pre-approval letter" → intent: "PRE_APPROVAL_LETTER"
+- "send pre-approval to the agent" → intent: "PRE_APPROVAL_LETTER"
+
+CRITICAL - GATHERING MISSING INFORMATION:
+For pre-approval letters, you MUST have these required fields:
+1. borrower_names - Full name(s) of the borrower(s)
+2. loan_amount - Approved loan amount (number)
+3. loan_type - Type of loan (Conventional, FHA, VA, USDA, Jumbo)
+4. recipient_email - Email address to send the letter to
+
+Optional fields (will use defaults if not provided):
+- property_address - Property address or "To Be Determined"
+- interest_rate - Interest rate (will use "Market Rate" if not provided)
+- expiration_days - Days until letter expires (default 90)
+- lead_id - Lead ID if known
+
+IF ANY REQUIRED FIELD IS MISSING:
+You MUST ask follow-up questions conversationally to gather the information.
+DO NOT refuse to help. Instead, ask for the specific missing information.
+
+EXAMPLE CONVERSATION FLOW:
+User: "Send a pre-approval letter for Steve Latterson"
+Assistant: "I'll prepare a pre-approval letter for Steve Latterson. I need a few details:
+
+1. **Loan Amount**: What loan amount should I put on the letter?
+2. **Loan Type**: What type of loan? (Conventional, FHA, VA, USDA, or Jumbo)
+3. **Recipient Email**: Who should I send this letter to?
+4. **Property Address**: Do you have a property address, or should I put 'To Be Determined'?"
+
+User: "$450,000 conventional, send it to timothy@perenniaai.com, TBD on property"
+Assistant: (Now has all required info, returns PRE_APPROVAL_LETTER intent with data)
+
+SEARCHING FOR LEAD DATA:
+When user mentions a name, first search the CRM to find their lead record and pull any available data:
+- Lead ID for activity tracking
+- Existing loan amount if on file
+- Existing loan type if on file
+- Email address if on file
+
+Use this data to pre-fill fields and reduce questions needed.
+
+For PRE_APPROVAL_LETTER, preview should include:
+- borrower_names: Full name(s) of borrower(s)
+- property_address: Property address or "To Be Determined"
+- loan_amount: Approved loan amount (number)
+- loan_type: Type of loan program
+- recipient_email: Email to send the letter to
+- interest_rate: (optional) Interest rate
+- expiration_days: (optional) Days until expiration
+- lead_id: (optional) Lead ID for activity tracking
+
+EXAMPLE PRE_APPROVAL_LETTER RESPONSE:
+{
+  "intent": "PRE_APPROVAL_LETTER",
+  "explanation": "I'll generate and send a pre-approval letter for Steve Latterson to timothy@perenniaai.com.",
+  "preview": {
+    "borrower_names": "Steve Latterson",
+    "property_address": "To Be Determined",
+    "loan_amount": 450000,
+    "loan_type": "Conventional",
+    "recipient_email": "timothy@perenniaai.com",
+    "expiration_days": 90
+  },
+  "data": {
+    "lead_id": 123
+  }
+}
 
 For DAILY_VIEW, data should include:
 - tasks: List of today's tasks
@@ -4170,6 +4290,10 @@ async def execute_action(
             result = await execute_voicemail_drop(
                 db, current_user_id, preview, modifications, background_tasks
             )
+        elif intent == "PRE_APPROVAL_LETTER":
+            result = await execute_pre_approval_letter(
+                db, current_user_id, preview, modifications, background_tasks
+            )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action type: {intent}")
 
@@ -4362,6 +4486,201 @@ async def execute_voicemail_drop(
         "recipients_count": len(recipients),
         "status": "queued"
     }
+
+
+async def execute_pre_approval_letter(
+    db: Session,
+    user_id: int,
+    preview: Dict[str, Any],
+    modifications: Dict[str, Any],
+    background_tasks: BackgroundTasks
+) -> Dict[str, Any]:
+    """Execute sending a pre-approval letter via email with PDF attachment"""
+    from routes.pre_approval_letter_settings_routes import (
+        generate_pre_approval_letter_pdf,
+        PreApprovalLetterSettings
+    )
+    from email_service import email_service
+
+    main = get_main_module()
+    Lead = main.Lead
+    Activity = main.Activity
+    User = main.User
+
+    # Apply modifications to preview data
+    borrower_names = modifications.get("borrower_names", preview.get("borrower_names", ""))
+    property_address = modifications.get("property_address", preview.get("property_address", "To Be Determined"))
+    loan_amount = modifications.get("loan_amount", preview.get("loan_amount", 0))
+    loan_type = modifications.get("loan_type", preview.get("loan_type", "Conventional"))
+    recipient_email = modifications.get("recipient_email", preview.get("recipient_email", ""))
+    interest_rate = modifications.get("interest_rate", preview.get("interest_rate"))
+    expiration_days = modifications.get("expiration_days", preview.get("expiration_days", 90))
+    lead_id = modifications.get("lead_id", preview.get("lead_id"))
+
+    # Get user/loan officer details
+    user = db.query(User).filter(User.id == user_id).first()
+    lo_name = f"{user.first_name} {user.last_name}" if user else "Loan Officer"
+    lo_nmls = getattr(user, 'nmls_id', '') or ''
+    lo_email = user.email if user else ''
+    lo_phone = getattr(user, 'phone', '') or ''
+
+    # Get or create settings (use defaults if not configured)
+    settings = db.query(PreApprovalLetterSettings).filter(
+        PreApprovalLetterSettings.user_id == user_id
+    ).first()
+
+    if not settings:
+        # Create default settings
+        settings = PreApprovalLetterSettings(
+            user_id=user_id,
+            company_name="Perennia Mortgage",
+            company_address="123 Main Street, San Francisco, CA 94105",
+            company_phone="(555) 123-4567",
+            company_nmls="123456",
+            logo_url=None,
+            letter_template="standard",
+            default_conditions=[
+                "Verification of employment and income",
+                "Satisfactory appraisal of the subject property",
+                "Clear title and title insurance",
+                "Verification of assets and funds to close"
+            ],
+            signature_name=lo_name,
+            signature_title="Loan Officer",
+            signature_nmls=lo_nmls,
+            signature_phone=lo_phone,
+            signature_email=lo_email,
+            include_disclaimer=True
+        )
+
+    # Calculate expiration date
+    from datetime import datetime, timedelta
+    expiration_date = datetime.now() + timedelta(days=expiration_days)
+
+    # Build sample data for PDF generation
+    sample_data = {
+        "borrower_names": borrower_names,
+        "property_address": property_address,
+        "loan_amount": f"${loan_amount:,.2f}" if isinstance(loan_amount, (int, float)) else str(loan_amount),
+        "loan_type": loan_type,
+        "interest_rate": f"{interest_rate}%" if interest_rate else "Market Rate",
+        "expiration_date": expiration_date.strftime("%B %d, %Y"),
+        "date_issued": datetime.now().strftime("%B %d, %Y")
+    }
+
+    try:
+        # Generate PDF
+        pdf_bytes = generate_pre_approval_letter_pdf(settings, sample_data)
+
+        # Create filename
+        borrower_filename = borrower_names.replace(" ", "_").replace(",", "")
+        pdf_filename = f"Pre_Approval_Letter_{borrower_filename}.pdf"
+
+        # Create email content
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <p>Please find attached the pre-approval letter for <strong>{borrower_names}</strong>.</p>
+
+            <p><strong>Loan Details:</strong></p>
+            <ul>
+                <li>Loan Amount: {sample_data['loan_amount']}</li>
+                <li>Loan Type: {loan_type}</li>
+                <li>Property: {property_address}</li>
+                <li>Valid Until: {sample_data['expiration_date']}</li>
+            </ul>
+
+            <p>Please don't hesitate to reach out if you have any questions.</p>
+
+            <p>Best regards,<br>
+            {lo_name}<br>
+            {settings.signature_title or 'Loan Officer'}<br>
+            NMLS# {lo_nmls or settings.signature_nmls or 'N/A'}<br>
+            {lo_phone or settings.signature_phone or ''}<br>
+            {lo_email or settings.signature_email or ''}</p>
+        </body>
+        </html>
+        """
+
+        plain_text = f"""
+Pre-Approval Letter for {borrower_names}
+
+Loan Details:
+- Loan Amount: {sample_data['loan_amount']}
+- Loan Type: {loan_type}
+- Property: {property_address}
+- Valid Until: {sample_data['expiration_date']}
+
+Please find the pre-approval letter attached.
+
+Best regards,
+{lo_name}
+{settings.signature_title or 'Loan Officer'}
+NMLS# {lo_nmls or settings.signature_nmls or 'N/A'}
+        """
+
+        # Create attachment
+        attachments = [{
+            'content': pdf_bytes,
+            'filename': pdf_filename,
+            'type': 'application/pdf'
+        }]
+
+        # Send email
+        success = email_service.send_html_email(
+            to_email=recipient_email,
+            subject=f"Pre-Approval Letter - {borrower_names}",
+            html_body=html_content,
+            plain_text_body=plain_text,
+            attachments=attachments
+        )
+
+        if not success:
+            return {
+                "success": False,
+                "message": "Failed to send pre-approval letter email",
+                "error": "Email service returned failure"
+            }
+
+        # Create activity record if we have a lead
+        if lead_id:
+            lead = db.query(Lead).filter(Lead.id == lead_id, Lead.user_id == user_id).first()
+            if lead:
+                activity = Activity(
+                    user_id=user_id,
+                    lead_id=lead_id,
+                    activity_type="pre_approval_letter",
+                    description=f"Pre-approval letter sent to {recipient_email}",
+                    data={
+                        "borrower_names": borrower_names,
+                        "loan_amount": loan_amount,
+                        "loan_type": loan_type,
+                        "recipient_email": recipient_email,
+                        "expiration_date": sample_data['expiration_date']
+                    }
+                )
+                db.add(activity)
+                db.commit()
+
+        return {
+            "success": True,
+            "message": f"Pre-approval letter sent successfully to {recipient_email}",
+            "details": {
+                "borrower": borrower_names,
+                "loan_amount": sample_data['loan_amount'],
+                "loan_type": loan_type,
+                "sent_to": recipient_email,
+                "valid_until": sample_data['expiration_date']
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to generate/send pre-approval letter: {e}")
+        return {
+            "success": False,
+            "message": f"Failed to send pre-approval letter: {str(e)}",
+            "error": str(e)
+        }
 
 
 # ============================================================================
