@@ -54716,6 +54716,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ SLA Workflow System tables creation skipped: {e}")
 
+            # Run Smart Docs SLA migration (Queue View, SLA tracking, reminders)
+            try:
+                from migrations.add_smart_docs_sla import run_migration as run_smart_docs_sla_migration
+                run_smart_docs_sla_migration()
+                logger.info("✅ Smart Docs SLA migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Smart Docs SLA migration skipped: {e}")
+
             # Seed default SLA Workflow configurations
             try:
                 seed_workflow_configurations()
