@@ -139,8 +139,8 @@ class IntelligentEmailHandler:
                 l.email,
                 l.phone,
                 l.stage,
-                l.loan_purpose,
-                l.estimated_loan_amount,
+                l.loan_type,
+                l.loan_amount,
                 u.full_name as lo_name,
                 u.email as lo_email
             FROM leads l
@@ -159,8 +159,8 @@ class IntelligentEmailHandler:
                 "email": lead[3],
                 "phone": lead[4],
                 "stage": lead[5],
-                "loan_purpose": lead[6],
-                "estimated_amount": float(lead[7]) if lead[7] else None,
+                "loan_type": lead[6],
+                "loan_amount": float(lead[7]) if lead[7] else None,
                 "lo_name": lead[8],
                 "lo_email": lead[9],
             }
@@ -850,7 +850,7 @@ AI Mortgage Assistant | Perennia AI"""
 
             # Also search in leads
             lead_result = self.db.execute(text("""
-                SELECT id, first_name, last_name, email, stage, loan_purpose
+                SELECT id, first_name, last_name, email, stage, loan_type
                 FROM leads
                 WHERE (
                     LOWER(first_name) LIKE :first_name
@@ -872,7 +872,7 @@ AI Mortgage Assistant | Perennia AI"""
                     "last_name": lead_result[2],
                     "email": lead_result[3],
                     "stage": lead_result[4],
-                    "loan_purpose": lead_result[5],
+                    "loan_type": lead_result[5],
                     "is_lead": True,
                 }
 
