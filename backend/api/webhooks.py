@@ -906,45 +906,102 @@ def classify_email_type(subject: str, body: str, from_email: str) -> str:
 async def get_graph_webhook_status():
     """
     Get the status of Microsoft Graph webhook subscriptions.
-
-    Returns information about active subscriptions and recent notifications.
     """
-    try:
-        from database import get_db
-        from sqlalchemy import text
+    return {
+        "status": "active",
+        "webhook_url": os.getenv("GRAPH_WEBHOOK_URL", "Not configured"),
+        "secret_configured": bool(os.getenv("GRAPH_WEBHOOK_SECRET") or os.getenv("WEBHOOK_SECRET")),
+    }
 
-        async for db in get_db():
-            try:
-                # Get recent webhook activity
-                recent = await db.execute(text("""
-                    SELECT
-                        COUNT(*) as total_received,
-                        COUNT(CASE WHEN processed THEN 1 END) as total_processed,
-                        MAX(received_at) as last_received
-                    FROM email_webhook_log
-                    WHERE received_at > NOW() - INTERVAL '24 hours'
-                """))
-                stats = recent.fetchone()
 
-                return {
-                    "status": "active",
-                    "last_24h": {
-                        "received": stats.total_received if stats else 0,
-                        "processed": stats.total_processed if stats else 0,
-                        "last_received": stats.last_received.isoformat() if stats and stats.last_received else None,
-                    },
-                    "webhook_url": os.getenv("GRAPH_WEBHOOK_URL", "Not configured"),
-                    "secret_configured": bool(os.getenv("GRAPH_WEBHOOK_SECRET") or os.getenv("WEBHOOK_SECRET")),
-                }
-            finally:
-                await db.close()
+@router.post("/graph/register")
+async def register_graph_subscription(user_email: str = "admin@perenniaai.com"):
+    """
+    Register a Microsoft Graph webhook subscription for email notifications.
+    """
+    import requests
+    from datetime import datetime, timedelta
 
-    except Exception as e:
-        logger.error(f"[GRAPH WEBHOOK] Error getting status: {e}")
+    tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+    client_id = os.getenv("MICROSOFT_CLIENT_ID")
+    client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+    webhook_url = os.getenv("GRAPH_WEBHOOK_URL")
+    webhook_secret = os.getenv("GRAPH_WEBHOOK_SECRET", os.getenv("WEBHOOK_SECRET", ""))
+
+    if not all([tenant_id, client_id, client_secret]):
+        return {"error": "Missing Microsoft Graph credentials"}
+
+    if not webhook_url:
+        return {"error": "GRAPH_WEBHOOK_URL not configured"}
+
+    # Get access token
+    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    token_response = requests.post(
+        token_url,
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "https://graph.microsoft.com/.default",
+            "grant_type": "client_credentials",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    if token_response.status_code != 200:
+        return {"error": f"Failed to get access token: {token_response.text}"}
+
+    access_token = token_response.json().get("access_token")
+
+    # Check existing subscriptions
+    list_response = requests.get(
+        "https://graph.microsoft.com/v1.0/subscriptions",
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+    )
+
+    existing_subs = list_response.json().get("value", []) if list_response.status_code == 200 else []
+    for sub in existing_subs:
+        if sub.get("notificationUrl") == webhook_url:
+            # Renew existing subscription
+            expiration = (datetime.utcnow() + timedelta(days=2, hours=23)).isoformat() + "Z"
+            renew_response = requests.patch(
+                f"https://graph.microsoft.com/v1.0/subscriptions/{sub['id']}",
+                headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+                json={"expirationDateTime": expiration},
+            )
+            if renew_response.status_code == 200:
+                return {"status": "renewed", "subscription_id": sub['id'], "expires": expiration}
+            else:
+                return {"error": f"Failed to renew: {renew_response.text}"}
+
+    # Create new subscription
+    expiration = (datetime.utcnow() + timedelta(days=2, hours=23)).isoformat() + "Z"
+    resource = f"users/{user_email}/mailFolders/inbox/messages"
+
+    subscription_data = {
+        "changeType": "created",
+        "notificationUrl": webhook_url,
+        "resource": resource,
+        "expirationDateTime": expiration,
+        "clientState": webhook_secret,
+    }
+
+    create_response = requests.post(
+        "https://graph.microsoft.com/v1.0/subscriptions",
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        json=subscription_data,
+    )
+
+    if create_response.status_code == 201:
+        subscription = create_response.json()
         return {
-            "status": "error",
-            "error": str(e),
+            "status": "created",
+            "subscription_id": subscription.get("id"),
+            "resource": resource,
+            "expires": subscription.get("expirationDateTime"),
+            "webhook_url": webhook_url,
         }
+    else:
+        return {"error": f"Failed to create subscription: {create_response.text}"}
 
 
 # =============================================================================
