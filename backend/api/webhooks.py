@@ -691,6 +691,221 @@ async def execute_email_response_pattern(
         logger.error(f"[GRAPH WEBHOOK] Error executing pattern: {e}", exc_info=True)
 
 
+async def handle_internal_user_email(
+    email: Dict[str, Any],
+    from_email: str,
+    from_name: str,
+    user_row: Any,
+    clean_message: str,
+    subject: str,
+    conv_id: str,
+    db: Any
+):
+    """
+    Handle emails from internal users (team members, LOs, admins).
+
+    Internal users should NOT be treated as leads or prospects.
+    Instead, we should:
+    1. Recognize their authority/role
+    2. Parse their request (task, question, action needed)
+    3. Route appropriately or provide helpful assistance
+    """
+    try:
+        from email_service import email_service
+        import os
+
+        user_name = user_row.name or from_name
+        user_role = user_row.role or "team_member"
+        user_title = user_row.title or ""
+
+        logger.info(f"[INTERNAL USER] Processing request from {user_name} ({user_role}): {clean_message[:100]}...")
+
+        # Use AI to understand the internal user's request
+        ai_response = await generate_internal_user_response(
+            user_name=user_name,
+            user_role=user_role,
+            user_title=user_title,
+            message=clean_message,
+            subject=subject,
+            db=db
+        )
+
+        # Build response email
+        html_response = f"""<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000; margin: 0; padding: 20px; }}
+    </style>
+</head>
+<body>
+<div style="font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000000;">
+<p>Hi {user_name.split()[0] if user_name else 'there'},</p>
+
+<p>{ai_response['response'].replace(chr(10), '<br>')}</p>
+
+<p>Best regards,<br>
+<b>Sarah</b><br>
+<span style="color: #666666;">AI Assistant | Perennia AI</span></p>
+</div>
+</body>
+</html>"""
+
+        plain_text_response = f"""Hi {user_name.split()[0] if user_name else 'there'},
+
+{ai_response['response']}
+
+Best regards,
+Sarah
+AI Assistant | Perennia AI"""
+
+        # Determine reply subject
+        reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
+
+        # Send response from the reply subdomain
+        ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+        email_sent = email_service.send_html_email(
+            to_email=from_email,
+            subject=reply_subject,
+            html_body=html_response,
+            plain_text_body=plain_text_response,
+            from_email=ai_from_email,
+            reply_to=ai_from_email
+        )
+
+        logger.info(f"[INTERNAL USER] Sent response to {from_email}, email_sent={email_sent}")
+
+        # Create a task if the AI detected an actionable request
+        if ai_response.get("create_task") and ai_response.get("task_details"):
+            task_details = ai_response["task_details"]
+            await db.execute(text("""
+                INSERT INTO tasks
+                (title, description, type, priority, status, due_date, metadata, created_at, user_id, assigned_to)
+                VALUES (:title, :description, :type, :priority, 'pending', :due_date, :metadata, :created_at, :user_id, :assigned_to)
+            """), {
+                "title": task_details.get("title", f"Request from {user_name}"),
+                "description": task_details.get("description", clean_message),
+                "type": task_details.get("type", "internal_request"),
+                "priority": task_details.get("priority", "medium"),
+                "due_date": datetime.utcnow(),
+                "metadata": json.dumps({"from_email": from_email, "original_message": clean_message[:500]}),
+                "created_at": datetime.utcnow(),
+                "user_id": user_row.id,
+                "assigned_to": task_details.get("assigned_to", user_row.id),
+            })
+            await db.commit()
+            logger.info(f"[INTERNAL USER] Created task: {task_details.get('title')}")
+
+    except Exception as e:
+        logger.error(f"[INTERNAL USER] Error handling internal user email: {e}", exc_info=True)
+
+
+async def generate_internal_user_response(
+    user_name: str,
+    user_role: str,
+    user_title: str,
+    message: str,
+    subject: str,
+    db: Any
+) -> Dict[str, Any]:
+    """
+    Generate an appropriate response for an internal user's request.
+    Uses AI to understand the request and provide helpful assistance.
+    """
+    try:
+        import anthropic
+        import os
+
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        system_prompt = f"""You are Sarah, an AI assistant for Perennia AI, a mortgage CRM company.
+
+IMPORTANT: The person emailing you is an INTERNAL TEAM MEMBER, not a lead or prospect:
+- Name: {user_name}
+- Role: {user_role}
+- Title: {user_title}
+
+They are a person of authority within the organization. Do NOT:
+- Treat them as a potential mortgage customer
+- Offer to connect them with a loan officer (they likely ARE a loan officer or manager)
+- Ask qualifying questions about their mortgage needs
+- Suggest they schedule a consultation
+
+Instead, you should:
+- Recognize their authority and role
+- Help with their request professionally
+- If they're asking for something to be done (like sending a letter), acknowledge the request
+- If they're asking about a client/lead, provide helpful information
+- If you can't complete their request directly, explain what steps are needed
+
+Be professional, concise, and helpful. You're assisting a colleague, not qualifying a lead.
+
+If they're asking you to perform a task (like send a pre-approval letter, look up a client, etc.):
+1. Acknowledge their request
+2. Explain what you can help with
+3. If it requires manual action, create a task for follow-up
+
+Respond in a friendly, professional tone appropriate for internal communication."""
+
+        user_prompt = f"""Subject: {subject}
+
+Message from {user_name}:
+{message}
+
+Please provide an appropriate response and indicate if a task should be created."""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}]
+        )
+
+        ai_text = response.content[0].text
+
+        # Check if we should create a task
+        create_task = False
+        task_details = None
+
+        # Simple heuristics for task creation
+        task_keywords = ["pre-approval", "letter", "send", "create", "generate", "look up", "find", "check"]
+        if any(kw in message.lower() for kw in task_keywords):
+            create_task = True
+            task_details = {
+                "title": f"Request: {subject[:50]}" if subject else f"Request from {user_name}",
+                "description": f"Original request from {user_name}:\n\n{message}",
+                "type": "internal_request",
+                "priority": "high" if "urgent" in message.lower() or "asap" in message.lower() else "medium",
+            }
+
+        return {
+            "response": ai_text,
+            "create_task": create_task,
+            "task_details": task_details
+        }
+
+    except Exception as e:
+        logger.error(f"[INTERNAL USER] AI response generation failed: {e}")
+
+        # Fallback response
+        return {
+            "response": f"""Thank you for your message, {user_name.split()[0] if user_name else 'there'}!
+
+I've received your request regarding "{subject}". Since this requires specific action, I've flagged it for follow-up.
+
+If this is urgent, please reach out directly through the CRM or contact the appropriate team member.
+
+Is there anything else I can help you with?""",
+            "create_task": True,
+            "task_details": {
+                "title": f"Email request: {subject[:50]}" if subject else f"Request from {user_name}",
+                "description": f"Original request from {user_name}:\n\n{message}",
+                "type": "internal_request",
+                "priority": "medium",
+            }
+        }
+
+
 async def process_ai_conversation_reply(
     email: Dict[str, Any],
     from_email: str,
@@ -747,7 +962,35 @@ async def process_ai_conversation_reply(
 
         logger.info(f"[GRAPH WEBHOOK] Processing AI conversation reply from {from_email}: {clean_message[:100]}...")
 
-        # Process through AI qualification agent
+        # =================================================================
+        # CHECK IF SENDER IS AN INTERNAL USER (team member, LO, admin)
+        # =================================================================
+        internal_user = await db.execute(text("""
+            SELECT id, name, email, role, title
+            FROM users
+            WHERE LOWER(email) = LOWER(:email)
+            LIMIT 1
+        """), {"email": from_email})
+        internal_user_row = internal_user.fetchone()
+
+        if internal_user_row:
+            # This is an internal user (team member) - don't treat them as a lead!
+            logger.info(f"[GRAPH WEBHOOK] Sender {from_email} is internal user: {internal_user_row.name} ({internal_user_row.role})")
+
+            # Route to internal user handler instead of qualification agent
+            await handle_internal_user_email(
+                email=email,
+                from_email=from_email,
+                from_name=from_name or internal_user_row.name,
+                user_row=internal_user_row,
+                clean_message=clean_message,
+                subject=subject,
+                conv_id=conv_id,
+                db=db
+            )
+            return
+
+        # Process through AI qualification agent (for external contacts only)
         result = process_qualification_message(
             conversation_id=conv_id,
             message=clean_message,

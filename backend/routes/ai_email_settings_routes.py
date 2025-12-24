@@ -25,7 +25,7 @@ class AIEmailSettings(Base):
     id = Column(Integer, primary_key=True, index=True)
     # AI Assistant Identity
     assistant_name = Column(String(100), default="Sarah")
-    assistant_email = Column(String(255), default="sarah@perenniaai.com")
+    assistant_email = Column(String(255), default="sarah@reply.perenniaai.com")
     assistant_title = Column(String(100), default="AI Assistant")
     company_name = Column(String(255), default="Perennia AI")
 
