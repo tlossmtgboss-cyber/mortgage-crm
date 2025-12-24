@@ -449,6 +449,11 @@ const Icon = ({ name, size = 24, className = '' }) => {
         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
       </svg>
     ),
+    save: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/>
+      </svg>
+    ),
   };
 
   return (
@@ -459,6 +464,7 @@ const Icon = ({ name, size = 24, className = '' }) => {
 };
 
 const STAGES = [
+  { id: 'account', label: 'Get Started', icon: 'user', description: 'Create your account', hideFromProgress: true },
   { id: 'declarations', label: 'Your Story', icon: 'story', description: 'Quick questions' },
   { id: 'planning', label: 'Planning', icon: 'goals', description: 'Your preferences' },
   { id: 'profile', label: 'About You', icon: 'profile', description: 'The basics' },
@@ -469,8 +475,18 @@ const STAGES = [
   { id: 'schedule', label: 'Submit', icon: 'check', description: 'Complete application' },
 ];
 
+// Stages visible in progress bar (excludes account)
+const VISIBLE_STAGES = STAGES.filter(s => !s.hideFromProgress);
+
 // Generate documents needed based on user's declarations (refinance-specific) - DYNAMIC based on answers
-const getRequiredDocuments = (declarations = {}, assetData = {}) => {
+const getRequiredDocuments = (
+  declarations = {},
+  assetData = {},
+  profileData = {},
+  incomeData = {},
+  coBorrowerData = {},
+  coBorrowerIncomeData = {}
+) => {
   const docs = [];
   const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
   const hasCoBorrower = ['2', '3', '4+'].includes(declarations.borrower_count);
@@ -481,9 +497,22 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
   const hasCheckingOrSavings = (parseFloat(assetData.checking) || 0) > 0 || (parseFloat(assetData.savings) || 0) > 0;
   const hasInvestmentOrRetirement = (parseFloat(assetData.investments) || 0) > 0 || (parseFloat(assetData.retirement) || 0) > 0;
 
+  // Get borrower names for personalization
+  const borrowerFirstName = profileData?.firstName?.trim() || 'Primary Borrower';
+  const coBorrowerFirstName = coBorrowerData?.firstName?.trim() || 'Co-Borrower';
+
+  // Get employer names from income data
+  const primaryEmployer = incomeData?.employerName?.trim() || null;
+  const coBorrowerEmployer = coBorrowerIncomeData?.employerName?.trim() || null;
+
+  // Current year for document labels
+  const currentYear = new Date().getFullYear();
+  const priorYear = currentYear - 1;
+  const twoYearsAgo = currentYear - 2;
+
   // === IDENTITY DOCUMENTS ===
   // Always require government ID (driver's license or passport)
-  docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'declarations' });
+  docs.push({ id: 'id', name: `${borrowerFirstName}'s Government ID`, description: "Driver's license or passport", category: 'identity', stage: 'declarations' });
 
   // Citizenship-based documents
   if (declarations.citizenship_status === 'permanent_resident') {
@@ -530,9 +559,11 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
       docs.push({ id: 'articles_incorporation', name: 'Articles of Incorporation', description: 'Corporate formation documents', category: 'income', stage: 'income' });
     }
   } else {
-    // W-2 employee
-    docs.push({ id: 'paystubs', name: 'Pay Stubs', description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
-    docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
+    // W-2 employee - Personalized with borrower name and employer
+    const employerLabel = primaryEmployer ? ` from ${primaryEmployer}` : '';
+    docs.push({ id: 'paystubs', name: `${borrowerFirstName}'s Pay Stubs${employerLabel}`, description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
+    docs.push({ id: 'w2_current', name: `${borrowerFirstName}'s ${priorYear} W-2${employerLabel}`, description: `${priorYear} W-2 from employer`, category: 'income', stage: 'income' });
+    docs.push({ id: 'w2_prior', name: `${borrowerFirstName}'s ${twoYearsAgo} W-2${employerLabel}`, description: `${twoYearsAgo} W-2 from employer`, category: 'income', stage: 'income' });
   }
 
   // === DIVORCE / CHILD SUPPORT DOCUMENTS ===
@@ -607,8 +638,12 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
 
   // === CO-BORROWER DOCUMENTS ===
   if (hasCoBorrower) {
-    docs.push({ id: 'coborrower_id', name: 'Co-Borrower ID', description: "Co-borrower's government ID", category: 'identity', stage: 'profile' });
-    docs.push({ id: 'coborrower_income', name: 'Co-Borrower Income Docs', description: 'Pay stubs & W-2s for co-borrower', category: 'income', stage: 'income' });
+    docs.push({ id: 'coborrower_id', name: `${coBorrowerFirstName}'s Government ID`, description: "Driver's license or passport", category: 'identity', stage: 'profile' });
+    // Co-borrower income documents with personalized labels
+    const coBorrowerEmployerLabel = coBorrowerEmployer ? ` from ${coBorrowerEmployer}` : '';
+    docs.push({ id: 'coborrower_paystubs', name: `${coBorrowerFirstName}'s Pay Stubs${coBorrowerEmployerLabel}`, description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
+    docs.push({ id: 'coborrower_w2_current', name: `${coBorrowerFirstName}'s ${priorYear} W-2${coBorrowerEmployerLabel}`, description: `${priorYear} W-2 from employer`, category: 'income', stage: 'income' });
+    docs.push({ id: 'coborrower_w2_prior', name: `${coBorrowerFirstName}'s ${twoYearsAgo} W-2${coBorrowerEmployerLabel}`, description: `${twoYearsAgo} W-2 from employer`, category: 'income', stage: 'income' });
   }
 
   return docs;
@@ -1228,7 +1263,7 @@ export default function RefinanceApplication() {
     : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
   // State
-  const [currentStage, setCurrentStage] = useState('declarations');
+  const [currentStage, setCurrentStage] = useState('account');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [declarations, setDeclarations] = useState({});
   const [profileData, setProfileData] = useState({});
@@ -1259,6 +1294,21 @@ export default function RefinanceApplication() {
   const [submitError, setSubmitError] = useState(null);
   const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
   const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null);
+
+  // Account and Save Progress state
+  const [userAccount, setUserAccount] = useState({
+    email: '',
+    authMethod: null, // 'email', 'google', 'facebook', 'linkedin', 'apple'
+    isLoggedIn: false,
+  });
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveEmail, setSaveEmail] = useState('');
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+
+  // Co-borrower income collection
+  const [coBorrowerData, setCoBorrowerData] = useState({});
+  const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({});
+  const [currentIncomeBorrower, setCurrentIncomeBorrower] = useState(1); // 1 = primary, 2 = co-borrower
 
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
@@ -1319,6 +1369,81 @@ export default function RefinanceApplication() {
     };
     fetchCalendarAssignment();
   }, [API_URL]);
+
+  // localStorage storage key for saving progress
+  const STORAGE_KEY = `refinance_application_${token || 'anonymous'}`;
+
+  // Auto-save to localStorage whenever data changes
+  useEffect(() => {
+    if (currentStage === 'account') return; // Don't save until account is set up
+
+    const dataToSave = {
+      declarations,
+      profileData,
+      incomeData,
+      propertyData,
+      goalsData,
+      planningData,
+      coBorrowerData,
+      coBorrowerIncomeData,
+      currentStage,
+      userAccount,
+      savedAt: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+      setLastSavedAt(new Date());
+    } catch (err) {
+      console.error('Error saving to localStorage:', err);
+    }
+  }, [declarations, profileData, incomeData, propertyData, goalsData, planningData, coBorrowerData, coBorrowerIncomeData, currentStage, userAccount, STORAGE_KEY]);
+
+  // Load saved progress on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.userAccount?.isLoggedIn) {
+          setDeclarations(data.declarations || {});
+          setProfileData(data.profileData || {});
+          setIncomeData(data.incomeData || {});
+          setPropertyData(data.propertyData || {});
+          setGoalsData(data.goalsData || {});
+          setPlanningData(data.planningData || {});
+          setCoBorrowerData(data.coBorrowerData || {});
+          setCoBorrowerIncomeData(data.coBorrowerIncomeData || {});
+          setUserAccount(data.userAccount || {});
+          setCurrentStage(data.currentStage || 'declarations');
+        }
+      }
+    } catch (err) {
+      console.error('Error loading saved progress:', err);
+    }
+  }, [STORAGE_KEY]);
+
+  // Handle Save Progress via email
+  const handleSaveProgressEmail = async () => {
+    if (!saveEmail || !saveEmail.includes('@')) return;
+
+    try {
+      // In a real implementation, this would send an email with a magic link
+      console.log('Saving progress for email:', saveEmail);
+
+      // Store the email in userAccount
+      setUserAccount(prev => ({ ...prev, email: saveEmail }));
+      setShowSaveModal(false);
+      setSaveEmail('');
+
+      // Show confirmation
+      setMicroWinMessage('Progress saved! Check your email for a link to continue later.');
+      setShowMicroWin(true);
+      setTimeout(() => setShowMicroWin(false), 4000);
+    } catch (err) {
+      console.error('Error saving progress:', err);
+    }
+  };
 
   // AI Follow-up questions state (disabled - inline followups removed)
   const [followupAnswers, setFollowupAnswers] = useState({});
@@ -1427,10 +1552,13 @@ export default function RefinanceApplication() {
 
   // Calculate progress
   const getProgress = useCallback(() => {
-    const stageIndex = STAGES.findIndex(s => s.id === currentStage);
-    const stageProgress = (stageIndex / STAGES.length) * 100;
+    // Account stage doesn't count toward progress
+    if (currentStage === 'account') return 0;
+
+    const stageIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+    const stageProgress = (stageIndex / VISIBLE_STAGES.length) * 100;
     if (currentStage === 'declarations') {
-      const questionProgress = (currentQuestionIndex / DECLARATION_QUESTIONS.length) * (100 / STAGES.length);
+      const questionProgress = (currentQuestionIndex / DECLARATION_QUESTIONS.length) * (100 / VISIBLE_STAGES.length);
       return Math.round(stageProgress + questionProgress);
     }
     return Math.round(stageProgress);
@@ -1851,12 +1979,43 @@ export default function RefinanceApplication() {
   };
 
   // Render profile
+  // Check if there are multiple borrowers
+  const hasMultipleBorrowers = ['2', '3', '4+'].includes(declarations.borrower_count);
+
   const renderProfileStage = () => (
     <div className="stage-content">
       <div className="stage-header">
         <h2>Let's get to know you</h2>
         <p>This should take about 2 minutes</p>
       </div>
+
+      {/* Multiple Borrower Disclaimer */}
+      {hasMultipleBorrowers && (
+        <div className="multiple-borrower-disclaimer" style={{
+          background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
+          border: '1px solid #0ea5e9',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '12px',
+        }}>
+          <div style={{ color: '#0284c7', marginTop: '2px' }}>
+            <Icon name="users" size={20} />
+          </div>
+          <div>
+            <p style={{ fontWeight: '600', color: '#0369a1', margin: '0 0 4px 0', fontSize: '15px' }}>
+              Multiple Borrowers Detected
+            </p>
+            <p style={{ color: '#0369a1', margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+              Since there are multiple people on this loan application, we'll collect information for each borrower separately.
+              We'll start with your information first, then move on to the next borrower.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="form-card">
         <div className="form-row">
           <div className="form-group">
@@ -2519,6 +2678,31 @@ export default function RefinanceApplication() {
         <div className="stage-header">
           <h2>Your Refinance Goals</h2>
           <p>Let's find the best option for you</p>
+        </div>
+
+        {/* Preliminary Disclaimer */}
+        <div className="preliminary-disclaimer" style={{
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          border: '1px solid #f59e0b',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '12px',
+        }}>
+          <div style={{ color: '#d97706', marginTop: '2px' }}>
+            <Icon name="info" size={20} />
+          </div>
+          <div>
+            <p style={{ fontWeight: '600', color: '#92400e', margin: '0 0 4px 0', fontSize: '15px' }}>
+              Preliminary Estimates
+            </p>
+            <p style={{ color: '#92400e', margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+              The numbers shown below are estimates based on current market conditions and the information you've provided.
+              Your loan officer will review these details with you and provide personalized, accurate figures based on your specific situation.
+            </p>
+          </div>
         </div>
 
         {/* Refinance Type Selection */}
@@ -3290,9 +3474,165 @@ export default function RefinanceApplication() {
     );
   };
 
+  // Render Account Stage (Get Started)
+  const renderAccountStage = () => {
+    const handleSocialAuth = (provider) => {
+      // Placeholder for social auth - in a real implementation, this would initiate OAuth
+      console.log(`Authenticating with ${provider}...`);
+      setUserAccount({
+        email: `user@${provider}.com`,
+        authMethod: provider,
+        isLoggedIn: true,
+      });
+      setCurrentStage('declarations');
+    };
+
+    const handleEmailContinue = () => {
+      if (!userAccount.email || !userAccount.email.includes('@')) return;
+      setUserAccount(prev => ({
+        ...prev,
+        authMethod: 'email',
+        isLoggedIn: true,
+      }));
+      setCurrentStage('declarations');
+    };
+
+    return (
+      <div className="stage-content" style={{ maxWidth: '500px', margin: '0 auto', padding: '40px 20px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
+          <h2 style={{ fontSize: '28px', fontWeight: '600', color: '#1a365d', marginBottom: '8px' }}>
+            Let's Get Started
+          </h2>
+          <p style={{ color: '#64748b', fontSize: '16px' }}>
+            Create an account to save your progress and continue anytime
+          </p>
+        </div>
+
+        {/* Social Login Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+          <button
+            onClick={() => handleSocialAuth('google')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+              padding: '14px 20px', borderRadius: '12px', border: '1px solid #e2e8f0',
+              background: 'white', cursor: 'pointer', fontSize: '15px', fontWeight: '500',
+              transition: 'all 0.2s', color: '#374151',
+            }}
+            onMouseOver={(e) => e.target.style.background = '#f8fafc'}
+            onMouseOut={(e) => e.target.style.background = 'white'}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <button
+            onClick={() => handleSocialAuth('facebook')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+              padding: '14px 20px', borderRadius: '12px', border: 'none',
+              background: '#1877F2', cursor: 'pointer', fontSize: '15px', fontWeight: '500',
+              color: 'white', transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => e.target.style.background = '#1565D8'}
+            onMouseOut={(e) => e.target.style.background = '#1877F2'}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            Continue with Facebook
+          </button>
+
+          <button
+            onClick={() => handleSocialAuth('linkedin')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+              padding: '14px 20px', borderRadius: '12px', border: 'none',
+              background: '#0A66C2', cursor: 'pointer', fontSize: '15px', fontWeight: '500',
+              color: 'white', transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => e.target.style.background = '#004182'}
+            onMouseOut={(e) => e.target.style.background = '#0A66C2'}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+            Continue with LinkedIn
+          </button>
+
+          <button
+            onClick={() => handleSocialAuth('apple')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+              padding: '14px 20px', borderRadius: '12px', border: 'none',
+              background: '#000000', cursor: 'pointer', fontSize: '15px', fontWeight: '500',
+              color: 'white', transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => e.target.style.background = '#333333'}
+            onMouseOut={(e) => e.target.style.background = '#000000'}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+            </svg>
+            Continue with Apple
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '24px 0' }}>
+          <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+          <span style={{ color: '#94a3b8', fontSize: '14px' }}>or</span>
+          <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+        </div>
+
+        {/* Email Input */}
+        <div style={{ marginBottom: '24px' }}>
+          <input
+            type="email"
+            placeholder="Enter your email"
+            value={userAccount.email || ''}
+            onChange={(e) => setUserAccount(prev => ({ ...prev, email: e.target.value }))}
+            style={{
+              width: '100%', padding: '14px 16px', borderRadius: '12px',
+              border: '1px solid #e2e8f0', fontSize: '15px',
+              outline: 'none', transition: 'border-color 0.2s',
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#218D8D'}
+            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+          />
+        </div>
+
+        <button
+          onClick={handleEmailContinue}
+          disabled={!userAccount.email || !userAccount.email.includes('@')}
+          style={{
+            width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
+            background: userAccount.email?.includes('@') ? 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' : '#e2e8f0',
+            color: userAccount.email?.includes('@') ? 'white' : '#94a3b8',
+            fontSize: '16px', fontWeight: '600', cursor: userAccount.email?.includes('@') ? 'pointer' : 'not-allowed',
+            transition: 'all 0.2s',
+          }}
+        >
+          Continue with Email
+        </button>
+
+        <p style={{ textAlign: 'center', marginTop: '24px', color: '#94a3b8', fontSize: '13px', lineHeight: '1.5' }}>
+          By continuing, you agree to our Terms of Service and Privacy Policy.
+          Your progress will be saved automatically.
+        </p>
+      </div>
+    );
+  };
+
   // Render current stage
   const renderStage = () => {
     switch (currentStage) {
+      case 'account': return renderAccountStage();
       case 'declarations': return renderDeclarationsStage();
       case 'profile': return renderProfileStage();
       case 'income': return renderIncomeStage();
@@ -3314,31 +3654,50 @@ export default function RefinanceApplication() {
         </div>
       )}
 
-      <div className="progress-header">
-        <div className="progress-chapters">
-          {STAGES.map((stage, index) => {
-            const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-            const isComplete = index < currentIndex;
-            const isCurrent = index === currentIndex;
-            return (
-              <div
-                key={stage.id}
-                className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''}`}
-                onClick={() => isComplete && setCurrentStage(stage.id)}
-              >
-                <span className="chapter-icon">{isComplete ? <Icon name="check" size={20} /> : <Icon name={stage.icon} size={20} />}</span>
-                <span className="chapter-label">{stage.label}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="progress-bar-container">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${getProgress()}%` }}></div>
+      {/* Hide progress bar on account stage */}
+      {currentStage !== 'account' && (
+        <div className="progress-header">
+          <div className="progress-chapters">
+            {VISIBLE_STAGES.map((stage, index) => {
+              const currentIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+              const isComplete = index < currentIndex;
+              const isCurrent = index === currentIndex;
+              return (
+                <div
+                  key={stage.id}
+                  className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''}`}
+                  onClick={() => isComplete && setCurrentStage(stage.id)}
+                >
+                  <span className="chapter-icon">{isComplete ? <Icon name="check" size={20} /> : <Icon name={stage.icon} size={20} />}</span>
+                  <span className="chapter-label">{stage.label}</span>
+                </div>
+              );
+            })}
           </div>
-          <span className="progress-text">{getProgress()}% Complete</span>
+          <div className="progress-bar-container">
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${getProgress()}%` }}></div>
+            </div>
+            <span className="progress-text">{getProgress()}% Complete</span>
+            {/* Save Progress Button */}
+            <button
+              onClick={() => setShowSaveModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 12px', marginLeft: '16px', borderRadius: '8px',
+                border: '1px solid #e2e8f0', background: 'white',
+                color: '#64748b', fontSize: '13px', fontWeight: '500',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.borderColor = '#218D8D'; e.currentTarget.style.color = '#218D8D'; }}
+              onMouseOut={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
+            >
+              <Icon name="save" size={16} />
+              Save
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {showMicroWin && (
         <div className="micro-win-toast">
@@ -3362,9 +3721,9 @@ export default function RefinanceApplication() {
 
         <div className="documents-list">
           {(() => {
-            const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-            // Get dynamic document list based on user's declarations and asset values
-            const requiredDocs = getRequiredDocuments(declarations, {});
+            const currentIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+            // Get dynamic document list based on user's declarations, profile, and income for personalized labels
+            const requiredDocs = getRequiredDocuments(declarations, {}, profileData, incomeData, coBorrowerData, coBorrowerIncomeData);
 
             // Map category to the stage that unlocks it
             const categoryUnlockStage = {
@@ -3384,7 +3743,7 @@ export default function RefinanceApplication() {
             // Filter categories to only show those that have been unlocked AND have documents
             const visibleCategories = ['identity', 'income', 'assets', 'property'].filter(category => {
               const unlockStage = categoryUnlockStage[category];
-              const unlockIndex = STAGES.findIndex(s => s.id === unlockStage);
+              const unlockIndex = VISIBLE_STAGES.findIndex(s => s.id === unlockStage);
               const categoryDocs = requiredDocs.filter(d => d.category === category);
               // Show category if user has reached or passed its unlock stage AND has documents
               return currentIndex >= unlockIndex && categoryDocs.length > 0;
@@ -3450,6 +3809,72 @@ export default function RefinanceApplication() {
             <h2>Application Submitted!</h2>
             <p>Your refinance application has been successfully submitted.</p>
             <p className="redirect-message">You will be redirected to your client portal...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Save Progress Modal */}
+      {showSaveModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '32px',
+            maxWidth: '420px', width: '90%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          }}>
+            <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1a365d', marginBottom: '8px' }}>
+              Save Your Progress
+            </h3>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>
+              Your progress is automatically saved to this device. Enter your email to get a link to continue from any device.
+            </p>
+
+            <div style={{ marginBottom: '16px' }}>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                value={saveEmail}
+                onChange={(e) => setSaveEmail(e.target.value)}
+                style={{
+                  width: '100%', padding: '12px 16px', borderRadius: '8px',
+                  border: '1px solid #e2e8f0', fontSize: '15px',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '8px',
+                  border: '1px solid #e2e8f0', background: 'white',
+                  color: '#64748b', fontSize: '14px', fontWeight: '500', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProgressEmail}
+                disabled={!saveEmail || !saveEmail.includes('@')}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: '8px', border: 'none',
+                  background: saveEmail?.includes('@') ? 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' : '#e2e8f0',
+                  color: saveEmail?.includes('@') ? 'white' : '#94a3b8',
+                  fontSize: '14px', fontWeight: '500',
+                  cursor: saveEmail?.includes('@') ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Send Link
+              </button>
+            </div>
+
+            {lastSavedAt && (
+              <p style={{ textAlign: 'center', marginTop: '16px', color: '#94a3b8', fontSize: '12px' }}>
+                Last auto-saved: {lastSavedAt.toLocaleTimeString()}
+              </p>
+            )}
           </div>
         </div>
       )}

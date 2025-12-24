@@ -18,6 +18,7 @@ import './AdaptiveURLA.css';
  */
 
 const STAGES = [
+  { id: 'account', label: 'Get Started', icon: 'user', description: 'Create your account', hideFromProgress: true },
   { id: 'declarations', label: 'Your Story', icon: 'story', description: 'Quick questions to personalize' },
   { id: 'planning', label: 'Your Goals', icon: 'goals', description: 'Mortgage preferences' },
   { id: 'profile', label: 'About You', icon: 'profile', description: 'The basics about you' },
@@ -28,13 +29,38 @@ const STAGES = [
   { id: 'schedule', label: 'Schedule', icon: 'calendar', description: 'Book a call' },
 ];
 
-// Generate documents needed based on user's declarations and asset data - DYNAMIC based on answers
-const getRequiredDocuments = (declarations = {}, assetData = {}) => {
+// Visible stages for progress bar (excludes account creation)
+const VISIBLE_STAGES = STAGES.filter(s => !s.hideFromProgress);
+
+// Generate documents needed based on user's declarations and data - DYNAMIC and PERSONALIZED
+// Now includes borrower names, employer names, and specific years for all documents
+const getRequiredDocuments = (
+  declarations = {},
+  assetData = {},
+  profileData = {},
+  incomeData = {},
+  coBorrowerData = {},
+  coBorrowerIncomeData = {}
+) => {
   const docs = [];
   const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
   const hasGiftFunds = declarations.gift_funds === 'yes';
   const hasCoBorrower = ['2', '3', '4+'].includes(declarations.borrower_count);
   const maximizesDeductions = declarations.write_off_expenses === 'yes';
+
+  // Get borrower names for personalization (use first name or fallback)
+  const borrowerFirstName = profileData?.firstName?.trim() || 'Primary Borrower';
+  const coBorrowerFirstName = coBorrowerData?.firstName?.trim() || 'Co-Borrower';
+
+  // Get employer names for personalization
+  const primaryEmployer = incomeData?.employerName?.trim() || null;
+  const coBorrowerEmployer = coBorrowerIncomeData?.employerName?.trim() || null;
+
+  // Get current and prior years for document labels
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const priorYear = currentYear - 1;
+  const twoYearsAgo = currentYear - 2;
 
   // Parse asset values
   const hasCheckingOrSavings = (parseFloat(assetData.checking) || 0) > 0 || (parseFloat(assetData.savings) || 0) > 0;
@@ -42,88 +68,252 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
 
   // === IDENTITY DOCUMENTS ===
   // Always require government ID (driver's license or passport)
-  docs.push({ id: 'id', name: 'Government ID', description: "Driver's license or passport", category: 'identity', stage: 'declarations' });
+  docs.push({
+    id: 'id',
+    name: `${borrowerFirstName}'s Government ID`,
+    description: "Driver's license or passport",
+    category: 'identity',
+    stage: 'declarations'
+  });
 
   // Citizenship-based documents
   if (declarations.citizenship_status === 'permanent_resident') {
-    docs.push({ id: 'green_card', name: 'Green Card', description: 'Unexpired Permanent Resident Card', category: 'identity', stage: 'declarations' });
+    docs.push({
+      id: 'green_card',
+      name: `${borrowerFirstName}'s Green Card`,
+      description: 'Unexpired Permanent Resident Card',
+      category: 'identity',
+      stage: 'declarations'
+    });
   }
   if (declarations.citizenship_status === 'non_permanent_resident' || declarations.citizenship_status === 'non_resident') {
-    docs.push({ id: 'visa_docs', name: 'Visa Documents', description: 'Current visa and work authorization', category: 'identity', stage: 'declarations' });
+    docs.push({
+      id: 'visa_docs',
+      name: `${borrowerFirstName}'s Visa Documents`,
+      description: 'Current visa and work authorization',
+      category: 'identity',
+      stage: 'declarations'
+    });
   }
 
   // === INCOME DOCUMENTS ===
+  const jan28 = new Date(currentYear, 0, 28); // January 28th
+  const apr15 = new Date(currentYear, 3, 15); // April 15th
+  const isBeforeJan28 = today < jan28;
+
   if (isSelfEmployed) {
     // Date-based logic for self-employment documents
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const priorYear = currentYear - 1;
-    const jan28 = new Date(currentYear, 0, 28); // January 28th
-    const apr15 = new Date(currentYear, 3, 15); // April 15th
-    const isBeforeJan28 = today < jan28;
-    const isInTaxSeason = today >= jan28 && today <= apr15;
+    const businessName = declarations.business_name?.trim() || 'your business';
 
     if (maximizesDeductions) {
       // Heavy deductions - use bank statement program instead of tax returns
-      docs.push({ id: 'business_bank_statements', name: 'Business Bank Statements', description: '12 months of business bank statements', category: 'income', stage: 'income' });
+      docs.push({
+        id: 'business_bank_statements',
+        name: `${borrowerFirstName}'s Business Bank Statements`,
+        description: `12 consecutive months of bank statements for ${businessName}`,
+        category: 'income',
+        stage: 'income'
+      });
     } else {
       // Standard self-employed documentation
       if (isBeforeJan28) {
         // Before Jan 28 - prior year taxes can't be filed yet, need P&L
-        docs.push({ id: 'tax_returns', name: 'Tax Returns', description: `Personal returns (${priorYear - 1})`, category: 'income', stage: 'income' });
-        docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: `Business returns (${priorYear - 1})`, category: 'income', stage: 'income' });
-        docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: `${priorYear} P&L (signed by applicant)`, category: 'income', stage: 'income' });
+        docs.push({
+          id: 'tax_returns',
+          name: `${borrowerFirstName}'s ${twoYearsAgo} Personal Tax Return`,
+          description: `Complete ${twoYearsAgo} personal tax return (all pages & schedules)`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'business_tax_returns',
+          name: `${twoYearsAgo} Business Tax Return`,
+          description: `${businessName} ${twoYearsAgo} business tax return`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'profit_loss',
+          name: `${priorYear} Profit & Loss Statement`,
+          description: `Year-to-date ${priorYear} P&L for ${businessName} (signed by ${borrowerFirstName})`,
+          category: 'income',
+          stage: 'income'
+        });
       } else if (declarations.prior_year_taxes_filed === 'yes') {
         // After Jan 28 and taxes filed - request full tax returns
-        docs.push({ id: 'tax_returns', name: 'Tax Returns', description: 'Personal returns (last 2 years)', category: 'income', stage: 'income' });
-        docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: 'Business returns (last 2 years)', category: 'income', stage: 'income' });
+        docs.push({
+          id: 'tax_returns_recent',
+          name: `${borrowerFirstName}'s ${priorYear} Personal Tax Return`,
+          description: `Complete ${priorYear} personal tax return (all pages & schedules)`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'tax_returns_prior',
+          name: `${borrowerFirstName}'s ${twoYearsAgo} Personal Tax Return`,
+          description: `Complete ${twoYearsAgo} personal tax return (all pages & schedules)`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'business_tax_returns_recent',
+          name: `${priorYear} Business Tax Return`,
+          description: `${businessName} ${priorYear} business tax return`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'business_tax_returns_prior',
+          name: `${twoYearsAgo} Business Tax Return`,
+          description: `${businessName} ${twoYearsAgo} business tax return`,
+          category: 'income',
+          stage: 'income'
+        });
       } else {
         // After Jan 28 but taxes not filed - need prior year P&L
-        docs.push({ id: 'tax_returns', name: 'Tax Returns', description: `Personal returns (${priorYear - 1})`, category: 'income', stage: 'income' });
-        docs.push({ id: 'business_tax_returns', name: 'Business Tax Returns', description: `Business returns (${priorYear - 1})`, category: 'income', stage: 'income' });
-        docs.push({ id: 'profit_loss', name: 'Profit & Loss Statement', description: `${priorYear} P&L (signed by applicant)`, category: 'income', stage: 'income' });
+        docs.push({
+          id: 'tax_returns',
+          name: `${borrowerFirstName}'s ${twoYearsAgo} Personal Tax Return`,
+          description: `Complete ${twoYearsAgo} personal tax return (all pages & schedules)`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'business_tax_returns',
+          name: `${twoYearsAgo} Business Tax Return`,
+          description: `${businessName} ${twoYearsAgo} business tax return`,
+          category: 'income',
+          stage: 'income'
+        });
+        docs.push({
+          id: 'profit_loss',
+          name: `${priorYear} Profit & Loss Statement`,
+          description: `Year-to-date ${priorYear} P&L for ${businessName} (signed by ${borrowerFirstName})`,
+          category: 'income',
+          stage: 'income'
+        });
       }
     }
 
     // Articles of Incorporation for S-Corp or C-Corp
     if (declarations.business_type === 's_corp' || declarations.business_type === 'c_corp') {
-      docs.push({ id: 'articles_incorporation', name: 'Articles of Incorporation', description: 'Corporate formation documents', category: 'income', stage: 'income' });
+      docs.push({
+        id: 'articles_incorporation',
+        name: `${businessName} Articles of Incorporation`,
+        description: 'Corporate formation documents showing ownership',
+        category: 'income',
+        stage: 'income'
+      });
     }
   } else {
-    // W-2 employee
-    docs.push({ id: 'paystubs', name: 'Pay Stubs', description: 'Last 30 days (most recent)', category: 'income', stage: 'income' });
-    docs.push({ id: 'w2', name: 'W-2 Forms', description: 'Last 2 years', category: 'income', stage: 'income' });
+    // W-2 employee - personalized with employer name
+    const employerLabel = primaryEmployer || 'your employer';
+    docs.push({
+      id: 'paystubs',
+      name: `${borrowerFirstName}'s Pay Stubs from ${employerLabel}`,
+      description: `2 consecutive recent pay stubs from ${employerLabel}`,
+      category: 'income',
+      stage: 'income'
+    });
+    docs.push({
+      id: 'w2_recent',
+      name: `${borrowerFirstName}'s ${priorYear} W-2 from ${employerLabel}`,
+      description: `${priorYear} W-2 form from ${employerLabel}`,
+      category: 'income',
+      stage: 'income'
+    });
+    docs.push({
+      id: 'w2_prior',
+      name: `${borrowerFirstName}'s ${twoYearsAgo} W-2 from ${employerLabel}`,
+      description: `${twoYearsAgo} W-2 form from ${employerLabel}`,
+      category: 'income',
+      stage: 'income'
+    });
   }
 
   // === DIVORCE / CHILD SUPPORT DOCUMENTS ===
   if ((declarations.marital_status === 'divorced' || declarations.marital_status === 'separated') &&
       declarations.child_support_alimony && declarations.child_support_alimony !== 'neither') {
-    docs.push({ id: 'divorce_decree', name: 'Divorce Decree', description: 'Final divorce decree', category: 'income', stage: 'declarations' });
-    docs.push({ id: 'property_settlement', name: 'Property Settlement Agreement', description: 'Marital settlement agreement', category: 'income', stage: 'declarations' });
+    docs.push({
+      id: 'divorce_decree',
+      name: `${borrowerFirstName}'s Divorce Decree`,
+      description: 'Final divorce decree with property/support terms',
+      category: 'income',
+      stage: 'declarations'
+    });
+    docs.push({
+      id: 'property_settlement',
+      name: 'Property Settlement Agreement',
+      description: 'Marital settlement agreement (if separate from decree)',
+      category: 'income',
+      stage: 'declarations'
+    });
   }
 
   // === VETERAN DOCUMENTS ===
   if (declarations.veteran === 'yes' || declarations.veteran === 'active' || declarations.veteran === 'spouse') {
-    docs.push({ id: 'va_coe', name: 'Certificate of Eligibility', description: 'VA Certificate of Eligibility (COE)', category: 'identity', stage: 'declarations' });
+    docs.push({
+      id: 'va_coe',
+      name: `${borrowerFirstName}'s VA Certificate of Eligibility`,
+      description: 'VA COE - can be obtained from eBenefits portal',
+      category: 'identity',
+      stage: 'declarations'
+    });
   }
   if (declarations.va_disability === 'pending') {
-    docs.push({ id: 'va_pending_claim', name: 'VA Pending Claim', description: 'Pending VA disability claim paperwork', category: 'identity', stage: 'declarations' });
+    docs.push({
+      id: 'va_pending_claim',
+      name: 'VA Pending Disability Claim',
+      description: 'Documentation of pending VA disability claim',
+      category: 'identity',
+      stage: 'declarations'
+    });
   }
 
   // === IRS DOCUMENTS ===
   if (declarations.irs_balance_owed === 'payment_plan') {
-    docs.push({ id: 'irs_payment_arrangement', name: 'IRS Payment Arrangement', description: 'IRS installment agreement letter', category: 'income', stage: 'declarations' });
+    docs.push({
+      id: 'irs_payment_arrangement',
+      name: `${borrowerFirstName}'s IRS Payment Arrangement`,
+      description: 'IRS installment agreement letter showing payment terms',
+      category: 'income',
+      stage: 'declarations'
+    });
   } else if (declarations.irs_balance_owed === 'yes') {
-    docs.push({ id: 'irs_payoff', name: 'IRS Payoff Statement', description: 'Current IRS balance and payoff amount', category: 'income', stage: 'declarations' });
+    docs.push({
+      id: 'irs_payoff',
+      name: `${borrowerFirstName}'s IRS Payoff Statement`,
+      description: 'Current IRS balance and payoff amount',
+      category: 'income',
+      stage: 'declarations'
+    });
   }
 
   // === PREVIOUS HOME / RENTAL PROPERTY DOCUMENTS ===
   if (declarations.previous_home_mortgage === 'yes') {
-    docs.push({ id: 'existing_mortgage_statement', name: 'Mortgage Statement', description: 'Current mortgage statement for existing property', category: 'assets', stage: 'declarations' });
+    docs.push({
+      id: 'existing_mortgage_statement',
+      name: 'Current Mortgage Statement',
+      description: 'Most recent mortgage statement for existing property',
+      category: 'assets',
+      stage: 'declarations'
+    });
   }
   if (declarations.previous_home_status === 'renting_out') {
-    docs.push({ id: 'rental_tax_returns', name: 'Tax Returns with Schedule E', description: 'Most recent tax returns showing rental income', category: 'income', stage: 'declarations' });
-    docs.push({ id: 'lease_agreement', name: 'Lease Agreement', description: 'Current signed lease agreement', category: 'assets', stage: 'declarations' });
+    docs.push({
+      id: 'rental_tax_returns',
+      name: `${borrowerFirstName}'s Tax Return with Schedule E`,
+      description: `${priorYear} tax return showing rental income (Schedule E)`,
+      category: 'income',
+      stage: 'declarations'
+    });
+    docs.push({
+      id: 'lease_agreement',
+      name: 'Current Lease Agreement',
+      description: 'Signed lease agreement for rental property',
+      category: 'assets',
+      stage: 'declarations'
+    });
   }
 
   // === CREDIT APPLICATION DOCUMENTS ===
@@ -136,7 +326,13 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
       'other': 'New Account Statement'
     };
     const label = creditLabels[creditType] || 'New Account Statement';
-    docs.push({ id: 'new_credit_statement', name: label, description: 'Statement for recently opened account', category: 'assets', stage: 'declarations' });
+    docs.push({
+      id: 'new_credit_statement',
+      name: `${borrowerFirstName}'s ${label}`,
+      description: 'Statement showing account balance and payment for recently opened account',
+      category: 'assets',
+      stage: 'declarations'
+    });
   }
 
   // === BANKRUPTCY DOCUMENTS ===
@@ -144,38 +340,132 @@ const getRequiredDocuments = (declarations = {}, assetData = {}) => {
     if (declarations.bankruptcy_type === 'chapter_7') {
       // Chapter 7 - only need docs if within 7 years
       if (declarations.bankruptcy_discharge_ch7 !== '8_years_or_more') {
-        docs.push({ id: 'bankruptcy_docs', name: 'Bankruptcy Documents', description: 'Chapter 7 discharge papers', category: 'identity', stage: 'declarations' });
+        docs.push({
+          id: 'bankruptcy_docs',
+          name: `${borrowerFirstName}'s Chapter 7 Bankruptcy Discharge`,
+          description: 'Chapter 7 discharge papers showing case number and discharge date',
+          category: 'identity',
+          stage: 'declarations'
+        });
       }
     } else if (declarations.bankruptcy_type === 'chapter_13') {
       if (declarations.chapter_13_status === 'active_paying') {
-        docs.push({ id: 'ch13_payment_history', name: 'Payment History', description: 'Chapter 13 trustee payment history', category: 'identity', stage: 'declarations' });
-        docs.push({ id: 'ch13_court_approval', name: 'Court Approval Letter', description: 'Court approval for new mortgage', category: 'identity', stage: 'declarations' });
+        docs.push({
+          id: 'ch13_payment_history',
+          name: 'Chapter 13 Payment History',
+          description: '12-month payment history from Chapter 13 trustee',
+          category: 'identity',
+          stage: 'declarations'
+        });
+        docs.push({
+          id: 'ch13_court_approval',
+          name: 'Court Approval for New Mortgage',
+          description: 'Court letter approving new mortgage while in Chapter 13',
+          category: 'identity',
+          stage: 'declarations'
+        });
       } else {
-        docs.push({ id: 'bankruptcy_discharge', name: 'Discharge Paperwork', description: 'Chapter 13 discharge documents', category: 'identity', stage: 'declarations' });
+        docs.push({
+          id: 'bankruptcy_discharge',
+          name: `${borrowerFirstName}'s Chapter 13 Discharge`,
+          description: 'Chapter 13 discharge documents',
+          category: 'identity',
+          stage: 'declarations'
+        });
       }
     } else if (declarations.bankruptcy_type === 'chapter_12') {
-      docs.push({ id: 'ch12_payment_history', name: '12-Month Payment History', description: 'Chapter 12 payment history', category: 'identity', stage: 'declarations' });
-      docs.push({ id: 'ch12_court_approval', name: 'Court Approval Letter', description: 'Court approval letter for financing', category: 'identity', stage: 'declarations' });
+      docs.push({
+        id: 'ch12_payment_history',
+        name: 'Chapter 12 Payment History',
+        description: '12-month payment history from trustee',
+        category: 'identity',
+        stage: 'declarations'
+      });
+      docs.push({
+        id: 'ch12_court_approval',
+        name: 'Court Approval Letter',
+        description: 'Court approval letter for new financing',
+        category: 'identity',
+        stage: 'declarations'
+      });
     }
   }
 
   // === ASSET DOCUMENTS - only show based on what user entered ===
   if (hasCheckingOrSavings) {
-    docs.push({ id: 'bank_statements', name: 'Bank Statements', description: 'Last 2 months (checking/savings)', category: 'assets', stage: 'assets' });
+    docs.push({
+      id: 'bank_statements',
+      name: `${borrowerFirstName}'s Bank Statements`,
+      description: 'Last 2 complete months for all checking/savings accounts',
+      category: 'assets',
+      stage: 'assets'
+    });
   }
   if (hasInvestmentOrRetirement) {
-    docs.push({ id: 'investment_statements', name: 'Investment Statements', description: 'Retirement/brokerage accounts', category: 'assets', stage: 'assets' });
+    docs.push({
+      id: 'investment_statements',
+      name: `${borrowerFirstName}'s Investment/Retirement Statements`,
+      description: 'Most recent quarterly statements for investment & retirement accounts',
+      category: 'assets',
+      stage: 'assets'
+    });
   }
 
   // Gift letter only if receiving gift funds
   if (hasGiftFunds) {
-    docs.push({ id: 'gift_letter', name: 'Gift Letter', description: 'Signed gift letter from donor', category: 'assets', stage: 'assets' });
+    docs.push({
+      id: 'gift_letter',
+      name: 'Gift Letter',
+      description: `Signed gift letter from donor to ${borrowerFirstName}`,
+      category: 'assets',
+      stage: 'assets'
+    });
   }
 
   // === CO-BORROWER DOCUMENTS ===
   if (hasCoBorrower) {
-    docs.push({ id: 'coborrower_id', name: 'Co-Borrower ID', description: "Co-borrower's government ID", category: 'identity', stage: 'profile' });
-    docs.push({ id: 'coborrower_income', name: 'Co-Borrower Income Docs', description: 'Pay stubs & W-2s for co-borrower', category: 'income', stage: 'income' });
+    // Co-borrower identity document
+    docs.push({
+      id: 'coborrower_id',
+      name: `${coBorrowerFirstName}'s Government ID`,
+      description: `${coBorrowerFirstName}'s driver's license or passport`,
+      category: 'identity',
+      stage: 'profile'
+    });
+
+    // Co-borrower income documents - personalized with their employer
+    const coBorrowerEmployerLabel = coBorrowerEmployer || `${coBorrowerFirstName}'s employer`;
+
+    docs.push({
+      id: 'coborrower_paystubs',
+      name: `${coBorrowerFirstName}'s Pay Stubs from ${coBorrowerEmployerLabel}`,
+      description: `2 consecutive recent pay stubs from ${coBorrowerEmployerLabel}`,
+      category: 'income',
+      stage: 'income'
+    });
+    docs.push({
+      id: 'coborrower_w2_recent',
+      name: `${coBorrowerFirstName}'s ${priorYear} W-2 from ${coBorrowerEmployerLabel}`,
+      description: `${priorYear} W-2 form from ${coBorrowerEmployerLabel}`,
+      category: 'income',
+      stage: 'income'
+    });
+    docs.push({
+      id: 'coborrower_w2_prior',
+      name: `${coBorrowerFirstName}'s ${twoYearsAgo} W-2 from ${coBorrowerEmployerLabel}`,
+      description: `${twoYearsAgo} W-2 form from ${coBorrowerEmployerLabel}`,
+      category: 'income',
+      stage: 'income'
+    });
+
+    // Co-borrower bank statements if they have separate accounts
+    docs.push({
+      id: 'coborrower_bank_statements',
+      name: `${coBorrowerFirstName}'s Bank Statements`,
+      description: `Last 2 complete months for ${coBorrowerFirstName}'s accounts (if separate from ${borrowerFirstName})`,
+      category: 'assets',
+      stage: 'assets'
+    });
   }
 
   return docs;
@@ -495,6 +785,11 @@ const Icon = ({ name, size = 24, className = '' }) => {
     refresh: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+      </svg>
+    ),
+    save: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/>
       </svg>
     ),
   };
@@ -1150,8 +1445,71 @@ export default function PurchaseApplication() {
     ? 'https://mortgage-crm-production-7a9a.up.railway.app'
     : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
+  // Storage key for auto-save
+  const STORAGE_KEY = `purchase_application_${token || 'draft'}`;
+
+  // Account & Save Progress State
+  const [userAccount, setUserAccount] = useState({
+    email: '',
+    authMethod: null, // 'email', 'google', 'facebook', 'linkedin', 'apple'
+    isLoggedIn: false,
+  });
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveEmail, setSaveEmail] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+
+  // Load saved progress from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        if (parsed.declarations) setDeclarations(parsed.declarations);
+        if (parsed.profileData) setProfileData(parsed.profileData);
+        if (parsed.incomeData) setIncomeData(parsed.incomeData);
+        if (parsed.assetData) setAssetData(parsed.assetData);
+        if (parsed.propertyData) setPropertyData(parsed.propertyData);
+        if (parsed.coBorrowerData) setCoBorrowerData(parsed.coBorrowerData);
+        if (parsed.coBorrowerIncomeData) setCoBorrowerIncomeData(parsed.coBorrowerIncomeData);
+        if (parsed.currentStage && parsed.currentStage !== 'account') {
+          setCurrentStage(parsed.currentStage);
+        }
+        if (parsed.userAccount?.email) {
+          setUserAccount(parsed.userAccount);
+        }
+        setLastSavedAt(parsed.savedAt ? new Date(parsed.savedAt) : null);
+        console.log('Loaded saved application progress');
+      } catch (e) {
+        console.error('Failed to load saved progress:', e);
+      }
+    }
+  }, [STORAGE_KEY]);
+
+  // Auto-save to localStorage whenever data changes
+  useEffect(() => {
+    // Don't save on initial mount or if on account stage
+    if (currentStage === 'account') return;
+
+    const dataToSave = {
+      declarations,
+      profileData,
+      incomeData,
+      assetData,
+      propertyData,
+      coBorrowerData,
+      coBorrowerIncomeData,
+      currentStage,
+      userAccount,
+      savedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    setLastSavedAt(new Date());
+  }, [declarations, profileData, incomeData, assetData, propertyData, coBorrowerData, coBorrowerIncomeData, currentStage, userAccount, STORAGE_KEY]);
+
   // State
-  const [currentStage, setCurrentStage] = useState('declarations');
+  const [currentStage, setCurrentStage] = useState('account');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [declarations, setDeclarations] = useState({});
   const [profileData, setProfileData] = useState({});
@@ -1209,6 +1567,8 @@ export default function PurchaseApplication() {
   const [ssnDisplay, setSsnDisplay] = useState(''); // Masked display (XXX-XX-1234)
   const [currentBorrower, setCurrentBorrower] = useState(1); // 1 = primary, 2 = co-borrower
   const [coBorrowerData, setCoBorrowerData] = useState({}); // Second borrower's profile data
+  const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({}); // Second borrower's income/employment data
+  const [currentIncomeBorrower, setCurrentIncomeBorrower] = useState(1); // 1 = primary, 2 = co-borrower (for income stage)
   const [coBorrowerSsnRaw, setCoBorrowerSsnRaw] = useState('');
   const [coBorrowerSsnDisplay, setCoBorrowerSsnDisplay] = useState('');
   const [paymentEstimate, setPaymentEstimate] = useState(null); // Stores calculated payment data
@@ -1829,6 +2189,217 @@ export default function PurchaseApplication() {
     }
   };
 
+  // Render account creation/login stage
+  const renderAccountStage = () => {
+    const handleSocialLogin = (provider) => {
+      // Placeholder for social login - will need OAuth integration
+      console.log(`Social login with ${provider} - OAuth integration needed`);
+      alert(`${provider} login coming soon! For now, please continue with email.`);
+    };
+
+    const handleEmailContinue = () => {
+      if (!userAccount.email || !userAccount.email.includes('@')) {
+        alert('Please enter a valid email address');
+        return;
+      }
+      setUserAccount(prev => ({ ...prev, authMethod: 'email', isLoggedIn: true }));
+      setCurrentStage('declarations');
+    };
+
+    const handleSkip = () => {
+      // Allow continuing without account - will prompt to save later
+      setCurrentStage('declarations');
+    };
+
+    return (
+      <div className="stage-content account-creation-stage">
+        <div className="stage-header" style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h2>Let's Get Started</h2>
+          <p>Create an account to save your progress and come back anytime</p>
+        </div>
+
+        <div className="form-card" style={{ maxWidth: '480px', margin: '0 auto' }}>
+          {/* Social Login Options */}
+          <div className="social-login-section" style={{ marginBottom: '24px' }}>
+            <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '16px', fontSize: '14px' }}>
+              Sign up with
+            </p>
+            <div className="social-buttons" style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '12px',
+              marginBottom: '16px'
+            }}>
+              <button
+                onClick={() => handleSocialLogin('Google')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#374151',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Google
+              </button>
+              <button
+                onClick={() => handleSocialLogin('Facebook')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#374151',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                Facebook
+              </button>
+              <button
+                onClick={() => handleSocialLogin('LinkedIn')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#374151',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#0A66C2">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                </svg>
+                LinkedIn
+              </button>
+              <button
+                onClick={() => handleSocialLogin('Apple')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#374151',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#000000">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                </svg>
+                Apple
+              </button>
+            </div>
+
+            <div className="divider" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              margin: '24px 0'
+            }}>
+              <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }}></div>
+              <span style={{ color: '#9ca3af', fontSize: '14px' }}>or continue with email</span>
+              <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }}></div>
+            </div>
+          </div>
+
+          {/* Email Input */}
+          <div className="email-section">
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Email Address</label>
+              <input
+                type="email"
+                value={userAccount.email}
+                onChange={(e) => setUserAccount(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="you@example.com"
+                className="fun-input"
+                style={{ width: '100%' }}
+              />
+            </div>
+            <button
+              onClick={handleEmailContinue}
+              className="btn-continue"
+              style={{ width: '100%', marginBottom: '12px' }}
+            >
+              Continue with Email →
+            </button>
+          </div>
+
+          {/* Skip Option */}
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+            <button
+              onClick={handleSkip}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#6b7280',
+                fontSize: '14px',
+                cursor: 'pointer',
+                textDecoration: 'underline'
+              }}
+            >
+              Skip for now (you can save later)
+            </button>
+          </div>
+
+          {/* Benefits */}
+          <div className="account-benefits" style={{
+            marginTop: '24px',
+            padding: '16px',
+            background: '#f9fafb',
+            borderRadius: '8px'
+          }}>
+            <p style={{ fontWeight: 600, fontSize: '14px', marginBottom: '12px', color: '#374151' }}>
+              Why create an account?
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '20px', color: '#6b7280', fontSize: '13px', lineHeight: '1.8' }}>
+              <li>Save your progress and return anytime</li>
+              <li>Get a personalized experience</li>
+              <li>Track your application status</li>
+              <li>Receive updates from your loan officer</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDeclarationsStage = () => {
     const question = DECLARATION_QUESTIONS[currentQuestionIndex];
     const visibleQuestions = getVisibleQuestions();
@@ -2408,11 +2979,38 @@ export default function PurchaseApplication() {
     return (
       <div className="stage-content">
         <div className="stage-header">
-          <h2>{isCollectingCoBorrower ? "Co-Borrower's Information" : "Let's get to know you"}</h2>
+          <h2>{isCollectingCoBorrower ? `${coBorrowerData.firstName || "Co-Borrower"}'s Information` : "Let's get to know you"}</h2>
           <p>{isCollectingCoBorrower
-            ? `Please enter the co-borrower's information`
+            ? `Please enter ${coBorrowerData.firstName || "the co-borrower"}'s information`
             : "This should take about 2 minutes"}</p>
         </div>
+
+        {/* Multiple Borrower Process Disclaimer - shown only for primary borrower when multiple borrowers selected */}
+        {hasMultipleBorrowers && !isCollectingCoBorrower && (
+          <div className="multiple-borrower-disclaimer" style={{
+            background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+            border: '1px solid #3b82f6',
+            borderRadius: '12px',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px'
+          }}>
+            <Icon name="users" size={24} style={{ color: '#2563eb', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <p style={{ margin: 0, color: '#1e40af', fontWeight: 600, fontSize: '15px', marginBottom: '6px' }}>
+                Multiple Borrowers Detected
+              </p>
+              <p style={{ margin: 0, color: '#1e3a8a', fontSize: '13px', lineHeight: '1.6' }}>
+                Since there are multiple people on this loan application, we'll collect information for each borrower separately.
+                We'll start with you (the primary borrower), and once your section is complete, you'll proceed to enter information
+                for the co-borrower. Each person's information will be clearly labeled throughout the process.
+              </p>
+            </div>
+          </div>
+        )}
+
         {renderBorrowerForm()}
         <div className="stage-navigation">
           <button className="btn-back" onClick={() => {
@@ -2451,10 +3049,23 @@ export default function PurchaseApplication() {
 
   // Render income
   const renderIncomeStage = () => {
+    const isCollectingCoBorrowerIncome = currentIncomeBorrower === 2;
+    const currentIncomeDataState = isCollectingCoBorrowerIncome ? coBorrowerIncomeData : incomeData;
+    const setCurrentIncomeData = isCollectingCoBorrowerIncome ? setCoBorrowerIncomeData : setIncomeData;
+
+    // Get borrower names for display
+    const primaryBorrowerName = profileData?.firstName || 'Primary Borrower';
+    const coBorrowerName = coBorrowerData?.firstName || 'Co-Borrower';
+    const currentBorrowerName = isCollectingCoBorrowerIncome ? coBorrowerName : primaryBorrowerName;
+
     const isSelfEmployed = declarations.self_employed === 'yes' || declarations.self_employed === 'side_business';
 
-    // Determine income type from declarations
+    // Determine income type from declarations (for primary) or assume employed for co-borrower
     const getIncomeType = () => {
+      if (isCollectingCoBorrowerIncome) {
+        // For co-borrower, check their income type or default to employed
+        return coBorrowerIncomeData.incomeType || 'employed';
+      }
       if (declarations.self_employed === 'yes') return 'self_employed';
       if (declarations.self_employed === 'side_business') return 'employed_with_business';
       return 'employed'; // Default to employed if 'no' or not set
@@ -2467,20 +3078,102 @@ export default function PurchaseApplication() {
       <div className="stage-content">
         <div className="stage-header">
           <h2>
-            {currentIncomeType === 'employed' && 'Employment Details'}
-            {currentIncomeType === 'self_employed' && 'Business Details'}
-            {currentIncomeType === 'employed_with_business' && 'Employment & Business Details'}
+            {isCollectingCoBorrowerIncome
+              ? `${coBorrowerName}'s Employment Details`
+              : (currentIncomeType === 'employed' && `${primaryBorrowerName}'s Employment Details`) ||
+                (currentIncomeType === 'self_employed' && `${primaryBorrowerName}'s Business Details`) ||
+                (currentIncomeType === 'employed_with_business' && `${primaryBorrowerName}'s Employment & Business Details`)
+            }
           </h2>
-          <p>Tell us more about your income</p>
+          <p>{isCollectingCoBorrowerIncome
+            ? `Tell us about ${coBorrowerName}'s income`
+            : 'Tell us more about your income'}</p>
         </div>
 
-        {(currentIncomeType === 'employed' || currentIncomeType === 'employed_with_business') && (
+        {/* Borrower indicator for multiple borrowers */}
+        {hasMultipleBorrowers && (
+          <div className="borrower-income-indicator" style={{
+            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+            border: '1px solid #22c55e',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Icon name="income" size={20} style={{ color: '#16a34a' }} />
+              <span style={{ color: '#166534', fontWeight: 600, fontSize: '14px' }}>
+                {isCollectingCoBorrowerIncome
+                  ? `Collecting ${coBorrowerName}'s income information`
+                  : `Collecting ${primaryBorrowerName}'s income information`
+                }
+              </span>
+            </div>
+            <span style={{
+              background: '#22c55e',
+              color: 'white',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 600
+            }}>
+              Borrower {currentIncomeBorrower} of {getBorrowerCount()}
+            </span>
+          </div>
+        )}
+
+        {/* Co-borrower income type selection (only for co-borrower) */}
+        {isCollectingCoBorrowerIncome && !currentIncomeDataState.incomeType && (
+          <div className="form-card" style={{ marginBottom: '20px' }}>
+            <h3 style={{ marginBottom: '16px' }}>How does {coBorrowerName} earn income?</h3>
+            <div className="income-type-selection" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                className={`income-type-btn ${currentIncomeDataState.incomeType === 'employed' ? 'selected' : ''}`}
+                onClick={() => setCurrentIncomeData(prev => ({ ...prev, incomeType: 'employed' }))}
+                style={{
+                  padding: '16px 24px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
+                  background: currentIncomeDataState.incomeType === 'employed' ? '#0d9488' : 'white',
+                  color: currentIncomeDataState.incomeType === 'employed' ? 'white' : '#374151',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500
+                }}
+              >
+                W-2 Employee
+              </button>
+              <button
+                className={`income-type-btn ${currentIncomeDataState.incomeType === 'self_employed' ? 'selected' : ''}`}
+                onClick={() => setCurrentIncomeData(prev => ({ ...prev, incomeType: 'self_employed' }))}
+                style={{
+                  padding: '16px 24px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
+                  background: currentIncomeDataState.incomeType === 'self_employed' ? '#0d9488' : 'white',
+                  color: currentIncomeDataState.incomeType === 'self_employed' ? 'white' : '#374151',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500
+                }}
+              >
+                Self-Employed
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Employment form - show for W-2 employees or primary borrower employed types */}
+        {((currentIncomeType === 'employed' || currentIncomeType === 'employed_with_business') ||
+          (isCollectingCoBorrowerIncome && currentIncomeDataState.incomeType === 'employed')) && (
           <div className="form-card">
             <EmployerAutocomplete
-              value={incomeData.employerName || ''}
-              onChange={(value) => setIncomeData(prev => ({ ...prev, employerName: value }))}
+              value={currentIncomeDataState.employerName || ''}
+              onChange={(value) => setCurrentIncomeData(prev => ({ ...prev, employerName: value }))}
               onEmployerSelect={(employer) => {
-                setIncomeData(prev => ({
+                setCurrentIncomeData(prev => ({
                   ...prev,
                   employerName: employer.name,
                   employerAddress: employer.address,
@@ -2489,7 +3182,7 @@ export default function PurchaseApplication() {
                   employerPhone: employer.phone,
                 }));
               }}
-              label="Employer Name"
+              label={`${currentBorrowerName}'s Employer Name`}
               placeholder="Start typing company name..."
               className="fun-input-wrapper"
             />
@@ -2498,8 +3191,8 @@ export default function PurchaseApplication() {
                 <label>Job Title</label>
                 <input
                   type="text"
-                  value={incomeData.jobTitle || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, jobTitle: e.target.value }))}
+                  value={currentIncomeDataState.jobTitle || ''}
+                  onChange={(e) => setCurrentIncomeData(prev => ({ ...prev, jobTitle: e.target.value }))}
                   className="fun-input"
                 />
               </div>
@@ -2507,8 +3200,8 @@ export default function PurchaseApplication() {
                 <label>Start Date</label>
                 <input
                   type="month"
-                  value={incomeData.employmentStartDate || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, employmentStartDate: e.target.value }))}
+                  value={currentIncomeDataState.employmentStartDate || ''}
+                  onChange={(e) => setCurrentIncomeData(prev => ({ ...prev, employmentStartDate: e.target.value }))}
                   className="fun-input"
                   max={new Date().toISOString().slice(0, 7)}
                 />
@@ -2520,8 +3213,8 @@ export default function PurchaseApplication() {
                 <span className="input-prefix">$</span>
                 <input
                   type="number"
-                  value={incomeData.annualSalary || ''}
-                  onChange={(e) => setIncomeData(prev => ({ ...prev, annualSalary: e.target.value }))}
+                  value={currentIncomeDataState.annualSalary || ''}
+                  onChange={(e) => setCurrentIncomeData(prev => ({ ...prev, annualSalary: e.target.value }))}
                   className="fun-input"
                   placeholder="0"
                 />
@@ -2761,8 +3454,32 @@ export default function PurchaseApplication() {
         </div>
 
         <div className="stage-navigation">
-          <button className="btn-back" onClick={goToPrevStage}>← Back</button>
-          <button className="btn-continue" onClick={goToNextStage}>Continue →</button>
+          <button className="btn-back" onClick={() => {
+            if (isCollectingCoBorrowerIncome) {
+              // Go back to primary borrower income
+              setCurrentIncomeBorrower(1);
+            } else {
+              goToPrevStage();
+            }
+          }}>← Back</button>
+
+          {/* Show appropriate continue button based on multiple borrower state */}
+          {!isCollectingCoBorrowerIncome && hasMultipleBorrowers ? (
+            <button
+              className="btn-continue"
+              onClick={() => setCurrentIncomeBorrower(2)}
+            >
+              Continue to {coBorrowerName}'s Income →
+            </button>
+          ) : (
+            <button className="btn-continue" onClick={() => {
+              if (isCollectingCoBorrowerIncome) {
+                // Done with co-borrower income, reset and go to next stage
+                setCurrentIncomeBorrower(1);
+              }
+              goToNextStage();
+            }}>Continue →</button>
+          )}
         </div>
       </div>
     );
@@ -3032,8 +3749,30 @@ export default function PurchaseApplication() {
     return (
       <div className="stage-content">
         <div className="stage-header">
-          <h2>Price & Loan Details</h2>
-          <p>Tell us about your budget and preferred loan program</p>
+          <h2>Estimated Budget & Loan Details</h2>
+          <p>Review your preliminary numbers below</p>
+        </div>
+
+        {/* Preliminary Numbers Disclaimer */}
+        <div className="preliminary-disclaimer" style={{
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          border: '1px solid #f59e0b',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '12px'
+        }}>
+          <Icon name="info" size={20} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
+          <div>
+            <p style={{ margin: 0, color: '#92400e', fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+              Preliminary Estimates
+            </p>
+            <p style={{ margin: 0, color: '#78350f', fontSize: '13px', lineHeight: '1.5' }}>
+              The numbers shown below are estimates based on the information you've provided. Your loan officer will review these details with you and make any necessary adjustments based on current rates, your specific situation, and available loan programs.
+            </p>
+          </div>
         </div>
 
         {/* Budget Summary from Payment Calculator */}
@@ -4265,6 +5004,7 @@ export default function PurchaseApplication() {
   // Render current stage
   const renderStage = () => {
     switch (currentStage) {
+      case 'account': return renderAccountStage();
       case 'declarations': return renderDeclarationsStage();
       case 'profile': return renderProfileStage();
       case 'income': return renderIncomeStage();
@@ -4273,7 +5013,7 @@ export default function PurchaseApplication() {
       case 'review': return renderReviewStage();
       case 'planning': return renderPlanningStage();
       case 'schedule': return renderScheduleStage();
-      default: return renderDeclarationsStage();
+      default: return renderAccountStage();
     }
   };
 
@@ -4286,32 +5026,163 @@ export default function PurchaseApplication() {
         </div>
       )}
 
-      <div className="progress-header">
-        <div className="progress-chapters">
-          {STAGES.map((stage, index) => {
-            const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-            const isComplete = index < currentIndex;
-            const isCurrent = index === currentIndex;
-            return (
-              <div
-                key={stage.id}
-                className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''} clickable`}
-                onClick={() => setCurrentStage(stage.id)}
-                style={{ cursor: 'pointer' }}
-              >
-                <span className="chapter-icon">{isComplete ? <Icon name="check" size={20} /> : <Icon name={stage.icon} size={20} />}</span>
-                <span className="chapter-label">{stage.label}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="progress-bar-container">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${getProgress()}%` }}></div>
+      {/* Hide progress header during account creation */}
+      {currentStage !== 'account' && (
+        <div className="progress-header">
+          <div className="progress-chapters">
+            {VISIBLE_STAGES.map((stage, index) => {
+              const currentIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+              const isComplete = index < currentIndex;
+              const isCurrent = index === currentIndex;
+              return (
+                <div
+                  key={stage.id}
+                  className={`progress-chapter ${isComplete ? 'complete' : ''} ${isCurrent ? 'current' : ''} clickable`}
+                  onClick={() => setCurrentStage(stage.id)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="chapter-icon">{isComplete ? <Icon name="check" size={20} /> : <Icon name={stage.icon} size={20} />}</span>
+                  <span className="chapter-label">{stage.label}</span>
+                </div>
+              );
+            })}
           </div>
-          <span className="progress-text">{getProgress()}% Complete</span>
+          <div className="progress-bar-container" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="progress-bar" style={{ flex: 1 }}>
+              <div className="progress-fill" style={{ width: `${getProgress()}%` }}></div>
+            </div>
+            <span className="progress-text">{getProgress()}% Complete</span>
+
+            {/* Save Progress Button */}
+            <button
+              onClick={() => setShowSaveModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                background: 'white',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#374151',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#f3f4f6';
+                e.target.style.borderColor = '#d1d5db';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'white';
+                e.target.style.borderColor = '#e5e7eb';
+              }}
+            >
+              <Icon name="save" size={16} />
+              Save
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Save Progress Modal */}
+      {showSaveModal && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="save-modal" style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '420px',
+            width: '90%',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '8px' }}>Save Your Progress</h3>
+            <p style={{ color: '#6b7280', marginBottom: '20px', fontSize: '14px' }}>
+              Your application is automatically saved to this browser. Enter your email to save to the cloud and access from any device.
+            </p>
+
+            {lastSavedAt && (
+              <p style={{
+                background: '#f0fdf4',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                color: '#166534',
+                fontSize: '13px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <Icon name="check" size={16} />
+                Auto-saved to browser {lastSavedAt.toLocaleTimeString()}
+              </p>
+            )}
+
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500, fontSize: '14px' }}>
+                Email Address (optional)
+              </label>
+              <input
+                type="email"
+                value={saveEmail || userAccount.email}
+                onChange={(e) => setSaveEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="fun-input"
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setShowSaveModal(false);
+                  if (saveEmail) {
+                    setUserAccount(prev => ({ ...prev, email: saveEmail }));
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#0d9488',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+              >
+                {saveEmail ? 'Save & Send Magic Link' : 'Got it!'}
+              </button>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                style={{
+                  padding: '12px 20px',
+                  background: 'transparent',
+                  color: '#6b7280',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontWeight: 500,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showMicroWin && (
         <div className="micro-win-toast">
@@ -4336,8 +5207,15 @@ export default function PurchaseApplication() {
           <div className="documents-list">
             {(() => {
               const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-              // Get dynamic document list based on user's declarations and asset values
-              const requiredDocs = getRequiredDocuments(declarations, assetData);
+              // Get dynamic document list with personalized labels (borrower names, employer names, years)
+              const requiredDocs = getRequiredDocuments(
+                declarations,
+                assetData,
+                profileData,
+                incomeData,
+                coBorrowerData,
+                coBorrowerIncomeData
+              );
 
               // Map category to the stage that unlocks it
               const categoryUnlockStage = {
