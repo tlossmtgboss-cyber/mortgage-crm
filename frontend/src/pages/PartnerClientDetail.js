@@ -549,46 +549,76 @@ export default function PartnerClientDetail() {
   const currentStage = client?.status || client?.stage || 'new';
 
   return (
-    <div className="partner-client-detail single-page">
-      {/* Header with Property Address */}
-      <header className="client-header-new">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          &#8592; Back to Portal
+    <div className="partner-client-detail-v2">
+      {/* Minimal Top Bar */}
+      <div className="top-bar">
+        <button className="back-link" onClick={() => navigate(-1)}>
+          <span className="back-arrow">&#8592;</span> Back to Dashboard
         </button>
+      </div>
 
-        <div className="header-property">
-          <span className="property-icon">&#127968;</span>
-          <h1 className="property-address">{formatAddress(client)}</h1>
+      {/* Client Hero Section */}
+      <div className="client-hero">
+        <div className="hero-main">
+          <div className="client-avatar">
+            {(client?.first_name || client?.borrower_name || 'C').charAt(0).toUpperCase()}
+          </div>
+          <div className="hero-info">
+            <h1 className="client-name">{client?.borrower_name || client?.name || 'Client Name'}</h1>
+            <div className="hero-meta">
+              <span className="meta-item">
+                <span className="meta-icon">&#127968;</span>
+                {formatAddress(client)}
+              </span>
+            </div>
+          </div>
+          <div className="hero-actions">
+            <button className="action-btn primary" onClick={handleGeneratePreApproval}>
+              <span className="btn-icon">&#128196;</span>
+              Pre-Approval Letter
+            </button>
+            {client?.loan_officer?.email && (
+              <button className="action-btn secondary" onClick={handleContactLO}>
+                <span className="btn-icon">&#9993;</span>
+                Contact LO
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="header-details">
-          <span className="borrower-name">{client?.borrower_name || client?.name || 'Unknown Borrower'}</span>
-          <span className="separator">&#8226;</span>
-          <span className="loan-number">Loan #{client?.loan_number || client?.id}</span>
-          <span className="separator">&#8226;</span>
-          <span className="loan-info">{client?.loan_type || 'Loan Type TBD'} {formatCurrency(client?.loan_amount)}</span>
+        {/* Quick Stats Bar */}
+        <div className="quick-stats">
+          <div className="stat-item">
+            <span className="stat-label">Loan Amount</span>
+            <span className="stat-value">{formatCurrency(client?.loan_amount)}</span>
+          </div>
+          <div className="stat-divider"></div>
+          <div className="stat-item">
+            <span className="stat-label">Loan Type</span>
+            <span className="stat-value">{client?.loan_type || 'TBD'}</span>
+          </div>
+          <div className="stat-divider"></div>
+          <div className="stat-item">
+            <span className="stat-label">Status</span>
+            <span className="stat-value">
+              <StatusBadge status={currentStage} size="large" />
+            </span>
+          </div>
+          <div className="stat-divider"></div>
+          <div className="stat-item">
+            <span className="stat-label">Expected Close</span>
+            <span className="stat-value">{client?.expected_close_date ? new Date(client.expected_close_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}</span>
+          </div>
         </div>
+      </div>
 
-        <div className="header-actions">
-          <button className="btn-primary" onClick={handleGeneratePreApproval}>
-            Generate Pre-Approval Letter
-          </button>
-          <button className="btn-secondary" onClick={handleContactLO}>
-            Contact Loan Officer
-          </button>
-        </div>
-      </header>
-
-      {/* Milestone Progress Tracker */}
-      <section className="milestone-section">
+      {/* Progress Tracker */}
+      <section className="progress-section">
         <MilestoneProgressTracker currentStatus={currentStage} />
       </section>
 
-      {/* Key Dates */}
-      <KeyDates client={client} stage={currentStage} />
-
-      {/* Main Content Grid */}
-      <div className="content-grid">
+      {/* Main Content */}
+      <div className="main-content">
         {/* Loan Summary Card */}
         <section className="info-card loan-summary">
           <h3 className="card-title">Loan Summary</h3>
@@ -705,109 +735,130 @@ export default function PartnerClientDetail() {
             <p className="no-data">Loan officer not yet assigned</p>
           )}
         </section>
+
+        {/* Loan Officer Contact - Now in main grid */}
+        <section className="info-card lo-contact-card">
+          <h3 className="card-title">Your Loan Officer</h3>
+          {client?.loan_officer ? (
+            <div className="lo-info-grid">
+              <div className="lo-avatar-lg">
+                {client.loan_officer.name?.charAt(0) || 'L'}
+              </div>
+              <div className="lo-contact-info">
+                <h4 className="lo-name">{client.loan_officer.name || 'Assigned LO'}</h4>
+                {client.loan_officer.email && (
+                  <a href={`mailto:${client.loan_officer.email}`} className="lo-email">
+                    &#9993; {client.loan_officer.email}
+                  </a>
+                )}
+                {client.loan_officer.phone && (
+                  <a href={`tel:${client.loan_officer.phone}`} className="lo-phone">
+                    &#128222; {formatPhone(client.loan_officer.phone)}
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="no-data">Loan officer not yet assigned</p>
+          )}
+        </section>
       </div>
 
-      {/* Outstanding Items - Collapsible */}
-      {documents && (documents.outstanding_count > 0 || documents.outstanding?.length > 0) && (
-        <CollapsibleSection
-          title="Outstanding Items"
-          count={documents.outstanding_count || documents.outstanding?.length}
-          defaultOpen={false}
-        >
-          <div className="outstanding-items">
-            {documents.outstanding?.length > 0 ? (
-              documents.outstanding.map((doc, idx) => (
-                <div key={idx} className="outstanding-item">
-                  <span className={`priority-indicator priority-${doc.priority?.toLowerCase() || 'normal'}`} />
-                  <div className="item-info">
-                    <span className="item-title">{doc.title || doc.type}</span>
-                    {doc.due_date && <span className="item-due">Due: {doc.due_date}</span>}
-                  </div>
-                  <span className={`item-status status-${doc.status?.toLowerCase() || 'pending'}`}>
-                    {doc.status === 'OPEN' ? 'Needed' : doc.status}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="no-items">No outstanding documents</p>
-            )}
-          </div>
-        </CollapsibleSection>
-      )}
-
-      {/* Activity Timeline - Collapsible */}
-      <CollapsibleSection title="Recent Activity" defaultOpen={true} count={getCombinedTimeline().length}>
-        <div className="activity-timeline">
-          {(() => {
-            const timeline = getCombinedTimeline();
-            // Fall back to conversation_log if no activities from API
-            const displayItems = timeline.length > 0 ? timeline : (conversation_log || []);
-
-            if (displayItems.length === 0) {
-              return <p className="no-data">No recent activity</p>;
-            }
-
-            return displayItems.slice(0, 10).map((item, idx) => {
-              const activityConfig = ACTIVITY_CONFIG[item.type] || { label: item.type || 'Update', color: '#6b7280' };
-
-              return (
-                <div key={item.id || idx} className="activity-item">
-                  <div
-                    className="activity-dot"
-                    style={{ backgroundColor: activityConfig.color }}
-                  />
-                  <div className="activity-content">
-                    <div className="activity-header">
-                      <span
-                        className="activity-type-badge"
-                        style={{ backgroundColor: `${activityConfig.color}15`, color: activityConfig.color }}
-                      >
-                        {activityConfig.label}
-                      </span>
-                      <span className="activity-time">{formatRelativeTime(item.created_at)}</span>
+      {/* Collapsible Sections */}
+      <div className="collapsible-area">
+        {/* Outstanding Items */}
+        {documents && (documents.outstanding_count > 0 || documents.outstanding?.length > 0) && (
+          <CollapsibleSection
+            title="Outstanding Documents"
+            count={documents.outstanding_count || documents.outstanding?.length}
+            defaultOpen={true}
+          >
+            <div className="outstanding-list">
+              {documents.outstanding?.length > 0 ? (
+                documents.outstanding.map((doc, idx) => (
+                  <div key={idx} className="doc-item">
+                    <span className={`doc-priority priority-${doc.priority?.toLowerCase() || 'normal'}`} />
+                    <div className="doc-info">
+                      <span className="doc-title">{doc.title || doc.type}</span>
+                      {doc.due_date && <span className="doc-due">Due: {doc.due_date}</span>}
                     </div>
-                    <span className="activity-text">
-                      {item.content || item.description || 'Activity logged'}
+                    <span className={`doc-status status-${doc.status?.toLowerCase() || 'pending'}`}>
+                      {doc.status === 'OPEN' ? 'Needed' : doc.status}
                     </span>
                   </div>
-                </div>
-              );
-            });
-          })()}
-        </div>
-      </CollapsibleSection>
+                ))
+              ) : (
+                <p className="empty-message">No outstanding documents</p>
+              )}
+            </div>
+          </CollapsibleSection>
+        )}
 
-      {/* Third-Party Orders - Collapsible */}
-      {third_party_orders && (
-        <CollapsibleSection title="Third-Party Orders" defaultOpen={false}>
-          <div className="orders-summary">
-            <div className={`order-item ${third_party_orders.appraisal?.received_date ? 'complete' : ''}`}>
-              <span className="order-icon">&#127968;</span>
-              <span className="order-name">Appraisal</span>
-              <span className="order-status">
-                {third_party_orders.appraisal?.received_date ? 'Complete' :
-                 third_party_orders.appraisal?.ordered_date ? 'In Progress' : 'Not Ordered'}
-              </span>
-            </div>
-            <div className={`order-item ${third_party_orders.title?.received_date ? 'complete' : ''}`}>
-              <span className="order-icon">&#128203;</span>
-              <span className="order-name">Title</span>
-              <span className="order-status">
-                {third_party_orders.title?.received_date ? 'Complete' :
-                 third_party_orders.title?.ordered_date ? 'In Progress' : 'Not Ordered'}
-              </span>
-            </div>
-            <div className={`order-item ${third_party_orders.homeowners_insurance?.received_date ? 'complete' : ''}`}>
-              <span className="order-icon">&#128737;</span>
-              <span className="order-name">Insurance</span>
-              <span className="order-status">
-                {third_party_orders.homeowners_insurance?.received_date ? 'Complete' :
-                 third_party_orders.homeowners_insurance?.ordered_date ? 'In Progress' : 'Not Ordered'}
-              </span>
-            </div>
+        {/* Recent Activity */}
+        <CollapsibleSection title="Recent Activity" defaultOpen={true} count={getCombinedTimeline().length}>
+          <div className="timeline">
+            {(() => {
+              const timeline = getCombinedTimeline();
+              const displayItems = timeline.length > 0 ? timeline : (conversation_log || []);
+
+              if (displayItems.length === 0) {
+                return <p className="empty-message">No recent activity</p>;
+              }
+
+              return displayItems.slice(0, 10).map((item, idx) => {
+                const activityConfig = ACTIVITY_CONFIG[item.type] || { label: item.type || 'Update', color: '#6b7280' };
+
+                return (
+                  <div key={item.id || idx} className="timeline-item">
+                    <div className="timeline-marker" style={{ backgroundColor: activityConfig.color }} />
+                    <div className="timeline-content">
+                      <div className="timeline-header">
+                        <span className="timeline-type" style={{ backgroundColor: `${activityConfig.color}15`, color: activityConfig.color }}>
+                          {activityConfig.label}
+                        </span>
+                        <span className="timeline-time">{formatRelativeTime(item.created_at)}</span>
+                      </div>
+                      <p className="timeline-text">{item.content || item.description || 'Activity logged'}</p>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </CollapsibleSection>
-      )}
+
+        {/* Third-Party Orders */}
+        {third_party_orders && (
+          <CollapsibleSection title="Third-Party Orders" defaultOpen={false}>
+            <div className="orders-grid">
+              <div className={`order-card ${third_party_orders.appraisal?.received_date ? 'complete' : ''}`}>
+                <span className="order-icon">&#127968;</span>
+                <span className="order-label">Appraisal</span>
+                <span className={`order-badge ${third_party_orders.appraisal?.received_date ? 'done' : third_party_orders.appraisal?.ordered_date ? 'pending' : 'not-started'}`}>
+                  {third_party_orders.appraisal?.received_date ? 'Complete' :
+                   third_party_orders.appraisal?.ordered_date ? 'In Progress' : 'Not Ordered'}
+                </span>
+              </div>
+              <div className={`order-card ${third_party_orders.title?.received_date ? 'complete' : ''}`}>
+                <span className="order-icon">&#128203;</span>
+                <span className="order-label">Title</span>
+                <span className={`order-badge ${third_party_orders.title?.received_date ? 'done' : third_party_orders.title?.ordered_date ? 'pending' : 'not-started'}`}>
+                  {third_party_orders.title?.received_date ? 'Complete' :
+                   third_party_orders.title?.ordered_date ? 'In Progress' : 'Not Ordered'}
+                </span>
+              </div>
+              <div className={`order-card ${third_party_orders.homeowners_insurance?.received_date ? 'complete' : ''}`}>
+                <span className="order-icon">&#128737;</span>
+                <span className="order-label">Insurance</span>
+                <span className={`order-badge ${third_party_orders.homeowners_insurance?.received_date ? 'done' : third_party_orders.homeowners_insurance?.ordered_date ? 'pending' : 'not-started'}`}>
+                  {third_party_orders.homeowners_insurance?.received_date ? 'Complete' :
+                   third_party_orders.homeowners_insurance?.ordered_date ? 'In Progress' : 'Not Ordered'}
+                </span>
+              </div>
+            </div>
+          </CollapsibleSection>
+        )}
+      </div>
 
       {/* Pre-Approval Letter Modal */}
       <PreApprovalLetterModal
