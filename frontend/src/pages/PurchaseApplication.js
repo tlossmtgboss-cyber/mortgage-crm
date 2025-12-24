@@ -3770,15 +3770,28 @@ export default function PurchaseApplication() {
                 <h4><Icon name={PLANNING_QUESTIONS.professionalNetwork.options.find(o => o.value === prof)?.icon || 'user'} size={20} /> {professionalLabels[prof]}</h4>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Name</label>
+                    <label>First Name</label>
                     <input
                       type="text"
                       className="fun-input"
-                      placeholder="Professional's name"
-                      value={professionalContacts[prof]?.name || ''}
+                      placeholder="First name"
+                      value={professionalContacts[prof]?.firstName || ''}
                       onChange={(e) => setProfessionalContacts(prev => ({
                         ...prev,
-                        [prof]: { ...prev[prof], name: e.target.value }
+                        [prof]: { ...prev[prof], firstName: e.target.value }
+                      }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Last Name</label>
+                    <input
+                      type="text"
+                      className="fun-input"
+                      placeholder="Last name"
+                      value={professionalContacts[prof]?.lastName || ''}
+                      onChange={(e) => setProfessionalContacts(prev => ({
+                        ...prev,
+                        [prof]: { ...prev[prof], lastName: e.target.value }
                       }))}
                     />
                   </div>
