@@ -55242,6 +55242,33 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Workflow scheduler not started: {e}")
 
+            # Start Workflow SLA task generation scheduler
+            try:
+                def run_workflow_sla_tasks():
+                    """Generate due workflow tasks based on SLA configurations"""
+                    db = SessionLocal()
+                    try:
+                        from services.workflow_scheduler import WorkflowScheduler
+                        sla_scheduler = WorkflowScheduler(db)
+                        result = sla_scheduler.generate_due_tasks()
+                        if result.get("tasks_generated", 0) > 0:
+                            logger.info(f"📋 Workflow SLA: Generated {result['tasks_generated']} tasks for {result.get('instances_processed', 0)} instances")
+                    except Exception as e:
+                        logger.error(f"Workflow SLA task generation error: {e}")
+                    finally:
+                        db.close()
+
+                # Run every 5 minutes to ensure timely task generation
+                scheduler.add_job(
+                    run_workflow_sla_tasks,
+                    IntervalTrigger(minutes=5),
+                    id="workflow_sla_tasks",
+                    replace_existing=True
+                )
+                logger.info("✅ Workflow SLA task scheduler started (runs every 5 minutes)")
+            except Exception as e:
+                logger.warning(f"⚠️ Workflow SLA scheduler not started: {e}")
+
     except Exception as e:
         logger.warning(f"⚠️ Startup initialization skipped: {e}")
         logger.info("Application will still start, database will be initialized on first request")
