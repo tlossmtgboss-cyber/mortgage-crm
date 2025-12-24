@@ -448,12 +448,13 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
             logger.warning(f"Conversation record note: {conv_err}")
             db.rollback()
 
-        # Send email with tracking headers
+        # Send email with tracking headers - use reply subdomain as FROM so replies come back
         result = email_service.send_html_email(
             to_email=email,
             subject=subject,
             html_body=html_body,
             plain_text_body=message,
+            from_email=reply_to,  # Send FROM the reply subdomain
             reply_to=reply_to,
             headers={
                 "Message-ID": message_id,
@@ -473,7 +474,7 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
                             :body_text, :body_html, :msg_id, true, NOW())
                 """), {
                     "conv_id": conv_id,
-                    "from_email": os.getenv("SENDGRID_FROM_EMAIL", "noreply@perenniaai.com"),
+                    "from_email": reply_to,  # Use the same FROM address we sent with
                     "to_email": email,
                     "subject": subject,
                     "body_text": message,

@@ -61,13 +61,19 @@ class EmailService:
         plain_text_body: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, str]] = None,
-        reply_to: Optional[str] = None
+        reply_to: Optional[str] = None,
+        from_email: Optional[str] = None
     ) -> bool:
-        """Send an HTML email with optional attachments and custom headers"""
+        """Send an HTML email with optional attachments and custom headers
+
+        Args:
+            from_email: Override the default from_email address. Useful for AI conversations
+                       where replies need to go to a specific inbound parse address.
+        """
         if self.use_sendgrid:
-            return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to)
+            return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
         else:
-            return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to)
+            return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
 
     def _send_via_sendgrid(
         self,
@@ -77,14 +83,18 @@ class EmailService:
         plain_text_body: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, str]] = None,
-        reply_to: Optional[str] = None
+        reply_to: Optional[str] = None,
+        from_email: Optional[str] = None
     ) -> bool:
         """Send email via SendGrid API"""
         try:
             from sendgrid.helpers.mail import ReplyTo, Header
 
+            # Use provided from_email or fall back to default
+            sender_email = from_email or self.from_email
+
             message = Mail(
-                from_email=(self.from_email, self.from_name),
+                from_email=(sender_email, self.from_name),
                 to_emails=to_email,
                 subject=subject,
                 html_content=html_body
@@ -129,7 +139,7 @@ class EmailService:
             # Try SMTP fallback if SendGrid fails
             if self.smtp_user:
                 logger.info("Attempting SMTP fallback...")
-                return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to)
+                return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
             return False
 
     def _send_via_smtp(
@@ -140,7 +150,8 @@ class EmailService:
         plain_text_body: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, str]] = None,
-        reply_to: Optional[str] = None
+        reply_to: Optional[str] = None,
+        from_email: Optional[str] = None
     ) -> bool:
         """Send email via SMTP (fallback method)"""
         if not self.smtp_user or not self.smtp_password:
@@ -148,9 +159,12 @@ class EmailService:
             return False
 
         try:
+            # Use provided from_email or fall back to default
+            sender_email = from_email or self.from_email
+
             # Create message
             msg = MIMEMultipart('alternative')
-            msg['From'] = f'{self.from_name} <{self.from_email}>'
+            msg['From'] = f'{self.from_name} <{sender_email}>'
             msg['To'] = to_email
             msg['Subject'] = subject
             msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')

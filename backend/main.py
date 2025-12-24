@@ -1029,6 +1029,12 @@ class ReferralPartner(Base):
     loyalty_tier = Column(String, default="bronze")
     last_interaction = Column(DateTime)
     notes = Column(Text)
+    # Address fields
+    street_address = Column(String)
+    city = Column(String)
+    state = Column(String)
+    zip_code = Column(String)
+    title = Column(String)  # Job title
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Owner of this referral partner
     leads = relationship("Lead", back_populates="referral_partner")
@@ -3914,18 +3920,39 @@ class ReferralPartnerCreate(BaseModel):
 class ReferralPartnerUpdate(BaseModel):
     name: Optional[str] = None
     company: Optional[str] = None
+    type: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    title: Optional[str] = None
+    street_address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    loyalty_tier: Optional[str] = None
+    category: Optional[str] = None
+    business_name: Optional[str] = None
+    contact_name: Optional[str] = None
 
 class ReferralPartnerResponse(BaseModel):
     id: int
     name: str
-    company: Optional[str]
-    type: Optional[str]
-    referrals_in: int
-    closed_loans: int
-    volume: float
-    loyalty_tier: str
+    company: Optional[str] = None
+    type: Optional[str] = None
+    referrals_in: int = 0
+    closed_loans: int = 0
+    volume: float = 0.0
+    loyalty_tier: str = "bronze"
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    title: Optional[str] = None
+    street_address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -35317,24 +35344,25 @@ Best regards,
 Sarah
 AI Mortgage Assistant | Perennia AI"""
 
-        # Get reply-to email from env
+        # Use the reply subdomain for FROM address so replies come back to us
         import os
-        reply_to = os.getenv("REPLY_TO_EMAIL", "sarah@reply.perenniaai.com")
+        ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
 
         email_sent = email_service.send_html_email(
             to_email=to_email,
             subject="Quick question about your mortgage goals - Perennia AI",
             html_body=html_body,
             plain_text_body=plain_text,
-            reply_to=reply_to
+            from_email=ai_from_email,
+            reply_to=ai_from_email
         )
 
         return {
             "status": "success" if email_sent else "failed",
             "email_sent": email_sent,
             "to": to_email,
-            "from": email_service.from_email,
-            "reply_to": reply_to,
+            "from": ai_from_email,
+            "reply_to": ai_from_email,
             "conversation_id": conv_id,
             "message": "Initial AI question sent! Reply to the email to continue.",
             "instruction": "Reply to this email and SendGrid will forward it to our webhook for AI response"

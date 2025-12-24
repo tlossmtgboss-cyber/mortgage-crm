@@ -49,23 +49,27 @@ function SmartDocsClientDetail() {
         });
       }
 
-      // Fetch document requests for this loan
-      const docsRes = await fetch(`/api/v1/smart-docs/loans/${loanId}/requests`, { headers });
-      if (docsRes.ok) {
-        const docsData = await docsRes.json();
-        setDocuments(docsData.requests || []);
+      // Fetch document requests from needs list
+      const needsListRes = await fetch(`/api/v1/smart-docs/needs-list/${loanId}`, { headers });
+      if (needsListRes.ok) {
+        const needsListData = await needsListRes.json();
+        // Backend returns all_requests array
+        const requests = needsListData.all_requests || [];
+        setDocuments(requests);
         // Auto-select first document if available
-        if (docsData.requests?.length > 0) {
-          setSelectedDoc(docsData.requests[0]);
+        if (requests.length > 0) {
+          setSelectedDoc(requests[0]);
         }
       } else {
-        // Fallback: try to get from smart-docs endpoint
-        const fallbackRes = await fetch(`/api/v1/smart-docs/client/${loanId}/documents`, { headers });
-        if (fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json();
-          setDocuments(fallbackData.documents || []);
-          if (fallbackData.documents?.length > 0) {
-            setSelectedDoc(fallbackData.documents[0]);
+        // Fallback: try queue detail endpoint
+        const queueRes = await fetch(`/api/v1/smart-docs/queue/${loanId}`, { headers });
+        if (queueRes.ok) {
+          const queueData = await queueRes.json();
+          // Queue returns requests array
+          const requests = queueData.requests || queueData.all_requests || [];
+          setDocuments(requests);
+          if (requests.length > 0) {
+            setSelectedDoc(requests[0]);
           }
         }
       }
