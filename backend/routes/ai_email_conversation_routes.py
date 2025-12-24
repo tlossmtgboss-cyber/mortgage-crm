@@ -278,7 +278,7 @@ async def inbound_email_webhook(
 
             # Try to find existing lead by email
             existing_lead = db.execute(text("""
-                SELECT id, first_name, last_name, owner_id
+                SELECT id, name, owner_id
                 FROM leads
                 WHERE email = :email
                 ORDER BY created_at DESC
@@ -288,15 +288,10 @@ async def inbound_email_webhook(
             if existing_lead:
                 lead_id = existing_lead.id
                 user_id = existing_lead.owner_id
-                sender_name = f"{existing_lead.first_name or ''} {existing_lead.last_name or ''}".strip() or sender_name
+                sender_name = existing_lead.name or sender_name
                 logger.info(f"Matched inbound email to existing lead {lead_id}")
             else:
                 # Create a new lead for this email
-                # Extract first/last name from sender name
-                name_parts = sender_name.split(' ', 1)
-                first_name = name_parts[0] if name_parts else sender_name
-                last_name = name_parts[1] if len(name_parts) > 1 else ''
-
                 # Get default user (first admin or system user)
                 default_user = db.execute(text("""
                     SELECT id FROM users
@@ -306,13 +301,12 @@ async def inbound_email_webhook(
                 """)).fetchone()
                 user_id = default_user.id if default_user else 1
 
-                # Create new lead
+                # Create new lead (using actual schema: name, not first_name/last_name)
                 db.execute(text("""
-                    INSERT INTO leads (first_name, last_name, email, source, status, owner_id, created_at, updated_at)
-                    VALUES (:first_name, :last_name, :email, 'inbound_email', 'new', :owner_id, NOW(), NOW())
+                    INSERT INTO leads (name, email, source, owner_id, created_at, updated_at)
+                    VALUES (:name, :email, 'inbound_email', :owner_id, NOW(), NOW())
                 """), {
-                    "first_name": first_name,
-                    "last_name": last_name,
+                    "name": sender_name,
                     "email": from_address,
                     "owner_id": user_id
                 })
