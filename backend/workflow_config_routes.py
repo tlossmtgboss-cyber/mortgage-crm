@@ -1829,9 +1829,115 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
                 "source": "Workflow",
             })
 
+    # Also include tasks from the workflow_task_instances table (workflow-sla system)
+    try:
+        sla_tasks_query = db.execute(text("""
+            SELECT
+                wti.id as task_id,
+                wti.task_type,
+                wti.status as task_status,
+                wti.scheduled_for,
+                wti.created_at,
+                wsi.lead_id,
+                wsi.loan_id,
+                wsi.workflow_type,
+                wsi.started_at,
+                wc.workflow_name,
+                wc.color as workflow_color,
+                l.name as lead_name,
+                l.phone as lead_phone,
+                l.email as lead_email,
+                l.stage as lead_stage,
+                loan.borrower_name as loan_borrower,
+                loan.property_address as loan_property
+            FROM workflow_task_instances wti
+            JOIN workflow_sla_instances wsi ON wsi.id = wti.instance_id
+            LEFT JOIN workflow_configurations wc ON wc.id = wsi.workflow_configuration_id
+            LEFT JOIN leads l ON l.id = wsi.lead_id
+            LEFT JOIN loans loan ON loan.id = wsi.loan_id
+            WHERE wti.status IN ('pending', 'scheduled')
+            ORDER BY wti.scheduled_for ASC NULLS LAST, wti.created_at DESC
+        """))
+        sla_task_rows = sla_tasks_query.fetchall()
+
+        for row in sla_task_rows:
+            # Determine client info
+            if row[5]:  # lead_id
+                client_name = row[12] or "Lead"
+                client_type = "lead"
+                client_id = row[5]
+                stage = row[15] if row[15] else "Prospect"
+            else:  # loan_id
+                client_name = row[16] or "Borrower"
+                client_type = "loan"
+                client_id = row[6]
+                stage = "Active Loan"
+
+            # Determine urgency based on task type and age
+            task_type = row[1]
+            task_created = row[4]
+            days_old = (datetime.utcnow() - task_created.replace(tzinfo=None)).days if task_created else 0
+
+            if days_old > 2:
+                urgency = "high"
+                status = "overdue"
+                days_until_due = -days_old
+            elif days_old > 0:
+                urgency = "medium"
+                status = "due_today"
+                days_until_due = 0
+            else:
+                urgency = "low"
+                status = "due_today"
+                days_until_due = 0
+
+            # Build communication methods from task type
+            methods = []
+            if task_type == "phone":
+                methods = ["phone"]
+            elif task_type == "text":
+                methods = ["text"]
+            elif task_type == "email":
+                methods = ["email"]
+            elif task_type == "referral_partner":
+                methods = ["email"]
+
+            # Format task title
+            type_labels = {
+                "phone": "Phone Call",
+                "text": "Send Text",
+                "email": "Send Email",
+                "referral_partner": "Partner Outreach"
+            }
+            title = f"{type_labels.get(task_type, task_type.title())} - {row[9] or 'Workflow'}"
+
+            all_tasks.append({
+                "id": f"sla-{row[0]}",
+                "title": title,
+                "description": f"Workflow task: {task_type} for {client_name}",
+                "client_name": client_name,
+                "client_type": client_type,
+                "client_id": client_id,
+                "stage": stage,
+                "workflow_name": row[9] or "Workflow",
+                "workflow_key": row[7],
+                "workflow_color": row[10] or "#3b82f6",
+                "day_value": days_old,
+                "days_in_stage": days_old,
+                "days_until_due": days_until_due,
+                "due_date": (row[3] or row[4] or datetime.utcnow()).isoformat() if row[3] or row[4] else datetime.utcnow().isoformat(),
+                "status": status,
+                "urgency": urgency,
+                "communication_methods": methods,
+                "source": "Workflow SLA",
+                "sla_task_id": row[0],
+            })
+    except Exception as sla_err:
+        logger.warning(f"Could not fetch workflow SLA tasks: {sla_err}")
+
     # Sort tasks by due date (due_today first, then tomorrow, then upcoming)
     urgency_order = {"high": 0, "medium": 1, "low": 2}
-    all_tasks.sort(key=lambda t: (urgency_order.get(t["urgency"], 3), t["days_until_due"], t["client_name"]))
+    all_tasks.sort(key=lambda t: (urgency_order.get(t["urgency"], 3), t.get("days_until_due", 0), t["client_name"]))
 
     return all_tasks
 
