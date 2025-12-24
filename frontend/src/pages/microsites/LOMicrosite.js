@@ -140,7 +140,8 @@ const LOMicrosite = () => {
   }
 
   const loName = loProfile?.name || themeData?.user?.name || `${loProfile?.first_name || ''} ${loProfile?.last_name || ''}`.trim() || 'Loan Officer';
-  const loPhoto = loProfile?.photo_url || loProfile?.avatar_url || themeData?.user?.photo_url || null;
+  const loPhoto = themeData?.themeConfig?.heroImageUrl || loProfile?.photo_url || loProfile?.avatar_url || themeData?.user?.photo_url || null;
+  const loLogo = themeData?.themeConfig?.logoUrl || null;
   const loCompany = loProfile?.company || themeData?.user?.company || 'Mortgage Lending';
   const loNmls = loProfile?.nmls_id || themeData?.user?.nmls_id;
   const loBio = loProfile?.bio || themeData?.user?.bio || themeData?.profile?.bioExtended || `Hi, I'm ${loName}. I'm dedicated to helping you find the perfect mortgage solution for your needs. Whether you're buying your first home or refinancing, I'm here to guide you every step of the way.`;
@@ -438,7 +439,11 @@ const LOMicrosite = () => {
         <nav className="lo-nav">
           <div className="container">
             <div className="nav-brand" onClick={() => navigateToPage('home')}>
-              {loName}
+              {loLogo ? (
+                <img src={loLogo} alt={loName} className="nav-logo" />
+              ) : (
+                loName
+              )}
             </div>
             <ul className="nav-links">
               <li>

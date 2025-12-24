@@ -213,12 +213,16 @@ const MicrositePreview = () => {
     company: micrositeData.company_name || 'Your Company'
   };
 
+  // Extract branding data (where uploaded images are stored)
+  const branding = micrositeData.branding_json || {};
+
   // Build profile object for theme
   const profile = {
     headline: micrositeData.headline || '',
     tagline: micrositeData.tagline || '',
     bioExtended: micrositeData.bio_extended || micrositeData.bio || '',
-    heroImageUrl: micrositeData.hero_image_url || micrositeData.photo_url || '',
+    heroImageUrl: branding.heroImageUrl || micrositeData.hero_image_url || micrositeData.photo_url || '',
+    logoUrl: branding.logoUrl || micrositeData.logo_url || '',
     yearsExperience: micrositeData.years_experience || 0,
     totalLoansFunded: micrositeData.total_loans_funded || 0,
     totalVolumeFunded: micrositeData.total_volume_funded || 0,

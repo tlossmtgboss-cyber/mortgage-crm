@@ -557,15 +557,22 @@ async def get_public_microsite(
             # Check for branding_json in theme_config or as separate attribute
             branding = getattr(microsite, 'branding_json', None) or theme_config.get('branding', {}) or {}
             if branding:
-                # Map branding fields to themeConfig
-                if branding.get('logo_url'):
-                    theme_config['logoUrl'] = branding['logo_url']
-                if branding.get('primary_color'):
-                    theme_config['primaryColor'] = branding['primary_color']
-                if branding.get('secondary_color'):
-                    theme_config['secondaryColor'] = branding['secondary_color']
-                if branding.get('accent_color'):
-                    theme_config['accentColor'] = branding['accent_color']
+                # Map branding fields to themeConfig (check both camelCase and snake_case)
+                logo = branding.get('logoUrl') or branding.get('logo_url')
+                if logo:
+                    theme_config['logoUrl'] = logo
+                hero_image = branding.get('heroImageUrl') or branding.get('hero_image_url')
+                if hero_image:
+                    theme_config['heroImageUrl'] = hero_image
+                primary = branding.get('primaryColor') or branding.get('primary_color')
+                if primary:
+                    theme_config['primaryColor'] = primary
+                secondary = branding.get('secondaryColor') or branding.get('secondary_color')
+                if secondary:
+                    theme_config['secondaryColor'] = secondary
+                accent = branding.get('accentColor') or branding.get('accent_color')
+                if accent:
+                    theme_config['accentColor'] = accent
             profile_data = microsite.profile.to_dict() if microsite.profile else {}
 
         # Build user data (public fields only)

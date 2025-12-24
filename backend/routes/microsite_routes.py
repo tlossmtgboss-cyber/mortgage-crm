@@ -539,6 +539,44 @@ async def upload_asset(
     )
 
 
+@router.get("/assets/{org_id}/{microsite_id}/{filename}")
+async def serve_asset(
+    org_id: int,
+    microsite_id: int,
+    filename: str
+):
+    """Serve uploaded microsite assets (logos, headshots, images)"""
+    from fastapi.responses import FileResponse
+
+    # Build file path
+    file_path = f"{STORAGE_PATH}/{org_id}/{microsite_id}/{filename}"
+
+    # Check if file exists
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    # Determine content type from extension
+    ext = os.path.splitext(filename)[1].lower()
+    content_types = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml'
+    }
+    content_type = content_types.get(ext, 'application/octet-stream')
+
+    return FileResponse(
+        file_path,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=31536000",  # Cache for 1 year
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+
 # ============================================================================
 # PUBLIC RENDERING ENDPOINT
 # ============================================================================
