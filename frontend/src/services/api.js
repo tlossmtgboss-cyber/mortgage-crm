@@ -204,7 +204,7 @@ export const loansAPI = {
 // Tasks
 export const tasksAPI = {
   getAll: async (params = {}) => {
-    const response = await api.get('/api/v1/tasks/', { params });
+    const response = await api.get('/api/v1/tasks', { params });
     return ensureArray(response.data, 'tasks');
   },
   getUnified: async () => {
@@ -216,7 +216,7 @@ export const tasksAPI = {
     return response.data;
   },
   create: async (data) => {
-    const response = await api.post('/api/v1/tasks/', data);
+    const response = await api.post('/api/v1/tasks', data);
     return response.data;
   },
   update: async (id, data) => {
@@ -235,7 +235,7 @@ export const tasksAPI = {
 // Referral Partners
 export const partnersAPI = {
   getAll: async (params = {}) => {
-    const response = await api.get('/api/v1/referral-partners/', { params });
+    const response = await api.get('/api/v1/referral-partners', { params });
     return ensureArray(response.data, 'partners');
   },
   getById: async (id) => {
@@ -247,7 +247,7 @@ export const partnersAPI = {
     return response.data;
   },
   create: async (data) => {
-    const response = await api.post('/api/v1/referral-partners/', data);
+    const response = await api.post('/api/v1/referral-partners', data);
     return response.data;
   },
   update: async (id, data) => {

@@ -23,6 +23,7 @@ import AccountVerification from './pages/AccountVerification';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
+import ApplicationSubmitted from './pages/ApplicationSubmitted';
 
 // Lazy load all other pages for instant navigation
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -281,6 +282,7 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/application-submitted" element={<ApplicationSubmitted />} />
 
           {/* Realtor Portal (public - token-based auth) */}
           <Route path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />
