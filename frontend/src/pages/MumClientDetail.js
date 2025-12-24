@@ -683,6 +683,26 @@ function MumClientDetail() {
         </div>
       </div>
 
+      {/* Client Name Banner */}
+      <div className="client-name-banner" style={{
+        padding: '12px 24px',
+        backgroundColor: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0'
+      }}>
+        <h2 style={{
+          margin: 0,
+          fontSize: '20px',
+          fontWeight: '600',
+          color: '#1a1a2e'
+        }}>
+          {formData.first_name || formData.last_name
+            ? `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
+            : client?.first_name || client?.last_name
+              ? `${client?.first_name || ''} ${client?.last_name || ''}`.trim()
+              : client?.name || 'Unknown Client'}
+        </h2>
+      </div>
+
       {/* Tab Navigation */}
       <div className="profile-tabs">
         <button

@@ -1722,18 +1722,6 @@ function LeadDetail() {
             <button className="btn-back" onClick={() => navigate('/leads')}>
               ← Back to Leads
             </button>
-            <h2 className="client-name-header" style={{
-              margin: '0 20px',
-              fontSize: '18px',
-              fontWeight: '600',
-              color: '#1a1a2e'
-            }}>
-              {formData.first_name || formData.last_name
-                ? `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
-                : lead?.first_name || lead?.last_name
-                  ? `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim()
-                  : 'Unknown Client'}
-            </h2>
           <button className="btn-next" onClick={handleViewNextLead} disabled={leadsList.length === 0}>
             View Next Lead →
           </button>
@@ -1831,6 +1819,26 @@ function LeadDetail() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Client Name Banner */}
+      <div className="client-name-banner" style={{
+        padding: '12px 24px',
+        backgroundColor: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0'
+      }}>
+        <h2 style={{
+          margin: 0,
+          fontSize: '20px',
+          fontWeight: '600',
+          color: '#1a1a2e'
+        }}>
+          {formData.first_name || formData.last_name
+            ? `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
+            : lead?.first_name || lead?.last_name
+              ? `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim()
+              : 'Unknown Client'}
+        </h2>
       </div>
 
       {/* Tab Navigation */}

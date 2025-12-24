@@ -919,16 +919,6 @@ function LoanDetail() {
             <button className="btn-back" onClick={() => navigate('/loans')}>
               ← Back to Loans
             </button>
-            <h2 className="client-name-header" style={{
-              margin: '0 20px',
-              fontSize: '18px',
-              fontWeight: '600',
-              color: '#1a1a2e'
-            }}>
-              {formData.borrower_first_name || formData.borrower_last_name
-                ? `${formData.borrower_first_name || ''} ${formData.borrower_last_name || ''}`.trim()
-                : loan?.borrower_name || loan?.borrower || 'Unknown Borrower'}
-            </h2>
           <button className="btn-next" onClick={handleViewNextLoan} disabled={loansList.length === 0}>
             View Next Loan →
           </button>
@@ -946,6 +936,24 @@ function LoanDetail() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Client Name Banner */}
+      <div className="client-name-banner" style={{
+        padding: '12px 24px',
+        backgroundColor: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0'
+      }}>
+        <h2 style={{
+          margin: 0,
+          fontSize: '20px',
+          fontWeight: '600',
+          color: '#1a1a2e'
+        }}>
+          {formData.borrower_first_name || formData.borrower_last_name
+            ? `${formData.borrower_first_name || ''} ${formData.borrower_last_name || ''}`.trim()
+            : loan?.borrower_name || loan?.borrower || 'Unknown Borrower'}
+        </h2>
       </div>
 
       {/* Tab Navigation */}
