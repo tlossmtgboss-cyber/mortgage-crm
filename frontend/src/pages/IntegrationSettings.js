@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
-import { toast } from 'react-hot-toast';
+import { toast } from '../utils/toast';
 import './IntegrationSettings.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';

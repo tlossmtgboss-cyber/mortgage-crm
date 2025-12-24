@@ -1406,7 +1406,7 @@ function App() {
                     taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`>
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AgentProfile /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
