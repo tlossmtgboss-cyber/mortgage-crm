@@ -42843,7 +42843,7 @@ async def get_process_flows(
 # AI TASKS CRUD (COMPLETE)
 # ============================================================================
 
-@app.post("/api/v1/tasks/", response_model=TaskResponse, status_code=201)
+@app.post("/api/v1/tasks", response_model=TaskResponse, status_code=201)
 async def create_task(task: TaskCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_task = AITask(
         **task.model_dump(),
@@ -42858,7 +42858,7 @@ async def create_task(task: TaskCreate, db: Session = Depends(get_db), current_u
     logger.info(f"Task created: {db_task.title}")
     return db_task
 
-@app.get("/api/v1/tasks/")
+@app.get("/api/v1/tasks")
 async def get_tasks(
     skip: int = 0,
     limit: int = 100,
@@ -43734,7 +43734,7 @@ async def reject_unified_task(
 # REFERRAL PARTNERS CRUD
 # ============================================================================
 
-@app.post("/api/v1/referral-partners/", response_model=ReferralPartnerResponse, status_code=201)
+@app.post("/api/v1/referral-partners", response_model=ReferralPartnerResponse, status_code=201)
 async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         partner_data = partner.model_dump()
@@ -43755,7 +43755,7 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
         logger.error(f"Error creating referral partner: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create referral partner: {str(e)}")
 
-@app.get("/api/v1/referral-partners/")
+@app.get("/api/v1/referral-partners")
 async def get_referral_partners(
     skip: int = 0,
     limit: int = 100,
