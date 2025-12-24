@@ -408,6 +408,62 @@ async def inbound_email_webhook(
         return {"status": "error", "message": str(e)}
 
 
+@router.get("/debug/history")
+async def debug_conversation_history(
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to view all conversation history (temporary)"""
+    try:
+        ensure_conversation_tables(db)
+
+        # Get all conversations with their messages
+        conversations = db.execute(text("""
+            SELECT c.conversation_id, c.recipient_email, c.recipient_name,
+                   c.conversation_type, c.status, c.message_count, c.created_at,
+                   c.last_message_at
+            FROM ai_email_conversations c
+            ORDER BY c.created_at DESC
+            LIMIT 20
+        """)).fetchall()
+
+        result = []
+        for conv in conversations:
+            # Get messages for this conversation
+            messages = db.execute(text("""
+                SELECT direction, from_email, to_email, subject,
+                       body_text, created_at, ai_generated
+                FROM ai_email_messages
+                WHERE conversation_id = :conv_id
+                ORDER BY created_at ASC
+            """), {"conv_id": conv.conversation_id}).fetchall()
+
+            result.append({
+                "conversation_id": conv.conversation_id,
+                "recipient": f"{conv.recipient_name} <{conv.recipient_email}>",
+                "type": conv.conversation_type,
+                "status": conv.status,
+                "message_count": conv.message_count,
+                "created": conv.created_at.isoformat() if conv.created_at else None,
+                "messages": [
+                    {
+                        "direction": "OUTBOUND" if m.direction == "outbound" else "INBOUND",
+                        "from": m.from_email,
+                        "to": m.to_email,
+                        "subject": m.subject,
+                        "body": m.body_text[:500] if m.body_text else "",
+                        "ai_generated": m.ai_generated,
+                        "time": m.created_at.isoformat() if m.created_at else None
+                    }
+                    for m in messages
+                ]
+            })
+
+        return result
+    except Exception as e:
+        logger.error(f"Error in debug history: {e}")
+        return {"error": str(e)}
+
+
 @router.get("/conversations", response_model=List[dict])
 async def list_conversations(
     status: Optional[str] = None,
