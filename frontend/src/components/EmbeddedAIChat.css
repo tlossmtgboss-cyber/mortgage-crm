@@ -201,6 +201,10 @@
   color: var(--chat-text);
 }
 
+.message.user .message-content p {
+  color: #ffffff;
+}
+
 .message-content.error {
   background: #fef2f2;
   border-color: #fecaca;
