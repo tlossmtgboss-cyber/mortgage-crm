@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
+import { toast } from '../utils/toast';
 import './CompanyBrandingSettings.css';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -14,7 +15,6 @@ const CompanyBrandingSettings = () => {
   const [error, setError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState(null);
 
   // Data states
   const [companyInfo, setCompanyInfo] = useState({});
@@ -100,11 +100,6 @@ const CompanyBrandingSettings = () => {
     loadData();
   }, [loadData]);
 
-  // Show toast
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   // Save handlers
   const saveCompanyInfo = async () => {
@@ -120,9 +115,9 @@ const CompanyBrandingSettings = () => {
         throw new APIError(error.detail?.message || 'Failed to save', response.status);
       }
       setHasChanges(false);
-      showToast('Company information saved successfully');
+      toast.success('Company information saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -137,9 +132,9 @@ const CompanyBrandingSettings = () => {
       });
       if (!response.ok) throw new APIError('Failed to save colors', response.status);
       setHasChanges(false);
-      showToast('Brand colors saved successfully');
+      toast.success('Brand colors saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -154,9 +149,9 @@ const CompanyBrandingSettings = () => {
       });
       if (!response.ok) throw new APIError('Failed to save typography', response.status);
       setHasChanges(false);
-      showToast('Typography saved successfully');
+      toast.success('Typography saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -171,9 +166,9 @@ const CompanyBrandingSettings = () => {
       });
       if (!response.ok) throw new APIError('Failed to save email branding', response.status);
       setHasChanges(false);
-      showToast('Email branding saved successfully');
+      toast.success('Email branding saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -188,9 +183,9 @@ const CompanyBrandingSettings = () => {
       });
       if (!response.ok) throw new APIError('Failed to save document branding', response.status);
       setHasChanges(false);
-      showToast('Document branding saved successfully');
+      toast.success('Document branding saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -205,9 +200,9 @@ const CompanyBrandingSettings = () => {
       });
       if (!response.ok) throw new APIError('Failed to save white-label settings', response.status);
       setHasChanges(false);
-      showToast('White-label settings saved successfully');
+      toast.success('White-label settings saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -222,9 +217,9 @@ const CompanyBrandingSettings = () => {
       });
       if (!response.ok) throw new APIError('Failed to save social media links', response.status);
       setHasChanges(false);
-      showToast('Social media links saved successfully');
+      toast.success('Social media links saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
     setSaving(false);
   };
@@ -239,10 +234,10 @@ const CompanyBrandingSettings = () => {
       if (response.ok) {
         const data = await response.json();
         setBrandColors(data.data);
-        showToast('Colors reset to defaults');
+        toast.success('Colors reset to defaults');
       }
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -937,13 +932,6 @@ const CompanyBrandingSettings = () => {
           </div>
         )}
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`toast ${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 };

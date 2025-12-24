@@ -735,21 +735,42 @@ def clean_email_reply(text: str) -> str:
     Clean email reply by removing quoted content.
     Returns just the new reply text.
     """
+    if not text:
+        return ""
+
     lines = text.split('\n')
     clean_lines = []
 
     for line in lines:
-        # Stop at common reply indicators
-        if any(indicator in line.lower() for indicator in [
-            'on ', 'wrote:', 'from:', '-----original message-----',
-            '________________________________', '> ', 'sent from my'
+        line_lower = line.lower().strip()
+
+        # Skip lines that start with '>' (quoted text)
+        if line.strip().startswith('>'):
+            continue
+
+        # Stop at common reply headers (more specific patterns)
+        if any([
+            line_lower.startswith('on ') and 'wrote:' in line_lower,  # "On Dec 24, 2025, ... wrote:"
+            line_lower.startswith('from:') and '@' in line_lower,      # "From: someone@email.com"
+            '-----original message-----' in line_lower,
+            '________________________________' in line,
+            line_lower.startswith('sent from my iphone'),
+            line_lower.startswith('sent from my ipad'),
+            line_lower.startswith('get outlook for'),
+            'wrote:' in line_lower and ('@' in line_lower or 'am' in line_lower or 'pm' in line_lower),
         ]):
             break
+
         clean_lines.append(line)
 
     result = '\n'.join(clean_lines).strip()
 
-    # If we got nothing, return original (might be top-posted)
+    # If we got nothing meaningful, return original (might be inline reply)
+    if not result or len(result) < 3:
+        # Try to extract non-quoted lines from original
+        non_quoted = [l for l in lines if not l.strip().startswith('>')]
+        result = '\n'.join(non_quoted).strip()
+
     return result if result else text.strip()
 
 

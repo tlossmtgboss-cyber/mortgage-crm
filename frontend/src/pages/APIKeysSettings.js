@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
+import { toast } from '../utils/toast';
 import './APIKeysSettings.css';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -12,7 +13,6 @@ const APIKeysSettings = () => {
   const [activeTab, setActiveTab] = useState('keys');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [toast, setToast] = useState(null);
 
   // Data states
   const [apiKeys, setApiKeys] = useState([]);
@@ -115,11 +115,6 @@ const APIKeysSettings = () => {
     loadData();
   }, [loadData]);
 
-  // Show toast
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   // Create API Key
   const handleCreateKey = async (e) => {
@@ -140,9 +135,9 @@ const APIKeysSettings = () => {
       setNewKeyData(result.data);
       setShowCreateKeyModal(false);
       loadData();
-      showToast('API key created successfully');
+      toast.success('API key created successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -164,9 +159,9 @@ const APIKeysSettings = () => {
 
       loadData();
       setSelectedKey(null);
-      showToast('API key deleted successfully');
+      toast.success('API key deleted successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -189,9 +184,9 @@ const APIKeysSettings = () => {
       const result = await response.json();
       setNewKeyData(result.data);
       loadData();
-      showToast('API key rotated successfully');
+      toast.success('API key rotated successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -209,9 +204,9 @@ const APIKeysSettings = () => {
       }
 
       loadData();
-      showToast(`API key ${currentStatus ? 'disabled' : 'enabled'} successfully`);
+      toast.success(`API key ${currentStatus ? 'disabled' : 'enabled'} successfully`);
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -233,9 +228,9 @@ const APIKeysSettings = () => {
       const result = await response.json();
       setShowCreateWebhookModal(false);
       loadData();
-      showToast(`Webhook created. Secret: ${result.data.secret}`);
+      toast.success(`Webhook created. Secret: ${result.data.secret}`);
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -257,9 +252,9 @@ const APIKeysSettings = () => {
 
       loadData();
       setSelectedWebhook(null);
-      showToast('Webhook deleted successfully');
+      toast.success('Webhook deleted successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -276,9 +271,9 @@ const APIKeysSettings = () => {
       }
 
       const result = await response.json();
-      showToast(`Test successful! Response: ${result.data.response_code} (${result.data.response_time_ms}ms)`);
+      toast.success(`Test successful! Response: ${result.data.response_code} (${result.data.response_time_ms}ms)`);
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
@@ -296,16 +291,16 @@ const APIKeysSettings = () => {
         throw new APIError('Failed to update rate limits', response.status);
       }
 
-      showToast('Rate limit settings saved successfully');
+      toast.success('Rate limit settings saved successfully');
     } catch (err) {
-      showToast(err.message, 'error');
+      toast.error(err.message);
     }
   };
 
   // Copy to clipboard
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    showToast('Copied to clipboard');
+    toast.success('Copied to clipboard');
   };
 
   // Render tabs
@@ -833,12 +828,6 @@ const APIKeysSettings = () => {
         </div>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className={`toast ${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 };
