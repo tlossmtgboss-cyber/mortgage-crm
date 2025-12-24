@@ -865,16 +865,21 @@ Loan Information:
         # Send response
         from email_service import email_service
 
-        reply_to = os.getenv("AI_REPLY_EMAIL", "ai-reply@mortgagecrm.ai")
-        tagged_reply_to = f"ai-reply+{conversation_id}@{reply_to.split('@')[1]}" if '@' in reply_to else reply_to
+        reply_to_base = os.getenv("AI_REPLY_EMAIL", "sarah@reply.perenniaai.com")
+        # Create tagged reply-to for conversation threading
+        if '@' in reply_to_base:
+            domain = reply_to_base.split('@')[1]
+            tagged_reply_to = f"ai-reply+{conversation_id}@{domain}"
+        else:
+            tagged_reply_to = reply_to_base
 
         success = email_service.send_html_email(
             to_email=user_email,
             subject=reply_subject,
             html_body=html_response,
             plain_text_body=ai_response,
+            reply_to=tagged_reply_to,  # Use dedicated parameter, not headers
             headers={
-                "Reply-To": tagged_reply_to,
                 "X-Conversation-ID": conversation_id,
                 "X-AI-Generated": "true"
             }

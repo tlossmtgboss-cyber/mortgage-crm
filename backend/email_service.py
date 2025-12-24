@@ -107,10 +107,16 @@ class EmailService:
             if reply_to:
                 message.reply_to = ReplyTo(reply_to)
 
-            # Add custom headers (Message-ID, In-Reply-To, References, etc.)
+            # Add custom headers (only supported ones - SendGrid doesn't support arbitrary X- headers)
+            # Supported: Message-ID, In-Reply-To, References, List-Unsubscribe
             if headers:
+                supported_headers = ['Message-ID', 'In-Reply-To', 'References', 'List-Unsubscribe']
                 for key, value in headers.items():
-                    message.add_header(Header(key, value))
+                    if key in supported_headers:
+                        message.add_header(Header(key, value))
+                    else:
+                        # Log skipped headers but don't fail
+                        logger.debug(f"Skipping unsupported SendGrid header: {key}")
 
             # Add attachments if any
             if attachments:
