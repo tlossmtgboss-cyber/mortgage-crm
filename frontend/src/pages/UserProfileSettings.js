@@ -6,8 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuthHeaders } from '../utils/auth';
-import { useAsyncOperation, useFormSubmit } from '../hooks/useAsyncOperation';
-import { APIError } from '../utils/errorHandling';
+import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import './UserProfileSettings.css';
 
