@@ -1202,6 +1202,22 @@
   color: #059669;
 }
 
+/* Days Waiting */
+.days-waiting {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.text-danger {
+  color: #dc2626 !important;
+  font-weight: 600;
+}
+
+.text-warning {
+  color: #d97706 !important;
+  font-weight: 600;
+}
+
 /* Reminder Indicators */
 .reminder-enabled {
   color: #10b981;

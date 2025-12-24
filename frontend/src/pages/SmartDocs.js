@@ -617,21 +617,30 @@ function SmartDocs() {
                 <table className="smart-docs-table">
                   <thead>
                     <tr>
-                      <th>Name</th>
+                      <th>Client</th>
                       <th>Loan #</th>
-                      <th>Amount</th>
-                      <th>Program</th>
                       <th>Stage</th>
-                      <th>Property</th>
-                      <th>Added</th>
+                      <th>Docs Progress</th>
+                      <th>Status</th>
+                      <th>Days Waiting</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((applicant) => (
+                    {filteredData.map((applicant) => {
+                      const docsCollected = applicant.docs_collected || 0;
+                      const docsRequired = applicant.docs_required || 8;
+                      const completionPct = docsRequired > 0 ? Math.round((docsCollected / docsRequired) * 100) : 0;
+                      const daysWaiting = applicant.created_at
+                        ? Math.floor((new Date() - new Date(applicant.created_at)) / (1000 * 60 * 60 * 24))
+                        : 0;
+                      const isOverdue = daysWaiting > 5;
+                      const isAtRisk = daysWaiting > 3 && daysWaiting <= 5;
+
+                      return (
                       <tr
                         key={applicant.loan_id}
-                        className={`${applicant.overdue_count > 0 ? 'has-overdue' : ''} ${hasDuplicate(applicant.loan_id) ? 'has-duplicate' : ''}`}
+                        className={`${isOverdue ? 'has-overdue' : ''} ${hasDuplicate(applicant.loan_id) ? 'has-duplicate' : ''}`}
                         onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
                       >
                         <td>
@@ -651,22 +660,42 @@ function SmartDocs() {
                           )}
                         </td>
                         <td className="loan-number">{applicant.loan_number || `#${applicant.loan_id}`}</td>
-                        <td className="loan-amount">{formatCurrency(applicant.loan_amount)}</td>
-                        <td>{applicant.program || '-'}</td>
                         <td>
                           <span className={`stage-badge stage-${(applicant.stage || 'processing').toLowerCase().replace(/\s+/g, '-')}`}>
                             {applicant.stage || 'Processing'}
                           </span>
                         </td>
-                        <td className="property-cell">{applicant.property_address || '-'}</td>
-                        <td className="date-cell">{formatDate(applicant.created_at)}</td>
+                        <td>
+                          <div className="completion-cell">
+                            <div className="progress-bar">
+                              <div
+                                className="progress-fill"
+                                style={{ width: `${completionPct}%` }}
+                              />
+                            </div>
+                            <span className="completion-text">
+                              {docsCollected}/{docsRequired}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`sla-badge ${isOverdue ? 'sla-breached' : isAtRisk ? 'sla-at_risk' : 'sla-good'}`}>
+                            {isOverdue ? 'OVERDUE' : isAtRisk ? 'AT RISK' : 'ON TRACK'}
+                          </span>
+                        </td>
+                        <td className="days-waiting">
+                          <span className={daysWaiting > 5 ? 'text-danger' : daysWaiting > 3 ? 'text-warning' : ''}>
+                            {daysWaiting} {daysWaiting === 1 ? 'day' : 'days'}
+                          </span>
+                        </td>
                         <td>
                           <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/loans/${applicant.loan_id}?tab=documents`); }}>
                             View
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
