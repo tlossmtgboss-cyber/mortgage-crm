@@ -18,8 +18,8 @@ const CommunicationPreferences = () => {
   const [testRecipient, setTestRecipient] = useState('');
   const [previewData, setPreviewData] = useState(null);
 
-  const { execute: fetchSettings, loading, error } = useAsyncOperation();
-  const { execute: saveSettings, loading: saving } = useFormSubmit();
+  const { execute: fetchSettings, loading, error } = useAsyncOperation({ showErrorToast: false });
+  const { execute: saveSettings, loading: saving } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
 
   useEffect(() => {
     loadSettings();

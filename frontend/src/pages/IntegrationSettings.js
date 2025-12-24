@@ -16,8 +16,8 @@ const IntegrationSettings = () => {
   const [syncHistory, setSyncHistory] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const { execute: fetchIntegrations, loading, error } = useAsyncOperation();
-  const { execute: saveConfig, loading: saving } = useFormSubmit();
+  const { execute: fetchIntegrations, loading, error } = useAsyncOperation({ showErrorToast: false });
+  const { execute: saveConfig, loading: saving } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
 
   useEffect(() => {
     loadIntegrations();

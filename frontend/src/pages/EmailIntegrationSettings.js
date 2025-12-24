@@ -48,11 +48,11 @@ const EmailIntegrationSettings = () => {
   const [testEmail, setTestEmail] = useState('');
   const [testResult, setTestResult] = useState(null);
 
-  // Async operations
-  const { loading, error, execute: fetchSettings } = useAsyncOperation();
-  const { loading: saving, execute: saveSettings } = useFormSubmit();
-  const { loading: testingEmail, execute: sendTestEmail } = useAsyncOperation();
-  const { loading: verifyingDns, execute: verifyDns } = useAsyncOperation();
+  // Async operations - disable automatic toasts since we handle them manually
+  const { loading, error, execute: fetchSettings } = useAsyncOperation(null, { showErrorToast: false });
+  const { loading: saving, execute: saveSettings } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
+  const { loading: testingEmail, execute: sendTestEmail } = useAsyncOperation(null, { showErrorToast: false });
+  const { loading: verifyingDns, execute: verifyDns } = useAsyncOperation(null, { showErrorToast: false });
 
   // Fetch settings on mount
   useEffect(() => {

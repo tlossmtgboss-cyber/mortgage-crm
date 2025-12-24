@@ -18,9 +18,9 @@ function DocumentUploadSettings() {
   const [testingClassification, setTestingClassification] = useState(false);
   const [classificationResults, setClassificationResults] = useState(null);
 
-  // Async operation hooks
-  const { loading, error, execute: fetchSettings } = useAsyncOperation();
-  const { submitting, execute: saveSettings } = useFormSubmit();
+  // Async operation hooks - disable automatic toasts since we use showToast manually
+  const { loading, error, execute: fetchSettings } = useAsyncOperation({ showErrorToast: false });
+  const { submitting, execute: saveSettings } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
 
   // Toast notification state
   const [toast, setToast] = useState({ show: false, type: '', message: '' });

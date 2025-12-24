@@ -17,8 +17,8 @@ const ClientPortalSettings = () => {
   const [testRecipient, setTestRecipient] = useState('');
   const [colorPreview, setColorPreview] = useState(null);
 
-  const { execute: fetchSettings, loading, error } = useAsyncOperation();
-  const { execute: saveSettings, loading: saving } = useFormSubmit();
+  const { execute: fetchSettings, loading, error } = useAsyncOperation({ showErrorToast: false });
+  const { execute: saveSettings, loading: saving } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
 
   // Fetch settings on mount
   useEffect(() => {

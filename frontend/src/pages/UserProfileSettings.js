@@ -60,11 +60,11 @@ const UserProfileSettings = () => {
   // Timezones
   const [timezones, setTimezones] = useState([]);
 
-  // Async operations
-  const { loading, error, execute: fetchProfile } = useAsyncOperation();
-  const { loading: saving, execute: saveProfile } = useFormSubmit();
-  const { loading: changingPassword, execute: changePassword } = useAsyncOperation();
-  const { loading: uploadingPhoto, execute: uploadPhoto } = useAsyncOperation();
+  // Async operations - disable automatic toasts since we handle them manually in catch blocks
+  const { loading, error, execute: fetchProfile } = useAsyncOperation(null, { showErrorToast: false });
+  const { loading: saving, execute: saveProfile } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
+  const { loading: changingPassword, execute: changePassword } = useAsyncOperation(null, { showErrorToast: false });
+  const { loading: uploadingPhoto, execute: uploadPhoto } = useAsyncOperation(null, { showErrorToast: false });
 
   // Fetch profile on mount
   useEffect(() => {
