@@ -1683,7 +1683,7 @@ function AILandingPage() {
       const API_URL = process.env.REACT_APP_API_URL || '';
 
       // Fetch tasks
-      const tasksResponse = await fetch(`${API_URL}/api/v1/tasks/?limit=50`, {
+      const tasksResponse = await fetch(`${API_URL}/api/v1/tasks?limit=50`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'

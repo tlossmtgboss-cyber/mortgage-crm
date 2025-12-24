@@ -196,7 +196,7 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
               ×
             </button>
             <iframe
-              src="/apply/purchase?embedded=true"
+              src="/apply/purchase?embedded=true&fresh=true"
               title="Purchase Application"
               className="embedded-modal-iframe"
             />
