@@ -1564,6 +1564,101 @@ async def submit_application(
             try:
                 import base64
 
+                # Helper function to format declaration values for display
+                def format_declaration(key, value):
+                    """Format a declaration value to human-readable text."""
+                    if value is None or value == '' or value == 'N/A':
+                        return 'N/A'
+
+                    # Value mappings for better readability
+                    value_maps = {
+                        # Borrower count
+                        '1': 'Just me',
+                        '2': '2 borrowers',
+                        '3': '3 borrowers',
+                        '4+': '4+ borrowers',
+                        # Relationships
+                        'spouse': 'Spouse',
+                        'partner': 'Domestic Partner',
+                        'relative': 'Relative',
+                        'other': 'Other',
+                        # Citizenship
+                        'us_citizen': 'U.S. Citizen',
+                        'permanent_resident': 'Permanent Resident',
+                        'non_permanent_resident': 'Non-Permanent Resident',
+                        'non_resident': 'Non-Resident Alien',
+                        # Yes/No
+                        'yes': 'Yes',
+                        'no': 'No',
+                        # Home status
+                        'sold': 'Sold',
+                        'second_home': 'Keeping as Second Home',
+                        'rental': 'Converting to Rental',
+                        'foreclosed': 'Foreclosed/Short Sale',
+                        # Marital status
+                        'married': 'Married',
+                        'single': 'Single',
+                        'divorced': 'Divorced',
+                        'separated': 'Separated',
+                        'widowed': 'Widowed',
+                        # Support type
+                        'alimony': 'Alimony',
+                        'child_support': 'Child Support',
+                        'both': 'Both',
+                        'none': 'None',
+                        # Veteran status
+                        'active_duty': 'Active Duty',
+                        'veteran': 'Veteran',
+                        'reserves': 'Reserves/National Guard',
+                        'surviving_spouse': 'Surviving Spouse',
+                        # Self-employed
+                        'side_business': 'Yes (Side Business)',
+                        # Business types
+                        'sole_proprietor': 'Sole Proprietor',
+                        'llc': 'LLC',
+                        's_corp': 'S-Corp',
+                        'c_corp': 'C-Corp',
+                        'partnership': 'Partnership',
+                        # IRS status
+                        'payment_plan': 'On Payment Plan',
+                        # Credit app types
+                        'auto': 'Auto Loan',
+                        'credit_card': 'Credit Card',
+                        'personal_loan': 'Personal Loan',
+                        'mortgage': 'Mortgage',
+                        # Gift donors
+                        'parent': 'Parent',
+                        'grandparent': 'Grandparent',
+                        'sibling': 'Sibling',
+                        'employer': 'Employer',
+                        # Bankruptcy types
+                        'chapter_7': 'Chapter 7',
+                        'chapter_13': 'Chapter 13',
+                        'chapter_12': 'Chapter 12',
+                        # Bankruptcy status
+                        'discharged': 'Discharged',
+                        'open': 'Open/Active',
+                        'dismissed': 'Dismissed',
+                    }
+
+                    str_value = str(value).lower()
+                    if str_value in value_maps:
+                        return value_maps[str_value]
+                    # Title case for unknown values
+                    return str(value).replace('_', ' ').title()
+
+                def format_currency_value(value):
+                    """Format a value as currency if it's a number."""
+                    if value is None or value == '' or value == 'N/A':
+                        return 'N/A'
+                    try:
+                        amount = float(value)
+                        if amount > 0:
+                            return f"${amount:,.0f}"
+                        return 'N/A'
+                    except (ValueError, TypeError):
+                        return str(value) if value else 'N/A'
+
                 # Calculate loan amount for email
                 email_purchase_price = float(submission.propertyData.get('purchasePrice', 0) or 0)
                 email_down_payment = float(submission.propertyData.get('downPayment', 0) or 0)
@@ -1614,12 +1709,53 @@ async def submit_application(
                             <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Gift Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${float(submission.assetData.get('giftAmount', 0) or 0):,.0f}</td></tr>
                         </table>
 
-                        <h3 style="color: #218D8D; margin-top: 25px;">📝 DECLARATIONS</h3>
+                        <h3 style="color: #218D8D; margin-top: 25px;">📝 DECLARATIONS & QUESTIONNAIRE RESPONSES</h3>
                         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Citizenship:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('citizenship', 'N/A')}</td></tr>
-                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>First-Time Buyer:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('first_time_buyer', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Borrowers on Loan:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('borrower_count', submission.declarations.get('borrower_count'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Borrower Relationship:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('borrower_relationship', submission.declarations.get('borrower_relationship'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Citizenship Status:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('citizenship_status', submission.declarations.get('citizenship_status'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>First-Time Buyer:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('first_time_buyer', submission.declarations.get('first_time_buyer'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Previous Home Status:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('previous_home_status', submission.declarations.get('previous_home_status'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Previous Home Mortgage:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('previous_home_mortgage', submission.declarations.get('previous_home_mortgage'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Marital Status:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('marital_status', submission.declarations.get('marital_status'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Spouse on Loan:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('spouse_on_loan', submission.declarations.get('spouse_on_loan'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Divorce Status:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('divorce_finalized', submission.declarations.get('divorce_finalized'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Child Support/Alimony:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('child_support_alimony', submission.declarations.get('child_support_alimony'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Monthly Support Received:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_currency_value(submission.declarations.get('support_received_monthly'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Monthly Support Paid:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_currency_value(submission.declarations.get('support_paid_monthly'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Other Real Estate:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('other_real_estate', submission.declarations.get('other_real_estate'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Veteran/Military:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('veteran', submission.declarations.get('veteran'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>VA Loan Used Before:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('va_loan_used', submission.declarations.get('va_loan_used'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>VA Disability Rating:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('va_disability', submission.declarations.get('va_disability'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Self-Employed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('self_employed', submission.declarations.get('self_employed'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Years Self-Employed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('self_employed_years', submission.declarations.get('self_employed_years'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Business Type:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('business_type', submission.declarations.get('business_type'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Prior Year Taxes Filed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('prior_year_taxes_filed', submission.declarations.get('prior_year_taxes_filed'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Maximizes Deductions:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('write_off_expenses', submission.declarations.get('write_off_expenses'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>IRS Balance Owed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('irs_balance_owed', submission.declarations.get('irs_balance_owed'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>IRS Payment Plan Current:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('irs_payment_current', submission.declarations.get('irs_payment_current'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Recent Credit Applications:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('recent_credit_apps', submission.declarations.get('recent_credit_apps'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Credit Application Type:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('credit_app_type', submission.declarations.get('credit_app_type'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Credit App Approved:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('credit_app_approved', submission.declarations.get('credit_app_approved'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Gift Funds:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('gift_funds', submission.declarations.get('gift_funds'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Gift Amount:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_currency_value(submission.declarations.get('gift_amount'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Gift Donor:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('gift_donor', submission.declarations.get('gift_donor'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Property Found:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('found_property', submission.declarations.get('found_property'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Target Closing Date:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('target_closing_date', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Working with Agent:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('working_with_agent', submission.declarations.get('working_with_agent'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Bankruptcy History:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('bankruptcy', submission.declarations.get('bankruptcy'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Bankruptcy Type:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('bankruptcy_type', submission.declarations.get('bankruptcy_type'))}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Bankruptcy Status:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{format_declaration('bankruptcy_status', submission.declarations.get('bankruptcy_status'))}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>E-Consent Agreed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{'Yes' if submission.eConsentAgreed else 'No'}</td></tr>
                             <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Credit Auth Agreed:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{'Yes' if submission.creditAuthAgreed else 'No'}</td></tr>
+                        </table>
+
+                        <h3 style="color: #218D8D; margin-top: 25px;">👥 CO-BORROWER INFORMATION</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; width: 40%;"><strong>Co-Borrower First Name:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('co_borrower_first_name', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Co-Borrower Last Name:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('co_borrower_last_name', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Co-Borrower Email:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('co_borrower_email', 'N/A')}</td></tr>
+                            <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Co-Borrower Phone:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">{submission.declarations.get('co_borrower_phone', 'N/A')}</td></tr>
                         </table>
 
                         <h3 style="color: #218D8D; margin-top: 25px;">📎 ATTACHED DOCUMENTS</h3>
