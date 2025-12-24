@@ -4953,7 +4953,9 @@ from middleware.dynamic_cors import DynamicCORSMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 app.add_middleware(IPBlockingMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=600, requests_per_hour=10000)
+# Rate limiting - high limits for production use
+# TODO: Implement per-user rate limiting instead of per-IP
+app.add_middleware(RateLimitMiddleware, requests_per_minute=5000, requests_per_hour=100000)
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
 
