@@ -103,6 +103,7 @@ const UserProfileSettings = () => {
       }
     } catch (err) {
       console.error('Error loading profile:', err);
+      toast.error('Failed to load profile settings');
     }
   };
 

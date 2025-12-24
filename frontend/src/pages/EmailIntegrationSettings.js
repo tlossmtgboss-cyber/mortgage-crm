@@ -102,6 +102,7 @@ const EmailIntegrationSettings = () => {
       loadEmailStatus();
     } catch (err) {
       console.error('Error loading settings:', err);
+      toast.error('Failed to load email integration settings');
     }
   };
 

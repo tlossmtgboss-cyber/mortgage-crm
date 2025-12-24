@@ -18,7 +18,7 @@ function DocumentUploadSettings() {
   const [testingClassification, setTestingClassification] = useState(false);
   const [classificationResults, setClassificationResults] = useState(null);
 
-  // Async operation hooks - disable automatic toasts since we use showToast manually
+  // Async operation hooks - we use our own showToast for this page
   const { loading, error, execute: fetchSettings } = useAsyncOperation({ showErrorToast: false });
   const { submitting, execute: saveSettings } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
 
@@ -75,6 +75,7 @@ function DocumentUploadSettings() {
 
     } catch (err) {
       console.error('Error loading document upload settings:', err);
+      showToast('error', 'Failed to load document upload settings');
       throw err;
     }
   }, []);

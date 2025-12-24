@@ -18,8 +18,9 @@ const CommunicationPreferences = () => {
   const [testRecipient, setTestRecipient] = useState('');
   const [previewData, setPreviewData] = useState(null);
 
-  const { execute: fetchSettings, loading, error } = useAsyncOperation({ showErrorToast: false });
-  const { execute: saveSettings, loading: saving } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
+  // Hooks handle toast notifications automatically
+  const { execute: fetchSettings, loading, error } = useAsyncOperation();
+  const { execute: saveSettings, loading: saving } = useFormSubmit();
 
   useEffect(() => {
     loadSettings();
@@ -54,7 +55,7 @@ const CommunicationPreferences = () => {
         setOriginalSettings(JSON.parse(JSON.stringify(response.data)));
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to load settings');
+      // Hook handles toast automatically
     }
   };
 
@@ -144,9 +145,9 @@ const CommunicationPreferences = () => {
 
       setOriginalSettings(JSON.parse(JSON.stringify(settings)));
       setHasChanges(false);
-      toast.success('Settings saved successfully');
+      // Hook handles success toast automatically
     } catch (err) {
-      toast.error(err.message || 'Failed to save settings');
+      // Hook handles error toast automatically
     }
   };
 

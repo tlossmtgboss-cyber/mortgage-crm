@@ -71,6 +71,7 @@ function LeadCaptureSettings() {
 
     } catch (err) {
       console.error('Error loading lead capture settings:', err);
+      showToast('error', 'Failed to load lead capture settings');
       throw err;
     }
   }, []);
