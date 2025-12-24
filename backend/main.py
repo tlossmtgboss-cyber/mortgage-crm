@@ -4940,7 +4940,8 @@ app = FastAPI(
     description="Complete mortgage CRM with AI automation - All features implemented",
     version="4.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    redirect_slashes=False  # Prevent HTTP redirects that cause mixed content errors
 )
 
 # CORS - Dynamic custom domain support
