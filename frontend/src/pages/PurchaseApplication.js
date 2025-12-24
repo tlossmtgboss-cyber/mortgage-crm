@@ -1459,6 +1459,77 @@ export default function PurchaseApplication() {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
 
+  // State - All useState declarations must come before useEffect hooks that reference them
+  const [currentStage, setCurrentStage] = useState('account');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [declarations, setDeclarations] = useState({});
+  const [profileData, setProfileData] = useState({});
+  const [residenceHistory, setResidenceHistory] = useState([
+    { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' }
+  ]);
+  const [coBorrowerResidenceHistory, setCoBorrowerResidenceHistory] = useState([
+    { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' }
+  ]);
+  const [incomeData, setIncomeData] = useState({});
+  const [incomeStep, setIncomeStep] = useState(1);
+  const [followupAnswers, setFollowupAnswers] = useState({});
+  const [activeFollowup, setActiveFollowup] = useState(null);
+  const [agentSearch, setAgentSearch] = useState('');
+  const [agentSuggestions, setAgentSuggestions] = useState([]);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [agentInfo, setAgentInfo] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    company: '',
+    partnerId: null
+  });
+  const [propertyStep, setPropertyStep] = useState(1);
+  const [assetData, setAssetData] = useState({});
+  const [propertyData, setPropertyData] = useState({});
+  const [planningData, setPlanningData] = useState({
+    mortgagePriorities: [],
+    personalGoals: [],
+    financialPhilosophy: '',
+    professionalNetwork: [],
+    taxDeferredRetirement: '',
+  });
+  const [needsList, setNeedsList] = useState([]);
+  const [showMicroWin, setShowMicroWin] = useState(false);
+  const [microWinMessage, setMicroWinMessage] = useState('');
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
+  const [scheduleStep, setScheduleStep] = useState(1);
+  const [calendarAssignment, setCalendarAssignment] = useState(null);
+  const [planningStep, setPlanningStep] = useState(1);
+  const [professionalSubStep, setProfessionalSubStep] = useState(1);
+  const [wantProfessionalsInvolved, setWantProfessionalsInvolved] = useState(null);
+  const [professionalContacts, setProfessionalContacts] = useState({});
+  const [wantIntroductions, setWantIntroductions] = useState(null);
+  const [introductionRequests, setIntroductionRequests] = useState([]);
+  const [ssnRaw, setSsnRaw] = useState('');
+  const [ssnDisplay, setSsnDisplay] = useState('');
+  const [currentBorrower, setCurrentBorrower] = useState(1);
+  const [coBorrowerData, setCoBorrowerData] = useState({});
+  const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({});
+  const [currentIncomeBorrower, setCurrentIncomeBorrower] = useState(1);
+  const [coBorrowerSsnRaw, setCoBorrowerSsnRaw] = useState('');
+  const [coBorrowerSsnDisplay, setCoBorrowerSsnDisplay] = useState('');
+  const [paymentEstimate, setPaymentEstimate] = useState(null);
+  const [eConsentAgreed, setEConsentAgreed] = useState(false);
+  const [creditAuthAgreed, setCreditAuthAgreed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
+  const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null);
+  const [employerSuggestions, setEmployerSuggestions] = useState([]);
+  const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
+
+  // Stubs for disabled followup feature
+  const clearFollowup = () => {};
+  const checkForFollowup = async () => null;
+
   // Load saved progress from localStorage on mount
   useEffect(() => {
     const savedData = localStorage.getItem(STORAGE_KEY);
@@ -1507,79 +1578,6 @@ export default function PurchaseApplication() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     setLastSavedAt(new Date());
   }, [declarations, profileData, incomeData, assetData, propertyData, coBorrowerData, coBorrowerIncomeData, currentStage, userAccount, STORAGE_KEY]);
-
-  // State
-  const [currentStage, setCurrentStage] = useState('account');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [declarations, setDeclarations] = useState({});
-  const [profileData, setProfileData] = useState({});
-  const [residenceHistory, setResidenceHistory] = useState([
-    { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' }
-  ]);
-  const [coBorrowerResidenceHistory, setCoBorrowerResidenceHistory] = useState([
-    { street: '', city: '', state: '', zip: '', years: '', months: '', housingStatus: '' }
-  ]);
-  const [incomeData, setIncomeData] = useState({});
-  const [incomeStep, setIncomeStep] = useState(1); // 1 = type selection, 2 = details
-
-  // AI Follow-up questions state (disabled - inline followups removed)
-  const [followupAnswers, setFollowupAnswers] = useState({});
-  const [activeFollowup, setActiveFollowup] = useState(null);
-  const clearFollowup = () => {}; // Stub - followup feature disabled
-  const checkForFollowup = async () => null; // Stub - followup feature disabled
-
-  // Agent autocomplete state
-  const [agentSearch, setAgentSearch] = useState('');
-  const [agentSuggestions, setAgentSuggestions] = useState([]);
-  const [agentLoading, setAgentLoading] = useState(false);
-  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
-  const [agentInfo, setAgentInfo] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    company: '',
-    partnerId: null
-  });
-  const [propertyStep, setPropertyStep] = useState(1); // 1 = type/occupancy, 2 = price/down, 3 = loan program
-  const [assetData, setAssetData] = useState({});
-  const [propertyData, setPropertyData] = useState({});
-  const [planningData, setPlanningData] = useState({
-    mortgagePriorities: [],
-    personalGoals: [],
-    financialPhilosophy: '',
-    professionalNetwork: [],
-    taxDeferredRetirement: '',
-  });
-  const [needsList, setNeedsList] = useState([]);
-  const [showMicroWin, setShowMicroWin] = useState(false);
-  const [microWinMessage, setMicroWinMessage] = useState('');
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
-  const [scheduleStep, setScheduleStep] = useState(1); // 1 = calendar, 2 = video/next steps
-  const [calendarAssignment, setCalendarAssignment] = useState(null); // Calendar assignment for scheduling
-  const [planningStep, setPlanningStep] = useState(1); // 1 = payment calculator, 2-6 for each planning question
-  const [professionalSubStep, setProfessionalSubStep] = useState(1); // 1 = select, 2 = involve?, 3 = contact info, 4 = intro request
-  const [wantProfessionalsInvolved, setWantProfessionalsInvolved] = useState(null); // true/false
-  const [professionalContacts, setProfessionalContacts] = useState({}); // { financial_planner: { name, phone, email }, ... }
-  const [wantIntroductions, setWantIntroductions] = useState(null); // true/false
-  const [introductionRequests, setIntroductionRequests] = useState([]); // ['financial_planner', 'accountant', ...]
-  const [ssnRaw, setSsnRaw] = useState(''); // Raw SSN (digits only)
-  const [ssnDisplay, setSsnDisplay] = useState(''); // Masked display (XXX-XX-1234)
-  const [currentBorrower, setCurrentBorrower] = useState(1); // 1 = primary, 2 = co-borrower
-  const [coBorrowerData, setCoBorrowerData] = useState({}); // Second borrower's profile data
-  const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({}); // Second borrower's income/employment data
-  const [currentIncomeBorrower, setCurrentIncomeBorrower] = useState(1); // 1 = primary, 2 = co-borrower (for income stage)
-  const [coBorrowerSsnRaw, setCoBorrowerSsnRaw] = useState('');
-  const [coBorrowerSsnDisplay, setCoBorrowerSsnDisplay] = useState('');
-  const [paymentEstimate, setPaymentEstimate] = useState(null); // Stores calculated payment data
-  const [eConsentAgreed, setEConsentAgreed] = useState(false); // E-consent agreement tracking
-  const [creditAuthAgreed, setCreditAuthAgreed] = useState(false); // Credit authorization agreement tracking
-  const [isSubmitting, setIsSubmitting] = useState(false); // Application submission loading state
-  const [submitError, setSubmitError] = useState(null); // Application submission error state
-  const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false); // Success lightbox
-  const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null); // Portal URL after submission
-  const [employerSuggestions, setEmployerSuggestions] = useState([]);
-  const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
   // US States for dropdown
   const US_STATES = [
