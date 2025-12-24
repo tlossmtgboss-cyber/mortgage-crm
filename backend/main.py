@@ -5011,6 +5011,14 @@ static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 logger.info(f"✅ Static files mounted at /static from {static_dir.absolute()}")
 
+# Register standardized exception handlers for consistent error responses
+try:
+    from utils.error_handling import register_exception_handlers
+    register_exception_handlers(app)
+    logger.info("✅ Standardized exception handlers registered")
+except Exception as e:
+    logger.warning(f"⚠️ Exception handlers not registered: {e}")
+
 # Auth - Define BEFORE importing routes that use these functions
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -20149,6 +20157,14 @@ try:
     logger.info("✅ Agent Governance routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Agent Governance routes not loaded: {e}")
+
+# Agent Governance Settings routes (Proof-of-concept with comprehensive error handling)
+try:
+    from routes.agent_governance_settings_routes import router as agent_governance_settings_router
+    app.include_router(agent_governance_settings_router, tags=["Agent Governance Settings"])
+    logger.info("✅ Agent Governance Settings routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Agent Governance Settings routes not loaded: {e}")
 
 # Agent Gym routes (Agent Training & Simulation)
 try:

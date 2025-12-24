@@ -238,25 +238,108 @@ async def inbound_email_webhook(
             reply_match = re.search(r'<(conv_[^@]+)@', in_reply_to)
             conversation_id = reply_match.group(1) if reply_match else None
 
-        if not conversation_id:
-            logger.warning(f"Could not determine conversation ID for email from {from_address}")
-            return {"status": "ignored", "reason": "no_conversation_id"}
+        # Variables for conversation context
+        conv_result = None
+        lead_id = None
+        loan_id = None
+        user_id = None
+        context = None
+        is_new_conversation = False
 
-        # Verify conversation exists
-        conv_result = db.execute(text("""
-            SELECT id, user_id, recipient_email, loan_id, lead_id,
-                   conversation_type, context, status
-            FROM ai_email_conversations
-            WHERE conversation_id = :conv_id
-        """), {"conv_id": conversation_id}).fetchone()
+        if conversation_id:
+            # Verify conversation exists
+            conv_result = db.execute(text("""
+                SELECT id, user_id, recipient_email, loan_id, lead_id,
+                       conversation_type, context, status
+                FROM ai_email_conversations
+                WHERE conversation_id = :conv_id
+            """), {"conv_id": conversation_id}).fetchone()
 
+            if conv_result:
+                if conv_result.status == "closed":
+                    logger.info(f"Conversation {conversation_id} is closed")
+                    return {"status": "ignored", "reason": "conversation_closed"}
+                lead_id = conv_result.lead_id
+                loan_id = conv_result.loan_id
+                user_id = conv_result.user_id
+                context = conv_result.context
+
+        # If no existing conversation, create a new one for this fresh inbound email
         if not conv_result:
-            logger.warning(f"Conversation {conversation_id} not found")
-            return {"status": "ignored", "reason": "conversation_not_found"}
+            logger.info(f"Creating new conversation for fresh inbound email from {from_address}")
+            is_new_conversation = True
 
-        if conv_result.status == "closed":
-            logger.info(f"Conversation {conversation_id} is closed")
-            return {"status": "ignored", "reason": "conversation_closed"}
+            # Generate new conversation ID
+            conversation_id = f"conv_{uuid.uuid4().hex[:12]}"
+
+            # Extract sender name from email "Name <email>" format
+            sender_name_match = re.match(r'^([^<]+)\s*<', from_email)
+            sender_name = sender_name_match.group(1).strip() if sender_name_match else from_address.split('@')[0]
+
+            # Try to find existing lead by email
+            existing_lead = db.execute(text("""
+                SELECT id, first_name, last_name, owner_id
+                FROM leads
+                WHERE email = :email
+                ORDER BY created_at DESC
+                LIMIT 1
+            """), {"email": from_address}).fetchone()
+
+            if existing_lead:
+                lead_id = existing_lead.id
+                user_id = existing_lead.owner_id
+                sender_name = f"{existing_lead.first_name or ''} {existing_lead.last_name or ''}".strip() or sender_name
+                logger.info(f"Matched inbound email to existing lead {lead_id}")
+            else:
+                # Create a new lead for this email
+                # Extract first/last name from sender name
+                name_parts = sender_name.split(' ', 1)
+                first_name = name_parts[0] if name_parts else sender_name
+                last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+                # Get default user (first admin or system user)
+                default_user = db.execute(text("""
+                    SELECT id FROM users
+                    WHERE role IN ('admin', 'owner', 'loan_officer')
+                    ORDER BY id ASC
+                    LIMIT 1
+                """)).fetchone()
+                user_id = default_user.id if default_user else 1
+
+                # Create new lead
+                db.execute(text("""
+                    INSERT INTO leads (first_name, last_name, email, source, status, owner_id, created_at, updated_at)
+                    VALUES (:first_name, :last_name, :email, 'inbound_email', 'new', :owner_id, NOW(), NOW())
+                """), {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": from_address,
+                    "owner_id": user_id
+                })
+
+                # Get the new lead ID
+                new_lead = db.execute(text("""
+                    SELECT id FROM leads WHERE email = :email ORDER BY id DESC LIMIT 1
+                """), {"email": from_address}).fetchone()
+                lead_id = new_lead.id if new_lead else None
+                logger.info(f"Created new lead {lead_id} from inbound email")
+
+            # Create the new conversation
+            db.execute(text("""
+                INSERT INTO ai_email_conversations
+                (conversation_id, user_id, recipient_email, recipient_name,
+                 lead_id, conversation_type, status, message_count, created_at, last_message_at)
+                VALUES (:conv_id, :user_id, :email, :name,
+                        :lead_id, 'inbound_inquiry', 'active', 0, NOW(), NOW())
+            """), {
+                "conv_id": conversation_id,
+                "user_id": user_id,
+                "email": from_address,
+                "name": sender_name,
+                "lead_id": lead_id
+            })
+
+            logger.info(f"Created new conversation {conversation_id} for {from_address}")
 
         # Clean the reply text (remove quoted content)
         clean_reply = clean_email_reply(text_body)
@@ -295,12 +378,13 @@ async def inbound_email_webhook(
             clean_reply,
             from_address,
             subject,
-            conv_result.context,
-            conv_result.loan_id,
-            conv_result.lead_id
+            context,
+            loan_id,
+            lead_id
         )
 
-        return {"status": "received", "conversation_id": conversation_id}
+        status_msg = "new_conversation" if is_new_conversation else "received"
+        return {"status": status_msg, "conversation_id": conversation_id, "lead_id": lead_id}
 
     except Exception as e:
         logger.error(f"Error processing inbound email: {e}")
