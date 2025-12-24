@@ -3500,7 +3500,6 @@ export default function RefinanceApplication() {
     return (
       <div className="stage-content" style={{ maxWidth: '500px', margin: '0 auto', padding: '40px 20px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏠</div>
           <h2 style={{ fontSize: '28px', fontWeight: '600', color: '#1a365d', marginBottom: '8px' }}>
             Let's Get Started
           </h2>
@@ -3712,6 +3711,7 @@ export default function RefinanceApplication() {
         </main>
 
         {/* Documents Sidebar - Reveals progressively as application is completed */}
+        {currentStage !== 'account-creation' && (
         <aside className="documents-sidebar">
         <div className="sidebar-header">
           <Icon name="document" size={20} />
@@ -3780,6 +3780,7 @@ export default function RefinanceApplication() {
           <span>Documents can be uploaded after you submit your application</span>
         </div>
       </aside>
+        )}
       </div>
 
       {currentStage !== 'declarations' && needsList.length > 0 && (

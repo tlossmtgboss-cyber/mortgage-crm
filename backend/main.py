@@ -34730,12 +34730,15 @@ async def debug_send_real_email(
 </html>
 """
 
-        # Send the email
+        # Send the email with correct FROM address
+        ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
         email_sent = email_service.send_html_email(
             to_email=to_email,
             subject=f"RE: Your Mortgage Inquiry - Perennia AI Assistant",
             html_body=html_body,
-            plain_text_body=f"Hello {sender_name}!\n\nYour message: {message}\n\nAI Response:\n{result['response']}\n\nReply to continue the conversation.\n\n- Perennia AI"
+            plain_text_body=f"Hello {sender_name}!\n\nYour message: {message}\n\nAI Response:\n{result['response']}\n\nReply to continue the conversation.\n\n- Perennia AI",
+            from_email=ai_from_email,
+            reply_to=ai_from_email
         )
 
         return {
@@ -35103,11 +35106,14 @@ Subject: {subject}
                             }]
 
                             # Send email to loan officer
+                            ai_from_email_lo = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
                             lo_email_sent = email_service.send_html_email(
                                 to_email=lo_email,
                                 subject=lo_subject,
                                 html_body=lo_html,
-                                attachments=lo_attachments
+                                attachments=lo_attachments,
+                                from_email=ai_from_email_lo,
+                                reply_to=ai_from_email_lo
                             )
                             lo_invite_sent = lo_email_sent
                             logger.info(f"LO notification sent to {lo_email}: {lo_email_sent}")
@@ -35119,12 +35125,15 @@ Subject: {subject}
                     logger.warning(f"Could not generate ICS: {ics_err}")
 
             # Send the response (with ICS attachment if booking)
+            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
             email_sent = email_service.send_html_email(
                 to_email=sender_email,
                 subject=reply_subject,
                 html_body=html_response,
                 plain_text_body=plain_text_response,
-                attachments=attachments
+                attachments=attachments,
+                from_email=ai_from_email,
+                reply_to=ai_from_email
             )
 
             logger.info(f"AI response sent to {sender_email}: {email_sent} (with_ics={calendar_invite_sent})")
@@ -35245,11 +35254,14 @@ async def simulate_email_reply(
 </html>
 """
 
+            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
             email_sent = email_service.send_html_email(
                 to_email=sender_email,
                 subject=f"Re: Your Mortgage Inquiry - Perennia AI",
                 html_body=html_response,
-                plain_text_body=f"Hi {sender_name},\n\nYou said: {reply_message}\n\nAI Response:\n{result['response']}\n\nQualification: {result['qualification']['completion_percentage']:.0f}%\n\n- Perennia AI"
+                plain_text_body=f"Hi {sender_name},\n\nYou said: {reply_message}\n\nAI Response:\n{result['response']}\n\nQualification: {result['qualification']['completion_percentage']:.0f}%\n\n- Perennia AI",
+                from_email=ai_from_email,
+                reply_to=ai_from_email
             )
 
             return {
@@ -35411,11 +35423,14 @@ If you received this, email delivery is working!
 
 - Perennia AI Team"""
 
+        ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
         email_sent = email_service.send_html_email(
             to_email=to_email,
             subject=f"{test_subject} - ID:{test_id}",
             html_body=html_body,
-            plain_text_body=plain_text
+            plain_text_body=plain_text,
+            from_email=ai_from_email,
+            reply_to=ai_from_email
         )
 
         return {

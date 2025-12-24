@@ -381,14 +381,18 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
     lead_id = input_data.get("lead_id")
     is_html = input_data.get("is_html", False)
 
-    # Send the actual email
+    # Send the actual email with correct FROM address
+    import os
+    ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
     try:
         if is_html:
             success = email_service.send_html_email(
                 to_email=to_email,
                 subject=subject,
                 html_body=body,
-                plain_text_body=input_data.get("plain_text_body")
+                plain_text_body=input_data.get("plain_text_body"),
+                from_email=ai_from_email,
+                reply_to=ai_from_email
             )
         else:
             # Convert plain text to simple HTML
@@ -397,7 +401,9 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
                 to_email=to_email,
                 subject=subject,
                 html_body=html_body,
-                plain_text_body=body
+                plain_text_body=body,
+                from_email=ai_from_email,
+                reply_to=ai_from_email
             )
     except Exception as e:
         return {

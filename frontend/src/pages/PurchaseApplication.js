@@ -5197,6 +5197,7 @@ export default function PurchaseApplication() {
         </main>
 
         {/* Documents Sidebar - Reveals progressively as application is completed */}
+        {currentStage !== 'account-creation' && (
         <aside className="documents-sidebar">
           <div className="sidebar-header">
             <Icon name="document" size={20} />
@@ -5272,6 +5273,7 @@ export default function PurchaseApplication() {
             <span>You can upload documents after submitting your application</span>
           </div>
         </aside>
+        )}
       </div>
 
       {/* Submission Success Lightbox */}

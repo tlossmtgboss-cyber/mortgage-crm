@@ -63,6 +63,8 @@ async def process_drip_campaigns(db_session):
                 # Send based on channel
                 success = False
                 if assignment["channel"] == "email" and assignment["email"]:
+                    import os
+                    ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
                     html_body = f"""<!DOCTYPE html>
 <html><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
 {message.replace(chr(10), '<br>')}
@@ -72,7 +74,9 @@ async def process_drip_campaigns(db_session):
                         to_email=assignment["email"],
                         subject=subject or "Message from Perennia AI",
                         html_body=html_body,
-                        plain_text_body=message
+                        plain_text_body=message,
+                        from_email=ai_from_email,
+                        reply_to=ai_from_email
                     )
 
                 elif assignment["channel"] == "sms" and assignment["phone"]:

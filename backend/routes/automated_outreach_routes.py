@@ -849,7 +849,9 @@ async def execute_trigger(
                 # Send based on channel
                 if trigger["channel"] == "email" and email:
                     from email_service import EmailService
+                    import os
                     email_service = EmailService()
+                    ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
 
                     html_body = f"""<!DOCTYPE html>
 <html><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
@@ -860,7 +862,9 @@ async def execute_trigger(
                         to_email=email,
                         subject=subject or "Message from Perennia AI",
                         html_body=html_body,
-                        plain_text_body=message
+                        plain_text_body=message,
+                        from_email=ai_from_email,
+                        reply_to=ai_from_email
                     )
                     executed += 1
                     logger.info(f"Trigger {trigger['id']} sent email to {email}")
