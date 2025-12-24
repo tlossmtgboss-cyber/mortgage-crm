@@ -167,6 +167,8 @@ def create_smart_scheduler_models(Base):
         ai_scheduling_enabled = Column(Boolean, default=True)
         ai_can_reschedule = Column(Boolean, default=True)
         ai_can_cancel = Column(Boolean, default=False)
+        auto_reschedule_enabled = Column(Boolean, default=True)
+        smart_reminders_enabled = Column(Boolean, default=True)
 
         # Landing page customization settings (JSON)
         landing_page_settings = Column(JSON, default={})

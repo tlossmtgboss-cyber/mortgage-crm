@@ -964,6 +964,8 @@ class SchedulerConfigUpdate(BaseModel):
     working_hours: Optional[Dict[str, WorkingHoursDay]] = None
     routing_strategy: Optional[str] = None
     ai_scheduling_enabled: Optional[bool] = None
+    auto_reschedule_enabled: Optional[bool] = None
+    smart_reminders_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
 
 

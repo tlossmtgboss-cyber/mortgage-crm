@@ -54861,6 +54861,22 @@ async def startup_event():
             except Exception as lps_e:
                 logger.warning(f"⚠️ Landing page settings column migration skipped: {lps_e}")
 
+            # Add auto_reschedule_enabled and smart_reminders_enabled columns to scheduler_configs
+            try:
+                db_temp = SessionLocal()
+                for col_name in ['auto_reschedule_enabled', 'smart_reminders_enabled']:
+                    result = db_temp.execute(text(f"""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'scheduler_configs' AND column_name = '{col_name}'
+                    """))
+                    if not result.fetchone():
+                        db_temp.execute(text(f"ALTER TABLE scheduler_configs ADD COLUMN {col_name} BOOLEAN DEFAULT TRUE"))
+                        db_temp.commit()
+                        logger.info(f"✅ Added '{col_name}' column to scheduler_configs table")
+                db_temp.close()
+            except Exception as ai_cols_e:
+                logger.warning(f"⚠️ AI settings columns migration skipped: {ai_cols_e}")
+
             # Add document type and category enum values for e-sign documents
             try:
                 engine = SessionLocal().get_bind()
