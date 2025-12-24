@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAuthHeaders } from '../utils/auth';
+import CalendarManagement from './CalendarManagement';
 import './SmartScheduler.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -9,7 +10,7 @@ const API_BASE = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType }) => {
-  const [view, setView] = useState('types'); // types, booking-links, settings, reminders, tutorial
+  const [view, setView] = useState('types'); // types, booking-links, settings, reminders, landing-page, calendar-management, tutorial
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -2338,6 +2339,12 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
             Settings
           </button>
           <button
+            className={`tab ${view === 'calendar-management' ? 'active' : ''}`}
+            onClick={() => setView('calendar-management')}
+          >
+            Calendar Management
+          </button>
+          <button
             className={`tab tutorial-tab ${view === 'tutorial' ? 'active' : ''}`}
             onClick={() => setView('tutorial')}
           >
@@ -2362,6 +2369,7 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
         {view === 'reminders' && renderRemindersView()}
         {view === 'landing-page' && renderLandingPageView()}
         {view === 'settings' && renderSettingsView()}
+        {view === 'calendar-management' && <CalendarManagement />}
         {view === 'tutorial' && renderTutorialView()}
       </div>
 

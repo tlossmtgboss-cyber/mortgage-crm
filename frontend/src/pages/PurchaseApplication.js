@@ -1228,6 +1228,7 @@ export default function PurchaseApplication() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [scheduleStep, setScheduleStep] = useState(1); // 1 = calendar, 2 = video/next steps
+  const [calendarAssignment, setCalendarAssignment] = useState(null); // Calendar assignment for scheduling
   const [planningStep, setPlanningStep] = useState(1); // 1 = payment calculator, 2-6 for each planning question
   const [professionalSubStep, setProfessionalSubStep] = useState(1); // 1 = select, 2 = involve?, 3 = contact info, 4 = intro request
   const [wantProfessionalsInvolved, setWantProfessionalsInvolved] = useState(null); // true/false
@@ -1327,6 +1328,22 @@ export default function PurchaseApplication() {
       setPlanningStep(1); // Step 1 is the payment calculator
     }
   }, [searchParams]);
+
+  // Fetch calendar assignment for scheduling
+  useEffect(() => {
+    const fetchCalendarAssignment = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/calendar-assignments/purchase_application`);
+        if (response.ok) {
+          const data = await response.json();
+          setCalendarAssignment(data);
+        }
+      } catch (err) {
+        console.error('Error fetching calendar assignment:', err);
+      }
+    };
+    fetchCalendarAssignment();
+  }, [API_URL]);
 
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
@@ -3938,6 +3955,9 @@ export default function PurchaseApplication() {
 
     // Step 1: Calendar selection
     if (scheduleStep === 1) {
+      // Check if Calendly is configured for this application type
+      const calendlyUrl = calendarAssignment?.calendly_url;
+
       return (
         <div className="stage-content scheduling-page">
           <div className="scheduling-header">
@@ -3946,35 +3966,62 @@ export default function PurchaseApplication() {
           </div>
 
           <div className="calendar-section">
-            <div className="calendar-placeholder">
-              <span className="cal-icon"><Icon name="calendar" size={48} /></span>
-              <h4>Pick a Time That Works For You</h4>
-              <p>We want to coordinate a time to review the application with you. Choose a time that is most convenient for you.</p>
-
-              <div className="time-slots">
-                {timeSlots.map(slot => (
-                  <div
-                    key={slot.id}
-                    className={`time-slot ${selectedTimeSlot === slot.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedTimeSlot(slot.id)}
+            {calendlyUrl ? (
+              // Show Calendly embed when configured
+              <div className="calendly-embed-container">
+                <iframe
+                  src={`${calendlyUrl}?hide_gdpr_banner=1&hide_event_type_details=1`}
+                  width="100%"
+                  height="630"
+                  frameBorder="0"
+                  title="Schedule Consultation"
+                  style={{ minWidth: '320px', borderRadius: '8px' }}
+                ></iframe>
+                <div className="calendly-skip-option">
+                  <p>After scheduling, click Continue to proceed with your application.</p>
+                  <button
+                    className="btn-schedule"
+                    onClick={() => {
+                      showMicroWinAnimation('Moving to next step!');
+                      setScheduleStep(2);
+                    }}
                   >
-                    <div className="time-slot-time">{slot.time}</div>
-                    <div className="time-slot-date">{slot.date}</div>
-                  </div>
-                ))}
+                    Continue →
+                  </button>
+                </div>
               </div>
+            ) : (
+              // Fallback to mock time slots when no Calendly configured
+              <div className="calendar-placeholder">
+                <span className="cal-icon"><Icon name="calendar" size={48} /></span>
+                <h4>Pick a Time That Works For You</h4>
+                <p>We want to coordinate a time to review the application with you. Choose a time that is most convenient for you.</p>
 
-              <button
-                className="btn-schedule"
-                disabled={!selectedTimeSlot}
-                onClick={() => {
-                  showMicroWinAnimation('Consultation Scheduled!');
-                  setScheduleStep(2);
-                }}
-              >
-                {selectedTimeSlot ? 'Confirm Appointment' : 'Select a Time Slot'}
-              </button>
-            </div>
+                <div className="time-slots">
+                  {timeSlots.map(slot => (
+                    <div
+                      key={slot.id}
+                      className={`time-slot ${selectedTimeSlot === slot.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedTimeSlot(slot.id)}
+                    >
+                      <div className="time-slot-time">{slot.time}</div>
+                      <div className="time-slot-date">{slot.date}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="btn-schedule"
+                  disabled={!selectedTimeSlot}
+                  onClick={() => {
+                    showMicroWinAnimation('Consultation Scheduled!');
+                    setScheduleStep(2);
+                  }}
+                >
+                  {selectedTimeSlot ? 'Confirm Appointment' : 'Select a Time Slot'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="stage-navigation">

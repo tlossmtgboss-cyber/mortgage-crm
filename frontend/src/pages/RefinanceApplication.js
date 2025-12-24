@@ -1254,6 +1254,7 @@ export default function RefinanceApplication() {
   const [eConsentAgreed, setEConsentAgreed] = useState(false);
   const [creditAuthAgreed, setCreditAuthAgreed] = useState(false);
   const [scheduleStep, setScheduleStep] = useState(1);
+  const [calendarAssignment, setCalendarAssignment] = useState(null); // Calendar assignment for scheduling
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
@@ -1302,6 +1303,22 @@ export default function RefinanceApplication() {
       return () => clearTimeout(redirectTimer);
     }
   }, [showSubmissionSuccess, portalUrlForRedirect]);
+
+  // Fetch calendar assignment for scheduling
+  useEffect(() => {
+    const fetchCalendarAssignment = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/calendar-assignments/refinance_application`);
+        if (response.ok) {
+          const data = await response.json();
+          setCalendarAssignment(data);
+        }
+      } catch (err) {
+        console.error('Error fetching calendar assignment:', err);
+      }
+    };
+    fetchCalendarAssignment();
+  }, [API_URL]);
 
   // AI Follow-up questions state (disabled - inline followups removed)
   const [followupAnswers, setFollowupAnswers] = useState({});
@@ -2938,10 +2955,90 @@ export default function RefinanceApplication() {
     return slots.slice(0, 12);
   };
 
-  // Render schedule stage with e-consent and credit authorization
+  // Render schedule stage with calendar, e-consent and credit authorization
   const renderScheduleStage = () => {
-    // Step 1: E-Consent Page
+    const timeSlots = generateTimeSlots();
+
+    // Step 1: Calendar Selection
     if (scheduleStep === 1) {
+      // Check if Calendly is configured for this application type
+      const calendlyUrl = calendarAssignment?.calendly_url;
+
+      return (
+        <div className="stage-content scheduling-page">
+          <div className="scheduling-header">
+            <h2>Schedule Your Consultation</h2>
+            <p>Let's find a time that works for you to discuss your refinance options.</p>
+          </div>
+
+          <div className="calendar-section">
+            {calendlyUrl ? (
+              // Show Calendly embed when configured
+              <div className="calendly-embed-container">
+                <iframe
+                  src={`${calendlyUrl}?hide_gdpr_banner=1&hide_event_type_details=1`}
+                  width="100%"
+                  height="630"
+                  frameBorder="0"
+                  title="Schedule Consultation"
+                  style={{ minWidth: '320px', borderRadius: '8px' }}
+                ></iframe>
+                <div className="calendly-skip-option">
+                  <p>After scheduling, click Continue to proceed with your application.</p>
+                  <button
+                    className="btn-schedule"
+                    onClick={() => {
+                      showMicroWinAnimation('Moving to next step!');
+                      setScheduleStep(2);
+                    }}
+                  >
+                    Continue →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Fallback to mock time slots when no Calendly configured
+              <div className="calendar-placeholder">
+                <span className="cal-icon"><Icon name="calendar" size={48} /></span>
+                <h4>Pick a Time That Works For You</h4>
+                <p>We want to coordinate a time to review your refinance options. Choose a time that is most convenient for you.</p>
+
+                <div className="time-slots">
+                  {timeSlots.map(slot => (
+                    <div
+                      key={slot.id}
+                      className={`time-slot ${selectedTimeSlot === slot.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedTimeSlot(slot.id)}
+                    >
+                      <div className="time-slot-time">{slot.time}</div>
+                      <div className="time-slot-date">{slot.date}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="btn-schedule"
+                  disabled={!selectedTimeSlot}
+                  onClick={() => {
+                    showMicroWinAnimation('Consultation Scheduled!');
+                    setScheduleStep(2);
+                  }}
+                >
+                  {selectedTimeSlot ? 'Confirm Appointment' : 'Select a Time Slot'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="stage-navigation">
+            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+          </div>
+        </div>
+      );
+    }
+
+    // Step 2: E-Consent Page
+    if (scheduleStep === 2) {
       return (
         <div className="stage-content scheduling-page">
           <div className="scheduling-header">
@@ -3070,11 +3167,11 @@ export default function RefinanceApplication() {
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={goToPrevStage}>← Back</button>
+            <button className="btn-back" onClick={() => setScheduleStep(1)}>← Back</button>
             <button
               className="btn-continue"
               disabled={!eConsentAgreed}
-              onClick={() => setScheduleStep(2)}
+              onClick={() => setScheduleStep(3)}
             >
               {eConsentAgreed ? 'Continue →' : 'Please Accept E-Consent to Continue'}
             </button>
@@ -3083,8 +3180,8 @@ export default function RefinanceApplication() {
       );
     }
 
-    // Step 2: Credit Authorization Page
-    if (scheduleStep === 2) {
+    // Step 3: Credit Authorization Page
+    if (scheduleStep === 3) {
       return (
         <div className="stage-content scheduling-page">
           <div className="scheduling-header">
@@ -3158,7 +3255,7 @@ export default function RefinanceApplication() {
           </div>
 
           <div className="stage-navigation">
-            <button className="btn-back" onClick={() => setScheduleStep(1)} disabled={isSubmitting}>← Back</button>
+            <button className="btn-back" onClick={() => setScheduleStep(2)} disabled={isSubmitting}>← Back</button>
           </div>
         </div>
       );

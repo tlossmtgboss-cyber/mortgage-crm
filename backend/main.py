@@ -445,6 +445,23 @@ class UserSettings(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__ = (UniqueConstraint('user_id', 'setting_key', name='uix_user_setting'),)
 
+class CalendarAssignment(Base):
+    """Calendar assignments for different purposes in the application"""
+    __tablename__ = "calendar_assignments"
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    purpose = Column(String, nullable=False, index=True)  # e.g., 'purchase_application', 'refinance_application', 'lead_consultation'
+    purpose_label = Column(String, nullable=True)  # Human-readable label
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # User whose calendar to use
+    calendly_url = Column(String, nullable=True)  # Direct Calendly URL if not using user's calendar
+    booking_link_id = Column(Integer, nullable=True)  # Smart Scheduler booking link ID
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    # Relationships
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
+    __table_args__ = (UniqueConstraint('organization_id', 'purpose', name='uix_org_calendar_purpose'),)
+
 class EmailSignature(Base):
     """Email signature configuration for users"""
     __tablename__ = "email_signatures"
@@ -4641,6 +4658,49 @@ class CalendarEventResponse(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+# ============================================================================
+# CALENDAR ASSIGNMENT SCHEMAS
+# ============================================================================
+
+class CalendarAssignmentCreate(BaseModel):
+    purpose: str
+    purpose_label: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+    calendly_url: Optional[str] = None
+    booking_link_id: Optional[int] = None
+    is_active: bool = True
+
+class CalendarAssignmentUpdate(BaseModel):
+    purpose_label: Optional[str] = None
+    assigned_user_id: Optional[int] = None
+    calendly_url: Optional[str] = None
+    booking_link_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class CalendarAssignmentResponse(BaseModel):
+    id: int
+    purpose: str
+    purpose_label: Optional[str]
+    assigned_user_id: Optional[int]
+    assigned_user_name: Optional[str] = None
+    calendly_url: Optional[str]
+    booking_link_id: Optional[int]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+# Default calendar purposes that can be assigned
+CALENDAR_PURPOSES = [
+    {"purpose": "purchase_application", "label": "Purchase Application Scheduling"},
+    {"purpose": "refinance_application", "label": "Refinance Application Scheduling"},
+    {"purpose": "lead_consultation", "label": "Lead Consultation"},
+    {"purpose": "document_review", "label": "Document Review Call"},
+    {"purpose": "closing_call", "label": "Closing Preparation Call"},
+    {"purpose": "general_appointment", "label": "General Appointment"},
+]
 
 # ============================================================================
 # DATA RECONCILIATION ENGINE SCHEMAS
@@ -46136,6 +46196,245 @@ async def delete_event(
 
     logger.info(f"Calendar event deleted: {event.title}")
     return None
+
+# ============================================================================
+# CALENDAR ASSIGNMENT API
+# ============================================================================
+
+@app.get("/api/v1/calendar-assignments/purposes")
+async def get_calendar_purposes():
+    """Get list of all calendar purposes that can be assigned"""
+    return CALENDAR_PURPOSES
+
+@app.get("/api/v1/calendar-assignments", response_model=List[CalendarAssignmentResponse])
+async def get_calendar_assignments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all calendar assignments for the organization"""
+    assignments = db.query(CalendarAssignment).filter(
+        or_(
+            CalendarAssignment.organization_id == current_user.organization_id,
+            CalendarAssignment.organization_id == None
+        )
+    ).all()
+
+    # Enrich with user names
+    result = []
+    for assignment in assignments:
+        data = {
+            "id": assignment.id,
+            "purpose": assignment.purpose,
+            "purpose_label": assignment.purpose_label,
+            "assigned_user_id": assignment.assigned_user_id,
+            "assigned_user_name": None,
+            "calendly_url": assignment.calendly_url,
+            "booking_link_id": assignment.booking_link_id,
+            "is_active": assignment.is_active,
+            "created_at": assignment.created_at,
+            "updated_at": assignment.updated_at,
+        }
+        if assignment.assigned_user_id:
+            user = db.query(User).filter(User.id == assignment.assigned_user_id).first()
+            if user:
+                data["assigned_user_name"] = user.full_name
+        result.append(data)
+
+    return result
+
+@app.get("/api/v1/calendar-assignments/{purpose}")
+async def get_calendar_assignment_by_purpose(
+    purpose: str,
+    db: Session = Depends(get_db)
+):
+    """Get calendar assignment for a specific purpose (public endpoint for applications)"""
+    assignment = db.query(CalendarAssignment).filter(
+        CalendarAssignment.purpose == purpose,
+        CalendarAssignment.is_active == True
+    ).first()
+
+    if not assignment:
+        # Return default - no specific assignment
+        return {
+            "purpose": purpose,
+            "assigned_user_id": None,
+            "calendly_url": None,
+            "booking_link_id": None,
+            "assigned_user_name": None,
+            "assigned_user_calendly": None
+        }
+
+    result = {
+        "purpose": purpose,
+        "assigned_user_id": assignment.assigned_user_id,
+        "calendly_url": assignment.calendly_url,
+        "booking_link_id": assignment.booking_link_id,
+        "assigned_user_name": None,
+        "assigned_user_calendly": None
+    }
+
+    # Get user's Calendly URL if assigned to a user
+    if assignment.assigned_user_id:
+        user = db.query(User).filter(User.id == assignment.assigned_user_id).first()
+        if user:
+            result["assigned_user_name"] = user.full_name
+            # Try to get user's Calendly integration
+            try:
+                from routes.calendly_routes import get_calendly_integration_for_user
+                calendly = get_calendly_integration_for_user(db, assignment.assigned_user_id)
+                if calendly and calendly.get("scheduling_url"):
+                    result["assigned_user_calendly"] = calendly["scheduling_url"]
+            except:
+                pass
+
+    return result
+
+@app.post("/api/v1/calendar-assignments", response_model=CalendarAssignmentResponse, status_code=201)
+async def create_calendar_assignment(
+    assignment_data: CalendarAssignmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new calendar assignment"""
+    # Check if assignment already exists for this purpose
+    existing = db.query(CalendarAssignment).filter(
+        CalendarAssignment.organization_id == current_user.organization_id,
+        CalendarAssignment.purpose == assignment_data.purpose
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Assignment already exists for this purpose. Use PUT to update.")
+
+    assignment = CalendarAssignment(
+        organization_id=current_user.organization_id,
+        purpose=assignment_data.purpose,
+        purpose_label=assignment_data.purpose_label,
+        assigned_user_id=assignment_data.assigned_user_id,
+        calendly_url=assignment_data.calendly_url,
+        booking_link_id=assignment_data.booking_link_id,
+        is_active=assignment_data.is_active
+    )
+
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+
+    # Get user name
+    assigned_user_name = None
+    if assignment.assigned_user_id:
+        user = db.query(User).filter(User.id == assignment.assigned_user_id).first()
+        if user:
+            assigned_user_name = user.full_name
+
+    logger.info(f"Calendar assignment created: {assignment.purpose} -> user {assignment.assigned_user_id}")
+
+    return {
+        **assignment.__dict__,
+        "assigned_user_name": assigned_user_name
+    }
+
+@app.put("/api/v1/calendar-assignments/{assignment_id}", response_model=CalendarAssignmentResponse)
+async def update_calendar_assignment(
+    assignment_id: int,
+    assignment_data: CalendarAssignmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a calendar assignment"""
+    assignment = db.query(CalendarAssignment).filter(
+        CalendarAssignment.id == assignment_id
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    # Update fields
+    if assignment_data.purpose_label is not None:
+        assignment.purpose_label = assignment_data.purpose_label
+    if assignment_data.assigned_user_id is not None:
+        assignment.assigned_user_id = assignment_data.assigned_user_id
+    if assignment_data.calendly_url is not None:
+        assignment.calendly_url = assignment_data.calendly_url
+    if assignment_data.booking_link_id is not None:
+        assignment.booking_link_id = assignment_data.booking_link_id
+    if assignment_data.is_active is not None:
+        assignment.is_active = assignment_data.is_active
+
+    db.commit()
+    db.refresh(assignment)
+
+    # Get user name
+    assigned_user_name = None
+    if assignment.assigned_user_id:
+        user = db.query(User).filter(User.id == assignment.assigned_user_id).first()
+        if user:
+            assigned_user_name = user.full_name
+
+    logger.info(f"Calendar assignment updated: {assignment.purpose}")
+
+    return {
+        **assignment.__dict__,
+        "assigned_user_name": assigned_user_name
+    }
+
+@app.delete("/api/v1/calendar-assignments/{assignment_id}", status_code=204)
+async def delete_calendar_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a calendar assignment"""
+    assignment = db.query(CalendarAssignment).filter(
+        CalendarAssignment.id == assignment_id
+    ).first()
+
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    db.delete(assignment)
+    db.commit()
+
+    logger.info(f"Calendar assignment deleted: {assignment.purpose}")
+    return None
+
+@app.get("/api/v1/users/with-calendars")
+async def get_users_with_calendars(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get list of users who can receive calendar appointments"""
+    users = db.query(User).filter(
+        User.is_active == True,
+        or_(
+            User.organization_id == current_user.organization_id,
+            User.organization_id == None
+        )
+    ).all()
+
+    result = []
+    for user in users:
+        user_data = {
+            "id": user.id,
+            "name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "has_calendly": False,
+            "calendly_url": None
+        }
+
+        # Check if user has Calendly connected
+        try:
+            from routes.calendly_routes import get_calendly_integration_for_user
+            calendly = get_calendly_integration_for_user(db, user.id)
+            if calendly:
+                user_data["has_calendly"] = True
+                user_data["calendly_url"] = calendly.get("scheduling_url")
+        except:
+            pass
+
+        result.append(user_data)
+
+    return result
 
 # ============================================================================
 # DATABASE INITIALIZATION
