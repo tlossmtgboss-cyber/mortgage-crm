@@ -20227,6 +20227,33 @@ try:
 except Exception as e:
     logger.warning(f"Communication Preferences routes not loaded: {e}")
 
+# Integration Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.integration_settings_routes import router as integration_settings_router, set_dependencies as set_integration_deps
+    set_integration_deps(User, get_current_user, get_db)
+    app.include_router(integration_settings_router, tags=["Integration Settings"])
+    logger.info("Integration Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Integration Settings routes not loaded: {e}")
+
+# API Keys Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.api_keys_settings_routes import router as api_keys_settings_router, set_dependencies as set_api_keys_deps
+    set_api_keys_deps(User, get_current_user, get_db)
+    app.include_router(api_keys_settings_router, tags=["API Keys Settings"])
+    logger.info("API Keys Settings routes loaded")
+except Exception as e:
+    logger.warning(f"API Keys Settings routes not loaded: {e}")
+
+# Company Branding Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.company_branding_routes import router as company_branding_router, set_dependencies as set_company_branding_deps
+    set_company_branding_deps(User, get_current_user, get_db)
+    app.include_router(company_branding_router, tags=["Company & Branding"])
+    logger.info("Company Branding Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Company Branding Settings routes not loaded: {e}")
+
 # Agent Gym routes (Agent Training & Simulation)
 try:
     from routes.agent_gym_routes import router as agent_gym_router

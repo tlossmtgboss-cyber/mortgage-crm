@@ -132,6 +132,9 @@ const DocumentUploadSettings = lazy(() => import('./pages/DocumentUploadSettings
 const LeadCaptureSettings = lazy(() => import('./pages/LeadCaptureSettings'));
 const ClientPortalSettings = lazy(() => import('./pages/ClientPortalSettings'));
 const CommunicationPreferences = lazy(() => import('./pages/CommunicationPreferences'));
+const IntegrationSettings = lazy(() => import('./pages/IntegrationSettings'));
+const APIKeysSettings = lazy(() => import('./pages/APIKeysSettings'));
+const CompanyBrandingSettings = lazy(() => import('./pages/CompanyBrandingSettings'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLPortal = lazy(() => import('./pages/PURLPortal'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
@@ -1324,7 +1327,7 @@ function App() {
             }
           />
           <Route
-            path="/agent/:id"
+            path="/settings/integrations"
             element={
               <PrivateRoute>
                 <div className="app-layout">
@@ -1338,6 +1341,72 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><IntegrationSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/api-keys"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><APIKeysSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/company-branding"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CompanyBrandingSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/agent/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`>
                     <LazyPage><AgentProfile /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
