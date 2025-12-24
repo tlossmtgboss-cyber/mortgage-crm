@@ -12,6 +12,11 @@ let toastContainer = null;
 const toastQueue = [];
 let isProcessing = false;
 
+// Deduplication: track recent messages to prevent spam
+const recentMessages = new Map();
+const DEDUPE_WINDOW_MS = 2000; // Don't show same message within 2 seconds
+const MAX_VISIBLE_TOASTS = 5; // Maximum toasts visible at once
+
 /**
  * Toast configuration
  */
@@ -150,11 +155,53 @@ function initContainer() {
 }
 
 /**
+ * Check if message was recently shown (deduplication)
+ */
+function isDuplicate(message, type) {
+  const key = `${type}:${message}`;
+  const lastShown = recentMessages.get(key);
+  const now = Date.now();
+
+  if (lastShown && (now - lastShown) < DEDUPE_WINDOW_MS) {
+    return true; // Duplicate within window
+  }
+
+  // Update timestamp
+  recentMessages.set(key, now);
+
+  // Clean up old entries
+  if (recentMessages.size > 50) {
+    for (const [k, timestamp] of recentMessages) {
+      if (now - timestamp > DEDUPE_WINDOW_MS * 2) {
+        recentMessages.delete(k);
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Create and show a toast
  */
 function createToast(message, type = 'info', options = {}) {
+  // Skip duplicates (unless explicitly allowed)
+  if (!options.allowDuplicate && isDuplicate(message, type)) {
+    return { id: null, dismiss: () => {}, update: () => {} };
+  }
+
   const container = initContainer();
   const config = CONFIG[type] || CONFIG.info;
+
+  // Limit visible toasts - remove oldest if at max
+  const existingToasts = container.querySelectorAll('.toast:not(.toast-exiting)');
+  if (existingToasts.length >= MAX_VISIBLE_TOASTS) {
+    const oldest = existingToasts[0];
+    if (oldest) {
+      oldest.classList.add('toast-exiting');
+      setTimeout(() => oldest.remove(), 200);
+    }
+  }
 
   // Create toast element
   const toastEl = document.createElement('div');
