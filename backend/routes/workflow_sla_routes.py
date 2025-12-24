@@ -1226,6 +1226,72 @@ async def repair_workflow_tables(
             db.rollback()
             # Ignore index errors - not critical
 
+    # Create role assignment tables if they don't exist
+    role_tables_created = []
+    role_table_sql = """
+    -- Lead-level role assignments
+    CREATE TABLE IF NOT EXISTS lead_workflow_role_assignments (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL DEFAULT 1,
+        lead_id INTEGER NOT NULL,
+        role_id INTEGER NOT NULL,
+        assigned_user_id INTEGER NOT NULL,
+        assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        assigned_by_id INTEGER,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        deactivated_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Loan-level role assignments
+    CREATE TABLE IF NOT EXISTS loan_workflow_role_assignments (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL DEFAULT 1,
+        loan_id INTEGER NOT NULL,
+        role_id INTEGER NOT NULL,
+        assigned_user_id INTEGER NOT NULL,
+        assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        assigned_by_id INTEGER,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        deactivated_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create indexes for performance
+    CREATE INDEX IF NOT EXISTS ix_lead_role_assignments_lead
+        ON lead_workflow_role_assignments(lead_id, is_active);
+
+    CREATE INDEX IF NOT EXISTS ix_lead_role_assignments_user
+        ON lead_workflow_role_assignments(assigned_user_id, is_active);
+
+    CREATE INDEX IF NOT EXISTS ix_loan_role_assignments_loan
+        ON loan_workflow_role_assignments(loan_id, is_active);
+
+    CREATE INDEX IF NOT EXISTS ix_loan_role_assignments_user
+        ON loan_workflow_role_assignments(assigned_user_id, is_active);
+    """
+
+    try:
+        db.execute(text(role_table_sql))
+        db.commit()
+        # Check which tables were created
+        for table_name in ['lead_workflow_role_assignments', 'loan_workflow_role_assignments']:
+            result = db.execute(text(f"""
+                SELECT 1 FROM information_schema.tables
+                WHERE table_name = '{table_name}' AND table_schema = 'public'
+            """))
+            if result.fetchone():
+                role_tables_created.append(table_name)
+        logger.info(f"Role assignment tables created: {role_tables_created}")
+    except Exception as e:
+        db.rollback()
+        results["errors"].append({"section": "role_tables", "error": str(e)})
+        logger.error(f"Error creating role assignment tables: {e}")
+
+    results["role_tables"] = role_tables_created
+
     added_count = sum(len([c for c in cols if c.get("status") == "added"]) for cols in results.values() if isinstance(cols, list))
 
     return {

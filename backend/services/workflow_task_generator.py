@@ -714,15 +714,19 @@ Email: {contact_info.get('email', 'N/A')}
         assignments = {}
 
         if lead_id:
-            # Get lead role assignments
-            results = self.db.execute(text("""
-                SELECT role_id, assigned_user_id
-                FROM lead_workflow_role_assignments
-                WHERE lead_id = :lead_id AND is_active = true
-            """), {"lead_id": lead_id}).fetchall()
+            # Try to get lead role assignments (table may not exist yet)
+            try:
+                results = self.db.execute(text("""
+                    SELECT role_id, assigned_user_id
+                    FROM lead_workflow_role_assignments
+                    WHERE lead_id = :lead_id AND is_active = true
+                """), {"lead_id": lead_id}).fetchall()
 
-            for row in results:
-                assignments[row[0]] = row[1]
+                for row in results:
+                    assignments[row[0]] = row[1]
+            except Exception as e:
+                # Table may not exist - fall back to owner assignment
+                logger.debug(f"lead_workflow_role_assignments not available: {e}")
 
             # Also get owner as default LO
             lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
@@ -733,15 +737,19 @@ Email: {contact_info.get('email', 'N/A')}
                     assignments[lo_role.id] = lead.owner_id
 
         if loan_id:
-            # Get loan role assignments
-            results = self.db.execute(text("""
-                SELECT role_id, assigned_user_id
-                FROM loan_workflow_role_assignments
-                WHERE loan_id = :loan_id AND is_active = true
-            """), {"loan_id": loan_id}).fetchall()
+            # Try to get loan role assignments (table may not exist yet)
+            try:
+                results = self.db.execute(text("""
+                    SELECT role_id, assigned_user_id
+                    FROM loan_workflow_role_assignments
+                    WHERE loan_id = :loan_id AND is_active = true
+                """), {"loan_id": loan_id}).fetchall()
 
-            for row in results:
-                assignments[row[0]] = row[1]
+                for row in results:
+                    assignments[row[0]] = row[1]
+            except Exception as e:
+                # Table may not exist - fall back to loan officer assignment
+                logger.debug(f"loan_workflow_role_assignments not available: {e}")
 
             # Also get loan officer as default
             loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
