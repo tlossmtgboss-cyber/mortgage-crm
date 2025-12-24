@@ -92,23 +92,26 @@
 }
 
 .suggestion-btn {
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  border: 2px solid #d1d5db;
   border-radius: 24px;
   padding: 10px 20px;
   font-size: 14px;
-  color: var(--chat-text);
+  color: #374151;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
   line-height: 1.4;
   white-space: nowrap;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .suggestion-btn:hover {
   border-color: var(--chat-primary);
-  background: rgba(45, 90, 39, 0.08);
+  background: #ffffff;
   color: var(--chat-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 @media (max-width: 600px) {
