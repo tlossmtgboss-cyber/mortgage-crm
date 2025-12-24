@@ -125,6 +125,7 @@ const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const AgentProfile = lazy(() => import('./pages/AgentProfile'));
 const AgentGym = lazy(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazy(() => import('./pages/AgentGovernanceSettings'));
+const SmartSchedulerSettings = lazy(() => import('./pages/SmartSchedulerSettings'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLPortal = lazy(() => import('./pages/PURLPortal'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
@@ -1156,6 +1157,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AgentGovernanceSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/smart-scheduler"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><SmartSchedulerSettings /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

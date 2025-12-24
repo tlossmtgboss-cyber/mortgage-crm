@@ -364,10 +364,9 @@ async def inbound_email_webhook(
 
         db.commit()
 
-        # Process AI response in background
+        # Process AI response in background (uses its own DB session)
         background_tasks.add_task(
             generate_ai_response,
-            db,
             conversation_id,
             clean_reply,
             from_address,
@@ -755,7 +754,6 @@ def clean_email_reply(text: str) -> str:
 
 
 async def generate_ai_response(
-    db: Session,
     conversation_id: str,
     user_message: str,
     user_email: str,
@@ -770,7 +768,13 @@ async def generate_ai_response(
 
     Uses the consolidated OpenAIConversationService for Trust-First Architecture.
     """
+    # Create a new database session for this background task
+    from database import get_db, SessionLocal
+    db = SessionLocal()
+
     try:
+        logger.info(f"Generating AI response for conversation {conversation_id}")
+
         # Import the consolidated AI service
         from services.openai_conversation_service import get_openai_service
         ai_service = get_openai_service()
@@ -907,4 +911,9 @@ Loan Information:
             logger.error(f"Failed to send AI response for conversation {conversation_id}")
 
     except Exception as e:
-        logger.error(f"Error generating AI response: {e}")
+        import traceback
+        logger.error(f"Error generating AI response for {conversation_id}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        db.rollback()
+    finally:
+        db.close()

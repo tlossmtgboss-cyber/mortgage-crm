@@ -20166,6 +20166,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Agent Governance Settings routes not loaded: {e}")
 
+# Smart Scheduler Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.smart_scheduler_settings_routes import router as smart_scheduler_settings_router
+    app.include_router(smart_scheduler_settings_router, tags=["Smart Scheduler Settings"])
+    logger.info("✅ Smart Scheduler Settings routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Smart Scheduler Settings routes not loaded: {e}")
+
 # Agent Gym routes (Agent Training & Simulation)
 try:
     from routes.agent_gym_routes import router as agent_gym_router
