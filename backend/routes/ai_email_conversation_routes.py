@@ -212,6 +212,30 @@ async def inbound_email_webhook(
         text_body = form_data.get("text", "")
         html_body = form_data.get("html", "")
 
+        # Log what we received for debugging
+        logger.info(f"SendGrid form fields: {list(form_data.keys())}")
+        logger.info(f"Text body length: {len(text_body)}, HTML body length: {len(html_body)}")
+        if text_body:
+            logger.info(f"Text body preview: {text_body[:200]}...")
+
+        # If text is empty but we have HTML, extract text from HTML
+        if not text_body.strip() and html_body:
+            logger.info("Text body empty, extracting from HTML")
+            # Simple HTML to text conversion
+            import re as regex
+            # Remove style and script tags
+            clean_html = regex.sub(r'<(style|script)[^>]*>.*?</\1>', '', html_body, flags=regex.DOTALL | regex.IGNORECASE)
+            # Replace br and p tags with newlines
+            clean_html = regex.sub(r'<br\s*/?>', '\n', clean_html, flags=regex.IGNORECASE)
+            clean_html = regex.sub(r'</p>', '\n', clean_html, flags=regex.IGNORECASE)
+            clean_html = regex.sub(r'<div[^>]*>', '\n', clean_html, flags=regex.IGNORECASE)
+            # Remove all other HTML tags
+            clean_html = regex.sub(r'<[^>]+>', '', clean_html)
+            # Decode HTML entities
+            import html
+            text_body = html.unescape(clean_html).strip()
+            logger.info(f"Extracted text from HTML: {text_body[:200]}...")
+
         # Extract email address from "Name <email>" format
         from_match = re.search(r'<([^>]+)>', from_email)
         from_address = from_match.group(1) if from_match else from_email
@@ -337,6 +361,7 @@ async def inbound_email_webhook(
 
         # Clean the reply text (remove quoted content)
         clean_reply = clean_email_reply(text_body)
+        logger.info(f"After cleaning - reply length: {len(clean_reply)}, content: {clean_reply[:200] if clean_reply else 'EMPTY'}...")
 
         # Store inbound message
         db.execute(text("""
