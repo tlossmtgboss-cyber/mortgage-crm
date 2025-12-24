@@ -314,6 +314,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         minute_ago = current_time - 60
         requests_last_minute = sum(1 for ts, _ in recent_requests if ts > minute_ago)
 
+        # Get origin for CORS headers on 429 responses
+        origin = request.headers.get("origin", "*")
+        cors_headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Requested-With",
+        }
+
         if requests_last_minute >= per_minute_limit:
             logger.warning(f"Rate limit exceeded for IP {client_ip}: {requests_last_minute} requests/min")
             return JSONResponse(
@@ -321,7 +330,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={
                     "detail": "Too many requests. Please try again later.",
                     "retry_after": 60
-                }
+                },
+                headers=cors_headers
             )
 
         # Check per-hour limit
@@ -335,7 +345,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={
                     "detail": "Hourly rate limit exceeded. Please try again later.",
                     "retry_after": 3600
-                }
+                },
+                headers=cors_headers
             )
 
         # Add this request to history
