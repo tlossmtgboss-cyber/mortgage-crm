@@ -201,6 +201,10 @@ async def inbound_email_webhook(
 
     This endpoint receives emails sent to the AI reply address,
     extracts the conversation ID, and generates AI responses.
+
+    Supports both SendGrid modes:
+    - Parsed mode: 'text' and 'html' fields contain body content
+    - Raw mode: 'email' field contains full RFC822 email
     """
     try:
         # Parse form data from SendGrid
@@ -211,29 +215,24 @@ async def inbound_email_webhook(
         subject = form_data.get("subject", "")
         text_body = form_data.get("text", "")
         html_body = form_data.get("html", "")
+        raw_email = form_data.get("email", "")
 
         # Log what we received for debugging
         logger.info(f"SendGrid form fields: {list(form_data.keys())}")
-        logger.info(f"Text body length: {len(text_body)}, HTML body length: {len(html_body)}")
-        if text_body:
-            logger.info(f"Text body preview: {text_body[:200]}...")
+        logger.info(f"text_body length={len(text_body)}, html_body length={len(html_body)}, raw_email length={len(raw_email)}")
+
+        # If text/html fields are empty but we have raw email, parse it
+        if not text_body.strip() and not html_body.strip() and raw_email:
+            logger.info("Parsing raw RFC822 email to extract body")
+            text_body, html_body = parse_raw_email(raw_email)
+            logger.info(f"Extracted from raw email - text: {len(text_body)} chars, html: {len(html_body)} chars")
+            if text_body:
+                logger.info(f"Extracted text preview: {text_body[:300]}...")
 
         # If text is empty but we have HTML, extract text from HTML
         if not text_body.strip() and html_body:
             logger.info("Text body empty, extracting from HTML")
-            # Simple HTML to text conversion
-            import re as regex
-            # Remove style and script tags
-            clean_html = regex.sub(r'<(style|script)[^>]*>.*?</\1>', '', html_body, flags=regex.DOTALL | regex.IGNORECASE)
-            # Replace br and p tags with newlines
-            clean_html = regex.sub(r'<br\s*/?>', '\n', clean_html, flags=regex.IGNORECASE)
-            clean_html = regex.sub(r'</p>', '\n', clean_html, flags=regex.IGNORECASE)
-            clean_html = regex.sub(r'<div[^>]*>', '\n', clean_html, flags=regex.IGNORECASE)
-            # Remove all other HTML tags
-            clean_html = regex.sub(r'<[^>]+>', '', clean_html)
-            # Decode HTML entities
-            import html
-            text_body = html.unescape(clean_html).strip()
+            text_body = html_to_text(html_body)
             logger.info(f"Extracted text from HTML: {text_body[:200]}...")
 
         # Extract email address from "Name <email>" format
@@ -753,6 +752,109 @@ def strip_html(html: str) -> str:
     clean = re.sub('<[^<]+?>', '', html)
     clean = re.sub(r'\s+', ' ', clean)
     return clean.strip()
+
+
+def html_to_text(html_body: str) -> str:
+    """Convert HTML to plain text"""
+    import html as html_module
+    # Remove style and script tags
+    clean_html = re.sub(r'<(style|script)[^>]*>.*?</\1>', '', html_body, flags=re.DOTALL | re.IGNORECASE)
+    # Replace br and p tags with newlines
+    clean_html = re.sub(r'<br\s*/?>', '\n', clean_html, flags=re.IGNORECASE)
+    clean_html = re.sub(r'</p>', '\n', clean_html, flags=re.IGNORECASE)
+    clean_html = re.sub(r'<div[^>]*>', '\n', clean_html, flags=re.IGNORECASE)
+    # Remove all other HTML tags
+    clean_html = re.sub(r'<[^>]+>', '', clean_html)
+    # Decode HTML entities
+    return html_module.unescape(clean_html).strip()
+
+
+def parse_raw_email(raw_email: str) -> tuple:
+    """
+    Parse a raw RFC822 email and extract text and HTML parts.
+    Returns (text_body, html_body) tuple.
+    """
+    import email
+    from email import policy
+    from email.parser import Parser
+
+    try:
+        # Parse the raw email
+        msg = email.message_from_string(raw_email, policy=policy.default)
+
+        text_body = ""
+        html_body = ""
+
+        if msg.is_multipart():
+            # Walk through all parts
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition", ""))
+
+                # Skip attachments
+                if "attachment" in content_disposition:
+                    continue
+
+                try:
+                    payload = part.get_content()
+                    if isinstance(payload, bytes):
+                        payload = payload.decode('utf-8', errors='ignore')
+                except Exception:
+                    try:
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            payload = payload.decode('utf-8', errors='ignore')
+                        else:
+                            continue
+                    except Exception:
+                        continue
+
+                if content_type == "text/plain" and not text_body:
+                    text_body = payload
+                elif content_type == "text/html" and not html_body:
+                    html_body = payload
+        else:
+            # Single-part email
+            content_type = msg.get_content_type()
+            try:
+                payload = msg.get_content()
+                if isinstance(payload, bytes):
+                    payload = payload.decode('utf-8', errors='ignore')
+            except Exception:
+                try:
+                    payload = msg.get_payload(decode=True)
+                    if payload:
+                        payload = payload.decode('utf-8', errors='ignore')
+                    else:
+                        payload = ""
+                except Exception:
+                    payload = ""
+
+            if content_type == "text/plain":
+                text_body = payload
+            elif content_type == "text/html":
+                html_body = payload
+
+        return text_body, html_body
+
+    except Exception as e:
+        logger.error(f"Error parsing raw email: {e}")
+        # Try a simple extraction as fallback
+        # Look for the body after headers (blank line separator)
+        try:
+            parts = raw_email.split('\r\n\r\n', 1)
+            if len(parts) < 2:
+                parts = raw_email.split('\n\n', 1)
+            if len(parts) >= 2:
+                body = parts[1]
+                # Check if it looks like HTML
+                if '<html' in body.lower() or '<body' in body.lower():
+                    return "", body
+                else:
+                    return body, ""
+        except Exception:
+            pass
+        return "", ""
 
 
 def clean_email_reply(text: str) -> str:
