@@ -20174,6 +20174,59 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Smart Scheduler Settings routes not loaded: {e}")
 
+# Email Integration Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.email_integration_settings_routes import router as email_integration_settings_router
+    app.include_router(email_integration_settings_router, tags=["Email Integration Settings"])
+    logger.info("Email Integration Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Email Integration Settings routes not loaded: {e}")
+
+# User Profile Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.user_profile_settings_routes import router as user_profile_settings_router, set_dependencies as set_user_profile_deps
+    set_user_profile_deps(User, get_current_user, pwd_context)
+    app.include_router(user_profile_settings_router, tags=["User Profile Settings"])
+    logger.info("User Profile Settings routes loaded")
+except Exception as e:
+    logger.warning(f"User Profile Settings routes not loaded: {e}")
+
+# Document Upload Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.document_upload_settings_routes import router as document_upload_settings_router, set_dependencies as set_document_upload_deps
+    set_document_upload_deps(User, get_current_user, get_db)
+    app.include_router(document_upload_settings_router, tags=["Document Upload Settings"])
+    logger.info("Document Upload Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Document Upload Settings routes not loaded: {e}")
+
+# Lead Capture Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.lead_capture_settings_routes import router as lead_capture_settings_router, set_dependencies as set_lead_capture_deps
+    set_lead_capture_deps(User, get_current_user, get_db)
+    app.include_router(lead_capture_settings_router, tags=["Lead Capture Settings"])
+    logger.info("Lead Capture Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Lead Capture Settings routes not loaded: {e}")
+
+# Client Portal Settings routes (Comprehensive error handling pattern)
+try:
+    from routes.client_portal_settings_routes import router as client_portal_settings_router, set_dependencies as set_client_portal_deps
+    set_client_portal_deps(User, get_current_user, get_db)
+    app.include_router(client_portal_settings_router, tags=["Client Portal Settings"])
+    logger.info("Client Portal Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Client Portal Settings routes not loaded: {e}")
+
+# Communication Preferences routes (Comprehensive error handling pattern)
+try:
+    from routes.communication_preferences_routes import router as communication_preferences_router, set_dependencies as set_communication_deps
+    set_communication_deps(User, get_current_user, get_db)
+    app.include_router(communication_preferences_router, tags=["Communication Preferences"])
+    logger.info("Communication Preferences routes loaded")
+except Exception as e:
+    logger.warning(f"Communication Preferences routes not loaded: {e}")
+
 # Agent Gym routes (Agent Training & Simulation)
 try:
     from routes.agent_gym_routes import router as agent_gym_router

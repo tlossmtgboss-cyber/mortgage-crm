@@ -355,7 +355,10 @@ function Settings() {
     { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
     { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
-    { id: 'client-portals', label: 'Client Portals', type: 'standalone', section: 'client-portals' },
+    { id: 'client-portals', label: 'Client Portals (PURL)', type: 'standalone', section: 'client-portals' },
+    { id: 'client-portal-settings', label: 'Client Portal Settings', type: 'standalone', section: 'client-portal-settings', navigate: '/settings/client-portal' },
+    { id: 'lead-capture', label: 'Lead Capture', type: 'standalone', section: 'lead-capture', navigate: '/settings/lead-capture' },
+    { id: 'communication-preferences', label: 'Communication Preferences', type: 'standalone', section: 'communication-preferences', navigate: '/settings/communication' },
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
     { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' }
   ];
