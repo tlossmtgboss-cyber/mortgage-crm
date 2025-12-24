@@ -1029,7 +1029,18 @@ function LeadDetail() {
     if (!id) return;
     setConditionsLoading(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/conditions`);
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/leads/${id}/conditions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setConditions(data.conditions || []);
@@ -1048,9 +1059,18 @@ function LeadDetail() {
 
     setAddingCondition(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/conditions`, {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/leads/${id}/conditions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           ...newCondition,
           lead_id: id,
@@ -1081,9 +1101,18 @@ function LeadDetail() {
   // Update condition status
   const updateConditionStatus = async (conditionId, newStatus) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/conditions/${conditionId}`, {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/leads/${id}/conditions/${conditionId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({ status: newStatus })
       });
 

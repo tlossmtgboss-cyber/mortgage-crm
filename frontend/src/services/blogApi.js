@@ -14,15 +14,38 @@ const BASE_URL = isProduction
 
 const API_BASE = `${BASE_URL}/api/v1/blog`;
 
-// Create axios instance with timeout
+// Create axios instance with timeout and default headers
 const apiClient = axios.create({
   timeout: 120000, // 2 minute timeout for AI generation
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 // Add shorter timeout for non-generation requests
 const quickClient = axios.create({
   timeout: 30000, // 30 second timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
+
+// Add auth token interceptor to both clients
+const addAuthInterceptor = (client) => {
+  client.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+};
+
+addAuthInterceptor(apiClient);
+addAuthInterceptor(quickClient);
 
 // ============ Voice Profiles ============
 

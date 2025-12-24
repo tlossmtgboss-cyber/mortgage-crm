@@ -1276,7 +1276,10 @@ export default function RefinanceApplication() {
 
           // Try to get the LO slug from the current URL (e.g., /lo/tim-loss or /apply/tim-loss)
           const pathMatch = window.location.pathname.match(/\/(?:lo|apply)\/([^/]+)/);
-          const loSlug = pathMatch ? pathMatch[1] : null;
+          const potentialSlug = pathMatch ? pathMatch[1] : null;
+          // Exclude reserved route names that aren't LO slugs
+          const reservedSlugs = ['purchase', 'refinance', 'login', 'start', 'oauth', 'verify'];
+          const loSlug = potentialSlug && !reservedSlugs.includes(potentialSlug.toLowerCase()) ? potentialSlug : null;
 
           if (loSlug) {
             // Redirect to the LO's microsite (which has client portal features)
