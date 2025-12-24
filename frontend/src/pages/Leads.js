@@ -171,7 +171,12 @@ function Leads() {
   const handleCreateDuplicateTasks = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/v1/duplicates/create-tasks', {
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/duplicates/create-tasks`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
