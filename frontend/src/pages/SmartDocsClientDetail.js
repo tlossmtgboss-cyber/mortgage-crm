@@ -15,6 +15,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 import './SmartDocsClientDetail.css';
 
 function SmartDocsClientDetail() {
@@ -33,49 +34,69 @@ function SmartDocsClientDetail() {
   // Fetch client documents
   const fetchClientData = useCallback(async () => {
     setLoading(true);
+    let clientInfoFound = false;
+
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-      // Fetch loan/client info
-      const loanRes = await fetch(`/api/v1/loans/${loanId}`, { headers });
-      if (loanRes.ok) {
-        const loanData = await loanRes.json();
-        setClient({
-          name: loanData.borrower_name || loanData.primary_borrower_name || 'Unknown',
-          email: loanData.borrower_email,
-          loanNumber: loanData.loan_number,
-          stage: loanData.stage
-        });
-      }
-
-      // Fetch document requests from needs list
-      const needsListRes = await fetch(`/api/v1/smart-docs/needs-list/${loanId}`, { headers });
+      // Fetch document requests from needs list - this uses PURL loan IDs
+      const needsListRes = await fetch(`${API_BASE_URL}/api/v1/smart-docs/needs-list/${loanId}`, { headers });
       if (needsListRes.ok) {
         const needsListData = await needsListRes.json();
-        // Backend returns all_requests array
+        // Backend returns all_requests array and loan info
         const requests = needsListData.all_requests || [];
         setDocuments(requests);
+        // Get client info from needs list response
+        if (needsListData.borrower_name || needsListData.loan_number) {
+          setClient({
+            name: needsListData.borrower_name || 'Unknown',
+            email: needsListData.borrower_email,
+            loanNumber: needsListData.loan_number,
+            stage: needsListData.stage
+          });
+          clientInfoFound = true;
+        }
         // Auto-select first document if available
         if (requests.length > 0) {
           setSelectedDoc(requests[0]);
         }
       } else {
         // Fallback: try queue detail endpoint
-        const queueRes = await fetch(`/api/v1/smart-docs/queue/${loanId}`, { headers });
+        const queueRes = await fetch(`${API_BASE_URL}/api/v1/smart-docs/queue/${loanId}`, { headers });
         if (queueRes.ok) {
           const queueData = await queueRes.json();
-          // Queue returns requests array
+          // Queue returns requests array and client info
           const requests = queueData.requests || queueData.all_requests || [];
           setDocuments(requests);
+          // Get client info from queue response
+          if (queueData.borrower_name || queueData.loan_number) {
+            setClient({
+              name: queueData.borrower_name || 'Unknown',
+              email: queueData.borrower_email,
+              loanNumber: queueData.loan_number,
+              stage: queueData.stage
+            });
+            clientInfoFound = true;
+          }
           if (requests.length > 0) {
             setSelectedDoc(requests[0]);
           }
         }
       }
 
+      // If client info not found, set fallback
+      if (!clientInfoFound) {
+        setClient({
+          name: `Loan ${loanId}`,
+          email: null,
+          loanNumber: null,
+          stage: null
+        });
+      }
+
       // Fetch reminder settings
-      const reminderRes = await fetch(`/api/v1/smart-docs/reminders/${loanId}`, { headers });
+      const reminderRes = await fetch(`${API_BASE_URL}/api/v1/smart-docs/reminders/${loanId}`, { headers });
       if (reminderRes.ok) {
         const reminderData = await reminderRes.json();
         setRemindersEnabled(reminderData.reminders_enabled ?? true);
@@ -121,7 +142,7 @@ function SmartDocsClientDetail() {
         'Content-Type': 'application/json'
       };
 
-      const response = await fetch(`/api/v1/smart-docs/reminders/${loanId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/reminders/${loanId}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ reminders_enabled: !remindersEnabled })
@@ -141,7 +162,7 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/v1/smart-docs/merge', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/merge`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -177,7 +198,7 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = localStorage.getItem('token');
-      await fetch('/api/v1/smart-docs/merge-email', {
+      await fetch(`${API_BASE_URL}/api/v1/smart-docs/merge-email`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -200,7 +221,7 @@ function SmartDocsClientDetail() {
   const handleDownloadSingle = async (doc) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/v1/smart-docs/documents/${doc.id}/download`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/documents/${doc.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -224,7 +245,7 @@ function SmartDocsClientDetail() {
   const handleEmailSingle = async (doc) => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`/api/v1/smart-docs/documents/${doc.id}/email`, {
+      await fetch(`${API_BASE_URL}/api/v1/smart-docs/documents/${doc.id}/email`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });

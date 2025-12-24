@@ -3,11 +3,9 @@
  *
  * Client-side API functions for the intelligent document collection system.
  */
+import { API_BASE_URL } from './api';
 
-// Use localhost:8000 for development, relative path for production
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_HOST = isProduction ? '' : 'http://localhost:8000';
-const API_BASE = `${API_HOST}/api/v1/smart-docs`;
+const API_BASE = `${API_BASE_URL}/api/v1/smart-docs`;
 
 /**
  * Helper to handle API responses

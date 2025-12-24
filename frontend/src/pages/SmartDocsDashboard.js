@@ -319,7 +319,7 @@ const SmartDocsDashboard = () => {
                 <div
                   key={applicant.loan_id}
                   className={`applicant-card ${applicant.overdue_count > 0 ? 'has-overdue' : ''}`}
-                  onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
+                  onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                 >
                   <div className="applicant-header">
                     <div className="applicant-info">
@@ -387,7 +387,7 @@ const SmartDocsDashboard = () => {
                 <div
                   key={applicant.loan_id}
                   className="applicant-card"
-                  onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
+                  onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                 >
                   <div className="applicant-header">
                     <div className="applicant-info">
@@ -438,7 +438,7 @@ const SmartDocsDashboard = () => {
                 <div
                   key={applicant.loan_id}
                   className="applicant-card completed-card"
-                  onClick={() => navigate(`/loans/${applicant.loan_id}?tab=documents`)}
+                  onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                 >
                   <div className="applicant-header">
                     <div className="applicant-info">
