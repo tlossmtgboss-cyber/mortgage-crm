@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
@@ -1523,6 +1523,7 @@ export default function PurchaseApplication() {
   const [submitError, setSubmitError] = useState(null);
   const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
   const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null);
+  const portalUrlRef = useRef(null); // Ref to avoid closure issues in setTimeout
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
@@ -1530,8 +1531,22 @@ export default function PurchaseApplication() {
   const clearFollowup = () => {};
   const checkForFollowup = async () => null;
 
-  // Load saved progress from localStorage on mount
+  // Load saved progress from localStorage on mount (unless fresh=true)
   useEffect(() => {
+    // Check if this is a fresh start (clear previous progress)
+    const isFreshStart = searchParams.get('fresh') === 'true';
+
+    if (isFreshStart) {
+      // Clear saved progress for a fresh start
+      localStorage.removeItem(STORAGE_KEY);
+      console.log('[PurchaseApplication] Fresh start - cleared saved progress');
+      // Remove the fresh param from URL without reload
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('fresh');
+      window.history.replaceState({}, '', newUrl.toString());
+      return; // Don't load saved data
+    }
+
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
       try {
@@ -1555,7 +1570,7 @@ export default function PurchaseApplication() {
         console.error('Failed to load saved progress:', e);
       }
     }
-  }, [STORAGE_KEY]);
+  }, [STORAGE_KEY, searchParams]);
 
   // Auto-save to localStorage whenever data changes
   useEffect(() => {
@@ -1673,19 +1688,27 @@ export default function PurchaseApplication() {
     fetchCalendarAssignment();
   }, [API_URL]);
 
+  // Keep ref in sync with state to avoid closure issues
+  useEffect(() => {
+    portalUrlRef.current = portalUrlForRedirect;
+  }, [portalUrlForRedirect]);
+
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
     if (showSubmissionSuccess) {
       const redirectTimer = setTimeout(() => {
-        // Determine the redirect URL
-        let redirectUrl = portalUrlForRedirect;
+        // Use ref to get latest portal URL (avoids closure capturing stale state)
+        let redirectUrl = portalUrlRef.current;
+
+        console.log('[PurchaseApplication] Redirect check - portalUrlRef:', portalUrlRef.current);
 
         // If no portal URL provided, construct one from current location
         if (!redirectUrl) {
           // Use perenniaai.com for production, current host for dev
           const isProduction = window.location.hostname === 'perenniaai.com' ||
+                               window.location.hostname === 'www.perenniaai.com' ||
                                window.location.hostname.includes('vercel.app');
-          const baseHost = isProduction ? 'perenniaai.com' : window.location.host;
+          const baseHost = isProduction ? 'www.perenniaai.com' : window.location.host;
           const protocol = isProduction ? 'https' : window.location.protocol.replace(':', '');
 
           // Try to get the LO slug from the current URL (e.g., /lo/tim-loss or /apply/tim-loss)
@@ -1699,9 +1722,17 @@ export default function PurchaseApplication() {
             // Redirect to the LO's microsite (which has client portal features)
             redirectUrl = `${protocol}://${baseHost}/lo/${loSlug}`;
           } else {
-            // Fallback: redirect to home with success message
-            redirectUrl = `${protocol}://${baseHost}/?application=submitted`;
+            // Check if borrower email is available for magic link
+            const borrowerEmail = localStorage.getItem('borrower_email');
+            if (borrowerEmail) {
+              // Redirect to borrower portal with email for magic link
+              redirectUrl = `${protocol}://${baseHost}/borrower-portal?email=${encodeURIComponent(borrowerEmail)}&submitted=true`;
+            } else {
+              // Final fallback: redirect to thank you page
+              redirectUrl = `${protocol}://${baseHost}/application-submitted`;
+            }
           }
+          console.log('[PurchaseApplication] Fallback redirect to:', redirectUrl);
         }
 
         // Signal to parent iframe that submission is complete (if embedded)
@@ -1715,7 +1746,7 @@ export default function PurchaseApplication() {
 
       return () => clearTimeout(redirectTimer);
     }
-  }, [showSubmissionSuccess, portalUrlForRedirect]);
+  }, [showSubmissionSuccess]);
 
   // Handle SSN input with masking - shows XXX-XX-1234 format
   const handleSsnChange = (input, isCoBorrower = false) => {
@@ -1966,9 +1997,21 @@ export default function PurchaseApplication() {
         throw new Error(result.detail || 'Submission failed');
       }
 
+      console.log('[PurchaseApplication] Submit response:', result);
+      console.log('[PurchaseApplication] Portal URL from response:', result.data?.portal_url);
+
+      // Store borrower email for fallback magic link
+      if (profileData?.email) {
+        localStorage.setItem('borrower_email', profileData.email);
+      }
+
       // Success - show the submission success lightbox
       if (result.data?.portal_url) {
+        console.log('[PurchaseApplication] Setting portal URL:', result.data.portal_url);
         setPortalUrlForRedirect(result.data.portal_url);
+        portalUrlRef.current = result.data.portal_url; // Set ref immediately to avoid timing issues
+      } else {
+        console.warn('[PurchaseApplication] No portal_url in response, will use fallback');
       }
       setShowSubmissionSuccess(true);
     } catch (error) {
@@ -2373,6 +2416,38 @@ export default function PurchaseApplication() {
               }}
             >
               Skip for now (you can save later)
+            </button>
+          </div>
+
+          {/* Login Option for Existing Users */}
+          <div style={{
+            textAlign: 'center',
+            marginTop: '20px',
+            padding: '16px',
+            background: '#f0f9ff',
+            borderRadius: '8px',
+            border: '1px solid #bae6fd'
+          }}>
+            <p style={{ margin: '0 0 12px', color: '#0369a1', fontSize: '14px', fontWeight: 500 }}>
+              Already started an application?
+            </p>
+            <button
+              onClick={() => navigate('/borrower-portal')}
+              style={{
+                background: '#0ea5e9',
+                color: 'white',
+                border: 'none',
+                padding: '10px 24px',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseOver={(e) => e.target.style.background = '#0284c7'}
+              onMouseOut={(e) => e.target.style.background = '#0ea5e9'}
+            >
+              Log In to Continue
             </button>
           </div>
 

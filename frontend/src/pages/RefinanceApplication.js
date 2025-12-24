@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
@@ -1294,6 +1294,7 @@ export default function RefinanceApplication() {
   const [submitError, setSubmitError] = useState(null);
   const [showSubmissionSuccess, setShowSubmissionSuccess] = useState(false);
   const [portalUrlForRedirect, setPortalUrlForRedirect] = useState(null);
+  const portalUrlRef = useRef(null); // Ref to avoid closure issues in setTimeout
 
   // Account and Save Progress state
   const [userAccount, setUserAccount] = useState({
@@ -1310,19 +1311,27 @@ export default function RefinanceApplication() {
   const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({});
   const [currentIncomeBorrower, setCurrentIncomeBorrower] = useState(1); // 1 = primary, 2 = co-borrower
 
+  // Keep ref in sync with state to avoid closure issues
+  useEffect(() => {
+    portalUrlRef.current = portalUrlForRedirect;
+  }, [portalUrlForRedirect]);
+
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
     if (showSubmissionSuccess) {
       const redirectTimer = setTimeout(() => {
-        // Determine the redirect URL
-        let redirectUrl = portalUrlForRedirect;
+        // Use ref to get latest portal URL (avoids closure capturing stale state)
+        let redirectUrl = portalUrlRef.current;
+
+        console.log('[RefinanceApplication] Redirect check - portalUrlRef:', portalUrlRef.current);
 
         // If no portal URL provided, construct one from current location
         if (!redirectUrl) {
           // Use perenniaai.com for production, current host for dev
           const isProduction = window.location.hostname === 'perenniaai.com' ||
+                               window.location.hostname === 'www.perenniaai.com' ||
                                window.location.hostname.includes('vercel.app');
-          const baseHost = isProduction ? 'perenniaai.com' : window.location.host;
+          const baseHost = isProduction ? 'www.perenniaai.com' : window.location.host;
           const protocol = isProduction ? 'https' : window.location.protocol.replace(':', '');
 
           // Try to get the LO slug from the current URL (e.g., /lo/tim-loss or /apply/tim-loss)
@@ -1336,9 +1345,17 @@ export default function RefinanceApplication() {
             // Redirect to the LO's microsite (which has client portal features)
             redirectUrl = `${protocol}://${baseHost}/lo/${loSlug}`;
           } else {
-            // Fallback: redirect to home with success message
-            redirectUrl = `${protocol}://${baseHost}/?application=submitted`;
+            // Check if borrower email is available for magic link
+            const borrowerEmail = localStorage.getItem('borrower_email');
+            if (borrowerEmail) {
+              // Redirect to borrower portal with email for magic link
+              redirectUrl = `${protocol}://${baseHost}/borrower-portal?email=${encodeURIComponent(borrowerEmail)}&submitted=true`;
+            } else {
+              // Final fallback: redirect to thank you page
+              redirectUrl = `${protocol}://${baseHost}/application-submitted`;
+            }
           }
+          console.log('[RefinanceApplication] Fallback redirect to:', redirectUrl);
         }
 
         // Signal to parent iframe that submission is complete (if embedded)
@@ -1352,7 +1369,7 @@ export default function RefinanceApplication() {
 
       return () => clearTimeout(redirectTimer);
     }
-  }, [showSubmissionSuccess, portalUrlForRedirect]);
+  }, [showSubmissionSuccess]);
 
   // Fetch calendar assignment for scheduling
   useEffect(() => {
@@ -1537,9 +1554,21 @@ export default function RefinanceApplication() {
         throw new Error(result.detail || 'Submission failed');
       }
 
+      console.log('[RefinanceApplication] Submit response:', result);
+      console.log('[RefinanceApplication] Portal URL from response:', result.data?.portal_url);
+
+      // Store borrower email for fallback magic link
+      if (profileData?.email) {
+        localStorage.setItem('borrower_email', profileData.email);
+      }
+
       // Success - show the submission success lightbox
       if (result.data?.portal_url) {
+        console.log('[RefinanceApplication] Setting portal URL:', result.data.portal_url);
         setPortalUrlForRedirect(result.data.portal_url);
+        portalUrlRef.current = result.data.portal_url; // Set ref immediately to avoid timing issues
+      } else {
+        console.warn('[RefinanceApplication] No portal_url in response, will use fallback');
       }
       setShowSubmissionSuccess(true);
     } catch (error) {
