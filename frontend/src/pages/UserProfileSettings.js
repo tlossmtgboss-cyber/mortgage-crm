@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuthHeaders } from '../utils/auth';
 import { useAsyncOperation, useFormSubmit } from '../hooks/useAsyncOperation';
 import { APIError } from '../utils/errorHandling';
+import { toast } from '../utils/toast';
 import './UserProfileSettings.css';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -192,11 +193,14 @@ const UserProfileSettings = () => {
           ...storedUser,
           full_name: profileData.full_name
         }));
+
+        toast.success('Profile saved successfully');
       }
     } catch (err) {
       if (err.fieldErrors) {
         setFieldErrors(err.fieldErrors);
       }
+      toast.error('Failed to save profile');
     }
   };
 
@@ -312,12 +316,13 @@ const UserProfileSettings = () => {
       if (response?.success) {
         setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
         setFieldErrors({});
-        alert('Password changed successfully!');
+        toast.success('Password changed successfully!');
       }
     } catch (err) {
       if (err.fieldErrors) {
         setFieldErrors(err.fieldErrors);
       }
+      toast.error(err.message || 'Failed to change password');
     }
   };
 
@@ -359,11 +364,13 @@ const UserProfileSettings = () => {
       if (response?.success) {
         setProfile(prev => ({ ...prev, photo_url: response.data.photo_url }));
         setFieldErrors({});
+        toast.success('Photo uploaded successfully');
       }
     } catch (err) {
       if (err.fieldErrors) {
         setFieldErrors(err.fieldErrors);
       }
+      toast.error('Failed to upload photo');
     }
   };
 

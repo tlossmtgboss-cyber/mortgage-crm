@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuthHeaders } from '../utils/auth';
 import { useAsyncOperation, useFormSubmit } from '../hooks/useAsyncOperation';
 import { APIError } from '../utils/errorHandling';
+import { toast } from '../utils/toast';
 import './EmailIntegrationSettings.css';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -149,11 +150,13 @@ const EmailIntegrationSettings = () => {
         setFieldErrors({});
         setWarnings(response.warnings || []);
         loadEmailStatus(); // Refresh status after save
+        toast.success('Email settings saved successfully');
       }
     } catch (err) {
       if (err.fieldErrors) {
         setFieldErrors(err.fieldErrors);
       }
+      toast.error('Failed to save settings');
     }
   };
 
@@ -246,9 +249,11 @@ const EmailIntegrationSettings = () => {
 
       if (response?.success) {
         setTestResult({ success: true, message: `Test email sent to ${testEmail}` });
+        toast.success('Test email sent successfully');
       }
     } catch (err) {
       setTestResult({ success: false, message: err.message });
+      toast.error('Failed to send test email');
     }
   };
 
@@ -271,9 +276,11 @@ const EmailIntegrationSettings = () => {
           ...prev,
           ...response.data
         }));
+        toast.success('DNS verification complete');
       }
     } catch (err) {
       console.error('DNS verification error:', err);
+      toast.error('DNS verification failed');
     }
   };
 

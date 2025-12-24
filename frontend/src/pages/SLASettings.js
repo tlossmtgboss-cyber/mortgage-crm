@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../services/api';
+import { toast } from '../utils/toast';
 import './SLASettings.css';
 
 const SLASettings = () => {
@@ -125,11 +126,14 @@ const SLASettings = () => {
         }
       });
       if (response.ok) {
-        alert('SLA tables created and default measures seeded!');
+        toast.success('SLA tables created and default measures seeded!');
         fetchDashboard();
+      } else {
+        toast.error('Failed to run migration');
       }
     } catch (err) {
       console.error('Migration error:', err);
+      toast.error('Migration failed: ' + err.message);
     }
   };
 
@@ -315,16 +319,17 @@ const SLASettings = () => {
       if (response.ok) {
         // Immediately remove from local state for instant UI feedback
         setMeasures(prev => prev.filter(m => m.id !== measureId));
+        toast.success('Measure deleted successfully');
         // Then refresh from server to ensure consistency
         fetchDashboard();
       } else {
         const error = await response.json().catch(() => ({}));
         console.error('Error deleting measure:', error);
-        alert('Failed to delete measure: ' + (error.detail || 'Please try again.'));
+        toast.error('Failed to delete measure: ' + (error.detail || 'Please try again.'));
       }
     } catch (err) {
       console.error('Error deleting measure:', err);
-      alert('Failed to delete measure. Please try again.');
+      toast.error('Failed to delete measure. Please try again.');
     }
   };
 

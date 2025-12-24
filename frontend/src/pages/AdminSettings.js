@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../services/api';
+import { toast } from '../utils/toast';
 import './AdminSettings.css';
 
 const AdminSettings = () => {
@@ -33,6 +34,7 @@ const AdminSettings = () => {
           ...data
         }
       });
+      toast.success(`${jobType === 'create' ? 'Certifications created' : 'Reminders sent'} successfully`);
     } catch (err) {
       setResults({
         ...results,
@@ -41,6 +43,7 @@ const AdminSettings = () => {
           error: err.message
         }
       });
+      toast.error(`Failed to run ${jobType} job: ${err.message}`);
     } finally {
       setRunning({ ...running, [jobType]: false });
     }
