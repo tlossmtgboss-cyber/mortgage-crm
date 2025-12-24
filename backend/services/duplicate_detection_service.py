@@ -191,11 +191,11 @@ class DuplicateDetectionService:
 
     def find_duplicate_loans(self) -> List[Dict]:
         """Find duplicate loans based on borrower info."""
-        from main import Loan
+        from main import Loan, LoanStage
 
-        # Get all active loans
+        # Get all active loans (exclude funded and dead loans)
         loans = self.db.query(Loan).filter(
-            Loan.status.notin_(['funded', 'cancelled', 'denied'])
+            Loan.stage.notin_([LoanStage.FUNDED, LoanStage.DEAD])
         ).all()
 
         duplicates = []
@@ -207,7 +207,7 @@ class DuplicateDetectionService:
                 matches = self.db.query(Loan).filter(
                     Loan.id != loan.id,
                     Loan.borrower_email == loan.borrower_email,
-                    Loan.status.notin_(['funded', 'cancelled', 'denied'])
+                    Loan.stage.notin_([LoanStage.FUNDED, LoanStage.DEAD])
                 ).all()
 
                 for match in matches:
@@ -221,19 +221,19 @@ class DuplicateDetectionService:
                         'record_1': {
                             'id': loan.id,
                             'loan_number': loan.loan_number,
-                            'borrower_name': f"{loan.borrower_first_name or ''} {loan.borrower_last_name or ''}".strip(),
+                            'borrower_name': loan.borrower_name or '',
                             'borrower_email': loan.borrower_email,
-                            'amount': float(loan.loan_amount) if loan.loan_amount else None,
-                            'status': loan.status,
+                            'amount': float(loan.amount) if loan.amount else None,
+                            'status': str(loan.stage.value) if loan.stage else loan.status,
                             'created_at': loan.created_at.isoformat() if loan.created_at else None
                         },
                         'record_2': {
                             'id': match.id,
                             'loan_number': match.loan_number,
-                            'borrower_name': f"{match.borrower_first_name or ''} {match.borrower_last_name or ''}".strip(),
+                            'borrower_name': match.borrower_name or '',
                             'borrower_email': match.borrower_email,
-                            'amount': float(match.loan_amount) if match.loan_amount else None,
-                            'status': match.status,
+                            'amount': float(match.amount) if match.amount else None,
+                            'status': str(match.stage.value) if match.stage else match.status,
                             'created_at': match.created_at.isoformat() if match.created_at else None
                         },
                         'confidence_score': 100,
@@ -311,6 +311,9 @@ class DuplicateDetectionService:
             }
 
         # Create task
+        # Note: Task model uses Integer FKs - lead_id refs leads.id, loan_id refs loans.id
+        # LeadProfile uses UUID, so we can't link to Task.lead_id
+        # Only link loan_id for loan duplicates
         task = Task(
             title=title,
             description=description,
@@ -319,7 +322,7 @@ class DuplicateDetectionService:
             owner_id=assigned_to_user_id,
             related_type=f'duplicate_{record_type}',
             related_contact_name=name_1,
-            lead_id=int(record_1['id']) if record_type == 'lead' and record_1.get('id') else None
+            loan_id=record_1['id'] if record_type == 'loan' and isinstance(record_1.get('id'), int) else None
         )
 
         self.db.add(task)

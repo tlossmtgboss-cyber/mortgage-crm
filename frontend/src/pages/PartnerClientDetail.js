@@ -714,29 +714,6 @@ export default function PartnerClientDetail() {
         </section>
 
         {/* Loan Officer Contact */}
-        <section className="info-card lo-contact">
-          <h3 className="card-title">Your Loan Officer</h3>
-          {client?.loan_officer ? (
-            <div className="lo-card-content">
-              <div className="lo-avatar">
-                {client.loan_officer.name?.charAt(0) || 'L'}
-              </div>
-              <div className="lo-details">
-                <h4>{client.loan_officer.name || 'Assigned LO'}</h4>
-                {client.loan_officer.email && (
-                  <p><a href={`mailto:${client.loan_officer.email}`}>{client.loan_officer.email}</a></p>
-                )}
-                {client.loan_officer.phone && (
-                  <p><a href={`tel:${client.loan_officer.phone}`}>{formatPhone(client.loan_officer.phone)}</a></p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="no-data">Loan officer not yet assigned</p>
-          )}
-        </section>
-
-        {/* Loan Officer Contact - Now in main grid */}
         <section className="info-card lo-contact-card">
           <h3 className="card-title">Your Loan Officer</h3>
           {client?.loan_officer ? (
