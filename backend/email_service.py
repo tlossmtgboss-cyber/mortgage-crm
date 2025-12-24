@@ -43,7 +43,7 @@ class EmailService:
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
 
         # Common configuration
-        self.from_email = os.getenv('FROM_EMAIL', 'sarah@perenniaai.com')
+        self.from_email = os.getenv('FROM_EMAIL', 'sarah@reply.perenniaai.com')
         self.from_name = os.getenv('FROM_NAME', 'Sarah from Perennia AI')
 
         if self.use_sendgrid:

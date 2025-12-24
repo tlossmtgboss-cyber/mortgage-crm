@@ -42,7 +42,7 @@ class PURLEmailService:
     """Service for sending PURL-related emails."""
 
     def __init__(self):
-        self.from_email = os.getenv("EMAIL_FROM", "sarah@perenniaai.com")
+        self.from_email = os.getenv("EMAIL_FROM", "sarah@reply.perenniaai.com")
         self.from_name = os.getenv("EMAIL_FROM_NAME", "Sarah from Perennia AI")
         self.company_name = os.getenv("COMPANY_NAME", "Perennia AI")
         self.purl_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")

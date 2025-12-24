@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # SendGrid configuration
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "sarah@perenniaai.com")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
 SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Sarah from Perennia AI")
 
 # Twilio configuration
