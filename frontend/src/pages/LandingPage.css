@@ -3,6 +3,85 @@
   background-color: #fff;
 }
 
+/* Application Success Banner */
+.application-success-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: white;
+  z-index: 1001;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.success-banner-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+}
+
+.success-icon {
+  font-size: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.success-text {
+  flex: 1;
+}
+
+.success-text h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.success-text p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.close-banner-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.close-banner-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Adjust nav when banner is showing */
+.landing-page:has(.application-success-banner) .landing-nav {
+  top: 88px;
+}
+
+.landing-page:has(.application-success-banner) .hero-section {
+  padding-top: calc(180px + 88px);
+}
+
 /* Navigation Bar */
 .landing-nav {
   position: fixed;

@@ -1,13 +1,24 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../services/api';
 import './LandingPage.css';
 
 function LandingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showApplicationSuccess, setShowApplicationSuccess] = useState(false);
+
+  // Check for application submission success
+  useEffect(() => {
+    if (searchParams.get('application') === 'submitted') {
+      setShowApplicationSuccess(true);
+      // Remove the query param from URL without reload
+      window.history.replaceState({}, '', '/');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadPlans();
@@ -44,6 +55,26 @@ function LandingPage() {
 
   return (
     <div className="landing-page">
+      {/* Application Submission Success Banner */}
+      {showApplicationSuccess && (
+        <div className="application-success-banner">
+          <div className="success-banner-content">
+            <span className="success-icon">✓</span>
+            <div className="success-text">
+              <h3>Application Submitted Successfully!</h3>
+              <p>Thank you for your application. A loan officer will review your information and contact you shortly.</p>
+            </div>
+            <button
+              className="close-banner-btn"
+              onClick={() => setShowApplicationSuccess(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Navigation Bar */}
       <nav className="landing-nav">
         <div className="landing-nav-container">
