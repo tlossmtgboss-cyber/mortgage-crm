@@ -4953,7 +4953,7 @@ from middleware.dynamic_cors import DynamicCORSMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 app.add_middleware(IPBlockingMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=300, requests_per_hour=5000)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=600, requests_per_hour=10000)
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
 

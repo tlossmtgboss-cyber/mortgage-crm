@@ -272,9 +272,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.request_history: Dict[str, list] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
+        path = str(request.url.path)
+
         # Skip rate limiting for WebSocket connections
         if is_websocket_request(request):
-            logger.info(f"Bypassing rate limit for WebSocket: {request.url.path}")
+            logger.info(f"Bypassing rate limit for WebSocket: {path}")
+            return await call_next(request)
+
+        # Skip rate limiting for public paths (health, docs, webhooks, public API)
+        rate_limit_exempt_paths = [
+            "/health",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+            "/api/v1/public/",  # All public endpoints
+            "/api/v1/webhook/",  # Webhooks
+            "/api/v1/borrower/",  # Borrower portal
+            "/lo/",  # Loan officer microsites
+        ]
+        if any(path.startswith(p) for p in rate_limit_exempt_paths):
             return await call_next(request)
 
         # Mobile apps get higher rate limits (they share IPs via carrier NAT)
