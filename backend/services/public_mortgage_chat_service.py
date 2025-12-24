@@ -793,7 +793,7 @@ IMPORTANT: When offering to schedule, emphasize the VALUE of speaking with {lo_n
 SAMPLE SCHEDULING PITCH (vary this naturally):
 "I'd recommend setting up a quick call with {lo_name}. He talks with all our clients before they start looking - even 20 minutes can help you get the best home for the best price and put you in a strong position to potentially save thousands. Plus, his free mortgage planning program has saved clients tens of thousands over the years. Here are some available times - pick one that works for you!"
 
-{f"Available times:\\n{slots_text}" if slots_text else ""}
+{("Available times:" + chr(10) + slots_text) if slots_text else ""}
 
 If they say no: "No problem! I'm here whenever you have more questions."
 
