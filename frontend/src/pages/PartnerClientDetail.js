@@ -1,14 +1,12 @@
 /**
- * Partner Client Detail Page
+ * Partner Client Detail Page - Redesigned
  *
- * Comprehensive single-page view of a referred client for partner portal.
+ * Clean, focused view for partners to track their referred clients.
  * Features:
- * - Property address in header
- * - Visual milestone progress tracker
- * - Key dates based on current stage
- * - Loan summary, borrower info, property details, LO contact
- * - Collapsible outstanding items section
- * - Pre-approval letter generation button
+ * - Document collection progress with percentage
+ * - Activity/Notes timeline for client communications
+ * - Clean milestone progress tracker
+ * - Key loan details without redundancy
  */
 
 import React, { useState, useEffect } from 'react';
@@ -21,20 +19,20 @@ import './PartnerClientDetail.css';
 // API base URL
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
-// Activity type configuration for display
+// Activity type configuration
 const ACTIVITY_CONFIG = {
-  note: { label: 'Note', color: '#6366f1' },
-  call: { label: 'Call', color: '#10b981' },
-  email: { label: 'Email', color: '#3b82f6' },
-  sms: { label: 'SMS', color: '#8b5cf6' },
-  meeting: { label: 'Meeting', color: '#f59e0b' },
-  task: { label: 'Task', color: '#ef4444' },
-  document: { label: 'Document', color: '#06b6d4' },
-  status_change: { label: 'Status Change', color: '#218D8D' },
-  stage_change: { label: 'Stage Change', color: '#218D8D' },
+  note: { label: 'Note', icon: '📝', color: '#6366f1' },
+  call: { label: 'Call', icon: '📞', color: '#10b981' },
+  email: { label: 'Email', icon: '✉️', color: '#3b82f6' },
+  sms: { label: 'SMS', icon: '💬', color: '#8b5cf6' },
+  meeting: { label: 'Meeting', icon: '🤝', color: '#f59e0b' },
+  task: { label: 'Task', icon: '✓', color: '#ef4444' },
+  document: { label: 'Document', icon: '📄', color: '#06b6d4' },
+  status_change: { label: 'Status Update', icon: '🔄', color: '#218D8D' },
+  stage_change: { label: 'Stage Change', icon: '📊', color: '#218D8D' },
 };
 
-// Format relative time for activities
+// Format relative time
 const formatRelativeTime = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
@@ -51,48 +49,9 @@ const formatRelativeTime = (dateString) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// Status badge component
-const StatusBadge = ({ status, size = 'normal' }) => {
-  const statusConfig = {
-    'New': { color: 'blue', label: 'New Lead' },
-    'new': { color: 'blue', label: 'New Lead' },
-    'lead': { color: 'blue', label: 'Lead' },
-    'Attempted Contact': { color: 'yellow', label: 'Attempted Contact' },
-    'attempted_contact': { color: 'yellow', label: 'Attempted Contact' },
-    'Prospect': { color: 'purple', label: 'Prospect' },
-    'prospect': { color: 'purple', label: 'Prospect' },
-    'Application': { color: 'orange', label: 'Application' },
-    'application': { color: 'orange', label: 'Application' },
-    'processing': { color: 'cyan', label: 'Processing' },
-    'submitted': { color: 'indigo', label: 'Submitted' },
-    'underwriting': { color: 'violet', label: 'Underwriting' },
-    'Pre-Qualified': { color: 'cyan', label: 'Pre-Qualified' },
-    'pre_qualified': { color: 'cyan', label: 'Pre-Qualified' },
-    'Pre-Approved': { color: 'green', label: 'Pre-Approved' },
-    'pre_approved': { color: 'green', label: 'Pre-Approved' },
-    'conditional_approval': { color: 'green', label: 'Conditional Approval' },
-    'under_contract': { color: 'teal', label: 'Under Contract' },
-    'clear_to_close': { color: 'emerald', label: 'Clear to Close' },
-    'Completed': { color: 'emerald', label: 'Completed' },
-    'funded': { color: 'emerald', label: 'Funded' },
-    'Withdrawn': { color: 'gray', label: 'Withdrawn' },
-    'denied': { color: 'red', label: 'Denied' },
-  };
-
-  const config = statusConfig[status] || { color: 'gray', label: status };
-
-  return (
-    <span className={`status-badge status-${config.color} ${size === 'large' ? 'badge-large' : ''}`}>
-      {config.label}
-    </span>
-  );
-};
-
 // Format full property address
 const formatAddress = (client) => {
   const parts = [];
-
-  // Handle different data structures
   const address = client?.property_address || client?.property?.address || client?.address;
   const city = client?.property_city || client?.property?.city || client?.city;
   const state = client?.property_state || client?.property?.state || client?.state;
@@ -111,157 +70,149 @@ const formatAddress = (client) => {
   return parts.join(', ') || 'Property Address TBD';
 };
 
-// Key dates component based on stage
-const KeyDates = ({ client, stage }) => {
-  const getDatesForStage = () => {
-    const dates = [];
+// Document Progress Component
+const DocumentProgress = ({ documents }) => {
+  const requested = documents?.requested_count || documents?.outstanding_count || 0;
+  const received = documents?.received_count || 0;
+  const total = requested + received || 8; // Default to 8 typical docs
+  const percentage = total > 0 ? Math.round((received / total) * 100) : 0;
 
-    // Always show created date
-    if (client?.created_at) {
-      dates.push({
-        label: 'Lead Created',
-        date: client.created_at,
-        completed: true
-      });
-    }
-
-    // Application stage and beyond
-    if (['application', 'Application', 'pre_qualified', 'Pre-Qualified', 'pre_approved', 'Pre-Approved',
-         'under_contract', 'processing', 'submitted', 'underwriting', 'clear_to_close', 'funded', 'Completed'].includes(stage)) {
-      if (client?.application_date || client?.application_submitted_at) {
-        dates.push({
-          label: 'Application Submitted',
-          date: client.application_date || client.application_submitted_at,
-          completed: true
-        });
-      }
-    }
-
-    // Pre-qualified stage and beyond
-    if (['pre_qualified', 'Pre-Qualified', 'pre_approved', 'Pre-Approved', 'under_contract',
-         'processing', 'submitted', 'underwriting', 'clear_to_close', 'funded', 'Completed'].includes(stage)) {
-      if (client?.credit_pulled_at) {
-        dates.push({
-          label: 'Credit Pulled',
-          date: client.credit_pulled_at,
-          completed: true
-        });
-      }
-    }
-
-    // Pre-approved stage and beyond
-    if (['pre_approved', 'Pre-Approved', 'under_contract', 'processing', 'submitted',
-         'underwriting', 'clear_to_close', 'funded', 'Completed'].includes(stage)) {
-      if (client?.preapproval_date || client?.pre_approval_date) {
-        dates.push({
-          label: 'Pre-Approval Issued',
-          date: client.preapproval_date || client.pre_approval_date,
-          completed: true
-        });
-      }
-      if (client?.preapproval_expiration || client?.pre_approval_expiration) {
-        dates.push({
-          label: 'Pre-Approval Expires',
-          date: client.preapproval_expiration || client.pre_approval_expiration,
-          completed: false,
-          isDeadline: true
-        });
-      }
-    }
-
-    // Under contract and beyond
-    if (['under_contract', 'processing', 'submitted', 'underwriting', 'clear_to_close', 'funded', 'Completed'].includes(stage)) {
-      if (client?.contract_date) {
-        dates.push({
-          label: 'Contract Date',
-          date: client.contract_date,
-          completed: true
-        });
-      }
-    }
-
-    // Expected close always shown if available
-    if (client?.expected_close_date || client?.closing_date) {
-      dates.push({
-        label: 'Expected Close',
-        date: client.expected_close_date || client.closing_date,
-        completed: stage === 'funded' || stage === 'Completed',
-        isTarget: true
-      });
-    }
-
-    // Funded date
-    if ((stage === 'funded' || stage === 'Completed') && client?.funded_at) {
-      dates.push({
-        label: 'Funded',
-        date: client.funded_at,
-        completed: true
-      });
-    }
-
-    return dates;
+  // Get color based on percentage
+  const getProgressColor = () => {
+    if (percentage >= 80) return '#10b981'; // Green
+    if (percentage >= 50) return '#f59e0b'; // Amber
+    return '#ef4444'; // Red
   };
-
-  const formatDateDisplay = (dateStr) => {
-    if (!dateStr) return 'TBD';
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const dates = getDatesForStage();
-
-  if (dates.length === 0) {
-    return null;
-  }
 
   return (
-    <div className="key-dates-section">
-      <h3 className="section-title">Key Dates</h3>
-      <div className="dates-grid">
-        {dates.map((item, idx) => (
-          <div
-            key={idx}
-            className={`date-card ${item.completed ? 'completed' : ''} ${item.isDeadline ? 'deadline' : ''} ${item.isTarget ? 'target' : ''}`}
-          >
-            <span className="date-label">{item.label}</span>
-            <span className="date-value">{formatDateDisplay(item.date)}</span>
-            {item.completed && <span className="date-check">&#10003;</span>}
-          </div>
-        ))}
+    <div className="document-progress-card">
+      <div className="progress-header">
+        <h3>Document Collection</h3>
+        <span className="progress-percentage" style={{ color: getProgressColor() }}>
+          {percentage}%
+        </span>
       </div>
+
+      <div className="progress-bar-container">
+        <div
+          className="progress-bar-fill"
+          style={{
+            width: `${percentage}%`,
+            background: `linear-gradient(90deg, ${getProgressColor()} 0%, ${getProgressColor()}dd 100%)`
+          }}
+        />
+      </div>
+
+      <div className="progress-stats">
+        <div className="progress-stat">
+          <span className="stat-number received">{received}</span>
+          <span className="stat-label">Received</span>
+        </div>
+        <div className="progress-divider">/</div>
+        <div className="progress-stat">
+          <span className="stat-number total">{total}</span>
+          <span className="stat-label">Requested</span>
+        </div>
+      </div>
+
+      {documents?.outstanding?.length > 0 && (
+        <div className="outstanding-docs">
+          <h4>Still Needed:</h4>
+          <ul>
+            {documents.outstanding.slice(0, 4).map((doc, idx) => (
+              <li key={idx}>
+                <span className="doc-bullet">•</span>
+                {doc.title || doc.type || doc.name}
+              </li>
+            ))}
+            {documents.outstanding.length > 4 && (
+              <li className="more-docs">+{documents.outstanding.length - 4} more</li>
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };
 
-// Collapsible section component
-const CollapsibleSection = ({ title, count, children, defaultOpen = false }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+// Notes & Activity Timeline Component
+const ActivityTimeline = ({ activities, stageHistory, conversationLog }) => {
+  // Combine all activities into unified timeline
+  const getTimeline = () => {
+    const timeline = [];
+
+    // Add activities
+    (activities || []).forEach(activity => {
+      timeline.push({
+        id: `activity-${activity.id}`,
+        type: activity.type?.toLowerCase() || 'note',
+        content: activity.content || activity.notes || activity.description,
+        created_at: activity.created_at,
+        user: activity.user_name || activity.created_by,
+      });
+    });
+
+    // Add stage changes
+    (stageHistory || []).forEach(history => {
+      timeline.push({
+        id: `stage-${history.id}`,
+        type: 'stage_change',
+        content: `Status changed from "${history.from_stage || 'New'}" to "${history.to_stage}"`,
+        created_at: history.changed_at,
+      });
+    });
+
+    // Add conversation log
+    (conversationLog || []).forEach((log, idx) => {
+      timeline.push({
+        id: `conv-${idx}`,
+        type: log.type || 'note',
+        content: log.content || log.message || log.description,
+        created_at: log.timestamp || log.created_at,
+        user: log.user,
+      });
+    });
+
+    // Sort by date (newest first)
+    timeline.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return timeline;
+  };
+
+  const timeline = getTimeline();
 
   return (
-    <div className={`collapsible-section ${isOpen ? 'open' : ''}`}>
-      <button
-        className="collapsible-header"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span className="collapsible-title">
-          {title}
-          {count !== undefined && count > 0 && (
-            <span className="count-badge">{count}</span>
-          )}
-        </span>
-        <span className={`chevron ${isOpen ? 'open' : ''}`}>&#9660;</span>
-      </button>
-      {isOpen && (
-        <div className="collapsible-content">
-          {children}
+    <div className="activity-timeline-card">
+      <div className="timeline-header">
+        <h3>Notes & Activity</h3>
+        <span className="timeline-count">{timeline.length} updates</span>
+      </div>
+
+      {timeline.length === 0 ? (
+        <div className="empty-timeline">
+          <span className="empty-icon">📋</span>
+          <p>No activity recorded yet</p>
+        </div>
+      ) : (
+        <div className="timeline-list">
+          {timeline.slice(0, 10).map((item) => {
+            const config = ACTIVITY_CONFIG[item.type] || { label: 'Update', icon: '📌', color: '#6b7280' };
+
+            return (
+              <div key={item.id} className="timeline-item">
+                <div className="timeline-icon" style={{ background: `${config.color}15`, color: config.color }}>
+                  {config.icon}
+                </div>
+                <div className="timeline-content">
+                  <div className="timeline-meta">
+                    <span className="timeline-type">{config.label}</span>
+                    <span className="timeline-time">{formatRelativeTime(item.created_at)}</span>
+                  </div>
+                  <p className="timeline-text">{item.content}</p>
+                  {item.user && <span className="timeline-user">by {item.user}</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -282,7 +233,6 @@ export default function PartnerClientDetail() {
     loadClientData();
   }, [clientId]);
 
-  // Fetch activities and stage history after client data is loaded
   useEffect(() => {
     if (clientData?.client?.id) {
       loadActivities();
@@ -293,13 +243,11 @@ export default function PartnerClientDetail() {
   const loadActivities = async () => {
     try {
       const jwtToken = localStorage.getItem('token');
-      if (!jwtToken) return; // Only fetch if CRM user is logged in
-
-      const activitiesData = await activitiesAPI.getAll({ lead_id: clientId });
-      setActivities(activitiesData || []);
+      if (!jwtToken) return;
+      const data = await activitiesAPI.getAll({ lead_id: clientId });
+      setActivities(data || []);
     } catch (err) {
       console.error('Error loading activities:', err);
-      // Don't show error to user - activities are supplementary
     }
   };
 
@@ -327,52 +275,17 @@ export default function PartnerClientDetail() {
     }
   };
 
-  // Combine activities and stage history into unified timeline
-  const getCombinedTimeline = () => {
-    const timeline = [];
-
-    // Add activities
-    activities.forEach(activity => {
-      timeline.push({
-        id: `activity-${activity.id}`,
-        type: activity.type?.toLowerCase() || 'note',
-        content: activity.content,
-        created_at: activity.created_at,
-        source: 'activity',
-      });
-    });
-
-    // Add stage changes
-    stageHistory.forEach(history => {
-      timeline.push({
-        id: `stage-${history.id}`,
-        type: 'stage_change',
-        content: `Status changed from "${history.from_stage || 'New'}" to "${history.to_stage}"`,
-        created_at: history.changed_at,
-        from_stage: history.from_stage,
-        to_stage: history.to_stage,
-        source: 'stage_history',
-      });
-    });
-
-    // Sort by date (newest first)
-    timeline.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    return timeline;
-  };
-
   const loadClientData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Check for CRM JWT token first (internal user), then partner token (external partner)
       const jwtToken = localStorage.getItem('token');
       const partnerToken = localStorage.getItem('partnerToken') || new URLSearchParams(window.location.search).get('token');
 
       let response;
 
-      // Try CRM authentication first if token exists
+      // Try CRM authentication first
       if (jwtToken) {
         try {
           response = await fetch(
@@ -387,7 +300,6 @@ export default function PartnerClientDetail() {
 
           if (response.ok) {
             const leadData = await response.json();
-            // Transform lead data to match expected client data format
             setClientData({
               success: true,
               client: {
@@ -416,12 +328,7 @@ export default function PartnerClientDetail() {
                 created_at: leadData.created_at,
                 updated_at: leadData.updated_at,
                 expected_close_date: leadData.expected_close_date,
-                application_date: leadData.application_date,
-                // Employment info
-                employer: leadData.employer,
-                job_title: leadData.job_title,
-                annual_income: leadData.annual_income,
-                // LO info
+                purchase_price: leadData.purchase_price || leadData.property_value,
                 loan_officer: leadData.assigned_user ? {
                   name: leadData.assigned_user.name,
                   email: leadData.assigned_user.email,
@@ -432,24 +339,15 @@ export default function PartnerClientDetail() {
                 outstanding: [],
                 received: [],
                 outstanding_count: 0,
-                received_count: 0
+                received_count: 0,
+                requested_count: 8
               },
-              milestones: [],
               conversations: []
             });
             return;
-          } else if (response.status === 404) {
-            throw new Error('Lead not found');
-          } else if (response.status === 401) {
-            console.log('JWT expired, trying partner token...');
-          } else {
-            throw new Error(`Failed to load lead: ${response.status}`);
           }
         } catch (jwtError) {
           console.error('JWT auth failed:', jwtError);
-          if (jwtError.message && !jwtError.message.includes('401')) {
-            throw jwtError;
-          }
         }
       }
 
@@ -464,12 +362,8 @@ export default function PartnerClientDetail() {
       );
 
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Session expired. Please log in again.');
-        }
-        if (response.status === 403) {
-          throw new Error('You do not have access to this client.');
-        }
+        if (response.status === 401) throw new Error('Session expired. Please log in again.');
+        if (response.status === 403) throw new Error('You do not have access to this client.');
         throw new Error('Failed to load client details');
       }
 
@@ -488,7 +382,7 @@ export default function PartnerClientDetail() {
   };
 
   const formatCurrency = (amount) => {
-    if (!amount) return 'N/A';
+    if (!amount) return 'TBD';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -497,7 +391,7 @@ export default function PartnerClientDetail() {
   };
 
   const formatPhone = (phone) => {
-    if (!phone) return 'N/A';
+    if (!phone) return null;
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length === 10) {
       return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
@@ -505,19 +399,9 @@ export default function PartnerClientDetail() {
     return phone;
   };
 
-  const handleGeneratePreApproval = () => {
-    setShowPreApprovalModal(true);
-  };
-
-  const handleContactLO = () => {
-    if (clientData?.client?.loan_officer?.email) {
-      window.location.href = `mailto:${clientData.client.loan_officer.email}`;
-    }
-  };
-
   if (loading) {
     return (
-      <div className="partner-client-detail loading">
+      <div className="partner-client-detail-v2 loading-state">
         <div className="loading-spinner" />
         <p>Loading client details...</p>
       </div>
@@ -526,11 +410,12 @@ export default function PartnerClientDetail() {
 
   if (error) {
     return (
-      <div className="partner-client-detail error">
+      <div className="partner-client-detail-v2 error-state">
         <div className="error-content">
-          <h2>Error</h2>
+          <span className="error-icon">⚠️</span>
+          <h2>Unable to Load</h2>
           <p>{error}</p>
-          <button onClick={() => navigate(-1)}>Go Back</button>
+          <button className="btn-back" onClick={() => navigate(-1)}>Go Back</button>
         </div>
       </div>
     );
@@ -538,303 +423,165 @@ export default function PartnerClientDetail() {
 
   if (!clientData) {
     return (
-      <div className="partner-client-detail not-found">
+      <div className="partner-client-detail-v2 error-state">
         <h2>Client Not Found</h2>
-        <button onClick={() => navigate(-1)}>Go Back</button>
+        <button className="btn-back" onClick={() => navigate(-1)}>Go Back</button>
       </div>
     );
   }
 
-  const { client, documents, milestones, third_party_orders, conversation_log } = clientData;
+  const { client, documents, conversation_log } = clientData;
   const currentStage = client?.status || client?.stage || 'new';
 
   return (
     <div className="partner-client-detail-v2">
-      {/* Minimal Top Bar */}
-      <div className="top-bar">
-        <button className="back-link" onClick={() => navigate(-1)}>
-          <span className="back-arrow">&#8592;</span> Back to Dashboard
+      {/* Top Navigation */}
+      <nav className="top-nav">
+        <button className="back-btn" onClick={() => navigate(-1)}>
+          ← Back to Dashboard
         </button>
-      </div>
+      </nav>
 
-      {/* Client Hero Section */}
-      <div className="client-hero">
-        <div className="hero-main">
+      {/* Client Header */}
+      <header className="client-header">
+        <div className="header-left">
           <div className="client-avatar">
             {(client?.first_name || client?.borrower_name || 'C').charAt(0).toUpperCase()}
           </div>
-          <div className="hero-info">
-            <h1 className="client-name">{client?.borrower_name || client?.name || 'Client Name'}</h1>
-            <div className="hero-meta">
-              <span className="meta-item">
-                <span className="meta-icon">&#127968;</span>
-                {formatAddress(client)}
-              </span>
-            </div>
-          </div>
-          <div className="hero-actions">
-            <button className="action-btn primary" onClick={handleGeneratePreApproval}>
-              <span className="btn-icon">&#128196;</span>
-              Pre-Approval Letter
-            </button>
-            {client?.loan_officer?.email && (
-              <button className="action-btn secondary" onClick={handleContactLO}>
-                <span className="btn-icon">&#9993;</span>
-                Contact LO
-              </button>
-            )}
+          <div className="client-info">
+            <h1>{client?.borrower_name || client?.name || 'Client'}</h1>
+            <p className="property-address">
+              📍 {formatAddress(client)}
+            </p>
           </div>
         </div>
-
-        {/* Quick Stats Bar */}
-        <div className="quick-stats">
-          <div className="stat-item">
-            <span className="stat-label">Loan Amount</span>
-            <span className="stat-value">{formatCurrency(client?.loan_amount)}</span>
-          </div>
-          <div className="stat-divider"></div>
-          <div className="stat-item">
-            <span className="stat-label">Loan Type</span>
-            <span className="stat-value">{client?.loan_type || 'TBD'}</span>
-          </div>
-          <div className="stat-divider"></div>
-          <div className="stat-item">
-            <span className="stat-label">Status</span>
-            <span className="stat-value">
-              <StatusBadge status={currentStage} size="large" />
-            </span>
-          </div>
-          <div className="stat-divider"></div>
-          <div className="stat-item">
-            <span className="stat-label">Expected Close</span>
-            <span className="stat-value">{client?.expected_close_date ? new Date(client.expected_close_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}</span>
-          </div>
+        <div className="header-actions">
+          <button className="btn-primary" onClick={() => setShowPreApprovalModal(true)}>
+            📄 Pre-Approval Letter
+          </button>
         </div>
-      </div>
+      </header>
 
       {/* Progress Tracker */}
       <section className="progress-section">
         <MilestoneProgressTracker currentStatus={currentStage} />
       </section>
 
-      {/* Main Content */}
-      <div className="main-content">
-        {/* Loan Details Card - shows details not in Quick Stats */}
-        <section className="info-card loan-summary">
-          <h3 className="card-title">Loan Details</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Interest Rate</label>
-              <span>{client?.interest_rate ? `${client.interest_rate}%` : 'TBD'}</span>
-            </div>
-            <div className="info-item">
-              <label>Loan Term</label>
-              <span>{client?.loan_term ? `${client.loan_term} years` : 'TBD'}</span>
-            </div>
-            <div className="info-item">
-              <label>LTV</label>
-              <span>{client?.ltv_ratio ? `${client.ltv_ratio}%` : 'TBD'}</span>
-            </div>
-            <div className="info-item">
-              <label>Down Payment</label>
-              <span>{formatCurrency(client?.down_payment) || 'TBD'}</span>
+      {/* Main Grid Layout */}
+      <div className="content-grid">
+        {/* Left Column - Key Info */}
+        <div className="left-column">
+          {/* Loan Summary Card */}
+          <div className="info-card">
+            <h3>Loan Summary</h3>
+            <div className="summary-grid">
+              <div className="summary-item highlight">
+                <span className="label">Loan Amount</span>
+                <span className="value large">{formatCurrency(client?.loan_amount)}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Loan Type</span>
+                <span className="value">{client?.loan_type || 'Conventional'}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Purchase Price</span>
+                <span className="value">{formatCurrency(client?.purchase_price)}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Down Payment</span>
+                <span className="value">{formatCurrency(client?.down_payment)}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">LTV</span>
+                <span className="value">{client?.ltv_ratio ? `${client.ltv_ratio}%` : 'TBD'}</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Interest Rate</span>
+                <span className="value">{client?.interest_rate ? `${client.interest_rate}%` : 'TBD'}</span>
+              </div>
             </div>
           </div>
-        </section>
 
-        {/* Borrower Information */}
-        <section className="info-card borrower-info">
-          <h3 className="card-title">Borrower Information</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Name</label>
-              <span>{client?.borrower_name || client?.name || 'N/A'}</span>
-            </div>
-            <div className="info-item">
-              <label>Email</label>
-              <span className="email-link">
-                {client?.email ? (
+          {/* Borrower Card */}
+          <div className="info-card">
+            <h3>Borrower</h3>
+            <div className="borrower-details">
+              <div className="detail-row">
+                <span className="icon">👤</span>
+                <span>{client?.borrower_name || client?.name}</span>
+              </div>
+              {client?.email && (
+                <div className="detail-row">
+                  <span className="icon">✉️</span>
                   <a href={`mailto:${client.email}`}>{client.email}</a>
-                ) : 'N/A'}
-              </span>
-            </div>
-            <div className="info-item">
-              <label>Phone</label>
-              <span>{formatPhone(client?.phone)}</span>
-            </div>
-            <div className="info-item">
-              <label>Credit Score</label>
-              <span className={client?.credit_score >= 700 ? 'score-good' : client?.credit_score >= 620 ? 'score-fair' : 'score-low'}>
-                {client?.credit_score || 'N/A'}
-              </span>
-            </div>
-            {client?.employer && (
-              <div className="info-item">
-                <label>Employer</label>
-                <span>{client.employer}</span>
-              </div>
-            )}
-            {client?.annual_income && (
-              <div className="info-item">
-                <label>Annual Income</label>
-                <span>{formatCurrency(client.annual_income)}</span>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Property Details */}
-        <section className="info-card property-details">
-          <h3 className="card-title">Property Details</h3>
-          <div className="info-grid">
-            <div className="info-item full-width">
-              <label>Address</label>
-              <span>{formatAddress(client)}</span>
-            </div>
-            <div className="info-item">
-              <label>Property Type</label>
-              <span>{client?.property_type || 'TBD'}</span>
-            </div>
-            <div className="info-item">
-              <label>Purchase Price</label>
-              <span>{formatCurrency(client?.purchase_price || client?.property_value)}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Loan Officer Contact */}
-        <section className="info-card lo-contact-card">
-          <h3 className="card-title">Your Loan Officer</h3>
-          {client?.loan_officer ? (
-            <div className="lo-info-grid">
-              <div className="lo-avatar-lg">
-                {client.loan_officer.name?.charAt(0) || 'L'}
-              </div>
-              <div className="lo-contact-info">
-                <h4 className="lo-name">{client.loan_officer.name || 'Assigned LO'}</h4>
-                {client.loan_officer.email && (
-                  <a href={`mailto:${client.loan_officer.email}`} className="lo-email">
-                    &#9993; {client.loan_officer.email}
-                  </a>
-                )}
-                {client.loan_officer.phone && (
-                  <a href={`tel:${client.loan_officer.phone}`} className="lo-phone">
-                    &#128222; {formatPhone(client.loan_officer.phone)}
-                  </a>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="no-data">Loan officer not yet assigned</p>
-          )}
-        </section>
-      </div>
-
-      {/* Collapsible Sections */}
-      <div className="collapsible-area">
-        {/* Outstanding Items */}
-        {documents && (documents.outstanding_count > 0 || documents.outstanding?.length > 0) && (
-          <CollapsibleSection
-            title="Outstanding Documents"
-            count={documents.outstanding_count || documents.outstanding?.length}
-            defaultOpen={true}
-          >
-            <div className="outstanding-list">
-              {documents.outstanding?.length > 0 ? (
-                documents.outstanding.map((doc, idx) => (
-                  <div key={idx} className="doc-item">
-                    <span className={`doc-priority priority-${doc.priority?.toLowerCase() || 'normal'}`} />
-                    <div className="doc-info">
-                      <span className="doc-title">{doc.title || doc.type}</span>
-                      {doc.due_date && <span className="doc-due">Due: {doc.due_date}</span>}
-                    </div>
-                    <span className={`doc-status status-${doc.status?.toLowerCase() || 'pending'}`}>
-                      {doc.status === 'OPEN' ? 'Needed' : doc.status}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-message">No outstanding documents</p>
+                </div>
+              )}
+              {client?.phone && (
+                <div className="detail-row">
+                  <span className="icon">📱</span>
+                  <a href={`tel:${client.phone}`}>{formatPhone(client.phone)}</a>
+                </div>
+              )}
+              {client?.credit_score > 0 && (
+                <div className="detail-row">
+                  <span className="icon">📊</span>
+                  <span className={`credit-score ${client.credit_score >= 700 ? 'good' : client.credit_score >= 620 ? 'fair' : 'low'}`}>
+                    Credit Score: {client.credit_score}
+                  </span>
+                </div>
               )}
             </div>
-          </CollapsibleSection>
-        )}
-
-        {/* Recent Activity */}
-        <CollapsibleSection title="Recent Activity" defaultOpen={true} count={getCombinedTimeline().length}>
-          <div className="timeline">
-            {(() => {
-              const timeline = getCombinedTimeline();
-              const displayItems = timeline.length > 0 ? timeline : (conversation_log || []);
-
-              if (displayItems.length === 0) {
-                return <p className="empty-message">No recent activity</p>;
-              }
-
-              return displayItems.slice(0, 10).map((item, idx) => {
-                const activityConfig = ACTIVITY_CONFIG[item.type] || { label: item.type || 'Update', color: '#6b7280' };
-
-                return (
-                  <div key={item.id || idx} className="timeline-item">
-                    <div className="timeline-marker" style={{ backgroundColor: activityConfig.color }} />
-                    <div className="timeline-content">
-                      <div className="timeline-header">
-                        <span className="timeline-type" style={{ backgroundColor: `${activityConfig.color}15`, color: activityConfig.color }}>
-                          {activityConfig.label}
-                        </span>
-                        <span className="timeline-time">{formatRelativeTime(item.created_at)}</span>
-                      </div>
-                      <p className="timeline-text">{item.content || item.description || 'Activity logged'}</p>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
           </div>
-        </CollapsibleSection>
 
-        {/* Third-Party Orders */}
-        {third_party_orders && (
-          <CollapsibleSection title="Third-Party Orders" defaultOpen={false}>
-            <div className="orders-grid">
-              <div className={`order-card ${third_party_orders.appraisal?.received_date ? 'complete' : ''}`}>
-                <span className="order-icon">&#127968;</span>
-                <span className="order-label">Appraisal</span>
-                <span className={`order-badge ${third_party_orders.appraisal?.received_date ? 'done' : third_party_orders.appraisal?.ordered_date ? 'pending' : 'not-started'}`}>
-                  {third_party_orders.appraisal?.received_date ? 'Complete' :
-                   third_party_orders.appraisal?.ordered_date ? 'In Progress' : 'Not Ordered'}
-                </span>
+          {/* Loan Officer Card */}
+          <div className="info-card lo-card">
+            <h3>Your Loan Officer</h3>
+            {client?.loan_officer ? (
+              <div className="lo-details">
+                <div className="lo-avatar">
+                  {client.loan_officer.name?.charAt(0) || 'L'}
+                </div>
+                <div className="lo-info">
+                  <strong>{client.loan_officer.name}</strong>
+                  {client.loan_officer.email && (
+                    <a href={`mailto:${client.loan_officer.email}`}>
+                      ✉️ {client.loan_officer.email}
+                    </a>
+                  )}
+                  {client.loan_officer.phone && (
+                    <a href={`tel:${client.loan_officer.phone}`}>
+                      📞 {formatPhone(client.loan_officer.phone)}
+                    </a>
+                  )}
+                </div>
               </div>
-              <div className={`order-card ${third_party_orders.title?.received_date ? 'complete' : ''}`}>
-                <span className="order-icon">&#128203;</span>
-                <span className="order-label">Title</span>
-                <span className={`order-badge ${third_party_orders.title?.received_date ? 'done' : third_party_orders.title?.ordered_date ? 'pending' : 'not-started'}`}>
-                  {third_party_orders.title?.received_date ? 'Complete' :
-                   third_party_orders.title?.ordered_date ? 'In Progress' : 'Not Ordered'}
-                </span>
-              </div>
-              <div className={`order-card ${third_party_orders.homeowners_insurance?.received_date ? 'complete' : ''}`}>
-                <span className="order-icon">&#128737;</span>
-                <span className="order-label">Insurance</span>
-                <span className={`order-badge ${third_party_orders.homeowners_insurance?.received_date ? 'done' : third_party_orders.homeowners_insurance?.ordered_date ? 'pending' : 'not-started'}`}>
-                  {third_party_orders.homeowners_insurance?.received_date ? 'Complete' :
-                   third_party_orders.homeowners_insurance?.ordered_date ? 'In Progress' : 'Not Ordered'}
-                </span>
-              </div>
-            </div>
-          </CollapsibleSection>
-        )}
+            ) : (
+              <p className="no-lo">Loan officer will be assigned soon</p>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column - Progress & Activity */}
+        <div className="right-column">
+          {/* Document Progress */}
+          <DocumentProgress documents={documents} />
+
+          {/* Activity Timeline */}
+          <ActivityTimeline
+            activities={activities}
+            stageHistory={stageHistory}
+            conversationLog={conversation_log}
+          />
+        </div>
       </div>
 
-      {/* Pre-Approval Letter Modal */}
+      {/* Pre-Approval Modal */}
       <PreApprovalLetterModal
         isOpen={showPreApprovalModal}
         onClose={() => setShowPreApprovalModal(false)}
         clientData={clientData}
         partnerId={partnerId}
-        onLetterGenerated={(data) => {
-          console.log('Letter generated:', data);
-        }}
+        onLetterGenerated={(data) => console.log('Letter generated:', data)}
       />
     </div>
   );
