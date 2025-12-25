@@ -819,9 +819,30 @@ class WorkflowSLAService:
         This is called during enrollment and by the scheduler.
         Returns the number of tasks created.
         """
-        # This will be implemented in TaskGeneratorService
-        # For now, return 0
-        return 0
+        try:
+            from services.workflow_task_generator import TaskGeneratorService
+
+            # Get the instance ID from the instance object
+            instance_id = instance.id if hasattr(instance, 'id') else instance.get('id')
+            if not instance_id:
+                logger.warning("Cannot generate tasks: instance ID not available")
+                return 0
+
+            # Use the task generator service
+            task_generator = TaskGeneratorService(self.db)
+            result = task_generator.generate_tasks_for_instance(instance_id)
+
+            if result.get("success"):
+                tasks_created = result.get("tasks_created", 0)
+                logger.info(f"Generated {tasks_created} tasks for instance {instance_id}")
+                return tasks_created
+            else:
+                logger.warning(f"Task generation failed: {result.get('error')}")
+                return 0
+
+        except Exception as e:
+            logger.error(f"Error generating tasks: {e}")
+            return 0
 
 
 # =============================================================================
