@@ -89,6 +89,19 @@ from middleware.purl_auth import (
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def get_user_org_id(user) -> int:
+    """
+    Get user's organization_id, defaulting to 1 if NULL.
+    This handles cases where users don't have an explicit organization assigned.
+    """
+    return user.organization_id if user.organization_id else 1
+
+
 # =============================================================================
 # AUTO-CREATE LEAD_CONDITIONS TABLE IF NOT EXISTS
 # =============================================================================
@@ -1133,8 +1146,9 @@ async def search_contacts_for_workspace(
 
     if lead_ids:
         # Find workspaces that have these lead_ids in their metadata
+        org_id = get_user_org_id(current_user)
         workspaces_with_leads = db.query(PURLWorkspace).filter(
-            PURLWorkspace.organization_id == current_user.organization_id,
+            PURLWorkspace.organization_id == org_id,
             PURLWorkspace.meta_data['lead_id'].astext.in_(lead_ids)
         ).all()
 
@@ -1195,6 +1209,8 @@ async def create_workspace(
     """Create a new PURL workspace with duplicate prevention."""
     from main import Lead
 
+    org_id = get_user_org_id(current_user)
+
     # Get lead if lead_id provided
     lead = None
     if request.lead_id:
@@ -1208,7 +1224,7 @@ async def create_workspace(
 
         # Check for existing workspace for this lead
         existing = db.query(PURLWorkspace).filter(
-            PURLWorkspace.organization_id == current_user.organization_id,
+            PURLWorkspace.organization_id == org_id,
             PURLWorkspace.meta_data['lead_id'].astext == str(request.lead_id)
         ).first()
 
@@ -1254,7 +1270,7 @@ async def create_workspace(
 
     try:
         result = service.create_workspace(
-            organization_id=current_user.organization_id,
+            organization_id=org_id,
             data=workspace_data,
             owner_user_id=current_user.id,
             first_name=borrower_first,  # For firstname.lastname slug format
@@ -1267,7 +1283,7 @@ async def create_workspace(
 
     if borrower_email or borrower_phone:
         contact = PURLContact(
-            organization_id=current_user.organization_id,
+            organization_id=org_id,
             workspace_id=result["id"],
             contact_type="borrower",
             first_name=borrower_first,
@@ -1298,8 +1314,13 @@ async def list_workspaces(
     db: Session = Depends(get_db)
 ):
     """List PURL workspaces for the organization."""
+    # Handle NULL organization_id - default to 1 (main organization)
+    org_id = get_user_org_id(current_user)
+
+    logger.info(f"list_workspaces: user={current_user.email}, org_id={org_id} (user.org_id={current_user.organization_id})")
+
     query = db.query(PURLWorkspace).filter(
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     )
 
     # Map frontend filter values to actual workspace statuses
@@ -1371,9 +1392,11 @@ async def get_workspace_by_lead(
     """Get workspace for a specific lead - used by PURLWidget in profile pages."""
     from sqlalchemy import or_, cast, String
 
+    org_id = get_user_org_id(current_user)
+
     # Try to find workspace by lead_id in metadata
     workspace = db.query(PURLWorkspace).filter(
-        PURLWorkspace.organization_id == current_user.organization_id,
+        PURLWorkspace.organization_id == org_id,
         or_(
             PURLWorkspace.meta_data['lead_id'].astext == lead_id,
             PURLWorkspace.meta_data['loan_id'].astext == lead_id
@@ -1460,16 +1483,18 @@ async def get_workspace(
     db: Session = Depends(get_db)
 ):
     """Get workspace details."""
+    org_id = get_user_org_id(current_user)
+
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     service = PURLWorkspaceService(db)
-    return service.get_complete_workspace_data(current_user.organization_id, workspace_id)
+    return service.get_complete_workspace_data(org_id, workspace_id)
 
 
 @purl_admin_router.patch(
@@ -1484,9 +1509,11 @@ async def update_workspace(
     db: Session = Depends(get_db)
 ):
     """Update workspace settings."""
+    org_id = get_user_org_id(current_user)
+
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1524,10 +1551,12 @@ async def create_token(
     import traceback
 
     try:
+        org_id = get_user_org_id(current_user)
+
         # Verify workspace ownership
         workspace = db.query(PURLWorkspace).filter(
             PURLWorkspace.id == workspace_id,
-            PURLWorkspace.organization_id == current_user.organization_id
+            PURLWorkspace.organization_id == org_id
         ).first()
 
         if not workspace:
@@ -1537,7 +1566,7 @@ async def create_token(
 
         # Service returns Tuple[token_id, full_token]
         token_id, full_token = service.create_token(
-            organization_id=current_user.organization_id,
+            organization_id=org_id,
             workspace_id=workspace_id,
             scope=token_data.scope if token_data else TokenScope.WRITE,
             contact_id=token_data.contact_id if token_data else None,
@@ -1652,10 +1681,12 @@ async def list_tokens(
     db: Session = Depends(get_db)
 ):
     """List access tokens for a workspace."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1698,10 +1729,12 @@ async def revoke_token(
     db: Session = Depends(get_db)
 ):
     """Revoke an access token."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1732,10 +1765,12 @@ async def add_contact(
     db: Session = Depends(get_db)
 ):
     """Add a contact to a workspace."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1745,7 +1780,7 @@ async def add_contact(
 
     try:
         result = service.add_contact(
-            organization_id=current_user.organization_id,
+            organization_id=org_id,
             workspace_id=workspace_id,
             data=contact
         )
@@ -1766,10 +1801,12 @@ async def list_contacts(
     db: Session = Depends(get_db)
 ):
     """List contacts for a workspace."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1811,10 +1848,12 @@ async def create_document_request(
     db: Session = Depends(get_db)
 ):
     """Create a document request for the borrower."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1823,7 +1862,7 @@ async def create_document_request(
     service = PURLDocumentService(db)
 
     result = service.create_document_request(
-        organization_id=current_user.organization_id,
+        organization_id=org_id,
         workspace_id=workspace_id,
         document_types=request_data.get("document_types", []),
         due_in_days=request_data.get("due_in_days", 5),
@@ -1852,7 +1891,7 @@ async def get_analytics_summary(
     from sqlalchemy import func
     from datetime import timedelta
 
-    org_id = current_user.organization_id
+    org_id = get_user_org_id(current_user)
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Workspace stats
@@ -1936,9 +1975,10 @@ async def revoke_token_with_reason(
         raise HTTPException(status_code=404, detail="Token not found")
 
     # Verify workspace belongs to user's organization
+    org_id = get_user_org_id(current_user)
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == token.workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -1970,10 +2010,12 @@ async def get_workspace_activity(
     db: Session = Depends(get_db)
 ):
     """Get activity history for a workspace."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -2026,10 +2068,12 @@ async def get_purl_url(
     """Get the full PURL URL for a workspace."""
     import os
 
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -2048,9 +2092,9 @@ async def get_purl_url(
             "message": "No active token found. Create a new token first."
         }
 
-    # Build URL
+    # Build URL with token for authenticated access
     base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
-    portal_url = f"https://{base_domain}/portal/{workspace.slug}"
+    portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={token.token}"
 
     return {
         "has_active_token": True,
@@ -2072,7 +2116,7 @@ async def get_purl_metrics(
     """Get aggregate metrics for the PURL dashboard."""
     from sqlalchemy import func
 
-    org_id = current_user.organization_id
+    org_id = get_user_org_id(current_user)
     today = datetime.now(timezone.utc).date()
 
     # Total workspaces
@@ -2142,10 +2186,12 @@ async def resend_invite(
     db: Session = Depends(get_db)
 ):
     """Resend portal invitation email to borrower."""
+    org_id = get_user_org_id(current_user)
+
     # Verify workspace ownership
     workspace = db.query(PURLWorkspace).filter(
         PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not workspace:
@@ -2187,7 +2233,7 @@ async def resend_invite(
 
     # Log action
     audit_log = PURLAuditLog(
-        organization_id=current_user.organization_id,
+        organization_id=org_id,
         workspace_id=workspace_id,
         action="invite_resent",
         actor_type="user",
