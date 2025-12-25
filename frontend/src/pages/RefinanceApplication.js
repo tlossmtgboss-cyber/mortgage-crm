@@ -3740,7 +3740,7 @@ export default function RefinanceApplication() {
         </main>
 
         {/* Documents Sidebar - Reveals progressively as application is completed */}
-        {currentStage !== 'account-creation' && (
+        {currentStage !== 'account' && (
         <aside className="documents-sidebar">
         <div className="sidebar-header">
           <Icon name="document" size={20} />
