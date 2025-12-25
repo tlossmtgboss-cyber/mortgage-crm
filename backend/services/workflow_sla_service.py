@@ -823,11 +823,8 @@ class WorkflowSLAService:
             from services.workflow_task_generator import TaskGeneratorService
 
             # Get the instance ID from the instance object
-            logger.info(f"_generate_due_tasks called with instance type: {type(instance)}")
-
+            # Instance can be a dict, SQLAlchemy model, or custom WorkflowInstanceData object
             if hasattr(instance, 'id'):
-                # SQLAlchemy model - refresh to ensure we have latest data
-                self.db.refresh(instance)
                 instance_id = instance.id
             elif isinstance(instance, dict):
                 instance_id = instance.get('id')
@@ -838,7 +835,7 @@ class WorkflowSLAService:
                 logger.warning("Cannot generate tasks: instance ID not available")
                 return 0
 
-            logger.info(f"Generating tasks for instance {instance_id}")
+            logger.info(f"Generating tasks for workflow instance {instance_id}")
 
             # Use the task generator service
             task_generator = TaskGeneratorService(self.db)
