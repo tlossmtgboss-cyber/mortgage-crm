@@ -319,19 +319,26 @@ const SmartDocsDashboard = () => {
                 <div
                   key={applicant.loan_id}
                   className={`applicant-card ${applicant.overdue_count > 0 ? 'has-overdue' : ''}`}
-                  onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                 >
                   <div className="applicant-header">
                     <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
+                      <h3
+                        className="clickable-name"
+                        onClick={() => navigate(`/loans/${applicant.loan_id}`)}
+                      >
+                        {applicant.borrower_name}
+                      </h3>
                       <span className="loan-info">
                         {applicant.loan_number || `Loan #${applicant.loan_id}`}
                         {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
                       </span>
                     </div>
-                    <div className="outstanding-badges">
-                      <span className="outstanding-badge">
-                        {applicant.outstanding_count} needed
+                    <div className="docs-progress">
+                      <span className="docs-requested">
+                        {applicant.outstanding_count || 0} requested
+                      </span>
+                      <span className="docs-received">
+                        {applicant.received_count || 0} received
                       </span>
                       {applicant.overdue_count > 0 && (
                         <span className="overdue-badge">
@@ -367,7 +374,12 @@ const SmartDocsDashboard = () => {
                         Next due: {formatDueDate(applicant.nearest_due).text}
                       </span>
                     )}
-                    <button className="btn-view">View Details →</button>
+                    <button
+                      className="btn-view"
+                      onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                    >
+                      View Documents →
+                    </button>
                   </div>
                 </div>
               ))
@@ -387,18 +399,24 @@ const SmartDocsDashboard = () => {
                 <div
                   key={applicant.loan_id}
                   className="applicant-card"
-                  onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                 >
                   <div className="applicant-header">
                     <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
+                      <h3
+                        className="clickable-name"
+                        onClick={() => navigate(`/loans/${applicant.loan_id}`)}
+                      >
+                        {applicant.borrower_name}
+                      </h3>
                       <span className="loan-info">
                         {applicant.loan_number || `Loan #${applicant.loan_id}`}
                         {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
                       </span>
                     </div>
-                    <div className="pending-badge">
-                      {applicant.pending_count} pending
+                    <div className="docs-progress">
+                      <span className="docs-received">
+                        {applicant.pending_count || 0} pending review
+                      </span>
                     </div>
                   </div>
                   <div className="documents-preview">
@@ -418,7 +436,12 @@ const SmartDocsDashboard = () => {
                     <span className="oldest-upload">
                       Oldest: {formatDate(applicant.oldest_upload)}
                     </span>
-                    <button className="btn-review">Review Documents →</button>
+                    <button
+                      className="btn-review"
+                      onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                    >
+                      Review Documents →
+                    </button>
                   </div>
                 </div>
               ))
@@ -438,11 +461,15 @@ const SmartDocsDashboard = () => {
                 <div
                   key={applicant.loan_id}
                   className="applicant-card completed-card"
-                  onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                 >
                   <div className="applicant-header">
                     <div className="applicant-info">
-                      <h3>{applicant.borrower_name}</h3>
+                      <h3
+                        className="clickable-name"
+                        onClick={() => navigate(`/loans/${applicant.loan_id}`)}
+                      >
+                        {applicant.borrower_name}
+                      </h3>
                       <span className="loan-info">
                         {applicant.loan_number || `Loan #${applicant.loan_id}`}
                         {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
@@ -464,7 +491,12 @@ const SmartDocsDashboard = () => {
                   </div>
                   <div className="card-footer">
                     <span className="loan-complete-status">All documents collected</span>
-                    <button className="btn-view">View Archive →</button>
+                    <button
+                      className="btn-view"
+                      onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                    >
+                      View Archive →
+                    </button>
                   </div>
                 </div>
               ))

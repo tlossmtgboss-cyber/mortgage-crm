@@ -846,12 +846,19 @@ async def get_applicants_with_outstanding_docs(
             DocumentRequest.due_date.asc().nullslast()
         ).all()
 
+        # Count received documents (any status other than OPEN)
+        received_count = db.query(func.count(DocumentRequest.id)).filter(
+            DocumentRequest.loan_id == loan_id,
+            DocumentRequest.status != RequestStatus.OPEN
+        ).scalar() or 0
+
         applicants.append({
             "loan_id": loan_id,
             "loan_number": loan_number,
             "borrower_name": borrower_name,
             "loan_purpose": loan_purpose,
             "outstanding_count": outstanding_count,
+            "received_count": received_count,
             "overdue_count": overdue_count or 0,
             "nearest_due": nearest_due.isoformat() if nearest_due else None,
             "requests": [

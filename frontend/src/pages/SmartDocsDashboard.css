@@ -314,7 +314,6 @@
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  cursor: pointer;
   transition: all 0.2s;
 }
 
@@ -344,9 +343,45 @@
   color: #1f2937;
 }
 
+.applicant-info h3.clickable-name {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.applicant-info h3.clickable-name:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
 .loan-info {
   font-size: 0.85rem;
   color: #6b7280;
+}
+
+/* Docs Progress - shows requested/received counts */
+.docs-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.docs-progress .docs-requested {
+  padding: 4px 10px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.docs-progress .docs-received {
+  padding: 4px 10px;
+  background: #d1fae5;
+  color: #065f46;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .pending-badge {
