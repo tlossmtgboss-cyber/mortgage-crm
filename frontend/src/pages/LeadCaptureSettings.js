@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
-import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
+import { APIError } from '../utils/errorHandling';
 import './LeadCaptureSettings.css';
 
 function LeadCaptureSettings() {
@@ -20,9 +20,13 @@ function LeadCaptureSettings() {
   const [testResult, setTestResult] = useState(null);
   const [testingScore, setTestingScore] = useState(false);
 
-  // Async operation hooks - disable automatic toasts since we use showToast manually
-  const { loading, error, execute: fetchSettings } = useAsyncOperation({ showErrorToast: false });
-  const { submitting, execute: saveSettings } = useFormSubmit({ showErrorToast: false, showSuccessToast: false });
+  // Loading and error state (managed directly to avoid infinite loop)
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Track if initial load has happened
+  const loadedRef = useRef(false);
 
   // Toast notification state
   const [toast, setToast] = useState({ show: false, type: '', message: '' });
@@ -34,6 +38,9 @@ function LeadCaptureSettings() {
 
   // Load settings and reference data
   const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -71,14 +78,20 @@ function LeadCaptureSettings() {
 
     } catch (err) {
       console.error('Error loading lead capture settings:', err);
+      setError(err);
       showToast('error', 'Failed to load lead capture settings');
-      throw err;
+    } finally {
+      setLoading(false);
     }
   }, []);
 
+  // Load data on mount only
   useEffect(() => {
-    fetchSettings(loadData);
-  }, [fetchSettings, loadData]);
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      loadData();
+    }
+  }, [loadData]);
 
   // Check for changes
   useEffect(() => {
@@ -242,6 +255,8 @@ function LeadCaptureSettings() {
       return;
     }
 
+    setSubmitting(true);
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/api/v1/lead-capture-settings`, {
@@ -270,6 +285,8 @@ function LeadCaptureSettings() {
     } catch (err) {
       console.error('Error saving settings:', err);
       showToast('error', err.message || 'Failed to save settings');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -329,7 +346,7 @@ function LeadCaptureSettings() {
           <i className="fas fa-exclamation-triangle"></i>
           <h2>Unable to Load Settings</h2>
           <p>{error.message || 'An unexpected error occurred'}</p>
-          <button className="btn-primary" onClick={() => fetchSettings(loadData)}>
+          <button className="btn-primary" onClick={loadData}>
             Try Again
           </button>
         </div>
