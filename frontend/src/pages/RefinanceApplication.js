@@ -3505,25 +3505,45 @@ export default function RefinanceApplication() {
 
   // Render Account Stage (Get Started)
   const renderAccountStage = () => {
+    const [emailSending, setEmailSending] = useState(false);
+    const [emailSent, setEmailSent] = useState(false);
+
     const handleSocialAuth = (provider) => {
-      // Placeholder for social auth - in a real implementation, this would initiate OAuth
-      console.log(`Authenticating with ${provider}...`);
-      setUserAccount({
-        email: `user@${provider}.com`,
-        authMethod: provider,
-        isLoggedIn: true,
-      });
-      setCurrentStage('declarations');
+      // Redirect to OAuth connect endpoint
+      const returnUrl = encodeURIComponent(window.location.href);
+      window.location.href = `${API_URL}/api/v1/borrower-auth/${provider}/connect?return_url=${returnUrl}`;
     };
 
-    const handleEmailContinue = () => {
-      if (!userAccount.email || !userAccount.email.includes('@')) return;
-      setUserAccount(prev => ({
-        ...prev,
-        authMethod: 'email',
-        isLoggedIn: true,
-      }));
-      setCurrentStage('declarations');
+    const handleEmailContinue = async () => {
+      if (!userAccount.email || !userAccount.email.includes('@')) {
+        alert('Please enter a valid email address');
+        return;
+      }
+
+      setEmailSending(true);
+      try {
+        const response = await fetch(`${API_URL}/api/v1/borrower-auth/email/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userAccount.email,
+            first_name: '',
+            last_name: ''
+          })
+        });
+
+        if (response.ok) {
+          setEmailSent(true);
+        } else {
+          const data = await response.json();
+          alert(data.detail || 'Failed to send login link. Please try again.');
+        }
+      } catch (error) {
+        console.error('Email login error:', error);
+        alert('Failed to send login link. Please try again.');
+      } finally {
+        setEmailSending(false);
+      }
     };
 
     return (
@@ -3619,35 +3639,71 @@ export default function RefinanceApplication() {
         </div>
 
         {/* Email Input */}
-        <div style={{ marginBottom: '24px' }}>
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={userAccount.email || ''}
-            onChange={(e) => setUserAccount(prev => ({ ...prev, email: e.target.value }))}
-            style={{
-              width: '100%', padding: '14px 16px', borderRadius: '12px',
-              border: '1px solid #e2e8f0', fontSize: '15px',
-              outline: 'none', transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#218D8D'}
-            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-          />
-        </div>
+        {emailSent ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '24px',
+            background: '#f0fdf4',
+            borderRadius: '12px',
+            border: '1px solid #bbf7d0'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>✉️</div>
+            <h3 style={{ margin: '0 0 8px', color: '#166534', fontSize: '18px' }}>Check Your Email</h3>
+            <p style={{ margin: '0 0 16px', color: '#15803d', fontSize: '14px' }}>
+              We sent a login link to <strong>{userAccount.email}</strong>
+            </p>
+            <p style={{ margin: 0, color: '#6b7280', fontSize: '13px' }}>
+              Click the link in the email to continue your application.
+            </p>
+            <button
+              onClick={() => setEmailSent(false)}
+              style={{
+                marginTop: '16px',
+                background: 'transparent',
+                border: 'none',
+                color: '#0ea5e9',
+                cursor: 'pointer',
+                fontSize: '14px',
+                textDecoration: 'underline'
+              }}
+            >
+              Use a different email
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: '24px' }}>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                value={userAccount.email || ''}
+                onChange={(e) => setUserAccount(prev => ({ ...prev, email: e.target.value }))}
+                disabled={emailSending}
+                style={{
+                  width: '100%', padding: '14px 16px', borderRadius: '12px',
+                  border: '1px solid #e2e8f0', fontSize: '15px',
+                  outline: 'none', transition: 'border-color 0.2s',
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#218D8D'}
+                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+              />
+            </div>
 
-        <button
-          onClick={handleEmailContinue}
-          disabled={!userAccount.email || !userAccount.email.includes('@')}
-          style={{
-            width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
-            background: userAccount.email?.includes('@') ? 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' : '#e2e8f0',
-            color: userAccount.email?.includes('@') ? 'white' : '#94a3b8',
-            fontSize: '16px', fontWeight: '600', cursor: userAccount.email?.includes('@') ? 'pointer' : 'not-allowed',
-            transition: 'all 0.2s',
-          }}
-        >
-          Continue with Email
-        </button>
+            <button
+              onClick={handleEmailContinue}
+              disabled={emailSending || !userAccount.email || !userAccount.email.includes('@')}
+              style={{
+                width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
+                background: userAccount.email?.includes('@') && !emailSending ? 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' : '#e2e8f0',
+                color: userAccount.email?.includes('@') && !emailSending ? 'white' : '#94a3b8',
+                fontSize: '16px', fontWeight: '600', cursor: userAccount.email?.includes('@') && !emailSending ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s',
+              }}
+            >
+              {emailSending ? 'Sending...' : 'Continue with Email'}
+            </button>
+          </>
+        )}
 
         <p style={{ textAlign: 'center', marginTop: '24px', color: '#94a3b8', fontSize: '13px', lineHeight: '1.5' }}>
           By continuing, you agree to our Terms of Service and Privacy Policy.

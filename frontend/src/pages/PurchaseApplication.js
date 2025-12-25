@@ -2233,23 +2233,45 @@ export default function PurchaseApplication() {
   // Render account creation/login stage
   const renderAccountStage = () => {
     const handleSocialLogin = (provider) => {
-      // Placeholder for social login - will need OAuth integration
-      console.log(`Social login with ${provider} - OAuth integration needed`);
-      alert(`${provider} login coming soon! For now, please continue with email.`);
+      // Redirect to OAuth connect endpoint
+      const providerLower = provider.toLowerCase();
+      const returnUrl = encodeURIComponent(window.location.href);
+      window.location.href = `${API_URL}/api/v1/borrower-auth/${providerLower}/connect?return_url=${returnUrl}`;
     };
 
-    const handleEmailContinue = () => {
+    const [emailSending, setEmailSending] = useState(false);
+    const [emailSent, setEmailSent] = useState(false);
+
+    const handleEmailContinue = async () => {
       if (!userAccount.email || !userAccount.email.includes('@')) {
         alert('Please enter a valid email address');
         return;
       }
-      setUserAccount(prev => ({ ...prev, authMethod: 'email', isLoggedIn: true }));
-      setCurrentStage('declarations');
-    };
 
-    const handleSkip = () => {
-      // Allow continuing without account - will prompt to save later
-      setCurrentStage('declarations');
+      setEmailSending(true);
+      try {
+        const response = await fetch(`${API_URL}/api/v1/borrower-auth/email/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userAccount.email,
+            first_name: userAccount.firstName || '',
+            last_name: userAccount.lastName || ''
+          })
+        });
+
+        if (response.ok) {
+          setEmailSent(true);
+        } else {
+          const data = await response.json();
+          alert(data.detail || 'Failed to send login link. Please try again.');
+        }
+      } catch (error) {
+        console.error('Email login error:', error);
+        alert('Failed to send login link. Please try again.');
+      } finally {
+        setEmailSending(false);
+      }
     };
 
     return (
@@ -2382,24 +2404,61 @@ export default function PurchaseApplication() {
 
           {/* Email Input */}
           <div className="email-section">
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Email Address</label>
-              <input
-                type="email"
-                value={userAccount.email}
-                onChange={(e) => setUserAccount(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="you@example.com"
-                className="fun-input"
-                style={{ width: '100%' }}
-              />
-            </div>
-            <button
-              onClick={handleEmailContinue}
-              className="btn-continue"
-              style={{ width: '100%', marginBottom: '12px' }}
-            >
-              Continue with Email →
-            </button>
+            {emailSent ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '24px',
+                background: '#f0fdf4',
+                borderRadius: '12px',
+                border: '1px solid #bbf7d0'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>✉️</div>
+                <h3 style={{ margin: '0 0 8px', color: '#166534', fontSize: '18px' }}>Check Your Email</h3>
+                <p style={{ margin: '0 0 16px', color: '#15803d', fontSize: '14px' }}>
+                  We sent a login link to <strong>{userAccount.email}</strong>
+                </p>
+                <p style={{ margin: 0, color: '#6b7280', fontSize: '13px' }}>
+                  Click the link in the email to continue your application.
+                </p>
+                <button
+                  onClick={() => setEmailSent(false)}
+                  style={{
+                    marginTop: '16px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#0ea5e9',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Use a different email
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Email Address</label>
+                  <input
+                    type="email"
+                    value={userAccount.email}
+                    onChange={(e) => setUserAccount(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="you@example.com"
+                    className="fun-input"
+                    style={{ width: '100%' }}
+                    disabled={emailSending}
+                  />
+                </div>
+                <button
+                  onClick={handleEmailContinue}
+                  className="btn-continue"
+                  style={{ width: '100%', marginBottom: '12px' }}
+                  disabled={emailSending || !userAccount.email?.includes('@')}
+                >
+                  {emailSending ? 'Sending...' : 'Continue with Email →'}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Login Option for Existing Users */}
