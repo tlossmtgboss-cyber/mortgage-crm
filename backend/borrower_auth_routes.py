@@ -1922,6 +1922,40 @@ async def submit_application(
         logger.info(f"Created lead {lead_id} in CRM for {borrower_name}")
 
         # =================================================================
+        # ENROLL LEAD IN WORKFLOW FOR TASK GENERATION
+        # =================================================================
+        workflow_enrollment_result = None
+        if lead_id:
+            try:
+                from services.workflow_sla_service import WorkflowSLAService
+                workflow_service = WorkflowSLAService(db)
+
+                # Enroll in "new_application" workflow (or "prospect" as fallback)
+                # This will generate initial tasks based on workflow configuration
+                workflow_enrollment_result = workflow_service.enroll_lead(
+                    lead_id=lead_id,
+                    workflow_key="new_application",  # Primary workflow for new applications
+                    trigger_status="NEW",
+                    user_id=submission.loId if submission.loId else None
+                )
+
+                # If new_application workflow doesn't exist, try prospect workflow
+                if not workflow_enrollment_result.get("success"):
+                    workflow_enrollment_result = workflow_service.enroll_lead(
+                        lead_id=lead_id,
+                        workflow_key="prospect",  # Fallback workflow
+                        trigger_status="NEW",
+                        user_id=submission.loId if submission.loId else None
+                    )
+
+                if workflow_enrollment_result.get("success"):
+                    logger.info(f"Lead {lead_id} enrolled in workflow, {workflow_enrollment_result.get('tasks_created', 0)} tasks created")
+                else:
+                    logger.warning(f"Workflow enrollment failed for lead {lead_id}: {workflow_enrollment_result.get('error')}")
+            except Exception as workflow_error:
+                logger.warning(f"Workflow enrollment failed (non-critical): {workflow_error}")
+
+        # =================================================================
         # CREATE LOAN RECORD FOR SMART DOCS
         # =================================================================
         loan_id = None
