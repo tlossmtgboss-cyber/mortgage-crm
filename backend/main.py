@@ -58957,6 +58957,39 @@ async def fix_referral_partners_schema_migration(
         }
 
 
+@app.get("/api/v1/public/debug/dashboard-test")
+async def public_debug_dashboard_test(
+    admin_key: str,
+    db: Session = Depends(get_db)
+):
+    """Test dashboard query to verify referral_partners schema is fixed."""
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
+
+    try:
+        # Test the referral_partners query that was failing
+        result = db.execute(text("""
+            SELECT id, name, company, email, phone, type,
+                   street_address, city, state, zip_code, title
+            FROM referral_partners
+            LIMIT 5
+        """))
+        partners = [dict(row._mapping) for row in result]
+
+        return {
+            "success": True,
+            "message": "Dashboard query works - referral_partners schema is fixed",
+            "partners_sample": partners,
+            "columns_verified": ["street_address", "city", "state", "zip_code", "title"]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Dashboard query still failing"
+        }
+
+
 @app.get("/api/v1/migrations/check-enum-values", response_model=None)
 async def check_enum_values(
     current_user: User = Depends(get_current_user),
