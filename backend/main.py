@@ -58904,14 +58904,18 @@ async def fix_admin_user_ownership_migration(
         }
 
 
-@app.post("/api/v1/migrations/fix-referral-partners-schema", response_model=None)
+@app.post("/api/v1/public/migrations/fix-referral-partners-schema", response_model=None)
 async def fix_referral_partners_schema_migration(
+    admin_key: str,
     db: Session = Depends(get_db)
 ):
     """
     Migration: Add missing columns to referral_partners table.
     Adds: street_address, city, state, zip_code, title
+    Requires admin_key=perennia-admin-2024 to execute.
     """
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
     try:
         logger.info("Running migration: fix referral_partners schema")
 
