@@ -2402,23 +2402,6 @@ export default function PurchaseApplication() {
             </button>
           </div>
 
-          {/* Skip Option */}
-          <div style={{ textAlign: 'center', marginTop: '16px' }}>
-            <button
-              onClick={handleSkip}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#6b7280',
-                fontSize: '14px',
-                cursor: 'pointer',
-                textDecoration: 'underline'
-              }}
-            >
-              Skip for now (you can save later)
-            </button>
-          </div>
-
           {/* Login Option for Existing Users */}
           <div style={{
             textAlign: 'center',
