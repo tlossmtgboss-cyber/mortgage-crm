@@ -106,7 +106,8 @@ class TaskGeneratorService:
             contact_info = self._get_contact_info(instance['lead_id'], instance['loan_id'])
 
             tasks_created = []
-            last_day_generated = instance['last_task_generated_day'] or 0
+            # Use -1 as default so day 0 tasks are generated for new instances
+            last_day_generated = instance['last_task_generated_day'] if instance['last_task_generated_day'] is not None else -1
 
             for day_config in day_configs:
                 day_value = day_config['day_value'] or 0

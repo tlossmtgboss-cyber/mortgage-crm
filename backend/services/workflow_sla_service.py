@@ -705,7 +705,7 @@ class WorkflowSLAService:
                 :workflow_type,
                 :lead_id, :loan_id, 'active',
                 :trigger_status, :trigger_time,
-                :started_at, 0,
+                :started_at, -1,
                 :created_at, :updated_at
             )
         """), {
