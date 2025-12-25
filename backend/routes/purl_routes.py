@@ -2300,12 +2300,14 @@ async def revoke_token_by_id(
     db: Session = Depends(get_db)
 ):
     """Revoke a PURL access token by ID."""
+    org_id = get_user_org_id(current_user)
+
     # Get token and verify ownership through workspace
     token = db.query(PURLAccessToken).join(
         PURLWorkspace, PURLAccessToken.workspace_id == PURLWorkspace.id
     ).filter(
         PURLAccessToken.id == token_id,
-        PURLWorkspace.organization_id == current_user.organization_id
+        PURLWorkspace.organization_id == org_id
     ).first()
 
     if not token:
@@ -2320,7 +2322,7 @@ async def revoke_token_by_id(
 
     # Log action
     audit_log = PURLAuditLog(
-        organization_id=current_user.organization_id,
+        organization_id=org_id,
         workspace_id=token.workspace_id,
         action="token_revoked",
         actor_type="user",
