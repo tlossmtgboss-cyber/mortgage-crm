@@ -8,65 +8,65 @@
 import React from 'react';
 import './MilestoneProgressTracker.css';
 
-// Define the stages in order
+// Define the key stages in order (simplified for clarity)
 const STAGES = [
-  { key: 'new', label: 'New Lead', shortLabel: 'New' },
-  { key: 'attempted_contact', label: 'Attempted Contact', shortLabel: 'Contact' },
-  { key: 'prospect', label: 'Prospect', shortLabel: 'Prospect' },
-  { key: 'application', label: 'Application', shortLabel: 'App' },
-  { key: 'pre_qualified', label: 'Pre-Qualified', shortLabel: 'Pre-Q' },
-  { key: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre-Appr' },
+  { key: 'new', label: 'New Lead', shortLabel: 'Lead' },
+  { key: 'application', label: 'Application', shortLabel: 'Application' },
+  { key: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre-Approved' },
   { key: 'under_contract', label: 'Under Contract', shortLabel: 'Contract' },
-  { key: 'processing', label: 'Processing', shortLabel: 'Process' },
+  { key: 'processing', label: 'Processing', shortLabel: 'Processing' },
   { key: 'clear_to_close', label: 'Clear to Close', shortLabel: 'CTC' },
   { key: 'funded', label: 'Funded', shortLabel: 'Funded' },
 ];
 
 // Map various status strings to our stage keys
 const STATUS_MAP = {
-  // Lead stages
+  // Lead stages - all map to 'new'
   'new': 'new',
   'New': 'new',
   'new_lead': 'new',
   'lead': 'new',
   'Lead': 'new',
+  'attempted_contact': 'new',
+  'Attempted Contact': 'new',
+  'contacted': 'new',
+  'prospect': 'new',
+  'Prospect': 'new',
 
-  'attempted_contact': 'attempted_contact',
-  'Attempted Contact': 'attempted_contact',
-  'contacted': 'attempted_contact',
-
-  'prospect': 'prospect',
-  'Prospect': 'prospect',
-
+  // Application stage
   'application': 'application',
   'Application': 'application',
   'app_submitted': 'application',
+  'pre_qualified': 'application',
+  'Pre-Qualified': 'application',
+  'prequalified': 'application',
+  'docs_requested': 'application',
 
-  'pre_qualified': 'pre_qualified',
-  'Pre-Qualified': 'pre_qualified',
-  'prequalified': 'pre_qualified',
-  'docs_requested': 'pre_qualified',
-
+  // Pre-Approved stage
   'pre_approved': 'pre_approved',
   'Pre-Approved': 'pre_approved',
   'preapproved': 'pre_approved',
   'conditional_approval': 'pre_approved',
 
+  // Under Contract
   'under_contract': 'under_contract',
   'Under Contract': 'under_contract',
   'contract': 'under_contract',
 
+  // Processing
   'processing': 'processing',
   'Processing': 'processing',
   'submitted': 'processing',
   'underwriting': 'processing',
 
+  // Clear to Close
   'clear_to_close': 'clear_to_close',
   'Clear to Close': 'clear_to_close',
   'ctc': 'clear_to_close',
   'docs_out': 'clear_to_close',
   'docs_back': 'clear_to_close',
 
+  // Funded
   'funded': 'funded',
   'Funded': 'funded',
   'closed': 'funded',

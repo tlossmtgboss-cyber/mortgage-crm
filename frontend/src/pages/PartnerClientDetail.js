@@ -619,18 +619,10 @@ export default function PartnerClientDetail() {
 
       {/* Main Content */}
       <div className="main-content">
-        {/* Loan Summary Card */}
+        {/* Loan Details Card - shows details not in Quick Stats */}
         <section className="info-card loan-summary">
-          <h3 className="card-title">Loan Summary</h3>
+          <h3 className="card-title">Loan Details</h3>
           <div className="info-grid">
-            <div className="info-item">
-              <label>Loan Amount</label>
-              <span className="value-large">{formatCurrency(client?.loan_amount)}</span>
-            </div>
-            <div className="info-item">
-              <label>Loan Type</label>
-              <span>{client?.loan_type || 'TBD'}</span>
-            </div>
             <div className="info-item">
               <label>Interest Rate</label>
               <span>{client?.interest_rate ? `${client.interest_rate}%` : 'TBD'}</span>
@@ -647,9 +639,6 @@ export default function PartnerClientDetail() {
               <label>Down Payment</label>
               <span>{formatCurrency(client?.down_payment) || 'TBD'}</span>
             </div>
-          </div>
-          <div className="card-status">
-            <StatusBadge status={currentStage} size="large" />
           </div>
         </section>
 

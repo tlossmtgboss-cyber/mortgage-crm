@@ -253,6 +253,26 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
+/* Ensure progress tracker circles render as circles */
+.progress-section .stage-indicator {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  border-radius: 50% !important;
+  overflow: visible !important;
+}
+
+.progress-section .progress-stage {
+  max-width: none;
+}
+
+.progress-section .progress-stages {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
 /* ============================================
    Main Content Grid
    ============================================ */
