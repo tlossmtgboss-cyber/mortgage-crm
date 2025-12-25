@@ -58904,6 +58904,55 @@ async def fix_admin_user_ownership_migration(
         }
 
 
+@app.post("/api/v1/migrations/fix-referral-partners-schema", response_model=None)
+async def fix_referral_partners_schema_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add missing columns to referral_partners table.
+    Adds: street_address, city, state, zip_code, title
+    """
+    try:
+        logger.info("Running migration: fix referral_partners schema")
+
+        columns_to_add = [
+            ("street_address", "VARCHAR"),
+            ("city", "VARCHAR"),
+            ("state", "VARCHAR"),
+            ("zip_code", "VARCHAR"),
+            ("title", "VARCHAR"),
+        ]
+
+        added = []
+        for col_name, col_type in columns_to_add:
+            try:
+                db.execute(text(f"""
+                    ALTER TABLE referral_partners ADD COLUMN IF NOT EXISTS {col_name} {col_type}
+                """))
+                added.append(col_name)
+            except Exception as e:
+                logger.warning(f"Could not add column {col_name}: {e}")
+
+        db.commit()
+
+        logger.info(f"Migration completed: added columns {added}")
+
+        return {
+            "success": True,
+            "message": "Referral partners schema fixed",
+            "columns_added": added
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.get("/api/v1/migrations/check-enum-values", response_model=None)
 async def check_enum_values(
     current_user: User = Depends(get_current_user),
