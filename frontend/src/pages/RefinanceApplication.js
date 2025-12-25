@@ -1310,6 +1310,8 @@ export default function RefinanceApplication() {
   const [coBorrowerData, setCoBorrowerData] = useState({});
   const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({});
   const [currentIncomeBorrower, setCurrentIncomeBorrower] = useState(1); // 1 = primary, 2 = co-borrower
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   // Keep ref in sync with state to avoid closure issues
   useEffect(() => {
@@ -3505,9 +3507,6 @@ export default function RefinanceApplication() {
 
   // Render Account Stage (Get Started)
   const renderAccountStage = () => {
-    const [emailSending, setEmailSending] = useState(false);
-    const [emailSent, setEmailSent] = useState(false);
-
     const handleSocialAuth = (provider) => {
       // Redirect to OAuth connect endpoint
       const returnUrl = encodeURIComponent(window.location.href);

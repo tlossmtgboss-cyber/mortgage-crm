@@ -1510,6 +1510,8 @@ export default function PurchaseApplication() {
   const [introductionRequests, setIntroductionRequests] = useState([]);
   const [ssnRaw, setSsnRaw] = useState('');
   const [ssnDisplay, setSsnDisplay] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const [currentBorrower, setCurrentBorrower] = useState(1);
   const [coBorrowerData, setCoBorrowerData] = useState({});
   const [coBorrowerIncomeData, setCoBorrowerIncomeData] = useState({});
@@ -2238,9 +2240,6 @@ export default function PurchaseApplication() {
       const returnUrl = encodeURIComponent(window.location.href);
       window.location.href = `${API_URL}/api/v1/borrower-auth/${providerLower}/connect?return_url=${returnUrl}`;
     };
-
-    const [emailSending, setEmailSending] = useState(false);
-    const [emailSent, setEmailSent] = useState(false);
 
     const handleEmailContinue = async () => {
       if (!userAccount.email || !userAccount.email.includes('@')) {
