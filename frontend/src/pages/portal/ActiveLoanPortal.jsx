@@ -21,16 +21,22 @@ import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal'
 import PaymentCalculator from '../../components/PaymentCalculator';
 import ApplicantTasks from '../../components/portal/ApplicantTasks';
 import PortalDocumentRequirements from '../../components/portal/PortalDocumentRequirements';
+import TotalCostAnalysis from '../../components/portal/TotalCostAnalysis';
 import '../PURLPortal.css';
 
-// Tab components - Arrow/chevron style with notification dots
-const TabButton = ({ label, isActive, onClick, hasNotification, isFirst, isLast }) => (
+// Tab components - Arrow/chevron style with notification dots or count badges
+const TabButton = ({ label, isActive, onClick, hasNotification, badgeCount, isFirst, isLast }) => (
   <button
     className={`purl-tab-btn ${isActive ? 'active' : ''} ${isFirst ? 'first' : ''} ${isLast ? 'last' : ''}`}
     onClick={onClick}
   >
     <span className="tab-label">{label}</span>
-    {hasNotification && <span className="tab-notification-dot" />}
+    {/* Show red number badge for count > 0, otherwise just a dot for boolean notification */}
+    {badgeCount > 0 ? (
+      <span className="tab-notification-badge">{badgeCount}</span>
+    ) : (
+      hasNotification && <span className="tab-notification-dot" />
+    )}
   </button>
 );
 
@@ -1400,7 +1406,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           label="Documents"
           isActive={activeTab === 'documents'}
           onClick={() => setActiveTab('documents')}
-          hasNotification={documents.filter(d => d.status === 'pending').length > 0}
+          badgeCount={conditions.filter(c => c.is_new && c.status === 'pending').length}
         />
         <TabButton
           label="Loan Quote"
@@ -1865,50 +1871,47 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           </div>
         )}
 
-        {/* Loan Quote Tab */}
+        {/* Loan Quote Tab - Uses TotalCostAnalysis component for comprehensive cost comparison */}
         {activeTab === 'loan-quote' && (
           <div className="tab-content loan-quote-tab">
-            <div className="loan-quote-header">
-              <h2>Your Loan Quote</h2>
-            </div>
-            {data?.loanEstimates && data.loanEstimates.length > 0 ? (
-              <div className="loan-estimates-list">
-                {data.loanEstimates.map((estimate, idx) => (
-                  <div key={estimate.id || idx} className="loan-estimate-card">
-                    <div className="estimate-header">
-                      <span className="estimate-lender">{estimate.lender_name || 'Loan Estimate'}</span>
-                      <span className="estimate-date">{formatDate(estimate.created_at)}</span>
-                    </div>
-                    <div className="estimate-details">
-                      <div className="estimate-item">
-                        <span className="item-label">Loan Amount</span>
-                        <span className="item-value">{formatCurrency(estimate.loan_amount)}</span>
-                      </div>
-                      <div className="estimate-item">
-                        <span className="item-label">Interest Rate</span>
-                        <span className="item-value">{estimate.interest_rate}%</span>
-                      </div>
-                      <div className="estimate-item">
-                        <span className="item-label">APR</span>
-                        <span className="item-value">{estimate.apr}%</span>
-                      </div>
-                      <div className="estimate-item">
-                        <span className="item-label">Monthly Payment</span>
-                        <span className="item-value">{formatCurrency(estimate.monthly_payment)}</span>
-                      </div>
-                      <div className="estimate-item">
-                        <span className="item-label">Cash to Close</span>
-                        <span className="item-value">{formatCurrency(estimate.cash_to_close)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {data?.presentation || data?.loanEstimates?.length > 0 ? (
+              <TotalCostAnalysis
+                currentLoanBalance={loan?.loan_amount || 400000}
+                currentRate={loan?.interest_rate || 6.5}
+                currentMonthlyPayment={loan?.monthly_payment || 2528}
+                currentRemainingMonths={loan?.remaining_months || 348}
+                homeValue={loan?.property_value || loan?.appraisal_value || loan?.purchase_price || 550000}
+                proposedScenarios={data?.presentation?.scenarios || data?.loanEstimates?.map((est, idx) => ({
+                  id: est.id || `estimate-${idx}`,
+                  name: est.lender_name || `Option ${idx + 1}`,
+                  type: idx === 0 ? 'current' : 'refinance',
+                  loanAmount: est.loan_amount || loan?.loan_amount,
+                  rate: est.interest_rate || loan?.interest_rate,
+                  term: est.term || 30,
+                  monthlyPayment: est.monthly_payment,
+                  closingCosts: est.closing_costs || est.cash_to_close || 0,
+                  cashOut: est.cash_out || 0,
+                })) || []}
+                clientName={borrower ? `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim() : 'Valued Client'}
+                onScheduleCall={() => setShowScheduleModal(true)}
+              />
             ) : (
               <div className="empty-state-card">
                 <div className="empty-icon">💰</div>
                 <h3>No Loan Quotes Yet</h3>
-                <p>Your loan quotes and estimates will appear here once available.</p>
+                <p>Your loan officer will prepare a comprehensive cost analysis for you. This will include:</p>
+                <ul className="quote-benefits-list">
+                  <li>Side-by-side loan scenario comparisons</li>
+                  <li>Monthly payment breakdown</li>
+                  <li>Closing costs analysis</li>
+                  <li>Breakeven calculations</li>
+                  <li>Long-term savings projections</li>
+                </ul>
+                <p>Check back soon or contact your loan officer for more information.</p>
+                <button className="schedule-call-btn" onClick={() => setShowScheduleModal(true)}>
+                  <span className="btn-icon">📅</span>
+                  Schedule a Call to Discuss Options
+                </button>
               </div>
             )}
           </div>

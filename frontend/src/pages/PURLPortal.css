@@ -993,7 +993,35 @@
   background: #ef4444;
   border-radius: 50%;
   margin-left: 4px;
-  flex-shrink: 0;
+}
+
+/* Red number badge for tabs - shows count of new items */
+.chevron-tabs .tab-notification-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  margin-left: 6px;
+  animation: badge-pulse 2s ease-in-out infinite;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.6);
+  }
 }
 
 /* Responsive: Horizontal scroll on mobile */
@@ -2542,6 +2570,52 @@
   font-size: 20px;
   font-weight: 600;
   color: var(--portal-text-primary);
+}
+
+/* Loan Quote empty state with benefits list */
+.loan-quote-tab .empty-state-card .quote-benefits-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  text-align: left;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.loan-quote-tab .empty-state-card .quote-benefits-list li {
+  padding: 8px 0 8px 28px;
+  position: relative;
+  color: var(--portal-text-secondary);
+  font-size: 14px;
+}
+
+.loan-quote-tab .empty-state-card .quote-benefits-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--portal-success);
+  font-weight: 600;
+}
+
+.loan-quote-tab .empty-state-card .schedule-call-btn {
+  margin-top: 20px;
+  padding: 12px 24px;
+  background: var(--portal-primary);
+  color: white;
+  border: none;
+  border-radius: var(--portal-radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.loan-quote-tab .empty-state-card .schedule-call-btn:hover {
+  background: var(--portal-primary-dark);
 }
 
 .loan-estimates-list {
