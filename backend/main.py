@@ -40212,6 +40212,89 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
 
 
+@app.delete("/api/v1/leads/bulk")
+async def bulk_delete_leads(
+    lead_ids: List[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Bulk delete multiple leads. Only master user (id=1) or users with leads.delete_all permission can use this.
+    """
+    # Only master user can bulk delete
+    if current_user.id != 1 and not has_permission(current_user.id, 'leads.delete_all', db):
+        raise HTTPException(status_code=403, detail="Only master users can perform bulk delete")
+
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+    deleted_count = 0
+    errors = []
+
+    for lead_id in lead_ids:
+        try:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            if not lead:
+                errors.append(f"Lead {lead_id} not found")
+                continue
+
+            # Delete related records
+            from sqlalchemy import inspect
+            inspector = inspect(db.bind)
+            existing_tables = set(inspector.get_table_names())
+
+            tables_to_clean = [
+                ("activities", "lead_id"),
+                ("tasks", "lead_id"),
+                ("ai_tasks", "lead_id"),
+                ("notes", "lead_id"),
+                ("communications", "lead_id"),
+                ("email_reconciliation_queue", "lead_id"),
+                ("workflow_executions", "lead_id"),
+                ("lead_profiles", "lead_id"),
+                ("circle_contacts", "lead_id"),
+                ("notifications", "lead_id"),
+                ("stage_history", "lead_id"),
+                ("conversation_messages", "lead_id"),
+                ("ai_conversation_messages", "lead_id"),
+                ("incoming_data_events", "lead_id"),
+            ]
+
+            delete_sqls = []
+            for table, column in tables_to_clean:
+                if table in existing_tables:
+                    delete_sqls.append(f"DELETE FROM {table} WHERE {column} = {lead_id}")
+
+            if "loans" in existing_tables:
+                delete_sqls.append(f"UPDATE loans SET lead_id = NULL WHERE lead_id = {lead_id}")
+
+            delete_sqls.append(f"DELETE FROM leads WHERE id = {lead_id}")
+
+            raw_conn = db.bind.raw_connection()
+            try:
+                cursor = raw_conn.cursor()
+                for sql in delete_sqls:
+                    try:
+                        cursor.execute(sql)
+                    except Exception as e:
+                        logger.debug(f"Bulk delete statement skipped: {sql[:50]}... - {e}")
+                raw_conn.commit()
+                deleted_count += 1
+            finally:
+                raw_conn.close()
+
+        except Exception as e:
+            logger.error(f"Error bulk deleting lead {lead_id}: {str(e)}")
+            errors.append(f"Lead {lead_id}: {str(e)}")
+
+    return {
+        "deleted_count": deleted_count,
+        "total_requested": len(lead_ids),
+        "errors": errors if errors else None,
+        "message": f"Successfully deleted {deleted_count} of {len(lead_ids)} leads"
+    }
+
+
 @app.post("/api/v1/leads/claim-orphans")
 async def claim_orphan_leads(
     db: Session = Depends(get_db),
@@ -49740,11 +49823,16 @@ def filter_leads_by_permissions(query, user: User, db: Session):
     Filter leads query based on user's permissions
 
     Returns filtered query based on:
+    - Master user (id=1): See all leads
     - leads.view_all: See all leads
     - leads.view_team: See team's leads
     - leads.view_assigned: See only assigned leads
     """
     try:
+        # Master user can see all leads
+        if user.id == 1:
+            return query
+
         if has_permission(user.id, 'leads.view_all', db):
             # Management: See all leads
             return query

@@ -124,6 +124,10 @@ export const leadsAPI = {
   delete: async (id) => {
     await api.delete(`/api/v1/leads/${id}`);
   },
+  bulkDelete: async (leadIds) => {
+    const response = await api.delete('/api/v1/leads/bulk', { data: leadIds });
+    return response.data;
+  },
   getDocuments: async (leadId) => {
     const response = await api.get(`/api/v1/leads/${leadId}/documents`);
     return response.data;

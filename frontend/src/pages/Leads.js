@@ -25,6 +25,8 @@ function Leads() {
   const [statusDropdown, setStatusDropdown] = useState({ show: false, leadId: null, position: { top: 0, left: 0 } });
   const [duplicateMap, setDuplicateMap] = useState({});  // Map of lead_id -> duplicate info
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
+  const [selectedLeads, setSelectedLeads] = useState(new Set());
+  const [isMasterUser, setIsMasterUser] = useState(false);
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -87,6 +89,20 @@ function Leads() {
 
   useEffect(() => {
     loadLeads();
+    // Check if master user (user ID 1)
+    const checkMasterUser = () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          // Check if user ID is 1 or email is admin
+          setIsMasterUser(payload.user_id === 1 || payload.sub === 'admin@perenniaai.com');
+        } catch (e) {
+          console.error('Error parsing token:', e);
+        }
+      }
+    };
+    checkMasterUser();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -358,6 +374,58 @@ function Leads() {
     }
   };
 
+  // Bulk selection handlers
+  const handleSelectLead = (leadId, e) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedLeads);
+    if (newSelected.has(leadId)) {
+      newSelected.delete(leadId);
+    } else {
+      newSelected.add(leadId);
+    }
+    setSelectedLeads(newSelected);
+  };
+
+  const handleSelectAll = (e) => {
+    e.stopPropagation();
+    if (selectedLeads.size === filteredLeads.length) {
+      // Deselect all
+      setSelectedLeads(new Set());
+    } else {
+      // Select all visible leads
+      setSelectedLeads(new Set(filteredLeads.map(lead => lead.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedLeads.size === 0) return;
+
+    const count = selectedLeads.size;
+    if (!window.confirm(`Are you sure you want to delete ${count} lead${count > 1 ? 's' : ''}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const leadIds = Array.from(selectedLeads);
+      console.log('Bulk deleting leads:', leadIds);
+      const result = await leadsAPI.bulkDelete(leadIds);
+      console.log('Bulk delete result:', result);
+
+      // Clear selection
+      setSelectedLeads(new Set());
+
+      // Clear cache and reload
+      localStorage.removeItem('leads_data');
+      localStorage.removeItem('leads_data_time');
+      loadLeads();
+
+      alert(result.message || `Successfully deleted ${result.deleted_count} leads`);
+    } catch (err) {
+      console.error('Failed to bulk delete leads:', err);
+      alert('Failed to delete leads: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
   const resetForm = () => {
     setBorrowers([{
       first_name: '',
@@ -553,6 +621,19 @@ function Leads() {
         )}
       </div>
 
+      {/* Bulk Delete Bar - Only for master user */}
+      {isMasterUser && selectedLeads.size > 0 && (
+        <div className="bulk-actions-bar">
+          <span className="selected-count">{selectedLeads.size} lead{selectedLeads.size > 1 ? 's' : ''} selected</span>
+          <button className="btn-danger" onClick={handleBulkDelete}>
+            🗑️ Delete Selected
+          </button>
+          <button className="btn-secondary" onClick={() => setSelectedLeads(new Set())}>
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Duplicate Warning Banner */}
       {getTotalDuplicates() > 0 && (
         <div className="duplicate-warning-banner">
@@ -578,6 +659,16 @@ function Leads() {
         <table className="leads-table">
           <thead>
             <tr>
+              {isMasterUser && (
+                <th className="checkbox-column">
+                  <input
+                    type="checkbox"
+                    checked={filteredLeads.length > 0 && selectedLeads.size === filteredLeads.length}
+                    onChange={handleSelectAll}
+                    title="Select All"
+                  />
+                </th>
+              )}
               <th>Name</th>
               <th>Email</th>
               <th>Phone</th>
@@ -591,9 +682,19 @@ function Leads() {
             {filteredLeads.map((lead) => (
               <tr
                 key={lead.id}
-                className={`${isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''} ${hasDuplicate(lead.id) ? 'has-duplicate' : ''}`}
+                className={`${isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''} ${hasDuplicate(lead.id) ? 'has-duplicate' : ''} ${selectedLeads.has(lead.id) ? 'selected-row' : ''}`}
                 onClick={() => handleLeadClick(lead.id)}
               >
+                {isMasterUser && (
+                  <td className="checkbox-column">
+                    <input
+                      type="checkbox"
+                      checked={selectedLeads.has(lead.id)}
+                      onChange={(e) => handleSelectLead(lead.id, e)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
+                )}
                 <td className="lead-name">
                   <div className="borrower-info">
                     <span>{lead.name}</span>
