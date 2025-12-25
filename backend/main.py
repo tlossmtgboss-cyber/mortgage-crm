@@ -321,6 +321,7 @@ class DocumentType(str, enum.Enum):
     E_CONSENT = "E-Consent Agreement"
     CREDIT_AUTHORIZATION = "Credit Authorization"
     FANNIE_MAE_34 = "Fannie Mae 3.4 File"
+    APPLICATION_SUMMARY = "Application Summary"
     # Other
     DIVORCE_DECREE = "Divorce Decree"
     BANKRUPTCY_DISCHARGE = "Bankruptcy Discharge"
@@ -334,6 +335,7 @@ class DocumentCategory(str, enum.Enum):
     PROPERTY = "Property"
     IDENTITY = "Identity"
     DISCLOSURES = "Disclosures"
+    APPLICATION = "Application"
     MISC = "Miscellaneous"
 
 
@@ -55117,6 +55119,7 @@ async def startup_event():
                     "E-Consent Agreement",
                     "Credit Authorization",
                     "Fannie Mae 3.4 File",
+                    "Application Summary",
                 ]
 
                 for doc_type in doc_types_to_add:
@@ -55139,6 +55142,7 @@ async def startup_event():
                     "Credit",
                     "Property",
                     "Identity",
+                    "Application",
                     "Miscellaneous",
                 ]
 
