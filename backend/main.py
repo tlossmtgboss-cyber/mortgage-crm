@@ -33238,6 +33238,127 @@ async def debug_all_loans(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/debug/dashboard-diagnosis")
+async def debug_dashboard_diagnosis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to diagnose dashboard errors step by step"""
+    import traceback
+    from datetime import date, timedelta, datetime, timezone
+    from sqlalchemy import func, extract, case, text
+
+    results = {"user_id": current_user.id, "steps": []}
+
+    try:
+        # Step 1: Basic date setup
+        today = date.today()
+        start_of_month = today.replace(day=1)
+        results["steps"].append({"step": "date_setup", "status": "ok", "today": str(today)})
+    except Exception as e:
+        results["steps"].append({"step": "date_setup", "status": "error", "error": str(e)})
+        return results
+
+    try:
+        # Step 2: User metadata
+        user_metadata = current_user.user_metadata or {}
+        goals = user_metadata.get('goals', {})
+        results["steps"].append({"step": "user_metadata", "status": "ok", "has_goals": bool(goals)})
+    except Exception as e:
+        results["steps"].append({"step": "user_metadata", "status": "error", "error": str(e)})
+        return results
+
+    try:
+        # Step 3: Funded loans query with case statements
+        funded_counts = db.query(
+            func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
+            func.count(case((Loan.funded_date >= start_of_month, 1))).label('monthly')
+        ).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED
+        ).first()
+        results["steps"].append({"step": "funded_counts", "status": "ok", "annual": funded_counts.annual or 0})
+    except Exception as e:
+        results["steps"].append({"step": "funded_counts", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    try:
+        # Step 4: Lead counts query
+        lead_counts = db.query(
+            func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
+            func.count(case((Lead.stage == LeadStage.PRE_APPROVED, 1))).label('preapproved')
+        ).filter(
+            Lead.owner_id == current_user.id
+        ).first()
+        results["steps"].append({"step": "lead_counts", "status": "ok", "new_leads": lead_counts.new_leads or 0})
+    except Exception as e:
+        results["steps"].append({"step": "lead_counts", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    try:
+        # Step 5: Active loans query
+        active_loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
+        ).all()
+        results["steps"].append({"step": "active_loans", "status": "ok", "count": len(active_loans)})
+    except Exception as e:
+        results["steps"].append({"step": "active_loans", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    try:
+        # Step 6: Tasks query
+        tasks_today = db.query(Task).filter(
+            Task.owner_id == current_user.id,
+            Task.status.in_(["pending", "in_progress"]),
+            Task.due_date <= today + timedelta(days=1)
+        ).limit(10).all()
+        results["steps"].append({"step": "tasks_query", "status": "ok", "count": len(tasks_today)})
+    except Exception as e:
+        results["steps"].append({"step": "tasks_query", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    try:
+        # Step 7: Lead metrics with ai_score
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
+        lead_metrics_query = db.query(
+            func.count(Lead.id).label('total_leads'),
+            func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
+            func.count(case(((Lead.ai_score >= 80) & (Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT])), 1))).label('hot_leads')
+        ).filter(
+            Lead.owner_id == current_user.id
+        ).first()
+        results["steps"].append({"step": "lead_metrics", "status": "ok", "total_leads": lead_metrics_query.total_leads or 0})
+    except Exception as e:
+        results["steps"].append({"step": "lead_metrics", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    try:
+        # Step 8: Referral partners query
+        partners = db.query(ReferralPartner).filter(
+            ReferralPartner.status == "active"
+        ).limit(5).all()
+        results["steps"].append({"step": "referral_partners", "status": "ok", "count": len(partners)})
+    except Exception as e:
+        results["steps"].append({"step": "referral_partners", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    try:
+        # Step 9: AI Colleague Actions table check
+        thirty_days_ago = today - timedelta(days=30)
+        ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(
+            AIColleagueAction.user_id == current_user.id,
+            AIColleagueAction.created_at >= thirty_days_ago
+        ).scalar() or 0
+        results["steps"].append({"step": "ai_colleague_actions", "status": "ok", "count": ai_tasks_count})
+    except Exception as e:
+        results["steps"].append({"step": "ai_colleague_actions", "status": "error", "error": str(e), "traceback": traceback.format_exc()})
+        return results
+
+    results["overall_status"] = "all_steps_passed"
+    return results
+
+
 @app.post("/api/v1/microsoft/reprocess-emails")
 async def reprocess_unextracted_emails(
     current_user: User = Depends(get_current_user),
