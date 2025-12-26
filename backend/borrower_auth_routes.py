@@ -335,8 +335,8 @@ def send_magic_link_email(to_email: str, first_name: str, magic_link: str) -> bo
 
         <p>Click the button below to securely sign in to your mortgage application:</p>
 
-        <div style="text-align: center;">
-            <a href="{magic_link}" class="btn-login">Sign In to Your Application</a>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{magic_link}" class="btn-login" style="display: inline-block; background-color: #10b981; color: #ffffff; padding: 16px 48px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 18px;">Sign In to Your Application</a>
         </div>
 
         <div class="info-box">
