@@ -404,6 +404,11 @@ async def list_recordings(
         }
 
     except Exception as e:
+        error_str = str(e).lower()
+        # Handle missing table gracefully - return empty list
+        if "undefined" in error_str and "table" in error_str or "does not exist" in error_str:
+            logger.warning(f"CI recordings table not found, returning empty list: {str(e)}")
+            return {"recordings": [], "total": 0, "limit": limit, "offset": offset}
         logger.error(f"Error listing recordings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1133,6 +1138,11 @@ async def list_qa_rubrics(
         return {"rubrics": rubrics}
 
     except Exception as e:
+        error_str = str(e).lower()
+        # Handle missing table gracefully - return empty list
+        if "undefined" in error_str and "table" in error_str or "does not exist" in error_str:
+            logger.warning(f"CI QA rubrics table not found, returning empty list: {str(e)}")
+            return {"rubrics": []}
         logger.error(f"Error listing rubrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
