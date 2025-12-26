@@ -55478,6 +55478,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Smart Docs SLA migration skipped: {e}")
 
+            # Run Microsite Platform migration (template packs, microsites, analytics)
+            try:
+                from migrations.add_microsite_platform import run_migration as run_microsite_platform_migration
+                run_microsite_platform_migration()
+                logger.info("✅ Microsite Platform migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Microsite Platform migration skipped: {e}")
+
             # Seed default SLA Workflow configurations
             try:
                 seed_workflow_configurations()
