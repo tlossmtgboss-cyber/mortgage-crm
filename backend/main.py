@@ -20255,6 +20255,15 @@ try:
 except Exception as e:
     logger.warning(f"Company Branding Settings routes not loaded: {e}")
 
+# Application Slides Settings routes (Customize application flow)
+try:
+    from routes.application_slides_settings_routes import router as application_slides_router, set_dependencies as set_app_slides_deps
+    set_app_slides_deps(User, get_current_user, get_db)
+    app.include_router(application_slides_router, tags=["Application Slides Settings"])
+    logger.info("Application Slides Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Application Slides Settings routes not loaded: {e}")
+
 # Agent Gym routes (Agent Training & Simulation)
 try:
     from routes.agent_gym_routes import router as agent_gym_router

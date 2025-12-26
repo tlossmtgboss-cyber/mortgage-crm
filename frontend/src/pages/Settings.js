@@ -17,6 +17,7 @@ import AIEmailTraining from '../components/AIEmailTraining';
 import AIEmailSetup from '../components/AIEmailSetup';
 import AIDailyBlog from './AIDailyBlog';
 import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
+import ApplicationSlidesEditor from '../components/ApplicationSlidesEditor';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -2898,6 +2899,21 @@ const API_BASE_URL = isProduction
                 >
                   Pre-Approval Letter
                 </button>
+                <button
+                  onClick={() => setMarketingTab('application-slides')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'application-slides' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'application-slides' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'application-slides' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Application Slides
+                </button>
               </div>
 
               {/* Landing Pages Tab */}
@@ -3204,6 +3220,11 @@ const API_BASE_URL = isProduction
               {/* Pre-Approval Letter Tab */}
               {marketingTab === 'pre-approval-letter' && (
                 <PreApprovalLetterSettings />
+              )}
+
+              {/* Application Slides Tab */}
+              {marketingTab === 'application-slides' && (
+                <ApplicationSlidesEditor />
               )}
             </div>
           )}

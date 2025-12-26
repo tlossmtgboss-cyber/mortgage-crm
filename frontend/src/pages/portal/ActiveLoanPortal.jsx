@@ -1443,7 +1443,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                 <ApplicantTasks
                   workspaceId={workspace?.id}
                   conditions={conditions}
-                  documentRequirements={[...(data?.document_requirements || []), ...smartDocsRequirements]}
+                  documentRequirements={smartDocsRequirements}
                   onUploadForCondition={handleUploadForCondition}
                   uploading={conditionUploading}
                 />
