@@ -254,6 +254,12 @@ async def inbound_email_webhook(
             conv_header_match = re.search(r'X-Conversation-ID:\s*(\S+)', headers)
             conversation_id = conv_header_match.group(1) if conv_header_match else None
 
+        # Get Message-ID for threading
+        inbound_message_id = form_data.get("Message-ID", "")
+        if not inbound_message_id and headers:
+            msg_id_match = re.search(r'Message-ID:\s*(<[^>]+>)', headers, re.IGNORECASE)
+            inbound_message_id = msg_id_match.group(1) if msg_id_match else ""
+
         # Check In-Reply-To header for message threading
         in_reply_to = form_data.get("In-Reply-To", "")
         if not conversation_id and in_reply_to:
@@ -362,20 +368,21 @@ async def inbound_email_webhook(
         clean_reply = clean_email_reply(text_body)
         logger.info(f"After cleaning - reply length: {len(clean_reply)}, content: {clean_reply[:200] if clean_reply else 'EMPTY'}...")
 
-        # Store inbound message
+        # Store inbound message with message_id for threading
         db.execute(text("""
             INSERT INTO ai_email_messages
             (conversation_id, direction, from_email, to_email, subject,
-             body_text, body_html, ai_generated, created_at)
+             body_text, body_html, message_id, ai_generated, created_at)
             VALUES (:conv_id, 'inbound', :from_email, :to_email, :subject,
-                    :body_text, :body_html, false, NOW())
+                    :body_text, :body_html, :message_id, false, NOW())
         """), {
             "conv_id": conversation_id,
             "from_email": from_address,
             "to_email": to_address,
             "subject": subject,
             "body_text": clean_reply,
-            "body_html": html_body
+            "body_html": html_body,
+            "message_id": inbound_message_id or None
         })
 
         # Update conversation last_message_at
@@ -1022,15 +1029,30 @@ Loan Information:
         # Get LO info for value pitch
         lo_name = "Tim"  # Default LO name
         lo_available_times = "Monday-Friday 9am-5pm, Saturday 10am-2pm"
+
+        # Try to get LO from loan first
         if loan_id:
             lo_result = db.execute(text("""
-                SELECT u.first_name, u.last_name
+                SELECT u.full_name, u.first_name, u.email, u.phone
                 FROM loans l
-                JOIN users u ON u.id = l.owner_id
+                LEFT JOIN users u ON u.id = l.loan_officer_id
                 WHERE l.id = :loan_id
             """), {"loan_id": loan_id}).fetchone()
-            if lo_result and lo_result.first_name:
-                lo_name = lo_result.first_name
+            if lo_result:
+                lo_name = lo_result.first_name or (lo_result.full_name.split()[0] if lo_result.full_name else "Tim")
+
+        # If no loan, try to get LO from lead
+        elif lead_id:
+            lo_result = db.execute(text("""
+                SELECT u.full_name, u.first_name, u.email, u.phone
+                FROM leads l
+                LEFT JOIN users u ON u.id = l.owner_id
+                WHERE l.id = :lead_id
+            """), {"lead_id": lead_id}).fetchone()
+            if lo_result:
+                lo_name = lo_result.first_name or (lo_result.full_name.split()[0] if lo_result.full_name else "Tim")
+
+        logger.info(f"Using LO name: {lo_name} for conversation {conversation_id}")
 
         # =================================================================
         # Use consolidated AI service with Trust-First Architecture
@@ -1077,16 +1099,35 @@ Loan Information:
         else:
             tagged_reply_to = reply_to_base
 
+        # Get last message_id for email threading
+        last_msg = db.execute(text("""
+            SELECT message_id FROM ai_email_messages
+            WHERE conversation_id = :conv_id AND direction = 'inbound' AND message_id IS NOT NULL
+            ORDER BY created_at DESC LIMIT 1
+        """), {"conv_id": conversation_id}).fetchone()
+
+        # Generate a new message_id for this response
+        new_message_id = f"<{conversation_id}-{uuid.uuid4().hex[:8]}@reply.perenniaai.com>"
+
+        # Build headers with threading support
+        email_headers = {
+            "Message-ID": new_message_id,
+            "X-Conversation-ID": conversation_id,
+            "X-AI-Generated": "true"
+        }
+
+        # Add In-Reply-To and References for proper email threading
+        if last_msg and last_msg.message_id:
+            email_headers["In-Reply-To"] = last_msg.message_id
+            email_headers["References"] = last_msg.message_id
+
         success = email_service.send_html_email(
             to_email=user_email,
             subject=reply_subject,
             html_body=html_response,
             plain_text_body=ai_response,
-            reply_to=tagged_reply_to,  # Use dedicated parameter, not headers
-            headers={
-                "X-Conversation-ID": conversation_id,
-                "X-AI-Generated": "true"
-            }
+            reply_to=tagged_reply_to,
+            headers=email_headers
         )
 
         if success:

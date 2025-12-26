@@ -1201,12 +1201,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 {"user_id": current_user.id}
             ).fetchall()
 
-            # Get closing metrics
+            # Get closing metrics (only count future closing dates)
             closing_metrics = db.execute(
                 text("""SELECT
-                       COUNT(*) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '7 days') as closing_7_days,
-                       COUNT(*) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '30 days') as closing_30_days,
-                       SUM(amount) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '30 days') as volume_30_days
+                       COUNT(*) FILTER (WHERE closing_date >= CURRENT_DATE AND closing_date <= CURRENT_DATE + INTERVAL '7 days') as closing_7_days,
+                       COUNT(*) FILTER (WHERE closing_date >= CURRENT_DATE AND closing_date <= CURRENT_DATE + INTERVAL '30 days') as closing_30_days,
+                       SUM(amount) FILTER (WHERE closing_date >= CURRENT_DATE AND closing_date <= CURRENT_DATE + INTERVAL '30 days') as volume_30_days
                        FROM loans WHERE loan_officer_id = :user_id AND stage::text != 'Funded'"""),
                 {"user_id": current_user.id}
             ).fetchone()
@@ -1236,11 +1236,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
         try:
             # Get loans closing in the specified timeframe (LoanStage enum values use title case like 'Funded')
+            # Filter to only include future closing dates
             loans = db.execute(
                 text("""SELECT id, loan_number, borrower_name, amount, closing_date,
                        rate, lock_expiration_date
                        FROM loans
                        WHERE loan_officer_id = :user_id
+                       AND closing_date >= CURRENT_DATE
                        AND closing_date <= CURRENT_DATE + INTERVAL ':days days'
                        AND stage::text NOT IN ('Funded')
                        ORDER BY closing_date ASC""".replace(':days', str(days_to_close))),
@@ -1331,14 +1333,27 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 {"user_id": current_user.id}
             ).fetchall()
 
-            # Get loans closing soon (use correct LoanStage enum values - 'Funded' not 'CLOSED')
+            # Get loans closing soon (future only - past dates mean loan is delayed or already closed)
             closing_soon = db.execute(
                 text("""SELECT id, loan_number, borrower_name, closing_date, stage, amount
                        FROM loans
                        WHERE loan_officer_id = :user_id
+                       AND closing_date >= CURRENT_DATE
                        AND closing_date <= CURRENT_DATE + INTERVAL '7 days'
                        AND stage::text NOT IN ('Funded')
                        ORDER BY closing_date ASC
+                       LIMIT 5"""),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Also check for loans with PAST closing dates that aren't funded (these need attention)
+            overdue_closings = db.execute(
+                text("""SELECT id, loan_number, borrower_name, closing_date, stage, amount
+                       FROM loans
+                       WHERE loan_officer_id = :user_id
+                       AND closing_date < CURRENT_DATE
+                       AND stage::text NOT IN ('Funded', 'Cancelled', 'Denied')
+                       ORDER BY closing_date DESC
                        LIMIT 5"""),
                 {"user_id": current_user.id}
             ).fetchall()
@@ -1372,7 +1387,15 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     "stage": str(l.stage) if l.stage else None,
                     "amount": float(l.amount) if l.amount else 0
                 } for l in closing_soon],
-                "summary": f"{len(overdue_tasks)} overdue, {len(today_tasks)} due today, {len(tomorrow_tasks)} due tomorrow, {len(closing_soon)} closing within 7 days"
+                "overdue_closings": [{
+                    "loan_number": l.loan_number,
+                    "borrower_name": l.borrower_name,
+                    "closing_date": l.closing_date.isoformat() if l.closing_date else None,
+                    "stage": str(l.stage) if l.stage else None,
+                    "amount": float(l.amount) if l.amount else 0,
+                    "status": "PAST DUE - needs update"
+                } for l in overdue_closings],
+                "summary": f"{len(overdue_tasks)} overdue tasks, {len(today_tasks)} due today, {len(closing_soon)} closing within 7 days" + (f", {len(overdue_closings)} loans with PAST closing dates needing attention" if overdue_closings else "")
             }
         except Exception as e:
             logger.error(f"Error in get_daily_priorities: {e}")
