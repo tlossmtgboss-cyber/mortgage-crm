@@ -55683,12 +55683,14 @@ async def startup_event():
                     db_temp.commit()
                     logger.info("✅ Fixed any lead stages with incorrect case")
 
-                    # Assign any orphaned leads/loans/tasks to admin
+                    # Assign any orphaned leads/loans/tasks/partners to admin
                     db_temp.execute(text("UPDATE leads SET owner_id = :admin_id WHERE owner_id IS NULL"),
                                     {"admin_id": admin_id})
                     db_temp.execute(text("UPDATE loans SET loan_officer_id = :admin_id WHERE loan_officer_id IS NULL"),
                                     {"admin_id": admin_id})
                     db_temp.execute(text("UPDATE tasks SET owner_id = :admin_id WHERE owner_id IS NULL"),
+                                    {"admin_id": admin_id})
+                    db_temp.execute(text("UPDATE referral_partners SET owner_id = :admin_id WHERE owner_id IS NULL"),
                                     {"admin_id": admin_id})
                     db_temp.commit()
                     logger.info("✅ Assigned orphaned records to admin user")
