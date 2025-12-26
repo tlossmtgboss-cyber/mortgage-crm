@@ -1544,9 +1544,72 @@ export default function PurchaseApplication() {
   const [employerSuggestions, setEmployerSuggestions] = useState([]);
   const [showEmployerDropdown, setShowEmployerDropdown] = useState(false);
 
+  // Application configuration (loaded from backend)
+  const [applicationConfig, setApplicationConfig] = useState(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
   // Stubs for disabled followup feature
   const clearFollowup = () => {};
   const checkForFollowup = async () => null;
+
+  // Load application configuration from backend (slide customization)
+  useEffect(() => {
+    const loadApplicationConfig = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/settings/application-slides`);
+        if (response.ok) {
+          const config = await response.json();
+          setApplicationConfig(config);
+          console.log('[PurchaseApplication] Loaded custom configuration:', {
+            stages: config.stages?.filter(s => s.enabled).length,
+            questions: config.declarationQuestions?.filter(q => q.enabled).length
+          });
+        }
+      } catch (error) {
+        console.warn('[PurchaseApplication] Failed to load config, using defaults:', error);
+      } finally {
+        setConfigLoaded(true);
+      }
+    };
+    loadApplicationConfig();
+  }, [API_URL]);
+
+  // Get enabled stages based on configuration
+  const getEnabledStages = useCallback(() => {
+    if (!applicationConfig?.stages) return STAGES;
+
+    // Create a map of config by stage id for quick lookup
+    const configMap = new Map(applicationConfig.stages.map(s => [s.id, s]));
+
+    // Filter and reorder stages based on config
+    return applicationConfig.stages
+      .filter(configStage => configStage.enabled)
+      .map(configStage => {
+        // Find the original stage definition and merge with config
+        const originalStage = STAGES.find(s => s.id === configStage.id);
+        return originalStage ? { ...originalStage, ...configStage } : configStage;
+      });
+  }, [applicationConfig]);
+
+  // Get enabled declaration questions based on configuration
+  const getEnabledQuestions = useCallback(() => {
+    if (!applicationConfig?.declarationQuestions) return DECLARATION_QUESTIONS;
+
+    // Create a set of enabled question IDs
+    const enabledIds = new Set(
+      applicationConfig.declarationQuestions
+        .filter(q => q.enabled)
+        .map(q => q.id)
+    );
+
+    // Filter original questions to only include enabled ones, preserving full question data
+    return DECLARATION_QUESTIONS.filter(q => enabledIds.has(q.id));
+  }, [applicationConfig]);
+
+  // Memoized enabled stages and questions
+  const enabledStages = getEnabledStages();
+  const enabledQuestions = getEnabledQuestions();
+  const visibleStages = enabledStages.filter(s => !s.hideFromProgress);
 
   // Load saved progress from localStorage on mount (unless fresh=true)
   useEffect(() => {
@@ -1923,14 +1986,14 @@ export default function PurchaseApplication() {
 
   // Calculate progress
   const getProgress = useCallback(() => {
-    const stageIndex = STAGES.findIndex(s => s.id === currentStage);
-    const stageProgress = (stageIndex / STAGES.length) * 100;
+    const stageIndex = enabledStages.findIndex(s => s.id === currentStage);
+    const stageProgress = (stageIndex / enabledStages.length) * 100;
     if (currentStage === 'declarations') {
-      const questionProgress = (currentQuestionIndex / DECLARATION_QUESTIONS.length) * (100 / STAGES.length);
+      const questionProgress = (currentQuestionIndex / enabledQuestions.length) * (100 / enabledStages.length);
       return Math.round(stageProgress + questionProgress);
     }
     return Math.round(stageProgress);
-  }, [currentStage, currentQuestionIndex]);
+  }, [currentStage, currentQuestionIndex, enabledStages, enabledQuestions]);
 
   // Helper to check if a question should be shown based on conditions
   const shouldShowQuestion = useCallback((question, currentDeclarations) => {
@@ -1949,8 +2012,8 @@ export default function PurchaseApplication() {
 
   // Get filtered questions based on current declarations
   const getVisibleQuestions = useCallback(() => {
-    return DECLARATION_QUESTIONS.filter(q => shouldShowQuestion(q, declarations));
-  }, [declarations, shouldShowQuestion]);
+    return enabledQuestions.filter(q => shouldShowQuestion(q, declarations));
+  }, [declarations, shouldShowQuestion, enabledQuestions]);
 
   // Update needs list
   useEffect(() => {
@@ -2215,16 +2278,16 @@ export default function PurchaseApplication() {
   // Proceed to next question
   const proceedToNextQuestion = () => {
     let nextIndex = currentQuestionIndex + 1;
-    while (nextIndex < DECLARATION_QUESTIONS.length) {
-      const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+    while (nextIndex < enabledQuestions.length) {
+      const nextQuestion = enabledQuestions[nextIndex];
       if (shouldShowQuestion(nextQuestion, declarations)) {
         setCurrentQuestionIndex(nextIndex);
         return;
       }
       nextIndex++;
     }
-    // If no more questions, go to planning stage
-    setCurrentStage('planning');
+    // If no more questions, go to next enabled stage after declarations
+    goToNextStage();
   };
 
   // Handle declaration answer
@@ -2249,8 +2312,8 @@ export default function PurchaseApplication() {
 
       // Find next visible question
       let nextIndex = currentQuestionIndex + 1;
-      while (nextIndex < DECLARATION_QUESTIONS.length) {
-        const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+      while (nextIndex < enabledQuestions.length) {
+        const nextQuestion = enabledQuestions[nextIndex];
         if (shouldShowQuestion(nextQuestion, newDeclarations)) {
           setCurrentQuestionIndex(nextIndex);
           return;
@@ -2258,7 +2321,7 @@ export default function PurchaseApplication() {
         nextIndex++;
       }
 
-      // No more visible questions - move to next stage (planning/Your Goals)
+      // No more visible questions - move to next stage
       showMicroWinAnimation('Great! Your checklist is ready!');
       setTimeout(() => goToNextStage(), 1500);
     }, 300);
@@ -2268,7 +2331,7 @@ export default function PurchaseApplication() {
   const goToPrevQuestion = () => {
     let prevIndex = currentQuestionIndex - 1;
     while (prevIndex >= 0) {
-      const prevQuestion = DECLARATION_QUESTIONS[prevIndex];
+      const prevQuestion = enabledQuestions[prevIndex];
       if (shouldShowQuestion(prevQuestion, declarations)) {
         setCurrentQuestionIndex(prevIndex);
         return;
@@ -2280,23 +2343,23 @@ export default function PurchaseApplication() {
   // Get current visible question number for display
   const getVisibleQuestionNumber = () => {
     const visibleQuestions = getVisibleQuestions();
-    const currentQuestion = DECLARATION_QUESTIONS[currentQuestionIndex];
-    return visibleQuestions.findIndex(q => q.id === currentQuestion.id) + 1;
+    const currentQuestion = enabledQuestions[currentQuestionIndex];
+    return visibleQuestions.findIndex(q => q.id === currentQuestion?.id) + 1;
   };
 
   // Navigation
   const goToNextStage = () => {
-    const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-    if (currentIndex < STAGES.length - 1) {
-      setCurrentStage(STAGES[currentIndex + 1].id);
-      showMicroWinAnimation(getStageMicroWin(STAGES[currentIndex].id));
+    const currentIndex = enabledStages.findIndex(s => s.id === currentStage);
+    if (currentIndex < enabledStages.length - 1) {
+      setCurrentStage(enabledStages[currentIndex + 1].id);
+      showMicroWinAnimation(getStageMicroWin(enabledStages[currentIndex].id));
     }
   };
 
   const goToPrevStage = () => {
-    const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+    const currentIndex = enabledStages.findIndex(s => s.id === currentStage);
     if (currentIndex > 0) {
-      setCurrentStage(STAGES[currentIndex - 1].id);
+      setCurrentStage(enabledStages[currentIndex - 1].id);
     }
   };
 
@@ -2324,15 +2387,15 @@ export default function PurchaseApplication() {
         setIsAnimating(false);
         // Find next visible question
         let nextIndex = currentQuestionIndex + 1;
-        while (nextIndex < DECLARATION_QUESTIONS.length) {
-          const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+        while (nextIndex < enabledQuestions.length) {
+          const nextQuestion = enabledQuestions[nextIndex];
           if (shouldShowQuestion(nextQuestion, declarations)) {
             setCurrentQuestionIndex(nextIndex);
             return;
           }
           nextIndex++;
         }
-        // No more visible questions - move to next stage (planning/Your Goals)
+        // No more visible questions - move to next stage
         showMicroWinAnimation('Great! Your checklist is ready!');
         setTimeout(() => goToNextStage(), 1500);
       }, 300);
@@ -2622,7 +2685,7 @@ export default function PurchaseApplication() {
   };
 
   const renderDeclarationsStage = () => {
-    const question = DECLARATION_QUESTIONS[currentQuestionIndex];
+    const question = enabledQuestions[currentQuestionIndex];
     const visibleQuestions = getVisibleQuestions();
     const visibleQuestionNum = getVisibleQuestionNumber();
 
@@ -5291,8 +5354,8 @@ export default function PurchaseApplication() {
       {currentStage !== 'account' && (
         <div className="progress-header">
           <div className="progress-chapters">
-            {VISIBLE_STAGES.map((stage, index) => {
-              const currentIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+            {visibleStages.map((stage, index) => {
+              const currentIndex = visibleStages.findIndex(s => s.id === currentStage);
               const isComplete = index < currentIndex;
               const isCurrent = index === currentIndex;
               return (
@@ -5468,7 +5531,7 @@ export default function PurchaseApplication() {
 
           <div className="documents-list">
             {(() => {
-              const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+              const currentIndex = enabledStages.findIndex(s => s.id === currentStage);
               // Get dynamic document list with personalized labels (borrower names, employer names, years)
               const requiredDocs = getRequiredDocuments(
                 declarations,
@@ -5497,7 +5560,7 @@ export default function PurchaseApplication() {
               // Filter categories to only show those that have been unlocked AND have documents
               const visibleCategories = ['identity', 'income', 'assets', 'property'].filter(category => {
                 const unlockStage = categoryUnlockStage[category];
-                const unlockIndex = STAGES.findIndex(s => s.id === unlockStage);
+                const unlockIndex = enabledStages.findIndex(s => s.id === unlockStage);
                 const categoryDocs = requiredDocs.filter(d => d.category === category);
                 // Show category if user has reached or passed its unlock stage AND has documents
                 return currentIndex >= unlockIndex && categoryDocs.length > 0;

@@ -776,7 +776,7 @@ async def execute_trigger(
         # Get active triggers of this type
         result = db.execute(text("""
             SELECT * FROM outreach_triggers
-            WHERE trigger_type = :trigger_type AND is_active = 1
+            WHERE trigger_type = :trigger_type AND is_active = true
         """), {"trigger_type": trigger_type.value})
 
         triggers = [dict(row._mapping) for row in result.fetchall()]

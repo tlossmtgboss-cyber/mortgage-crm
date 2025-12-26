@@ -1115,7 +1115,7 @@ async def list_qa_rubrics(
             SELECT id, name, description, category, max_points,
                    weight, required, created_at
             FROM ci_qa_rubrics
-            WHERE is_active = 1
+            WHERE is_active = true
             ORDER BY category, name
         """))
 
