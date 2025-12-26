@@ -4100,10 +4100,17 @@ export default function PurchaseApplication() {
     const loanAmount = paymentEstimate?.loanAmount || (purchasePrice - downPaymentAmount);
     const downPaymentPercent = paymentEstimate?.downPaymentPercent || (purchasePrice > 0 ? ((downPaymentAmount / purchasePrice) * 100).toFixed(1) : 0);
 
+    // Build welcome message with borrower names
+    const borrowerNames = [profileData.firstName];
+    if (hasMultipleBorrowers && coBorrowerData.firstName) {
+      borrowerNames.push(coBorrowerData.firstName);
+    }
+    const welcomeMessage = `Welcome ${borrowerNames.join(' and ')}`;
+
     return (
       <div className="stage-content review-stage">
         <div className="stage-header">
-          <h2>Review Your Application</h2>
+          <h2>{welcomeMessage}</h2>
           <p>Almost there! Review your information below and make any edits needed.</p>
         </div>
 
@@ -4134,15 +4141,15 @@ export default function PurchaseApplication() {
         </div>
 
         <div className="review-grid">
-          {/* Profile Card */}
-          <div className="review-card">
+          {/* Borrower Card - styled like Co-Borrower card */}
+          <div className="review-card borrower-card">
             <div className="card-header">
-              <div className="card-icon profile-icon">
-                <Icon name="profile" size={24} />
+              <div className="card-icon borrower-icon">
+                <Icon name="user" size={24} />
               </div>
               <div className="card-title">
-                <h4>Personal Information</h4>
-                <span className="card-subtitle">Your contact details</span>
+                <h4>Borrower Information</h4>
+                <span className="card-subtitle">Primary applicant details</span>
               </div>
               <button className="edit-btn-modern" onClick={() => setCurrentStage('profile')}>
                 <Icon name="edit" size={16} />

@@ -99,6 +99,11 @@ async def list_template_packs(
         templates = query.order_by(MicrositeTemplatePack.name).all()
         return templates
     except Exception as e:
+        error_str = str(e).lower()
+        # Handle missing table gracefully - return empty list
+        if "undefined" in error_str and "table" in error_str or "does not exist" in error_str:
+            logger.warning(f"Microsite templates table not found, returning empty list: {str(e)}")
+            return []
         logger.error(f"Error fetching microsite templates: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
