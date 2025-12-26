@@ -984,8 +984,8 @@ async def request_email_login(
     })
     db.commit()
 
-    # Magic link goes to backend API which then redirects to frontend with auth token
-    magic_link = f"{BACKEND_URL}/api/v1/borrower-auth/email/verify?token={magic_token}"
+    # Magic link goes to frontend which redirects to backend API for verification
+    magic_link = f"{FRONTEND_URL}/apply/verify?token={magic_token}"
 
     # Send the magic link email
     first_name = request.first_name or "there"
