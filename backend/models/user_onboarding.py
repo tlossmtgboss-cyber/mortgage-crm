@@ -36,13 +36,13 @@ class Role(Base):
     User roles define the primary job function
     Examples: Loan Officer, Processor, Concierge, etc.
     """
-    __tablename__ = "roles"
+    __tablename__ = "onboarding_roles"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, unique=True, index=True)
     description = Column(Text)
-    default_permission_template_id = Column(Integer, ForeignKey("permission_templates.id"))
+    default_permission_template_id = Column(Integer, ForeignKey("onboarding_permission_templates.id"))
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -62,7 +62,7 @@ class Category(Base):
     Categories represent operational areas of responsibility
     Examples: Lead Generation, Borrower Engagement, Processing & Milestones
     """
-    __tablename__ = "categories"
+    __tablename__ = "onboarding_categories"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -84,13 +84,13 @@ class Responsibility(Base):
     Responsibilities are specific tasks/duties that can be assigned to users
     Each responsibility maps to KPIs for scorecard generation
     """
-    __tablename__ = "responsibilities"
+    __tablename__ = "onboarding_responsibilities"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False, index=True)
     description = Column(Text)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("onboarding_categories.id"), nullable=False)
     applicable_role_ids = Column(JSON, default=list)  # List of role IDs this responsibility applies to
     kpi_mapping = Column(JSON)  # Maps to KPI definitions for scorecard generation
     is_active = Column(Boolean, default=True, nullable=False)
@@ -106,15 +106,15 @@ class Responsibility(Base):
 # ============================================================================
 class RoleDefaultCategory(Base):
     """Junction table for default categories per role"""
-    __tablename__ = "role_default_categories"
+    __tablename__ = "onboarding_role_default_categories"
     __table_args__ = (
-        UniqueConstraint('role_id', 'category_id', name='uix_role_default_category'),
+        UniqueConstraint('role_id', 'category_id', name='uix_onboarding_role_default_category'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
-    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
+    role_id = Column(Integer, ForeignKey("onboarding_roles.id", ondelete="CASCADE"), nullable=False)
+    category_id = Column(Integer, ForeignKey("onboarding_categories.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -124,15 +124,15 @@ class RoleDefaultCategory(Base):
 
 class RoleDefaultResponsibility(Base):
     """Junction table for default responsibilities per role"""
-    __tablename__ = "role_default_responsibilities"
+    __tablename__ = "onboarding_role_default_responsibilities"
     __table_args__ = (
-        UniqueConstraint('role_id', 'responsibility_id', name='uix_role_default_responsibility'),
+        UniqueConstraint('role_id', 'responsibility_id', name='uix_onboarding_role_default_responsibility'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    role_id = Column(Integer, ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
-    responsibility_id = Column(Integer, ForeignKey("responsibilities.id", ondelete="CASCADE"), nullable=False)
+    role_id = Column(Integer, ForeignKey("onboarding_roles.id", ondelete="CASCADE"), nullable=False)
+    responsibility_id = Column(Integer, ForeignKey("onboarding_responsibilities.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -148,7 +148,7 @@ class UserProfile(Base):
     Extended user profile for onboarding system
     Links to the main User table via user_id
     """
-    __tablename__ = "user_profiles"
+    __tablename__ = "onboarding_user_profiles"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -161,8 +161,8 @@ class UserProfile(Base):
     profile_image_url = Column(Text)
 
     # Role and status
-    role_id = Column(Integer, ForeignKey("roles.id"))
-    permission_template_id = Column(Integer, ForeignKey("permission_templates.id"))
+    role_id = Column(Integer, ForeignKey("onboarding_roles.id"))
+    permission_template_id = Column(Integer, ForeignKey("onboarding_permission_templates.id"))
     status = Column(String(50), default="pending_setup", nullable=False, index=True)
     # Status values: 'pending_setup', 'active_awaiting_setup', 'active', 'suspended', 'deactivated'
 
@@ -190,15 +190,15 @@ class UserProfile(Base):
 # ============================================================================
 class UserCategory(Base):
     """Junction table for user-category assignments"""
-    __tablename__ = "user_categories"
+    __tablename__ = "onboarding_user_categories"
     __table_args__ = (
-        UniqueConstraint('user_profile_id', 'category_id', name='uix_user_category'),
+        UniqueConstraint('user_profile_id', 'category_id', name='uix_onboarding_user_category'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_profile_id = Column(Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False)
-    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False)
+    user_profile_id = Column(Integer, ForeignKey("onboarding_user_profiles.id", ondelete="CASCADE"), nullable=False)
+    category_id = Column(Integer, ForeignKey("onboarding_categories.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -208,15 +208,15 @@ class UserCategory(Base):
 
 class UserResponsibility(Base):
     """Junction table for user-responsibility assignments"""
-    __tablename__ = "user_responsibilities"
+    __tablename__ = "onboarding_user_responsibilities"
     __table_args__ = (
-        UniqueConstraint('user_profile_id', 'responsibility_id', name='uix_user_responsibility'),
+        UniqueConstraint('user_profile_id', 'responsibility_id', name='uix_onboarding_user_responsibility'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_profile_id = Column(Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False)
-    responsibility_id = Column(Integer, ForeignKey("responsibilities.id", ondelete="CASCADE"), nullable=False)
+    user_profile_id = Column(Integer, ForeignKey("onboarding_user_profiles.id", ondelete="CASCADE"), nullable=False)
+    responsibility_id = Column(Integer, ForeignKey("onboarding_responsibilities.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -232,7 +232,7 @@ class PermissionTemplate(Base):
     Pre-configured permission sets that can be applied to users
     Stores granular permissions as JSON
     """
-    __tablename__ = "permission_templates"
+    __tablename__ = "onboarding_permission_templates"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -253,11 +253,11 @@ class UserPermissions(Base):
     Stores individual user's permissions
     Can be from a template or custom-configured
     """
-    __tablename__ = "user_permissions_v2"  # v2 to avoid conflict with existing table
+    __tablename__ = "onboarding_user_permissions"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_profile_id = Column(Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), unique=True, nullable=False)
+    user_profile_id = Column(Integer, ForeignKey("onboarding_user_profiles.id", ondelete="CASCADE"), unique=True, nullable=False)
     permissions = Column(JSON, nullable=False, default=dict)
     source = Column(String(50), default="template", nullable=False)  # 'template', 'custom', 'override'
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -275,11 +275,11 @@ class KPIScorecard(Base):
     Auto-generated KPI scorecard based on user's responsibilities
     Stores the scorecard configuration as JSON
     """
-    __tablename__ = "kpi_scorecards"
+    __tablename__ = "onboarding_kpi_scorecards"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    user_profile_id = Column(Integer, ForeignKey("user_profiles.id", ondelete="CASCADE"), unique=True, nullable=False)
+    user_profile_id = Column(Integer, ForeignKey("onboarding_user_profiles.id", ondelete="CASCADE"), unique=True, nullable=False)
     scorecard_config = Column(JSON, nullable=False, default=dict)
     # scorecard_config structure:
     # {
@@ -305,7 +305,7 @@ class BulkUploadSession(Base):
     """
     Tracks bulk user upload sessions
     """
-    __tablename__ = "bulk_upload_sessions"
+    __tablename__ = "onboarding_bulk_upload_sessions"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -330,11 +330,11 @@ class BulkUserDraft(Base):
     """
     Temporary storage for bulk upload user data before finalization
     """
-    __tablename__ = "bulk_user_drafts"
+    __tablename__ = "onboarding_bulk_user_drafts"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("bulk_upload_sessions.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(Integer, ForeignKey("onboarding_bulk_upload_sessions.id", ondelete="CASCADE"), nullable=False)
     row_number = Column(Integer, nullable=False)
 
     # User data
@@ -346,13 +346,13 @@ class BulkUserDraft(Base):
 
     # Role and permissions (text values from file)
     role_name = Column(String(100))
-    role_id = Column(Integer, ForeignKey("roles.id"))
+    role_id = Column(Integer, ForeignKey("onboarding_roles.id"))
     categories = Column(JSON)  # Array of category names
     category_ids = Column(JSON)  # Array of resolved category IDs
     responsibilities = Column(JSON)  # Array of responsibility names
     responsibility_ids = Column(JSON)  # Array of resolved responsibility IDs
     permission_template_name = Column(String(100))
-    permission_template_id = Column(Integer, ForeignKey("permission_templates.id"))
+    permission_template_id = Column(Integer, ForeignKey("onboarding_permission_templates.id"))
 
     # Validation
     is_valid = Column(Boolean, default=True, nullable=False)
@@ -370,7 +370,7 @@ class UserAuditLog(Base):
     """
     Audit trail for user-related actions
     """
-    __tablename__ = "user_audit_log"
+    __tablename__ = "onboarding_user_audit_log"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -391,13 +391,13 @@ class OnboardingSession(Base):
     """
     Tracks the state of a user creation wizard session
     """
-    __tablename__ = "onboarding_sessions"
+    __tablename__ = "onboarding_wizard_sessions"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     session_token = Column(String(255), unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"))  # The user being created
-    user_profile_id = Column(Integer, ForeignKey("user_profiles.id"))
+    user_profile_id = Column(Integer, ForeignKey("onboarding_user_profiles.id"))
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     # Wizard state
