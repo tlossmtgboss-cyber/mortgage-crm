@@ -324,8 +324,8 @@ async def upload_document_for_requirement(
         "document_id": document.id,
         "decision": result.decision.value if result and result.decision else None,
         "validation": {
-            "is_screenshot": result.is_screenshot if result else None,
-            "is_fresh": result.is_fresh if result else None,
+            "is_screenshot": result.screenshot_result.get("is_screenshot") if result and result.screenshot_result else None,
+            "is_fresh": result.freshness_result.get("is_fresh") if result and result.freshness_result else None,
             "rejection_reason": result.rejection_reason if result else None,
             "fix_instructions": result.fix_instructions if result else None,
         } if result else None,

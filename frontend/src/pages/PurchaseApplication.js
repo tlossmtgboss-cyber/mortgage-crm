@@ -1598,6 +1598,20 @@ export default function PurchaseApplication() {
           const payload = JSON.parse(atob(parts[1]));
           const email = payload.sub || payload.email;
           if (email) {
+            // Clear any old cached data when logging in fresh via magic link
+            // This ensures we don't show stale personalized data from previous sessions
+            localStorage.removeItem(STORAGE_KEY);
+            console.log('[PurchaseApplication] Cleared old data for fresh magic link login');
+
+            // Reset all form data to initial state
+            setDeclarations({});
+            setProfileData({ firstName: '', lastName: '', email: email, phone: '', dateOfBirth: '' });
+            setIncomeData({});
+            setAssetData({ checking: '', savings: '', investments: '', retirement: '', other: '' });
+            setPropertyData({});
+            setCoBorrowerData({});
+            setCoBorrowerIncomeData({});
+
             setUserAccount({
               email: email,
               authMethod: 'email',
@@ -1617,7 +1631,7 @@ export default function PurchaseApplication() {
         console.error('Failed to parse auth token:', e);
       }
     }
-  }, [searchParams]);
+  }, [searchParams, STORAGE_KEY]);
 
   // Auto-save to localStorage whenever data changes
   useEffect(() => {
