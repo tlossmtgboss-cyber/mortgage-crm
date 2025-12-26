@@ -1,0 +1,284 @@
+/**
+ * Portal Onboarding Guide Styles
+ */
+
+/* Overlay */
+.portal-onboarding-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Target highlight */
+.target-highlight {
+  position: fixed;
+  border: 2px solid #3b82f6;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  z-index: 10001;
+  pointer-events: none;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+/* Tooltip */
+.portal-onboarding-tooltip {
+  position: fixed;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  z-index: 10002;
+  animation: slideIn 0.3s ease;
+}
+
+.portal-onboarding-tooltip.centered {
+  width: 400px;
+  max-width: calc(100vw - 48px);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tooltip arrow */
+.tooltip-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  transform: rotate(45deg);
+}
+
+.tooltip-arrow.arrow-bottom {
+  top: -7px;
+  left: 50%;
+  margin-left: -6px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.tooltip-arrow.arrow-top {
+  bottom: -7px;
+  left: 50%;
+  margin-left: -6px;
+  border-left: none;
+  border-top: none;
+}
+
+.tooltip-arrow.arrow-left {
+  right: -7px;
+  top: 50%;
+  margin-top: -6px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.tooltip-arrow.arrow-right {
+  left: -7px;
+  top: 50%;
+  margin-top: -6px;
+  border-right: none;
+  border-top: none;
+}
+
+/* Tooltip header */
+.tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 16px 8px;
+  border-bottom: 1px solid #334155;
+}
+
+.tooltip-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.skip-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.skip-btn:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Tooltip body */
+.tooltip-body {
+  padding: 16px;
+}
+
+.tooltip-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #cbd5e1;
+}
+
+/* Tooltip footer */
+.tooltip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px 16px;
+  gap: 16px;
+}
+
+/* Progress dots */
+.progress-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.progress-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #475569;
+  transition: all 0.2s;
+}
+
+.progress-dots .dot.active {
+  background: #3b82f6;
+  transform: scale(1.2);
+}
+
+.progress-dots .dot.completed {
+  background: #22c55e;
+}
+
+/* Action buttons */
+.tooltip-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.prev-btn,
+.next-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.prev-btn {
+  background: transparent;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+}
+
+.prev-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: #64748b;
+}
+
+.next-btn {
+  background: #3b82f6;
+  border: none;
+  color: white;
+}
+
+.next-btn:hover {
+  background: #2563eb;
+}
+
+/* Centered modal styling */
+.portal-onboarding-tooltip.centered .tooltip-header {
+  padding: 20px 20px 12px;
+}
+
+.portal-onboarding-tooltip.centered .tooltip-header h3 {
+  font-size: 18px;
+}
+
+.portal-onboarding-tooltip.centered .tooltip-body {
+  padding: 16px 20px;
+}
+
+.portal-onboarding-tooltip.centered .tooltip-body p {
+  font-size: 15px;
+}
+
+.portal-onboarding-tooltip.centered .tooltip-footer {
+  padding: 16px 20px 20px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .portal-onboarding-tooltip {
+    width: calc(100vw - 24px);
+    left: 12px !important;
+    right: 12px;
+    transform: none !important;
+  }
+
+  .portal-onboarding-tooltip.position-bottom,
+  .portal-onboarding-tooltip.position-top {
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+  }
+
+  .tooltip-arrow {
+    display: none;
+  }
+
+  .tooltip-header h3 {
+    font-size: 15px;
+  }
+
+  .tooltip-body p {
+    font-size: 13px;
+  }
+
+  .progress-dots .dot {
+    width: 6px;
+    height: 6px;
+  }
+}

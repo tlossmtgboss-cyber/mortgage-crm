@@ -24,6 +24,7 @@ import {
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import PaymentCalculator from '../components/PaymentCalculator';
 import PortalDocumentRequirements from '../components/portal/PortalDocumentRequirements';
+import PortalOnboardingGuide from '../components/portal/PortalOnboardingGuide';
 import './PURLPortal.css';
 
 // Tab components
@@ -777,6 +778,23 @@ export default function PURLPortal() {
   const justSubmitted = urlParams.get('submitted') === 'true';
   const [showSubmitSuccess, setShowSubmitSuccess] = useState(justSubmitted);
 
+  // Onboarding guide - show for first-time visitors or after submission
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Check if should show onboarding (after data loads)
+  useEffect(() => {
+    if (workspaceData && !loading) {
+      const storageKey = `portal_onboarding_${slug}`;
+      const hasSeenGuide = localStorage.getItem(storageKey);
+      // Show onboarding for first-time visitors or if just submitted
+      if (!hasSeenGuide || justSubmitted) {
+        // Small delay to let the UI render
+        const timer = setTimeout(() => setShowOnboarding(true), 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [workspaceData, loading, slug, justSubmitted]);
+
   // Use workspace data hook - only enabled after token is ready
   const {
     data: workspaceData,
@@ -1360,6 +1378,15 @@ export default function PURLPortal() {
           Need help? Contact your loan officer directly.
         </p>
       </footer>
+
+      {/* Onboarding Guide for first-time visitors */}
+      {showOnboarding && (
+        <PortalOnboardingGuide
+          workspaceSlug={slug}
+          onComplete={() => setShowOnboarding(false)}
+          forceShow={justSubmitted}
+        />
+      )}
     </div>
   );
 }
