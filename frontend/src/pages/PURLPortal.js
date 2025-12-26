@@ -795,6 +795,13 @@ export default function PURLPortal() {
     }
   }, [workspaceData, loading, slug, justSubmitted]);
 
+  // Restart the portal tour
+  const restartTour = () => {
+    const storageKey = `portal_onboarding_${slug}`;
+    localStorage.removeItem(storageKey);
+    setShowOnboarding(true);
+  };
+
   // Use workspace data hook - only enabled after token is ready
   const {
     data: workspaceData,
@@ -1023,12 +1030,22 @@ export default function PURLPortal() {
             <h1>{workspace?.display_name || 'Your Loan Portal'}</h1>
             <StatusBadge status={workspace?.status} />
           </div>
-          {application && (
-            <ProgressBar
-              percentage={application.completeness_pct || 0}
-              label="Application Progress"
-            />
-          )}
+          <div className="header-actions">
+            {application && (
+              <ProgressBar
+                percentage={application.completeness_pct || 0}
+                label="Application Progress"
+              />
+            )}
+            <button
+              className="tour-btn"
+              onClick={restartTour}
+              title="Take a tour of the portal"
+            >
+              <span className="tour-icon">?</span>
+              <span className="tour-label">Tour</span>
+            </button>
+          </div>
         </div>
       </header>
 

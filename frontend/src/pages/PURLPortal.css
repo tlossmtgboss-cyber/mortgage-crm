@@ -209,6 +209,72 @@
   max-width: 1400px;
   margin: 0 auto;
   position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* Tour Button */
+.tour-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--portal-gray-100);
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius-sm);
+  color: var(--portal-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tour-btn:hover {
+  background: var(--portal-primary);
+  border-color: var(--portal-primary);
+  color: white;
+}
+
+.tour-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: var(--portal-text-secondary);
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background 0.2s ease;
+}
+
+.tour-btn:hover .tour-icon {
+  background: white;
+  color: var(--portal-primary);
+}
+
+.tour-label {
+  display: inline;
+}
+
+@media (max-width: 480px) {
+  .tour-label {
+    display: none;
+  }
+
+  .tour-btn {
+    padding: 8px;
+  }
 }
 
 /* Header Top Row - Client Name & Date */

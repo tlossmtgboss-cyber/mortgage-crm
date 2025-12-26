@@ -24,7 +24,7 @@ import json
 
 from fastapi import (
     APIRouter, Depends, HTTPException, BackgroundTasks,
-    WebSocket, WebSocketDisconnect, UploadFile, File, Query, Request
+    WebSocket, WebSocketDisconnect, UploadFile, File, Query, Request, status
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -43,22 +43,42 @@ router = APIRouter(prefix="/api/v1/ci-voice", tags=["Conversation Intelligence -
 # =============================================================================
 
 _get_current_user = None
+_oauth2_scheme = None
 
 
-def set_dependencies(user_dependency):
+def set_dependencies(user_dependency, oauth2=None):
     """Set the get_current_user dependency from main app."""
-    global _get_current_user
+    global _get_current_user, _oauth2_scheme
     _get_current_user = user_dependency
+    _oauth2_scheme = oauth2
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     """Get current user dependency wrapper."""
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if _get_current_user is None:
         # Development fallback - return mock user
         return {"id": 1, "email": "admin@perenniaai.com", "role": "admin"}
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
+
+    # Call the main app's get_current_user with the extracted token
+    try:
+        return await _get_current_user(token=token, request=request, db=db)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def get_current_user_id(db: Session) -> int:
