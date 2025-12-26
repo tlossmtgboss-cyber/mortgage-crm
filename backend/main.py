@@ -41400,8 +41400,10 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
         row_dict = dict(result._mapping)
 
         # Check ownership unless user has view_all permission
+        # Also allow access if loan_officer_id is null (e.g., application-created loans)
         if not has_permission(current_user.id, 'loans.view_all', db):
-            if row_dict.get('loan_officer_id') != current_user.id:
+            loan_officer_id = row_dict.get('loan_officer_id')
+            if loan_officer_id is not None and loan_officer_id != current_user.id:
                 raise HTTPException(status_code=404, detail="Loan not found")
 
         # Normalize stage
@@ -41429,7 +41431,18 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
 @app.patch("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
+        # First check if user has view_all permission
+        has_view_all = has_permission(current_user.id, 'loans.view_all', db)
+
+        if has_view_all:
+            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        else:
+            # Allow access if loan_officer_id matches current user OR is null (application-created loans)
+            loan = db.query(Loan).filter(
+                Loan.id == loan_id,
+                (Loan.loan_officer_id == current_user.id) | (Loan.loan_officer_id == None)
+            ).first()
+
         if not loan:
             # Check if loan exists but belongs to different user
             any_loan = db.query(Loan).filter(Loan.id == loan_id).first()
