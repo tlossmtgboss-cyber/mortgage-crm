@@ -1313,10 +1313,66 @@ export default function RefinanceApplication() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
+  // Application slides configuration (loaded from backend)
+  const [applicationConfig, setApplicationConfig] = useState(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
   // Keep ref in sync with state to avoid closure issues
   useEffect(() => {
     portalUrlRef.current = portalUrlForRedirect;
   }, [portalUrlForRedirect]);
+
+  // Load application configuration from backend
+  useEffect(() => {
+    const loadApplicationConfig = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/settings/application-slides`);
+        if (response.ok) {
+          const config = await response.json();
+          setApplicationConfig(config);
+        }
+      } catch (error) {
+        console.log('Using default application configuration');
+      } finally {
+        setConfigLoaded(true);
+      }
+    };
+    loadApplicationConfig();
+  }, [API_URL]);
+
+  // Get enabled stages based on configuration
+  const getEnabledStages = useCallback(() => {
+    if (!applicationConfig?.stages) return STAGES;
+
+    // Build a map of config settings by stage id
+    const configMap = new Map(applicationConfig.stages.map(s => [s.id, s]));
+
+    // Filter and order stages based on config
+    return applicationConfig.stages
+      .filter(configStage => configStage.enabled)
+      .map(configStage => {
+        const originalStage = STAGES.find(s => s.id === configStage.id);
+        return originalStage ? { ...originalStage, ...configStage } : configStage;
+      });
+  }, [applicationConfig]);
+
+  // Get enabled declaration questions based on configuration
+  const getEnabledQuestions = useCallback(() => {
+    if (!applicationConfig?.declarationQuestions) return DECLARATION_QUESTIONS;
+
+    const enabledIds = new Set(
+      applicationConfig.declarationQuestions
+        .filter(q => q.enabled)
+        .map(q => q.id)
+    );
+
+    return DECLARATION_QUESTIONS.filter(q => enabledIds.has(q.id));
+  }, [applicationConfig]);
+
+  // Derived values for enabled stages and questions
+  const enabledStages = getEnabledStages();
+  const enabledQuestions = getEnabledQuestions();
+  const visibleStages = enabledStages.filter(s => !s.hideFromProgress);
 
   // Auto-redirect to client portal after successful submission
   useEffect(() => {
@@ -1585,14 +1641,14 @@ export default function RefinanceApplication() {
     // Account stage doesn't count toward progress
     if (currentStage === 'account') return 0;
 
-    const stageIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
-    const stageProgress = (stageIndex / VISIBLE_STAGES.length) * 100;
+    const stageIndex = visibleStages.findIndex(s => s.id === currentStage);
+    const stageProgress = (stageIndex / visibleStages.length) * 100;
     if (currentStage === 'declarations') {
-      const questionProgress = (currentQuestionIndex / DECLARATION_QUESTIONS.length) * (100 / VISIBLE_STAGES.length);
+      const questionProgress = (currentQuestionIndex / enabledQuestions.length) * (100 / visibleStages.length);
       return Math.round(stageProgress + questionProgress);
     }
     return Math.round(stageProgress);
-  }, [currentStage, currentQuestionIndex]);
+  }, [currentStage, currentQuestionIndex, visibleStages, enabledQuestions]);
 
   // Helper to check if a question should be shown based on conditions
   const shouldShowQuestion = useCallback((question, currentDeclarations) => {
@@ -1603,8 +1659,8 @@ export default function RefinanceApplication() {
 
   // Get filtered questions based on current declarations
   const getVisibleQuestions = useCallback(() => {
-    return DECLARATION_QUESTIONS.filter(q => shouldShowQuestion(q, declarations));
-  }, [declarations, shouldShowQuestion]);
+    return enabledQuestions.filter(q => shouldShowQuestion(q, declarations));
+  }, [declarations, shouldShowQuestion, enabledQuestions]);
 
   // Update needs list
   useEffect(() => {
@@ -1770,8 +1826,8 @@ export default function RefinanceApplication() {
   // Proceed to next question
   const proceedToNextQuestion = () => {
     let nextIndex = currentQuestionIndex + 1;
-    while (nextIndex < DECLARATION_QUESTIONS.length) {
-      const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+    while (nextIndex < enabledQuestions.length) {
+      const nextQuestion = enabledQuestions[nextIndex];
       if (shouldShowQuestion(nextQuestion, declarations)) {
         setCurrentQuestionIndex(nextIndex);
         return;
@@ -1805,8 +1861,8 @@ export default function RefinanceApplication() {
 
       // Find next visible question
       let nextIndex = currentQuestionIndex + 1;
-      while (nextIndex < DECLARATION_QUESTIONS.length) {
-        const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+      while (nextIndex < enabledQuestions.length) {
+        const nextQuestion = enabledQuestions[nextIndex];
         if (shouldShowQuestion(nextQuestion, newDeclarations)) {
           setCurrentQuestionIndex(nextIndex);
           return;
@@ -1832,8 +1888,8 @@ export default function RefinanceApplication() {
       setTimeout(() => {
         setIsAnimating(false);
         let nextIndex = currentQuestionIndex + 1;
-        while (nextIndex < DECLARATION_QUESTIONS.length) {
-          const nextQuestion = DECLARATION_QUESTIONS[nextIndex];
+        while (nextIndex < enabledQuestions.length) {
+          const nextQuestion = enabledQuestions[nextIndex];
           if (shouldShowQuestion(nextQuestion, declarations)) {
             setCurrentQuestionIndex(nextIndex);
             return;
@@ -1850,7 +1906,7 @@ export default function RefinanceApplication() {
   const goToPrevQuestion = () => {
     let prevIndex = currentQuestionIndex - 1;
     while (prevIndex >= 0) {
-      const prevQuestion = DECLARATION_QUESTIONS[prevIndex];
+      const prevQuestion = enabledQuestions[prevIndex];
       if (shouldShowQuestion(prevQuestion, declarations)) {
         setCurrentQuestionIndex(prevIndex);
         return;
@@ -1862,23 +1918,23 @@ export default function RefinanceApplication() {
   // Get current visible question number for display
   const getVisibleQuestionNumber = () => {
     const visibleQuestions = getVisibleQuestions();
-    const currentQuestion = DECLARATION_QUESTIONS[currentQuestionIndex];
+    const currentQuestion = enabledQuestions[currentQuestionIndex];
     return visibleQuestions.findIndex(q => q.id === currentQuestion.id) + 1;
   };
 
   // Navigation
   const goToNextStage = () => {
-    const currentIndex = STAGES.findIndex(s => s.id === currentStage);
-    if (currentIndex < STAGES.length - 1) {
-      setCurrentStage(STAGES[currentIndex + 1].id);
-      showMicroWinAnimation(getStageMicroWin(STAGES[currentIndex].id));
+    const currentIndex = enabledStages.findIndex(s => s.id === currentStage);
+    if (currentIndex < enabledStages.length - 1) {
+      setCurrentStage(enabledStages[currentIndex + 1].id);
+      showMicroWinAnimation(getStageMicroWin(enabledStages[currentIndex].id));
     }
   };
 
   const goToPrevStage = () => {
-    const currentIndex = STAGES.findIndex(s => s.id === currentStage);
+    const currentIndex = enabledStages.findIndex(s => s.id === currentStage);
     if (currentIndex > 0) {
-      setCurrentStage(STAGES[currentIndex - 1].id);
+      setCurrentStage(enabledStages[currentIndex - 1].id);
     }
   };
 
@@ -1895,7 +1951,7 @@ export default function RefinanceApplication() {
 
   // Render declarations
   const renderDeclarationsStage = () => {
-    const question = DECLARATION_QUESTIONS[currentQuestionIndex];
+    const question = enabledQuestions[currentQuestionIndex];
     const visibleQuestions = getVisibleQuestions();
     const visibleQuestionNum = getVisibleQuestionNumber();
 
@@ -3740,8 +3796,8 @@ export default function RefinanceApplication() {
       {currentStage !== 'account' && (
         <div className="progress-header">
           <div className="progress-chapters">
-            {VISIBLE_STAGES.map((stage, index) => {
-              const currentIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+            {visibleStages.map((stage, index) => {
+              const currentIndex = visibleStages.findIndex(s => s.id === currentStage);
               const isComplete = index < currentIndex;
               const isCurrent = index === currentIndex;
               return (
@@ -3804,7 +3860,7 @@ export default function RefinanceApplication() {
 
         <div className="documents-list">
           {(() => {
-            const currentIndex = VISIBLE_STAGES.findIndex(s => s.id === currentStage);
+            const currentIndex = enabledStages.findIndex(s => s.id === currentStage);
             // Get dynamic document list based on user's declarations, profile, and income for personalized labels
             const requiredDocs = getRequiredDocuments(declarations, {}, profileData, incomeData, coBorrowerData, coBorrowerIncomeData);
 
@@ -3826,7 +3882,7 @@ export default function RefinanceApplication() {
             // Filter categories to only show those that have been unlocked AND have documents
             const visibleCategories = ['identity', 'income', 'assets', 'property'].filter(category => {
               const unlockStage = categoryUnlockStage[category];
-              const unlockIndex = VISIBLE_STAGES.findIndex(s => s.id === unlockStage);
+              const unlockIndex = enabledStages.findIndex(s => s.id === unlockStage);
               const categoryDocs = requiredDocs.filter(d => d.category === category);
               // Show category if user has reached or passed its unlock stage AND has documents
               return currentIndex >= unlockIndex && categoryDocs.length > 0;
