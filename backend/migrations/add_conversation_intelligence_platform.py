@@ -67,8 +67,8 @@ def run_migration():
             run_sql_file(engine, str(seed_file))
         except Exception as e:
             print(f"Seed data error: {e}")
-            print("Attempting statement-by-statement execution...")
-            run_migration_statements(engine, str(seed_file))
+            print("Attempting INSERT-by-INSERT execution...")
+            run_seed_statements(engine, str(seed_file))
     else:
         print(f"Seed file not found: {seed_file}")
 
@@ -76,6 +76,36 @@ def run_migration():
     print("Migration completed!")
     print("=" * 60)
     return True
+
+
+def run_seed_statements(db_engine, filepath: str):
+    """Execute seed file by splitting on INSERT INTO for better handling."""
+    with open(filepath, 'r') as f:
+        sql = f.read()
+
+    # Split by INSERT INTO to handle multi-value INSERTs
+    parts = sql.split('INSERT INTO')
+    success_count = 0
+    error_count = 0
+
+    with db_engine.connect() as conn:
+        for i, part in enumerate(parts[1:], 1):  # Skip first empty part
+            try:
+                # Reconstruct the INSERT statement
+                stmt = 'INSERT INTO' + part.rstrip().rstrip(';')
+                conn.execute(text(stmt))
+                success_count += 1
+                print(f"  INSERT {i}: OK")
+            except Exception as e:
+                error_count += 1
+                error_msg = str(e)
+                if "duplicate key" in error_msg.lower():
+                    print(f"  INSERT {i}: SKIPPED (already exists)")
+                else:
+                    print(f"  INSERT {i}: ERROR - {error_msg[:80]}")
+        conn.commit()
+
+    print(f"  Seed complete: {success_count} succeeded, {error_count} failed/skipped")
 
 
 def run_migration_statements(db_engine, filepath: str):
