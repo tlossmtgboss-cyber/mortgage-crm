@@ -118,11 +118,11 @@ def format_requirement(request: DocumentRequest, documents: list) -> dict:
         "documents": [
             {
                 "id": doc.id,
-                "filename": doc.original_filename,
+                "filename": doc.file_name,
                 "status": doc.status,
-                "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
-                "document_date": doc.document_date.isoformat() if doc.document_date else None,
-                "freshness_status": doc.freshness_status,
+                "uploaded_at": doc.created_at.isoformat() if doc.created_at else None,
+                "document_date": doc.doc_date.isoformat() if doc.doc_date else None,
+                "is_expired": doc.is_expired,
             }
             for doc in fulfilled_docs
         ]

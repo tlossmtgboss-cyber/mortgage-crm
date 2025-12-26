@@ -67,14 +67,16 @@ const getRequiredDocuments = (
   const hasInvestmentOrRetirement = (parseFloat(assetData.investments) || 0) > 0 || (parseFloat(assetData.retirement) || 0) > 0;
 
   // === IDENTITY DOCUMENTS ===
-  // Always require government ID (driver's license or passport)
-  docs.push({
-    id: 'id',
-    name: `${borrowerFirstName}'s Government ID`,
-    description: "Driver's license or passport",
-    category: 'identity',
-    stage: 'declarations'
-  });
+  // Only add government ID after citizenship question is answered
+  if (declarations.citizenship_status) {
+    docs.push({
+      id: 'id',
+      name: `${borrowerFirstName}'s Government ID`,
+      description: "Driver's license or passport",
+      category: 'identity',
+      stage: 'declarations'
+    });
+  }
 
   // Citizenship-based documents
   if (declarations.citizenship_status === 'permanent_resident') {
@@ -5455,7 +5457,7 @@ export default function PurchaseApplication() {
           {renderStage()}
         </main>
 
-        {/* Documents Sidebar - Reveals progressively as application is completed */}
+        {/* Documents Sidebar - Shows container, documents populate as questions are answered */}
         {currentStage !== 'account' && (
         <aside className="documents-sidebar">
           <div className="sidebar-header">
