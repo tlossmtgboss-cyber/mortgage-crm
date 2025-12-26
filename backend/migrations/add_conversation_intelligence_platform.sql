@@ -19,10 +19,10 @@ CREATE TABLE IF NOT EXISTS ci_call_recordings (
     direction VARCHAR(10) NOT NULL DEFAULT 'inbound',  -- inbound, outbound
 
     -- Participants
-    agent_user_id UUID REFERENCES users(id),  -- Loan officer/agent
-    contact_id UUID,  -- Borrower/contact (references contacts table)
-    loan_id UUID,  -- Associated loan if applicable
-    lead_id UUID,  -- Associated lead if applicable
+    agent_user_id INTEGER REFERENCES users(id),  -- Loan officer/agent
+    contact_id INTEGER,  -- Borrower/contact (references contacts table)
+    loan_id INTEGER,  -- Associated loan if applicable
+    lead_id INTEGER,  -- Associated lead if applicable
 
     -- Call metadata
     phone_from VARCHAR(20),
@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS ci_qa_scorecards (
     recording_id UUID NOT NULL REFERENCES ci_call_recordings(id) ON DELETE CASCADE,
 
     -- Scoring metadata
-    scored_by UUID REFERENCES users(id),  -- NULL if auto-scored
+    scored_by INTEGER REFERENCES users(id),  -- NULL if auto-scored
     scoring_method VARCHAR(20) NOT NULL DEFAULT 'auto',  -- auto, manual, hybrid
 
     -- Overall scores
@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS ci_qa_scorecards (
     -- Review status
     status VARCHAR(20) DEFAULT 'pending',  -- pending, in_review, completed, disputed
     reviewed_at TIMESTAMP WITH TIME ZONE,
-    reviewer_id UUID REFERENCES users(id),
+    reviewer_id INTEGER REFERENCES users(id),
 
     -- Agent acknowledgment
     agent_acknowledged BOOLEAN DEFAULT false,
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS ci_realtime_sessions (
     recording_id UUID REFERENCES ci_call_recordings(id),  -- May be created before recording
 
     -- Session info
-    agent_user_id UUID NOT NULL REFERENCES users(id),
+    agent_user_id INTEGER NOT NULL REFERENCES users(id),
     call_id VARCHAR(100),  -- External call ID
 
     -- Status
@@ -385,7 +385,7 @@ CREATE TABLE IF NOT EXISTS ci_coaching_clips (
     view_count INTEGER DEFAULT 0,
 
     -- Creator
-    created_by UUID REFERENCES users(id),
+    created_by INTEGER REFERENCES users(id),
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -401,7 +401,7 @@ CREATE TABLE IF NOT EXISTS ci_coaching_assignments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
     -- Assignment target
-    agent_user_id UUID NOT NULL REFERENCES users(id),
+    agent_user_id INTEGER NOT NULL REFERENCES users(id),
     assigned_by UUID NOT NULL REFERENCES users(id),
 
     -- Content
@@ -425,7 +425,7 @@ CREATE TABLE IF NOT EXISTS ci_coaching_assignments (
     agent_notes TEXT,
 
     -- Manager review
-    reviewed_by UUID REFERENCES users(id),
+    reviewed_by INTEGER REFERENCES users(id),
     reviewed_at TIMESTAMP WITH TIME ZONE,
     review_notes TEXT,
 
@@ -524,7 +524,7 @@ CREATE TABLE IF NOT EXISTS ci_compliance_violations (
 
     -- Resolution
     status VARCHAR(20) DEFAULT 'open',  -- open, reviewed, false_positive, resolved
-    reviewed_by UUID REFERENCES users(id),
+    reviewed_by INTEGER REFERENCES users(id),
     reviewed_at TIMESTAMP WITH TIME ZONE,
     resolution_notes TEXT,
 
@@ -544,7 +544,7 @@ CREATE INDEX IF NOT EXISTS idx_ci_violations_status ON ci_compliance_violations(
 -- Agent Call Metrics (aggregated stats)
 CREATE TABLE IF NOT EXISTS ci_agent_metrics (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    agent_user_id UUID NOT NULL REFERENCES users(id),
+    agent_user_id INTEGER NOT NULL REFERENCES users(id),
 
     -- Time period
     period_type VARCHAR(10) NOT NULL,  -- daily, weekly, monthly
@@ -692,7 +692,7 @@ FOR EACH ROW EXECUTE FUNCTION ci_calculate_duration();
 CREATE OR REPLACE FUNCTION ci_update_agent_metrics_on_scorecard()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_agent_id UUID;
+    v_agent_id INTEGER;
     v_period_start DATE;
 BEGIN
     -- Get agent ID from recording
