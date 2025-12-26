@@ -3569,8 +3569,8 @@ IMPORTANT: When answering questions about SLAs or turnaround times:
 
         # Build task list for display
         task_list = ""
+        today = datetime.now().date()  # Define today BEFORE the conditional
         if daily_data.get("tasks"):
-            today = datetime.now().date()
             for task in daily_data["tasks"][:10]:
                 due_date = task.get("due_date")
                 if due_date:
