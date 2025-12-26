@@ -757,7 +757,7 @@ SELECT
     r.direction,
     r.agent_user_id,
     u.email as agent_email,
-    u.first_name || ' ' || u.last_name as agent_name,
+    COALESCE(u.full_name, u.email) as agent_name,
     r.contact_id,
     r.loan_id,
     r.phone_from,
@@ -785,7 +785,7 @@ CREATE OR REPLACE VIEW ci_agent_performance AS
 SELECT
     u.id as agent_id,
     u.email,
-    u.first_name || ' ' || u.last_name as name,
+    COALESCE(u.full_name, u.email) as name,
     m.period_type,
     m.period_start,
     m.total_calls,
@@ -812,13 +812,13 @@ CREATE OR REPLACE VIEW ci_coaching_queue AS
 SELECT
     a.id,
     a.agent_user_id,
-    u.first_name || ' ' || u.last_name as agent_name,
+    COALESCE(u.full_name, u.email) as agent_name,
     a.title,
     a.assignment_type,
     a.due_date,
     a.status,
     a.assigned_by,
-    assigner.first_name || ' ' || assigner.last_name as assigned_by_name,
+    COALESCE(assigner.full_name, assigner.email) as assigned_by_name,
     r.external_call_id as related_call_id,
     c.title as related_clip_title,
     a.created_at
