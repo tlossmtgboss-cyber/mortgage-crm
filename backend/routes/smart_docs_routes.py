@@ -207,9 +207,77 @@ async def get_needs_list(
     loan_id: int,
     db: Session = Depends(get_db),
 ):
-    """Get the current needs list for a loan."""
+    """Get the current needs list for a loan with borrower info and document URLs."""
+    from sqlalchemy import text
+
     generator = NeedsListGenerator(db)
-    return generator.get_needs_list(loan_id)
+    result = generator.get_needs_list(loan_id)
+
+    # Fetch borrower info from loans table
+    loan_info = db.execute(text("""
+        SELECT borrower_name, borrower_email, loan_number, stage
+        FROM loans WHERE id = :loan_id
+    """), {"loan_id": loan_id}).fetchone()
+
+    if loan_info:
+        result["borrower_name"] = loan_info.borrower_name
+        result["borrower_email"] = loan_info.borrower_email
+        result["loan_number"] = loan_info.loan_number
+        result["stage"] = loan_info.stage
+    else:
+        # Fallback: try PURL system
+        from models.purl import PURLLoan, PURLWorkspace, PURLContact
+        purl_loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
+        if purl_loan and purl_loan.workspace_id:
+            workspace = db.query(PURLWorkspace).filter(
+                PURLWorkspace.id == purl_loan.workspace_id
+            ).first()
+            if workspace:
+                result["borrower_name"] = workspace.display_name
+                result["loan_number"] = purl_loan.loan_number
+                result["stage"] = purl_loan.loan_purpose
+                # Try to get email from contacts
+                borrower_contact = db.query(PURLContact).filter(
+                    PURLContact.workspace_id == purl_loan.workspace_id,
+                    PURLContact.contact_type == 'borrower'
+                ).first()
+                if borrower_contact:
+                    result["borrower_email"] = borrower_contact.email
+                    if not result.get("borrower_name"):
+                        result["borrower_name"] = f"{borrower_contact.first_name or ''} {borrower_contact.last_name or ''}".strip()
+
+    # Enrich each request with uploaded document info
+    for req in result.get("all_requests", []):
+        request_id = req.get("id")
+        if request_id:
+            # Get uploaded documents for this request
+            uploaded_docs = db.query(SmartDocument).filter(
+                SmartDocument.request_id == request_id
+            ).order_by(SmartDocument.created_at.desc()).all()
+
+            if uploaded_docs:
+                latest_doc = uploaded_docs[0]
+                req["filename"] = latest_doc.file_name
+                req["uploaded_at"] = latest_doc.created_at.isoformat() if latest_doc.created_at else None
+
+                # Generate presigned URL for viewing
+                if latest_doc.storage_key:
+                    s3_service = get_smart_docs_s3_service()
+                    if s3_service.is_available:
+                        url_result = s3_service.get_presigned_download_url(
+                            storage_key=latest_doc.storage_key,
+                            file_name=latest_doc.file_name,
+                            expires_in=3600  # 1 hour
+                        )
+                        if url_result.get("success"):
+                            req["file_url"] = url_result["presigned_url"]
+                            req["s3_url"] = url_result["presigned_url"]
+
+                req["document_id"] = latest_doc.id
+                req["doc_date"] = latest_doc.doc_date.isoformat() if latest_doc.doc_date else None
+                req["expiration_date"] = latest_doc.doc_expires_at.isoformat() if latest_doc.doc_expires_at else None
+
+    return result
 
 
 @router.post("/needs-list/sync-from-application")
@@ -1265,6 +1333,40 @@ async def get_client_queue_detail(
 
     if not result:
         raise HTTPException(status_code=404, detail="Client not found in queue")
+
+    # Enrich each request with uploaded document info
+    for req in result.get("requests", []):
+        request_id = req.get("id")
+        if request_id:
+            # Get uploaded documents for this request
+            uploaded_docs = db.query(SmartDocument).filter(
+                SmartDocument.request_id == request_id
+            ).order_by(SmartDocument.created_at.desc()).all()
+
+            if uploaded_docs:
+                latest_doc = uploaded_docs[0]
+                req["filename"] = latest_doc.file_name
+                req["uploaded_at"] = latest_doc.created_at.isoformat() if latest_doc.created_at else None
+
+                # Generate presigned URL for viewing
+                if latest_doc.storage_key:
+                    s3_service = get_smart_docs_s3_service()
+                    if s3_service.is_available:
+                        url_result = s3_service.get_presigned_download_url(
+                            storage_key=latest_doc.storage_key,
+                            file_name=latest_doc.file_name,
+                            expires_in=3600  # 1 hour
+                        )
+                        if url_result.get("success"):
+                            req["file_url"] = url_result["presigned_url"]
+                            req["s3_url"] = url_result["presigned_url"]
+
+                req["document_id"] = latest_doc.id
+                req["doc_date"] = latest_doc.doc_date.isoformat() if latest_doc.doc_date else None
+                req["expiration_date"] = latest_doc.doc_expires_at.isoformat() if latest_doc.doc_expires_at else None
+
+    # Also add all_requests for frontend compatibility
+    result["all_requests"] = result.get("requests", [])
 
     return result
 
