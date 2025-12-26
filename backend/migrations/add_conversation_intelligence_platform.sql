@@ -402,7 +402,7 @@ CREATE TABLE IF NOT EXISTS ci_coaching_assignments (
 
     -- Assignment target
     agent_user_id INTEGER NOT NULL REFERENCES users(id),
-    assigned_by UUID NOT NULL REFERENCES users(id),
+    assigned_by INTEGER NOT NULL REFERENCES users(id),
 
     -- Content
     title VARCHAR(200) NOT NULL,
@@ -449,7 +449,7 @@ CREATE TABLE IF NOT EXISTS ci_coaching_comments (
     scorecard_id UUID REFERENCES ci_qa_scorecards(id) ON DELETE CASCADE,
 
     -- Comment info
-    user_id UUID NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
     content TEXT NOT NULL,
 
     -- Timestamp reference (optional)
