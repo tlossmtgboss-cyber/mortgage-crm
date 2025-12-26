@@ -324,7 +324,7 @@ const SmartDocsDashboard = () => {
                     <div className="applicant-info">
                       <h3
                         className="clickable-name"
-                        onClick={() => navigate(`/loans/${applicant.loan_id}`)}
+                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                       >
                         {applicant.borrower_name}
                       </h3>
@@ -404,7 +404,7 @@ const SmartDocsDashboard = () => {
                     <div className="applicant-info">
                       <h3
                         className="clickable-name"
-                        onClick={() => navigate(`/loans/${applicant.loan_id}`)}
+                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                       >
                         {applicant.borrower_name}
                       </h3>
@@ -466,7 +466,7 @@ const SmartDocsDashboard = () => {
                     <div className="applicant-info">
                       <h3
                         className="clickable-name"
-                        onClick={() => navigate(`/loans/${applicant.loan_id}`)}
+                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
                       >
                         {applicant.borrower_name}
                       </h3>

@@ -71,10 +71,11 @@ const formatAddress = (client) => {
 };
 
 // Document Progress Component
-const DocumentProgress = ({ documents }) => {
-  const requested = documents?.requested_count || documents?.outstanding_count || 0;
+const DocumentProgress = ({ documents, loanId }) => {
+  const navigate = useNavigate();
+  const total = documents?.total || documents?.requested_count || 0;
   const received = documents?.received_count || 0;
-  const total = requested + received || 8; // Default to 8 typical docs
+  const outstanding = documents?.outstanding_count || 0;
   const percentage = total > 0 ? Math.round((received / total) * 100) : 0;
 
   // Get color based on percentage
@@ -110,7 +111,7 @@ const DocumentProgress = ({ documents }) => {
         </div>
         <div className="progress-divider">/</div>
         <div className="progress-stat">
-          <span className="stat-number total">{total}</span>
+          <span className="stat-number total">{outstanding}</span>
           <span className="stat-label">Requested</span>
         </div>
       </div>
@@ -120,7 +121,7 @@ const DocumentProgress = ({ documents }) => {
           <h4>Still Needed:</h4>
           <ul>
             {documents.outstanding.slice(0, 4).map((doc, idx) => (
-              <li key={idx}>
+              <li key={doc.id || idx}>
                 <span className="doc-bullet">•</span>
                 {doc.title || doc.type || doc.name}
               </li>
@@ -130,6 +131,15 @@ const DocumentProgress = ({ documents }) => {
             )}
           </ul>
         </div>
+      )}
+
+      {loanId && (
+        <button
+          className="btn-view-docs"
+          onClick={() => navigate(`/smart-docs/client/${loanId}`)}
+        >
+          View Documents →
+        </button>
       )}
     </div>
   );
@@ -228,6 +238,7 @@ export default function PartnerClientDetail() {
   const [showPreApprovalModal, setShowPreApprovalModal] = useState(false);
   const [activities, setActivities] = useState([]);
   const [stageHistory, setStageHistory] = useState([]);
+  const [smartDocsData, setSmartDocsData] = useState(null);
 
   useEffect(() => {
     loadClientData();
@@ -237,6 +248,7 @@ export default function PartnerClientDetail() {
     if (clientData?.client?.id) {
       loadActivities();
       loadStageHistory();
+      loadSmartDocsData();
     }
   }, [clientData?.client?.id]);
 
@@ -272,6 +284,109 @@ export default function PartnerClientDetail() {
       }
     } catch (err) {
       console.error('Error loading stage history:', err);
+    }
+  };
+
+  // Load Smart Docs data for document progress
+  const loadSmartDocsData = async () => {
+    try {
+      const jwtToken = localStorage.getItem('token');
+      if (!jwtToken) return;
+
+      // First, try to find a linked loan for this lead
+      // Try by lead's loan_id if available, or search by email
+      const leadEmail = clientData?.client?.email;
+      const leadId = clientData?.client?.id;
+
+      // Try to get Smart Docs queue data which includes all loans
+      const queueResponse = await fetch(
+        `${API_BASE}/api/v1/smart-docs/queue`,
+        {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (queueResponse.ok) {
+        const queueData = await queueResponse.json();
+        // Find matching loan by borrower name or email
+        const borrowerName = clientData?.client?.borrower_name || clientData?.client?.name;
+        const matchingLoan = queueData.find(loan =>
+          (leadEmail && loan.borrower_email?.toLowerCase() === leadEmail.toLowerCase()) ||
+          (borrowerName && loan.borrower_name?.toLowerCase().includes(borrowerName.toLowerCase()))
+        );
+
+        if (matchingLoan) {
+          // Fetch detailed needs list for this loan
+          const needsListResponse = await fetch(
+            `${API_BASE}/api/v1/smart-docs/needs-list/${matchingLoan.loan_id}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${jwtToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          if (needsListResponse.ok) {
+            const needsListData = await needsListResponse.json();
+            const requests = needsListData.all_requests || [];
+
+            // Count by status
+            const outstanding = requests.filter(r => r.status === 'REQUESTED' || r.status === 'PENDING');
+            const received = requests.filter(r => r.status === 'PENDING_REVIEW' || r.status === 'UPLOADED');
+            const completed = requests.filter(r => r.status === 'ACCEPTED' || r.status === 'WAIVED');
+
+            setSmartDocsData({
+              loanId: matchingLoan.loan_id,
+              outstanding: outstanding,
+              received: received,
+              completed: completed,
+              outstanding_count: outstanding.length,
+              received_count: received.length + completed.length,
+              requested_count: requests.length,
+              total: requests.length
+            });
+            return;
+          }
+        }
+      }
+
+      // Fallback: try to fetch by lead's conditions endpoint
+      const conditionsResponse = await fetch(
+        `${API_BASE}/api/v1/leads/${leadId}/conditions`,
+        {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (conditionsResponse.ok) {
+        const conditionsData = await conditionsResponse.json();
+        const docConditions = (conditionsData.conditions || []).filter(c => c.source === 'smart_docs');
+
+        if (docConditions.length > 0) {
+          const outstanding = docConditions.filter(c => c.status === 'pending');
+          const received = docConditions.filter(c => c.status === 'received' || c.status === 'approved');
+
+          setSmartDocsData({
+            loanId: docConditions[0]?.loan_id,
+            outstanding: outstanding,
+            received: received,
+            completed: [],
+            outstanding_count: outstanding.length,
+            received_count: received.length,
+            requested_count: docConditions.length,
+            total: docConditions.length
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error loading Smart Docs data:', err);
     }
   };
 
@@ -564,7 +679,7 @@ export default function PartnerClientDetail() {
         {/* Right Column - Progress & Activity */}
         <div className="right-column">
           {/* Document Progress */}
-          <DocumentProgress documents={documents} />
+          <DocumentProgress documents={smartDocsData || documents} loanId={smartDocsData?.loanId} />
 
           {/* Activity Timeline */}
           <ActivityTimeline
