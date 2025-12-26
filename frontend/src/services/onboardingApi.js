@@ -5,7 +5,7 @@
 
 import { getAuthHeaders } from '../utils/auth';
 
-const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE = 'https://api.perenniaai.com';
 
 // ============== ONBOARDING WIZARD ==============
 

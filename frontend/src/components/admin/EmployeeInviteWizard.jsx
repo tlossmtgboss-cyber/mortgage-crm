@@ -30,7 +30,7 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
 
   const [errors, setErrors] = useState({});
 
-  const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api';
+  const API_BASE = 'https://api.perenniaai.com/api';
 
   // Load options on mount
   useEffect(() => {

@@ -15,7 +15,7 @@ const CertificationDueWidget = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/certifications/due', {
+      const response = await fetch('https://api.perenniaai.com/api/v1/certifications/due', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

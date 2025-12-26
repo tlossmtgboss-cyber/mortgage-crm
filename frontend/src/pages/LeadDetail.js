@@ -612,7 +612,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/email-drafts?lead_id=${id}&status=draft`, {
@@ -639,7 +639,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/leads/${id}/stage-history`, {
@@ -676,7 +676,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       // Fetch SLA measures (configuration)
@@ -728,7 +728,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/contacts/search?q=${encodeURIComponent(query)}`, {
@@ -783,7 +783,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/email-drafts/${selectedDraft.id}`, {
@@ -822,7 +822,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/email-drafts/${selectedDraft.id}`, {
@@ -858,7 +858,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       // First save any changes
@@ -1032,7 +1032,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/leads/${id}/conditions`, {
@@ -1062,7 +1062,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/leads/${id}/conditions`, {
@@ -1104,7 +1104,7 @@ function LeadDetail() {
       const token = localStorage.getItem('token');
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
       const response = await fetch(`${API_BASE}/api/v1/leads/${id}/conditions/${conditionId}`, {

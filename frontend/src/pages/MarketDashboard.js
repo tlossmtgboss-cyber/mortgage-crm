@@ -47,7 +47,7 @@ function MarketChat() {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/market-chat/messages`,
+        `${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/market-chat/messages`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -73,7 +73,7 @@ function MarketChat() {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/market-chat/messages`,
+        `${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/market-chat/messages`,
         {
           method: 'POST',
           headers: {

@@ -3,7 +3,7 @@ import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandli
 import { toast } from '../utils/toast';
 import './ClientPortalSettings.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const ClientPortalSettings = () => {
   const [activeTab, setActiveTab] = useState('branding');

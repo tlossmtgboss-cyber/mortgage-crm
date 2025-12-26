@@ -54,7 +54,7 @@ const VerificationModal = ({ type, contact, onClose, onVerified }) => {
         ? '/api/v1/onboarding/step-1/verify-email'
         : '/api/v1/onboarding/step-1/verify-sms';
 
-      const response = await fetch(`https://mortgage-crm-production-7a9a.up.railway.app${endpoint}`, {
+      const response = await fetch(`https://api.perenniaai.com${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -93,7 +93,7 @@ const VerificationModal = ({ type, contact, onClose, onVerified }) => {
         ? { email: contact }
         : { phone: contact };
 
-      const response = await fetch(`https://mortgage-crm-production-7a9a.up.railway.app${endpoint}`, {
+      const response = await fetch(`https://api.perenniaai.com${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

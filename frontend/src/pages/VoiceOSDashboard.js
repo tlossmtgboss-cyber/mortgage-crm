@@ -86,7 +86,7 @@ const VoiceOSDashboard = () => {
     setLoading(true);
     try {
       const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
       const token = localStorage.getItem('token');
@@ -162,7 +162,7 @@ const VoiceOSDashboard = () => {
 
     try {
       const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
       const token = localStorage.getItem('token');
@@ -209,7 +209,7 @@ const VoiceOSDashboard = () => {
     setSaving(true);
     try {
       const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
       const token = localStorage.getItem('token');

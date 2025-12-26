@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './FeatureManagement.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Category metadata for grouping
 const CATEGORY_META = {

@@ -132,7 +132,7 @@ const Step1Registration = ({ data, onChange }) => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/step-1/send-email-verification', {
+      const response = await fetch('https://api.perenniaai.com/api/v1/onboarding/step-1/send-email-verification', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -168,7 +168,7 @@ const Step1Registration = ({ data, onChange }) => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/step-1/send-sms-verification', {
+      const response = await fetch('https://api.perenniaai.com/api/v1/onboarding/step-1/send-sms-verification', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

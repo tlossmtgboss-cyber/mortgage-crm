@@ -7,7 +7,7 @@ import './MeetingRoom.css';
 // API Base URL
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE = isProduction
-  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  ? 'https://api.perenniaai.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const MeetingRoom = () => {
@@ -197,7 +197,7 @@ const MeetingRoom = () => {
     // Determine WebSocket URL
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = isProduction
-      ? 'mortgage-crm-production-7a9a.up.railway.app'
+      ? 'api.perenniaai.com'
       : (process.env.REACT_APP_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000');
     const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}&host=${isHost}`;
 

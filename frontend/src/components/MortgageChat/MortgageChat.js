@@ -12,7 +12,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './MortgageChat.css';
 
 // API base URL - use environment variable or default
-const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Phase display info
 const PHASES = {

@@ -6,7 +6,7 @@ console.log('[ScheduleAppointmentModal] v3.7 loaded - build 20251216b');
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://mortgage-crm-production-7a9a.up.railway.app';
+  : 'https://api.perenniaai.com';
 
 const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   // Initialize weekStart to null - will be set to today when modal opens

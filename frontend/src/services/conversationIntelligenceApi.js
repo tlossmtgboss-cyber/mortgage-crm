@@ -205,7 +205,7 @@ export const realTimeApi = {
     const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
     const wsProtocol = isProduction ? 'wss' : 'ws';
     const host = isProduction
-      ? 'mortgage-crm-production-7a9a.up.railway.app'
+      ? 'api.perenniaai.com'
       : 'localhost:8000';
     return `${wsProtocol}://${host}${BASE_PATH}/realtime/sessions/${sessionId}/ws`;
   },

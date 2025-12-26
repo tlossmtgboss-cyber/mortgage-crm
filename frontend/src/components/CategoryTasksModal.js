@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './CategoryTasksModal.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Map role_id to responsibility field keys
 const ROLE_TO_RESPONSIBILITY_FIELD = {

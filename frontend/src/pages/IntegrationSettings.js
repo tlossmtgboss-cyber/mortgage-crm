@@ -3,7 +3,7 @@ import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandli
 import { toast } from '../utils/toast';
 import './IntegrationSettings.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const IntegrationSettings = () => {
   const [activeTab, setActiveTab] = useState('all');

@@ -9,7 +9,7 @@
  * knowing which backend is being used.
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 /**
  * Get available time slots for scheduling

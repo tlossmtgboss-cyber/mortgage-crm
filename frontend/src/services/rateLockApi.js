@@ -3,7 +3,7 @@ import { generateMockRecommendation } from './mockRateLockLogic';
 
 // Rate Lock Intelligence - Now integrated into main CRM backend
 // Uses the same backend as the rest of the app instead of a separate microservice
-const RATE_LOCK_API_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const RATE_LOCK_API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Create axios instance for rate lock service (now points to main CRM backend)
 const rateLockApi = axios.create({

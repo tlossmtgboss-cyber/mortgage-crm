@@ -15,7 +15,7 @@ import './MicrositePageManager.css';
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://mortgage-crm-production-7a9a.up.railway.app';
+  : 'https://api.perenniaai.com';
 
 // Page type icons
 const PAGE_ICONS = {

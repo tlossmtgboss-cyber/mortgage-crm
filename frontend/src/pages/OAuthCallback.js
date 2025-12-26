@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import './OAuthCallback.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Helper to notify parent - uses localStorage as fallback when window.opener is blocked by COOP
 const notifyParent = (type, data) => {

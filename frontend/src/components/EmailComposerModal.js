@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './EmailComposerModal.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Email templates organized by category
 const EMAIL_TEMPLATES = {

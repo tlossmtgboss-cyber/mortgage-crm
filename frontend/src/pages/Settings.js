@@ -22,7 +22,7 @@ import './Settings.css';
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE = isProduction
-  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  ? 'https://api.perenniaai.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Dialer Settings Section Component
@@ -694,7 +694,7 @@ function Settings() {
     setLoadingProfile(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -732,7 +732,7 @@ function Settings() {
       const token = localStorage.getItem('token');
       // Combine first_name and last_name into full_name for the API
       const fullName = `${userProfile.first_name} ${userProfile.last_name}`.trim();
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/users/me`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -779,7 +779,7 @@ function Settings() {
     setProfileMessage({ type: '', text: '' });
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me/password`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/users/me/password`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1226,7 +1226,7 @@ function Settings() {
   // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE_URL = isProduction
-  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  ? 'https://api.perenniaai.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
   const runDatabaseMigration = async () => {

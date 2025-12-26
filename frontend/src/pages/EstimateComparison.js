@@ -4,7 +4,7 @@ import { getCalendlySchedulingUrl } from '../services/schedulingService';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://mortgage-crm-production-7a9a.up.railway.app';
+  : 'https://api.perenniaai.com';
 
 // Default fallback URL if no Calendly integration is configured
 const DEFAULT_CALENDLY_URL = "https://calendly.com/timlossteam/client-reengagement-clone?hide_event_type_details=1&hide_gdpr_banner=1";

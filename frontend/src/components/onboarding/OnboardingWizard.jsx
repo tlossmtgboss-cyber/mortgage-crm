@@ -9,7 +9,7 @@ import Step5Confirmation from './steps/Step5Confirmation';
 import './OnboardingWizard.css';
 
 const TOTAL_STEPS = 5;
-const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api';
+const API_BASE = 'https://api.perenniaai.com/api';
 const API_V1 = `${API_BASE}/v1`;
 
 const OnboardingWizard = () => {

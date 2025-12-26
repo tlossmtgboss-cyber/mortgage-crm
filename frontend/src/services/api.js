@@ -8,7 +8,7 @@ import { ensureArray } from '../utils/arrayHelpers';
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const isNativeApp = Capacitor.isNativePlatform();
 export const API_BASE_URL = (isProduction || isNativeApp)
-  ? 'https://mortgage-crm-production-7a9a.up.railway.app' // Direct Railway URL
+  ? 'https://api.perenniaai.com' // Custom domain
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Create axios instance with mobile app identification

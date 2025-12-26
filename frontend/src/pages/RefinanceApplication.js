@@ -1259,7 +1259,7 @@ export default function RefinanceApplication() {
   // API Configuration
   const isProduction = window.location.hostname !== 'localhost';
   const API_URL = isProduction
-    ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+    ? 'https://api.perenniaai.com'
     : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
   // State

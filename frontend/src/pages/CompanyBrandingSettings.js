@@ -6,7 +6,7 @@ import './CompanyBrandingSettings.css';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
-  : 'https://mortgage-crm-production-7a9a.up.railway.app';
+  : 'https://api.perenniaai.com';
 
 const CompanyBrandingSettings = () => {
   const navigate = useNavigate();

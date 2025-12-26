@@ -6,7 +6,7 @@ import './ActivateAccount.css';
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE_URL = isProduction
-  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  ? 'https://api.perenniaai.com'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const STAGES = {

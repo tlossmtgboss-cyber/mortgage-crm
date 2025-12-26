@@ -17,7 +17,7 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
       setLoading(true);
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/certifications/${certificationId}`,
+        `https://api.perenniaai.com/api/v1/certifications/${certificationId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -54,7 +54,7 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/certifications/${certificationId}/certify`,
+        `https://api.perenniaai.com/api/v1/certifications/${certificationId}/certify`,
         {
           method: 'POST',
           headers: {
@@ -89,7 +89,7 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/certifications/${certificationId}/skip`,
+        `https://api.perenniaai.com/api/v1/certifications/${certificationId}/skip`,
         {
           method: 'POST',
           headers: {

@@ -507,15 +507,15 @@ function AIReceptionist() {
                 <p>Configure these webhooks in your Twilio console:</p>
                 <div className="webhook-url">
                   <label>Incoming Call Webhook:</label>
-                  <code>https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming</code>
-                  <button onClick={() => navigator.clipboard.writeText('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/incoming')}>
+                  <code>https://api.perenniaai.com/api/v1/voice/incoming</code>
+                  <button onClick={() => navigator.clipboard.writeText('https://api.perenniaai.com/api/v1/voice/incoming')}>
                     Copy
                   </button>
                 </div>
                 <div className="webhook-url">
                   <label>Call Status Callback:</label>
-                  <code>https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/call-status</code>
-                  <button onClick={() => navigator.clipboard.writeText('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/voice/call-status')}>
+                  <code>https://api.perenniaai.com/api/v1/voice/call-status</code>
+                  <button onClick={() => navigator.clipboard.writeText('https://api.perenniaai.com/api/v1/voice/call-status')}>
                     Copy
                   </button>
                 </div>

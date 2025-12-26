@@ -15,7 +15,7 @@ function YearOverYear() {
     try {
       setLoading(true);
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-      const API_URL = isProduction ? 'https://mortgage-crm-production-7a9a.up.railway.app' : (process.env.REACT_APP_API_URL || '');
+      const API_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || '');
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${API_URL}/api/v1/portfolio/yearly-stats`, {

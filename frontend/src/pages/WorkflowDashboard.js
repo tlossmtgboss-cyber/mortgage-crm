@@ -4,7 +4,7 @@ import WorkflowUpcomingTasks from '../components/WorkflowUpcomingTasks';
 import WorkflowScorecard from '../components/WorkflowScorecard';
 import './WorkflowDashboard.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // The 10 workflow definitions matching backend
 const WORKFLOW_TABS = [
