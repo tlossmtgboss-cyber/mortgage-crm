@@ -40212,14 +40212,29 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
 
 
 @app.delete("/api/v1/leads/bulk")
+@app.post("/api/v1/leads/bulk-delete")  # Alternative POST endpoint for compatibility
 async def bulk_delete_leads(
-    lead_ids: List[int],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
     Bulk delete multiple leads. Admin users, master user (id=1), or users with leads.delete_all permission can use this.
     """
+    # Parse lead_ids from request body
+    try:
+        body = await request.json()
+        # Handle both array format [1,2,3] and object format {"lead_ids": [1,2,3]}
+        if isinstance(body, list):
+            lead_ids = body
+        elif isinstance(body, dict):
+            lead_ids = body.get('lead_ids', body.get('ids', []))
+        else:
+            lead_ids = []
+        lead_ids = [int(id) for id in lead_ids]  # Ensure integers
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
     # Check permissions - allow admin role, master user, or users with specific permission
     is_admin = getattr(current_user, 'role', None) == 'admin'
     is_master = current_user.id == 1
