@@ -39916,41 +39916,50 @@ async def bulk_delete_leads_v2(
     deleted_count = 0
     errors = []
 
+    # Get table list once
+    from sqlalchemy import inspect
+    inspector = inspect(db.bind)
+    existing_tables = set(inspector.get_table_names())
+
+    tables_to_clean = [
+        ("activities", "lead_id"),
+        ("tasks", "lead_id"),
+        ("ai_tasks", "lead_id"),
+        ("notes", "lead_id"),
+        ("communications", "lead_id"),
+        ("email_reconciliation_queue", "lead_id"),
+        ("workflow_executions", "lead_id"),
+        ("workflow_sla_instances", "lead_id"),
+        ("workflow_sla_tasks", "lead_id"),
+        ("lead_profiles", "lead_id"),
+        ("circle_contacts", "lead_id"),
+        ("notifications", "lead_id"),
+        ("stage_history", "lead_id"),
+        ("conversation_messages", "lead_id"),
+        ("ai_conversation_messages", "lead_id"),
+        ("incoming_data_events", "lead_id"),
+        ("lead_source_tracking", "lead_id"),
+        ("purl_events", "lead_id"),
+        ("purl_workspaces", "lead_id"),
+    ]
+
     for lead_id in lead_ids:
+        # Use savepoint for each lead so failures don't cascade
+        savepoint = db.begin_nested()
         try:
             lead = db.query(Lead).filter(Lead.id == lead_id).first()
             if not lead:
                 errors.append(f"Lead {lead_id} not found")
+                savepoint.rollback()
                 continue
 
-            # Delete related records using raw SQL for safety
-            from sqlalchemy import inspect
-            inspector = inspect(db.bind)
-            existing_tables = set(inspector.get_table_names())
-
-            tables_to_clean = [
-                ("activities", "lead_id"),
-                ("tasks", "lead_id"),
-                ("ai_tasks", "lead_id"),
-                ("notes", "lead_id"),
-                ("communications", "lead_id"),
-                ("email_reconciliation_queue", "lead_id"),
-                ("workflow_executions", "lead_id"),
-                ("lead_profiles", "lead_id"),
-                ("circle_contacts", "lead_id"),
-                ("notifications", "lead_id"),
-                ("stage_history", "lead_id"),
-                ("conversation_messages", "lead_id"),
-                ("ai_conversation_messages", "lead_id"),
-                ("incoming_data_events", "lead_id"),
-            ]
-
+            # Delete related records using raw SQL
             for table, column in tables_to_clean:
                 if table in existing_tables:
                     try:
                         db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
-                    except Exception:
-                        pass  # Ignore errors for optional tables
+                    except Exception as te:
+                        logger.warning(f"Error cleaning {table} for lead {lead_id}: {te}")
 
             # Unlink from loans instead of deleting
             if "loans" in existing_tables:
@@ -39958,12 +39967,19 @@ async def bulk_delete_leads_v2(
 
             # Delete the lead
             db.delete(lead)
+            savepoint.commit()  # Commit the savepoint
             deleted_count += 1
 
         except Exception as e:
+            savepoint.rollback()  # Rollback only this lead's savepoint
             errors.append(f"Failed to delete lead {lead_id}: {str(e)}")
 
-    db.commit()
+    # Final commit
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Final commit failed: {e}")
 
     return {
         "success": True,
