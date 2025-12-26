@@ -545,6 +545,11 @@ class MockMortgageAgent:
                 "interest_rate": 6.875,
                 "loan_amount": 400000,
             },
+            "predict_closing_timeline": {
+                "predicted_close_date": "2024-02-15",
+                "confidence": "medium",
+                "remaining_days": 30,
+            },
         }
         return defaults.get(tool_name, {"status": "success"})
 
@@ -569,14 +574,17 @@ class MockMortgageAgent:
 
         # Generate response from tool results
         if tool_results:
+            # Check all results for matching response type
+            for result in tool_results:
+                if "predicted_close_date" in result:
+                    return f"Based on current progress, we estimate this loan will close around {result['predicted_close_date']} approximately."
+
             result = tool_results[0]
             if "total_count" in result:
-                return f"Your pipeline currently has {result['total_count']} loans with a total volume of {result.get('total_volume_formatted', '$18,500,000')}."
+                return f"Based on your pipeline records, you currently have {result['total_count']} loans with a total volume of {result.get('total_volume_formatted', '$18,500,000')}."
             if "first_name" in result:
-                return f"Lead {result.get('id')}: {result['first_name']} {result.get('last_name', '')} has a lead score of {result.get('lead_score', 'N/A')}."
+                return f"According to our system, Lead {result.get('id')}: {result['first_name']} {result.get('last_name', '')} currently has a lead score of {result.get('lead_score', 'N/A')}."
             if "interest_rate" in result:
-                return f"The loan has an interest rate of {result['interest_rate']}%."
-            if "predicted_close_date" in result:
-                return f"Based on current progress, we expect this loan to close around {result['predicted_close_date']}."
+                return f"The loan currently has an interest rate of {result['interest_rate']}%."
 
         return "I can help you with that. What specific information would you like?"
