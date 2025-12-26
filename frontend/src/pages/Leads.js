@@ -422,7 +422,11 @@ function Leads() {
       alert(result.message || `Successfully deleted ${result.deleted_count} leads`);
     } catch (err) {
       console.error('Failed to bulk delete leads:', err);
-      alert('Failed to delete leads: ' + (err.response?.data?.detail || err.message));
+      const errorDetail = err.response?.data?.detail;
+      const errorMessage = typeof errorDetail === 'string'
+        ? errorDetail
+        : (errorDetail?.message || err.message || 'Unknown error');
+      alert('Failed to delete leads: ' + errorMessage);
     }
   };
 

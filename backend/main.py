@@ -40218,11 +40218,15 @@ async def bulk_delete_leads(
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
-    Bulk delete multiple leads. Only master user (id=1) or users with leads.delete_all permission can use this.
+    Bulk delete multiple leads. Admin users, master user (id=1), or users with leads.delete_all permission can use this.
     """
-    # Only master user can bulk delete
-    if current_user.id != 1 and not has_permission(current_user.id, 'leads.delete_all', db):
-        raise HTTPException(status_code=403, detail="Only master users can perform bulk delete")
+    # Check permissions - allow admin role, master user, or users with specific permission
+    is_admin = getattr(current_user, 'role', None) == 'admin'
+    is_master = current_user.id == 1
+    has_delete_permission = has_permission(current_user.id, 'leads.delete_all', db)
+
+    if not (is_admin or is_master or has_delete_permission):
+        raise HTTPException(status_code=403, detail="You don't have permission to bulk delete leads")
 
     if not lead_ids:
         raise HTTPException(status_code=400, detail="No lead IDs provided")
