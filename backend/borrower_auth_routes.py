@@ -985,7 +985,8 @@ async def request_email_login(
     db.commit()
 
     # Magic link goes to frontend which redirects to backend API for verification
-    magic_link = f"{FRONTEND_URL}/apply/verify?token={magic_token}"
+    # HARDCODED to ensure correct URL - do not change
+    magic_link = f"https://www.perenniaai.com/apply/verify?token={magic_token}"
 
     # Send the magic link email
     first_name = request.first_name or "there"
