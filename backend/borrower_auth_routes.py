@@ -1022,6 +1022,8 @@ async def verify_email_login(
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=invalid_link")
 
     borrower_id, expires_at, used_at, email = result
+    # Ensure borrower_id is a string for JWT encoding
+    borrower_id = str(borrower_id)
 
     if used_at:
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=link_already_used")
