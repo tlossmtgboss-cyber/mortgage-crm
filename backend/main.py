@@ -55784,6 +55784,34 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Conversation Intelligence Platform migration skipped: {e}")
 
+            # Create admin user if not exists
+            try:
+                db_admin = SessionLocal()
+                admin_exists = db_admin.execute(text(
+                    "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
+                )).fetchone()
+
+                if not admin_exists:
+                    # Hash password using bcrypt
+                    admin_password_hash = pwd_context.hash("PerenniaAdmin2024!")
+                    db_admin.execute(text("""
+                        INSERT INTO users (email, hashed_password, full_name, role, permission_role, is_active, email_verified, created_at)
+                        VALUES (:email, :password, :full_name, :role, :permission_role, true, true, NOW())
+                    """), {
+                        "email": "admin@perenniaai.com",
+                        "password": admin_password_hash,
+                        "full_name": "Admin User",
+                        "role": "admin",
+                        "permission_role": "admin"
+                    })
+                    db_admin.commit()
+                    logger.info("✅ Created admin user: admin@perenniaai.com")
+                else:
+                    logger.info("ℹ️ Admin user already exists")
+                db_admin.close()
+            except Exception as admin_e:
+                logger.warning(f"⚠️ Admin user creation skipped: {admin_e}")
+
             # Seed default SLA Workflow configurations
             try:
                 seed_workflow_configurations()
