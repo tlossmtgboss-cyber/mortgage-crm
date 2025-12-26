@@ -38642,6 +38642,109 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     return result
 
 # ============================================================================
+# DASHBOARD DIAGNOSTIC
+# ============================================================================
+
+@app.get("/api/v1/dashboard-debug")
+async def get_dashboard_debug(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Debug endpoint to identify dashboard issues"""
+    from datetime import date, timedelta, datetime, timezone
+    from sqlalchemy import func, extract, case
+    import traceback
+
+    results = {"user_id": current_user.id, "tests": []}
+
+    # Test 1: Basic date operations
+    try:
+        today = date.today()
+        start_of_month = today.replace(day=1)
+        results["tests"].append({"test": "date_operations", "status": "pass"})
+    except Exception as e:
+        results["tests"].append({"test": "date_operations", "status": "fail", "error": str(e)})
+        return results
+
+    # Test 2: User metadata
+    try:
+        user_metadata = current_user.user_metadata or {}
+        goals = user_metadata.get('goals', {})
+        results["tests"].append({"test": "user_metadata", "status": "pass"})
+    except Exception as e:
+        results["tests"].append({"test": "user_metadata", "status": "fail", "error": str(e)})
+
+    # Test 3: Funded loans query
+    try:
+        funded_counts = db.query(
+            func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
+        ).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED
+        ).first()
+        results["tests"].append({"test": "funded_loans_query", "status": "pass", "annual": funded_counts.annual or 0})
+    except Exception as e:
+        results["tests"].append({"test": "funded_loans_query", "status": "fail", "error": str(e), "traceback": traceback.format_exc()})
+
+    # Test 4: Lead counts query
+    try:
+        lead_counts = db.query(
+            func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
+        ).filter(
+            Lead.owner_id == current_user.id
+        ).first()
+        results["tests"].append({"test": "lead_counts_query", "status": "pass", "new_leads": lead_counts.new_leads or 0})
+    except Exception as e:
+        results["tests"].append({"test": "lead_counts_query", "status": "fail", "error": str(e), "traceback": traceback.format_exc()})
+
+    # Test 5: Active loans query
+    try:
+        active_loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
+        ).limit(5).all()
+        results["tests"].append({"test": "active_loans_query", "status": "pass", "count": len(active_loans)})
+    except Exception as e:
+        results["tests"].append({"test": "active_loans_query", "status": "fail", "error": str(e), "traceback": traceback.format_exc()})
+
+    # Test 6: Tasks query
+    try:
+        tasks_today = db.query(Task).filter(
+            Task.owner_id == current_user.id,
+            Task.status.in_(["pending", "in_progress"])
+        ).limit(5).all()
+        results["tests"].append({"test": "tasks_query", "status": "pass", "count": len(tasks_today)})
+    except Exception as e:
+        results["tests"].append({"test": "tasks_query", "status": "fail", "error": str(e), "traceback": traceback.format_exc()})
+
+    # Test 7: ReferralPartner query
+    try:
+        partners = db.query(ReferralPartner).filter(
+            ReferralPartner.status == "active"
+        ).limit(5).all()
+        results["tests"].append({"test": "referral_partners_query", "status": "pass", "count": len(partners)})
+    except Exception as e:
+        results["tests"].append({"test": "referral_partners_query", "status": "fail", "error": str(e), "traceback": traceback.format_exc()})
+
+    # Test 8: AIColleagueAction query
+    try:
+        thirty_days_ago = today - timedelta(days=30)
+        ai_count = db.query(func.count(AIColleagueAction.id)).filter(
+            AIColleagueAction.user_id == current_user.id,
+            AIColleagueAction.created_at >= thirty_days_ago
+        ).scalar() or 0
+        results["tests"].append({"test": "ai_colleague_action_query", "status": "pass", "count": ai_count})
+    except Exception as e:
+        results["tests"].append({"test": "ai_colleague_action_query", "status": "fail", "error": str(e), "traceback": traceback.format_exc()})
+
+    # Summary
+    failed_tests = [t for t in results["tests"] if t["status"] == "fail"]
+    results["summary"] = {
+        "total": len(results["tests"]),
+        "passed": len([t for t in results["tests"] if t["status"] == "pass"]),
+        "failed": len(failed_tests)
+    }
+
+    return results
+
+# ============================================================================
 # LOAN SCORECARD REPORT
 # ============================================================================
 
