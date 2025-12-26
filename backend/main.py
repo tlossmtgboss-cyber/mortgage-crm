@@ -41657,7 +41657,9 @@ async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db), curre
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    # Get conditions from database using raw SQL (table may not exist yet)
+    conditions = []
+
+    # Get conditions from lead_conditions table using raw SQL (table may not exist yet)
     try:
         result = db.execute(text("""
             SELECT id, name, description, category, priority, due_date, status, is_new, created_at, updated_at
@@ -41668,7 +41670,6 @@ async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db), curre
                 created_at DESC
         """), {"lead_id": lead_id})
 
-        conditions = []
         for row in result:
             conditions.append({
                 "id": row[0],
@@ -41680,14 +41681,75 @@ async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db), curre
                 "status": row[6],
                 "is_new": row[7],
                 "created_at": row[8].isoformat() if row[8] else None,
-                "updated_at": row[9].isoformat() if row[9] else None
+                "updated_at": row[9].isoformat() if row[9] else None,
+                "source": "lead_conditions"
             })
-
-        return {"conditions": conditions, "total": len(conditions)}
     except Exception as e:
-        # Table might not exist yet - return empty list
-        logger.warning(f"Error fetching conditions: {e}")
-        return {"conditions": [], "total": 0}
+        # Table might not exist yet
+        logger.warning(f"Error fetching lead_conditions: {e}")
+
+    # Also fetch Smart Docs document requests if there's a linked loan
+    # Try to find loan by loan_number pattern (APP-{lead_id} format) or by matching email
+    try:
+        # First try by loan_number pattern
+        loan_number_pattern = f"APP-{lead_id:06d}"
+        loan_result = db.execute(text("""
+            SELECT id FROM loans WHERE loan_number LIKE :pattern LIMIT 1
+        """), {"pattern": f"{loan_number_pattern}%"}).first()
+
+        # If not found, try by email match
+        if not loan_result and lead.email:
+            loan_result = db.execute(text("""
+                SELECT id FROM loans WHERE borrower_email = :email ORDER BY created_at DESC LIMIT 1
+            """), {"email": lead.email}).first()
+
+        if loan_result:
+            loan_id = loan_result[0]
+            # Fetch document requests from Smart Docs
+            doc_requests = db.execute(text("""
+                SELECT id, title, description, priority, due_date, status, created_at
+                FROM document_requests
+                WHERE loan_id = :loan_id AND is_active = true
+                ORDER BY
+                    CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
+                    created_at DESC
+            """), {"loan_id": loan_id})
+
+            for row in doc_requests:
+                # Map Smart Docs status to condition status
+                status = row[5]
+                if status in ['ACCEPTED', 'WAIVED']:
+                    mapped_status = 'approved'
+                elif status == 'PENDING_REVIEW':
+                    mapped_status = 'received'
+                else:
+                    mapped_status = 'pending'
+
+                # Map priority
+                priority = row[3]
+                if priority in ['CRITICAL', 'HIGH']:
+                    mapped_priority = 'required'
+                else:
+                    mapped_priority = 'recommended'
+
+                conditions.append({
+                    "id": f"doc_{row[0]}",  # Prefix to avoid ID conflicts
+                    "name": row[1],
+                    "description": row[2],
+                    "category": "document",
+                    "priority": mapped_priority,
+                    "due_date": row[4].isoformat() if row[4] else None,
+                    "status": mapped_status,
+                    "is_new": False,
+                    "created_at": row[6].isoformat() if row[6] else None,
+                    "updated_at": None,
+                    "source": "smart_docs",
+                    "loan_id": loan_id
+                })
+    except Exception as e:
+        logger.warning(f"Error fetching Smart Docs conditions: {e}")
+
+    return {"conditions": conditions, "total": len(conditions)}
 
 @app.post("/api/v1/leads/{lead_id}/conditions")
 async def create_lead_condition(lead_id: int, condition: ConditionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
