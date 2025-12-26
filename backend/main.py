@@ -55784,16 +55784,17 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Conversation Intelligence Platform migration skipped: {e}")
 
-            # Create admin user if not exists
+            # Ensure admin user exists with correct settings
             try:
                 db_admin = SessionLocal()
                 admin_exists = db_admin.execute(text(
-                    "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
+                    "SELECT id, permission_role FROM users WHERE email = 'admin@perenniaai.com'"
                 )).fetchone()
 
+                # Hash password using bcrypt
+                admin_password_hash = pwd_context.hash("PerenniaAdmin2024!")
+
                 if not admin_exists:
-                    # Hash password using bcrypt
-                    admin_password_hash = pwd_context.hash("PerenniaAdmin2024!")
                     db_admin.execute(text("""
                         INSERT INTO users (email, hashed_password, full_name, role, permission_role, is_active, email_verified, created_at)
                         VALUES (:email, :password, :full_name, :role, :permission_role, true, true, NOW())
@@ -55807,10 +55808,21 @@ async def startup_event():
                     db_admin.commit()
                     logger.info("✅ Created admin user: admin@perenniaai.com")
                 else:
-                    logger.info("ℹ️ Admin user already exists")
+                    # Update existing admin user with correct role and password
+                    db_admin.execute(text("""
+                        UPDATE users SET
+                            hashed_password = :password,
+                            role = 'admin',
+                            permission_role = 'admin',
+                            is_active = true,
+                            email_verified = true
+                        WHERE email = 'admin@perenniaai.com'
+                    """), {"password": admin_password_hash})
+                    db_admin.commit()
+                    logger.info("✅ Updated admin user: admin@perenniaai.com with admin role and new password")
                 db_admin.close()
             except Exception as admin_e:
-                logger.warning(f"⚠️ Admin user creation skipped: {admin_e}")
+                logger.warning(f"⚠️ Admin user setup skipped: {admin_e}")
 
             # Seed default SLA Workflow configurations
             try:
