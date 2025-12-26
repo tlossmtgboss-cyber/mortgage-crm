@@ -240,19 +240,23 @@ async def upload_document_for_requirement(
     if file_size > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
+    # Use request.borrower_id if available, otherwise use a default (1 for primary borrower)
+    borrower_id = request.borrower_id if request.borrower_id else 1
+
     # Get S3 service and generate storage key
     s3_service = get_smart_docs_s3_service()
     storage_key = s3_service.generate_storage_key(
         loan_id=main_loan_id,
-        borrower_id=request.borrower_id,
+        borrower_id=borrower_id,
         file_name=file.filename
     )
 
     # Create document record
+
     document = SmartDocument(
         request_id=request_id,
         loan_id=main_loan_id,
-        borrower_id=request.borrower_id,
+        borrower_id=borrower_id,
         file_name=file.filename,
         mime_type=mime_type,
         file_size=file_size,
@@ -271,7 +275,7 @@ async def upload_document_for_requirement(
         content_type=mime_type,
         metadata={
             "loan_id": str(main_loan_id),
-            "borrower_id": str(request.borrower_id) if request.borrower_id else "",
+            "borrower_id": str(borrower_id),
             "document_id": str(document.id),
             "request_id": str(request_id),
             "original_filename": file.filename
