@@ -1574,6 +1574,38 @@ export default function PurchaseApplication() {
     }
   }, [STORAGE_KEY, searchParams]);
 
+  // Handle auth token from magic link login
+  useEffect(() => {
+    const authToken = searchParams.get('auth');
+    if (authToken) {
+      try {
+        // Decode JWT to get user info (without verification - server already verified)
+        const parts = authToken.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          const email = payload.sub || payload.email;
+          if (email) {
+            setUserAccount({
+              email: email,
+              authMethod: 'email',
+              isLoggedIn: true,
+              authToken: authToken,
+            });
+            // Skip account stage and go to declarations
+            setCurrentStage('declarations');
+            // Clean up URL
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('auth');
+            window.history.replaceState({}, '', newUrl.toString());
+            console.log('[PurchaseApplication] Logged in via magic link:', email);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse auth token:', e);
+      }
+    }
+  }, [searchParams]);
+
   // Auto-save to localStorage whenever data changes
   useEffect(() => {
     // Don't save on initial mount or if on account stage
@@ -2473,7 +2505,7 @@ export default function PurchaseApplication() {
               Already started an application?
             </p>
             <button
-              onClick={() => navigate('/borrower-portal')}
+              onClick={() => navigate('/apply/login')}
               style={{
                 background: '#0ea5e9',
                 color: 'white',

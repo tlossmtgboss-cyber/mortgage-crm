@@ -1046,7 +1046,8 @@ async def verify_email_login(
 
     auth_token = generate_borrower_token(borrower_id, email)
 
-    return RedirectResponse(url=f"{FRONTEND_URL}/apply/start?token={auth_token}")
+    # Redirect to the actual purchase application with the auth token
+    return RedirectResponse(url=f"{FRONTEND_URL}/apply/purchase?auth={auth_token}")
 
 
 # =============================================================================
