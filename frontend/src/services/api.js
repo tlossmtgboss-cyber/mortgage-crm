@@ -125,7 +125,7 @@ export const leadsAPI = {
     await api.delete(`/api/v1/leads/${id}`);
   },
   bulkDelete: async (leadIds) => {
-    const response = await api.delete('/api/v1/leads/bulk', { data: leadIds });
+    const response = await api.post('/api/v1/leads/bulk-delete', leadIds);
     return response.data;
   },
   getDocuments: async (leadId) => {

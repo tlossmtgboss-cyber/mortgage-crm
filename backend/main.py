@@ -39868,6 +39868,102 @@ async def get_command_center(
     return action_items
 
 
+# IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts
+@app.delete("/api/v1/leads/bulk-delete")
+@app.post("/api/v1/leads/bulk-delete")
+async def bulk_delete_leads_v2(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Bulk delete multiple leads. Admin users, master user (id=1), or users with leads.delete_all permission can use this.
+    """
+    # Parse lead_ids from request body
+    try:
+        body = await request.json()
+        # Handle both array format [1,2,3] and object format {"lead_ids": [1,2,3]}
+        if isinstance(body, list):
+            lead_ids = body
+        elif isinstance(body, dict):
+            lead_ids = body.get('lead_ids', body.get('ids', []))
+        else:
+            lead_ids = []
+        lead_ids = [int(id) for id in lead_ids]  # Ensure integers
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
+    # Check permissions - allow admin role, master user, or users with specific permission
+    is_admin = getattr(current_user, 'role', None) == 'admin'
+    is_master = current_user.id == 1
+    has_delete_permission = has_permission(current_user.id, 'leads.delete_all', db)
+
+    if not (is_admin or is_master or has_delete_permission):
+        raise HTTPException(status_code=403, detail="You don't have permission to bulk delete leads")
+
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+    deleted_count = 0
+    errors = []
+
+    for lead_id in lead_ids:
+        try:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            if not lead:
+                errors.append(f"Lead {lead_id} not found")
+                continue
+
+            # Delete related records using raw SQL for safety
+            from sqlalchemy import inspect
+            inspector = inspect(db.bind)
+            existing_tables = set(inspector.get_table_names())
+
+            tables_to_clean = [
+                ("activities", "lead_id"),
+                ("tasks", "lead_id"),
+                ("ai_tasks", "lead_id"),
+                ("notes", "lead_id"),
+                ("communications", "lead_id"),
+                ("email_reconciliation_queue", "lead_id"),
+                ("workflow_executions", "lead_id"),
+                ("lead_profiles", "lead_id"),
+                ("circle_contacts", "lead_id"),
+                ("notifications", "lead_id"),
+                ("stage_history", "lead_id"),
+                ("conversation_messages", "lead_id"),
+                ("ai_conversation_messages", "lead_id"),
+                ("incoming_data_events", "lead_id"),
+            ]
+
+            for table, column in tables_to_clean:
+                if table in existing_tables:
+                    try:
+                        db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                    except Exception:
+                        pass  # Ignore errors for optional tables
+
+            # Unlink from loans instead of deleting
+            if "loans" in existing_tables:
+                db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+            # Delete the lead
+            db.delete(lead)
+            deleted_count += 1
+
+        except Exception as e:
+            errors.append(f"Failed to delete lead {lead_id}: {str(e)}")
+
+    db.commit()
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "errors": errors,
+        "message": f"Successfully deleted {deleted_count} leads" + (f" with {len(errors)} errors" if errors else "")
+    }
+
+
 @app.get("/api/v1/leads/{lead_id}")
 async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
