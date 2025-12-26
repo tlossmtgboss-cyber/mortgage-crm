@@ -59464,6 +59464,63 @@ async def public_debug_dashboard_test(
         }
 
 
+@app.get("/api/v1/public/debug/referral-partners-data")
+async def public_debug_referral_partners(
+    admin_key: str,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to investigate referral partners data inconsistency."""
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
+
+    try:
+        # Get all users with admin@perenniaai.com email
+        admin_users = db.execute(text("""
+            SELECT id, email, role, created_at
+            FROM users
+            WHERE email = 'admin@perenniaai.com'
+            ORDER BY created_at
+        """)).fetchall()
+
+        # Get all referral partners with their owner info
+        partners = db.execute(text("""
+            SELECT rp.id, rp.name, rp.owner_id, u.email as owner_email, rp.created_at
+            FROM referral_partners rp
+            LEFT JOIN users u ON rp.owner_id = u.id
+            ORDER BY rp.created_at
+        """)).fetchall()
+
+        # Count by owner_id
+        counts = db.execute(text("""
+            SELECT owner_id, COUNT(*) as count
+            FROM referral_partners
+            GROUP BY owner_id
+            ORDER BY count DESC
+        """)).fetchall()
+
+        return {
+            "success": True,
+            "admin_users": [
+                {"id": u[0], "email": u[1], "role": u[2], "created_at": str(u[3])}
+                for u in admin_users
+            ],
+            "total_partners": len(partners),
+            "partners": [
+                {"id": p[0], "name": p[1], "owner_id": p[2], "owner_email": p[3], "created_at": str(p[4])}
+                for p in partners
+            ],
+            "counts_by_owner": [
+                {"owner_id": c[0], "count": c[1]}
+                for c in counts
+            ]
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/api/v1/migrations/check-enum-values", response_model=None)
 async def check_enum_values(
     current_user: User = Depends(get_current_user),
