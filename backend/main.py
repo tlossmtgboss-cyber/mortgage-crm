@@ -20589,7 +20589,7 @@ async def debug_create_test_workspace(
             "token": full_token,
             "token_id": token[0],
             "expires_at": expires_at.isoformat(),
-            "portal_url": f"https://mortgage-crm-nine.vercel.app/portal/{workspace_slug}",
+            "portal_url": f"https://perenniaai.com/portal/{workspace_slug}",
             "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://mortgage-crm-production-7a9a.up.railway.app/api/purl/workspace/{workspace_slug}"'
         }
     except Exception as e:
@@ -29345,7 +29345,7 @@ async def get_microsoft_auth_url(
         if frontend_origin:
             redirect_uri = f"{frontend_origin}/oauth/callback"
         else:
-            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
+            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback")
 
         if not client_id:
             raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Please configure in Settings > Outlook Email.")
@@ -29638,7 +29638,7 @@ async def get_microsoft_oauth_config(
                 return MicrosoftAppConfigResponse(
                     client_id=env_client_id[:8] + "..." if env_client_id else None,  # Mask for security
                     tenant_id=env_tenant_id,
-                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback"),
+                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback"),
                     configured=True,
                     has_client_secret=bool(os.getenv("MICROSOFT_CLIENT_SECRET"))
                 )
@@ -29676,7 +29676,7 @@ async def save_microsoft_oauth_config(
                 MicrosoftAppConfig.organization_id == org_id
             ).first()
 
-        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
+        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback")
 
         if not config:
             # Create new config for this organization

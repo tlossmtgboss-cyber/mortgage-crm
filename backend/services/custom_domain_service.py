@@ -32,9 +32,10 @@ class CustomDomainService:
     STATIC_DOMAINS = {
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://mortgage-crm-nine.vercel.app",
         "https://perenniaai.com",
         "https://www.perenniaai.com",
+        "https://app.perenniaai.com",
+        "https://api.perenniaai.com",
     }
 
     def __init__(self, refresh_interval: int = 60):
@@ -102,10 +103,6 @@ class CustomDomainService:
 
         # Always allow static domains
         if origin in self.STATIC_DOMAINS:
-            return True
-
-        # Allow Vercel deployments
-        if origin.endswith(".vercel.app"):
             return True
 
         # Allow perenniaai.com and subdomains

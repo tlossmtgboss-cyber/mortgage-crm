@@ -585,7 +585,7 @@ SUMMARY:
     ) -> bool:
         """Send user activation email"""
         if not base_url:
-            base_url = os.getenv('FRONTEND_URL', 'https://pipeline360.vercel.app')
+            base_url = os.getenv('FRONTEND_URL', 'https://perenniaai.com')
 
         activation_url = f"{base_url}/activate?token={activation_token}"
         subject = "🔐 Activate Your Perennia AI Account"
@@ -831,7 +831,7 @@ This meeting invite was sent via Perennia AI CRM
             </div>
         """ if message else ""
 
-        crm_link = os.getenv('FRONTEND_URL', 'https://pipeline360.vercel.app')
+        crm_link = os.getenv('FRONTEND_URL', 'https://perenniaai.com')
         lead_link = f"{crm_link}/leads/{lead_id}" if lead_id else crm_link
 
         html = f"""

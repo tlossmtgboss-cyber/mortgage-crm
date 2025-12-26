@@ -6,7 +6,7 @@
 ### Master Account
 - **Email**: tloss@cmgfi.com
 - **Environment**: Production
-- **Frontend URL**: https://mortgage-crm-nine.vercel.app
+- **Frontend URL**: https://perenniaai.com
 - **Backend URL**: https://mortgage-crm-production-7a9a.up.railway.app
 
 ---

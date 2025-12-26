@@ -595,7 +595,7 @@ async def invite_coborrower(
     # Send invitation email to co-borrower
     email_sent = False
     try:
-        frontend_url = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+        frontend_url = os.getenv("FRONTEND_URL", "https://perenniaai.com")
         accept_url = f"{frontend_url}/borrower/coborrower-accept?token={invitation_token}"
 
         # Get primary borrower's name for context

@@ -85,7 +85,7 @@ curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/profitability/a
 
 ### 2. Test Frontend
 
-1. Go to https://mortgage-crm-nine.vercel.app
+1. Go to https://perenniaai.com
 2. Log in as admin@perenniaai.com
 3. Navigate to Profitability (in toolbar)
 4. Verify dashboard loads

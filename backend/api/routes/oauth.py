@@ -32,7 +32,7 @@ MICROSOFT_SCOPES = "Mail.Send Mail.ReadWrite Calendars.ReadWrite Contacts.Read U
 MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "")
 MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET", "")
 MICROSOFT_REDIRECT_URI = os.getenv("MICROSOFT_REDIRECT_URI", "")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 
 
 def get_current_user_from_token(db: Session, token: str):

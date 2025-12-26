@@ -1956,7 +1956,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 """)
                 user_result = db.execute(booking_query, {"user_id": user_id}).fetchone()
                 if user_result and user_result.booking_slug:
-                    booking_link = f"\n\nBook a time here: https://mortgage-crm-nine.vercel.app/book/{user_result.booking_slug}"
+                    booking_link = f"\n\nBook a time here: https://perenniaai.com/book/{user_result.booking_slug}"
 
             # Initialize SMS client
             sms_client = TwilioSMSClient()

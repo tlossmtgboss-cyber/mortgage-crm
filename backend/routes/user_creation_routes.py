@@ -215,7 +215,7 @@ def get_user_creation_routes(
     This allows the routes to work with the existing main.py models
     """
     import os
-    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 
     # ========================================================================
     # UNIFIED USER CREATION ENDPOINT (All-in-one)

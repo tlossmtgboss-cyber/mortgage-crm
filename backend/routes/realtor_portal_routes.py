@@ -892,7 +892,7 @@ async def notify_overlimit_request(
 
                     <p>Please review the file and contact the partner to discuss options for increasing the approval amount.</p>
 
-                    <p><a href="{os.getenv('FRONTEND_URL', 'https://mortgage-crm-nine.vercel.app')}/leads/{request.lead_id}"
+                    <p><a href="{os.getenv('FRONTEND_URL', 'https://perenniaai.com')}/leads/{request.lead_id}"
                           style="background: #1e40af; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
                         View Lead Details
                     </a></p>
@@ -981,7 +981,7 @@ async def email_letter(
                 </div>
 
                 <p>You can also access your letter online:</p>
-                <p><a href="{os.getenv('FRONTEND_URL', 'https://mortgage-crm-nine.vercel.app')}/letters/shared/{letter.get('share_token')}"
+                <p><a href="{os.getenv('FRONTEND_URL', 'https://perenniaai.com')}/letters/shared/{letter.get('share_token')}"
                       style="background: #1e40af; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
                     View Your Letter
                 </a></p>
@@ -1080,7 +1080,7 @@ async def send_message(
                     <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
                         <p style="margin: 0; white-space: pre-wrap;">{request.message}</p>
                     </div>
-                    <p><a href="{os.getenv('FRONTEND_URL', 'https://mortgage-crm-nine.vercel.app')}/loans/{loan_id}"
+                    <p><a href="{os.getenv('FRONTEND_URL', 'https://perenniaai.com')}/loans/{loan_id}"
                           style="background: #1e40af; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
                         View Loan Details
                     </a></p>

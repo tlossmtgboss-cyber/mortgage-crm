@@ -76,7 +76,7 @@ def get_user_invitation_routes(
     Factory function to create invitation routes with injected dependencies.
     """
     import os
-    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 
     @router.post("", response_model=InvitationResponse)
     async def invite_user(

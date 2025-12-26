@@ -427,7 +427,7 @@ async def submit_application(
         raise HTTPException(status_code=400, detail=str(e))
 
     # Construct portal URL with the same token used for submission
-    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
     portal_url = f"https://{base_domain}/portal/{context.workspace_slug}"
     if token:
         portal_url = f"{portal_url}?token={token}"
@@ -1578,7 +1578,7 @@ async def create_token(
         token_record = db.query(PURLAccessToken).filter(PURLAccessToken.id == token_id).first()
 
         # Build full portal URL with token
-        base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+        base_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
         portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={full_token}"
 
         return {
@@ -1654,7 +1654,7 @@ async def regenerate_token_temp(
     token_id = result.scalar()
     db.commit()
 
-    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
     portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={full_token}"
 
     logger.info(f"Regenerated token for workspace {workspace_id}: token_id={token_id}")
@@ -2093,7 +2093,7 @@ async def get_purl_url(
         }
 
     # Build URL with token for authenticated access
-    base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+    base_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
     portal_url = f"https://{base_domain}/portal/{workspace.slug}?token={token.token}"
 
     return {

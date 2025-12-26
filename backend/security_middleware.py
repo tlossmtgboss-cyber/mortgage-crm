@@ -208,13 +208,10 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                 auth_header = request.headers.get("authorization", "")
 
                 allowed_origins = [
-                    "https://www.pipeline360.io",
-                    "https://pipeline360.io",
                     "https://www.perenniaai.com",
                     "https://perenniaai.com",
-                    "https://mortgage-crm-nine.vercel.app",  # Production Vercel
-                    "https://mortgage-crm",  # Vercel preview deployments
-                    "https://frontend-",  # Vercel preview deployments (legacy)
+                    "https://app.perenniaai.com",
+                    "https://api.perenniaai.com",
                     "http://localhost:3000",
                     "http://localhost:3001",
                 ]

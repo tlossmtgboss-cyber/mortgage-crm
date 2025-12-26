@@ -393,7 +393,7 @@ async def create_task_function(
 
                         # Create urgent notification message
                         caller_name = lead.name or "Unknown caller"
-                        sms_message = f"🚨 URGENT: {caller_name} needs immediate callback.\n\nReason: {title}\n\n{description}\n\nView task in CRM: https://mortgage-crm-nine.vercel.app/tasks"
+                        sms_message = f"🚨 URGENT: {caller_name} needs immediate callback.\n\nReason: {title}\n\n{description}\n\nView task in CRM: https://perenniaai.com/tasks"
 
                         # Send SMS
                         message_sid = await sms_client.send_sms(

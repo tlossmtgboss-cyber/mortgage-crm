@@ -3336,7 +3336,7 @@ async def confirm_public_booking(
                 db.flush()  # Get the video room ID
 
                 # Update appointment with video link
-                base_url = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+                base_url = os.getenv("FRONTEND_URL", "https://perenniaai.com")
                 video_link = f"{base_url}/meeting/{room_code}"
                 appointment.video_link = video_link
                 appointment.video_meeting_id = video_room.id

@@ -66,16 +66,17 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         static_allowed = {
             "http://localhost:3000",
             "http://localhost:3001",
-            "https://mortgage-crm-nine.vercel.app",
             "https://perenniaai.com",
             "https://www.perenniaai.com",
+            "https://app.perenniaai.com",
+            "https://api.perenniaai.com",
         }
 
         if origin in static_allowed:
             return True
 
-        # Allow Vercel and perenniaai subdomains
-        if origin.endswith(".vercel.app") or origin.endswith("perenniaai.com"):
+        # Allow perenniaai.com subdomains
+        if origin.endswith("perenniaai.com"):
             return True
 
         return False
