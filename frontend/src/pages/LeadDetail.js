@@ -1021,6 +1021,9 @@ function LeadDetail() {
       loadDocuments();
       loadConditions();
     }
+    if (activeTab === 'conditions' && id) {
+      loadConditions();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id]);
 
