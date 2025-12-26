@@ -2327,12 +2327,14 @@ async def submit_application(
                                 organization_id, workspace_id, loan_number, status,
                                 loan_purpose, product_type, loan_amount,
                                 property_address, property_type, meta_data,
+                                main_loan_id,
                                 created_at, updated_at
                             )
                             VALUES (
                                 :org_id, :workspace_id, :loan_number, 'processing',
                                 :loan_purpose, :product_type, :loan_amount,
                                 :property_address, :property_type, :meta_data,
+                                :main_loan_id,
                                 :created_at, :updated_at
                             )
                             RETURNING id
@@ -2351,6 +2353,7 @@ async def submit_application(
                                 "ltv": round(ltv, 2),
                                 "lead_id": lead_id,
                             }),
+                            "main_loan_id": loan_id,  # Link to main loans table for Smart Docs
                             "created_at": submission_date,
                             "updated_at": submission_date,
                         })
@@ -2667,6 +2670,7 @@ async def submit_application(
             "data": {
                 "borrower_id": borrower_id,
                 "lead_id": lead_id,
+                "loan_id": loan_id,  # Main loans table ID for Smart Docs
                 "workspace_id": workspace_id,
                 "workspace_slug": workspace_slug,
                 "portal_url": portal_url,

@@ -2051,6 +2051,53 @@ export default function PurchaseApplication() {
         localStorage.setItem('borrower_email', profileData.email);
       }
 
+      // Sync document requirements to Smart Docs portal
+      if (result.data?.loan_id) {
+        try {
+          // Get the calculated document requirements using the same function as the sidebar
+          const coBorrowerInfo = declarations.borrower_count && ['2', '3', '4+'].includes(declarations.borrower_count)
+            ? { firstName: declarations.co_borrower_first_name }
+            : {};
+          const coBorrowerIncomeInfo = { employerName: declarations.co_borrower_employer_name };
+
+          const requiredDocs = getRequiredDocuments(
+            declarations,
+            assetData,
+            profileData,
+            incomeData,
+            coBorrowerInfo,
+            coBorrowerIncomeInfo
+          );
+
+          // Call the sync endpoint
+          const syncResponse = await fetch(`${API_URL}/api/v1/smart-docs/needs-list/sync-from-application`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              loan_id: result.data.loan_id,
+              workspace_slug: result.data.workspace_slug,
+              borrower_first_name: profileData.firstName || 'Borrower',
+              co_borrower_first_name: coBorrowerInfo.firstName || null,
+              documents: requiredDocs.map(doc => ({
+                id: doc.id,
+                name: doc.name,
+                description: doc.description,
+                category: doc.category,
+                stage: doc.stage,
+              })),
+            }),
+          });
+
+          const syncResult = await syncResponse.json();
+          console.log('[PurchaseApplication] Smart Docs sync result:', syncResult);
+        } catch (syncError) {
+          // Non-critical - log but don't fail the submission
+          console.warn('[PurchaseApplication] Failed to sync documents to Smart Docs (non-critical):', syncError);
+        }
+      }
+
       // Success - show the submission success lightbox
       if (result.data?.portal_url) {
         console.log('[PurchaseApplication] Setting portal URL:', result.data.portal_url);
@@ -2659,6 +2706,39 @@ export default function PurchaseApplication() {
               className="btn-continue declaration-continue"
               onClick={() => submitInputAnswer(question.id)}
               disabled={!declarations[question.id]}
+            >
+              Continue →
+            </button>
+          </div>
+        );
+      }
+
+      // State select dropdown type
+      if (question.type === 'state_select') {
+        return (
+          <div className="declaration-input-container">
+            <select
+              className="declaration-text-input fun-input"
+              value={declarations[question.id] || ''}
+              onChange={(e) => handleInputAnswer(question.id, e.target.value)}
+              style={{
+                fontSize: '18px',
+                padding: '16px 20px',
+                maxWidth: '400px',
+                margin: '0 auto',
+                display: 'block',
+                cursor: 'pointer'
+              }}
+            >
+              {US_STATES.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+            <button
+              className="btn-continue declaration-continue"
+              onClick={() => submitInputAnswer(question.id)}
+              disabled={!declarations[question.id]}
+              style={{ marginTop: '20px' }}
             >
               Continue →
             </button>
