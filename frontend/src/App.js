@@ -109,6 +109,7 @@ const PurchaseApplication = lazy(() => import('./pages/PurchaseApplication'));
 const RefinanceApplication = lazy(() => import('./pages/RefinanceApplication'));
 const CoborrowerApplication = lazy(() => import('./pages/CoborrowerApplication'));
 const BorrowerLogin = lazy(() => import('./pages/BorrowerLogin'));
+const ApplyVerify = lazy(() => import('./pages/ApplyVerify'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
@@ -311,6 +312,9 @@ function App() {
 
           {/* Borrower Login (public - social login for applicants) */}
           <Route path="/apply/login" element={<LazyPage><BorrowerLogin /></LazyPage>} />
+
+          {/* Magic link verification - redirects to backend API */}
+          <Route path="/apply/verify" element={<LazyPage><ApplyVerify /></LazyPage>} />
 
           {/* Borrower Application Start (after social login) - New Adaptive URLA */}
           <Route path="/apply/start" element={<LazyPage><AdaptiveURLA /></LazyPage>} />
