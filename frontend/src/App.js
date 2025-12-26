@@ -325,7 +325,6 @@ function App() {
 
           {/* Borrower OAuth Callbacks */}
           <Route path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />
-          <Route path="/apply/verify" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />
 
           {/* Borrower Application (public - token-based access) */}
           <Route path="/apply/:token" element={<LazyPage><BorrowerApplication /></LazyPage>} />
