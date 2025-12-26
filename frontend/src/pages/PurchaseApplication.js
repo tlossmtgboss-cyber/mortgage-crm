@@ -851,6 +851,19 @@ const DECLARATION_QUESTIONS = [
     hint: 'First-time buyers may qualify for special programs!',
   },
   {
+    id: 'desired_state',
+    question: 'What state are you looking to buy in?',
+    type: 'state_select',
+    hint: 'This helps us find state-specific programs and lenders.',
+  },
+  {
+    id: 'desired_city',
+    question: 'What city or area are you looking to buy in?',
+    type: 'text',
+    placeholder: 'e.g., Austin, Denver metro, Orange County',
+    hint: 'This helps us connect you with local experts.',
+  },
+  {
     id: 'previous_home_status',
     question: 'What happened to your previous home?',
     type: 'choice',

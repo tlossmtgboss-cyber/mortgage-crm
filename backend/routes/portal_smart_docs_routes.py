@@ -281,7 +281,9 @@ async def upload_document_for_requirement(
     if not upload_result.get("success"):
         logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
 
-    # Process the document through the review pipeline
+    # Process the document through the review pipeline (optional - don't fail upload if processing fails)
+    result = None
+    processing_error = None
     try:
         pipeline = DocumentReviewPipeline(db)
         result = pipeline.process_document(
@@ -302,23 +304,30 @@ async def upload_document_for_requirement(
             request.status = RequestStatus.PENDING_REVIEW
         db.commit()
 
-        return {
-            "success": True,
-            "message": "Document uploaded successfully",
-            "document_id": document.id,
-            "decision": result.decision.value if result.decision else None,
-            "validation": {
-                "is_screenshot": result.is_screenshot,
-                "is_fresh": result.is_fresh,
-                "rejection_reason": result.rejection_reason,
-                "fix_instructions": result.fix_instructions,
-            },
-            "requirement_status": request.status.value
-        }
-
     except Exception as e:
-        logger.error(f"Error processing upload: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload processing failed: {str(e)}")
+        import traceback
+        processing_error = str(e)
+        logger.error(f"Error processing upload (non-fatal): {e}")
+        logger.error(traceback.format_exc())
+        # Still mark as pending review so document isn't lost
+        if request.status == RequestStatus.OPEN:
+            request.status = RequestStatus.PENDING_REVIEW
+            db.commit()
+
+    return {
+        "success": True,
+        "message": "Document uploaded successfully" + (" (processing pending)" if processing_error else ""),
+        "document_id": document.id,
+        "decision": result.decision.value if result and result.decision else None,
+        "validation": {
+            "is_screenshot": result.is_screenshot if result else None,
+            "is_fresh": result.is_fresh if result else None,
+            "rejection_reason": result.rejection_reason if result else None,
+            "fix_instructions": result.fix_instructions if result else None,
+        } if result else None,
+        "requirement_status": request.status.value,
+        "processing_error": processing_error
+    }
 
 
 @router.get("/{workspace_slug}/summary")
