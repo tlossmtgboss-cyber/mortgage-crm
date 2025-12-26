@@ -41705,10 +41705,10 @@ async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db), curre
 
         if loan_result:
             loan_id = loan_result[0]
-            # Fetch document requests from Smart Docs
+            # Fetch document requests from Smart Docs (smart_document_requests table)
             doc_requests = db.execute(text("""
                 SELECT id, title, description, priority, due_date, status, created_at
-                FROM document_requests
+                FROM smart_document_requests
                 WHERE loan_id = :loan_id AND is_active = true
                 ORDER BY
                     CASE priority WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
@@ -41747,7 +41747,7 @@ async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db), curre
                     "loan_id": loan_id
                 })
     except Exception as e:
-        logger.warning(f"Error fetching Smart Docs conditions: {e}")
+        logger.warning(f"Error fetching Smart Docs conditions from smart_document_requests: {e}")
 
     return {"conditions": conditions, "total": len(conditions)}
 
