@@ -42654,41 +42654,67 @@ async def get_documents(
 ):
     """
     Get documents with optional filtering.
+    Uses raw SQL to avoid enum validation issues with legacy data.
     """
-    query = db.query(Document).filter(Document.status == "active")
+    from sqlalchemy import text
+
+    # Build query with raw SQL to bypass ORM enum validation
+    # This handles cases where database has doc_type values not in current Python enum
+    conditions = ["status = 'active'"]
+    params = {"limit_val": limit, "offset_val": offset}
 
     if borrower_id:
-        query = query.filter(Document.borrower_id == borrower_id)
+        conditions.append("borrower_id = :borrower_id")
+        params["borrower_id"] = borrower_id
     if loan_id:
-        query = query.filter(Document.loan_id == loan_id)
+        conditions.append("loan_id = :loan_id")
+        params["loan_id"] = loan_id
     if doc_type:
-        query = query.filter(Document.doc_type == DocumentType(doc_type))
+        conditions.append("doc_type = :doc_type")
+        params["doc_type"] = doc_type
     if doc_category:
-        query = query.filter(Document.doc_category == DocumentCategory(doc_category))
+        conditions.append("doc_category = :doc_category")
+        params["doc_category"] = doc_category
 
-    total = query.count()
-    documents = query.order_by(Document.uploaded_at.desc()).offset(offset).limit(limit).all()
+    where_clause = " AND ".join(conditions)
+
+    # Get total count
+    count_query = text(f"SELECT COUNT(*) FROM documents WHERE {where_clause}")
+    total = db.execute(count_query, params).scalar() or 0
+
+    # Get documents
+    select_query = text(f"""
+        SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,
+               file_size, mime_type, period_start_date, period_end_date,
+               source, uploaded_at, notes
+        FROM documents
+        WHERE {where_clause}
+        ORDER BY uploaded_at DESC NULLS LAST
+        LIMIT :limit_val OFFSET :offset_val
+    """)
+
+    result = db.execute(select_query, params)
+    documents = []
+    for row in result:
+        documents.append({
+            "id": row.id,
+            "borrower_id": row.borrower_id,
+            "loan_id": row.loan_id,
+            "doc_type": row.doc_type,
+            "doc_category": row.doc_category,
+            "filename": row.filename,
+            "file_size": row.file_size,
+            "mime_type": row.mime_type,
+            "period_start_date": row.period_start_date.isoformat() if row.period_start_date else None,
+            "period_end_date": row.period_end_date.isoformat() if row.period_end_date else None,
+            "source": row.source,
+            "uploaded_at": row.uploaded_at.isoformat() if row.uploaded_at else None,
+            "notes": row.notes
+        })
 
     return {
         "total": total,
-        "documents": [
-            {
-                "id": doc.id,
-                "borrower_id": doc.borrower_id,
-                "loan_id": doc.loan_id,
-                "doc_type": doc.doc_type.value if doc.doc_type else None,
-                "doc_category": doc.doc_category.value if doc.doc_category else None,
-                "filename": doc.filename,
-                "file_size": doc.file_size,
-                "mime_type": doc.mime_type,
-                "period_start_date": doc.period_start_date.isoformat() if doc.period_start_date else None,
-                "period_end_date": doc.period_end_date.isoformat() if doc.period_end_date else None,
-                "source": doc.source,
-                "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
-                "notes": doc.notes
-            }
-            for doc in documents
-        ]
+        "documents": documents
     }
 
 
@@ -42700,31 +42726,43 @@ async def get_document(
 ):
     """
     Get a single document by ID.
+    Uses raw SQL to avoid enum validation issues with legacy data.
     """
-    document = db.query(Document).filter(Document.id == document_id).first()
+    from sqlalchemy import text
 
-    if not document:
+    query = text("""
+        SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,
+               original_filename, file_size, mime_type, file_location,
+               period_start_date, period_end_date, source, source_email_intake_id,
+               status, notes, uploaded_at, updated_at
+        FROM documents
+        WHERE id = :doc_id
+    """)
+
+    result = db.execute(query, {"doc_id": document_id}).first()
+
+    if not result:
         raise HTTPException(status_code=404, detail="Document not found")
 
     return {
-        "id": document.id,
-        "borrower_id": document.borrower_id,
-        "loan_id": document.loan_id,
-        "doc_type": document.doc_type.value if document.doc_type else None,
-        "doc_category": document.doc_category.value if document.doc_category else None,
-        "filename": document.filename,
-        "original_filename": document.original_filename,
-        "file_size": document.file_size,
-        "mime_type": document.mime_type,
-        "file_location": document.file_location,
-        "period_start_date": document.period_start_date.isoformat() if document.period_start_date else None,
-        "period_end_date": document.period_end_date.isoformat() if document.period_end_date else None,
-        "source": document.source,
-        "source_email_intake_id": document.source_email_intake_id,
-        "status": document.status,
-        "notes": document.notes,
-        "uploaded_at": document.uploaded_at.isoformat() if document.uploaded_at else None,
-        "updated_at": document.updated_at.isoformat() if document.updated_at else None
+        "id": result.id,
+        "borrower_id": result.borrower_id,
+        "loan_id": result.loan_id,
+        "doc_type": result.doc_type,
+        "doc_category": result.doc_category,
+        "filename": result.filename,
+        "original_filename": result.original_filename,
+        "file_size": result.file_size,
+        "mime_type": result.mime_type,
+        "file_location": result.file_location,
+        "period_start_date": result.period_start_date.isoformat() if result.period_start_date else None,
+        "period_end_date": result.period_end_date.isoformat() if result.period_end_date else None,
+        "source": result.source,
+        "source_email_intake_id": result.source_email_intake_id,
+        "status": result.status,
+        "notes": result.notes,
+        "uploaded_at": result.uploaded_at.isoformat() if result.uploaded_at else None,
+        "updated_at": result.updated_at.isoformat() if result.updated_at else None
     }
 
 
