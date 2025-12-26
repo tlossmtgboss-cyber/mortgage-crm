@@ -68,7 +68,7 @@ function DataUpload() {
       const formData = new FormData();
       formData.append('file', file);
 
-      // Use relative URL to leverage Vercel proxy (see vercel.json)
+      // Use relative URL which will be proxied to the backend API
       const response = await fetch('/api/v1/data-import/analyze', {
         method: 'POST',
         headers: {
@@ -131,7 +131,7 @@ function DataUpload() {
       formData.append('answers', JSON.stringify(answers));
       formData.append('mappings', JSON.stringify(columnMappings));
 
-      // Use relative URL to leverage Vercel proxy (see vercel.json)
+      // Use relative URL which will be proxied to the backend API
       const response = await fetch('/api/v1/data-import/execute', {
         method: 'POST',
         headers: {
