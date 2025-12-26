@@ -888,3 +888,65 @@ async def fix_referral_partner_links(
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/seed-ci-qa-rubrics")
+async def seed_ci_qa_rubrics(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Seed QA rubrics and compliance rules for Conversation Intelligence platform
+    """
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+        from pathlib import Path
+
+        logger.info("Starting CI QA rubrics seeding...")
+
+        db = SessionLocal()
+
+        # Read and execute the seed file
+        seed_file = Path(__file__).parent / "migrations" / "seed_mortgage_qa_rubrics.sql"
+
+        if not seed_file.exists():
+            raise HTTPException(status_code=404, detail="Seed file not found")
+
+        with open(seed_file, 'r') as f:
+            seed_sql = f.read()
+
+        # Split by INSERT statements and execute each
+        statements = seed_sql.split('INSERT INTO')
+        success_count = 0
+        errors = []
+
+        for i, stmt in enumerate(statements[1:], 1):  # Skip first empty split
+            try:
+                full_stmt = 'INSERT INTO' + stmt.rstrip().rstrip(';')
+                db.execute(text(full_stmt))
+                success_count += 1
+                logger.info(f"Seed statement {i}: OK")
+            except Exception as e:
+                error_msg = str(e)[:100]
+                errors.append(f"Statement {i}: {error_msg}")
+                logger.warning(f"Seed statement {i}: {error_msg}")
+
+        db.commit()
+
+        # Get counts
+        rubric_count = db.execute(text("SELECT COUNT(*) FROM ci_qa_rubrics")).scalar()
+        rule_count = db.execute(text("SELECT COUNT(*) FROM ci_compliance_rules")).scalar()
+
+        db.close()
+
+        return {
+            "status": "success",
+            "message": f"Seeded {success_count} statements",
+            "qa_rubrics_count": rubric_count,
+            "compliance_rules_count": rule_count,
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        logger.error(f"CI QA rubrics seeding error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
