@@ -73,19 +73,34 @@ async def list_template_packs(
     List available template packs for the current organization.
     Returns global templates + org-specific templates.
     """
-    query = db.query(MicrositeTemplatePack).filter(
-        MicrositeTemplatePack.status == status,
-        or_(
-            MicrositeTemplatePack.organization_id == current_user.organization_id,
-            MicrositeTemplatePack.organization_id.is_(None)
-        )
-    )
+    try:
+        # Get user's organization_id (may be None)
+        org_id = getattr(current_user, 'organization_id', None)
 
-    if category:
-        query = query.filter(MicrositeTemplatePack.category == category)
+        # Build query - if org_id is None, just get global templates
+        if org_id is not None:
+            query = db.query(MicrositeTemplatePack).filter(
+                MicrositeTemplatePack.status == status,
+                or_(
+                    MicrositeTemplatePack.organization_id == org_id,
+                    MicrositeTemplatePack.organization_id.is_(None)
+                )
+            )
+        else:
+            # User has no organization - only show global templates
+            query = db.query(MicrositeTemplatePack).filter(
+                MicrositeTemplatePack.status == status,
+                MicrositeTemplatePack.organization_id.is_(None)
+            )
 
-    templates = query.order_by(MicrositeTemplatePack.name).all()
-    return templates
+        if category:
+            query = query.filter(MicrositeTemplatePack.category == category)
+
+        templates = query.order_by(MicrositeTemplatePack.name).all()
+        return templates
+    except Exception as e:
+        logger.error(f"Error fetching microsite templates: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @router.get("/templates/{template_id}", response_model=TemplatePackResponse)

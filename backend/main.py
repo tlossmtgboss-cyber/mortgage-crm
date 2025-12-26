@@ -45255,21 +45255,41 @@ async def get_conversion_funnel(db: Session = Depends(get_db), current_user: Use
 
 @app.get("/api/v1/analytics/pipeline")
 async def get_pipeline_analytics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+    """
+    Get pipeline analytics with stage breakdown.
+    Uses raw SQL to avoid enum validation issues with legacy data.
+    """
+    from sqlalchemy import text
 
-    stage_breakdown = {}
-    for stage in LoanStage:
-        stage_loans = [l for l in loans if l.stage == stage]
-        stage_breakdown[stage.value] = {
-            "count": len(stage_loans),
-            "volume": sum([l.amount for l in stage_loans if l.amount])
+    try:
+        # Use raw SQL to avoid ORM enum issues
+        query = text("""
+            SELECT id, stage, amount
+            FROM loans
+            WHERE loan_officer_id = :user_id
+        """)
+        result = db.execute(query, {"user_id": current_user.id})
+        loans_data = result.fetchall()
+
+        # Build stage breakdown manually
+        stage_breakdown = {}
+        for stage in LoanStage:
+            stage_loans = [l for l in loans_data if l.stage == stage.value]
+            stage_breakdown[stage.value] = {
+                "count": len(stage_loans),
+                "volume": sum([l.amount for l in stage_loans if l.amount]) or 0
+            }
+
+        total_volume = sum([l.amount for l in loans_data if l.amount]) or 0
+
+        return {
+            "total_loans": len(loans_data),
+            "total_volume": total_volume,
+            "stage_breakdown": stage_breakdown
         }
-
-    return {
-        "total_loans": len(loans),
-        "total_volume": sum([l.amount for l in loans if l.amount]),
-        "stage_breakdown": stage_breakdown
-    }
+    except Exception as e:
+        logger.error(f"Error in pipeline analytics: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/v1/analytics/scorecard")
 async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
