@@ -40749,6 +40749,98 @@ def calculate_referral_scores(data: dict) -> dict:
 # LOANS CRUD
 # ============================================================================
 
+# IMPORTANT: This route MUST be defined BEFORE /loans/{loan_id} to avoid route conflicts
+@app.delete("/api/v1/loans/bulk-delete")
+@app.post("/api/v1/loans/bulk-delete")
+async def bulk_delete_loans(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Bulk delete multiple loans. Admin users, master user (id=1), or users with loans.delete_all permission can use this.
+    """
+    # Parse loan_ids from request body
+    try:
+        body = await request.json()
+        # Handle both array format [1,2,3] and object format {"loan_ids": [1,2,3]}
+        if isinstance(body, list):
+            loan_ids = body
+        elif isinstance(body, dict):
+            loan_ids = body.get('loan_ids', body.get('ids', []))
+        else:
+            loan_ids = []
+        loan_ids = [int(id) for id in loan_ids]  # Ensure integers
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
+    # Check permissions - allow admin role, master user, or users with specific permission
+    is_admin = getattr(current_user, 'role', None) == 'admin'
+    is_master = current_user.id == 1
+    has_delete_permission = has_permission(current_user.id, 'loans.delete_all', db)
+
+    if not (is_admin or is_master or has_delete_permission):
+        raise HTTPException(status_code=403, detail="You don't have permission to bulk delete loans")
+
+    if not loan_ids:
+        raise HTTPException(status_code=400, detail="No loan IDs provided")
+
+    deleted_count = 0
+    errors = []
+
+    for loan_id in loan_ids:
+        try:
+            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            if not loan:
+                errors.append(f"Loan {loan_id} not found")
+                continue
+
+            # Delete related records using raw SQL for safety
+            from sqlalchemy import inspect
+            inspector = inspect(db.bind)
+            existing_tables = set(inspector.get_table_names())
+
+            tables_to_clean = [
+                ("activities", "loan_id"),
+                ("tasks", "loan_id"),
+                ("ai_tasks", "loan_id"),
+                ("notes", "loan_id"),
+                ("communications", "loan_id"),
+                ("workflow_executions", "loan_id"),
+                ("loan_conditions", "loan_id"),
+                ("loan_documents", "loan_id"),
+                ("loan_team_members", "loan_id"),
+                ("notifications", "loan_id"),
+                ("stage_history", "loan_id"),
+                ("loan_milestones", "loan_id"),
+                ("power_play_history", "loan_id"),
+                ("smart_docs_needs_list", "loan_id"),
+            ]
+
+            for table, column in tables_to_clean:
+                if table in existing_tables:
+                    try:
+                        db.execute(text(f"DELETE FROM {table} WHERE {column} = :loan_id"), {"loan_id": loan_id})
+                    except Exception:
+                        pass  # Ignore errors for optional tables
+
+            # Delete the loan
+            db.delete(loan)
+            deleted_count += 1
+
+        except Exception as e:
+            errors.append(f"Failed to delete loan {loan_id}: {str(e)}")
+
+    db.commit()
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "errors": errors,
+        "message": f"Successfully deleted {deleted_count} loans" + (f" with {len(errors)} errors" if errors else "")
+    }
+
+
 @app.post("/api/v1/loans/", response_model=LoanResponse, status_code=201)
 async def create_loan(
     loan: LoanCreate,

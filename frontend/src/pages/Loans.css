@@ -633,3 +633,42 @@
     width: 100%;
   }
 }
+
+/* Bulk delete and checkbox styles */
+.checkbox-column {
+  width: 40px;
+  text-align: center;
+}
+
+.checkbox-column input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.loans-table tr.selected {
+  background-color: #e8f4fd !important;
+}
+
+.loans-table tr.selected:hover {
+  background-color: #d0e8f9 !important;
+}
+
+.btn-danger {
+  padding: var(--space-sm) var(--space-md);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border: none;
+  border-radius: var(--radius-base);
+  color: white;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}

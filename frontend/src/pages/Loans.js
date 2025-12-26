@@ -30,6 +30,7 @@ function Loans() {
   const [statusDropdown, setStatusDropdown] = useState({ show: false, loanId: null, position: { top: 0, left: 0 } });
   const [duplicateMap, setDuplicateMap] = useState({});
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
+  const [selectedLoans, setSelectedLoans] = useState([]);
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -335,6 +336,52 @@ function Loans() {
     }
   };
 
+  // Bulk selection and delete handlers
+  const handleSelectLoan = (loanId, e) => {
+    e.stopPropagation(); // Prevent row click navigation
+    setSelectedLoans(prev =>
+      prev.includes(loanId)
+        ? prev.filter(id => id !== loanId)
+        : [...prev, loanId]
+    );
+  };
+
+  const handleSelectAll = (e) => {
+    e.stopPropagation();
+    if (selectedLoans.length === filteredLoans.length) {
+      setSelectedLoans([]);
+    } else {
+      setSelectedLoans(filteredLoans.map(loan => loan.id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedLoans.length === 0) {
+      alert('No loans selected');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedLoans.length} loan${selectedLoans.length > 1 ? 's' : ''}?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      const result = await loansAPI.bulkDelete(selectedLoans);
+      alert(`Successfully deleted ${result.deleted_count} loans${result.errors?.length > 0 ? ` with ${result.errors.length} errors` : ''}`);
+      setSelectedLoans([]);
+      loadLoans();
+    } catch (err) {
+      console.error('Failed to bulk delete loans:', err);
+      const errorDetail = err.response?.data?.detail;
+      const errorMessage = typeof errorDetail === 'string'
+        ? errorDetail
+        : (errorDetail?.message || err.message || 'Unknown error');
+      alert('Failed to delete loans: ' + errorMessage);
+    }
+  };
+
   // Status dropdown handlers
   const handleStatusClick = (e, loanId) => {
     e.stopPropagation(); // Prevent row click navigation
@@ -494,6 +541,11 @@ function Loans() {
           <p>{safeLoans.filter(loan => !isFundedLoan(loan)).length} active loans</p>
         </div>
         <div className="header-actions">
+          {selectedLoans.length > 0 && (
+            <button className="btn-danger" onClick={handleBulkDelete}>
+              Delete Selected ({selectedLoans.length})
+            </button>
+          )}
           <button className="btn-secondary" onClick={handleExport}>
             Export
           </button>
@@ -555,6 +607,14 @@ function Loans() {
         <table className="loans-table">
           <thead>
             <tr>
+              <th className="checkbox-column">
+                <input
+                  type="checkbox"
+                  checked={filteredLoans.length > 0 && selectedLoans.length === filteredLoans.length}
+                  onChange={handleSelectAll}
+                  title="Select all"
+                />
+              </th>
               <th>Borrower</th>
               <th>Loan Amount</th>
               <th>Rate Lock</th>
@@ -568,10 +628,17 @@ function Loans() {
             {filteredLoans.map((loan) => (
               <tr
                 key={loan.id}
-                className={hasDuplicate(loan.id) ? 'has-duplicate' : ''}
+                className={`${hasDuplicate(loan.id) ? 'has-duplicate' : ''} ${selectedLoans.includes(loan.id) ? 'selected' : ''}`}
                 onClick={() => navigate(`/loans/${loan.id}`)}
                 style={{ cursor: 'pointer' }}
               >
+                <td className="checkbox-column" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLoans.includes(loan.id)}
+                    onChange={(e) => handleSelectLoan(loan.id, e)}
+                  />
+                </td>
                 <td className="borrower-name">
                   <div className="borrower-info">
                     <span>{loan.borrower || loan.borrower_name}</span>

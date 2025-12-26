@@ -203,6 +203,10 @@ export const loansAPI = {
   delete: async (id) => {
     await api.delete(`/api/v1/loans/${id}`);
   },
+  bulkDelete: async (loanIds) => {
+    const response = await api.post('/api/v1/loans/bulk-delete', loanIds);
+    return response.data;
+  },
 };
 
 // Tasks
