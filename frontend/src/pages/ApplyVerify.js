@@ -15,8 +15,8 @@ export default function ApplyVerify() {
 
     if (token) {
       // Redirect to backend API for verification
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
-      window.location.href = `${apiUrl}/api/v1/borrower-auth/email/verify?token=${token}`;
+      // HARDCODED to ensure correct URL - the env var may have old Railway URL
+      window.location.href = `https://api.perenniaai.com/api/v1/borrower-auth/email/verify?token=${token}`;
     } else {
       // No token, redirect to login page
       window.location.href = '/apply/login';
