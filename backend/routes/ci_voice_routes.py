@@ -2021,3 +2021,32 @@ async def health_check():
         "service": "ci-voice",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/diagnostic/rubrics")
+async def diagnostic_rubrics(db: Session = Depends(get_db)):
+    """Diagnostic endpoint to check rubrics data - no auth required."""
+    try:
+        result = db.execute(text("""
+            SELECT COUNT(*) as count FROM ci_qa_rubrics WHERE is_active = true
+        """))
+        count = result.scalar() or 0
+
+        # Get sample rubrics
+        samples = db.execute(text("""
+            SELECT id, name, category FROM ci_qa_rubrics
+            WHERE is_active = true LIMIT 5
+        """))
+        sample_list = [{"id": str(r[0]), "name": r[1], "category": r[2]} for r in samples.fetchall()]
+
+        return {
+            "status": "ok",
+            "rubrics_count": count,
+            "samples": sample_list
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "rubrics_count": 0
+        }
