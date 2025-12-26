@@ -55674,6 +55674,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Microsite Platform migration skipped: {e}")
 
+            # Run Conversation Intelligence Platform migration (call recordings, QA, coaching)
+            try:
+                from migrations.add_conversation_intelligence_platform import run_migration as run_ci_platform_migration
+                run_ci_platform_migration()
+                logger.info("✅ Conversation Intelligence Platform migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Conversation Intelligence Platform migration skipped: {e}")
+
             # Seed default SLA Workflow configurations
             try:
                 seed_workflow_configurations()
