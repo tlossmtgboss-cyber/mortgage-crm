@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/v1/borrower-auth", tags=["borrower-auth"])
 # CONFIGURATION
 # =============================================================================
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://mortgage-crm-nine.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     logger.critical("JWT_SECRET environment variable is not set! Authentication will fail.")
@@ -984,8 +984,8 @@ async def request_email_login(
     })
     db.commit()
 
-    # TODO: Send email with magic link
-    magic_link = f"{FRONTEND_URL}/apply/verify?token={magic_token}"
+    # Magic link goes to backend API which then redirects to frontend with auth token
+    magic_link = f"{BACKEND_URL}/api/v1/borrower-auth/email/verify?token={magic_token}"
 
     # Send the magic link email
     first_name = request.first_name or "there"
@@ -2650,7 +2650,7 @@ async def submit_application(
         # Build portal URL with token if available
         portal_url = None
         if workspace_slug:
-            base_domain = os.getenv("PURL_BASE_DOMAIN", "mortgage-crm-nine.vercel.app")
+            base_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
             portal_url = f"https://{base_domain}/portal/{workspace_slug}"
             try:
                 if portal_token:
