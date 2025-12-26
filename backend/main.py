@@ -38506,7 +38506,10 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     time_to_close_list = []
     for loan in funded_loans_recent:
         if loan.created_at and loan.funded_date:
-            days = (loan.funded_date - loan.created_at.date()).days
+            # Handle both datetime and date types for funded_date
+            funded_date = loan.funded_date.date() if hasattr(loan.funded_date, 'date') else loan.funded_date
+            created_date = loan.created_at.date() if hasattr(loan.created_at, 'date') else loan.created_at
+            days = (funded_date - created_date).days
             if days > 0:
                 time_to_close_list.append(days)
 

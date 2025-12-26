@@ -1740,8 +1740,7 @@ export default function PurchaseApplication() {
         if (!redirectUrl) {
           // Use perenniaai.com for production, current host for dev
           const isProduction = window.location.hostname === 'perenniaai.com' ||
-                               window.location.hostname === 'www.perenniaai.com' ||
-                               window.location.hostname.includes('vercel.app');
+                               window.location.hostname === 'www.perenniaai.com';
           const baseHost = isProduction ? 'www.perenniaai.com' : window.location.host;
           const protocol = isProduction ? 'https' : window.location.protocol.replace(':', '');
 

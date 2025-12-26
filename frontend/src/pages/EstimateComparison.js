@@ -8,7 +8,7 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
 
 // Default fallback URL if no Calendly integration is configured
 const DEFAULT_CALENDLY_URL = "https://calendly.com/timlossteam/client-reengagement-clone?hide_event_type_details=1&hide_gdpr_banner=1";
-const CUSTOM_QUOTE_URL = "https://mortgage-crm-nine.vercel.app/apply/purchase";
+const CUSTOM_QUOTE_URL = "https://www.perenniaai.com/apply/purchase";
 
 function EstimateComparison() {
   // State for estimates A and B
