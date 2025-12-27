@@ -365,17 +365,14 @@
 
 /* Info Bar - LO Info on Left, Loan Details on Right */
 .portal-info-bar {
-  background: var(--portal-gray-50);
-  border-radius: var(--portal-radius);
-  padding: 20px 24px;
   margin-bottom: 16px;
-  border: 1px solid var(--portal-border);
 }
 
 .info-bar-content {
   display: flex;
   justify-content: space-between;
-  gap: 32px;
+  align-items: stretch;
+  gap: 16px;
 }
 
 /* Left Side - Loan Officer Info */
@@ -384,6 +381,11 @@
   flex-direction: column;
   gap: 16px;
   flex-shrink: 0;
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius);
+  padding: 20px 24px;
+  border: 1px solid var(--portal-border);
+  min-width: 220px;
 }
 
 .lo-info-section {
@@ -457,6 +459,11 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 16px 24px;
   flex: 1;
+  background: var(--portal-gray-50);
+  border-radius: var(--portal-radius);
+  padding: 20px 24px;
+  border: 1px solid var(--portal-border);
+  align-content: center;
 }
 
 .loan-detail-item {
