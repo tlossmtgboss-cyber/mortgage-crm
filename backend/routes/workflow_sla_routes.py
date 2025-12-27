@@ -2408,6 +2408,135 @@ async def create_missing_linked_tasks(
         return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
 
 
+@router.post("/test/create-workflow-instance")
+async def test_create_workflow_instance(
+    lead_id: int = Query(..., description="Lead ID to enroll"),
+    workflow_key: str = Query("prospect", description="Workflow key (prospect, prequal, etc.)"),
+    db: Session = Depends(get_db)
+):
+    """
+    TEST ENDPOINT: Create a new workflow instance and generate tasks.
+    Verifies the complete workflow → task → linked task flow.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+    import traceback
+
+    results = {
+        "success": False,
+        "workflow_instance_id": None,
+        "tasks_generated": 0,
+        "linked_tasks_created": 0,
+        "steps": []
+    }
+
+    try:
+        # Step 1: Verify lead exists and get owner
+        lead = db.execute(text("""
+            SELECT id, name, owner_id FROM leads WHERE id = :id
+        """), {"id": lead_id}).fetchone()
+
+        if not lead:
+            return {"success": False, "error": f"Lead {lead_id} not found"}
+
+        results["steps"].append(f"1. Found lead: {lead[1]} (owner_id={lead[2]})")
+
+        # Step 2: Get workflow configuration
+        config = db.execute(text("""
+            SELECT id, workflow_key, workflow_name
+            FROM workflow_configurations
+            WHERE workflow_key = :key AND is_active = true
+            LIMIT 1
+        """), {"key": workflow_key}).fetchone()
+
+        if not config:
+            return {"success": False, "error": f"Workflow '{workflow_key}' not found"}
+
+        results["steps"].append(f"2. Found workflow config: {config[2]} (id={config[0]})")
+
+        # Step 3: Create workflow instance
+        db.execute(text("""
+            INSERT INTO workflow_instances (
+                organization_id, workflow_configuration_id, lead_id,
+                status, started_at, trigger_milestone_entered_at,
+                last_task_generated_day, created_at
+            ) VALUES (
+                1, :config_id, :lead_id,
+                'active', NOW(), NOW(),
+                -1, NOW()
+            )
+        """), {"config_id": config[0], "lead_id": lead_id})
+        db.flush()
+
+        # Get the new instance ID
+        instance = db.execute(text("""
+            SELECT id FROM workflow_instances
+            WHERE lead_id = :lead_id AND workflow_configuration_id = :config_id
+            ORDER BY id DESC LIMIT 1
+        """), {"lead_id": lead_id, "config_id": config[0]}).fetchone()
+
+        if not instance:
+            return {"success": False, "error": "Failed to create workflow instance"}
+
+        instance_id = instance[0]
+        results["workflow_instance_id"] = instance_id
+        results["steps"].append(f"3. Created workflow instance: {instance_id}")
+
+        db.commit()
+
+        # Step 4: Generate tasks using the TaskGeneratorService
+        from services.workflow_task_generator import TaskGeneratorService
+        generator = TaskGeneratorService(db)
+        gen_result = generator.generate_tasks_for_instance(instance_id, force=True)
+
+        results["tasks_generated"] = len(gen_result.get("tasks_created", []))
+        results["steps"].append(f"4. Generated {results['tasks_generated']} workflow task instances")
+
+        # Step 5: Check linked tasks created
+        linked = db.execute(text("""
+            SELECT COUNT(*) FROM tasks
+            WHERE workflow_task_instance_id IN (
+                SELECT id FROM workflow_task_instances
+                WHERE workflow_instance_id = :id
+            )
+        """), {"id": instance_id}).scalar()
+
+        results["linked_tasks_created"] = linked or 0
+        results["steps"].append(f"5. Created {results['linked_tasks_created']} linked tasks in main table")
+
+        # Step 6: Get sample task
+        sample_task = db.execute(text("""
+            SELECT t.id, t.title, t.owner_id, t.lead_id, t.workflow_task_instance_id
+            FROM tasks t
+            WHERE t.workflow_task_instance_id IN (
+                SELECT id FROM workflow_task_instances
+                WHERE workflow_instance_id = :id
+            )
+            LIMIT 1
+        """), {"id": instance_id}).fetchone()
+
+        if sample_task:
+            results["sample_linked_task"] = {
+                "id": sample_task[0],
+                "title": sample_task[1],
+                "owner_id": sample_task[2],
+                "lead_id": sample_task[3],
+                "workflow_task_instance_id": sample_task[4]
+            }
+
+        results["success"] = True
+        return results
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "steps": results["steps"]
+        }
+
+
 @router.get("/diagnostic/tasks-for-user/{user_id}")
 async def get_tasks_for_user_diagnostic(
     user_id: int,
