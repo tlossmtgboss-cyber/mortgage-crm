@@ -180,14 +180,14 @@ class SmartDocsS3Service:
             if isinstance(file_content, bytes):
                 body = file_content
                 file_size = len(file_content)
-                logger.info(f"S3 upload: using bytes directly, size={file_size}")
+                logger.debug(f"S3 upload: using bytes directly, size={file_size}")
             else:
                 # Read from file-like object
-                logger.info(f"S3 upload: reading from file-like object type={type(file_content)}")
+                logger.debug(f"S3 upload: reading from file-like object type={type(file_content)}")
                 body = file_content.read()
                 file_size = len(body)
 
-            logger.info(f"S3 upload: body type={type(body)}, size={file_size}, bucket={self.bucket_name}, key={storage_key}")
+            logger.debug(f"S3 upload: size={file_size}, key={storage_key}")
 
             # Build put_object params
             put_params = {
@@ -202,12 +202,12 @@ class SmartDocsS3Service:
                     str(k): str(v) for k, v in metadata.items()
                 }
 
-            logger.info(f"S3 upload: calling put_object...")
+            logger.debug("S3 upload: calling put_object...")
             # Upload using put_object (simpler than upload_fileobj)
             self.s3_client.put_object(**put_params)
-            logger.info(f"S3 upload: put_object completed successfully")
+            logger.debug("S3 upload: put_object completed successfully")
 
-            logger.info(f"Uploaded document to S3: {storage_key} ({file_size} bytes)")
+            logger.info(f"Uploaded to S3: {storage_key} ({file_size} bytes)")
 
             return {
                 "success": True,
