@@ -688,14 +688,30 @@ export default function PartnerClientDetail() {
               conversations: []
             });
             return;
+          } else {
+            // Handle JWT auth errors with specific messages
+            if (response.status === 401) {
+              throw new Error('Session expired. Please log in again.');
+            } else if (response.status === 403) {
+              throw new Error('You do not have permission to view this client.');
+            } else if (response.status === 404) {
+              throw new Error('Client not found.');
+            }
+            // For other errors, fall through to try partner token auth
           }
         } catch (jwtError) {
           console.error('JWT auth failed:', jwtError);
+          // If we have a specific error message, show it instead of falling through
+          if (jwtError.message && jwtError.message !== 'Failed to fetch') {
+            setError(jwtError.message);
+            setLoading(false);
+            return;
+          }
         }
       }
 
       if (!partnerToken) {
-        setError('Authentication required. Please log in.');
+        setError('Authentication required. Please log in to view this client.');
         return;
       }
 
