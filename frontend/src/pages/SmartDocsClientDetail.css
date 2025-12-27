@@ -447,6 +447,28 @@
   background: #2563eb;
 }
 
+/* Storage Error State */
+.no-preview.storage-error {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+}
+
+.no-preview.storage-error h3 {
+  color: #b45309;
+}
+
+.no-preview.storage-error p {
+  color: #78350f;
+}
+
+.no-preview .help-text {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
 /* No Selection State */
 .no-selection {
   display: flex;

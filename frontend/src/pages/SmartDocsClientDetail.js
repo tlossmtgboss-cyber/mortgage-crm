@@ -448,7 +448,14 @@ function SmartDocsClientDetail() {
 
               {/* Document Preview */}
               <div className="document-preview">
-                {selectedDoc.file_url || selectedDoc.s3_url ? (
+                {selectedDoc.storage_error ? (
+                  <div className="no-preview storage-error">
+                    <span className="preview-icon">⚠️</span>
+                    <h3>Document Not Available</h3>
+                    <p>{selectedDoc.storage_error_message || 'The document file could not be found in storage.'}</p>
+                    <p className="help-text">Please ask the borrower to re-upload this document.</p>
+                  </div>
+                ) : selectedDoc.file_url || selectedDoc.s3_url ? (
                   <iframe
                     src={selectedDoc.file_url || selectedDoc.s3_url}
                     title={getDocTypeName(selectedDoc.doc_type)}

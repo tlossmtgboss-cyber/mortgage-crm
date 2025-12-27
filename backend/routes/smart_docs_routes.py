@@ -260,18 +260,25 @@ async def get_needs_list(
                 req["filename"] = latest_doc.file_name
                 req["uploaded_at"] = latest_doc.created_at.isoformat() if latest_doc.created_at else None
 
-                # Generate presigned URL for viewing
+                # Generate presigned URL for viewing - verify file exists first
                 if latest_doc.storage_key:
                     s3_service = get_smart_docs_s3_service()
                     if s3_service.is_available:
-                        url_result = s3_service.get_presigned_download_url(
-                            storage_key=latest_doc.storage_key,
-                            file_name=latest_doc.file_name,
-                            expires_in=3600  # 1 hour
-                        )
-                        if url_result.get("success"):
-                            req["file_url"] = url_result["presigned_url"]
-                            req["s3_url"] = url_result["presigned_url"]
+                        # Check if file actually exists in S3 before generating URL
+                        if s3_service.file_exists(latest_doc.storage_key):
+                            url_result = s3_service.get_presigned_download_url(
+                                storage_key=latest_doc.storage_key,
+                                file_name=latest_doc.file_name,
+                                expires_in=3600  # 1 hour
+                            )
+                            if url_result.get("success"):
+                                req["file_url"] = url_result["presigned_url"]
+                                req["s3_url"] = url_result["presigned_url"]
+                        else:
+                            # File doesn't exist in S3 - mark as storage error
+                            req["storage_error"] = True
+                            req["storage_error_message"] = "Document file not found in storage. Please re-upload."
+                            logger.warning(f"S3 file not found for document {latest_doc.id}: {latest_doc.storage_key}")
 
                 req["document_id"] = latest_doc.id
                 req["doc_date"] = latest_doc.doc_date.isoformat() if latest_doc.doc_date else None
@@ -1352,18 +1359,25 @@ async def get_client_queue_detail(
                 req["filename"] = latest_doc.file_name
                 req["uploaded_at"] = latest_doc.created_at.isoformat() if latest_doc.created_at else None
 
-                # Generate presigned URL for viewing
+                # Generate presigned URL for viewing - verify file exists first
                 if latest_doc.storage_key:
                     s3_service = get_smart_docs_s3_service()
                     if s3_service.is_available:
-                        url_result = s3_service.get_presigned_download_url(
-                            storage_key=latest_doc.storage_key,
-                            file_name=latest_doc.file_name,
-                            expires_in=3600  # 1 hour
-                        )
-                        if url_result.get("success"):
-                            req["file_url"] = url_result["presigned_url"]
-                            req["s3_url"] = url_result["presigned_url"]
+                        # Check if file actually exists in S3 before generating URL
+                        if s3_service.file_exists(latest_doc.storage_key):
+                            url_result = s3_service.get_presigned_download_url(
+                                storage_key=latest_doc.storage_key,
+                                file_name=latest_doc.file_name,
+                                expires_in=3600  # 1 hour
+                            )
+                            if url_result.get("success"):
+                                req["file_url"] = url_result["presigned_url"]
+                                req["s3_url"] = url_result["presigned_url"]
+                        else:
+                            # File doesn't exist in S3 - mark as storage error
+                            req["storage_error"] = True
+                            req["storage_error_message"] = "Document file not found in storage. Please re-upload."
+                            logger.warning(f"S3 file not found for document {latest_doc.id}: {latest_doc.storage_key}")
 
                 req["document_id"] = latest_doc.id
                 req["doc_date"] = latest_doc.doc_date.isoformat() if latest_doc.doc_date else None
@@ -2323,4 +2337,72 @@ async def create_test_loan(
         "loan_id": loan_id,
         "message": "Test loan created successfully",
         "url": f"https://www.perenniaai.com/loans/{loan_id}",
+    }
+
+
+@router.get("/diagnostic/storage-health")
+async def check_storage_health():
+    """Check S3 storage health and configuration."""
+    s3_service = get_smart_docs_s3_service()
+
+    return {
+        "s3_available": s3_service.is_available,
+        "bucket_name": s3_service.bucket_name,
+        "region": s3_service.region,
+        "prefix": s3_service.prefix,
+    }
+
+
+@router.get("/diagnostic/loan/{loan_id}/documents")
+async def check_loan_documents_storage(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Check storage status for all documents in a loan.
+    Returns which documents have valid S3 files and which are missing.
+    """
+    s3_service = get_smart_docs_s3_service()
+
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.loan_id == loan_id
+    ).all()
+
+    results = []
+    missing_count = 0
+    valid_count = 0
+
+    for doc in documents:
+        doc_info = {
+            "id": doc.id,
+            "file_name": doc.file_name,
+            "doc_type": doc.doc_type.value if doc.doc_type else None,
+            "status": doc.status,
+            "storage_key": doc.storage_key,
+            "file_size": doc.file_size,
+            "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        }
+
+        if doc.storage_key and s3_service.is_available:
+            exists = s3_service.file_exists(doc.storage_key)
+            doc_info["s3_exists"] = exists
+            if exists:
+                valid_count += 1
+            else:
+                missing_count += 1
+                doc_info["error"] = "File not found in S3"
+        else:
+            doc_info["s3_exists"] = False
+            doc_info["error"] = "No storage key or S3 not available"
+            missing_count += 1
+
+        results.append(doc_info)
+
+    return {
+        "loan_id": loan_id,
+        "total_documents": len(documents),
+        "valid_files": valid_count,
+        "missing_files": missing_count,
+        "s3_available": s3_service.is_available,
+        "documents": results,
     }

@@ -243,16 +243,45 @@ async def upload_document_for_requirement(
     # Use request.borrower_id if available, otherwise use a default (1 for primary borrower)
     borrower_id = request.borrower_id if request.borrower_id else 1
 
-    # Get S3 service and generate storage key
+    # Get S3 service - must verify availability and upload BEFORE creating DB record
     s3_service = get_smart_docs_s3_service()
+
+    # Check S3 availability
+    if not s3_service.is_available:
+        logger.error("S3 storage is not available - document upload will fail")
+        raise HTTPException(
+            status_code=503,
+            detail="Document storage is temporarily unavailable. Please try again later."
+        )
+
+    # Generate storage key
     storage_key = s3_service.generate_storage_key(
         loan_id=main_loan_id,
         borrower_id=borrower_id,
         file_name=file.filename
     )
 
-    # Create document record
+    # Upload file to S3 first
+    upload_result = s3_service.upload_file(
+        file_content=content,
+        storage_key=storage_key,
+        content_type=mime_type,
+        metadata={
+            "loan_id": str(main_loan_id),
+            "borrower_id": str(borrower_id),
+            "request_id": str(request_id),
+            "original_filename": file.filename
+        }
+    )
 
+    if not upload_result.get("success"):
+        logger.error(f"S3 upload failed: {upload_result.get('error')}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to store document: {upload_result.get('error', 'Unknown error')}"
+        )
+
+    # Only create document record AFTER successful S3 upload
     document = SmartDocument(
         request_id=request_id,
         loan_id=main_loan_id,
@@ -267,23 +296,6 @@ async def upload_document_for_requirement(
     db.add(document)
     db.commit()
     db.refresh(document)
-
-    # Upload file to S3
-    upload_result = s3_service.upload_file(
-        file_content=content,
-        storage_key=storage_key,
-        content_type=mime_type,
-        metadata={
-            "loan_id": str(main_loan_id),
-            "borrower_id": str(borrower_id),
-            "document_id": str(document.id),
-            "request_id": str(request_id),
-            "original_filename": file.filename
-        }
-    )
-
-    if not upload_result.get("success"):
-        logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
 
     # Process the document through the review pipeline (optional - don't fail upload if processing fails)
     result = None
