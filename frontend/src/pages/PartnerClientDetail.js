@@ -891,6 +891,8 @@ export default function PartnerClientDetail() {
           activities={activities}
           stageHistory={stageHistory}
           chatMessages={chatMessages}
+          clientId={parseInt(clientId)}
+          onNoteAdded={loadActivities}
         />
       </div>
 

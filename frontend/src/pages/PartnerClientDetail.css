@@ -861,6 +861,58 @@
   grid-column: 1 / -1;
 }
 
+/* Add Note Form */
+.add-note-form {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.note-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.note-input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.note-input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.add-note-btn {
+  padding: 0.75rem 1.25rem;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.add-note-btn:hover:not(:disabled) {
+  background: #1a7070;
+}
+
+.add-note-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
 /* Empty state styling */
 .empty-state {
   text-align: center;
