@@ -5136,7 +5136,11 @@ async def get_current_user(
                 ).first()
 
                 if impersonated_user:
-                    logger.info(f"Impersonation active: {actual_user.email} → {impersonated_user.email}")
+                    logger.info(f"Impersonation active: {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                    # PHASE 3: Store impersonation info on request state for middleware
+                    request.state.impersonation_session = session
+                    request.state.impersonation_mode = session.mode
+                    request.state.actual_user = actual_user
                     return impersonated_user
 
     # No impersonation, return actual user
@@ -5194,7 +5198,11 @@ async def get_current_user_flexible(
                         ).first()
 
                         if impersonated_user:
-                            logger.info(f"Impersonation active (API key): {actual_user.email} → {impersonated_user.email}")
+                            logger.info(f"Impersonation active (API key): {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                            # PHASE 3: Store impersonation info on request state for middleware
+                            request.state.impersonation_session = session
+                            request.state.impersonation_mode = session.mode
+                            request.state.actual_user = actual_user
                             return impersonated_user
 
                 return actual_user
@@ -5245,7 +5253,11 @@ async def get_current_user_flexible(
                 ).first()
 
                 if impersonated_user:
-                    logger.info(f"Impersonation active (Bearer API key): {actual_user.email} → {impersonated_user.email}")
+                    logger.info(f"Impersonation active (Bearer API key): {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                    # PHASE 3: Store impersonation info on request state for middleware
+                    request.state.impersonation_session = session
+                    request.state.impersonation_mode = session.mode
+                    request.state.actual_user = actual_user
                     return impersonated_user
 
         return actual_user
@@ -34794,7 +34806,7 @@ async def health_check(db: Session = Depends(get_db)):
     """Basic health check - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.4"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.5"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
@@ -34808,7 +34820,7 @@ async def api_health_check(db: Session = Depends(get_db)):
     """API health check endpoint at /api/v1/health - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.4"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.5"}
     except Exception as e:
         logger.error(f"API health check failed: {e}")
         return JSONResponse(
@@ -34820,7 +34832,7 @@ async def api_health_check(db: Session = Depends(get_db)):
 @app.get("/deploy-test")
 async def deploy_test():
     """Simple endpoint to verify deployment - added 2025-12-27T22:45"""
-    return {"deployed_at": "2025-12-27T22:45:00Z", "version": "2025.12.27.4", "test": "smart-docs-migration"}
+    return {"deployed_at": "2025-12-27T22:45:00Z", "version": "2025.12.27.5", "test": "smart-docs-migration"}
 
 
 @app.get("/debug/routers")
