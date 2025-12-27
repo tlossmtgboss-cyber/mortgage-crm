@@ -93,6 +93,7 @@ class DocumentExtraction(Base):
         Index("ix_doc_extractions_review_status", "review_status"),
         Index("ix_doc_extractions_detected_owner", "detected_owner"),
         Index("ix_doc_extractions_created_at", "created_at"),
+        {"extend_existing": True},
     )
 
 

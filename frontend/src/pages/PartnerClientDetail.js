@@ -356,7 +356,61 @@ const ContactCard = ({ client, loanOfficer }) => (
   </div>
 );
 
-// Key Dates Card
+// Important Dates Card - Shows key dates from the pre-approval process
+const ImportantDatesCard = ({ client, stageHistory }) => {
+  // Build list of important dates from stage history and client data
+  const formatDate = (dateValue) => {
+    if (!dateValue) return null;
+    return new Date(dateValue).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Get stage-specific dates from history
+  const getStageDate = (stageName) => {
+    const entry = stageHistory?.find(h =>
+      h.to_stage?.toLowerCase().replace(/[_-]/g, '') === stageName.toLowerCase().replace(/[_-]/g, '')
+    );
+    return entry?.changed_at;
+  };
+
+  const importantDates = [
+    { label: 'Application Started', value: client?.created_at, icon: '📝' },
+    { label: 'Pre-Qualified', value: getStageDate('qualified'), icon: '✓' },
+    { label: 'Pre-Approved', value: getStageDate('pre_approved') || getStageDate('preapproval'), icon: '🎯' },
+    { label: 'Under Contract', value: getStageDate('under_contract'), icon: '📋' },
+    { label: 'Clear to Close', value: getStageDate('clear_to_close'), icon: '🏁' },
+    { label: 'Expected Close', value: client?.expected_close_date, icon: '📅' },
+  ].filter(d => d.value);
+
+  return (
+    <div className="dashboard-card important-dates-card">
+      <h2>Important Dates</h2>
+      {importantDates.length === 0 ? (
+        <div className="empty-state">
+          <span className="empty-icon">📅</span>
+          <p>No milestone dates recorded yet</p>
+        </div>
+      ) : (
+        <div className="important-dates-list">
+          {importantDates.map((date, idx) => (
+            <div key={idx} className="important-date-item">
+              <span className="date-icon">{date.icon}</span>
+              <div className="date-info">
+                <span className="date-label">{date.label}</span>
+                <span className="date-value">{formatDate(date.value)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Key Dates Card (legacy - kept for reference)
 const KeyDatesCard = ({ client }) => {
   const dates = [
     { label: 'Expected Close', value: client?.expected_close_date },
@@ -720,23 +774,8 @@ export default function PartnerClientDetail() {
 
       {/* Main Dashboard Grid */}
       <div className="dashboard-grid">
-        {/* Progress Overview Card */}
-        <div className="dashboard-card progress-overview-card">
-          <h2>Loan Progress</h2>
-          <div className="progress-overview-content">
-            <ProgressCircle percentage={progressPercent} />
-            <div className="progress-stats">
-              <div className="stat-item">
-                <span className="stat-value">{stageInfo.label}</span>
-                <span className="stat-label">Current Stage</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-value">{progressPercent}%</span>
-                <span className="stat-label">Complete</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Important Dates Card */}
+        <ImportantDatesCard client={client} stageHistory={stageHistory} />
 
         {/* Loan Summary */}
         <LoanSummaryCard client={client} />

@@ -59378,6 +59378,60 @@ async def fix_referral_partners_schema_migration(
         }
 
 
+@app.post("/api/v1/public/migrations/set-test-logo", response_model=None)
+async def set_test_logo_migration(
+    admin_key: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Set test company logo for users.
+    Requires admin_key=perennia-admin-2024 to execute.
+    """
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
+
+    TEST_LOGO_URL = "https://www.cmgfi.com/hubfs/CMGFinancial_logo_2-Color.png"
+
+    try:
+        logger.info("Running migration: set test logo")
+
+        # Find matching users
+        result = db.execute(text("""
+            SELECT id, email, full_name, company_logo_url
+            FROM users
+            WHERE email ILIKE '%tim%' OR email ILIKE '%loss%' OR email ILIKE '%admin%'
+            LIMIT 10
+        """))
+        users_before = result.fetchall()
+
+        # Update users with logo
+        result = db.execute(text("""
+            UPDATE users
+            SET company_logo_url = :logo_url
+            WHERE email ILIKE '%tim%' OR email ILIKE '%loss%' OR email ILIKE '%admin%'
+            RETURNING id, email
+        """), {"logo_url": TEST_LOGO_URL})
+
+        updated = result.fetchall()
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Updated {len(updated)} users with test logo",
+            "logo_url": TEST_LOGO_URL,
+            "users_before": [{"id": u[0], "email": u[1], "name": u[2], "logo": u[3]} for u in users_before],
+            "updated_users": [{"id": u[0], "email": u[1]} for u in updated]
+        }
+
+    except Exception as e:
+        logger.error(f"Set test logo migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/api/v1/public/debug/dashboard-test")
 async def public_debug_dashboard_test(
     admin_key: str,
