@@ -23,17 +23,25 @@ const API_BASE = process.env.REACT_APP_API_URL || '';
 
 // Lifecycle stages with colors
 const LIFECYCLE_STAGES = {
-  new: { label: 'New Lead', color: '#3b82f6', icon: '✨' },
-  new_lead: { label: 'New Lead', color: '#3b82f6', icon: '✨' },
-  contacted: { label: 'Contacted', color: '#8b5cf6', icon: '📞' },
-  qualified: { label: 'Qualified', color: '#06b6d4', icon: '✅' },
+  // Main pipeline stages
+  new: { label: 'New', color: '#3b82f6', icon: '✨' },
+  new_lead: { label: 'New', color: '#3b82f6', icon: '✨' },
+  attempted_contact: { label: 'Attempted Contact', color: '#8b5cf6', icon: '📞' },
+  contacted: { label: 'Attempted Contact', color: '#8b5cf6', icon: '📞' },
+  prospect: { label: 'Prospect', color: '#06b6d4', icon: '👤' },
+  application: { label: 'Application', color: '#0ea5e9', icon: '📋' },
+  pre_qualified: { label: 'Pre-Qualified', color: '#14b8a6', icon: '✅' },
+  prequalified: { label: 'Pre-Qualified', color: '#14b8a6', icon: '✅' },
+  qualified: { label: 'Pre-Qualified', color: '#14b8a6', icon: '✅' },
   pre_approved: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
-  preapproval: { label: 'Pre-Approval', color: '#10b981', icon: '🎯' },
-  under_contract: { label: 'Under Contract', color: '#f59e0b', icon: '📝' },
-  processing: { label: 'Processing', color: '#ec4899', icon: '⚙️' },
-  clear_to_close: { label: 'Clear to Close', color: '#22c55e', icon: '🏁' },
-  funded: { label: 'Funded', color: '#059669', icon: '🎉' },
-  closed: { label: 'Closed', color: '#059669', icon: '🏠' },
+  preapproval: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
+  preapproved: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
+
+  // Exit stages
+  nurture: { label: 'Nurture', color: '#f59e0b', icon: '🌱' },
+  withdrawn: { label: 'Withdrawn', color: '#ef4444', icon: '🚫' },
+  does_not_qualify: { label: 'Does Not Qualify', color: '#6b7280', icon: '❌' },
+  dnq: { label: 'Does Not Qualify', color: '#6b7280', icon: '❌' },
 };
 
 // Activity type configuration
@@ -47,6 +55,8 @@ const ACTIVITY_CONFIG = {
   document: { label: 'Document', icon: '📄', color: '#06b6d4' },
   status_change: { label: 'Status Update', icon: '🔄', color: '#218D8D' },
   stage_change: { label: 'Stage Change', icon: '📊', color: '#218D8D' },
+  sarah_ai_user: { label: 'Client Message', icon: '👤', color: '#64748b' },
+  sarah_ai_assistant: { label: 'Sarah AI', icon: '🤖', color: '#218D8D' },
 };
 
 // Format relative time
@@ -196,7 +206,7 @@ const DocumentStatsCard = ({ documents, loanId, navigate }) => {
 };
 
 // Activity Timeline Card
-const ActivityTimelineCard = ({ activities, stageHistory }) => {
+const ActivityTimelineCard = ({ activities, stageHistory, chatMessages }) => {
   const getTimeline = useCallback(() => {
     const timeline = [];
 
@@ -219,9 +229,21 @@ const ActivityTimelineCard = ({ activities, stageHistory }) => {
       });
     });
 
+    // Add Sarah AI chat messages
+    (chatMessages || []).forEach(msg => {
+      const isUser = msg.role === 'user';
+      timeline.push({
+        id: `chat-${msg.id}`,
+        type: isUser ? 'sarah_ai_user' : 'sarah_ai_assistant',
+        content: msg.content?.length > 150 ? msg.content.substring(0, 150) + '...' : msg.content,
+        created_at: msg.created_at,
+        user: isUser ? (msg.contact_name || 'Client') : 'Sarah AI',
+      });
+    });
+
     timeline.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return timeline;
-  }, [activities, stageHistory]);
+  }, [activities, stageHistory, chatMessages]);
 
   const timeline = getTimeline();
 
@@ -241,6 +263,7 @@ const ActivityTimelineCard = ({ activities, stageHistory }) => {
         <ul className="activity-list">
           {timeline.slice(0, 8).map((item) => {
             const config = ACTIVITY_CONFIG[item.type] || { label: 'Update', icon: '📌', color: '#6b7280' };
+            const isChatMessage = item.type?.startsWith('sarah_ai_');
             return (
               <li key={item.id} className="activity-item">
                 <span
@@ -250,6 +273,11 @@ const ActivityTimelineCard = ({ activities, stageHistory }) => {
                   {config.icon}
                 </span>
                 <div className="activity-content">
+                  {isChatMessage && item.user && (
+                    <span className="activity-user" style={{ color: config.color, fontWeight: 600 }}>
+                      {item.user}:
+                    </span>
+                  )}
                   <p className="activity-description">{item.content}</p>
                   <span className="activity-time">{formatRelativeTime(item.created_at)}</span>
                 </div>
@@ -410,39 +438,6 @@ const ImportantDatesCard = ({ client, stageHistory }) => {
   );
 };
 
-// Key Dates Card (legacy - kept for reference)
-const KeyDatesCard = ({ client }) => {
-  const dates = [
-    { label: 'Expected Close', value: client?.expected_close_date },
-    { label: 'Created', value: client?.created_at },
-    { label: 'Last Updated', value: client?.updated_at },
-  ].filter(d => d.value);
-
-  if (dates.length === 0) return null;
-
-  return (
-    <div className="dashboard-card dates-card">
-      <h2>Key Dates</h2>
-      <div className="dates-list">
-        {dates.map((date, idx) => (
-          <div key={idx} className="date-item">
-            <div className="date-info">
-              <span className="date-label">{date.label}</span>
-              <span className="date-value">
-                {new Date(date.value).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 // Main Component
 export default function PartnerClientDetail() {
   const { partnerId, clientId } = useParams();
@@ -454,6 +449,7 @@ export default function PartnerClientDetail() {
   const [activities, setActivities] = useState([]);
   const [stageHistory, setStageHistory] = useState([]);
   const [smartDocsData, setSmartDocsData] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
 
   useEffect(() => {
     loadClientData();
@@ -464,6 +460,7 @@ export default function PartnerClientDetail() {
       loadActivities();
       loadStageHistory();
       loadSmartDocsData();
+      loadChatMessages();
     }
   }, [clientData?.client?.id]);
 
@@ -499,6 +496,30 @@ export default function PartnerClientDetail() {
       }
     } catch (err) {
       console.error('Error loading stage history:', err);
+    }
+  };
+
+  const loadChatMessages = async () => {
+    try {
+      const jwtToken = localStorage.getItem('token');
+      if (!jwtToken) return;
+
+      const response = await fetch(
+        `${API_BASE}/api/v1/leads/${clientId}/chat-messages?limit=20`,
+        {
+          headers: {
+            'Authorization': `Bearer ${jwtToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setChatMessages(data.messages || []);
+      }
+    } catch (err) {
+      console.error('Error loading chat messages:', err);
     }
   };
 
@@ -759,6 +780,25 @@ export default function PartnerClientDetail() {
               <p className="property-address">📍 {formatAddress(client)}</p>
             </div>
           </div>
+
+          {/* Loan Summary - Centered */}
+          <div className="header-loan-summary">
+            <div className="summary-item">
+              <span className="summary-value highlight">{formatCurrency(client?.loan_amount)}</span>
+              <span className="summary-label">Loan Amount</span>
+            </div>
+            <div className="summary-divider"></div>
+            <div className="summary-item">
+              <span className="summary-value">{client?.loan_type || 'Conventional'}</span>
+              <span className="summary-label">Loan Type</span>
+            </div>
+            <div className="summary-divider"></div>
+            <div className="summary-item">
+              <span className="summary-value">{stageInfo.label}</span>
+              <span className="summary-label">Current Stage</span>
+            </div>
+          </div>
+
           <div className="header-right">
             <button className="btn-primary" onClick={() => setShowPreApprovalModal(true)}>
               Pre-Approval Letter
@@ -777,9 +817,6 @@ export default function PartnerClientDetail() {
         {/* Important Dates Card */}
         <ImportantDatesCard client={client} stageHistory={stageHistory} />
 
-        {/* Loan Summary */}
-        <LoanSummaryCard client={client} />
-
         {/* Documents */}
         <DocumentStatsCard
           documents={smartDocsData || documents}
@@ -791,13 +828,11 @@ export default function PartnerClientDetail() {
         <ActivityTimelineCard
           activities={activities}
           stageHistory={stageHistory}
+          chatMessages={chatMessages}
         />
 
         {/* Contact Information */}
         <ContactCard client={client} loanOfficer={client?.loan_officer} />
-
-        {/* Key Dates */}
-        <KeyDatesCard client={client} />
       </div>
 
       {/* Pre-Approval Modal */}

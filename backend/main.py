@@ -41495,6 +41495,122 @@ async def get_lead_stage_history(lead_id: int, db: Session = Depends(get_db), cu
         ]
     }
 
+@app.get("/api/v1/leads/{lead_id}/chat-messages")
+async def get_lead_chat_messages(lead_id: int, limit: int = 50, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get Sarah AI chat messages associated with a lead"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    messages = []
+
+    # Get chat sessions linked to this lead from chat_sessions table
+    try:
+        # First check if tables exist
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'chat_sessions'
+            )
+        """)).scalar()
+
+        if table_check:
+            # Get all chat sessions for this lead with their messages
+            sessions_result = db.execute(text("""
+                SELECT cs.id, cs.visitor_id, cs.contact_name, cs.contact_email,
+                       cs.current_phase, cs.intent_score, cs.created_at as session_started
+                FROM chat_sessions cs
+                WHERE cs.lead_id = :lead_id
+                ORDER BY cs.created_at DESC
+            """), {"lead_id": lead_id})
+
+            session_ids = []
+            sessions_info = {}
+            for row in sessions_result:
+                session_id = row[0]
+                session_ids.append(session_id)
+                sessions_info[str(session_id)] = {
+                    "visitor_id": row[1],
+                    "contact_name": row[2],
+                    "contact_email": row[3],
+                    "phase": row[4],
+                    "intent_score": row[5],
+                    "session_started": row[6].isoformat() if row[6] else None
+                }
+
+            # Get messages from those sessions
+            if session_ids:
+                messages_result = db.execute(text("""
+                    SELECT cm.id, cm.session_id, cm.role, cm.content, cm.turn_number,
+                           cm.phase_at_message, cm.created_at
+                    FROM chat_messages cm
+                    WHERE cm.session_id = ANY(:session_ids)
+                    ORDER BY cm.created_at DESC
+                    LIMIT :limit
+                """), {"session_ids": session_ids, "limit": limit})
+
+                for row in messages_result:
+                    session_id_str = str(row[1])
+                    session_info = sessions_info.get(session_id_str, {})
+                    messages.append({
+                        "id": str(row[0]),
+                        "session_id": session_id_str,
+                        "role": row[2],
+                        "content": row[3],
+                        "turn_number": row[4],
+                        "phase": row[5],
+                        "created_at": row[6].isoformat() if row[6] else None,
+                        "contact_name": session_info.get("contact_name"),
+                        "type": "sarah_ai_chat"
+                    })
+    except Exception as e:
+        logger.warning(f"Error fetching chat messages for lead {lead_id}: {e}")
+
+    # Also try to get messages from ai_chat_sessions table (alternative table name)
+    try:
+        alt_table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'ai_chat_sessions'
+            )
+        """)).scalar()
+
+        if alt_table_check:
+            alt_messages = db.execute(text("""
+                SELECT acs.id, acs.session_id, acm.role, acm.content, acm.created_at
+                FROM ai_chat_sessions acs
+                JOIN ai_chat_messages acm ON acm.session_id = acs.id
+                WHERE acs.lead_id = :lead_id
+                ORDER BY acm.created_at DESC
+                LIMIT :limit
+            """), {"lead_id": lead_id, "limit": limit})
+
+            for row in alt_messages:
+                messages.append({
+                    "id": str(row[0]),
+                    "session_id": str(row[1]),
+                    "role": row[2],
+                    "content": row[3],
+                    "created_at": row[4].isoformat() if row[4] else None,
+                    "type": "sarah_ai_chat"
+                })
+    except Exception as e:
+        logger.debug(f"ai_chat_sessions table not found or error: {e}")
+
+    # Sort all messages by created_at descending
+    messages.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+
+    return {
+        "lead_id": lead_id,
+        "lead_name": lead.name,
+        "messages": messages[:limit],
+        "total": len(messages)
+    }
+
+
 @app.get("/api/v1/leads/{lead_id}/circle-contacts")
 async def get_lead_circle_contacts(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     """Get the circle of cash flow contacts for a lead (trusted professionals from questionnaire)"""

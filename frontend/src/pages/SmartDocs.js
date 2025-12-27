@@ -397,7 +397,8 @@ function SmartDocs() {
   const handleCreateDuplicateTasks = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/v1/duplicates/create-tasks', {
+      const API_BASE = process.env.REACT_APP_API_URL || '';
+      const response = await fetch(`${API_BASE}/api/v1/duplicates/create-tasks`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

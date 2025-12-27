@@ -8,81 +8,96 @@
 import React from 'react';
 import './MilestoneProgressTracker.css';
 
-// Define the key stages in order (simplified for clarity)
+// Define the key stages in order (main pipeline progression)
 const STAGES = [
-  { key: 'new', label: 'New Lead', shortLabel: 'Lead' },
+  { key: 'new', label: 'New', shortLabel: 'New' },
+  { key: 'attempted_contact', label: 'Attempted Contact', shortLabel: 'Contact' },
+  { key: 'prospect', label: 'Prospect', shortLabel: 'Prospect' },
   { key: 'application', label: 'Application', shortLabel: 'Application' },
+  { key: 'pre_qualified', label: 'Pre-Qualified', shortLabel: 'Pre-Qual' },
   { key: 'pre_approved', label: 'Pre-Approved', shortLabel: 'Pre-Approved' },
-  { key: 'under_contract', label: 'Under Contract', shortLabel: 'Contract' },
-  { key: 'processing', label: 'Processing', shortLabel: 'Processing' },
-  { key: 'clear_to_close', label: 'Clear to Close', shortLabel: 'CTC' },
-  { key: 'funded', label: 'Funded', shortLabel: 'Funded' },
 ];
+
+// Exit stages (shown differently - not part of progress bar)
+const EXIT_STAGES = ['nurture', 'withdrawn', 'does_not_qualify'];
 
 // Map various status strings to our stage keys
 const STATUS_MAP = {
-  // Lead stages - all map to 'new'
+  // New
   'new': 'new',
   'New': 'new',
   'new_lead': 'new',
   'lead': 'new',
   'Lead': 'new',
-  'attempted_contact': 'new',
-  'Attempted Contact': 'new',
-  'contacted': 'new',
-  'prospect': 'new',
-  'Prospect': 'new',
 
-  // Application stage
+  // Attempted Contact
+  'attempted_contact': 'attempted_contact',
+  'Attempted Contact': 'attempted_contact',
+  'contacted': 'attempted_contact',
+
+  // Prospect
+  'prospect': 'prospect',
+  'Prospect': 'prospect',
+
+  // Application
   'application': 'application',
   'Application': 'application',
   'app_submitted': 'application',
-  'pre_qualified': 'application',
-  'Pre-Qualified': 'application',
-  'prequalified': 'application',
   'docs_requested': 'application',
 
-  // Pre-Approved stage
+  // Pre-Qualified
+  'pre_qualified': 'pre_qualified',
+  'Pre-Qualified': 'pre_qualified',
+  'prequalified': 'pre_qualified',
+  'pre-qualified': 'pre_qualified',
+  'qualified': 'pre_qualified',
+
+  // Pre-Approved
   'pre_approved': 'pre_approved',
   'Pre-Approved': 'pre_approved',
   'preapproved': 'pre_approved',
+  'pre-approved': 'pre_approved',
+  'preapproval': 'pre_approved',
   'conditional_approval': 'pre_approved',
 
-  // Under Contract
-  'under_contract': 'under_contract',
-  'Under Contract': 'under_contract',
-  'contract': 'under_contract',
-
-  // Processing
-  'processing': 'processing',
-  'Processing': 'processing',
-  'submitted': 'processing',
-  'underwriting': 'processing',
-
-  // Clear to Close
-  'clear_to_close': 'clear_to_close',
-  'Clear to Close': 'clear_to_close',
-  'ctc': 'clear_to_close',
-  'docs_out': 'clear_to_close',
-  'docs_back': 'clear_to_close',
-
-  // Funded
-  'funded': 'funded',
-  'Funded': 'funded',
-  'closed': 'funded',
-  'Completed': 'funded',
+  // Exit stages (map to themselves)
+  'nurture': 'nurture',
+  'Nurture': 'nurture',
+  'withdrawn': 'withdrawn',
+  'Withdrawn': 'withdrawn',
+  'does_not_qualify': 'does_not_qualify',
+  'Does Not Qualify': 'does_not_qualify',
+  'dnq': 'does_not_qualify',
 };
 
 const MilestoneProgressTracker = ({ currentStatus, completedMilestones = [] }) => {
   // Normalize the current status
   const normalizedStatus = STATUS_MAP[currentStatus] || 'new';
-  const currentIndex = STAGES.findIndex(s => s.key === normalizedStatus);
+
+  // Check if in an exit stage
+  const isExitStage = EXIT_STAGES.includes(normalizedStatus);
+  const currentIndex = isExitStage ? -1 : STAGES.findIndex(s => s.key === normalizedStatus);
+
+  // Get display label for exit stages
+  const getExitStageLabel = (status) => {
+    const labels = {
+      'nurture': 'Nurture',
+      'withdrawn': 'Withdrawn',
+      'does_not_qualify': 'Does Not Qualify'
+    };
+    return labels[status] || status;
+  };
 
   // Determine which stages are completed
   const getStageStatus = (stageKey, index) => {
     // If this stage is in completedMilestones, it's complete
     if (completedMilestones.includes(stageKey)) {
       return 'completed';
+    }
+
+    // If in exit stage, show progress up to where they exited (assume last completed)
+    if (isExitStage) {
+      return 'upcoming';
     }
 
     // If before current index, it's completed
@@ -142,8 +157,8 @@ const MilestoneProgressTracker = ({ currentStatus, completedMilestones = [] }) =
       {/* Current stage highlight */}
       <div className="current-stage-info">
         <span className="current-label">Current Stage:</span>
-        <span className="current-value">
-          {STAGES[currentIndex]?.label || currentStatus}
+        <span className={`current-value ${isExitStage ? 'exit-stage' : ''}`}>
+          {isExitStage ? getExitStageLabel(normalizedStatus) : (STAGES[currentIndex]?.label || currentStatus)}
         </span>
       </div>
     </div>

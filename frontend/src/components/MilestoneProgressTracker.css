@@ -175,6 +175,11 @@
   color: #0d9488;
 }
 
+.current-value.exit-stage {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .milestone-progress-tracker {
