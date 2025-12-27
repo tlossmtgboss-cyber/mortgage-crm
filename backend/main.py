@@ -43865,12 +43865,13 @@ async def get_unified_tasks(
             })
 
         # 2. Get pending workflow tasks with joined loan data
+        # Increased limit to ensure workflow tasks (which may have later due dates) are included
         workflow_tasks = db.query(Task).options(
             joinedload(Task.loan)
         ).filter(
             Task.owner_id == current_user.id,
             Task.status.in_(["pending", "in_progress"])
-        ).order_by(Task.due_date.asc()).limit(50).all()
+        ).order_by(Task.due_date.asc()).limit(200).all()
 
         # Collect additional loan/lead IDs from workflow tasks
         for task in workflow_tasks:
