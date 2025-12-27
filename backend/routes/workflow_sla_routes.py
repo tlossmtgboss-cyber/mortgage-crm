@@ -2599,3 +2599,79 @@ async def get_tasks_for_user_diagnostic(
     except Exception as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.delete("/test/cleanup-test-instances")
+async def cleanup_test_workflow_instances(
+    keep_count: int = Query(1, description="Number of instances to keep per lead"),
+    db: Session = Depends(get_db)
+):
+    """
+    Clean up test workflow instances, keeping only the specified number per lead.
+    Also removes orphaned linked tasks.
+    """
+    from sqlalchemy import text
+    import traceback
+
+    try:
+        results = {
+            "instances_deleted": 0,
+            "task_instances_deleted": 0,
+            "linked_tasks_deleted": 0,
+        }
+
+        # Get instances to delete (keep only 'keep_count' per lead, ordered by created_at DESC)
+        instances_to_delete = db.execute(text("""
+            WITH ranked AS (
+                SELECT id, lead_id, loan_id,
+                       ROW_NUMBER() OVER (PARTITION BY COALESCE(lead_id, 0), COALESCE(loan_id, 0)
+                                          ORDER BY created_at DESC) as rn
+                FROM workflow_instances
+            )
+            SELECT id FROM ranked WHERE rn > :keep_count
+        """), {"keep_count": keep_count}).fetchall()
+
+        instance_ids = [row[0] for row in instances_to_delete]
+
+        if not instance_ids:
+            return {"message": "No instances to clean up", **results}
+
+        # Delete linked tasks first
+        linked_deleted = db.execute(text("""
+            DELETE FROM tasks
+            WHERE workflow_task_instance_id IN (
+                SELECT id FROM workflow_task_instances
+                WHERE workflow_instance_id = ANY(:ids)
+            )
+        """), {"ids": instance_ids})
+        results["linked_tasks_deleted"] = linked_deleted.rowcount
+
+        # Delete workflow task instances
+        task_instances_deleted = db.execute(text("""
+            DELETE FROM workflow_task_instances
+            WHERE workflow_instance_id = ANY(:ids)
+        """), {"ids": instance_ids})
+        results["task_instances_deleted"] = task_instances_deleted.rowcount
+
+        # Delete workflow instances
+        instances_deleted = db.execute(text("""
+            DELETE FROM workflow_instances
+            WHERE id = ANY(:ids)
+        """), {"ids": instance_ids})
+        results["instances_deleted"] = instances_deleted.rowcount
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Cleaned up {results['instances_deleted']} workflow instances",
+            **results
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
