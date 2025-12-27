@@ -1072,9 +1072,10 @@ function Tasks() {
         related_type: task.related_type
       }));
 
-      // Filter manual tasks only (workflow tasks come from the new endpoint)
-      const manualTasks = transformedTasks.filter(t =>
-        t.source === 'Manual' &&
+      // Filter manual tasks AND workflow tasks from unified-tasks
+      // (workflow tasks from unified-tasks are actual linked tasks in the tasks table)
+      const manualAndUnifiedWorkflowTasks = transformedTasks.filter(t =>
+        (t.source === 'Manual' || t.source === 'Workflow') &&
         !t.email_from &&
         !t.email_subject
       );
@@ -1085,8 +1086,8 @@ function Tasks() {
         task.preferred_contact_method !== 'Phone'
       );
 
-      // Combine workflow tasks (excluding phone tasks) with manual tasks
-      const allTasks = [...nonPhoneWorkflowTasks, ...manualTasks];
+      // Combine old-style workflow tasks with manual + new linked workflow tasks
+      const allTasks = [...nonPhoneWorkflowTasks, ...manualAndUnifiedWorkflowTasks];
 
       // Deduplicate tasks by id
       const seen = new Set();
