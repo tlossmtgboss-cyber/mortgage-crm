@@ -38106,6 +38106,24 @@ async def delete_user(
             "DELETE FROM user_permission_overrides WHERE user_id = :user_id",
             # Microsite themes
             "DELETE FROM microsite_user_settings WHERE user_id = :user_id",
+            # Calendly integration
+            "DELETE FROM calendly_user_configs WHERE user_id = :user_id",
+            "DELETE FROM calendly_bookings WHERE user_id = :user_id",
+            # AI Feedback
+            "DELETE FROM ai_feedback_logs WHERE user_id = :user_id",
+            # Conversation Intelligence (NOT NULL agent_user_id)
+            "DELETE FROM ci_recordings WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_coaching_sessions WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_coaching_assignments WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_agent_development_plans WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_team_goals WHERE user_id = :user_id",
+            # Skills and responsibilities
+            "DELETE FROM user_skill_assessments WHERE user_id = :user_id",
+            "DELETE FROM user_responsibilities WHERE user_id = :user_id",
+            # User integrations
+            "DELETE FROM user_integrations WHERE user_id = :user_id",
+            # Guideline bookmarks
+            "DELETE FROM guideline_bookmarks WHERE user_id = :user_id",
         ]
 
         for query in delete_queries:
@@ -38206,6 +38224,64 @@ async def delete_user(
         db.rollback()
         logger.error(f"Failed to delete user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+
+
+@app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
+async def check_user_deletion_blockers(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Check what tables/records are blocking user deletion."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    blockers = []
+
+    # Query all tables that reference users
+    try:
+        fk_query = """
+            SELECT
+                tc.table_name,
+                kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu
+                ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+                AND ccu.table_name = 'users'
+                AND tc.table_schema = 'public'
+        """
+        result = db.execute(text(fk_query))
+        fk_refs = result.fetchall()
+
+        for table_name, column_name in fk_refs:
+            if table_name == 'users':
+                continue
+            try:
+                count_query = f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"
+                count_result = db.execute(text(count_query), {"user_id": user_id}).scalar()
+                if count_result > 0:
+                    blockers.append({
+                        "table": table_name,
+                        "column": column_name,
+                        "count": count_result
+                    })
+            except Exception as e:
+                pass  # Table might not exist
+
+    except Exception as e:
+        return {"error": str(e), "blockers": []}
+
+    return {
+        "user_id": user_id,
+        "user_email": user.email,
+        "blockers": blockers,
+        "total_blocking_records": sum(b["count"] for b in blockers)
+    }
+
 
 # ============================================================================
 # DASHBOARD
