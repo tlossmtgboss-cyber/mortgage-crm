@@ -2458,14 +2458,14 @@ async def test_create_workflow_instance(
         db.execute(text("""
             INSERT INTO workflow_instances (
                 organization_id, workflow_configuration_id, lead_id,
-                status, started_at, trigger_milestone_entered_at,
+                workflow_type, status, started_at, trigger_milestone_entered_at,
                 last_task_generated_day, created_at
             ) VALUES (
                 1, :config_id, :lead_id,
-                'active', NOW(), NOW(),
+                :workflow_key, 'active', NOW(), NOW(),
                 -1, NOW()
             )
-        """), {"config_id": config[0], "lead_id": lead_id})
+        """), {"config_id": config[0], "lead_id": lead_id, "workflow_key": workflow_key})
         db.flush()
 
         # Get the new instance ID
