@@ -1244,19 +1244,23 @@ async def add_partner_note(
             pass
 
     # Get lead/client info (using owner_id which is the correct column name)
-    lead_info = db.execute(text("""
-        SELECT
-            l.id,
-            l.name as borrower_name,
-            l.email as borrower_email,
-            l.owner_id,
-            u.email as lo_email,
-            u.full_name as lo_name,
-            u.organization_id
-        FROM leads l
-        LEFT JOIN users u ON u.id = l.owner_id
-        WHERE l.id = :client_id
-    """), {"client_id": client_id}).fetchone()
+    try:
+        lead_info = db.execute(text("""
+            SELECT
+                l.id,
+                l.name as borrower_name,
+                l.email as borrower_email,
+                l.owner_id,
+                u.email as lo_email,
+                u.full_name as lo_name,
+                u.organization_id
+            FROM leads l
+            LEFT JOIN users u ON u.id = l.owner_id
+            WHERE l.id = :client_id
+        """), {"client_id": client_id}).fetchone()
+    except Exception as e:
+        logger.error(f"Failed to query lead info: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     if not lead_info:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -1287,7 +1291,7 @@ async def add_partner_note(
     except Exception as e:
         logger.error(f"Failed to create activity: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to save note")
+        raise HTTPException(status_code=500, detail=f"Failed to save note: {str(e)}")
 
     # Get all team members to notify
     team_emails = []
