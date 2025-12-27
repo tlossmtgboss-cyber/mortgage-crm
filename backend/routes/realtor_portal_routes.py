@@ -640,7 +640,7 @@ async def generate_preapproval_for_lead(
             l.id, l.name, l.email, l.phone, l.loan_amount, l.loan_type,
             l.address, l.city, l.state, l.zip_code, l.credit_score,
             l.property_type, l.ltv, l.down_payment, l.interest_rate,
-            l.stage, l.organization_id, l.assigned_to
+            l.stage, l.owner_id
         FROM leads l
         WHERE l.id = :lead_id
     """), {"lead_id": lead_id}).fetchone()
@@ -648,21 +648,28 @@ async def generate_preapproval_for_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Get organization_id from the lead's owner
+    org_id = 1  # Default
+    if lead[16]:  # owner_id
+        owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[16]}).fetchone()
+        if owner and owner[0]:
+            org_id = owner[0]
+
     # Get organization info
     org = db.execute(text("""
         SELECT id, name, nmls_number, address, phone, logo_url
         FROM organizations
         WHERE id = :org_id
-    """), {"org_id": lead[16] or 1}).fetchone()
+    """), {"org_id": org_id}).fetchone()
 
-    # Get LO info if assigned
+    # Get LO info if owner assigned
     lo_info = None
-    if lead[17]:
+    if lead[16]:  # owner_id
         lo = db.execute(text("""
             SELECT id, full_name, email, phone, nmls_id
             FROM users
             WHERE id = :user_id
-        """), {"user_id": lead[17]}).fetchone()
+        """), {"user_id": lead[16]}).fetchone()
         if lo:
             lo_info = {
                 "name": lo[1],
@@ -797,7 +804,7 @@ async def generate_preapproval_for_lead(
             )
             RETURNING id
         """), {
-            "org_id": lead[16] or 1,
+            "org_id": org_id,
             "lead_id": lead_id,
             "html": letter_html,
             "variables": json.dumps({"borrower_name": lead[1] or "", "loan_amount": calculated_amount}),
@@ -845,7 +852,7 @@ async def notify_overlimit_request(
     # Get lead and LO info
     lead = db.execute(text("""
         SELECT
-            l.id, l.name, l.email, l.phone, l.assigned_to, l.organization_id
+            l.id, l.name, l.email, l.phone, l.owner_id
         FROM leads l
         WHERE l.id = :lead_id
     """), {"lead_id": request.lead_id}).fetchone()
@@ -853,10 +860,17 @@ async def notify_overlimit_request(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Get organization_id from the lead's owner
+    owner_org_id = 1  # Default
+    if lead[4]:  # owner_id
+        owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[4]}).fetchone()
+        if owner and owner[0]:
+            owner_org_id = owner[0]
+
     # Get LO email
     lo_email = None
     lo_name = None
-    if lead[4]:
+    if lead[4]:  # owner_id
         lo = db.execute(text("""
             SELECT full_name, email FROM users WHERE id = :user_id
         """), {"user_id": lead[4]}).fetchone()
@@ -919,9 +933,9 @@ async def notify_overlimit_request(
                 'HIGH', 'pending', CURRENT_TIMESTAMP
             )
         """), {
-            "org_id": lead[5] or 1,
+            "org_id": owner_org_id,
             "lead_id": request.lead_id,
-            "assigned_to": lead[4],
+            "assigned_to": lead[4],  # owner_id
             "description": f"Partner {partner_name} requested pre-approval at ${request.requested_purchase_price:,.0f}, which exceeds the max ${request.max_purchase_price:,.0f}. Please review and contact partner."
         })
         db.commit()
@@ -1753,7 +1767,7 @@ async def debug_test_preapproval(
         # Step 1: Check if lead exists
         result["steps"].append("Checking lead...")
         lead = db.execute(text("""
-            SELECT id, name, loan_amount, loan_type, organization_id
+            SELECT id, name, loan_amount, loan_type, owner_id
             FROM leads WHERE id = :lead_id
         """), {"lead_id": lead_id}).fetchone()
 
@@ -1762,6 +1776,14 @@ async def debug_test_preapproval(
             return result
 
         result["steps"].append(f"Lead found: {lead[1]}, loan_amount={lead[2]}")
+
+        # Get organization_id from the lead's owner
+        org_id = 1  # Default
+        if lead[4]:  # owner_id
+            owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[4]}).fetchone()
+            if owner and owner[0]:
+                org_id = owner[0]
+        result["steps"].append(f"Using organization_id: {org_id}")
 
         # Step 2: Check if table exists
         result["steps"].append("Checking pre_approval_letters table...")
@@ -1789,7 +1811,7 @@ async def debug_test_preapproval(
             )
             RETURNING id
         """), {
-            "org_id": lead[4] or 1,
+            "org_id": org_id,
             "lead_id": lead_id,
             "html": test_html,
             "variables": "{}",
