@@ -2046,27 +2046,41 @@ async def test_create_linked_task(
     db: Session = Depends(get_db)
 ):
     """
-    Test creating a linked task in the main tasks table.
+    Test creating a linked task using EXACT same INSERT as _create_linked_task.
     This helps debug why linked tasks aren't being created.
     """
     from sqlalchemy import text
     import traceback
 
     try:
-        # Try to create a test task
+        # Use EXACT same INSERT as _create_linked_task in workflow_task_generator.py
         db.execute(text("""
             INSERT INTO tasks (
                 title, description, status, priority,
-                due_date, lead_id,
+                due_date, owner_id, lead_id, loan_id,
+                related_contact_name, related_type,
                 workflow_task_instance_id, task_group_key,
                 created_at, updated_at
             ) VALUES (
-                'Test Workflow Task', 'Test description', 'pending', 'medium',
-                NOW() + INTERVAL '1 day', NULL,
-                -999, 'test_group',
+                :title, :description, 'pending', :priority,
+                :due_date, :owner_id, :lead_id, :loan_id,
+                :contact_name, :related_type,
+                :task_instance_id, :group_key,
                 NOW(), NOW()
             )
-        """))
+        """), {
+            "title": "[TEST] Workflow Task",
+            "description": "Test task to debug linked task creation",
+            "priority": "medium",
+            "due_date": "2025-12-28",
+            "owner_id": 1,  # Test with user ID 1
+            "lead_id": None,
+            "loan_id": None,
+            "contact_name": "Test Contact",
+            "related_type": "lead",
+            "task_instance_id": -999,
+            "group_key": "test_group_diagnostic"
+        })
         db.commit()
 
         # Check if it was created
@@ -2150,6 +2164,98 @@ async def get_linked_tasks_diagnostic(
         return {
             "total_linked_tasks": total,
             "tasks": tasks
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.get("/diagnostic/task-instance-data/{instance_id}")
+async def get_task_instance_data(
+    instance_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to see what data is available for a workflow task instance.
+    Shows the data that would be passed to _create_linked_task.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Get workflow task instance
+        task_instance = db.execute(text("""
+            SELECT wti.id, wti.workflow_instance_id, wti.day_config_id,
+                   wti.task_type, wti.scheduled_date, wti.status,
+                   wti.assigned_user_id, wti.linked_task_id, wti.route
+            FROM workflow_task_instances wti
+            WHERE wti.id = :id
+        """), {"id": instance_id}).fetchone()
+
+        if not task_instance:
+            return {"error": f"Task instance {instance_id} not found"}
+
+        # Get workflow instance
+        workflow_instance = db.execute(text("""
+            SELECT wi.id, wi.lead_id, wi.loan_id, wi.organization_id, wi.started_at
+            FROM workflow_instances wi
+            WHERE wi.id = :id
+        """), {"id": task_instance[1]}).fetchone()
+
+        # Get day config
+        day_config = db.execute(text("""
+            SELECT wdc.id, wdc.day_label, wdc.day_value, wdc.task_description
+            FROM workflow_day_configs wdc
+            WHERE wdc.id = :id
+        """), {"id": task_instance[2]}).fetchone()
+
+        # Get contact info
+        contact_info = {}
+        if workflow_instance and workflow_instance[1]:  # lead_id
+            lead = db.execute(text("""
+                SELECT first_name, last_name, email, phone
+                FROM leads WHERE id = :id
+            """), {"id": workflow_instance[1]}).fetchone()
+            if lead:
+                contact_info = {
+                    "name": f"{lead[0] or ''} {lead[1] or ''}".strip(),
+                    "email": lead[2],
+                    "phone": lead[3]
+                }
+
+        return {
+            "task_instance": {
+                "id": task_instance[0],
+                "workflow_instance_id": task_instance[1],
+                "day_config_id": task_instance[2],
+                "task_type": task_instance[3],
+                "scheduled_date": str(task_instance[4]) if task_instance[4] else None,
+                "status": task_instance[5],
+                "assigned_user_id": task_instance[6],
+                "linked_task_id": task_instance[7],
+                "route": task_instance[8]
+            },
+            "workflow_instance": {
+                "id": workflow_instance[0] if workflow_instance else None,
+                "lead_id": workflow_instance[1] if workflow_instance else None,
+                "loan_id": workflow_instance[2] if workflow_instance else None,
+                "organization_id": workflow_instance[3] if workflow_instance else None,
+                "started_at": str(workflow_instance[4]) if workflow_instance and workflow_instance[4] else None
+            } if workflow_instance else None,
+            "day_config": {
+                "id": day_config[0] if day_config else None,
+                "day_label": day_config[1] if day_config else None,
+                "day_value": day_config[2] if day_config else None,
+                "task_description": day_config[3] if day_config else None
+            } if day_config else None,
+            "contact_info": contact_info,
+            "can_create_linked_task": {
+                "has_assigned_user": task_instance[6] is not None,
+                "has_workflow_instance": workflow_instance is not None,
+                "has_day_config": day_config is not None,
+                "has_lead_or_loan": (workflow_instance[1] if workflow_instance else None) is not None or
+                                   (workflow_instance[2] if workflow_instance else None) is not None
+            }
         }
 
     except Exception as e:
