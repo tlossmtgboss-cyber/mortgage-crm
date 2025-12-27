@@ -118,6 +118,9 @@ const ApplicationSlidesEditor = () => {
   // Edit modal state
   const [editModal, setEditModal] = useState({ open: false, type: null, item: null, isNew: false });
 
+  // Preview modal state
+  const [previewModal, setPreviewModal] = useState({ open: false, stage: null });
+
   // Get current stages and questions based on selected app type
   const stages = appType === 'purchase' ? purchaseStages : refinanceStages;
   const setStages = appType === 'purchase' ? setPurchaseStages : setRefinanceStages;
@@ -408,6 +411,7 @@ const ApplicationSlidesEditor = () => {
                   <div className="slide-card-actions">
                     <button onClick={() => moveStage(index, 'up')} disabled={index === 0} title="Move up">↑</button>
                     <button onClick={() => moveStage(index, 'down')} disabled={index === stages.length - 1} title="Move down">↓</button>
+                    <button onClick={() => setPreviewModal({ open: true, stage })} className="preview-btn" title="Preview">👁️</button>
                     <button onClick={() => openEditModal('stage', stage)} title="Edit">Edit</button>
                     {!stage.required && (
                       <button onClick={() => deleteItem('stage', stage.id)} className="delete" title="Delete">×</button>
@@ -638,6 +642,47 @@ const ApplicationSlidesEditor = () => {
               </button>
               <button className="btn-primary" onClick={saveEditModal}>
                 {editModal.isNew ? 'Add' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stage Preview Modal */}
+      {previewModal.open && previewModal.stage && (
+        <div className="modal-overlay preview-modal-overlay" onClick={() => setPreviewModal({ open: false, stage: null })}>
+          <div className="preview-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="preview-modal-header">
+              <h3>
+                <span className="preview-icon">👁️</span>
+                Preview: {previewModal.stage.label}
+              </h3>
+              <div className="preview-header-actions">
+                <a
+                  href={`/apply/preview?stage=${previewModal.stage.id}&type=${appType}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-open-new-tab"
+                >
+                  Open in New Tab ↗
+                </a>
+                <button className="modal-close" onClick={() => setPreviewModal({ open: false, stage: null })}>×</button>
+              </div>
+            </div>
+            <div className="preview-modal-body">
+              <iframe
+                src={`/apply/preview?stage=${previewModal.stage.id}&type=${appType}`}
+                title={`Preview: ${previewModal.stage.label}`}
+                className="preview-iframe"
+              />
+            </div>
+            <div className="preview-modal-footer">
+              <div className="preview-info">
+                <span className="preview-stage-id">Stage ID: {previewModal.stage.id}</span>
+                <span className="preview-app-type">{appType === 'purchase' ? 'Purchase' : 'Refinance'} Application</span>
+              </div>
+              <button className="btn-secondary" onClick={() => setPreviewModal({ open: false, stage: null })}>
+                Close Preview
               </button>
             </div>
           </div>

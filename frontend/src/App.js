@@ -65,6 +65,7 @@ const Users = lazy(() => import('./pages/Users'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const ProcessTemplates = lazy(() => import('./pages/ProcessTemplates'));
 const BuyerIntake = lazy(() => import('./pages/BuyerIntake'));
+const ApplicationPreview = lazy(() => import('./pages/ApplicationPreview'));
 const VerizonTest = lazy(() => import('./pages/VerizonTest'));
 const PipelineEfficiency = lazy(() => import('./pages/PipelineEfficiency'));
 const StageEmployees = lazy(() => import('./pages/StageEmployees'));
@@ -276,6 +277,7 @@ function App() {
               : <LandingPage />
           } />
           <Route path="/apply" element={<BuyerIntake />} />
+          <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />
