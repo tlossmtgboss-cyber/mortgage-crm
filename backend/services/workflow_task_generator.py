@@ -266,7 +266,8 @@ class TaskGeneratorService:
 
                 # Create linked task in main tasks table for ALL workflow tasks
                 # This provides visibility into all workflow activities in the task list UI
-                self._create_linked_task(
+                logger.info(f"Creating linked task for instance {task_instance_id}, type={task_type}")
+                linked_task_id = self._create_linked_task(
                     task_instance_id=task_instance_id,
                     instance=instance,
                     day_config=day_config,
@@ -276,6 +277,10 @@ class TaskGeneratorService:
                     contact_info=contact_info,
                     group_key=group_key
                 )
+                if linked_task_id:
+                    logger.info(f"Created linked task {linked_task_id} for workflow instance {task_instance_id}")
+                else:
+                    logger.warning(f"Failed to create linked task for workflow instance {task_instance_id}")
 
         return tasks_created
 
@@ -517,9 +522,13 @@ class TaskGeneratorService:
     ) -> Optional[int]:
         """Create a linked task in the main tasks table."""
         try:
+            logger.info(f"_create_linked_task called: task_instance_id={task_instance_id}, task_type={task_type}")
+
             # Build title
             contact_name = contact_info.get('name', 'Contact')
             title = f"[Workflow] {task_type.replace('_', ' ').title()} - {contact_name}"
+
+            logger.info(f"Creating task: title='{title}', lead_id={instance.get('lead_id')}, loan_id={instance.get('loan_id')}")
 
             # Build description
             description = f"""Workflow Task: {day_config['day_label']}
