@@ -683,8 +683,8 @@ const RecentActivitySidebar = ({ timeline, onViewAll }) => {
   );
 };
 
-// Info Bar Component - Shows LO info on left, loan details on right
-const PortalInfoBar = ({ loan, workspace, contacts, loanOfficerInfo }) => {
+// Info Bar Component - Shows LO info on left, logo & loan details on right
+const PortalInfoBar = ({ loan, workspace, contacts, loanOfficerInfo, companyLogoUrl }) => {
   // LO info comes from the workspace's assigned user (loan officer)
   const loName = loanOfficerInfo?.name || workspace?.assigned_user_name || 'Your Loan Officer';
   const loEmail = loanOfficerInfo?.email || workspace?.assigned_user_email || '';
@@ -715,8 +715,18 @@ const PortalInfoBar = ({ loan, workspace, contacts, loanOfficerInfo }) => {
           </div>
         </div>
 
-        {/* Right Side - Loan Details */}
+        {/* Right Side - Logo Container & Loan Details */}
         <div className="info-bar-right">
+          {/* Logo Container - positioned above loan details */}
+          {companyLogoUrl && (
+            <div className="logo-container">
+              <img
+                src={companyLogoUrl}
+                alt="Company Logo"
+                className="portal-company-logo"
+              />
+            </div>
+          )}
           <div className="loan-detail-item">
             <span className="detail-label">Purpose</span>
             <span className="detail-value">{loan?.loan_purpose ? loan.loan_purpose.charAt(0).toUpperCase() + loan.loan_purpose.slice(1) : 'Purchase'}</span>
@@ -1348,28 +1358,13 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       {/* Header */}
       <header className="portal-header">
         <div className="header-content">
-          {/* Top Row - Logo & Date (stacked vertically) */}
-          <div className="header-top-row">
-            <div className="logo-date-stack">
-              {data?.loanOfficer?.company_logo_url && (
-                <img
-                  src={data.loanOfficer.company_logo_url}
-                  alt="Company Logo"
-                  className="portal-company-logo"
-                />
-              )}
-              <div className="header-date">
-                <span className="date-label">{formatCurrentDate()}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Info Bar with LO Info (left) and Loan Details (right) */}
+          {/* Info Bar with LO Info (left) and Logo/Loan Details (right) */}
           <PortalInfoBar
             loan={loan}
             workspace={workspace}
             contacts={contacts}
             loanOfficerInfo={data?.loanOfficer}
+            companyLogoUrl={data?.loanOfficer?.company_logo_url}
           />
 
           {/* Milestone Progress Indicator - Uses actual CRM lead stage */}
