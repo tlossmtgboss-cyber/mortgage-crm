@@ -1558,7 +1558,7 @@ async def extract_document_data(
     including names for owner matching and values that can be
     applied to the Lead/Loan profile.
     """
-    from models.document_extraction import DocumentExtraction, ReviewStatus, DetectedOwner
+    from models.document_extraction import SmartDocumentExtraction, ReviewStatus, DetectedOwner
     from services.smart_docs.document_data_extractor import get_document_data_extractor
     from services.smart_docs.owner_matcher import get_owner_matcher
 
@@ -1571,8 +1571,8 @@ async def extract_document_data(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Check if extraction already exists
-    existing = db.query(DocumentExtraction).filter(
-        DocumentExtraction.document_id == document_id
+    existing = db.query(SmartDocumentExtraction).filter(
+        SmartDocumentExtraction.document_id == document_id
     ).first()
 
     if existing:
@@ -1652,7 +1652,7 @@ async def extract_document_data(
         owner_enum = DetectedOwner.CO_BORROWER
 
     # Store extraction result
-    extraction = DocumentExtraction(
+    extraction = SmartDocumentExtraction(
         document_id=document_id,
         extracted_fields=result.extracted_fields,
         confidence_scores=result.confidence_scores,
@@ -1695,10 +1695,10 @@ async def get_document_extraction(
     db: Session = Depends(get_db),
 ):
     """Get existing extraction results for a document."""
-    from models.document_extraction import DocumentExtraction
+    from models.document_extraction import SmartDocumentExtraction
 
-    extraction = db.query(DocumentExtraction).filter(
-        DocumentExtraction.document_id == document_id
+    extraction = db.query(SmartDocumentExtraction).filter(
+        SmartDocumentExtraction.document_id == document_id
     ).first()
 
     if not extraction:
@@ -1738,11 +1738,11 @@ async def get_field_comparison(
 
     Returns side-by-side comparison with differences highlighted.
     """
-    from models.document_extraction import DocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING
+    from models.document_extraction import SmartDocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING
 
     # Get extraction
-    extraction = db.query(DocumentExtraction).filter(
-        DocumentExtraction.document_id == document_id
+    extraction = db.query(SmartDocumentExtraction).filter(
+        SmartDocumentExtraction.document_id == document_id
     ).first()
 
     if not extraction:
@@ -1846,12 +1846,12 @@ async def apply_extracted_fields(
 
     Creates audit trail via DataConflict records.
     """
-    from models.document_extraction import DocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING, ReviewStatus
+    from models.document_extraction import SmartDocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING, ReviewStatus
     from sqlalchemy import text
 
     # Get extraction
-    extraction = db.query(DocumentExtraction).filter(
-        DocumentExtraction.document_id == document_id
+    extraction = db.query(SmartDocumentExtraction).filter(
+        SmartDocumentExtraction.document_id == document_id
     ).first()
 
     if not extraction:
@@ -1951,7 +1951,7 @@ async def approve_document_with_review(
 
     Optionally applies selected field values to Lead/Loan profile.
     """
-    from models.document_extraction import DocumentExtraction, ReviewStatus
+    from models.document_extraction import SmartDocumentExtraction, ReviewStatus
 
     # Get document
     document = db.query(SmartDocument).filter(
@@ -1971,8 +1971,8 @@ async def approve_document_with_review(
         document.assigned_owner = body.assigned_owner
 
     # Update extraction if exists
-    extraction = db.query(DocumentExtraction).filter(
-        DocumentExtraction.document_id == document_id
+    extraction = db.query(SmartDocumentExtraction).filter(
+        SmartDocumentExtraction.document_id == document_id
     ).first()
 
     if extraction:

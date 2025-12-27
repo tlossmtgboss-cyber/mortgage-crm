@@ -32,7 +32,7 @@ class DetectedOwner(str, enum.Enum):
     UNKNOWN = "UNKNOWN"
 
 
-class DocumentExtraction(Base):
+class SmartDocumentExtraction(Base):
     """
     Stores extraction results for document review.
 
@@ -43,7 +43,7 @@ class DocumentExtraction(Base):
     - Detected document owner with match confidence
     - Review status and applied field tracking
     """
-    __tablename__ = "document_extractions"
+    __tablename__ = "smart_document_extractions"
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -89,11 +89,10 @@ class DocumentExtraction(Base):
 
     # Indexes
     __table_args__ = (
-        Index("ix_doc_extractions_document_id", "document_id"),
-        Index("ix_doc_extractions_review_status", "review_status"),
-        Index("ix_doc_extractions_detected_owner", "detected_owner"),
-        Index("ix_doc_extractions_created_at", "created_at"),
-        {"extend_existing": True},
+        Index("ix_smart_doc_extractions_document_id", "document_id"),
+        Index("ix_smart_doc_extractions_review_status", "review_status"),
+        Index("ix_smart_doc_extractions_detected_owner", "detected_owner"),
+        Index("ix_smart_doc_extractions_created_at", "created_at"),
     )
 
 

@@ -24,10 +24,10 @@ def run_migration(engine):
 
         logger.info(f"Running document extraction migration on {dialect}")
 
-        # Create document_extractions table
+        # Create smart_document_extractions table
         if is_sqlite:
             create_extractions_sql = """
-                CREATE TABLE IF NOT EXISTS document_extractions (
+                CREATE TABLE IF NOT EXISTS smart_document_extractions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     document_id INTEGER NOT NULL,
                     extracted_fields JSON,
@@ -55,7 +55,7 @@ def run_migration(engine):
             """
         else:
             create_extractions_sql = """
-                CREATE TABLE IF NOT EXISTS document_extractions (
+                CREATE TABLE IF NOT EXISTS smart_document_extractions (
                     id SERIAL PRIMARY KEY,
                     document_id INTEGER NOT NULL,
                     extracted_fields JSONB,
@@ -84,23 +84,23 @@ def run_migration(engine):
 
         try:
             conn.execute(text(create_extractions_sql))
-            logger.info("Created document_extractions table")
+            logger.info("Created smart_document_extractions table")
         except Exception as e:
-            logger.warning(f"document_extractions table may already exist: {e}")
+            logger.warning(f"smart_document_extractions table may already exist: {e}")
 
-        # Create indexes for document_extractions
+        # Create indexes for smart_document_extractions
         indexes = [
-            ("ix_doc_extractions_document_id", "document_id"),
-            ("ix_doc_extractions_review_status", "review_status"),
-            ("ix_doc_extractions_detected_owner", "detected_owner"),
-            ("ix_doc_extractions_created_at", "created_at"),
+            ("ix_smart_doc_extractions_document_id", "document_id"),
+            ("ix_smart_doc_extractions_review_status", "review_status"),
+            ("ix_smart_doc_extractions_detected_owner", "detected_owner"),
+            ("ix_smart_doc_extractions_created_at", "created_at"),
         ]
 
         for index_name, column in indexes:
             try:
                 conn.execute(text(f"""
                     CREATE INDEX IF NOT EXISTS {index_name}
-                    ON document_extractions({column})
+                    ON smart_document_extractions({column})
                 """))
                 logger.info(f"Created index {index_name}")
             except Exception as e:
