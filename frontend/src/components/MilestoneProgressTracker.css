@@ -10,13 +10,16 @@
   margin: 0 auto;
 }
 
-.progress-bar-container {
+.milestone-progress-tracker .progress-bar-container {
   position: relative;
   padding: 1rem 0;
+  height: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
 }
 
 /* Background track */
-.progress-bar-container::before {
+.milestone-progress-tracker .progress-bar-container::before {
   content: '';
   position: absolute;
   top: 28px;
@@ -29,7 +32,7 @@
 }
 
 /* Filled progress */
-.progress-bar-fill {
+.milestone-progress-tracker .progress-bar-fill {
   position: absolute;
   top: 28px;
   left: 7%;
@@ -41,7 +44,7 @@
 }
 
 /* Stage container */
-.progress-stages {
+.milestone-progress-tracker .progress-stages {
   display: flex;
   justify-content: space-between;
   position: relative;
@@ -49,7 +52,7 @@
 }
 
 /* Individual stage */
-.progress-stage {
+.milestone-progress-tracker .progress-stage {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -195,15 +198,15 @@
     padding: 1rem;
   }
 
-  .progress-bar-container {
+  .milestone-progress-tracker .progress-bar-container {
     min-width: 600px;
   }
 
-  .progress-bar-container::before {
+  .milestone-progress-tracker .progress-bar-container::before {
     top: 20px;
   }
 
-  .progress-bar-fill {
+  .milestone-progress-tracker .progress-bar-fill {
     top: 20px;
   }
 
