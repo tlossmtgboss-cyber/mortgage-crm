@@ -2057,3 +2057,59 @@ async def health_check():
         "service": "smart-docs",
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+# =============================================================================
+# Admin Endpoints
+# =============================================================================
+
+@router.post("/admin/create-test-loan")
+async def create_test_loan(
+    admin_key: str = Query(default="perennia-admin-2024"),
+    db: Session = Depends(get_db),
+):
+    """Create a test loan for Smart Docs testing."""
+    from sqlalchemy import text
+
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    # Check if test loan already exists
+    existing = db.execute(text(
+        "SELECT id FROM loans WHERE borrower_name = 'Test Borrower - Smart Docs' LIMIT 1"
+    )).fetchone()
+
+    if existing:
+        return {
+            "status": "exists",
+            "loan_id": existing[0],
+            "message": "Test loan already exists",
+            "url": f"https://www.perenniaai.com/loans/{existing[0]}",
+        }
+
+    # Get a user to assign the loan to
+    user = db.execute(text("SELECT id, email FROM users LIMIT 1")).fetchone()
+    user_id = user[0] if user else None
+
+    # Create test loan
+    result = db.execute(text("""
+        INSERT INTO loans (
+            borrower_name, loan_amount, property_address,
+            loan_type, status, transaction_type,
+            loan_officer_id, created_at, updated_at
+        ) VALUES (
+            'Test Borrower - Smart Docs', 350000, '123 Test Street, Austin TX 78701',
+            'Conventional', 'In Processing', 'Purchase',
+            :user_id, NOW(), NOW()
+        ) RETURNING id
+    """), {"user_id": user_id})
+
+    loan_id = result.fetchone()[0]
+    db.commit()
+
+    return {
+        "status": "created",
+        "loan_id": loan_id,
+        "message": "Test loan created successfully",
+        "url": f"https://www.perenniaai.com/loans/{loan_id}",
+    }
