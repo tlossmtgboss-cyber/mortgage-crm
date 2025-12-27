@@ -824,15 +824,15 @@ export default function PartnerClientDetail() {
           navigate={navigate}
         />
 
+        {/* Contact Information - Next to Document Progress */}
+        <ContactCard client={client} loanOfficer={client?.loan_officer} />
+
         {/* Activity Timeline */}
         <ActivityTimelineCard
           activities={activities}
           stageHistory={stageHistory}
           chatMessages={chatMessages}
         />
-
-        {/* Contact Information */}
-        <ContactCard client={client} loanOfficer={client?.loan_officer} />
       </div>
 
       {/* Pre-Approval Modal */}
