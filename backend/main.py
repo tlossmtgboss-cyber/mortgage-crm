@@ -58450,13 +58450,14 @@ async def add_goals_and_okrs_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
-@app.post("/api/v1/migrations/add-smart-docs-columns", response_model=None)
+@app.post("/api/v1/public/migrations/add-smart-docs-columns", response_model=None)
 async def add_smart_docs_columns_migration(
     migration_key: str = "",
     db: Session = Depends(get_db)
 ):
     """
     Add missing columns to smart_documents table (uploaded_at, original_filename)
+    Public endpoint - requires migration key for security
     """
     if migration_key != "add-smart-docs-cols":
         raise HTTPException(status_code=403, detail="Invalid migration key")
