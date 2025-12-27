@@ -84,6 +84,13 @@ class UpdatePayrollFrequencyBody(BaseModel):
     frequency: str  # WEEKLY, BIWEEKLY, SEMIMONTHLY, MONTHLY
 
 
+class MergeDocumentsRequest(BaseModel):
+    """Request to merge multiple documents into a single PDF."""
+    loan_id: int
+    document_ids: List[int]
+    recipient_email: Optional[str] = None  # For merge-email endpoint
+
+
 class ApplicationDocumentItem(BaseModel):
     """A single document requirement from the application."""
     id: str
@@ -654,6 +661,218 @@ async def download_document(
         "content_type": document.mime_type,
         "file_size": document.file_size
     }
+
+
+@router.post("/merge")
+async def merge_documents(
+    request: MergeDocumentsRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Merge multiple documents into a single PDF for download.
+
+    Downloads specified documents from S3, merges them into a single PDF,
+    and returns the merged file.
+    """
+    from fastapi.responses import StreamingResponse
+    from pypdf import PdfMerger, PdfReader
+    import io
+    import tempfile
+
+    if not request.document_ids:
+        raise HTTPException(status_code=400, detail="No document IDs provided")
+
+    # Get all requested documents
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.id.in_(request.document_ids),
+        SmartDocument.loan_id == request.loan_id
+    ).all()
+
+    if not documents:
+        raise HTTPException(status_code=404, detail="No documents found")
+
+    if len(documents) != len(request.document_ids):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Some documents not found. Requested {len(request.document_ids)}, found {len(documents)}"
+        )
+
+    s3_service = get_smart_docs_s3_service()
+    if not s3_service.is_available:
+        raise HTTPException(status_code=503, detail="Document storage not available")
+
+    # Download and merge PDFs
+    merger = PdfMerger()
+    merged_any = False
+    errors = []
+
+    for doc in documents:
+        if not doc.storage_key:
+            errors.append(f"{doc.file_name}: No storage key")
+            continue
+
+        try:
+            # Download file from S3
+            download_result = s3_service.download_file(doc.storage_key)
+            if not download_result.get("success"):
+                errors.append(f"{doc.file_name}: {download_result.get('error', 'Failed to download')}")
+                continue
+
+            file_data = download_result["content"]
+
+            # Check if it's a PDF
+            if doc.mime_type == "application/pdf" or doc.file_name.lower().endswith('.pdf'):
+                pdf_reader = PdfReader(io.BytesIO(file_data))
+                merger.append(pdf_reader)
+                merged_any = True
+            else:
+                # For non-PDF files, skip with warning
+                errors.append(f"{doc.file_name}: Not a PDF, skipping")
+        except Exception as e:
+            logger.error(f"Error processing document {doc.id}: {e}")
+            errors.append(f"{doc.file_name}: {str(e)}")
+
+    if not merged_any:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No PDF documents could be merged. Errors: {', '.join(errors)}"
+        )
+
+    # Write merged PDF to bytes
+    output = io.BytesIO()
+    merger.write(output)
+    merger.close()
+    output.seek(0)
+
+    # Get loan info for filename
+    from models.loan import Loan
+    loan = db.query(Loan).filter(Loan.id == request.loan_id).first()
+    filename = f"merged_documents_{loan.borrower_name if loan else request.loan_id}.pdf"
+
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.post("/merge-email")
+async def merge_and_email_documents(
+    request: MergeDocumentsRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Merge multiple documents into a single PDF and email it.
+
+    Downloads specified documents from S3, merges them into a single PDF,
+    and sends via email.
+    """
+    from pypdf import PdfMerger, PdfReader
+    import io
+
+    if not request.document_ids:
+        raise HTTPException(status_code=400, detail="No document IDs provided")
+
+    # Get all requested documents
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.id.in_(request.document_ids),
+        SmartDocument.loan_id == request.loan_id
+    ).all()
+
+    if not documents:
+        raise HTTPException(status_code=404, detail="No documents found")
+
+    s3_service = get_smart_docs_s3_service()
+    if not s3_service.is_available:
+        raise HTTPException(status_code=503, detail="Document storage not available")
+
+    # Get loan info for context
+    from models.loan import Loan
+    loan = db.query(Loan).filter(Loan.id == request.loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Determine recipient email
+    recipient_email = request.recipient_email
+    if not recipient_email:
+        # Try to get from loan officer or borrower
+        if loan.loan_officer_email:
+            recipient_email = loan.loan_officer_email
+        elif hasattr(loan, 'borrower_email') and loan.borrower_email:
+            recipient_email = loan.borrower_email
+        else:
+            raise HTTPException(status_code=400, detail="No recipient email provided or available")
+
+    # Download and merge PDFs
+    merger = PdfMerger()
+    merged_any = False
+    doc_names = []
+
+    for doc in documents:
+        if not doc.storage_key:
+            continue
+
+        try:
+            download_result = s3_service.download_file(doc.storage_key)
+            if not download_result.get("success"):
+                logger.warning(f"Failed to download {doc.file_name}: {download_result.get('error')}")
+                continue
+
+            file_data = download_result["content"]
+
+            if doc.mime_type == "application/pdf" or doc.file_name.lower().endswith('.pdf'):
+                pdf_reader = PdfReader(io.BytesIO(file_data))
+                merger.append(pdf_reader)
+                merged_any = True
+                doc_names.append(doc.file_name)
+        except Exception as e:
+            logger.error(f"Error processing document {doc.id} for email: {e}")
+
+    if not merged_any:
+        raise HTTPException(status_code=400, detail="No PDF documents could be merged")
+
+    # Write merged PDF to bytes
+    output = io.BytesIO()
+    merger.write(output)
+    merger.close()
+    pdf_bytes = output.getvalue()
+
+    # Send email with attachment
+    try:
+        from email_service import EmailService
+        email_service = EmailService()
+
+        filename = f"merged_documents_{loan.borrower_name or loan.id}.pdf"
+
+        email_service.send_email(
+            to=recipient_email,
+            subject=f"Merged Documents - {loan.borrower_name or 'Loan ' + str(loan.id)}",
+            body=f"""
+            <p>Please find attached the merged documents for loan {loan.loan_number or loan.id}.</p>
+            <p>Documents included:</p>
+            <ul>
+                {''.join(f'<li>{name}</li>' for name in doc_names)}
+            </ul>
+            <p>This is an automated message from Perennia AI.</p>
+            """,
+            attachments=[{
+                "filename": filename,
+                "content": pdf_bytes,
+                "content_type": "application/pdf"
+            }]
+        )
+
+        return {
+            "success": True,
+            "message": f"Merged {len(doc_names)} documents and sent to {recipient_email}",
+            "documents_merged": doc_names,
+            "recipient": recipient_email
+        }
+    except Exception as e:
+        logger.error(f"Failed to send merged documents email: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
 
 @router.post("/document/{document_id}/manual-review")

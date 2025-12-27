@@ -52,12 +52,14 @@ PUBLIC_PATHS = [
     "/health/ready",
     "/health/live",
     "/health/detailed",
+    "/api/v1/health",  # API health check endpoint
     "/docs",
     "/redoc",
     "/openapi.json",
     "/api/v1/migrations/convert-lead-stage-to-enum-names",  # Key-protected migration
     "/api/v1/migrations/fix-lead-stage-values",  # Key-protected migration
     "/api/v1/webhook/",  # Webhooks must be accessible from external services (SendGrid, Twilio, etc.)
+    "/api/v1/referral-partners",  # May need public access for integrations
 ]
 
 # ============================================================================
@@ -562,19 +564,40 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Request entity too large"}
             )
 
-        # Validate content type for POST/PUT requests
+        # Validate content type for POST/PUT requests with body
         if request.method in ["POST", "PUT", "PATCH"]:
             content_type = request.headers.get("content-type", "")
+            content_length = request.headers.get("content-length", "0")
+
             allowed_types = [
                 "application/json",
                 "application/x-www-form-urlencoded",
-                "multipart/form-data"
+                "multipart/form-data",
+                "text/plain",
+                "text/html",
+                "application/octet-stream",
             ]
 
-            if not any(allowed in content_type for allowed in allowed_types):
-                # Skip validation for specific endpoints that might need other types
-                if not request.url.path.startswith("/api/v1/documents/upload"):
-                    logger.warning(f"Invalid content type: {content_type} from {request.client.host}")
+            # Paths that don't require content type validation
+            skip_validation_paths = [
+                "/api/v1/documents/upload",
+                "/api/v1/webhook/",
+                "/api/v1/voice/",
+                "/api/v1/smart-docs/",
+                "/api/portal/",
+            ]
+
+            # Only validate if:
+            # 1. There's actually content being sent (content-length > 0)
+            # 2. Content-type is specified but not in allowed list
+            # 3. Path is not in skip list
+            has_body = content_length != "0" and content_length != ""
+            path_skip = any(request.url.path.startswith(p) for p in skip_validation_paths)
+
+            if has_body and content_type and not path_skip:
+                if not any(allowed in content_type.lower() for allowed in allowed_types):
+                    # Log at debug level instead of warning to reduce noise
+                    logger.debug(f"Uncommon content type: {content_type} from {request.client.host} for {request.url.path}")
 
         response = await call_next(request)
         return response

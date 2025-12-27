@@ -240,8 +240,10 @@ async def upload_document_for_requirement(
     if file_size > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
-    # Use request.borrower_id if available, otherwise use a default (1 for primary borrower)
+    # Use request.borrower_id if available, otherwise default to primary borrower
     borrower_id = request.borrower_id if request.borrower_id else 1
+    if not request.borrower_id:
+        logger.info(f"Document request {request_id} has no borrower_id, defaulting to primary borrower (1)")
 
     # Get S3 service - must verify availability and upload BEFORE creating DB record
     s3_service = get_smart_docs_s3_service()
