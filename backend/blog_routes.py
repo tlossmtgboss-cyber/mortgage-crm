@@ -888,54 +888,54 @@ async def generate_content(
     db: Session = Depends(get_db),
 ):
     """Generate a new blog post with AI."""
-    logger.info(f"Blog generation request received: topic='{request.topic}', archetype='{request.archetype}'")
-
-    if not blog_llm_service.enabled:
-        logger.error("Blog generation failed: LLM service not enabled")
-        raise HTTPException(status_code=503, detail="LLM service not configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.")
-
-    user_id = get_current_user_id(db)
-
-    # Get voice and compliance profiles
-    voice_profile = None
-    if request.voice_profile_id:
-        vp = db.query(BlogVoiceProfile).filter(
-            BlogVoiceProfile.id == request.voice_profile_id,
-            BlogVoiceProfile.user_id == user_id,
-        ).first()
-        if vp:
-            voice_profile = {
-                "sliders_json": vp.sliders_json,
-                "toggles_json": vp.toggles_json,
-                "examples_json": vp.examples_json,
-            }
-
-    compliance_profile = None
-    if request.compliance_profile_id:
-        cp = db.query(BlogComplianceProfile).filter(
-            BlogComplianceProfile.id == request.compliance_profile_id,
-            BlogComplianceProfile.user_id == user_id,
-        ).first()
-        if cp:
-            compliance_profile = {
-                "required_disclosures_json": cp.required_disclosures_json,
-                "banned_phrases_json": cp.banned_phrases_json,
-                "overrides_json": cp.overrides_json,
-            }
-
-    # Get source content if specified
-    source_content = ""
-    if request.source_document_id:
-        doc = db.query(BlogSourceDocument).filter(
-            BlogSourceDocument.id == request.source_document_id,
-            BlogSourceDocument.user_id == user_id,
-            BlogSourceDocument.processed == True,
-        ).first()
-        if doc and doc.extracted_text:
-            source_content = doc.extracted_text[:5000]
-
-    # Generate content
     try:
+        logger.info(f"Blog generation request received: topic='{request.topic}', archetype='{request.archetype}'")
+
+        if not blog_llm_service.enabled:
+            logger.error("Blog generation failed: LLM service not enabled")
+            raise HTTPException(status_code=503, detail="LLM service not configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.")
+
+        user_id = get_current_user_id(db)
+
+        # Get voice and compliance profiles
+        voice_profile = None
+        if request.voice_profile_id:
+            vp = db.query(BlogVoiceProfile).filter(
+                BlogVoiceProfile.id == request.voice_profile_id,
+                BlogVoiceProfile.user_id == user_id,
+            ).first()
+            if vp:
+                voice_profile = {
+                    "sliders_json": vp.sliders_json,
+                    "toggles_json": vp.toggles_json,
+                    "examples_json": vp.examples_json,
+                }
+
+        compliance_profile = None
+        if request.compliance_profile_id:
+            cp = db.query(BlogComplianceProfile).filter(
+                BlogComplianceProfile.id == request.compliance_profile_id,
+                BlogComplianceProfile.user_id == user_id,
+            ).first()
+            if cp:
+                compliance_profile = {
+                    "required_disclosures_json": cp.required_disclosures_json,
+                    "banned_phrases_json": cp.banned_phrases_json,
+                    "overrides_json": cp.overrides_json,
+                }
+
+        # Get source content if specified
+        source_content = ""
+        if request.source_document_id:
+            doc = db.query(BlogSourceDocument).filter(
+                BlogSourceDocument.id == request.source_document_id,
+                BlogSourceDocument.user_id == user_id,
+                BlogSourceDocument.processed == True,
+            ).first()
+            if doc and doc.extracted_text:
+                source_content = doc.extracted_text[:5000]
+
+        # Generate content
         result = await blog_llm_service.generate_blog_post(
             topic=request.topic,
             archetype=request.archetype,
@@ -944,72 +944,79 @@ async def generate_content(
             voice_profile=voice_profile,
             compliance_profile=compliance_profile,
         )
+
+        if not result.success:
+            raise HTTPException(status_code=500, detail=f"Generation failed: {result.error}")
+
+        # Check compliance
+        compliance_result = blog_compliance_service.check_compliance(
+            result.blog_md,
+            compliance_profile,
+            content_type="blog",
+        )
+
+        # Check similarity against source
+        similarity_result = None
+        if source_content:
+            similarity_result = blog_similarity_service.check_similarity(
+                result.blog_md,
+                source_content,
+            )
+
+        # Generate social content if requested
+        social_content = {}
+        if request.generate_social:
+            social_content = await blog_llm_service.generate_social_content(
+                result.blog_md,
+                result.title,
+                request.platforms,
+                voice_profile,
+            )
+
+        # Create content item
+        content_item = BlogContentItem(
+            user_id=user_id,
+            campaign_id=request.campaign_id,
+            source_document_id=request.source_document_id,
+            status="draft",
+            archetype=request.archetype,
+            title=result.title,
+            slug=result.slug,
+            blog_md=result.blog_md,
+            blog_html=result.blog_html,
+            social_json=social_content,
+            image_prompt=result.image_prompt,
+            metadata_json=result.metadata,
+            voice_profile_id=request.voice_profile_id,
+            compliance_profile_id=request.compliance_profile_id,
+            uniqueness_score=similarity_result.uniqueness_score if similarity_result else None,
+        )
+        db.add(content_item)
+        db.commit()
+        db.refresh(content_item)
+
+        return {
+            "id": content_item.id,
+            "title": result.title,
+            "slug": result.slug,
+            "blog_md": result.blog_md,
+            "blog_html": result.blog_html,
+            "social": social_content,
+            "image_prompt": result.image_prompt,
+            "compliance": compliance_result.to_dict(),
+            "similarity": similarity_result.to_dict() if similarity_result else None,
+            "metadata": result.metadata,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Blog generation exception: {e}")
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
-
-    if not result.success:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {result.error}")
-
-    # Check compliance
-    compliance_result = blog_compliance_service.check_compliance(
-        result.blog_md,
-        compliance_profile,
-        content_type="blog",
-    )
-
-    # Check similarity against source
-    similarity_result = None
-    if source_content:
-        similarity_result = blog_similarity_service.check_similarity(
-            result.blog_md,
-            source_content,
+        import traceback
+        logger.error(f"Blog generation failed with unexpected error: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Content generation failed: {str(e)}"
         )
-
-    # Generate social content if requested
-    social_content = {}
-    if request.generate_social:
-        social_content = await blog_llm_service.generate_social_content(
-            result.blog_md,
-            result.title,
-            request.platforms,
-            voice_profile,
-        )
-
-    # Create content item
-    content_item = BlogContentItem(
-        user_id=user_id,
-        campaign_id=request.campaign_id,
-        source_document_id=request.source_document_id,
-        status="draft",
-        archetype=request.archetype,
-        title=result.title,
-        slug=result.slug,
-        blog_md=result.blog_md,
-        blog_html=result.blog_html,
-        social_json=social_content,
-        image_prompt=result.image_prompt,
-        metadata_json=result.metadata,
-        voice_profile_id=request.voice_profile_id,
-        compliance_profile_id=request.compliance_profile_id,
-        uniqueness_score=similarity_result.uniqueness_score if similarity_result else None,
-    )
-    db.add(content_item)
-    db.commit()
-    db.refresh(content_item)
-
-    return {
-        "id": content_item.id,
-        "title": result.title,
-        "slug": result.slug,
-        "blog_md": result.blog_md,
-        "blog_html": result.blog_html,
-        "social": social_content,
-        "image_prompt": result.image_prompt,
-        "compliance": compliance_result.to_dict(),
-        "similarity": similarity_result.to_dict() if similarity_result else None,
-        "metadata": result.metadata,
-    }
 
 
 @router.get("/content")

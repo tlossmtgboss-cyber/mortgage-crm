@@ -918,8 +918,13 @@ const AIDailyBlog = () => {
                                 errorMessage = 'Cannot connect to the server. Please check your internet connection and try again.';
                               } else if (lastError?.response?.status === 503) {
                                 errorMessage = 'AI service is not available. The ANTHROPIC_API_KEY environment variable needs to be configured in Railway.';
+                              } else if (lastError?.response?.status === 500) {
+                                // Show the specific error from the server
+                                errorMessage = lastError?.response?.data?.detail || lastError?.response?.data?.error?.message || 'Server error during content generation. Please try again.';
                               } else if (lastError?.response?.data?.detail) {
                                 errorMessage = lastError.response.data.detail;
+                              } else if (lastError?.response?.data?.error?.message) {
+                                errorMessage = lastError.response.data.error.message;
                               } else if (lastError?.message) {
                                 errorMessage = lastError.message;
                               }
