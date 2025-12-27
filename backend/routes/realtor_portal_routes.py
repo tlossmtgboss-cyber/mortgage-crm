@@ -1262,6 +1262,7 @@ async def add_partner_note(
         raise HTTPException(status_code=404, detail="Client not found")
 
     # Create activity record
+    activity_id = None
     try:
         db.execute(text("""
             INSERT INTO activities (
@@ -1275,6 +1276,14 @@ async def add_partner_note(
             "user_id": lead_info.owner_id or 1
         })
         db.commit()
+
+        # Get the activity ID (works for both SQLite and PostgreSQL)
+        result = db.execute(text("""
+            SELECT id FROM activities
+            WHERE lead_id = :lead_id AND type = 'Note'
+            ORDER BY created_at DESC LIMIT 1
+        """), {"lead_id": client_id}).fetchone()
+        activity_id = result[0] if result else None
     except Exception as e:
         logger.error(f"Failed to create activity: {e}")
         db.rollback()
