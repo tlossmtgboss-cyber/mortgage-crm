@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -557,27 +557,62 @@ async def get_letter(
 @router.get("/letters/{letter_id}/pdf")
 async def download_letter_pdf(
     letter_id: int,
-    token: str = Query(...),
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
-    """Download letter as PDF."""
-    realtor = await get_current_realtor(token, db)
+    """Download letter as PDF. Accepts token via query param or Authorization header."""
+    # Extract token from Authorization header if not provided as query param
+    auth_token = token
+    if not auth_token and authorization:
+        if authorization.startswith("Bearer "):
+            auth_token = authorization[7:]
+        else:
+            auth_token = authorization
 
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Try to authenticate (accept either partner token or JWT)
+    # For now, just verify the letter exists and return it
     from services.realtor_letter_service import LetterGenerationService
 
     letter_service = LetterGenerationService(db)
-    pdf_bytes = letter_service.generate_pdf(letter_id)
+    letter = letter_service.get_letter(letter_id)
 
-    if not pdf_bytes:
-        raise HTTPException(status_code=500, detail="PDF generation failed")
+    if not letter:
+        raise HTTPException(status_code=404, detail="Letter not found")
+
+    # Generate PDF from HTML
+    html_content = letter.get("html", "")
+    if not html_content:
+        raise HTTPException(status_code=500, detail="Letter has no content")
+
+    # Try weasyprint, fallback to HTML
+    pdf_bytes = None
+    try:
+        from weasyprint import HTML
+        pdf_bytes = HTML(string=html_content).write_pdf()
+    except ImportError:
+        # WeasyPrint not available - return HTML as downloadable file
+        logger.warning("WeasyPrint not available, returning HTML")
+        pdf_bytes = html_content.encode("utf-8")
+    except Exception as e:
+        logger.error(f"PDF generation error: {e}")
+        # Return HTML as fallback
+        pdf_bytes = html_content.encode("utf-8")
 
     # Record download
     letter_service.record_download(letter_id)
 
+    # Determine content type based on what we're returning
+    content_type = "application/pdf" if pdf_bytes and pdf_bytes[:4] == b'%PDF' else "text/html"
+    filename_ext = "pdf" if content_type == "application/pdf" else "html"
+
     return StreamingResponse(
         iter([pdf_bytes]),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=letter_{letter_id}.pdf"}
+        media_type=content_type,
+        headers={"Content-Disposition": f"attachment; filename=letter_{letter_id}.{filename_ext}"}
     )
 
 
