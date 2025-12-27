@@ -140,6 +140,9 @@ class TaskGeneratorService:
             # Update instance's last_task_generated_day
             self._update_instance_progress(instance_id, last_day_generated)
 
+            # CRITICAL: Commit all changes to persist tasks to database
+            self.db.commit()
+
             logger.info(f"Generated {len(tasks_created)} tasks for instance {instance_id}")
 
             return {

@@ -660,7 +660,11 @@ class PURLWorkspaceService:
                             "name": lo_user.full_name or lo_user.email.split('@')[0] if lo_user.email else 'Loan Officer',
                             "email": lo_user.email,
                             "phone": lo_user.phone,
-                            "nmls_id": getattr(lo_user, 'nmls_id', None)
+                            "nmls_id": getattr(lo_user, 'nmls_id', None),
+                            "headshot_url": getattr(lo_user, 'headshot_url', None),
+                            "company_logo_url": getattr(lo_user, 'company_logo_url', None),
+                            "title": getattr(lo_user, 'title', None),
+                            "team_name": getattr(lo_user, 'team_name', None),
                         }
                         logger.info(f"Loaded LO info for workspace {workspace.id}: {loan_officer_data.get('name')}")
                 except Exception as e:

@@ -170,3 +170,271 @@
   background: #9ca3af;
   cursor: not-allowed;
 }
+
+/* Upload Result Actions */
+.upload-result-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.review-document-btn {
+  flex: 1;
+  padding: 12px 24px;
+  background: #4a90d9;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.review-document-btn:hover {
+  background: #3a7fc9;
+}
+
+.upload-another-btn {
+  padding: 12px 24px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-another-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Dragging State */
+.drop-zone.dragging {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.drop-zone.error {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+/* Drop Zone Elements */
+.drop-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.drop-text {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #374151;
+}
+
+.drop-hint {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.file-types {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+/* Upload Progress */
+.upload-progress {
+  padding: 20px;
+  text-align: center;
+}
+
+.upload-progress .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.processing-steps {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  text-align: left;
+  max-width: 200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.processing-steps li {
+  padding: 4px 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.processing-steps li.complete {
+  color: #10b981;
+}
+
+.processing-steps li.active {
+  color: #2563eb;
+  font-weight: 500;
+}
+
+/* Upload Guidelines */
+.upload-guidelines {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.upload-guidelines h4 {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.upload-guidelines ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.upload-guidelines li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 0.875rem;
+  color: #4b5563;
+}
+
+.upload-guidelines li .check {
+  color: #10b981;
+}
+
+.upload-guidelines li .warning {
+  color: #f59e0b;
+}
+
+/* Result Container */
+.result-container {
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.result-container.approved {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.result-container.rejected {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.result-container.needs_review {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.result-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.status-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.status-icon.success {
+  background: #10b981;
+  color: white;
+}
+
+.status-icon.error {
+  background: #dc2626;
+  color: white;
+}
+
+.status-icon.warning {
+  background: #f59e0b;
+  color: white;
+}
+
+/* Analysis Details */
+.analysis-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.analysis-item h4 {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.detection-result {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.detection-result.clear {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.detection-result.detected {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.date-info {
+  display: flex;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.date-label {
+  color: #6b7280;
+}
+
+.date-value {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.no-date {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  font-style: italic;
+}

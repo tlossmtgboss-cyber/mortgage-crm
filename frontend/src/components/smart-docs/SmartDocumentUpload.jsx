@@ -3,12 +3,14 @@
  *
  * Drag-and-drop document upload with real-time processing feedback.
  * Shows screenshot detection and freshness validation results.
+ * Opens DocumentReviewModal for AI extraction and data comparison.
  */
 
 import React, { useState, useCallback, useRef } from 'react';
 import { smartDocsAPI } from '../../services/smartDocsApi';
 import RejectionExplainer from './RejectionExplainer';
 import FreshnessIndicator from './FreshnessIndicator';
+import DocumentReviewModal from '../document-review/DocumentReviewModal';
 import './SmartDocumentUpload.css';
 
 const SmartDocumentUpload = ({
@@ -18,14 +20,24 @@ const SmartDocumentUpload = ({
   docType = null,
   onUploadComplete,
   onUploadError,
+  onDocumentApproved,
   maxSizeMB = 20,
   acceptedTypes = '.pdf,.jpg,.jpeg,.png,.gif,.tiff',
+  // Profile info for comparison
+  profileType = 'loan', // 'lead' or 'loan'
+  profileId = null,
+  borrowerName = '',
+  coBorrowerName = '',
+  // Auto-open review modal
+  autoOpenReview = true,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadState, setUploadState] = useState('idle'); // idle, uploading, processing, complete, error
   const [uploadResult, setUploadResult] = useState(null);
   const [error, setError] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewDocumentId, setReviewDocumentId] = useState(null);
   const fileInputRef = useRef(null);
 
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
@@ -74,6 +86,12 @@ const SmartDocumentUpload = ({
       setUploadState('complete');
       setUploadResult(result);
 
+      // Open review modal if auto-open is enabled and we have a document ID
+      if (autoOpenReview && result.document_id) {
+        setReviewDocumentId(result.document_id);
+        setShowReviewModal(true);
+      }
+
       if (onUploadComplete) {
         onUploadComplete(result);
       }
@@ -121,20 +139,67 @@ const SmartDocumentUpload = ({
     setUploadResult(null);
     setError(null);
     setSelectedFile(null);
+    setShowReviewModal(false);
+    setReviewDocumentId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCloseReviewModal = () => {
+    setShowReviewModal(false);
+    setReviewDocumentId(null);
+  };
+
+  const handleDocumentApproved = (approvalResult) => {
+    setShowReviewModal(false);
+    setReviewDocumentId(null);
+
+    if (onDocumentApproved) {
+      onDocumentApproved(approvalResult);
+    }
+  };
+
+  const handleOpenReview = () => {
+    if (uploadResult?.document_id) {
+      setReviewDocumentId(uploadResult.document_id);
+      setShowReviewModal(true);
     }
   };
 
   // Render based on state
   if (uploadState === 'complete' && uploadResult) {
     return (
-      <div className="upload-result">
-        <UploadResultDisplay result={uploadResult} />
-        <button className="upload-another-btn" onClick={handleReset}>
-          Upload Another Document
-        </button>
-      </div>
+      <>
+        <div className="upload-result">
+          <UploadResultDisplay result={uploadResult} />
+          <div className="upload-result-actions">
+            {uploadResult.document_id && (
+              <button className="review-document-btn" onClick={handleOpenReview}>
+                Review & Extract Data
+              </button>
+            )}
+            <button className="upload-another-btn" onClick={handleReset}>
+              Upload Another Document
+            </button>
+          </div>
+        </div>
+
+        {/* Document Review Modal */}
+        {showReviewModal && reviewDocumentId && (
+          <DocumentReviewModal
+            documentId={reviewDocumentId}
+            loanId={loanId}
+            borrowerName={borrowerName}
+            coBorrowerName={coBorrowerName}
+            profileType={profileType}
+            profileId={profileId || loanId}
+            onClose={handleCloseReviewModal}
+            onApprove={handleDocumentApproved}
+            initialFileName={uploadResult.file_name || selectedFile?.name}
+          />
+        )}
+      </>
     );
   }
 

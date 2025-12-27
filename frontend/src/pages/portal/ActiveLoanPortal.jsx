@@ -1351,7 +1351,13 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           {/* Top Row - Logo & Date */}
           <div className="header-top-row">
             <div className="logo-section">
-              {/* Logo will go here */}
+              {data?.loanOfficer?.company_logo_url && (
+                <img
+                  src={data.loanOfficer.company_logo_url}
+                  alt="Company Logo"
+                  className="portal-company-logo"
+                />
+              )}
             </div>
             <div className="header-date">
               <span className="date-label">{formatCurrentDate()}</span>
@@ -1409,7 +1415,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           badgeCount={conditions.filter(c => c.is_new && c.status === 'pending').length}
         />
         <TabButton
-          label="Loan Quote"
+          label="Loan Comparison"
           isActive={activeTab === 'loan-quote'}
           onClick={() => setActiveTab('loan-quote')}
           hasNotification={data?.loanEstimates?.length > 0}
@@ -1898,7 +1904,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
             ) : (
               <div className="empty-state-card">
                 <div className="empty-icon">💰</div>
-                <h3>No Loan Quotes Yet</h3>
+                <h3>No Loan Comparisons Yet</h3>
                 <p>Your loan officer will prepare a comprehensive cost analysis for you. This will include:</p>
                 <ul className="quote-benefits-list">
                   <li>Side-by-side loan scenario comparisons</li>

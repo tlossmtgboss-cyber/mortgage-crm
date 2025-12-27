@@ -18,6 +18,15 @@ const ONBOARDING_STEPS = [
     targetSelector: null, // No specific target - centered modal
   },
   {
+    id: 'action-items',
+    title: '⚡ Action Required',
+    description: 'This is your task center! When you have items to complete, they\'ll appear here. Click each task to view details and mark it done. Completing these keeps your loan moving forward quickly!',
+    position: 'bottom',
+    targetSelector: '.applicant-tasks-section, .all-caught-up-section',
+    highlightNav: false,
+    isPrimary: true,
+  },
+  {
     id: 'overview',
     title: 'Overview Tab',
     description: 'Your home base! See your loan status, action items, documents needed, and loan progress all in one place.',
@@ -43,8 +52,8 @@ const ONBOARDING_STEPS = [
   },
   {
     id: 'loan-quote',
-    title: 'Loan Quote Tab',
-    description: 'View your loan estimate with detailed costs, rates, and monthly payment breakdown.',
+    title: 'Loan Comparison Tab',
+    description: 'Compare loan options side-by-side with detailed costs, rates, and monthly payment breakdowns.',
     position: 'bottom',
     targetSelector: '.purl-tab-btn:nth-child(4), .portal-nav button:nth-child(4)',
     highlightNav: true,
@@ -241,7 +250,7 @@ const PortalOnboardingGuide = ({ workspaceSlug, onComplete, forceShow = false })
 
       {/* Tooltip */}
       <div
-        className={`portal-onboarding-tooltip ${isCenteredStep ? 'centered' : ''} position-${step.position}`}
+        className={`portal-onboarding-tooltip ${isCenteredStep ? 'centered' : ''} ${step.isPrimary ? 'primary' : ''} position-${step.position}`}
         style={tooltipPosition}
       >
         {/* Arrow pointer for non-centered tooltips */}

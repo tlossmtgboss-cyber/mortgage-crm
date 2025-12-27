@@ -55682,6 +55682,15 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Conversation Intelligence Platform migration skipped: {e}")
 
+            # Run Document Extraction migration (AI extraction, owner detection)
+            try:
+                from migrations.add_document_extraction_tables import run_migration as run_doc_extraction_migration
+                from database import engine
+                run_doc_extraction_migration(engine)
+                logger.info("✅ Document Extraction migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Document Extraction migration skipped: {e}")
+
             # Ensure admin user exists with correct settings
             try:
                 db_admin = SessionLocal()

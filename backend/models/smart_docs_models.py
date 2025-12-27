@@ -232,6 +232,10 @@ class SmartDocument(Base):
     user_agent = Column(String(512), nullable=True)
     ip_address = Column(String(45), nullable=True)
 
+    # Review display info
+    display_name = Column(String(255), nullable=True)  # User-editable document name
+    assigned_owner = Column(String(20), nullable=True)  # BORROWER, CO_BORROWER
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

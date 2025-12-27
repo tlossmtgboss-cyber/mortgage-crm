@@ -229,6 +229,25 @@
   background: #2563eb;
 }
 
+/* Primary/Important step styling */
+.portal-onboarding-tooltip.primary {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #1e293b 0%, #292524 100%);
+}
+
+.portal-onboarding-tooltip.primary .tooltip-header {
+  border-bottom-color: #f59e0b;
+}
+
+.portal-onboarding-tooltip.primary .tooltip-header h3 {
+  color: #fbbf24;
+  font-size: 18px;
+}
+
+.portal-onboarding-tooltip.primary .target-highlight {
+  border-color: #f59e0b;
+}
+
 /* Centered modal styling */
 .portal-onboarding-tooltip.centered .tooltip-header {
   padding: 20px 20px 12px;

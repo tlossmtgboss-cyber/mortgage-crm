@@ -1,0 +1,273 @@
+/* Data Comparison Row Styles */
+
+.comparison-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e9ecef;
+  transition: background 0.15s;
+}
+
+.comparison-row:hover {
+  background: #f8f9fa;
+}
+
+.comparison-row:last-child {
+  border-bottom: none;
+}
+
+/* Status Colors */
+.comparison-row.conflict {
+  background: #fff8f8;
+}
+
+.comparison-row.conflict:hover {
+  background: #fff0f0;
+}
+
+.comparison-row.new {
+  background: #f8fff8;
+}
+
+.comparison-row.new:hover {
+  background: #f0fff0;
+}
+
+.comparison-row.match {
+  background: #fff;
+}
+
+/* Action Selected States */
+.comparison-row.action-replace,
+.comparison-row.action-add {
+  background: #f0f7ff;
+}
+
+.comparison-row.action-keep {
+  background: #fff;
+}
+
+.comparison-row.action-ignore {
+  background: #f8f8f8;
+  opacity: 0.7;
+}
+
+/* Row Label */
+.row-label {
+  flex: 0 0 150px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.confidence-indicator {
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.confidence-indicator.high {
+  background: #d4edda;
+  color: #155724;
+}
+
+.confidence-indicator.medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.confidence-indicator.low {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Values Section */
+.row-values {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.value-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  min-width: 0;
+  transition: all 0.15s;
+}
+
+.value-cell.selected {
+  border-color: #4a90d9;
+  background: #f0f7ff;
+}
+
+.value-cell.current.selected {
+  border-color: #28a745;
+  background: #f8fff8;
+}
+
+.value-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #999;
+  margin-bottom: 2px;
+}
+
+.value-content {
+  font-size: 13px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty-value {
+  color: #ccc;
+}
+
+.provenance {
+  margin-left: auto;
+  cursor: help;
+  opacity: 0.6;
+}
+
+.provenance:hover {
+  opacity: 1;
+}
+
+/* Value Indicator */
+.value-indicator {
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.conflict-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #dc3545;
+  color: white;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.new-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #28a745;
+  color: white;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.match-icon {
+  color: #28a745;
+  font-size: 18px;
+}
+
+/* Action Buttons */
+.row-actions {
+  flex: 0 0 160px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.action-btn {
+  padding: 5px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #fff;
+  color: #495057;
+}
+
+.action-btn:hover {
+  border-color: #adb5bd;
+}
+
+.action-btn.active {
+  color: white;
+}
+
+.action-btn.keep.active {
+  background: #28a745;
+  border-color: #28a745;
+}
+
+.action-btn.replace.active,
+.action-btn.add.active {
+  background: #4a90d9;
+  border-color: #4a90d9;
+}
+
+.action-btn.ignore.active {
+  background: #6c757d;
+  border-color: #6c757d;
+}
+
+.match-label {
+  font-size: 12px;
+  color: #28a745;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .comparison-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .row-label {
+    flex: none;
+  }
+
+  .row-values {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .value-cell {
+    flex: none;
+    width: 100%;
+  }
+
+  .value-indicator {
+    flex: none;
+    transform: rotate(90deg);
+  }
+
+  .row-actions {
+    flex: none;
+    justify-content: center;
+  }
+}
