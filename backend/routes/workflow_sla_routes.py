@@ -2027,7 +2027,71 @@ async def workflow_diagnostic_summary(
 
         summary["issues"] = issues
 
+        # Check linked tasks in main tasks table
+        linked_tasks = db.execute(text("""
+            SELECT COUNT(*) FROM tasks
+            WHERE workflow_task_instance_id IS NOT NULL
+        """)).scalar() or 0
+        summary["linked_tasks_in_main_table"] = linked_tasks
+
         return summary
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.get("/diagnostic/linked-tasks")
+async def get_linked_tasks_diagnostic(
+    limit: int = Query(20, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Check linked tasks in the main tasks table.
+    Shows workflow tasks that appear in the task list UI.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Get tasks with workflow links
+        linked = db.execute(text("""
+            SELECT t.id, t.title, t.status, t.priority, t.due_date,
+                   t.owner_id, t.lead_id, t.loan_id,
+                   t.workflow_task_instance_id, t.task_group_key,
+                   t.created_at
+            FROM tasks t
+            WHERE t.workflow_task_instance_id IS NOT NULL
+            ORDER BY t.created_at DESC
+            LIMIT :limit
+        """), {"limit": limit}).fetchall()
+
+        tasks = [
+            {
+                "id": r[0],
+                "title": r[1],
+                "status": r[2],
+                "priority": r[3],
+                "due_date": str(r[4]) if r[4] else None,
+                "owner_id": r[5],
+                "lead_id": r[6],
+                "loan_id": r[7],
+                "workflow_task_instance_id": r[8],
+                "task_group_key": r[9],
+                "created_at": str(r[10])
+            }
+            for r in linked
+        ]
+
+        # Count total
+        total = db.execute(text("""
+            SELECT COUNT(*) FROM tasks
+            WHERE workflow_task_instance_id IS NOT NULL
+        """)).scalar() or 0
+
+        return {
+            "total_linked_tasks": total,
+            "tasks": tasks
+        }
 
     except Exception as e:
         import traceback
