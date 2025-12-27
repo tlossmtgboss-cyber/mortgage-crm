@@ -2063,6 +2063,57 @@ async def health_check():
 # Admin Endpoints
 # =============================================================================
 
+@router.get("/admin/s3-test")
+async def s3_test(
+    admin_key: str = Query(default="perennia-admin-2024"),
+):
+    """Direct S3 test without any middleware."""
+    import boto3
+    import os
+    from datetime import datetime
+
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = {}
+
+    try:
+        # Create fresh S3 client
+        s3 = boto3.client(
+            's3',
+            region_name=os.getenv('AWS_REGION', 'us-east-1'),
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        )
+        results["client_created"] = "ok"
+
+        bucket = os.getenv('SMART_DOCS_S3_BUCKET', 'perennia-smart-docs')
+        test_key = f"test/s3_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        test_content = f"S3 test at {datetime.now().isoformat()}".encode('utf-8')
+
+        # Test put_object
+        s3.put_object(
+            Bucket=bucket,
+            Key=test_key,
+            Body=test_content,
+            ContentType='text/plain'
+        )
+        results["put_object"] = f"ok - uploaded to {test_key}"
+
+        # Verify by listing
+        response = s3.list_objects_v2(Bucket=bucket, Prefix='test/', MaxKeys=5)
+        results["list_objects"] = f"ok - found {response.get('KeyCount', 0)} objects"
+
+        # Clean up
+        s3.delete_object(Bucket=bucket, Key=test_key)
+        results["delete_object"] = "ok"
+
+    except Exception as e:
+        results["error"] = f"{type(e).__name__}: {str(e)}"
+
+    return results
+
+
 @router.get("/admin/upload-diagnostic")
 async def upload_diagnostic(
     admin_key: str = Query(default="perennia-admin-2024"),
