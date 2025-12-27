@@ -2063,6 +2063,152 @@ async def health_check():
 # Admin Endpoints
 # =============================================================================
 
+@router.get("/admin/upload-diagnostic")
+async def upload_diagnostic(
+    admin_key: str = Query(default="perennia-admin-2024"),
+    db: Session = Depends(get_db),
+):
+    """Diagnostic endpoint to test upload capabilities."""
+    from sqlalchemy import text
+
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = {
+        "database": "unknown",
+        "s3": "unknown",
+        "smart_document_table": "unknown",
+        "pipeline_import": "unknown",
+    }
+
+    # Test database connection
+    try:
+        db.execute(text("SELECT 1")).fetchone()
+        results["database"] = "connected"
+    except Exception as e:
+        results["database"] = f"error: {str(e)}"
+
+    # Test smart_documents table
+    try:
+        count = db.execute(text("SELECT COUNT(*) FROM smart_documents")).fetchone()[0]
+        results["smart_document_table"] = f"ok ({count} documents)"
+    except Exception as e:
+        results["smart_document_table"] = f"error: {str(e)}"
+
+    # Test S3 service
+    try:
+        s3_service = get_smart_docs_s3_service()
+        results["s3"] = f"available: {s3_service.is_available}, bucket: {s3_service.bucket_name}"
+    except Exception as e:
+        results["s3"] = f"error: {str(e)}"
+
+    # Test pipeline import
+    try:
+        pipeline = DocumentReviewPipeline(db)
+        results["pipeline_import"] = "ok"
+    except Exception as e:
+        results["pipeline_import"] = f"error: {str(e)}"
+
+    return results
+
+
+@router.post("/admin/test-upload")
+async def test_upload(
+    file: UploadFile = File(...),
+    loan_id: int = Form(146),
+    borrower_id: int = Form(574),
+    admin_key: str = Query(default="perennia-admin-2024"),
+    db: Session = Depends(get_db),
+):
+    """Test upload endpoint with detailed error logging."""
+    from sqlalchemy import text
+
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    steps = {}
+
+    # Step 1: Read file
+    try:
+        file_content = await file.read()
+        steps["read_file"] = f"ok ({len(file_content)} bytes)"
+    except Exception as e:
+        steps["read_file"] = f"error: {str(e)}"
+        return {"steps": steps, "error": "Failed at read_file"}
+
+    # Step 2: Get S3 service
+    try:
+        s3_service = get_smart_docs_s3_service()
+        storage_key = s3_service.generate_storage_key(
+            loan_id=loan_id,
+            borrower_id=borrower_id,
+            file_name=file.filename
+        )
+        steps["s3_service"] = f"ok, key: {storage_key}"
+    except Exception as e:
+        steps["s3_service"] = f"error: {str(e)}"
+        return {"steps": steps, "error": "Failed at s3_service"}
+
+    # Step 3: Create document record
+    try:
+        document = SmartDocument(
+            request_id=None,
+            loan_id=loan_id,
+            borrower_id=borrower_id,
+            file_name=file.filename,
+            mime_type=file.content_type or "application/octet-stream",
+            file_size=len(file_content),
+            storage_key=storage_key,
+            doc_type=None,
+            status="UPLOADED",
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+        steps["create_document"] = f"ok, id: {document.id}"
+    except Exception as e:
+        db.rollback()
+        steps["create_document"] = f"error: {str(e)}"
+        return {"steps": steps, "error": "Failed at create_document"}
+
+    # Step 4: Upload to S3 (optional)
+    try:
+        if s3_service.is_available:
+            upload_result = s3_service.upload_file(
+                file_content=file_content,
+                storage_key=storage_key,
+                content_type=file.content_type or "application/octet-stream",
+                metadata={"loan_id": str(loan_id), "document_id": str(document.id)}
+            )
+            steps["s3_upload"] = f"result: {upload_result}"
+        else:
+            steps["s3_upload"] = "skipped (S3 not available)"
+    except Exception as e:
+        steps["s3_upload"] = f"error: {str(e)}"
+
+    # Step 5: Process document
+    try:
+        pipeline = DocumentReviewPipeline(db)
+        result = pipeline.process_document(
+            document_id=document.id,
+            file_content=file_content,
+            mime_type=file.content_type or "application/octet-stream",
+            filename=file.filename,
+            doc_type=None,
+            request_id=None,
+        )
+        steps["process_document"] = f"ok, status: {result.status.value}"
+    except Exception as e:
+        steps["process_document"] = f"error: {str(e)}"
+        return {"steps": steps, "error": "Failed at process_document", "document_id": document.id}
+
+    return {
+        "steps": steps,
+        "document_id": document.id,
+        "status": "success"
+    }
+
+
 @router.post("/admin/create-test-loan")
 async def create_test_loan(
     admin_key: str = Query(default="perennia-admin-2024"),
