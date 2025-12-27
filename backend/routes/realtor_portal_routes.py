@@ -632,7 +632,7 @@ async def generate_preapproval_for_lead(
 
     This endpoint works with both CRM JWT tokens and partner portal tokens.
     """
-    from services.realtor_letter_service import LetterGenerationService
+    logger.info(f"Generating pre-approval letter for lead {lead_id}")
 
     # Get lead data
     lead = db.execute(text("""
@@ -825,8 +825,10 @@ async def generate_preapproval_for_lead(
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Error generating pre-approval letter: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Error generating pre-approval letter: {e}\n{error_details}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 @router.post("/preapproval/notify-overlimit")
@@ -1735,6 +1737,79 @@ async def create_test_realtor(
                 "traceback": stack_trace.split('\n')[-5:]
             }
         )
+
+
+@router.get("/debug/test-preapproval/{lead_id}")
+async def debug_test_preapproval(
+    lead_id: int,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to test pre-approval letter generation"""
+    import traceback
+
+    result = {"steps": [], "error": None}
+
+    try:
+        # Step 1: Check if lead exists
+        result["steps"].append("Checking lead...")
+        lead = db.execute(text("""
+            SELECT id, name, loan_amount, loan_type, organization_id
+            FROM leads WHERE id = :lead_id
+        """), {"lead_id": lead_id}).fetchone()
+
+        if not lead:
+            result["error"] = f"Lead {lead_id} not found"
+            return result
+
+        result["steps"].append(f"Lead found: {lead[1]}, loan_amount={lead[2]}")
+
+        # Step 2: Check if table exists
+        result["steps"].append("Checking pre_approval_letters table...")
+        table_check = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'pre_approval_letters'
+            ORDER BY ordinal_position
+        """)).fetchall()
+
+        result["table_columns"] = [row[0] for row in table_check]
+        result["steps"].append(f"Table has {len(table_check)} columns")
+
+        # Step 3: Try a test insert
+        result["steps"].append("Testing insert...")
+        test_html = "<p>Test</p>"
+        test_token = secrets.token_urlsafe(16)
+
+        insert_result = db.execute(text("""
+            INSERT INTO pre_approval_letters (
+                organization_id, lead_id, letter_type, version,
+                generated_html, variables_used, approved_amount, expires_at, share_token
+            ) VALUES (
+                :org_id, :lead_id, 'preapproval', 1,
+                :html, :variables, :amount, :expires_at, :token
+            )
+            RETURNING id
+        """), {
+            "org_id": lead[4] or 1,
+            "lead_id": lead_id,
+            "html": test_html,
+            "variables": "{}",
+            "amount": lead[2] or 300000,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=90),
+            "token": test_token
+        })
+        letter_id = insert_result.fetchone()[0]
+        db.commit()
+
+        result["steps"].append(f"Insert successful! Letter ID: {letter_id}")
+        result["success"] = True
+        result["letter_id"] = letter_id
+
+    except Exception as e:
+        result["error"] = str(e)
+        result["traceback"] = traceback.format_exc()
+        db.rollback()
+
+    return result
 
 
 @router.post("/admin/run-migration")
