@@ -2041,6 +2041,65 @@ async def workflow_diagnostic_summary(
         return {"error": str(e), "traceback": traceback.format_exc()}
 
 
+@router.post("/diagnostic/test-linked-task")
+async def test_create_linked_task(
+    db: Session = Depends(get_db)
+):
+    """
+    Test creating a linked task in the main tasks table.
+    This helps debug why linked tasks aren't being created.
+    """
+    from sqlalchemy import text
+    import traceback
+
+    try:
+        # Try to create a test task
+        db.execute(text("""
+            INSERT INTO tasks (
+                title, description, status, priority,
+                due_date, lead_id,
+                workflow_task_instance_id, task_group_key,
+                created_at, updated_at
+            ) VALUES (
+                'Test Workflow Task', 'Test description', 'pending', 'medium',
+                NOW() + INTERVAL '1 day', NULL,
+                -999, 'test_group',
+                NOW(), NOW()
+            )
+        """))
+        db.commit()
+
+        # Check if it was created
+        result = db.execute(text("""
+            SELECT id, title, workflow_task_instance_id
+            FROM tasks
+            WHERE workflow_task_instance_id = -999
+        """)).fetchone()
+
+        if result:
+            # Clean up
+            db.execute(text("DELETE FROM tasks WHERE id = :id"), {"id": result[0]})
+            db.commit()
+            return {
+                "success": True,
+                "message": "Linked task creation works!",
+                "test_task_id": result[0]
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Task was not found after insert"
+            }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @router.get("/diagnostic/linked-tasks")
 async def get_linked_tasks_diagnostic(
     limit: int = Query(20, le=100),
