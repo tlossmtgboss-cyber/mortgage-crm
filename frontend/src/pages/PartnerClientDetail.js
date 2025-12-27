@@ -206,7 +206,31 @@ const DocumentStatsCard = ({ documents, loanId, navigate }) => {
 };
 
 // Activity Timeline Card
-const ActivityTimelineCard = ({ activities, stageHistory, chatMessages }) => {
+const ActivityTimelineCard = ({ activities, stageHistory, chatMessages, clientId, onNoteAdded }) => {
+  const [noteText, setNoteText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmitNote = async (e) => {
+    e.preventDefault();
+    if (!noteText.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await activitiesAPI.create({
+        type: 'Note',
+        content: noteText.trim(),
+        lead_id: clientId
+      });
+      setNoteText('');
+      if (onNoteAdded) onNoteAdded();
+    } catch (error) {
+      console.error('Failed to add note:', error);
+      alert('Failed to add note. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getTimeline = useCallback(() => {
     const timeline = [];
 
@@ -253,6 +277,25 @@ const ActivityTimelineCard = ({ activities, stageHistory, chatMessages }) => {
         <h2>Conversation Log</h2>
         <span className="activity-badge">{timeline.length} updates</span>
       </div>
+
+      {/* Add Note Form */}
+      <form className="add-note-form" onSubmit={handleSubmitNote}>
+        <input
+          type="text"
+          className="note-input"
+          placeholder="Add a note..."
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          disabled={isSubmitting}
+        />
+        <button
+          type="submit"
+          className="add-note-btn"
+          disabled={!noteText.trim() || isSubmitting}
+        >
+          {isSubmitting ? 'Adding...' : 'Add Note'}
+        </button>
+      </form>
 
       {timeline.length === 0 ? (
         <div className="empty-state">

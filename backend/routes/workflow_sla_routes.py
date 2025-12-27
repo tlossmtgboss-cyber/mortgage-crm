@@ -2487,7 +2487,7 @@ async def test_create_workflow_instance(
         # Step 4: Generate tasks using the TaskGeneratorService
         from services.workflow_task_generator import TaskGeneratorService
         generator = TaskGeneratorService(db)
-        gen_result = generator.generate_tasks_for_instance(instance_id, force=True)
+        gen_result = generator.generate_tasks_for_instance(instance_id, force_regenerate=True)
 
         results["tasks_generated"] = len(gen_result.get("tasks_created", []))
         results["steps"].append(f"4. Generated {results['tasks_generated']} workflow task instances")
