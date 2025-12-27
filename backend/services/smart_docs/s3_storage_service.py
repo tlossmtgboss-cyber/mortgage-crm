@@ -179,8 +179,14 @@ class SmartDocsS3Service:
             # Convert bytes to BytesIO if needed
             if isinstance(file_content, bytes):
                 file_obj = BytesIO(file_content)
+                file_size = len(file_content)
             else:
+                # For file-like objects, get size before upload
                 file_obj = file_content
+                current_pos = file_obj.tell()
+                file_obj.seek(0, 2)
+                file_size = file_obj.tell()
+                file_obj.seek(current_pos)
 
             # Prepare extra args
             extra_args = {
@@ -199,9 +205,6 @@ class SmartDocsS3Service:
                 storage_key,
                 ExtraArgs=extra_args
             )
-
-            # Get file size
-            file_size = file_obj.seek(0, 2) if hasattr(file_obj, 'seek') else len(file_content)
 
             logger.info(f"Uploaded document to S3: {storage_key} ({file_size} bytes)")
 
