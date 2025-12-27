@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './PortalOnboardingGuide.css';
 
-// Onboarding steps configuration
+// Onboarding steps configuration for Active Loan Portal
 const ONBOARDING_STEPS = [
   {
     id: 'welcome',
@@ -20,9 +20,17 @@ const ONBOARDING_STEPS = [
   {
     id: 'overview',
     title: 'Overview Tab',
-    description: 'Your home base! See your loan status, upcoming tasks, and recent activity all in one place.',
+    description: 'Your home base! See your loan status, action items, documents needed, and loan progress all in one place.',
     position: 'bottom',
-    targetSelector: '.portal-nav button:first-child',
+    targetSelector: '.purl-tab-btn.first, .portal-nav button:first-child',
+    highlightNav: true,
+  },
+  {
+    id: 'application',
+    title: 'Application Tab',
+    description: 'Review and update your loan application details. Make sure all your information is accurate.',
+    position: 'bottom',
+    targetSelector: '.purl-tab-btn:nth-child(2), .portal-nav button:nth-child(2)',
     highlightNav: true,
   },
   {
@@ -30,36 +38,37 @@ const ONBOARDING_STEPS = [
     title: 'Documents Tab',
     description: 'Upload required documents here. You\'ll see a checklist of what\'s needed and can track what\'s been approved.',
     position: 'bottom',
-    targetSelector: '.portal-nav button:nth-child(3)',
+    targetSelector: '.purl-tab-btn:nth-child(3), .portal-nav button:nth-child(3)',
     highlightNav: true,
   },
   {
-    id: 'tasks',
-    title: 'Tasks Tab',
-    description: 'Your to-do list for the loan process. Complete tasks to keep your loan moving forward.',
+    id: 'loan-quote',
+    title: 'Loan Quote Tab',
+    description: 'View your loan estimate with detailed costs, rates, and monthly payment breakdown.',
     position: 'bottom',
-    targetSelector: '.portal-nav button:nth-child(4)',
+    targetSelector: '.purl-tab-btn:nth-child(4), .portal-nav button:nth-child(4)',
     highlightNav: true,
   },
   {
-    id: 'messages',
-    title: 'Messages Tab',
-    description: 'Send secure messages directly to your loan team. They\'ll respond here and you\'ll be notified.',
+    id: 'pre-approval',
+    title: 'Pre-Approval Tab',
+    description: 'Access your pre-approval letter when available. Download or share it with your real estate agent.',
     position: 'bottom',
-    targetSelector: '.portal-nav button:nth-child(6)',
+    targetSelector: '.purl-tab-btn:nth-child(5), .portal-nav button:nth-child(5)',
     highlightNav: true,
   },
   {
-    id: 'quick-actions',
-    title: 'Quick Actions',
-    description: 'Need to schedule a call, upload a document, or send a message? Use these shortcuts for fast access.',
-    position: 'top',
-    targetSelector: '.quick-actions-bar',
+    id: 'contacts',
+    title: 'Contacts Tab',
+    description: 'Find contact information for your loan team. Reach out anytime you have questions.',
+    position: 'bottom',
+    targetSelector: '.purl-tab-btn.last, .portal-nav button:last-child',
+    highlightNav: true,
   },
   {
     id: 'complete',
     title: 'You\'re All Set!',
-    description: 'That\'s the basics! Explore the portal at your own pace. If you have questions, use the Messages tab to reach your loan team.',
+    description: 'That\'s the basics! Explore the portal at your own pace. Your loan officer is here to help if you have questions.',
     position: 'center',
     targetSelector: null,
   },
@@ -84,6 +93,21 @@ const PortalOnboardingGuide = ({ workspaceSlug, onComplete, forceShow = false })
     }
   }, [workspaceSlug, forceShow]);
 
+  // Find first matching element from comma-separated selectors
+  const findTarget = useCallback((selectorString) => {
+    if (!selectorString) return null;
+    const selectors = selectorString.split(',').map(s => s.trim());
+    for (const selector of selectors) {
+      try {
+        const el = document.querySelector(selector);
+        if (el) return el;
+      } catch (e) {
+        // Invalid selector, try next
+      }
+    }
+    return null;
+  }, []);
+
   // Position tooltip near target element
   const positionTooltip = useCallback(() => {
     const step = ONBOARDING_STEPS[currentStep];
@@ -98,7 +122,7 @@ const PortalOnboardingGuide = ({ workspaceSlug, onComplete, forceShow = false })
       return;
     }
 
-    const target = document.querySelector(step.targetSelector);
+    const target = findTarget(step.targetSelector);
     if (!target) {
       setTooltipPosition({
         top: '50%',
@@ -157,7 +181,7 @@ const PortalOnboardingGuide = ({ workspaceSlug, onComplete, forceShow = false })
       transform,
       position: 'fixed',
     });
-  }, [currentStep]);
+  }, [currentStep, findTarget]);
 
   // Reposition on step change or window resize
   useEffect(() => {
@@ -264,12 +288,27 @@ const PortalOnboardingGuide = ({ workspaceSlug, onComplete, forceShow = false })
   );
 };
 
+// Helper to find first matching element from comma-separated selectors
+const findTargetElement = (selectorString) => {
+  if (!selectorString) return null;
+  const selectors = selectorString.split(',').map(s => s.trim());
+  for (const selector of selectors) {
+    try {
+      const el = document.querySelector(selector);
+      if (el) return el;
+    } catch (e) {
+      // Invalid selector, try next
+    }
+  }
+  return null;
+};
+
 // Component to highlight target element
 const TargetHighlight = ({ selector }) => {
   const [rect, setRect] = useState(null);
 
   useEffect(() => {
-    const element = document.querySelector(selector);
+    const element = findTargetElement(selector);
     if (element) {
       const updateRect = () => {
         const r = element.getBoundingClientRect();
