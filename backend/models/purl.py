@@ -248,7 +248,7 @@ class PURLWorkspace(Base):
     __tablename__ = "purl_workspaces"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
 
     slug = Column(String(255), nullable=False, index=True)
     status = Column(String(50), default=WorkspaceStatus.LEAD.value, nullable=False)
@@ -289,7 +289,7 @@ class PURLContact(Base):
     __tablename__ = "purl_contacts"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
 
     contact_type = Column(String(50), nullable=False)
@@ -316,7 +316,7 @@ class PURLWorkspaceMember(Base):
     __tablename__ = "purl_workspace_members"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE", use_alter=True, name="fk_purl_workspace_members_user_id"), nullable=False)
 
@@ -337,7 +337,7 @@ class PURLAccessToken(Base):
     __tablename__ = "purl_access_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
 
     token_hash = Column(String(255), nullable=False, unique=True, index=True)
@@ -367,7 +367,7 @@ class PURLApplication(Base):
     __tablename__ = "purl_applications"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
 
     application_type = Column(String(20), nullable=False)
@@ -400,7 +400,7 @@ class PURLLoan(Base):
     __tablename__ = "purl_loans"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
     application_id = Column(Integer, ForeignKey("purl_applications.id"))
     main_loan_id = Column(Integer)  # Link to main loans table
@@ -439,7 +439,7 @@ class PURLDocument(Base):
     __tablename__ = "purl_documents"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
     loan_id = Column(Integer, ForeignKey("purl_loans.id", ondelete="CASCADE"))
 
@@ -485,7 +485,7 @@ class PURLPortalModule(Base):
     __tablename__ = "purl_portal_modules"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
 
     module_key = Column(String(50), nullable=False)
@@ -512,7 +512,7 @@ class PURLMilestoneDefinition(Base):
     __tablename__ = "purl_milestone_definitions"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
 
     code = Column(String(100), nullable=False)
     stage = Column(String(50), nullable=False)
@@ -545,7 +545,7 @@ class PURLLoanMilestone(Base):
     __tablename__ = "purl_loan_milestones"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     loan_id = Column(Integer, ForeignKey("purl_loans.id", ondelete="CASCADE"), nullable=False)
     milestone_definition_id = Column(Integer, ForeignKey("purl_milestone_definitions.id"), nullable=False)
 
@@ -576,7 +576,7 @@ class PURLTask(Base):
     __tablename__ = "purl_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"))
     loan_id = Column(Integer, ForeignKey("purl_loans.id", ondelete="CASCADE"))
 
@@ -612,7 +612,7 @@ class PURLMessage(Base):
     __tablename__ = "purl_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
 
     message_type = Column(String(30), default=MessageType.TEXT.value, nullable=False)
@@ -641,7 +641,7 @@ class PURLEventsOutbox(Base):
     __tablename__ = "purl_events_outbox"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
 
     event_key = Column(String(100), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id"))
@@ -668,7 +668,7 @@ class PURLAuditLog(Base):
     __tablename__ = "purl_audit_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
 
     actor_type = Column(String(20), nullable=False)
     actor_id = Column(Integer)
@@ -695,7 +695,7 @@ class PURLDocumentRequest(Base):
     __tablename__ = "purl_document_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE", use_alter=True), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
     loan_id = Column(Integer, ForeignKey("purl_loans.id", ondelete="CASCADE"))
 
