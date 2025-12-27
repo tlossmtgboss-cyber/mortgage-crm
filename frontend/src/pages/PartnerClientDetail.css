@@ -850,10 +850,15 @@
 }
 
 /* ============================================
-   Activity Card
+   Activity Card (Conversation Log)
    ============================================ */
 .activity-card {
   grid-column: span 2;
+}
+
+/* Full width variant - spans all columns */
+.activity-card.full-width {
+  grid-column: 1 / -1;
 }
 
 /* Empty state styling */

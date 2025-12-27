@@ -248,16 +248,16 @@ const ActivityTimelineCard = ({ activities, stageHistory, chatMessages }) => {
   const timeline = getTimeline();
 
   return (
-    <div className="dashboard-card activity-card">
+    <div className="dashboard-card activity-card full-width">
       <div className="card-header-with-badge">
-        <h2>Recent Activity</h2>
+        <h2>Conversation Log</h2>
         <span className="activity-badge">{timeline.length} updates</span>
       </div>
 
       {timeline.length === 0 ? (
         <div className="empty-state">
-          <span className="empty-icon">📋</span>
-          <p>No activity recorded yet</p>
+          <span className="empty-icon">💬</span>
+          <p>No conversations yet</p>
         </div>
       ) : (
         <ul className="activity-list">
