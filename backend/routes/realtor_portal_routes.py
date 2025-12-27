@@ -655,9 +655,9 @@ async def generate_preapproval_for_lead(
         if owner and owner[0]:
             org_id = owner[0]
 
-    # Get organization info
+    # Get organization info (only columns that exist)
     org = db.execute(text("""
-        SELECT id, name, nmls_number, address, phone, logo_url
+        SELECT id, name
         FROM organizations
         WHERE id = :org_id
     """), {"org_id": org_id}).fetchone()
@@ -726,7 +726,7 @@ async def generate_preapproval_for_lead(
     <body>
         <div class="header">
             <h1>{org[1] if org else 'Mortgage Company'}</h1>
-            <p>NMLS #{org[2] if org else 'N/A'}</p>
+            <p>NMLS #{lo_info['nmls'] if lo_info and lo_info.get('nmls') else 'N/A'}</p>
         </div>
 
         <div class="date">{datetime.now().strftime('%B %d, %Y')}</div>
@@ -1796,10 +1796,10 @@ async def debug_test_preapproval(
         result["steps"].append(f"Using organization_id: {org_id}")
         result["org_id"] = org_id
 
-        # Step 2: Get org info
+        # Step 2: Get org info (only columns that exist)
         result["steps"].append("Getting organization info...")
         org = db.execute(text("""
-            SELECT id, name, nmls_number, address, phone, logo_url
+            SELECT id, name
             FROM organizations
             WHERE id = :org_id
         """), {"org_id": org_id}).fetchone()
