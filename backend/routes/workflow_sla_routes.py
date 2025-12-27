@@ -2209,11 +2209,13 @@ async def get_task_instance_data(
             WHERE wdc.id = :id
         """), {"id": task_instance[2]}).fetchone()
 
-        # Get contact info
+        # Get contact info and lead owner
         contact_info = {}
+        lead_assigned_to = None
+        loan_officer_id = None
         if workflow_instance and workflow_instance[1]:  # lead_id
             lead = db.execute(text("""
-                SELECT first_name, last_name, email, phone
+                SELECT first_name, last_name, email, phone, assigned_to
                 FROM leads WHERE id = :id
             """), {"id": workflow_instance[1]}).fetchone()
             if lead:
@@ -2222,6 +2224,14 @@ async def get_task_instance_data(
                     "email": lead[2],
                     "phone": lead[3]
                 }
+                lead_assigned_to = lead[4]
+
+        if workflow_instance and workflow_instance[2]:  # loan_id
+            loan = db.execute(text("""
+                SELECT loan_officer_id FROM loans WHERE id = :id
+            """), {"id": workflow_instance[2]}).fetchone()
+            if loan:
+                loan_officer_id = loan[0]
 
         return {
             "task_instance": {
@@ -2249,12 +2259,16 @@ async def get_task_instance_data(
                 "task_description": day_config[3] if day_config else None
             } if day_config else None,
             "contact_info": contact_info,
+            "lead_assigned_to": lead_assigned_to,
+            "loan_officer_id": loan_officer_id,
+            "resolved_owner_id": lead_assigned_to or loan_officer_id,
             "can_create_linked_task": {
                 "has_assigned_user": task_instance[6] is not None,
                 "has_workflow_instance": workflow_instance is not None,
                 "has_day_config": day_config is not None,
                 "has_lead_or_loan": (workflow_instance[1] if workflow_instance else None) is not None or
-                                   (workflow_instance[2] if workflow_instance else None) is not None
+                                   (workflow_instance[2] if workflow_instance else None) is not None,
+                "has_owner": (lead_assigned_to or loan_officer_id) is not None
             }
         }
 
