@@ -58450,6 +58450,30 @@ async def add_goals_and_okrs_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/add-smart-docs-columns", response_model=None)
+async def add_smart_docs_columns_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Add missing columns to smart_documents table (uploaded_at, original_filename)
+    """
+    if migration_key != "add-smart-docs-cols":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_smart_docs_missing_columns import run_migration
+        run_migration()
+        return {
+            "success": True,
+            "message": "Smart docs columns migration completed"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Smart docs columns migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.post("/api/v1/migrations/add-user-compliance-columns", response_model=None)
 async def add_user_compliance_columns_migration(
     migration_key: str = "",
