@@ -781,6 +781,14 @@ export default function PURLPortal() {
   // Onboarding guide - show for first-time visitors or after submission
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  // Use workspace data hook - only enabled after token is ready
+  const {
+    data: workspaceData,
+    loading,
+    error,
+    refetch: refetchWorkspace,
+  } = useWorkspaceData(tokenReady ? slug : null); // Pass null slug to disable until token ready
+
   // Check if should show onboarding (after data loads)
   useEffect(() => {
     if (workspaceData && !loading) {
@@ -801,14 +809,6 @@ export default function PURLPortal() {
     localStorage.removeItem(storageKey);
     setShowOnboarding(true);
   };
-
-  // Use workspace data hook - only enabled after token is ready
-  const {
-    data: workspaceData,
-    loading,
-    error,
-    refetch: refetchWorkspace,
-  } = useWorkspaceData(tokenReady ? slug : null); // Pass null slug to disable until token ready
 
   // Debug logging for workspace data fetch
   React.useEffect(() => {
