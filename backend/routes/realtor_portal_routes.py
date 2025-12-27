@@ -1243,18 +1243,18 @@ async def add_partner_note(
         except:
             pass
 
-    # Get lead/client info
+    # Get lead/client info (using owner_id which is the correct column name)
     lead_info = db.execute(text("""
         SELECT
             l.id,
             l.name as borrower_name,
             l.email as borrower_email,
-            l.assigned_user_id,
+            l.owner_id,
             u.email as lo_email,
             u.full_name as lo_name,
-            l.organization_id
+            u.organization_id
         FROM leads l
-        LEFT JOIN users u ON u.id = l.assigned_user_id
+        LEFT JOIN users u ON u.id = l.owner_id
         WHERE l.id = :client_id
     """), {"client_id": client_id}).fetchone()
 
@@ -1263,20 +1263,17 @@ async def add_partner_note(
 
     # Create activity record
     try:
-        result = db.execute(text("""
+        db.execute(text("""
             INSERT INTO activities (
                 type, content, lead_id, user_id, created_at
             ) VALUES (
                 'Note', :content, :lead_id, :user_id, CURRENT_TIMESTAMP
             )
-            RETURNING id, created_at
         """), {
             "content": f"[Partner Note from {partner_name}] {request.content}",
             "lead_id": client_id,
-            "user_id": lead_info.assigned_user_id or 1
+            "user_id": lead_info.owner_id or 1
         })
-        activity_row = result.fetchone()
-        activity_id = activity_row[0]
         db.commit()
     except Exception as e:
         logger.error(f"Failed to create activity: {e}")
@@ -1301,12 +1298,11 @@ async def add_partner_note(
                 FROM users u
                 WHERE u.organization_id = :org_id
                     AND u.email IS NOT NULL
-                    AND u.is_active = true
-                    AND u.id != :assigned_user_id
+                    AND u.id != :owner_id
                 LIMIT 10
             """), {
                 "org_id": lead_info.organization_id,
-                "assigned_user_id": lead_info.assigned_user_id or 0
+                "owner_id": lead_info.owner_id or 0
             }).fetchall()
 
             for member in team_members:

@@ -176,35 +176,30 @@ class SmartDocsS3Service:
             }
 
         try:
-            # Convert bytes to BytesIO if needed
+            # Convert file-like objects to bytes
             if isinstance(file_content, bytes):
-                file_obj = BytesIO(file_content)
+                body = file_content
                 file_size = len(file_content)
             else:
-                # For file-like objects, get size before upload
-                file_obj = file_content
-                current_pos = file_obj.tell()
-                file_obj.seek(0, 2)
-                file_size = file_obj.tell()
-                file_obj.seek(current_pos)
+                # Read from file-like object
+                body = file_content.read()
+                file_size = len(body)
 
-            # Prepare extra args
-            extra_args = {
-                'ContentType': content_type
+            # Build put_object params
+            put_params = {
+                'Bucket': self.bucket_name,
+                'Key': storage_key,
+                'Body': body,
+                'ContentType': content_type,
             }
 
             if metadata:
-                extra_args['Metadata'] = {
+                put_params['Metadata'] = {
                     str(k): str(v) for k, v in metadata.items()
                 }
 
-            # Upload
-            self.s3_client.upload_fileobj(
-                file_obj,
-                self.bucket_name,
-                storage_key,
-                ExtraArgs=extra_args
-            )
+            # Upload using put_object (simpler than upload_fileobj)
+            self.s3_client.put_object(**put_params)
 
             logger.info(f"Uploaded document to S3: {storage_key} ({file_size} bytes)")
 
