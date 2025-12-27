@@ -573,18 +573,17 @@ async def download_letter_pdf(
     if not auth_token:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    # Try to authenticate (accept either partner token or JWT)
-    # For now, just verify the letter exists and return it
-    from services.realtor_letter_service import LetterGenerationService
-
-    letter_service = LetterGenerationService(db)
-    letter = letter_service.get_letter(letter_id)
+    # Get letter directly from database (simpler than using service which has complex joins)
+    letter = db.execute(text("""
+        SELECT id, generated_html, download_count
+        FROM pre_approval_letters
+        WHERE id = :letter_id
+    """), {"letter_id": letter_id}).fetchone()
 
     if not letter:
         raise HTTPException(status_code=404, detail="Letter not found")
 
-    # Generate PDF from HTML
-    html_content = letter.get("html", "")
+    html_content = letter[1]
     if not html_content:
         raise HTTPException(status_code=500, detail="Letter has no content")
 
@@ -603,7 +602,16 @@ async def download_letter_pdf(
         pdf_bytes = html_content.encode("utf-8")
 
     # Record download
-    letter_service.record_download(letter_id)
+    try:
+        db.execute(text("""
+            UPDATE pre_approval_letters
+            SET download_count = COALESCE(download_count, 0) + 1,
+                last_downloaded_at = CURRENT_TIMESTAMP
+            WHERE id = :letter_id
+        """), {"letter_id": letter_id})
+        db.commit()
+    except Exception as e:
+        logger.error(f"Error recording download: {e}")
 
     # Determine content type based on what we're returning
     content_type = "application/pdf" if pdf_bytes and pdf_bytes[:4] == b'%PDF' else "text/html"
