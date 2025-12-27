@@ -19,7 +19,7 @@ class BlogVoiceProfile(Base):
     __tablename__ = "blog_voice_profiles"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     name = Column(String(255), nullable=False)
     sliders_json = Column(JSONB, default=dict)  # professional_casual, bold_conservative, etc.
     toggles_json = Column(JSONB, default=dict)  # use_emojis, use_hashtags, etc.
@@ -34,7 +34,7 @@ class BlogComplianceProfile(Base):
     __tablename__ = "blog_compliance_profiles"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     name = Column(String(255), nullable=False)
     required_disclosures_json = Column(JSONB, default=list)  # Mandatory footer text
     banned_phrases_json = Column(JSONB, default=list)  # Prohibited words/phrases
@@ -48,7 +48,7 @@ class BlogSourceDocument(Base):
     __tablename__ = "blog_source_documents"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     type = Column(String(50), default="pdf")
     title = Column(String(500), nullable=False)
     author = Column(String(255))
@@ -73,7 +73,7 @@ class BlogCampaign(Base):
     __tablename__ = "blog_campaigns"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     name = Column(String(255), nullable=False)
     brief_json = Column(JSONB, default=dict)  # Campaign goals, keywords, audience
     archetype_weights_json = Column(JSONB, default=dict)  # informative: 0.4, story: 0.2, etc.
@@ -95,7 +95,7 @@ class BlogContentItem(Base):
     __tablename__ = "blog_content_items"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     campaign_id = Column(String, ForeignKey("blog_campaigns.id"), index=True)
     source_document_id = Column(String, ForeignKey("blog_source_documents.id"), index=True)
     status = Column(String(50), default="draft", index=True)  # draft, pending_approval, scheduled, published, archived
@@ -136,7 +136,7 @@ class BlogContentJob(Base):
     __tablename__ = "blog_content_jobs"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     type = Column(String(100), nullable=False, index=True)  # pdf_extract, batch_generate, daily_post, publish
     status = Column(String(50), default="queued", index=True)  # queued, processing, completed, failed
     payload_json = Column(JSONB, default=dict)
@@ -153,7 +153,7 @@ class BlogImageAsset(Base):
     __tablename__ = "blog_image_assets"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     content_item_id = Column(String, ForeignKey("blog_content_items.id"), index=True)
     provider = Column(String(50), default="template")  # template, dalle, midjourney
     prompt = Column(Text, default="")
@@ -171,7 +171,7 @@ class BlogSocialConnection(Base):
     __tablename__ = "blog_social_connections"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     provider = Column(String(50), nullable=False)  # buffer, linkedin, facebook, instagram, twitter
     profile_id = Column(String(255), nullable=False)
     profile_name = Column(String(255))
@@ -188,7 +188,7 @@ class BlogPublishLog(Base):
     __tablename__ = "blog_publish_logs"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     content_item_id = Column(String, ForeignKey("blog_content_items.id"), index=True)
     platform = Column(String(50), nullable=False)
     status = Column(String(50), default="pending", index=True)  # pending, success, failed
@@ -209,7 +209,7 @@ class BlogTopicQueue(Base):
     __tablename__ = "blog_topic_queue"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     campaign_id = Column(String, ForeignKey("blog_campaigns.id"))
     source_document_id = Column(String, ForeignKey("blog_source_documents.id"))
     topic = Column(String(500), nullable=False)
@@ -231,7 +231,7 @@ class BlogAuditLog(Base):
     __tablename__ = "blog_audit_logs"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     action = Column(String(100), nullable=False)
     entity_type = Column(String(100), nullable=False)
     entity_id = Column(Text, nullable=False)
@@ -251,7 +251,7 @@ class BlogPerformanceFeedback(Base):
     __tablename__ = "blog_performance_feedback"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, index=True)  # Logical reference to users, no FK constraint
     content_item_id = Column(String, ForeignKey("blog_content_items.id"), index=True)
     platform = Column(String(50))
     views = Column(Integer, default=0)
@@ -273,7 +273,7 @@ class BlogUserSettings(Base):
     __tablename__ = "blog_user_settings"
 
     id = Column(String, primary_key=True, default=gen_uuid)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    user_id = Column(Integer, unique=True)  # Logical reference to users, no FK constraint
     default_voice_profile_id = Column(String, ForeignKey("blog_voice_profiles.id"))
     default_compliance_profile_id = Column(String, ForeignKey("blog_compliance_profiles.id"))
     posting_mode = Column(String(50), default="draft")  # auto, schedule, draft, manual

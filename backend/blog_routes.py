@@ -78,11 +78,11 @@ def ensure_blog_tables_exist():
         if tables_to_create:
             logger.info(f"Creating blog tables: {tables_to_create}")
             with engine.connect() as conn:
-                # Voice Profiles
+                # Voice Profiles (no FK constraint - user_id is logical reference only)
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_voice_profiles (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         name VARCHAR(255) NOT NULL,
                         sliders_json JSONB DEFAULT '{}',
                         toggles_json JSONB DEFAULT '{}',
@@ -97,7 +97,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_compliance_profiles (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         name VARCHAR(255) NOT NULL,
                         required_disclosures_json JSONB DEFAULT '[]',
                         banned_phrases_json JSONB DEFAULT '[]',
@@ -111,7 +111,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_audit_logs (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         action VARCHAR(100) NOT NULL,
                         entity_type VARCHAR(100) NOT NULL,
                         entity_id TEXT NOT NULL,
@@ -127,7 +127,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_source_documents (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         type VARCHAR(50) DEFAULT 'pdf',
                         title VARCHAR(500) NOT NULL,
                         author VARCHAR(255),
@@ -148,7 +148,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_campaigns (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         name VARCHAR(255) NOT NULL,
                         brief_json JSONB DEFAULT '{}',
                         archetype_weights_json JSONB DEFAULT '{}',
@@ -166,7 +166,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_content_items (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         campaign_id TEXT REFERENCES blog_campaigns(id),
                         source_document_id TEXT REFERENCES blog_source_documents(id),
                         status VARCHAR(50) DEFAULT 'draft',
@@ -195,7 +195,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_content_jobs (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         type VARCHAR(100) NOT NULL,
                         status VARCHAR(50) DEFAULT 'queued',
                         payload_json JSONB DEFAULT '{}',
@@ -212,7 +212,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_image_assets (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         content_item_id TEXT REFERENCES blog_content_items(id),
                         provider VARCHAR(50) DEFAULT 'template',
                         prompt TEXT DEFAULT '',
@@ -227,7 +227,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_social_connections (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         provider VARCHAR(50) NOT NULL,
                         profile_id VARCHAR(255) NOT NULL,
                         profile_name VARCHAR(255),
@@ -244,7 +244,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_publish_logs (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         content_item_id TEXT REFERENCES blog_content_items(id),
                         platform VARCHAR(50) NOT NULL,
                         status VARCHAR(50) DEFAULT 'pending',
@@ -262,7 +262,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_topic_queue (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         campaign_id TEXT REFERENCES blog_campaigns(id),
                         source_document_id TEXT REFERENCES blog_source_documents(id),
                         topic VARCHAR(500) NOT NULL,
@@ -280,7 +280,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_performance_feedback (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id),
+                        user_id INTEGER,
                         content_item_id TEXT REFERENCES blog_content_items(id),
                         platform VARCHAR(50),
                         views INTEGER DEFAULT 0,
@@ -299,7 +299,7 @@ def ensure_blog_tables_exist():
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS blog_user_settings (
                         id TEXT PRIMARY KEY,
-                        user_id INTEGER REFERENCES users(id) UNIQUE,
+                        user_id INTEGER UNIQUE,
                         default_voice_profile_id TEXT REFERENCES blog_voice_profiles(id),
                         default_compliance_profile_id TEXT REFERENCES blog_compliance_profiles(id),
                         posting_mode VARCHAR(50) DEFAULT 'draft',
