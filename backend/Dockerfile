@@ -15,7 +15,7 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application - force rebuild 2025-12-27T22:22:00Z
+# Copy application - force rebuild 2025-12-27T22:35:00Z
 COPY . .
 
 # Expose port
