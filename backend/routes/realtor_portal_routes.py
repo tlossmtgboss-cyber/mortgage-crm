@@ -587,14 +587,23 @@ async def download_letter_pdf(
     if not html_content:
         raise HTTPException(status_code=500, detail="Letter has no content")
 
-    # Try weasyprint, fallback to HTML
+    # Try xhtml2pdf (pure Python), fallback to HTML
     pdf_bytes = None
     try:
-        from weasyprint import HTML
-        pdf_bytes = HTML(string=html_content).write_pdf()
+        from xhtml2pdf import pisa
+        from io import BytesIO
+
+        result_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(html_content, dest=result_buffer)
+
+        if pisa_status.err:
+            logger.warning(f"xhtml2pdf had errors: {pisa_status.err}")
+            pdf_bytes = html_content.encode("utf-8")
+        else:
+            pdf_bytes = result_buffer.getvalue()
     except ImportError:
-        # WeasyPrint not available - return HTML as downloadable file
-        logger.warning("WeasyPrint not available, returning HTML")
+        # xhtml2pdf not available - return HTML as downloadable file
+        logger.warning("xhtml2pdf not available, returning HTML")
         pdf_bytes = html_content.encode("utf-8")
     except Exception as e:
         logger.error(f"PDF generation error: {e}")
