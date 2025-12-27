@@ -216,13 +216,31 @@ const ActivityTimelineCard = ({ activities, stageHistory, chatMessages, clientId
 
     setIsSubmitting(true);
     try {
-      await activitiesAPI.create({
-        type: 'Note',
-        content: noteText.trim(),
-        lead_id: clientId
-      });
+      // Use the partner notes endpoint which sends email notifications
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || ''}/api/v1/realtor-portal/clients/${clientId}/notes`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ content: noteText.trim() })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to add note');
+      }
+
+      const data = await response.json();
       setNoteText('');
       if (onNoteAdded) onNoteAdded();
+
+      // Show success message with notification count
+      if (data.notifications_sent > 0) {
+        console.log(`Note added. ${data.notifications_sent} team member(s) notified.`);
+      }
     } catch (error) {
       console.error('Failed to add note:', error);
       alert('Failed to add note. Please try again.');

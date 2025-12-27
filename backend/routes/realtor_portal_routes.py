@@ -1165,6 +1165,161 @@ async def get_messages(
 
 
 # =============================================================================
+# PARTNER NOTES ENDPOINT
+# =============================================================================
+
+@router.post("/clients/{client_id}/notes")
+async def add_partner_note(
+    client_id: int,
+    request: PartnerNoteRequest,
+    token: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Add a note from a partner to a client/lead.
+    Sends email notifications to all team members associated with the lead.
+    """
+    # Get partner info - try partner token first, then check JWT
+    partner_name = "Partner"
+    partner_id = None
+
+    if token:
+        try:
+            realtor = await get_current_realtor(token, db)
+            partner_name = realtor.get("name") or realtor.get("company_name") or "Partner"
+            partner_id = realtor.get("realtor_id")
+        except:
+            pass
+
+    # Get lead/client info
+    lead_info = db.execute(text("""
+        SELECT
+            l.id,
+            l.name as borrower_name,
+            l.email as borrower_email,
+            l.assigned_user_id,
+            u.email as lo_email,
+            u.full_name as lo_name,
+            l.organization_id
+        FROM leads l
+        LEFT JOIN users u ON u.id = l.assigned_user_id
+        WHERE l.id = :client_id
+    """), {"client_id": client_id}).fetchone()
+
+    if not lead_info:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Create activity record
+    try:
+        result = db.execute(text("""
+            INSERT INTO activities (
+                type, content, lead_id, user_id, created_at
+            ) VALUES (
+                'Note', :content, :lead_id, :user_id, CURRENT_TIMESTAMP
+            )
+            RETURNING id, created_at
+        """), {
+            "content": f"[Partner Note from {partner_name}] {request.content}",
+            "lead_id": client_id,
+            "user_id": lead_info.assigned_user_id or 1
+        })
+        activity_row = result.fetchone()
+        activity_id = activity_row[0]
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to create activity: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save note")
+
+    # Get all team members to notify
+    team_emails = []
+
+    # Add assigned loan officer
+    if lead_info.lo_email:
+        team_emails.append({
+            "email": lead_info.lo_email,
+            "name": lead_info.lo_name or "Team Member"
+        })
+
+    # Get other team members from the organization
+    try:
+        if lead_info.organization_id:
+            team_members = db.execute(text("""
+                SELECT DISTINCT u.email, u.full_name
+                FROM users u
+                WHERE u.organization_id = :org_id
+                    AND u.email IS NOT NULL
+                    AND u.is_active = true
+                    AND u.id != :assigned_user_id
+                LIMIT 10
+            """), {
+                "org_id": lead_info.organization_id,
+                "assigned_user_id": lead_info.assigned_user_id or 0
+            }).fetchall()
+
+            for member in team_members:
+                if member.email and member.email not in [t["email"] for t in team_emails]:
+                    team_emails.append({
+                        "email": member.email,
+                        "name": member.full_name or "Team Member"
+                    })
+    except Exception as e:
+        logger.error(f"Error fetching team members: {e}")
+
+    # Send email notifications
+    emails_sent = 0
+    frontend_url = os.getenv('FRONTEND_URL', 'https://perenniaai.com')
+
+    try:
+        notification_service = NotificationService()
+
+        for recipient in team_emails[:5]:  # Limit to 5 recipients
+            try:
+                notification_service.send_email(
+                    to_email=recipient["email"],
+                    subject=f"New Partner Note - {lead_info.borrower_name or 'Client'}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <div style="background: linear-gradient(135deg, #218D8D 0%, #14b8a6 100%); padding: 20px; border-radius: 8px 8px 0 0;">
+                            <h2 style="color: white; margin: 0;">New Partner Note</h2>
+                        </div>
+                        <div style="padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+                            <p style="margin-top: 0;">Hi {recipient['name']},</p>
+                            <p>You have a new note from <strong>{partner_name}</strong> regarding:</p>
+                            <ul style="color: #374151;">
+                                <li><strong>Client:</strong> {lead_info.borrower_name or 'N/A'}</li>
+                            </ul>
+                            <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #218D8D; margin: 20px 0;">
+                                <p style="margin: 0; white-space: pre-wrap; color: #1f2937;">{request.content}</p>
+                            </div>
+                            <p style="margin-bottom: 20px;">Please review and respond to this note.</p>
+                            <a href="{frontend_url}/leads/{client_id}"
+                               style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">
+                                View Client & Respond
+                            </a>
+                            <p style="margin-top: 20px; font-size: 12px; color: #6b7280;">
+                                This notification was sent from Perennia AI Partner Portal.
+                            </p>
+                        </div>
+                    </div>
+                    """
+                )
+                emails_sent += 1
+                logger.info(f"Sent partner note notification to {recipient['email']}")
+            except Exception as email_err:
+                logger.error(f"Failed to send notification to {recipient['email']}: {email_err}")
+    except Exception as notify_err:
+        logger.error(f"Failed to initialize notification service: {notify_err}")
+
+    return {
+        "success": True,
+        "activity_id": activity_id,
+        "message": "Note added successfully",
+        "notifications_sent": emails_sent
+    }
+
+
+# =============================================================================
 # AI ASSISTANT ENDPOINT
 # =============================================================================
 
