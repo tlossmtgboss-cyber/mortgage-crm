@@ -2406,3 +2406,65 @@ async def create_missing_linked_tasks(
         db.rollback()
         import traceback
         return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.get("/diagnostic/tasks-for-user/{user_id}")
+async def get_tasks_for_user_diagnostic(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to check what tasks would appear for a specific user.
+    This simulates the unified-tasks query.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Get workflow tasks from main tasks table (same query as unified-tasks)
+        tasks = db.execute(text("""
+            SELECT t.id, t.title, t.status, t.priority, t.due_date,
+                   t.owner_id, t.lead_id, t.loan_id,
+                   t.workflow_task_instance_id,
+                   t.related_contact_name, t.related_type
+            FROM tasks t
+            WHERE t.owner_id = :user_id
+              AND t.status IN ('pending', 'in_progress')
+            ORDER BY t.due_date ASC
+            LIMIT 20
+        """), {"user_id": user_id}).fetchall()
+
+        # Get user info
+        user = db.execute(text("""
+            SELECT id, email, full_name FROM users WHERE id = :id
+        """), {"id": user_id}).fetchone()
+
+        workflow_tasks = [t for t in tasks if t[8] is not None]  # workflow_task_instance_id at index 8
+
+        return {
+            "user": {
+                "id": user[0] if user else None,
+                "email": user[1] if user else None,
+                "name": user[2] if user else None
+            } if user else None,
+            "total_tasks": len(tasks),
+            "workflow_tasks": len(workflow_tasks),
+            "tasks": [
+                {
+                    "id": t[0],
+                    "title": t[1],
+                    "status": t[2],
+                    "priority": t[3],
+                    "due_date": str(t[4]) if t[4] else None,
+                    "lead_id": t[6],
+                    "loan_id": t[7],
+                    "workflow_task_instance_id": t[8],
+                    "contact_name": t[9],
+                    "is_workflow_task": t[8] is not None
+                }
+                for t in tasks
+            ]
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
