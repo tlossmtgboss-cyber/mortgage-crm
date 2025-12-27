@@ -128,6 +128,11 @@ class SMSWebhookPayload(BaseModel):
     MessageSid: Optional[str] = None
 
 
+class PartnerNoteRequest(BaseModel):
+    """Request to add a partner note to a client/lead."""
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
 # =============================================================================
 # AUTHENTICATION ENDPOINTS
 # =============================================================================

@@ -2489,7 +2489,8 @@ async def test_create_workflow_instance(
         generator = TaskGeneratorService(db)
         gen_result = generator.generate_tasks_for_instance(instance_id, force_regenerate=True)
 
-        results["tasks_generated"] = len(gen_result.get("tasks_created", []))
+        results["tasks_generated"] = gen_result.get("tasks_created", 0)
+        results["gen_result"] = gen_result  # Full result for debugging
         results["steps"].append(f"4. Generated {results['tasks_generated']} workflow task instances")
 
         # Step 5: Check linked tasks created
