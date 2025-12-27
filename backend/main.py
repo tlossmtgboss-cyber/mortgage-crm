@@ -59512,6 +59512,46 @@ async def set_workspace_owner_migration(
         }
 
 
+@app.get("/api/v1/public/debug/user-logo-check")
+async def public_debug_user_logo_check(
+    admin_key: str,
+    db: Session = Depends(get_db)
+):
+    """Check user logo column via both raw SQL and ORM."""
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
+
+    try:
+        # Raw SQL check
+        sql_result = db.execute(text("""
+            SELECT id, email, full_name, company_logo_url
+            FROM users
+            WHERE id = 57
+        """))
+        row = sql_result.fetchone()
+        sql_data = {"id": row[0], "email": row[1], "name": row[2], "logo": row[3]} if row else None
+
+        # ORM check
+        user = db.query(User).filter(User.id == 57).first()
+        orm_data = None
+        if user:
+            orm_data = {
+                "id": user.id,
+                "email": user.email,
+                "name": user.full_name,
+                "logo_via_attribute": user.company_logo_url,
+                "logo_via_getattr": getattr(user, 'company_logo_url', 'GETATTR_FAILED'),
+            }
+
+        return {
+            "success": True,
+            "sql_result": sql_data,
+            "orm_result": orm_data
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/v1/public/debug/dashboard-test")
 async def public_debug_dashboard_test(
     admin_key: str,
