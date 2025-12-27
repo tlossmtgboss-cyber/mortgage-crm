@@ -2411,6 +2411,7 @@ async def create_missing_linked_tasks(
 @router.get("/diagnostic/tasks-for-user/{user_id}")
 async def get_tasks_for_user_diagnostic(
     user_id: int,
+    limit: int = Query(100, le=500),
     db: Session = Depends(get_db)
 ):
     """
@@ -2430,8 +2431,8 @@ async def get_tasks_for_user_diagnostic(
             WHERE t.owner_id = :user_id
               AND t.status IN ('pending', 'in_progress')
             ORDER BY t.due_date ASC
-            LIMIT 20
-        """), {"user_id": user_id}).fetchall()
+            LIMIT :limit
+        """), {"user_id": user_id, "limit": limit}).fetchall()
 
         # Get user info
         user = db.execute(text("""
