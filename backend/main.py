@@ -59395,6 +59395,18 @@ async def set_test_logo_migration(
     try:
         logger.info("Running migration: set test logo")
 
+        # First, add the column if it doesn't exist
+        try:
+            db.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS company_logo_url TEXT
+            """))
+            db.commit()
+            column_added = True
+        except Exception as col_err:
+            logger.info(f"Column may already exist: {col_err}")
+            db.rollback()
+            column_added = False
+
         # Find matching users
         result = db.execute(text("""
             SELECT id, email, full_name, company_logo_url
@@ -59419,6 +59431,7 @@ async def set_test_logo_migration(
             "success": True,
             "message": f"Updated {len(updated)} users with test logo",
             "logo_url": TEST_LOGO_URL,
+            "column_added": column_added,
             "users_before": [{"id": u[0], "email": u[1], "name": u[2], "logo": u[3]} for u in users_before],
             "updated_users": [{"id": u[0], "email": u[1]} for u in updated]
         }
