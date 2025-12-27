@@ -470,7 +470,7 @@ async def list_documents(
     )
 
     if category:
-        query = query.filter(PURLDocument.category == category)
+        query = query.filter(PURLDocument.doc_category == category)
 
     documents = query.order_by(PURLDocument.created_at.desc()).all()
 
@@ -478,11 +478,11 @@ async def list_documents(
         "documents": [
             {
                 "id": doc.id,
-                "filename": doc.filename,
-                "document_type": doc.document_type,
-                "category": doc.category,
+                "filename": doc.file_name,
+                "document_type": doc.doc_type,
+                "category": doc.doc_category,
                 "status": doc.status,
-                "file_size": doc.file_size,
+                "file_size": doc.size_bytes,
                 "uploaded_at": doc.created_at.isoformat() if doc.created_at else None
             }
             for doc in documents
