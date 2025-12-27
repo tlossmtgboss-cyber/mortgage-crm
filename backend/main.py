@@ -858,6 +858,9 @@ class Task(Base):
     # Document intake classification task relationship
     email_intake_id = Column(Integer, ForeignKey("email_intakes.id"), nullable=True)
     email_intake = relationship("EmailIntake", back_populates="classification_task")
+    # Workflow task linkage
+    workflow_task_instance_id = Column(Integer, nullable=True)
+    task_group_key = Column(String(100), nullable=True)
 
 
 # ============================================================================
