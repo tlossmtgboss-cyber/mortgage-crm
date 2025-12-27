@@ -14,6 +14,7 @@ import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import './PortalContainer.css';
+import PortalOnboardingGuide from '../../components/portal/PortalOnboardingGuide';
 
 // Lazy load portal components for code splitting
 const LeadPortal = lazy(() => import('./LeadPortal'));
@@ -201,6 +202,7 @@ export default function PortalContainer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Get token from URL or localStorage
   const getToken = useCallback(() => {
@@ -273,6 +275,27 @@ export default function PortalContainer() {
     fetchPortalData();
   }, [fetchPortalData]);
 
+  // Check if should show onboarding (after data loads)
+  useEffect(() => {
+    if (portalData && !loading && !error) {
+      const storageKey = `portal_onboarding_${slug}`;
+      const hasSeenGuide = localStorage.getItem(storageKey);
+      // Show onboarding for first-time visitors
+      if (!hasSeenGuide) {
+        // Small delay to let the UI render
+        const timer = setTimeout(() => setShowOnboarding(true), 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [portalData, loading, error, slug]);
+
+  // Restart the portal tour
+  const restartTour = useCallback(() => {
+    const storageKey = `portal_onboarding_${slug}`;
+    localStorage.removeItem(storageKey);
+    setShowOnboarding(true);
+  }, [slug]);
+
   // Handle celebration dismiss
   const handleCelebrationContinue = () => {
     setShowCelebration(false);
@@ -306,31 +329,45 @@ export default function PortalContainer() {
 
   // Render appropriate portal based on stage
   return (
-    <Suspense fallback={<PortalLoadingSpinner />}>
-      {stage === PortalStage.LEAD && (
-        <LeadPortal
-          data={portalData}
-          slug={slug}
-          onRefresh={fetchPortalData}
-        />
-      )}
+    <>
+      <Suspense fallback={<PortalLoadingSpinner />}>
+        {stage === PortalStage.LEAD && (
+          <LeadPortal
+            data={portalData}
+            slug={slug}
+            onRefresh={fetchPortalData}
+            onRestartTour={restartTour}
+          />
+        )}
 
-      {stage === PortalStage.ACTIVE_LOAN && (
-        <ActiveLoanPortal
-          data={portalData}
-          slug={slug}
-          subStage={subStage}
-          onRefresh={fetchPortalData}
-        />
-      )}
+        {stage === PortalStage.ACTIVE_LOAN && (
+          <ActiveLoanPortal
+            data={portalData}
+            slug={slug}
+            subStage={subStage}
+            onRefresh={fetchPortalData}
+            onRestartTour={restartTour}
+          />
+        )}
 
-      {stage === PortalStage.MUM && (
-        <MUMPortal
-          data={portalData}
-          slug={slug}
-          onRefresh={fetchPortalData}
+        {stage === PortalStage.MUM && (
+          <MUMPortal
+            data={portalData}
+            slug={slug}
+            onRefresh={fetchPortalData}
+            onRestartTour={restartTour}
+          />
+        )}
+      </Suspense>
+
+      {/* Onboarding Guide for first-time visitors */}
+      {showOnboarding && (
+        <PortalOnboardingGuide
+          workspaceSlug={slug}
+          stage={stage}
+          onComplete={() => setShowOnboarding(false)}
         />
       )}
-    </Suspense>
+    </>
   );
 }

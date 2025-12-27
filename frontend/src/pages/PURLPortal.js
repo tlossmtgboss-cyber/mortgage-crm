@@ -791,13 +791,24 @@ export default function PURLPortal() {
 
   // Check if should show onboarding (after data loads)
   useEffect(() => {
+    console.log('[PURLPortal] Onboarding check:', {
+      hasWorkspaceData: !!workspaceData,
+      loading,
+      slug,
+      justSubmitted
+    });
     if (workspaceData && !loading) {
       const storageKey = `portal_onboarding_${slug}`;
       const hasSeenGuide = localStorage.getItem(storageKey);
+      console.log('[PURLPortal] Onboarding storage check:', { storageKey, hasSeenGuide });
       // Show onboarding for first-time visitors or if just submitted
       if (!hasSeenGuide || justSubmitted) {
         // Small delay to let the UI render
-        const timer = setTimeout(() => setShowOnboarding(true), 800);
+        console.log('[PURLPortal] Starting onboarding timer...');
+        const timer = setTimeout(() => {
+          console.log('[PURLPortal] Setting showOnboarding to true');
+          setShowOnboarding(true);
+        }, 800);
         return () => clearTimeout(timer);
       }
     }
@@ -1397,6 +1408,7 @@ export default function PURLPortal() {
       </footer>
 
       {/* Onboarding Guide for first-time visitors */}
+      {console.log('[PURLPortal] Render - showOnboarding:', showOnboarding)}
       {showOnboarding && (
         <PortalOnboardingGuide
           workspaceSlug={slug}
