@@ -38226,13 +38226,8 @@ async def delete_user(
         raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
 
 
-@app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
-async def check_user_deletion_blockers(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Check what tables/records are blocking user deletion."""
+async def _get_deletion_blockers(user_id: int, db: Session):
+    """Helper function to check deletion blockers."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -38281,6 +38276,25 @@ async def check_user_deletion_blockers(
         "blockers": blockers,
         "total_blocking_records": sum(b["count"] for b in blockers)
     }
+
+
+@app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
+async def check_user_deletion_blockers(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Check what tables/records are blocking user deletion (requires auth)."""
+    return await _get_deletion_blockers(user_id, db)
+
+
+@app.get("/api/v1/debug/user-deletion-blockers/{user_id}")
+async def debug_user_deletion_blockers(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Check what tables/records are blocking user deletion (public debug endpoint)."""
+    return await _get_deletion_blockers(user_id, db)
 
 
 # ============================================================================
