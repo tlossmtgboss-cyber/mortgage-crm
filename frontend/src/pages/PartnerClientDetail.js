@@ -145,7 +145,7 @@ const ProgressCircle = ({ percentage }) => {
   );
 };
 
-// Document Stats Card
+// Document Stats Card - with circular progress like Loan Progress
 const DocumentStatsCard = ({ documents, loanId, navigate }) => {
   const total = documents?.total || documents?.requested_count || 0;
   const received = documents?.received_count || 0;
@@ -154,29 +154,19 @@ const DocumentStatsCard = ({ documents, loanId, navigate }) => {
 
   return (
     <div className="dashboard-card documents-card">
-      <h2>📁 Documents</h2>
-      <div className="document-stats-grid">
-        <div className="doc-stat approved">
-          <span className="doc-stat-value">{received}</span>
-          <span className="doc-stat-label">Received</span>
+      <h2>Document Progress</h2>
+      <div className="progress-overview-content">
+        <ProgressCircle percentage={percentage} />
+        <div className="progress-stats">
+          <div className="stat-item">
+            <span className="stat-value">{received}/{total}</span>
+            <span className="stat-label">Received</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{outstanding}</span>
+            <span className="stat-label">Outstanding</span>
+          </div>
         </div>
-        <div className="doc-stat pending">
-          <span className="doc-stat-value">{outstanding}</span>
-          <span className="doc-stat-label">Outstanding</span>
-        </div>
-        <div className="doc-stat total">
-          <span className="doc-stat-value">{total}</span>
-          <span className="doc-stat-label">Total Requested</span>
-        </div>
-      </div>
-      <div className="doc-progress-container">
-        <div className="doc-progress-bar">
-          <div
-            className="doc-progress-fill"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        <span className="doc-progress-text">{percentage}% Complete</span>
       </div>
       {documents?.outstanding?.length > 0 && (
         <div className="outstanding-list">
@@ -238,7 +228,7 @@ const ActivityTimelineCard = ({ activities, stageHistory }) => {
   return (
     <div className="dashboard-card activity-card">
       <div className="card-header-with-badge">
-        <h2>📋 Recent Activity</h2>
+        <h2>Recent Activity</h2>
         <span className="activity-badge">{timeline.length} updates</span>
       </div>
 
@@ -275,7 +265,7 @@ const ActivityTimelineCard = ({ activities, stageHistory }) => {
 // Loan Summary Card
 const LoanSummaryCard = ({ client }) => (
   <div className="dashboard-card loan-summary-card">
-    <h2>💰 Loan Summary</h2>
+    <h2>Loan Summary</h2>
     <div className="loan-amount-highlight">
       <span className="loan-label">Loan Amount</span>
       <span className="loan-value">{formatCurrency(client?.loan_amount)}</span>
@@ -312,7 +302,7 @@ const LoanSummaryCard = ({ client }) => (
 // Contact Card
 const ContactCard = ({ client, loanOfficer }) => (
   <div className="dashboard-card contact-card">
-    <h2>👤 Contact Information</h2>
+    <h2>Contact Information</h2>
 
     {/* Borrower Info */}
     <div className="contact-section">
@@ -369,20 +359,19 @@ const ContactCard = ({ client, loanOfficer }) => (
 // Key Dates Card
 const KeyDatesCard = ({ client }) => {
   const dates = [
-    { label: 'Expected Close', value: client?.expected_close_date, icon: '🎯' },
-    { label: 'Created', value: client?.created_at, icon: '📅' },
-    { label: 'Last Updated', value: client?.updated_at, icon: '🔄' },
+    { label: 'Expected Close', value: client?.expected_close_date },
+    { label: 'Created', value: client?.created_at },
+    { label: 'Last Updated', value: client?.updated_at },
   ].filter(d => d.value);
 
   if (dates.length === 0) return null;
 
   return (
     <div className="dashboard-card dates-card">
-      <h2>📅 Key Dates</h2>
+      <h2>Key Dates</h2>
       <div className="dates-list">
         {dates.map((date, idx) => (
           <div key={idx} className="date-item">
-            <span className="date-icon">{date.icon}</span>
             <div className="date-info">
               <span className="date-label">{date.label}</span>
               <span className="date-value">
@@ -740,7 +729,7 @@ export default function PartnerClientDetail() {
       <div className="dashboard-grid">
         {/* Progress Overview Card */}
         <div className="dashboard-card progress-overview-card">
-          <h2>📊 Loan Progress</h2>
+          <h2>Loan Progress</h2>
           <div className="progress-overview-content">
             <ProgressCircle percentage={progressPercent} />
             <div className="progress-stats">

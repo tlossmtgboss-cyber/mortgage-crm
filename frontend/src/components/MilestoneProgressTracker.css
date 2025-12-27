@@ -3,36 +3,39 @@
  */
 
 .milestone-progress-tracker {
-  background: transparent;
-  padding: 0.5rem 0;
+  background: #f8fafc;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .progress-bar-container {
   position: relative;
-  padding: 0.75rem 0;
+  padding: 1rem 0;
 }
 
 /* Background track */
 .progress-bar-container::before {
   content: '';
   position: absolute;
-  top: 16px;
+  top: 28px;
   left: 7%;
   right: 7%;
-  height: 4px;
-  background: #e2e8f0;
-  border-radius: 2px;
+  height: 6px;
+  background: #cbd5e1;
+  border-radius: 3px;
   z-index: 0;
 }
 
 /* Filled progress */
 .progress-bar-fill {
   position: absolute;
-  top: 16px;
+  top: 28px;
   left: 7%;
-  height: 4px;
-  background: linear-gradient(90deg, #0d9488 0%, #14b8a6 100%);
-  border-radius: 2px;
+  height: 6px;
+  background: linear-gradient(90deg, #218D8D 0%, #14b8a6 100%);
+  border-radius: 3px;
   transition: width 0.5s ease;
   z-index: 1;
 }
@@ -50,53 +53,53 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   flex: 1;
   max-width: 120px;
 }
 
 /* Stage indicator (the circle) */
 .stage-indicator {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: 50% !important;
   display: flex;
   align-items: center;
   justify-content: center;
   background: white;
-  border: 3px solid #e2e8f0;
+  border: 3px solid #cbd5e1;
   transition: all 0.3s ease;
   box-sizing: border-box;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
 /* Completed stage */
 .progress-stage.completed .stage-indicator {
-  background: #0d9488;
-  border-color: #0d9488;
+  background: #218D8D;
+  border-color: #218D8D;
   color: white;
 }
 
 .progress-stage.completed .check-icon {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Current stage */
 .progress-stage.current .stage-indicator {
   background: white;
-  border-color: #0d9488;
-  border-width: 2px;
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+  border-color: #218D8D;
+  border-width: 3px;
+  box-shadow: 0 0 0 4px rgba(33, 141, 141, 0.25);
 }
 
 .progress-stage.current .current-dot {
-  width: 10px;
-  height: 10px;
-  background: #0d9488;
+  width: 14px;
+  height: 14px;
+  background: #218D8D;
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
@@ -114,22 +117,22 @@
 
 /* Upcoming stage */
 .progress-stage.upcoming .stage-indicator {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .progress-stage.upcoming .empty-dot {
-  width: 6px;
-  height: 6px;
-  background: #cbd5e1;
+  width: 10px;
+  height: 10px;
+  background: #94a3b8;
   border-radius: 50%;
 }
 
 /* Stage label */
 .stage-label {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   text-align: center;
@@ -138,7 +141,8 @@
 }
 
 .progress-stage.completed .stage-label {
-  color: #0d9488;
+  color: #218D8D;
+  font-weight: 700;
 }
 
 .progress-stage.current .stage-label {
@@ -175,24 +179,45 @@
 @media (max-width: 768px) {
   .milestone-progress-tracker {
     overflow-x: auto;
+    padding: 1rem;
   }
 
   .progress-bar-container {
-    min-width: 500px;
+    min-width: 600px;
+  }
+
+  .progress-bar-container::before {
+    top: 20px;
+  }
+
+  .progress-bar-fill {
+    top: 20px;
   }
 
   .stage-indicator {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
   }
 
   .progress-stage.completed .check-icon {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
+  }
+
+  .progress-stage.current .current-dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .progress-stage.upcoming .empty-dot {
+    width: 8px;
+    height: 8px;
   }
 
   .stage-label {
-    font-size: 0.5rem;
+    font-size: 0.625rem;
   }
 }
 

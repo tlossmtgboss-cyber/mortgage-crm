@@ -323,8 +323,10 @@
    ============================================ */
 .progress-section {
   background: white;
-  padding: 1.5rem 2rem;
+  padding: 1.5rem 2rem 2rem;
   border-bottom: 1px solid #e5e7eb;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* ============================================
@@ -785,6 +787,71 @@
 .btn-view-docs:hover {
   background: #1a7070;
   transform: translateY(-1px);
+}
+
+/* View All Button (used in documents card) */
+.view-all-btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.view-all-btn:hover {
+  background: #1a7070;
+  transform: translateY(-1px);
+}
+
+/* Outstanding documents list */
+.outstanding-list {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.outstanding-list h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #f59e0b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.outstanding-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.outstanding-list li {
+  font-size: 0.85rem;
+  color: #475569;
+  padding: 0.5rem 0.75rem;
+  background: #fffbeb;
+  border-radius: 6px;
+  border-left: 3px solid #f59e0b;
+}
+
+.outstanding-list li.more-count {
+  color: #94a3b8;
+  font-style: italic;
+  background: #f8fafc;
+  border-left-color: #cbd5e1;
 }
 
 /* ============================================
