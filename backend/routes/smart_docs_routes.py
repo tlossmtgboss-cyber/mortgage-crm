@@ -2222,20 +2222,30 @@ async def test_upload(
         steps["create_document"] = f"error: {str(e)}"
         return {"steps": steps, "error": "Failed at create_document"}
 
-    # Step 4: Upload to S3 (optional)
+    # Step 4: Upload to S3 using fresh boto3 client
     try:
-        if s3_service.is_available:
-            upload_result = s3_service.upload_file(
-                file_content=file_content,
-                storage_key=storage_key,
-                content_type=file.content_type or "application/octet-stream",
-                metadata={"loan_id": str(loan_id), "document_id": str(document.id)}
-            )
-            steps["s3_upload"] = f"result: {upload_result}"
-        else:
-            steps["s3_upload"] = "skipped (S3 not available)"
+        import boto3
+        import os
+        bucket = os.getenv('SMART_DOCS_S3_BUCKET', 'perennia-smart-docs')
+
+        s3_client = boto3.client(
+            's3',
+            region_name=os.getenv('AWS_REGION', 'us-east-1'),
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        )
+        steps["s3_client"] = "created fresh client"
+
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=storage_key,
+            Body=file_content,
+            ContentType=file.content_type or "application/octet-stream",
+            Metadata={"loan_id": str(loan_id), "document_id": str(document.id)}
+        )
+        steps["s3_upload"] = f"success - uploaded to {bucket}/{storage_key}"
     except Exception as e:
-        steps["s3_upload"] = f"error: {str(e)}"
+        steps["s3_upload"] = f"error: {type(e).__name__}: {str(e)}"
 
     # Step 5: Process document
     try:
