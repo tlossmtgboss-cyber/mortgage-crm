@@ -786,7 +786,7 @@ async def generate_preapproval_for_lead(
     try:
         result = db.execute(text("""
             INSERT INTO pre_approval_letters (
-                organization_id, loan_id, letter_type, version,
+                organization_id, lead_id, letter_type, version,
                 generated_html, variables_used, property_address, purchase_price,
                 approved_amount, expires_at, generated_by_realtor, share_token
             ) VALUES (
@@ -1876,12 +1876,13 @@ async def run_realtor_portal_migration(
             );
         """),
 
-        # Pre-approval letters
+        # Pre-approval letters (with lead_id for pre-approval stage)
         ("Create pre_approval_letters", """
             CREATE TABLE IF NOT EXISTS pre_approval_letters (
                 id SERIAL PRIMARY KEY,
                 organization_id INTEGER NOT NULL,
-                loan_id INTEGER NOT NULL,
+                lead_id INTEGER,
+                loan_id INTEGER,
                 template_id INTEGER,
                 letter_type VARCHAR(50) NOT NULL,
                 version INTEGER NOT NULL DEFAULT 1,
@@ -1909,6 +1910,31 @@ async def run_realtor_portal_migration(
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+        """),
+
+        # Add lead_id column if table exists but column doesn't
+        ("Add lead_id to pre_approval_letters", """
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'pre_approval_letters')
+                   AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                   WHERE table_name = 'pre_approval_letters' AND column_name = 'lead_id') THEN
+                    ALTER TABLE pre_approval_letters ADD COLUMN lead_id INTEGER;
+                END IF;
+            END $$;
+        """),
+
+        # Make loan_id nullable if it's required
+        ("Make loan_id nullable in pre_approval_letters", """
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns
+                           WHERE table_name = 'pre_approval_letters'
+                           AND column_name = 'loan_id'
+                           AND is_nullable = 'NO') THEN
+                    ALTER TABLE pre_approval_letters ALTER COLUMN loan_id DROP NOT NULL;
+                END IF;
+            END $$;
         """),
 
         # Communication events
