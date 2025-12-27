@@ -172,8 +172,16 @@ else:
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Initialize background scheduler for auto-sync
-scheduler = AsyncIOScheduler()
+# Initialize background scheduler for auto-sync with job defaults
+# misfire_grace_time: If a job is missed by up to 30 seconds, still run it
+# coalesce: If multiple executions were missed, only run once
+scheduler = AsyncIOScheduler(
+    job_defaults={
+        'coalesce': True,  # Combine missed executions into one
+        'max_instances': 1,  # Only one instance of each job at a time
+        'misfire_grace_time': 30  # 30 second grace period for missed jobs
+    }
+)
 
 def get_db():
     db = SessionLocal()
@@ -205,13 +213,19 @@ class LeadStage(str, enum.Enum):
     DISCLOSED = "Disclosed"  # Lead converted to Active Loan
 
 class LoanStage(str, enum.Enum):
+    # Pre-disclosure stages
+    APPLICATION = "Application"  # Loan application started
     DISCLOSED = "Disclosed"
     PROCESSING = "Processing"
     SUBMITTED = "Submitted"  # PRD: UW Submitted but not yet received
+    UNDERWRITING = "Underwriting"  # In underwriting review
     UW_RECEIVED = "UW Received"
+    CONDITIONAL_APPROVAL = "Conditional Approval"  # Approved with conditions
     APPROVED = "Approved"
     SUSPENDED = "Suspended"
     CTC = "CTC"
+    CLEAR_TO_CLOSE = "Clear to Close"  # Alias for CTC
+    CLOSING = "Closing"  # In closing process
     DOCS = "Docs Out"  # Closing documents sent out
     FUNDED = "Funded"
 
@@ -21060,17 +21074,8 @@ except Exception as e:
     portal_document_error = traceback.format_exc()
     logger.warning(f"⚠️ Portal Document routes not loaded: {e}")
 
-# Smart Document Collection Routes (needs list, screenshot detection, freshness validation)
-smart_docs_error = None
-try:
-    from routes.smart_docs_routes import router as smart_docs_router
-    app.include_router(smart_docs_router, tags=["Smart Documents"])
-    logger.info("✅ Smart Documents routes loaded")
-except Exception as e:
-    smart_docs_error = str(e)
-    import traceback
-    smart_docs_error = traceback.format_exc()
-    logger.warning(f"⚠️ Smart Documents routes not loaded: {e}")
+# NOTE: Smart Documents routes already loaded earlier in main.py (line ~19873)
+# Duplicate registration was removed to fix FastAPI duplicate operation_id warnings
 
 # Portal Authentication Routes (magic links, sessions)
 portal_auth_error = None
@@ -34798,6 +34803,20 @@ async def health_check(db: Session = Depends(get_db)):
         )
 
 
+@app.get("/api/v1/health")
+async def api_health_check(db: Session = Depends(get_db)):
+    """API health check endpoint at /api/v1/health - database connectivity"""
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.4"}
+    except Exception as e:
+        logger.error(f"API health check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "error": str(e)}
+        )
+
+
 @app.get("/deploy-test")
 async def deploy_test():
     """Simple endpoint to verify deployment - added 2025-12-27T22:45"""
@@ -42022,6 +42041,73 @@ async def delete_lead_condition(lead_id: int, condition_id: int, db: Session = D
         db.rollback()
         logger.error(f"Error deleting condition: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete condition: {str(e)}")
+
+
+@app.get("/api/v1/leads/{lead_id}/team-assignments")
+async def get_lead_team_assignments(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    """Get team assignments for a lead including owner, processor, and other assigned team members"""
+    # Verify lead exists and user has access
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    query = filter_leads_by_permissions(query, current_user, db)
+    lead = query.first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        # Get owner details
+        owner = None
+        if lead.owner_id:
+            owner_user = db.query(User).filter(User.id == lead.owner_id).first()
+            if owner_user:
+                owner = {
+                    "user_id": owner_user.id,
+                    "name": owner_user.name,
+                    "email": owner_user.email,
+                    "role": "Loan Officer"
+                }
+
+        # Build team assignments list
+        team_assignments = []
+
+        # Add owner as primary team member
+        if owner:
+            team_assignments.append({
+                "role": "Loan Officer",
+                "user_id": owner["user_id"],
+                "name": owner["name"],
+                "email": owner["email"],
+                "is_primary": True
+            })
+
+        # Add processor if specified
+        if lead.processor:
+            team_assignments.append({
+                "role": "Processor",
+                "user_id": None,
+                "name": lead.processor,
+                "email": None,
+                "is_primary": False
+            })
+
+        # Add underwriter if specified
+        if lead.underwriter:
+            team_assignments.append({
+                "role": "Underwriter",
+                "user_id": None,
+                "name": lead.underwriter,
+                "email": None,
+                "is_primary": False
+            })
+
+        return {
+            "lead_id": lead_id,
+            "lead_name": lead.name,
+            "team_assignments": team_assignments,
+            "total_assignments": len(team_assignments)
+        }
+    except Exception as e:
+        logger.error(f"Error getting lead team assignments: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get team assignments: {str(e)}")
 
 
 @app.get("/api/v1/loans/{loan_id}/stage-history")
