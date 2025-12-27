@@ -12,6 +12,7 @@ Comprehensive API for the realtor portal including:
 """
 
 import os
+import json
 import secrets
 import logging
 from datetime import datetime, timezone, timedelta
@@ -799,7 +800,7 @@ async def generate_preapproval_for_lead(
             "org_id": lead[16] or 1,
             "lead_id": lead_id,
             "html": letter_html,
-            "variables": f'{{"borrower_name": "{lead[1]}", "loan_amount": {calculated_amount}}}',
+            "variables": json.dumps({"borrower_name": lead[1] or "", "loan_amount": calculated_amount}),
             "property_address": property_address if request.include_property_address else None,
             "purchase_price": purchase_price,
             "approved_amount": calculated_amount,
