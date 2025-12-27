@@ -1260,10 +1260,16 @@ async def add_partner_note(
         """), {"client_id": client_id}).fetchone()
     except Exception as e:
         logger.error(f"Failed to query lead info: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Database error: {str(e)}"}
+        )
 
     if not lead_info:
-        raise HTTPException(status_code=404, detail="Client not found")
+        return JSONResponse(
+            status_code=404,
+            content={"success": False, "error": "Client not found"}
+        )
 
     # Create activity record
     activity_id = None
@@ -1291,7 +1297,10 @@ async def add_partner_note(
     except Exception as e:
         logger.error(f"Failed to create activity: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to save note: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Failed to save note: {str(e)}"}
+        )
 
     # Get all team members to notify
     team_emails = []
