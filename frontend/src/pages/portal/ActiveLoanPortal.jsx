@@ -1348,9 +1348,9 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       {/* Header */}
       <header className="portal-header">
         <div className="header-content">
-          {/* Top Row - Logo & Date */}
+          {/* Top Row - Logo & Date (stacked vertically) */}
           <div className="header-top-row">
-            <div className="logo-section">
+            <div className="logo-date-stack">
               {data?.loanOfficer?.company_logo_url && (
                 <img
                   src={data.loanOfficer.company_logo_url}
@@ -1358,9 +1358,9 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
                   className="portal-company-logo"
                 />
               )}
-            </div>
-            <div className="header-date">
-              <span className="date-label">{formatCurrentDate()}</span>
+              <div className="header-date">
+                <span className="date-label">{formatCurrentDate()}</span>
+              </div>
             </div>
           </div>
 

@@ -277,19 +277,18 @@
   }
 }
 
-/* Header Top Row - Client Name & Date */
+/* Header Top Row - Logo & Date */
 .header-top-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--portal-border);
 }
 
-.logo-section {
+.logo-date-stack {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .portal-company-logo {
@@ -298,6 +297,10 @@
   width: auto;
   height: auto;
   object-fit: contain;
+}
+
+.logo-date-stack .header-date {
+  margin-top: 4px;
 }
 
 @media (max-width: 768px) {
