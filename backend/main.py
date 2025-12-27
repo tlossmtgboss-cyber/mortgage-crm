@@ -55882,6 +55882,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ Smart Docs SLA migration skipped: {e}")
 
+            # Run Smart Docs missing columns migration (uploaded_at, original_filename)
+            try:
+                from migrations.add_smart_docs_missing_columns import run_migration as run_smart_docs_columns_migration
+                run_smart_docs_columns_migration()
+                logger.info("✅ Smart Docs columns migration completed")
+            except Exception as e:
+                logger.warning(f"⚠️ Smart Docs columns migration skipped: {e}")
+
             # Run Microsite Platform migration (template packs, microsites, analytics)
             try:
                 from migrations.add_microsite_platform import run_migration as run_microsite_platform_migration
