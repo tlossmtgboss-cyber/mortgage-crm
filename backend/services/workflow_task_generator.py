@@ -524,11 +524,37 @@ class TaskGeneratorService:
         try:
             logger.info(f"_create_linked_task called: task_instance_id={task_instance_id}, task_type={task_type}")
 
+            # If no assigned user, get the owner from the lead or loan
+            owner_id = assigned_user_id
+            if not owner_id:
+                # Try to get owner from lead
+                if instance.get('lead_id'):
+                    lead_owner = self.db.execute(text("""
+                        SELECT assigned_to FROM leads WHERE id = :lead_id
+                    """), {"lead_id": instance['lead_id']}).fetchone()
+                    if lead_owner and lead_owner[0]:
+                        owner_id = lead_owner[0]
+                        logger.info(f"Got owner_id={owner_id} from lead {instance['lead_id']}")
+
+                # Try to get owner from loan if still no owner
+                if not owner_id and instance.get('loan_id'):
+                    loan_owner = self.db.execute(text("""
+                        SELECT loan_officer_id FROM loans WHERE id = :loan_id
+                    """), {"loan_id": instance['loan_id']}).fetchone()
+                    if loan_owner and loan_owner[0]:
+                        owner_id = loan_owner[0]
+                        logger.info(f"Got owner_id={owner_id} from loan {instance['loan_id']}")
+
+                # If still no owner, skip creating the linked task
+                if not owner_id:
+                    logger.warning(f"No owner found for task instance {task_instance_id}, skipping linked task")
+                    return None
+
             # Build title
             contact_name = contact_info.get('name', 'Contact')
             title = f"[Workflow] {task_type.replace('_', ' ').title()} - {contact_name}"
 
-            logger.info(f"Creating task: title='{title}', lead_id={instance.get('lead_id')}, loan_id={instance.get('loan_id')}")
+            logger.info(f"Creating task: title='{title}', lead_id={instance.get('lead_id')}, loan_id={instance.get('loan_id')}, owner_id={owner_id}")
 
             # Build description
             description = f"""Workflow Task: {day_config['day_label']}
@@ -565,7 +591,7 @@ Email: {contact_info.get('email', 'N/A')}
                 "description": description,
                 "priority": priority,
                 "due_date": due_date,
-                "owner_id": assigned_user_id,
+                "owner_id": owner_id,  # Use resolved owner_id (from assigned_user_id, lead, or loan)
                 "lead_id": instance['lead_id'],
                 "loan_id": instance['loan_id'],
                 "contact_name": contact_name,
