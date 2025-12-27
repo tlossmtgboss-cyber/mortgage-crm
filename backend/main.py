@@ -59463,12 +59463,13 @@ async def set_workspace_owner_migration(
     try:
         logger.info("Running migration: set workspace owner")
 
-        # Find workspaces with timothy.loss pattern
+        # Find workspaces with timothy.loss pattern (including .url suffix)
         result = db.execute(text("""
             SELECT id, slug, owner_user_id
             FROM purl_workspaces
-            WHERE slug ILIKE '%timothy.loss%' OR slug ILIKE '%tim%'
-            LIMIT 10
+            WHERE slug ILIKE '%timothy%' OR slug ILIKE '%tim%loss%'
+            ORDER BY id DESC
+            LIMIT 20
         """))
         workspaces = result.fetchall()
 
