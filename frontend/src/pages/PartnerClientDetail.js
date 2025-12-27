@@ -1,15 +1,17 @@
 /**
- * Partner Client Detail Page - Redesigned
+ * Partner Client Detail Page - Redesigned v3
  *
- * Clean, focused view for partners to track their referred clients.
+ * Modern card-based view matching the Client Portal UX.
  * Features:
- * - Document collection progress with percentage
- * - Activity/Notes timeline for client communications
- * - Clean milestone progress tracker
- * - Key loan details without redundancy
+ * - Welcome header with prominent stage badge
+ * - Circular loan progress indicator
+ * - Document collection with visual stats
+ * - Activity timeline
+ * - Key dates display
+ * - Loan officer contact
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MilestoneProgressTracker from '../components/MilestoneProgressTracker';
 import PreApprovalLetterModal from '../components/PreApprovalLetterModal';
@@ -18,6 +20,21 @@ import './PartnerClientDetail.css';
 
 // API base URL
 const API_BASE = process.env.REACT_APP_API_URL || '';
+
+// Lifecycle stages with colors
+const LIFECYCLE_STAGES = {
+  new: { label: 'New Lead', color: '#3b82f6', icon: '✨' },
+  new_lead: { label: 'New Lead', color: '#3b82f6', icon: '✨' },
+  contacted: { label: 'Contacted', color: '#8b5cf6', icon: '📞' },
+  qualified: { label: 'Qualified', color: '#06b6d4', icon: '✅' },
+  pre_approved: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
+  preapproval: { label: 'Pre-Approval', color: '#10b981', icon: '🎯' },
+  under_contract: { label: 'Under Contract', color: '#f59e0b', icon: '📝' },
+  processing: { label: 'Processing', color: '#ec4899', icon: '⚙️' },
+  clear_to_close: { label: 'Clear to Close', color: '#22c55e', icon: '🏁' },
+  funded: { label: 'Funded', color: '#059669', icon: '🎉' },
+  closed: { label: 'Closed', color: '#059669', icon: '🏠' },
+};
 
 // Activity type configuration
 const ACTIVITY_CONFIG = {
@@ -49,109 +66,150 @@ const formatRelativeTime = (dateString) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// Format full property address
+// Format address
 const formatAddress = (client) => {
   const parts = [];
   const address = client?.property_address || client?.property?.address || client?.address;
   const city = client?.property_city || client?.property?.city || client?.city;
   const state = client?.property_state || client?.property?.state || client?.state;
-  const zip = client?.property_zip || client?.property?.zip || client?.zip_code;
 
   if (address) parts.push(address);
   if (city) parts.push(city);
-  if (state && zip) {
-    parts.push(`${state} ${zip}`);
-  } else if (state) {
-    parts.push(state);
-  } else if (zip) {
-    parts.push(zip);
-  }
+  if (state) parts.push(state);
 
   return parts.join(', ') || 'Property Address TBD';
 };
 
-// Document Progress Component
-const DocumentProgress = ({ documents, loanId }) => {
-  const navigate = useNavigate();
+// Format currency
+const formatCurrency = (amount) => {
+  if (!amount) return 'TBD';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0
+  }).format(amount);
+};
+
+// Format phone
+const formatPhone = (phone) => {
+  if (!phone) return null;
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  return phone;
+};
+
+// Calculate loan progress percentage based on stage
+const calculateProgress = (stage) => {
+  const stageOrder = ['new', 'new_lead', 'contacted', 'qualified', 'pre_approved', 'preapproval', 'under_contract', 'processing', 'clear_to_close', 'funded', 'closed'];
+  const normalizedStage = (stage || 'new').toLowerCase().replace(/-/g, '_');
+  const index = stageOrder.indexOf(normalizedStage);
+  if (index === -1) return 10;
+  return Math.round(((index + 1) / stageOrder.length) * 100);
+};
+
+// Progress Circle Component
+const ProgressCircle = ({ percentage }) => {
+  const radius = 45;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div className="progress-circle-container">
+      <svg viewBox="0 0 100 100" className="progress-circle-svg">
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth="8"
+        />
+        <circle
+          cx="50"
+          cy="50"
+          r={radius}
+          fill="none"
+          stroke="#218D8D"
+          strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          transform="rotate(-90 50 50)"
+          className="progress-circle-fill"
+        />
+      </svg>
+      <span className="progress-circle-value">{percentage}%</span>
+    </div>
+  );
+};
+
+// Document Stats Card
+const DocumentStatsCard = ({ documents, loanId, navigate }) => {
   const total = documents?.total || documents?.requested_count || 0;
   const received = documents?.received_count || 0;
   const outstanding = documents?.outstanding_count || 0;
   const percentage = total > 0 ? Math.round((received / total) * 100) : 0;
 
-  // Get color based on percentage
-  const getProgressColor = () => {
-    if (percentage >= 80) return '#10b981'; // Green
-    if (percentage >= 50) return '#f59e0b'; // Amber
-    return '#ef4444'; // Red
-  };
-
   return (
-    <div className="document-progress-card">
-      <div className="progress-header">
-        <h3>Document Collection</h3>
-        <span className="progress-percentage" style={{ color: getProgressColor() }}>
-          {percentage}%
-        </span>
-      </div>
-
-      <div className="progress-bar-container">
-        <div
-          className="progress-bar-fill"
-          style={{
-            width: `${percentage}%`,
-            background: `linear-gradient(90deg, ${getProgressColor()} 0%, ${getProgressColor()}dd 100%)`
-          }}
-        />
-      </div>
-
-      <div className="progress-stats">
-        <div className="progress-stat">
-          <span className="stat-number received">{received}</span>
-          <span className="stat-label">Received</span>
+    <div className="dashboard-card documents-card">
+      <h2>📁 Documents</h2>
+      <div className="document-stats-grid">
+        <div className="doc-stat approved">
+          <span className="doc-stat-value">{received}</span>
+          <span className="doc-stat-label">Received</span>
         </div>
-        <div className="progress-divider">/</div>
-        <div className="progress-stat">
-          <span className="stat-number total">{outstanding}</span>
-          <span className="stat-label">Requested</span>
+        <div className="doc-stat pending">
+          <span className="doc-stat-value">{outstanding}</span>
+          <span className="doc-stat-label">Outstanding</span>
+        </div>
+        <div className="doc-stat total">
+          <span className="doc-stat-value">{total}</span>
+          <span className="doc-stat-label">Total Requested</span>
         </div>
       </div>
-
+      <div className="doc-progress-container">
+        <div className="doc-progress-bar">
+          <div
+            className="doc-progress-fill"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        <span className="doc-progress-text">{percentage}% Complete</span>
+      </div>
       {documents?.outstanding?.length > 0 && (
-        <div className="outstanding-docs">
+        <div className="outstanding-list">
           <h4>Still Needed:</h4>
           <ul>
-            {documents.outstanding.slice(0, 4).map((doc, idx) => (
+            {documents.outstanding.slice(0, 3).map((doc, idx) => (
               <li key={doc.id || idx}>
-                <span className="doc-bullet">•</span>
                 {doc.title || doc.type || doc.name}
               </li>
             ))}
-            {documents.outstanding.length > 4 && (
-              <li className="more-docs">+{documents.outstanding.length - 4} more</li>
+            {documents.outstanding.length > 3 && (
+              <li className="more-count">+{documents.outstanding.length - 3} more</li>
             )}
           </ul>
         </div>
       )}
-
       {loanId && (
         <button
-          className="btn-view-docs"
+          className="view-all-btn"
           onClick={() => navigate(`/smart-docs/client/${loanId}`)}
         >
-          View Documents →
+          View All Documents
         </button>
       )}
     </div>
   );
 };
 
-// Notes & Activity Timeline Component
-const ActivityTimeline = ({ activities, stageHistory, conversationLog }) => {
-  // Combine all activities into unified timeline
-  const getTimeline = () => {
+// Activity Timeline Card
+const ActivityTimelineCard = ({ activities, stageHistory }) => {
+  const getTimeline = useCallback(() => {
     const timeline = [];
 
-    // Add activities
     (activities || []).forEach(activity => {
       timeline.push({
         id: `activity-${activity.id}`,
@@ -162,73 +220,187 @@ const ActivityTimeline = ({ activities, stageHistory, conversationLog }) => {
       });
     });
 
-    // Add stage changes
     (stageHistory || []).forEach(history => {
       timeline.push({
         id: `stage-${history.id}`,
         type: 'stage_change',
-        content: `Status changed from "${history.from_stage || 'New'}" to "${history.to_stage}"`,
+        content: `Stage changed to "${history.to_stage}"`,
         created_at: history.changed_at,
       });
     });
 
-    // Add conversation log
-    (conversationLog || []).forEach((log, idx) => {
-      timeline.push({
-        id: `conv-${idx}`,
-        type: log.type || 'note',
-        content: log.content || log.message || log.description,
-        created_at: log.timestamp || log.created_at,
-        user: log.user,
-      });
-    });
-
-    // Sort by date (newest first)
     timeline.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return timeline;
-  };
+  }, [activities, stageHistory]);
 
   const timeline = getTimeline();
 
   return (
-    <div className="activity-timeline-card">
-      <div className="timeline-header">
-        <h3>Notes & Activity</h3>
-        <span className="timeline-count">{timeline.length} updates</span>
+    <div className="dashboard-card activity-card">
+      <div className="card-header-with-badge">
+        <h2>📋 Recent Activity</h2>
+        <span className="activity-badge">{timeline.length} updates</span>
       </div>
 
       {timeline.length === 0 ? (
-        <div className="empty-timeline">
+        <div className="empty-state">
           <span className="empty-icon">📋</span>
           <p>No activity recorded yet</p>
         </div>
       ) : (
-        <div className="timeline-list">
-          {timeline.slice(0, 10).map((item) => {
+        <ul className="activity-list">
+          {timeline.slice(0, 8).map((item) => {
             const config = ACTIVITY_CONFIG[item.type] || { label: 'Update', icon: '📌', color: '#6b7280' };
-
             return (
-              <div key={item.id} className="timeline-item">
-                <div className="timeline-icon" style={{ background: `${config.color}15`, color: config.color }}>
+              <li key={item.id} className="activity-item">
+                <span
+                  className="activity-icon"
+                  style={{ background: `${config.color}15`, color: config.color }}
+                >
                   {config.icon}
+                </span>
+                <div className="activity-content">
+                  <p className="activity-description">{item.content}</p>
+                  <span className="activity-time">{formatRelativeTime(item.created_at)}</span>
                 </div>
-                <div className="timeline-content">
-                  <div className="timeline-meta">
-                    <span className="timeline-type">{config.label}</span>
-                    <span className="timeline-time">{formatRelativeTime(item.created_at)}</span>
-                  </div>
-                  <p className="timeline-text">{item.content}</p>
-                  {item.user && <span className="timeline-user">by {item.user}</span>}
-                </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );
 };
 
+// Loan Summary Card
+const LoanSummaryCard = ({ client }) => (
+  <div className="dashboard-card loan-summary-card">
+    <h2>💰 Loan Summary</h2>
+    <div className="loan-amount-highlight">
+      <span className="loan-label">Loan Amount</span>
+      <span className="loan-value">{formatCurrency(client?.loan_amount)}</span>
+    </div>
+    <div className="loan-details-grid">
+      <div className="loan-detail">
+        <span className="detail-label">Loan Type</span>
+        <span className="detail-value">{client?.loan_type || 'Conventional'}</span>
+      </div>
+      <div className="loan-detail">
+        <span className="detail-label">Purchase Price</span>
+        <span className="detail-value">{formatCurrency(client?.purchase_price)}</span>
+      </div>
+      <div className="loan-detail">
+        <span className="detail-label">Down Payment</span>
+        <span className="detail-value">{formatCurrency(client?.down_payment)}</span>
+      </div>
+      <div className="loan-detail">
+        <span className="detail-label">LTV</span>
+        <span className="detail-value">{client?.ltv_ratio ? `${client.ltv_ratio}%` : 'TBD'}</span>
+      </div>
+      <div className="loan-detail">
+        <span className="detail-label">Interest Rate</span>
+        <span className="detail-value">{client?.interest_rate ? `${client.interest_rate}%` : 'TBD'}</span>
+      </div>
+      <div className="loan-detail">
+        <span className="detail-label">Term</span>
+        <span className="detail-value">{client?.loan_term ? `${client.loan_term} years` : '30 years'}</span>
+      </div>
+    </div>
+  </div>
+);
+
+// Contact Card
+const ContactCard = ({ client, loanOfficer }) => (
+  <div className="dashboard-card contact-card">
+    <h2>👤 Contact Information</h2>
+
+    {/* Borrower Info */}
+    <div className="contact-section">
+      <h3>Borrower</h3>
+      <div className="contact-info">
+        <div className="contact-row">
+          <span className="contact-icon">👤</span>
+          <span>{client?.borrower_name || client?.name}</span>
+        </div>
+        {client?.email && (
+          <div className="contact-row">
+            <span className="contact-icon">✉️</span>
+            <a href={`mailto:${client.email}`}>{client.email}</a>
+          </div>
+        )}
+        {client?.phone && (
+          <div className="contact-row">
+            <span className="contact-icon">📱</span>
+            <a href={`tel:${client.phone}`}>{formatPhone(client.phone)}</a>
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Loan Officer Info */}
+    <div className="contact-section lo-section">
+      <h3>Loan Officer</h3>
+      {loanOfficer ? (
+        <div className="lo-info-card">
+          <div className="lo-avatar">
+            {loanOfficer.name?.charAt(0) || 'L'}
+          </div>
+          <div className="lo-details">
+            <strong>{loanOfficer.name}</strong>
+            {loanOfficer.email && (
+              <a href={`mailto:${loanOfficer.email}`}>
+                ✉️ {loanOfficer.email}
+              </a>
+            )}
+            {loanOfficer.phone && (
+              <a href={`tel:${loanOfficer.phone}`}>
+                📞 {formatPhone(loanOfficer.phone)}
+              </a>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="no-lo">Loan officer will be assigned soon</p>
+      )}
+    </div>
+  </div>
+);
+
+// Key Dates Card
+const KeyDatesCard = ({ client }) => {
+  const dates = [
+    { label: 'Expected Close', value: client?.expected_close_date, icon: '🎯' },
+    { label: 'Created', value: client?.created_at, icon: '📅' },
+    { label: 'Last Updated', value: client?.updated_at, icon: '🔄' },
+  ].filter(d => d.value);
+
+  if (dates.length === 0) return null;
+
+  return (
+    <div className="dashboard-card dates-card">
+      <h2>📅 Key Dates</h2>
+      <div className="dates-list">
+        {dates.map((date, idx) => (
+          <div key={idx} className="date-item">
+            <span className="date-icon">{date.icon}</span>
+            <div className="date-info">
+              <span className="date-label">{date.label}</span>
+              <span className="date-value">
+                {new Date(date.value).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Main Component
 export default function PartnerClientDetail() {
   const { partnerId, clientId } = useParams();
   const navigate = useNavigate();
@@ -287,18 +459,14 @@ export default function PartnerClientDetail() {
     }
   };
 
-  // Load Smart Docs data for document progress
   const loadSmartDocsData = async () => {
     try {
       const jwtToken = localStorage.getItem('token');
       if (!jwtToken) return;
 
-      // First, try to find a linked loan for this lead
-      // Try by lead's loan_id if available, or search by email
       const leadEmail = clientData?.client?.email;
       const leadId = clientData?.client?.id;
 
-      // Try to get Smart Docs queue data which includes all loans
       const queueResponse = await fetch(
         `${API_BASE}/api/v1/smart-docs/queue`,
         {
@@ -311,7 +479,6 @@ export default function PartnerClientDetail() {
 
       if (queueResponse.ok) {
         const queueData = await queueResponse.json();
-        // Find matching loan by borrower name or email
         const borrowerName = clientData?.client?.borrower_name || clientData?.client?.name;
         const matchingLoan = queueData.find(loan =>
           (leadEmail && loan.borrower_email?.toLowerCase() === leadEmail.toLowerCase()) ||
@@ -319,7 +486,6 @@ export default function PartnerClientDetail() {
         );
 
         if (matchingLoan) {
-          // Fetch detailed needs list for this loan
           const needsListResponse = await fetch(
             `${API_BASE}/api/v1/smart-docs/needs-list/${matchingLoan.loan_id}`,
             {
@@ -334,7 +500,6 @@ export default function PartnerClientDetail() {
             const needsListData = await needsListResponse.json();
             const requests = needsListData.all_requests || [];
 
-            // Count by status
             const outstanding = requests.filter(r => r.status === 'REQUESTED' || r.status === 'PENDING');
             const received = requests.filter(r => r.status === 'PENDING_REVIEW' || r.status === 'UPLOADED');
             const completed = requests.filter(r => r.status === 'ACCEPTED' || r.status === 'WAIVED');
@@ -354,7 +519,7 @@ export default function PartnerClientDetail() {
         }
       }
 
-      // Fallback: try to fetch by lead's conditions endpoint
+      // Fallback
       const conditionsResponse = await fetch(
         `${API_BASE}/api/v1/leads/${leadId}/conditions`,
         {
@@ -400,7 +565,6 @@ export default function PartnerClientDetail() {
 
       let response;
 
-      // Try CRM authentication first
       if (jwtToken) {
         try {
           response = await fetch(
@@ -455,7 +619,7 @@ export default function PartnerClientDetail() {
                 received: [],
                 outstanding_count: 0,
                 received_count: 0,
-                requested_count: 8
+                requested_count: 0
               },
               conversations: []
             });
@@ -466,7 +630,6 @@ export default function PartnerClientDetail() {
         }
       }
 
-      // Fall back to partner portal token
       if (!partnerToken) {
         setError('Authentication required. Please log in.');
         return;
@@ -496,27 +659,9 @@ export default function PartnerClientDetail() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    if (!amount) return 'TBD';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatPhone = (phone) => {
-    if (!phone) return null;
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length === 10) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-    }
-    return phone;
-  };
-
   if (loading) {
     return (
-      <div className="partner-client-detail-v2 loading-state">
+      <div className="partner-client-detail-v3 loading-state">
         <div className="loading-spinner" />
         <p>Loading client details...</p>
       </div>
@@ -525,7 +670,7 @@ export default function PartnerClientDetail() {
 
   if (error) {
     return (
-      <div className="partner-client-detail-v2 error-state">
+      <div className="partner-client-detail-v3 error-state">
         <div className="error-content">
           <span className="error-icon">⚠️</span>
           <h2>Unable to Load</h2>
@@ -538,18 +683,20 @@ export default function PartnerClientDetail() {
 
   if (!clientData) {
     return (
-      <div className="partner-client-detail-v2 error-state">
+      <div className="partner-client-detail-v3 error-state">
         <h2>Client Not Found</h2>
         <button className="btn-back" onClick={() => navigate(-1)}>Go Back</button>
       </div>
     );
   }
 
-  const { client, documents, conversation_log } = clientData;
-  const currentStage = client?.status || client?.stage || 'new';
+  const { client, documents } = clientData;
+  const currentStage = (client?.status || client?.stage || 'new').toLowerCase().replace(/-/g, '_');
+  const stageInfo = LIFECYCLE_STAGES[currentStage] || LIFECYCLE_STAGES.new;
+  const progressPercent = calculateProgress(currentStage);
 
   return (
-    <div className="partner-client-detail-v2">
+    <div className="partner-client-detail-v3">
       {/* Top Navigation */}
       <nav className="top-nav">
         <button className="back-btn" onClick={() => navigate(-1)}>
@@ -557,137 +704,79 @@ export default function PartnerClientDetail() {
         </button>
       </nav>
 
-      {/* Client Header */}
-      <header className="client-header">
-        <div className="header-left">
-          <div className="client-avatar">
-            {(client?.first_name || client?.borrower_name || 'C').charAt(0).toUpperCase()}
+      {/* Welcome Header */}
+      <header className="welcome-header">
+        <div className="header-content">
+          <div className="client-identity">
+            <div className="client-avatar-large">
+              {(client?.first_name || client?.borrower_name || 'C').charAt(0).toUpperCase()}
+            </div>
+            <div className="client-info">
+              <h1>{client?.borrower_name || client?.name || 'Client'}</h1>
+              <p className="property-address">📍 {formatAddress(client)}</p>
+            </div>
           </div>
-          <div className="client-info">
-            <h1>{client?.borrower_name || client?.name || 'Client'}</h1>
-            <p className="property-address">
-              📍 {formatAddress(client)}
-            </p>
+          <div className="header-right">
+            <div
+              className="stage-badge"
+              style={{ backgroundColor: `${stageInfo.color}15`, color: stageInfo.color }}
+            >
+              <span className="stage-icon">{stageInfo.icon}</span>
+              {stageInfo.label}
+            </div>
+            <button className="btn-primary" onClick={() => setShowPreApprovalModal(true)}>
+              📄 Pre-Approval Letter
+            </button>
           </div>
-        </div>
-        <div className="header-actions">
-          <button className="btn-primary" onClick={() => setShowPreApprovalModal(true)}>
-            📄 Pre-Approval Letter
-          </button>
         </div>
       </header>
 
-      {/* Progress Tracker */}
+      {/* Progress Section */}
       <section className="progress-section">
         <MilestoneProgressTracker currentStatus={currentStage} />
       </section>
 
-      {/* Main Grid Layout */}
-      <div className="content-grid">
-        {/* Left Column - Key Info */}
-        <div className="left-column">
-          {/* Loan Summary Card */}
-          <div className="info-card">
-            <h3>Loan Summary</h3>
-            <div className="summary-grid">
-              <div className="summary-item highlight">
-                <span className="label">Loan Amount</span>
-                <span className="value large">{formatCurrency(client?.loan_amount)}</span>
+      {/* Main Dashboard Grid */}
+      <div className="dashboard-grid">
+        {/* Progress Overview Card */}
+        <div className="dashboard-card progress-overview-card">
+          <h2>📊 Loan Progress</h2>
+          <div className="progress-overview-content">
+            <ProgressCircle percentage={progressPercent} />
+            <div className="progress-stats">
+              <div className="stat-item">
+                <span className="stat-value">{stageInfo.label}</span>
+                <span className="stat-label">Current Stage</span>
               </div>
-              <div className="summary-item">
-                <span className="label">Loan Type</span>
-                <span className="value">{client?.loan_type || 'Conventional'}</span>
-              </div>
-              <div className="summary-item">
-                <span className="label">Purchase Price</span>
-                <span className="value">{formatCurrency(client?.purchase_price)}</span>
-              </div>
-              <div className="summary-item">
-                <span className="label">Down Payment</span>
-                <span className="value">{formatCurrency(client?.down_payment)}</span>
-              </div>
-              <div className="summary-item">
-                <span className="label">LTV</span>
-                <span className="value">{client?.ltv_ratio ? `${client.ltv_ratio}%` : 'TBD'}</span>
-              </div>
-              <div className="summary-item">
-                <span className="label">Interest Rate</span>
-                <span className="value">{client?.interest_rate ? `${client.interest_rate}%` : 'TBD'}</span>
+              <div className="stat-item">
+                <span className="stat-value">{progressPercent}%</span>
+                <span className="stat-label">Complete</span>
               </div>
             </div>
           </div>
-
-          {/* Borrower Card */}
-          <div className="info-card">
-            <h3>Borrower</h3>
-            <div className="borrower-details">
-              <div className="detail-row">
-                <span className="icon">👤</span>
-                <span>{client?.borrower_name || client?.name}</span>
-              </div>
-              {client?.email && (
-                <div className="detail-row">
-                  <span className="icon">✉️</span>
-                  <a href={`mailto:${client.email}`}>{client.email}</a>
-                </div>
-              )}
-              {client?.phone && (
-                <div className="detail-row">
-                  <span className="icon">📱</span>
-                  <a href={`tel:${client.phone}`}>{formatPhone(client.phone)}</a>
-                </div>
-              )}
-              {client?.credit_score > 0 && (
-                <div className="detail-row">
-                  <span className="icon">📊</span>
-                  <span className={`credit-score ${client.credit_score >= 700 ? 'good' : client.credit_score >= 620 ? 'fair' : 'low'}`}>
-                    Credit Score: {client.credit_score}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Loan Officer Card */}
-          <div className="info-card lo-card">
-            <h3>Your Loan Officer</h3>
-            {client?.loan_officer ? (
-              <div className="lo-details">
-                <div className="lo-avatar">
-                  {client.loan_officer.name?.charAt(0) || 'L'}
-                </div>
-                <div className="lo-info">
-                  <strong>{client.loan_officer.name}</strong>
-                  {client.loan_officer.email && (
-                    <a href={`mailto:${client.loan_officer.email}`}>
-                      ✉️ {client.loan_officer.email}
-                    </a>
-                  )}
-                  {client.loan_officer.phone && (
-                    <a href={`tel:${client.loan_officer.phone}`}>
-                      📞 {formatPhone(client.loan_officer.phone)}
-                    </a>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="no-lo">Loan officer will be assigned soon</p>
-            )}
-          </div>
         </div>
 
-        {/* Right Column - Progress & Activity */}
-        <div className="right-column">
-          {/* Document Progress */}
-          <DocumentProgress documents={smartDocsData || documents} loanId={smartDocsData?.loanId} />
+        {/* Loan Summary */}
+        <LoanSummaryCard client={client} />
 
-          {/* Activity Timeline */}
-          <ActivityTimeline
-            activities={activities}
-            stageHistory={stageHistory}
-            conversationLog={conversation_log}
-          />
-        </div>
+        {/* Documents */}
+        <DocumentStatsCard
+          documents={smartDocsData || documents}
+          loanId={smartDocsData?.loanId}
+          navigate={navigate}
+        />
+
+        {/* Activity Timeline */}
+        <ActivityTimelineCard
+          activities={activities}
+          stageHistory={stageHistory}
+        />
+
+        {/* Contact Information */}
+        <ContactCard client={client} loanOfficer={client?.loan_officer} />
+
+        {/* Key Dates */}
+        <KeyDatesCard client={client} />
       </div>
 
       {/* Pre-Approval Modal */}
