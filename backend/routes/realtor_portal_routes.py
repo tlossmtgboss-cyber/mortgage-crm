@@ -134,6 +134,16 @@ class PartnerNoteRequest(BaseModel):
 
 
 # =============================================================================
+# DEBUG ENDPOINT
+# =============================================================================
+
+@router.get("/debug/notes-version")
+async def debug_notes_version():
+    """Debug endpoint to verify deployment version."""
+    return {"version": "v3-jsonresponse", "timestamp": "2024-12-27T10:00:00Z"}
+
+
+# =============================================================================
 # AUTHENTICATION ENDPOINTS
 # =============================================================================
 
