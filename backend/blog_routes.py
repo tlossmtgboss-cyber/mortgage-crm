@@ -612,6 +612,51 @@ async def get_blog_status():
     }
 
 
+@router.post("/repair-tables")
+async def repair_blog_tables():
+    """
+    Drop foreign key constraints that reference users table.
+    This fixes the "Foreign key violation" error when generating blog content.
+    """
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        dropped = []
+        with engine.connect() as conn:
+            # Get all foreign key constraints referencing users table
+            constraints = conn.execute(text("""
+                SELECT tc.table_name, tc.constraint_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND tc.table_name LIKE 'blog_%'
+                    AND ccu.table_name = 'users'
+            """)).fetchall()
+
+            for table_name, constraint_name in constraints:
+                try:
+                    conn.execute(text(f'ALTER TABLE {table_name} DROP CONSTRAINT IF EXISTS {constraint_name}'))
+                    dropped.append(f"{table_name}.{constraint_name}")
+                    logger.info(f"Dropped FK constraint: {table_name}.{constraint_name}")
+                except Exception as e:
+                    logger.warning(f"Could not drop {constraint_name}: {e}")
+
+            conn.commit()
+
+        return {
+            "status": "success",
+            "message": f"Dropped {len(dropped)} foreign key constraints",
+            "dropped_constraints": dropped
+        }
+    except Exception as e:
+        logger.error(f"Repair failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 # ============ Trending Topics Endpoint ============
 
 @router.get("/trending-topics")
