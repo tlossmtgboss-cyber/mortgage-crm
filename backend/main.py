@@ -34789,7 +34789,7 @@ async def health_check(db: Session = Depends(get_db)):
     """Basic health check - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.1"}
+        return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2025.12.27.2"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
