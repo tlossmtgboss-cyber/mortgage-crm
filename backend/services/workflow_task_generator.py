@@ -264,18 +264,18 @@ class TaskGeneratorService:
             if task_instance_id:
                 tasks_created.append(task_instance_id)
 
-                # Create linked task in main tasks table
-                if route == 'task_list':
-                    self._create_linked_task(
-                        task_instance_id=task_instance_id,
-                        instance=instance,
-                        day_config=day_config,
-                        task_type=task_type,
-                        assigned_user_id=assigned_user_id,
-                        due_date=due_date,
-                        contact_info=contact_info,
-                        group_key=group_key
-                    )
+                # Create linked task in main tasks table for ALL workflow tasks
+                # This provides visibility into all workflow activities in the task list UI
+                self._create_linked_task(
+                    task_instance_id=task_instance_id,
+                    instance=instance,
+                    day_config=day_config,
+                    task_type=task_type,
+                    assigned_user_id=assigned_user_id,
+                    due_date=due_date,
+                    contact_info=contact_info,
+                    group_key=group_key
+                )
 
         return tasks_created
 
