@@ -706,15 +706,8 @@ export default function PartnerClientDetail() {
             </div>
           </div>
           <div className="header-right">
-            <div
-              className="stage-badge"
-              style={{ backgroundColor: `${stageInfo.color}15`, color: stageInfo.color }}
-            >
-              <span className="stage-icon">{stageInfo.icon}</span>
-              {stageInfo.label}
-            </div>
             <button className="btn-primary" onClick={() => setShowPreApprovalModal(true)}>
-              📄 Pre-Approval Letter
+              Pre-Approval Letter
             </button>
           </div>
         </div>
