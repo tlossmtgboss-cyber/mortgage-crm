@@ -69,11 +69,42 @@ class PublicMortgageChatService:
         self._load_scheduler_settings(user.id)
 
     def _load_scheduler_settings(self, user_id: int):
-        """Load scheduler settings and availability"""
+        """Load scheduler settings and availability from User Profile work hours"""
         try:
             from services.smart_scheduler_service import SchedulerSettings, LoanOfficerSchedule, ScheduledAppointment
 
-            # Get scheduler settings
+            # First, try to get work hours from User Profile (business_hours field)
+            try:
+                from main import User
+                user = self.db.query(User).filter(User.id == user_id).first()
+                if user and hasattr(user, 'business_hours') and user.business_hours:
+                    user_hours = user.business_hours
+                    work_start = user_hours.get('start', '09:00')
+                    work_end = user_hours.get('end', '17:00')
+                    work_days = user_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])
+
+                    # Convert user profile work hours to business_hours format
+                    profile_business_hours = {}
+                    all_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                    for day in all_days:
+                        profile_business_hours[day] = {
+                            "start": work_start,
+                            "end": work_end,
+                            "enabled": day in [d.lower() for d in work_days]
+                        }
+
+                    self.scheduler_settings = {
+                        "business_hours": profile_business_hours,
+                        "default_duration_minutes": 30,
+                        "buffer_between_appointments": 15,
+                        "min_notice_hours": 2,
+                        "max_advance_days": 30,
+                    }
+                    logger.info(f"Loaded work hours from user profile: days={work_days}, {work_start}-{work_end}")
+            except Exception as profile_err:
+                logger.warning(f"Could not load user profile work hours: {profile_err}")
+
+            # Get scheduler settings (override if exists)
             settings = self.db.query(SchedulerSettings).filter(
                 SchedulerSettings.user_id == user_id
             ).first()
@@ -82,14 +113,16 @@ class PublicMortgageChatService:
                 # Use default settings
                 settings = self.db.query(SchedulerSettings).first()
 
-            if settings:
-                self.scheduler_settings = {
-                    "business_hours": settings.business_hours or {},
+            if settings and settings.business_hours:
+                # Only override if scheduler settings has actual business_hours configured
+                self.scheduler_settings = self.scheduler_settings or {}
+                self.scheduler_settings.update({
+                    "business_hours": settings.business_hours,
                     "default_duration_minutes": settings.default_duration_minutes or 30,
                     "buffer_between_appointments": settings.buffer_between_appointments or 15,
                     "min_notice_hours": settings.min_notice_hours or 2,
                     "max_advance_days": settings.max_advance_days or 30,
-                }
+                })
 
             # Get LO schedule if exists
             lo_schedule = self.db.query(LoanOfficerSchedule).filter(
