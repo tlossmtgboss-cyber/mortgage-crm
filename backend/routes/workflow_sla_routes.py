@@ -849,12 +849,12 @@ async def get_dialer_queue(
 
 @router.post("/init/ensure-tasks-columns")
 async def ensure_tasks_table_columns(
-    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Ensure all required columns exist on the tasks table.
     This is a safe operation that only adds missing columns.
+    Public endpoint - no auth required for initialization.
     """
     from sqlalchemy import text
 
