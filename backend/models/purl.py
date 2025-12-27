@@ -254,7 +254,7 @@ class PURLWorkspace(Base):
     status = Column(String(50), default=WorkspaceStatus.LEAD.value, nullable=False)
     display_name = Column(String(500), nullable=False)
     source = Column(String(255))
-    owner_user_id = Column(Integer, ForeignKey("users.id"))
+    owner_user_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_workspaces_owner_user_id"))
 
     # Lifecycle timestamps
     lead_at = Column(DateTime(timezone=True))
@@ -298,7 +298,7 @@ class PURLContact(Base):
     email = Column(String(255))
     phone = Column(String(50))
 
-    auth_user_id = Column(Integer, ForeignKey("users.id"))
+    auth_user_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_contacts_auth_user_id"))
     auth_provider = Column(String(50))
 
     meta_data = Column(JSONB, default={})
@@ -318,7 +318,7 @@ class PURLWorkspaceMember(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     workspace_id = Column(Integer, ForeignKey("purl_workspaces.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE", use_alter=True, name="fk_purl_workspace_members_user_id"), nullable=False)
 
     role = Column(String(50), nullable=False)
 
@@ -351,11 +351,11 @@ class PURLAccessToken(Base):
     expires_at = Column(DateTime(timezone=True))
     last_used_at = Column(DateTime(timezone=True))
     revoked_at = Column(DateTime(timezone=True))
-    revoked_by = Column(Integer, ForeignKey("users.id"))
+    revoked_by = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_access_tokens_revoked_by"))
     revoked_reason = Column(Text)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_access_tokens_created_by"))
 
     # Relationships
     workspace = relationship("PURLWorkspace", back_populates="tokens")
@@ -454,12 +454,14 @@ class PURLDocument(Base):
     sha256 = Column(String(64))
 
     uploaded_by_contact_id = Column(Integer, ForeignKey("purl_contacts.id"))
-    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"))
+    # Use use_alter=True to defer FK constraint creation (avoids circular import with User model)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_documents_uploaded_by_user_id"))
 
     ocr_text = Column(Text)
     extracted_data = Column(JSONB)
 
-    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    # Use use_alter=True to defer FK constraint creation (avoids circular import with User model)
+    reviewed_by = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_documents_reviewed_by"))
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
 
@@ -553,7 +555,7 @@ class PURLLoanMilestone(Base):
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
 
-    assigned_to = Column(Integer, ForeignKey("users.id"))
+    assigned_to = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_loan_milestones_assigned_to"))
     completion_notes = Column(Text)
     delay_reason = Column(Text)
 
@@ -584,7 +586,7 @@ class PURLTask(Base):
     status = Column(String(30), default=TaskStatus.OPEN.value, nullable=False)
     priority = Column(String(20), default=TaskPriority.MEDIUM.value, nullable=False)
 
-    assigned_to_user_id = Column(Integer, ForeignKey("users.id"))
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_tasks_assigned_to_user_id"))
     assigned_to_contact_id = Column(Integer, ForeignKey("purl_contacts.id"))
 
     related_document_id = Column(Integer, ForeignKey("purl_documents.id"))
@@ -592,7 +594,7 @@ class PURLTask(Base):
 
     due_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
-    completed_by_user_id = Column(Integer, ForeignKey("users.id"))
+    completed_by_user_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_tasks_completed_by_user_id"))
     completed_by_contact_id = Column(Integer, ForeignKey("purl_contacts.id"))
 
     meta_data = Column(JSONB, default={})
@@ -617,7 +619,7 @@ class PURLMessage(Base):
     content = Column(Text, nullable=False)
 
     sender_type = Column(String(20), nullable=False)
-    sender_user_id = Column(Integer, ForeignKey("users.id"))
+    sender_user_id = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_messages_sender_user_id"))
     sender_contact_id = Column(Integer, ForeignKey("purl_contacts.id"))
 
     related_document_id = Column(Integer, ForeignKey("purl_documents.id"))
@@ -705,7 +707,7 @@ class PURLDocumentRequest(Base):
     is_required = Column(Boolean, default=True)
 
     requested_at = Column(DateTime(timezone=True), server_default=func.now())
-    requested_by = Column(Integer, ForeignKey("users.id"))
+    requested_by = Column(Integer, ForeignKey("users.id", use_alter=True, name="fk_purl_document_requests_requested_by"))
     due_date = Column(Date)
 
     reminder_count = Column(Integer, default=0)
