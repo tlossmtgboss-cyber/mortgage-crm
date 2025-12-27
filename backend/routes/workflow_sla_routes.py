@@ -2211,11 +2211,11 @@ async def get_task_instance_data(
 
         # Get contact info and lead owner
         contact_info = {}
-        lead_assigned_to = None
+        lead_owner_id = None
         loan_officer_id = None
         if workflow_instance and workflow_instance[1]:  # lead_id
             lead = db.execute(text("""
-                SELECT first_name, last_name, email, phone, assigned_to
+                SELECT first_name, last_name, email, phone, owner_id
                 FROM leads WHERE id = :id
             """), {"id": workflow_instance[1]}).fetchone()
             if lead:
@@ -2224,7 +2224,7 @@ async def get_task_instance_data(
                     "email": lead[2],
                     "phone": lead[3]
                 }
-                lead_assigned_to = lead[4]
+                lead_owner_id = lead[4]
 
         if workflow_instance and workflow_instance[2]:  # loan_id
             loan = db.execute(text("""
@@ -2259,16 +2259,16 @@ async def get_task_instance_data(
                 "task_description": day_config[3] if day_config else None
             } if day_config else None,
             "contact_info": contact_info,
-            "lead_assigned_to": lead_assigned_to,
+            "lead_owner_id": lead_owner_id,
             "loan_officer_id": loan_officer_id,
-            "resolved_owner_id": lead_assigned_to or loan_officer_id,
+            "resolved_owner_id": lead_owner_id or loan_officer_id,
             "can_create_linked_task": {
                 "has_assigned_user": task_instance[6] is not None,
                 "has_workflow_instance": workflow_instance is not None,
                 "has_day_config": day_config is not None,
                 "has_lead_or_loan": (workflow_instance[1] if workflow_instance else None) is not None or
                                    (workflow_instance[2] if workflow_instance else None) is not None,
-                "has_owner": (lead_assigned_to or loan_officer_id) is not None
+                "has_owner": (lead_owner_id or loan_officer_id) is not None
             }
         }
 

@@ -527,10 +527,10 @@ class TaskGeneratorService:
             # If no assigned user, get the owner from the lead or loan
             owner_id = assigned_user_id
             if not owner_id:
-                # Try to get owner from lead
+                # Try to get owner from lead (column is owner_id, not assigned_to)
                 if instance.get('lead_id'):
                     lead_owner = self.db.execute(text("""
-                        SELECT assigned_to FROM leads WHERE id = :lead_id
+                        SELECT owner_id FROM leads WHERE id = :lead_id
                     """), {"lead_id": instance['lead_id']}).fetchone()
                     if lead_owner and lead_owner[0]:
                         owner_id = lead_owner[0]
