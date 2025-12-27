@@ -153,14 +153,6 @@ const MilestoneProgressTracker = ({ currentStatus, completedMilestones = [] }) =
           })}
         </div>
       </div>
-
-      {/* Current stage highlight */}
-      <div className="current-stage-info">
-        <span className="current-label">Current Stage:</span>
-        <span className={`current-value ${isExitStage ? 'exit-stage' : ''}`}>
-          {isExitStage ? getExitStageLabel(normalizedStatus) : (STAGES[currentIndex]?.label || currentStatus)}
-        </span>
-      </div>
     </div>
   );
 };
