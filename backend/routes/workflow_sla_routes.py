@@ -2675,3 +2675,54 @@ async def cleanup_test_workflow_instances(
             "error": str(e),
             "traceback": traceback.format_exc()
         }
+
+
+@router.get("/diagnostic/verify-unified-tasks/{user_id}")
+async def verify_unified_tasks_for_user(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify what unified-tasks endpoint would return for a user.
+    This mimics the exact query used by /api/v1/unified-tasks.
+    """
+    from sqlalchemy.orm import joinedload
+    from main import Task
+
+    try:
+        # Same query as unified-tasks endpoint (with updated 200 limit)
+        workflow_tasks = db.query(Task).filter(
+            Task.owner_id == user_id,
+            Task.status.in_(["pending", "in_progress"])
+        ).order_by(Task.due_date.asc()).limit(200).all()
+
+        # Count workflow vs non-workflow tasks
+        workflow_count = sum(1 for t in workflow_tasks if t.workflow_task_instance_id is not None)
+        non_workflow_count = len(workflow_tasks) - workflow_count
+
+        # Sample workflow tasks
+        workflow_samples = [
+            {
+                "id": t.id,
+                "title": t.title,
+                "status": t.status,
+                "due_date": str(t.due_date) if t.due_date else None,
+                "lead_id": t.lead_id,
+                "workflow_task_instance_id": t.workflow_task_instance_id
+            }
+            for t in workflow_tasks if t.workflow_task_instance_id is not None
+        ][:10]
+
+        return {
+            "user_id": user_id,
+            "total_tasks_fetched": len(workflow_tasks),
+            "workflow_tasks_count": workflow_count,
+            "non_workflow_tasks_count": non_workflow_count,
+            "workflow_tasks_included": workflow_count > 0,
+            "sample_workflow_tasks": workflow_samples,
+            "message": f"Unified-tasks would return {workflow_count} workflow tasks out of {len(workflow_tasks)} total"
+        }
+
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
