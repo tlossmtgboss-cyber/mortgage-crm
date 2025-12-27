@@ -59448,6 +59448,69 @@ async def set_test_logo_migration(
         }
 
 
+@app.post("/api/v1/public/migrations/set-workspace-owner", response_model=None)
+async def set_workspace_owner_migration(
+    admin_key: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Set owner_user_id for workspaces that don't have one.
+    Matches workspace slug patterns to user emails.
+    """
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
+
+    try:
+        logger.info("Running migration: set workspace owner")
+
+        # Find workspaces with timothy.loss pattern
+        result = db.execute(text("""
+            SELECT id, slug, owner_user_id
+            FROM purl_workspaces
+            WHERE slug ILIKE '%timothy.loss%' OR slug ILIKE '%tim%'
+            LIMIT 10
+        """))
+        workspaces = result.fetchall()
+
+        # Find user by email
+        user_result = db.execute(text("""
+            SELECT id, email, full_name
+            FROM users
+            WHERE email ILIKE '%tim%' OR email ILIKE '%loss%'
+            LIMIT 5
+        """))
+        users = user_result.fetchall()
+
+        # Update workspaces with matching user ID (user 57 = admin@perenniaai.com = Tim Loss)
+        updated = []
+        for ws in workspaces:
+            if not ws[2]:  # If no owner_user_id
+                db.execute(text("""
+                    UPDATE purl_workspaces
+                    SET owner_user_id = 57
+                    WHERE id = :ws_id
+                """), {"ws_id": ws[0]})
+                updated.append({"id": ws[0], "slug": ws[1]})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Updated {len(updated)} workspaces",
+            "workspaces_found": [{"id": w[0], "slug": w[1], "owner": w[2]} for w in workspaces],
+            "users_found": [{"id": u[0], "email": u[1], "name": u[2]} for u in users],
+            "updated": updated
+        }
+
+    except Exception as e:
+        logger.error(f"Set workspace owner migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/api/v1/public/debug/dashboard-test")
 async def public_debug_dashboard_test(
     admin_key: str,
