@@ -12,7 +12,7 @@ import React, { useState, useEffect } from 'react';
 import { sanitizeHTML } from '../utils/sanitize';
 import './PreApprovalLetterModal.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || '';
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Steps in the modal flow
 const STEPS = {
