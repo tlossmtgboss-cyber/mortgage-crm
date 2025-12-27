@@ -1001,7 +1001,7 @@ function Tasks() {
 
       // Fetch workflow tasks from all leads/loans
       const token = localStorage.getItem('token');
-      const workflowResponse = await fetch('/api/v1/workflow-config/all-workflow-tasks?days_ahead=14', {
+      const workflowResponse = await fetch(`${API_BASE_URL}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
