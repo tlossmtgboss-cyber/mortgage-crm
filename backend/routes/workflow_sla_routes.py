@@ -2275,3 +2275,134 @@ async def get_task_instance_data(
     except Exception as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.post("/init/create-missing-linked-tasks")
+async def create_missing_linked_tasks(
+    db: Session = Depends(get_db)
+):
+    """
+    Create linked tasks in the main tasks table for all workflow task instances
+    that don't have a linked_task_id yet.
+    """
+    from sqlalchemy import text
+
+    try:
+        # Get all workflow task instances without linked tasks
+        instances = db.execute(text("""
+            SELECT wti.id, wti.workflow_instance_id, wti.day_config_id,
+                   wti.task_type, wti.scheduled_date, wti.assigned_user_id,
+                   wi.lead_id, wi.loan_id,
+                   wdc.day_label, wdc.day_value, wdc.task_description
+            FROM workflow_task_instances wti
+            JOIN workflow_instances wi ON wi.id = wti.workflow_instance_id
+            JOIN workflow_day_configs wdc ON wdc.id = wti.day_config_id
+            WHERE wti.linked_task_id IS NULL
+        """)).fetchall()
+
+        created = 0
+        skipped = 0
+        errors = []
+
+        for inst in instances:
+            task_instance_id = inst[0]
+            lead_id = inst[6]
+            loan_id = inst[7]
+            task_type = inst[3]
+            scheduled_date = inst[4]
+            assigned_user_id = inst[5]
+            day_label = inst[8]
+            day_value = inst[9]
+            task_description = inst[10]
+
+            # Get owner_id
+            owner_id = assigned_user_id
+            if not owner_id and lead_id:
+                lead = db.execute(text("SELECT owner_id FROM leads WHERE id = :id"), {"id": lead_id}).fetchone()
+                if lead and lead[0]:
+                    owner_id = lead[0]
+            if not owner_id and loan_id:
+                loan = db.execute(text("SELECT loan_officer_id FROM loans WHERE id = :id"), {"id": loan_id}).fetchone()
+                if loan and loan[0]:
+                    owner_id = loan[0]
+
+            if not owner_id:
+                skipped += 1
+                continue
+
+            # Get contact name
+            contact_name = "Contact"
+            if lead_id:
+                lead = db.execute(text("SELECT first_name, last_name FROM leads WHERE id = :id"), {"id": lead_id}).fetchone()
+                if lead:
+                    contact_name = f"{lead[0] or ''} {lead[1] or ''}".strip() or "Contact"
+
+            # Build title and description
+            title = f"[Workflow] {task_type.replace('_', ' ').title()} - {contact_name}"
+            description = f"Workflow Task: {day_label}\n{task_description or ''}"
+
+            # Determine priority
+            priority = 'medium'
+            if day_value is not None:
+                if day_value <= 1:
+                    priority = 'high'
+                elif day_value >= 30:
+                    priority = 'low'
+
+            try:
+                # Insert linked task
+                db.execute(text("""
+                    INSERT INTO tasks (
+                        title, description, status, priority,
+                        due_date, owner_id, lead_id, loan_id,
+                        related_contact_name, related_type,
+                        workflow_task_instance_id,
+                        created_at, updated_at
+                    ) VALUES (
+                        :title, :description, 'pending', :priority,
+                        :due_date, :owner_id, :lead_id, :loan_id,
+                        :contact_name, :related_type,
+                        :task_instance_id,
+                        NOW(), NOW()
+                    )
+                """), {
+                    "title": title,
+                    "description": description,
+                    "priority": priority,
+                    "due_date": scheduled_date,
+                    "owner_id": owner_id,
+                    "lead_id": lead_id,
+                    "loan_id": loan_id,
+                    "contact_name": contact_name,
+                    "related_type": 'lead' if lead_id else 'loan',
+                    "task_instance_id": task_instance_id
+                })
+
+                # Get the new task ID
+                result = db.execute(text("""
+                    SELECT id FROM tasks WHERE workflow_task_instance_id = :id ORDER BY id DESC LIMIT 1
+                """), {"id": task_instance_id}).fetchone()
+
+                if result:
+                    # Update the workflow task instance with the linked task ID
+                    db.execute(text("""
+                        UPDATE workflow_task_instances SET linked_task_id = :task_id WHERE id = :id
+                    """), {"task_id": result[0], "id": task_instance_id})
+                    created += 1
+
+            except Exception as e:
+                errors.append({"task_instance_id": task_instance_id, "error": str(e)})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "created": created,
+            "skipped": skipped,
+            "errors": errors
+        }
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
