@@ -59521,35 +59521,42 @@ async def public_debug_user_logo_check(
     if admin_key != "perennia-admin-2024":
         return {"success": False, "error": "Invalid admin key"}
 
+    result = {"success": True}
+
+    # Raw SQL check
     try:
-        # Raw SQL check
         sql_result = db.execute(text("""
             SELECT id, email, full_name, company_logo_url
             FROM users
             WHERE id = 57
         """))
         row = sql_result.fetchone()
-        sql_data = {"id": row[0], "email": row[1], "name": row[2], "logo": row[3]} if row else None
+        result["sql_result"] = {"id": row[0], "email": row[1], "name": row[2], "logo": row[3]} if row else None
+    except Exception as e:
+        result["sql_error"] = str(e)
 
-        # ORM check
+    # ORM check
+    try:
         user = db.query(User).filter(User.id == 57).first()
-        orm_data = None
         if user:
-            orm_data = {
+            result["orm_result"] = {
                 "id": user.id,
                 "email": user.email,
                 "name": user.full_name,
-                "logo_via_attribute": user.company_logo_url,
-                "logo_via_getattr": getattr(user, 'company_logo_url', 'GETATTR_FAILED'),
             }
-
-        return {
-            "success": True,
-            "sql_result": sql_data,
-            "orm_result": orm_data
-        }
+            # Try getting logo separately
+            try:
+                result["orm_result"]["logo_direct"] = user.company_logo_url
+            except Exception as attr_err:
+                result["orm_result"]["logo_direct_error"] = str(attr_err)
+            result["orm_result"]["logo_getattr"] = getattr(user, 'company_logo_url', 'NOT_FOUND')
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        result["orm_error"] = str(e)
+
+    # Check User class attributes
+    result["user_model_has_column"] = hasattr(User, 'company_logo_url')
+
+    return result
 
 
 @app.get("/api/v1/public/debug/dashboard-test")
