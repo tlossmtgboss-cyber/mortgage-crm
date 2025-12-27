@@ -980,9 +980,9 @@ async def get_applicants_with_pending_review(
             "documents": [
                 {
                     "id": doc.id,
-                    "file_name": doc.original_filename,
+                    "file_name": doc.original_filename or doc.file_name,
                     "doc_type": doc.doc_type.value if doc.doc_type else None,
-                    "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                    "uploaded_at": (doc.uploaded_at or doc.created_at).isoformat() if (doc.uploaded_at or doc.created_at) else None,
                 }
                 for doc in pending_docs
             ]
@@ -1008,22 +1008,26 @@ async def get_applicants_with_outstanding_docs(
     Get all applicants/loans that have outstanding document requests (needs list items not fulfilled).
     Returns grouped by loan with summary of outstanding requirements.
     """
-    from sqlalchemy import func, distinct
+    from sqlalchemy import func, distinct, case
     from models.purl import PURLLoan, PURLWorkspace
 
     # Build filter for outstanding requests
     outstanding_filter = [DocumentRequest.status == RequestStatus.OPEN]
 
     if include_overdue_only:
-        outstanding_filter.append(DocumentRequest.due_date < datetime.utcnow())
+        outstanding_filter.append(DocumentRequest.due_date < func.now())
 
     # Get loans with outstanding requests
+    # Use case() for conditional counting since func.count().filter() isn't valid
+    overdue_case = case(
+        (DocumentRequest.due_date < func.now(), 1),
+        else_=0
+    )
+
     outstanding_query = db.query(
         DocumentRequest.loan_id,
         func.count(DocumentRequest.id).label('outstanding_count'),
-        func.count().filter(
-            DocumentRequest.due_date < datetime.utcnow()
-        ).label('overdue_count'),
+        func.sum(overdue_case).label('overdue_count'),
         func.min(DocumentRequest.due_date).label('nearest_due')
     ).filter(
         *outstanding_filter
@@ -1037,7 +1041,7 @@ async def get_applicants_with_outstanding_docs(
     # Paginate - prioritize by overdue and nearest due date
     offset = (page - 1) * limit
     outstanding_loans = outstanding_query.order_by(
-        func.count().filter(DocumentRequest.due_date < datetime.utcnow()).desc(),
+        func.sum(overdue_case).desc(),
         func.min(DocumentRequest.due_date).asc().nullslast()
     ).offset(offset).limit(limit).all()
 
@@ -1168,7 +1172,7 @@ async def get_document_dashboard_summary(
     # Overdue requests
     overdue = db.query(func.count(DocumentRequest.id)).filter(
         DocumentRequest.status == RequestStatus.OPEN,
-        DocumentRequest.due_date < datetime.utcnow()
+        DocumentRequest.due_date < func.now()
     ).scalar() or 0
 
     # Documents processed today
