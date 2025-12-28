@@ -90,6 +90,7 @@ function LoanDetail() {
   // Salesforce sync state
   const [salesforceStatus, setSalesforceStatus] = useState(null);
   const [salesforcePushing, setSalesforcePushing] = useState(false);
+  const [salesforcePulling, setSalesforcePulling] = useState(false);
 
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
@@ -873,6 +874,50 @@ function LoanDetail() {
     }
   };
 
+  // Salesforce pull handler - refresh data from Salesforce
+  const handleSalesforcePull = async () => {
+    if (salesforcePulling) return;
+
+    try {
+      setSalesforcePulling(true);
+
+      // First check if Salesforce is connected
+      const status = await salesforceAPI.getStatus();
+      if (!status.connected) {
+        toast.error('Salesforce is not connected. Please connect in Settings → Integrations.');
+        return;
+      }
+
+      // Check if loan has Salesforce ID
+      if (!salesforceStatus?.salesforce_id) {
+        toast.error('This loan is not linked to Salesforce. Push it first to create the link.');
+        return;
+      }
+
+      // Pull the loan from Salesforce
+      const result = await salesforceAPI.pullLoan(id);
+
+      if (result.status === 'success') {
+        toast.success('Loan refreshed from Salesforce');
+        // Reload the loan data to show updated fields
+        fetchLoan();
+        // Update sync status
+        setSalesforceStatus({
+          ...salesforceStatus,
+          last_synced_at: new Date().toISOString(),
+          sync_status: 'synced',
+          needs_sync: false
+        });
+      }
+    } catch (error) {
+      console.error('Salesforce pull error:', error);
+      const errorMsg = error.response?.data?.detail?.error || error.response?.data?.detail || error.message;
+      toast.error(`Failed to pull from Salesforce: ${errorMsg}`);
+    } finally {
+      setSalesforcePulling(false);
+    }
+  };
+
   // Fetch Salesforce sync status when loan loads
   useEffect(() => {
     const fetchSalesforceStatus = async () => {
@@ -947,6 +992,9 @@ function LoanDetail() {
         break;
       case 'salesforce':
         handleSalesforcePush();
+        break;
+      case 'salesforce-pull':
+        handleSalesforcePull();
         break;
       default:
         break;
@@ -3894,6 +3942,17 @@ function LoanDetail() {
             <span className="icon">{salesforcePushing ? '⏳' : '☁️'}</span>
             <span>{salesforcePushing ? 'Syncing...' : (salesforceStatus?.is_linked ? 'Update SF' : 'Push to SF')}</span>
           </button>
+          {salesforceStatus?.is_linked && (
+            <button
+              className={`action-btn salesforce-pull ${salesforcePulling ? 'loading' : ''}`}
+              onClick={() => handleAction('salesforce-pull')}
+              title={`Pull latest data from Salesforce (${salesforceStatus.salesforce_id})`}
+              disabled={salesforcePulling}
+            >
+              <span className="icon">{salesforcePulling ? '⏳' : '⬇️'}</span>
+              <span>{salesforcePulling ? 'Pulling...' : 'Pull from SF'}</span>
+            </button>
+          )}
         </div>
       </div>
     </CalendarSidebar>

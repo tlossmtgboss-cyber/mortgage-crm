@@ -1120,6 +1120,36 @@ button.borrower-btn.add-borrower-btn:hover {
   cursor: not-allowed;
 }
 
+/* Salesforce Pull button - teal/cyan theme for inbound sync */
+.action-btn.salesforce-pull {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  border-color: #06b6d4;
+  color: white;
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+}
+
+.action-btn.salesforce-pull:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+  border-color: #0891b2;
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.4);
+}
+
+.action-btn.salesforce-pull .icon {
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.action-btn.salesforce-pull.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.action-btn.salesforce-pull:disabled {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
+
 /* Email History */
 .email-list {
   display: flex;

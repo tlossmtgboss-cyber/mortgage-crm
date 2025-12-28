@@ -2529,6 +2529,13 @@ export const salesforceAPI = {
     return response.data;
   },
 
+  // Pull/refresh single loan from Salesforce
+  pullLoan: async (loanId, sfObject = null) => {
+    const params = sfObject ? { sf_object: sfObject } : {};
+    const response = await api.post(`/api/v1/salesforce/pull/loan/${loanId}`, null, { params });
+    return response.data;
+  },
+
   // Full sync from Salesforce
   fullSync: async () => {
     const response = await api.post('/api/v1/salesforce/sync/full');

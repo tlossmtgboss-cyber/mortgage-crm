@@ -1165,8 +1165,7 @@ async def seed_test_income_data(
         annual_qualifying_income=Decimal("90000.00"),
         gross_monthly_income=Decimal("7916.67"),
         gross_annual_income=Decimal("95000.00"),
-        calculation_method="YTD_ANNUALIZED",
-        trending_direction="STABLE",
+        calculation_method=IncomeCalculationMethod.YTD_ANNUALIZED,
     )
     db.add(w2_source)
     db.flush()
@@ -1185,9 +1184,7 @@ async def seed_test_income_data(
         annual_qualifying_income=Decimal("14400.00"),
         gross_monthly_income=Decimal("2000.00"),
         gross_annual_income=Decimal("24000.00"),
-        calculation_method="SCHEDULE_E_2YR_AVG",
-        trending_direction="INCREASING",
-        trending_percentage=Decimal("5.2"),
+        calculation_method=IncomeCalculationMethod.SCHEDULE_E_AVERAGE,
     )
     db.add(rental_source)
     db.flush()
@@ -1206,9 +1203,7 @@ async def seed_test_income_data(
         annual_qualifying_income=Decimal("42000.00"),
         gross_monthly_income=Decimal("5000.00"),
         gross_annual_income=Decimal("60000.00"),
-        calculation_method="SCHEDULE_C_2YR_AVG_WITH_ADDBACKS",
-        trending_direction="STABLE",
-        declining_income_flag=False,
+        calculation_method=IncomeCalculationMethod.TWO_YEAR_AVERAGE,
     )
     db.add(self_emp_source)
     db.flush()
