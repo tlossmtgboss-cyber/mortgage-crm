@@ -1322,6 +1322,27 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
             except Exception:
                 pass  # Column might already exist or table doesn't exist
 
+        # Add missing columns to agent_alerts
+        alert_columns = [
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS title VARCHAR(200)",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS message TEXT",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '{}'",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP WITH TIME ZONE",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS acknowledged_by_id INTEGER",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS resolved_by_id INTEGER",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS resolution_notes TEXT",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS snooze_until TIMESTAMP WITH TIME ZONE",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
+            "ALTER TABLE agent_alerts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP",
+        ]
+
+        for sql in alert_columns:
+            try:
+                db.execute(text(sql))
+            except Exception:
+                pass  # Column might already exist or table doesn't exist
+
         db.commit()
 
         logger.info("Agent governance tables created/verified")
