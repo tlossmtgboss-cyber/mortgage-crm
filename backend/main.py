@@ -20294,6 +20294,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ DocuSign routes not loaded: {e}")
 
+# Listing Agent Portal routes (Transaction updates for listing agents)
+try:
+    from routes.listing_portal_routes import router as listing_portal_router, set_dependencies as set_listing_portal_deps
+    set_listing_portal_deps(get_db, get_current_user)
+    app.include_router(listing_portal_router, tags=["Listing Agent Portal"])
+    logger.info("✅ Listing Agent Portal routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Listing Agent Portal routes not loaded: {e}")
+
 # Agent Governance routes (Agent Management & Monitoring)
 try:
     from routes.agent_governance_routes import router as agent_governance_router
