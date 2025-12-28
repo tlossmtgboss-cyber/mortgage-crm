@@ -19990,6 +19990,14 @@ app.include_router(financial_intelligence_router, tags=["Financial Intelligence"
 from routes.business_operations_routes import router as business_ops_router
 app.include_router(business_ops_router, tags=["Business Operations"])
 
+# Include Acquisition Engine routes (lead scoring, speed-to-lead)
+try:
+    from routes.acquisition_engine_routes import router as acquisition_router
+    app.include_router(acquisition_router, tags=["Acquisition Engine"])
+    logger.info("✅ Acquisition Engine routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Acquisition Engine routes: {e}")
+
 # Include AI Daily Blog + PDF Content Factory routes
 from blog_routes import router as blog_router
 app.include_router(blog_router, tags=["AI Daily Blog"])
