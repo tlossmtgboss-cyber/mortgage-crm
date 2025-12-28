@@ -1298,6 +1298,18 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
             except Exception:
                 pass  # Column might already exist
 
+        # Add missing columns to agent_executions
+        execution_columns = [
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS user_email VARCHAR(255)",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS execution_time_ms FLOAT",
+        ]
+
+        for sql in execution_columns:
+            try:
+                db.execute(text(sql))
+            except Exception:
+                pass  # Column might already exist or table doesn't exist
+
         db.commit()
 
         logger.info("Agent governance tables created/verified")
