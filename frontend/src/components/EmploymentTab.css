@@ -140,8 +140,90 @@
   color: #666;
 }
 
+/* Header badges container */
+.employment-section .header-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Verification Badge */
+.employment-section .verification-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Paystub Info Banner */
+.paystub-info-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  color: #166534;
+}
+
+.paystub-info-banner .info-icon {
+  margin-right: 0.375rem;
+}
+
+.paystub-info-banner .paystub-date,
+.paystub-info-banner .income-link {
+  display: flex;
+  align-items: center;
+}
+
+.paystub-info-banner .income-amount {
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  background: #dcfce7;
+  border-radius: 4px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+/* View Income Tab Link */
+.view-income-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+  color: #3b82f6;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.view-income-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
   .employment-section .info-grid {
     grid-template-columns: 1fr;
+  }
+
+  .employment-section h3.section-header-with-score {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .employment-section .header-badges {
+    flex-wrap: wrap;
+  }
+
+  .paystub-info-banner {
+    flex-direction: column;
+    gap: 0.5rem;
   }
 }
