@@ -296,6 +296,30 @@ class PublicMortgageChatService:
 
             end_time = appointment_time + timedelta(minutes=duration)
 
+            # Check for slot conflicts - prevent double booking
+            existing_appointment = self.db.query(ScheduledAppointment).filter(
+                ScheduledAppointment.loan_officer_id == self.lo_info["id"],
+                ScheduledAppointment.status.in_([
+                    AppointmentStatus.SCHEDULED.value,
+                    AppointmentStatus.CONFIRMED.value
+                ]),
+                # Check for any overlap: existing starts before our end AND existing ends after our start
+                ScheduledAppointment.start_time < end_time,
+                ScheduledAppointment.end_time > appointment_time
+            ).first()
+
+            if existing_appointment:
+                logger.warning(f"Slot conflict: {appointment_time} already booked (appointment {existing_appointment.appointment_id})")
+                return {
+                    "success": False,
+                    "error": "This time slot is no longer available. Please select a different time.",
+                    "conflict": True,
+                    "conflicting_slot": {
+                        "start": existing_appointment.start_time.isoformat(),
+                        "end": existing_appointment.end_time.isoformat()
+                    }
+                }
+
             # Create or find the lead in CRM
             lead = None
             lead_id = None
