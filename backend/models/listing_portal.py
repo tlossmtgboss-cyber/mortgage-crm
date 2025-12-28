@@ -3,7 +3,7 @@ Listing Agent Portal Models
 Pydantic models for the transaction-scoped listing agent portal.
 """
 
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -153,8 +153,7 @@ class PartyResponse(BaseModel):
     is_active: bool = True
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class MilestoneResponse(BaseModel):
@@ -168,8 +167,7 @@ class MilestoneResponse(BaseModel):
     target_date: Optional[date] = None
     display_order: int
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TransactionResponse(BaseModel):
@@ -189,8 +187,7 @@ class TransactionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TransactionDetailResponse(BaseModel):
@@ -212,8 +209,7 @@ class MessageResponse(BaseModel):
     read_at: Optional[datetime] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ConversationResponse(BaseModel):
@@ -313,16 +309,9 @@ class TransactionSnapshot(BaseModel):
     recent_activity: List[Dict[str, Any]] = []
     snapshot_at: datetime = Field(default_factory=datetime.utcnow)
 
-    @validator('*', pre=True, always=True)
-    def check_no_pii(cls, v, field):
-        """Ensure no PII fields slip through"""
-        if field.name.lower() in FORBIDDEN_PII_KEYS:
-            raise ValueError(f"PII field '{field.name}' is forbidden in snapshots")
-        return v
-
     def to_safe_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with extra PII validation"""
-        data = self.dict()
+        data = self.model_dump()
         # Double-check all keys
         for key in list(data.keys()):
             if key.lower() in FORBIDDEN_PII_KEYS:
