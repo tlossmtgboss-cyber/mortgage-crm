@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './UnifiedIncomeCalculator.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+// Always use production API for deployed builds
+const API_BASE = window.location.hostname === 'localhost'
+  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
+  : 'https://api.perenniaai.com';
 
 // All 14 income types from the unified calculator
 const INCOME_TYPES = [
