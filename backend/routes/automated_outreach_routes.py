@@ -84,12 +84,12 @@ class AssignToCampaign(BaseModel):
 # ============================================================================
 
 def create_automated_outreach_tables(engine):
-    """Create tables for automated outreach"""
+    """Create tables for automated outreach (PostgreSQL compatible)"""
     with engine.connect() as conn:
         # Campaigns table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS outreach_campaigns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 description TEXT,
                 status VARCHAR(50) DEFAULT 'draft',
@@ -102,7 +102,7 @@ def create_automated_outreach_tables(engine):
         # Campaign steps
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS campaign_steps (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 campaign_id INTEGER NOT NULL,
                 step_order INTEGER NOT NULL,
                 channel VARCHAR(20) NOT NULL,
@@ -118,7 +118,7 @@ def create_automated_outreach_tables(engine):
         # Lead campaign assignments
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS lead_campaign_assignments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 lead_id INTEGER NOT NULL,
                 campaign_id INTEGER NOT NULL,
                 current_step INTEGER DEFAULT 1,
@@ -134,14 +134,14 @@ def create_automated_outreach_tables(engine):
         # Outreach triggers
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS outreach_triggers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 trigger_type VARCHAR(50) NOT NULL,
                 trigger_config TEXT,
                 channel VARCHAR(20) NOT NULL,
                 subject VARCHAR(500),
                 message TEXT NOT NULL,
-                is_active BOOLEAN DEFAULT 1,
+                is_active BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -150,7 +150,7 @@ def create_automated_outreach_tables(engine):
         # Trigger execution log
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS trigger_execution_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 trigger_id INTEGER NOT NULL,
                 lead_id INTEGER,
                 loan_id INTEGER,
