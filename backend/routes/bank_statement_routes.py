@@ -412,6 +412,44 @@ async def download_worksheet(
     )
 
 
+@router.get("/admin/create-tables")
+async def create_tables(
+    admin_key: str = None,
+):
+    """
+    Admin endpoint to create bank statement tables.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    from database import engine
+    from models.bank_statement_models import (
+        BankStatementWorksheet, BankStatementAccount,
+        BankStatementMonth, BankStatementIneligibleItem
+    )
+
+    tables = [
+        BankStatementWorksheet.__table__,
+        BankStatementAccount.__table__,
+        BankStatementMonth.__table__,
+        BankStatementIneligibleItem.__table__,
+    ]
+
+    created = []
+    for table in tables:
+        try:
+            table.create(bind=engine, checkfirst=True)
+            created.append(table.name)
+        except Exception as e:
+            logger.error(f"Error creating table {table.name}: {e}")
+
+    return {
+        "success": True,
+        "message": f"Created tables: {', '.join(created)}",
+        "tables": created
+    }
+
+
 @router.post("/worksheets/{worksheet_id}/update-data")
 async def update_worksheet_data(
     worksheet_id: int,
