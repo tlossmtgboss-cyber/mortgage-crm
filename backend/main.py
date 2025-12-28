@@ -60021,6 +60021,86 @@ async def set_workspace_owner_migration(
         }
 
 
+@app.post("/api/v1/public/migrations/add-known-client-emails-status", response_model=None)
+async def add_known_client_emails_status_migration(
+    admin_key: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add status column to known_client_emails table.
+    Status values: 'active', 'inactive', 'bounced', 'unsubscribed'
+    """
+    if admin_key != "perennia-admin-2024":
+        return {"success": False, "error": "Invalid admin key"}
+
+    try:
+        logger.info("Running migration: add known_client_emails status column")
+
+        # Check if table exists
+        table_check = db.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name = 'known_client_emails'
+        """))
+
+        if not table_check.fetchone():
+            return {"success": True, "message": "Table 'known_client_emails' does not exist - skipping migration"}
+
+        # Check if column exists
+        column_check = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'known_client_emails' AND column_name = 'status'
+        """))
+
+        if column_check.fetchone():
+            return {"success": True, "message": "Column 'status' already exists in known_client_emails table"}
+
+        # Add the column
+        db.execute(text("""
+            ALTER TABLE known_client_emails
+            ADD COLUMN status VARCHAR(50) DEFAULT 'active'
+        """))
+        db.commit()
+        logger.info("✓ Successfully added 'status' column to known_client_emails")
+
+        # Create index
+        try:
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_known_client_emails_status
+                ON known_client_emails(status)
+            """))
+            db.commit()
+            logger.info("✓ Index created/verified")
+        except Exception as idx_error:
+            logger.warning(f"Index may already exist: {idx_error}")
+
+        # Update NULL values
+        try:
+            db.execute(text("""
+                UPDATE known_client_emails
+                SET status = 'active'
+                WHERE status IS NULL
+            """))
+            db.commit()
+            logger.info("✓ Updated NULL status values to 'active'")
+        except Exception as upd_error:
+            logger.warning(f"Update may not be needed: {upd_error}")
+
+        return {
+            "success": True,
+            "message": "Migration complete: added 'status' column to known_client_emails table"
+        }
+
+    except Exception as e:
+        logger.error(f"Add known_client_emails status migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/api/v1/public/debug/user-logo-check")
 async def public_debug_user_logo_check(
     admin_key: str,
