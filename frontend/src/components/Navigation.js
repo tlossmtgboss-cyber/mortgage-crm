@@ -139,6 +139,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Profitability
           </Link>
+          <Link
+            to="/business-ops"
+            className={`nav-link ${isActive('/business-ops') ? 'active' : ''}`}
+          >
+            Business Ops
+          </Link>
         </div>
 
         <div className="nav-actions">
