@@ -580,3 +580,298 @@ class AutoRenewalScheduler:
             "check_date": today.isoformat(),
             "documents_expired": expired_count,
         }
+
+    # =========================================================================
+    # PAY-CYCLE BASED EXPIRATION (Income Extraction Integration)
+    # =========================================================================
+
+    # Expiration days based on pay frequency
+    PAY_FREQUENCY_EXPIRATION_DAYS = {
+        PayrollFrequency.WEEKLY: 7,
+        PayrollFrequency.BIWEEKLY: 30,
+        PayrollFrequency.SEMIMONTHLY: 30,
+        PayrollFrequency.MONTHLY: 45,
+    }
+
+    def calculate_paystub_expiration(
+        self,
+        pay_date: date,
+        pay_frequency: PayrollFrequency,
+    ) -> date:
+        """
+        Calculate paystub expiration date based on pay frequency.
+
+        Args:
+            pay_date: The pay date from the paystub
+            pay_frequency: The payroll frequency
+
+        Returns:
+            Expiration date
+        """
+        days_until_expire = self.PAY_FREQUENCY_EXPIRATION_DAYS.get(pay_frequency, 30)
+        return pay_date + timedelta(days=days_until_expire)
+
+    def process_paystub_extraction_expiration(
+        self,
+        document_id: int,
+        pay_date: date,
+        pay_frequency: str,
+    ) -> Dict[str, Any]:
+        """
+        Update document expiration based on extracted paystub data.
+
+        Called after AI extracts paystub data to set correct expiration.
+
+        Args:
+            document_id: SmartDocument ID
+            pay_date: Extracted pay date
+            pay_frequency: Extracted pay frequency (WEEKLY, BIWEEKLY, etc.)
+
+        Returns:
+            Updated expiration info
+        """
+        doc = self.db.query(SmartDocument).filter(
+            SmartDocument.id == document_id
+        ).first()
+
+        if not doc:
+            return {"success": False, "error": "Document not found"}
+
+        # Convert string to enum if needed
+        try:
+            freq_enum = PayrollFrequency(pay_frequency.upper())
+        except ValueError:
+            freq_enum = PayrollFrequency.BIWEEKLY  # Default
+
+        expires_at = self.calculate_paystub_expiration(pay_date, freq_enum)
+
+        # Update document
+        doc.doc_date = pay_date
+        doc.doc_expires_at = expires_at
+        doc.is_expired = expires_at < date.today()
+        doc.updated_at = datetime.utcnow()
+
+        # Update the associated request with inferred frequency
+        if doc.request_id:
+            request = self.db.query(DocumentRequest).filter(
+                DocumentRequest.id == doc.request_id
+            ).first()
+            if request:
+                request.payroll_frequency = freq_enum
+                request.updated_at = datetime.utcnow()
+
+        self.db.commit()
+
+        logger.info(
+            f"Updated paystub {document_id} expiration: pay_date={pay_date}, "
+            f"frequency={freq_enum.value}, expires={expires_at}"
+        )
+
+        return {
+            "success": True,
+            "document_id": document_id,
+            "pay_date": pay_date.isoformat(),
+            "pay_frequency": freq_enum.value,
+            "expires_at": expires_at.isoformat(),
+            "is_expired": expires_at < date.today(),
+            "days_until_expiry": (expires_at - date.today()).days,
+        }
+
+    def trigger_immediate_renewal(
+        self,
+        loan_id: int,
+        borrower_id: int,
+        doc_type: DocType,
+        reason: str = "expired",
+    ) -> Optional[DocumentRequest]:
+        """
+        Immediately create a renewal request for an expired document.
+
+        Used when a paystub expires based on pay cycle.
+
+        Args:
+            loan_id: Loan ID
+            borrower_id: Borrower ID
+            doc_type: Document type to renew
+            reason: Reason for immediate renewal
+
+        Returns:
+            New DocumentRequest or None if unable to create
+        """
+        # Find the most recent request for this doc type
+        original = self.db.query(DocumentRequest).filter(
+            and_(
+                DocumentRequest.loan_id == loan_id,
+                DocumentRequest.borrower_id == borrower_id,
+                DocumentRequest.doc_type == doc_type,
+            )
+        ).order_by(DocumentRequest.created_at.desc()).first()
+
+        if not original:
+            logger.warning(
+                f"No original request found for loan={loan_id}, "
+                f"borrower={borrower_id}, doc_type={doc_type.value}"
+            )
+            return None
+
+        # Check if there's already a pending request
+        existing = self.db.query(DocumentRequest).filter(
+            and_(
+                DocumentRequest.loan_id == loan_id,
+                DocumentRequest.borrower_id == borrower_id,
+                DocumentRequest.doc_type == doc_type,
+                DocumentRequest.status == RequestStatus.OPEN,
+            )
+        ).first()
+
+        if existing:
+            logger.info(f"Pending request already exists: {existing.id}")
+            return existing
+
+        # Calculate next expected date
+        next_expected = self._calculate_next_expected(
+            doc_type,
+            original.payroll_frequency,
+            date.today(),
+        )
+
+        # Create immediate renewal request
+        renewal = DocumentRequest(
+            loan_id=loan_id,
+            borrower_id=borrower_id,
+            doc_type=doc_type,
+            title=f"Updated {original.title}",
+            description=f"Your previous {original.title} has expired. Please upload a new one.",
+            instructions=original.instructions,
+            required_count=1,
+            applies_to=original.applies_to,
+            priority=original.priority,
+            freshness_days=original.freshness_days,
+            auto_renew=True,
+            payroll_frequency=original.payroll_frequency,
+            next_expected_available_at=next_expected,
+            status=RequestStatus.OPEN,
+        )
+
+        self.db.add(renewal)
+        self.db.flush()
+
+        # Log the event
+        event = DocPolicyEvent(
+            loan_id=loan_id,
+            request_id=renewal.id,
+            event_type=DocPolicyEventType.AUTO_REQUEST_CREATED,
+            payload={
+                "original_request_id": original.id,
+                "doc_type": doc_type.value,
+                "reason": reason,
+                "triggered": "immediate",
+            },
+        )
+        self.db.add(event)
+        self.db.commit()
+
+        logger.info(
+            f"Created immediate renewal request {renewal.id} for loan {loan_id}, "
+            f"doc_type={doc_type.value}, reason={reason}"
+        )
+
+        # Send notification
+        context = self._get_notification_context(loan_id, borrower_id)
+        if context:
+            try:
+                self.notification_service.send_document_request_notification(
+                    request=renewal,
+                    borrower_email=context["borrower_email"],
+                    borrower_name=context["borrower_name"],
+                    loan_officer_name=context["loan_officer_name"],
+                    portal_url=context["portal_url"],
+                )
+            except Exception as e:
+                logger.error(f"Failed to send renewal notification: {e}")
+
+        return renewal
+
+    def check_and_renew_expired_paystubs(self) -> Dict[str, Any]:
+        """
+        Check all paystubs with extracted data for expiration and trigger renewals.
+
+        Uses the PaystubExtraction table to find documents past their
+        pay-cycle based expiration date.
+
+        Returns:
+            Summary of renewals triggered
+        """
+        from sqlalchemy import text
+
+        today = date.today()
+        renewals_created = []
+        errors = []
+
+        # Find expired paystub extractions that haven't been renewed yet
+        try:
+            expired_paystubs = self.db.execute(text("""
+                SELECT pe.id, pe.document_id, pe.borrower_id, pe.loan_id,
+                       pe.pay_date, pe.pay_frequency, pe.expires_at
+                FROM paystub_extractions pe
+                LEFT JOIN document_requests dr ON (
+                    dr.loan_id = pe.loan_id
+                    AND dr.borrower_id = pe.borrower_id
+                    AND dr.doc_type = 'PAYSTUB'
+                    AND dr.status = 'OPEN'
+                    AND dr.created_at >= pe.expires_at
+                )
+                WHERE pe.expires_at < :today
+                  AND pe.is_expired = false
+                  AND dr.id IS NULL
+            """), {"today": today}).fetchall()
+
+            for paystub in expired_paystubs:
+                try:
+                    # Mark as expired
+                    self.db.execute(text("""
+                        UPDATE paystub_extractions
+                        SET is_expired = true, updated_at = :now
+                        WHERE id = :id
+                    """), {"id": paystub[0], "now": datetime.utcnow()})
+
+                    # Trigger immediate renewal
+                    renewal = self.trigger_immediate_renewal(
+                        loan_id=paystub[3],
+                        borrower_id=paystub[2],
+                        doc_type=DocType.PAYSTUB,
+                        reason="pay_cycle_expired",
+                    )
+
+                    if renewal:
+                        renewals_created.append({
+                            "paystub_extraction_id": paystub[0],
+                            "document_id": paystub[1],
+                            "new_request_id": renewal.id,
+                            "expired_at": paystub[6].isoformat() if paystub[6] else None,
+                        })
+
+                except Exception as e:
+                    errors.append({
+                        "paystub_extraction_id": paystub[0],
+                        "error": str(e),
+                    })
+
+            self.db.commit()
+
+        except Exception as e:
+            logger.error(f"Error checking paystub expirations: {e}")
+            errors.append({"error": str(e)})
+
+        logger.info(
+            f"Paystub expiration check: {len(renewals_created)} renewals, "
+            f"{len(errors)} errors"
+        )
+
+        return {
+            "check_date": today.isoformat(),
+            "renewals_created": len(renewals_created),
+            "errors": len(errors),
+            "details": renewals_created,
+            "error_details": errors,
+        }

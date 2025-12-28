@@ -1,0 +1,789 @@
+"""
+Income API Routes
+
+Endpoints for income extraction, calculation, and management.
+Supports the AI-powered income extraction system.
+"""
+
+import logging
+from datetime import datetime, date
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models.income_models import (
+    IncomeSource, PaystubExtraction, Employment,
+    IncomeType, IncomeCalculationMethod, IncomeVerificationStatus, PayrollFrequency
+)
+from services.smart_docs.document_data_extractor import get_document_data_extractor
+from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+from services.income import get_income_calculation_service
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/income", tags=["Income"])
+
+
+# =============================================================================
+# PYDANTIC MODELS
+# =============================================================================
+
+class IncomeSourceCreate(BaseModel):
+    """Request model for creating an income source."""
+    borrower_id: int
+    loan_id: int
+    income_type: str
+    source_name: Optional[str] = None
+    source_description: Optional[str] = None
+    is_primary: bool = False
+    employment_id: Optional[int] = None
+
+
+class IncomeSourceUpdate(BaseModel):
+    """Request model for updating an income source."""
+    source_name: Optional[str] = None
+    source_description: Optional[str] = None
+    monthly_qualifying_income: Optional[float] = None
+    annual_qualifying_income: Optional[float] = None
+    calculation_method: Optional[str] = None
+    verification_status: Optional[str] = None
+    verification_notes: Optional[str] = None
+    is_primary: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class IncomeSourceResponse(BaseModel):
+    """Response model for income source."""
+    id: int
+    borrower_id: int
+    loan_id: int
+    income_type: str
+    source_name: Optional[str]
+    is_primary: bool
+    is_active: bool
+    monthly_qualifying_income: Optional[float]
+    annual_qualifying_income: Optional[float]
+    calculation_method: Optional[str]
+    verification_status: str
+    trending_direction: Optional[str]
+    declining_income_flag: bool
+    variable_income_flag: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PaystubExtractionResponse(BaseModel):
+    """Response model for paystub extraction."""
+    id: int
+    document_id: int
+    employer_name: Optional[str]
+    employee_name: Optional[str]
+    pay_date: Optional[str]
+    pay_frequency: Optional[str]
+    gross_pay: Optional[float]
+    net_pay: Optional[float]
+    ytd_gross: Optional[float]
+    calculated_annual_income: Optional[float]
+    calculated_monthly_income: Optional[float]
+    expires_at: Optional[str]
+    is_expired: bool
+    extraction_confidence: Optional[int]
+    applied_to_profile: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ApplyExtractionRequest(BaseModel):
+    """Request model for applying extracted data."""
+    extraction_id: int
+    fields_to_apply: List[str]  # List of field names to apply
+    create_employment: bool = True
+    create_income_source: bool = True
+
+
+class IncomeSummaryResponse(BaseModel):
+    """Response model for income summary."""
+    borrower_id: int
+    loan_id: int
+    total_monthly_income: float
+    total_annual_income: float
+    source_count: int
+    verified_count: int
+    has_declining_income: bool
+    sources: List[IncomeSourceResponse]
+
+
+# =============================================================================
+# INCOME SOURCE ENDPOINTS
+# =============================================================================
+
+@router.get("/borrowers/{borrower_id}/sources")
+async def get_income_sources(
+    borrower_id: int,
+    loan_id: Optional[int] = None,
+    active_only: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Get all income sources for a borrower."""
+    query = db.query(IncomeSource).filter(IncomeSource.borrower_id == borrower_id)
+
+    if loan_id:
+        query = query.filter(IncomeSource.loan_id == loan_id)
+    if active_only:
+        query = query.filter(IncomeSource.is_active == True)
+
+    sources = query.order_by(IncomeSource.is_primary.desc(), IncomeSource.created_at).all()
+
+    return {
+        "borrower_id": borrower_id,
+        "count": len(sources),
+        "sources": [_format_income_source(s) for s in sources],
+    }
+
+
+@router.post("/borrowers/{borrower_id}/sources")
+async def create_income_source(
+    borrower_id: int,
+    request: IncomeSourceCreate,
+    db: Session = Depends(get_db),
+):
+    """Create a new income source."""
+    try:
+        income_type = IncomeType(request.income_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid income type: {request.income_type}")
+
+    source = IncomeSource(
+        borrower_id=borrower_id,
+        loan_id=request.loan_id,
+        income_type=income_type,
+        source_name=request.source_name,
+        source_description=request.source_description,
+        is_primary=request.is_primary,
+        employment_id=request.employment_id,
+        verification_status=IncomeVerificationStatus.PENDING,
+    )
+
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+
+    return _format_income_source(source)
+
+
+@router.get("/sources/{source_id}")
+async def get_income_source(
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get a specific income source."""
+    source = db.query(IncomeSource).filter(IncomeSource.id == source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Income source not found")
+
+    return _format_income_source(source)
+
+
+@router.patch("/sources/{source_id}")
+async def update_income_source(
+    source_id: int,
+    request: IncomeSourceUpdate,
+    db: Session = Depends(get_db),
+):
+    """Update an income source."""
+    source = db.query(IncomeSource).filter(IncomeSource.id == source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Income source not found")
+
+    update_data = request.dict(exclude_unset=True)
+
+    # Handle enum conversions
+    if "calculation_method" in update_data and update_data["calculation_method"]:
+        try:
+            update_data["calculation_method"] = IncomeCalculationMethod(update_data["calculation_method"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid calculation method")
+
+    if "verification_status" in update_data and update_data["verification_status"]:
+        try:
+            update_data["verification_status"] = IncomeVerificationStatus(update_data["verification_status"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid verification status")
+
+    for key, value in update_data.items():
+        setattr(source, key, value)
+
+    source.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(source)
+
+    return _format_income_source(source)
+
+
+@router.delete("/sources/{source_id}")
+async def delete_income_source(
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    """Delete (soft-delete) an income source."""
+    source = db.query(IncomeSource).filter(IncomeSource.id == source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Income source not found")
+
+    source.is_active = False
+    source.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"success": True, "message": "Income source deactivated"}
+
+
+@router.post("/sources/{source_id}/calculate")
+async def calculate_income(
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    """Trigger income calculation for a source."""
+    source = db.query(IncomeSource).filter(IncomeSource.id == source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Income source not found")
+
+    calc_service = get_income_calculation_service()
+
+    # Get related paystub extractions
+    paystubs = db.query(PaystubExtraction).filter(
+        PaystubExtraction.income_source_id == source_id
+    ).order_by(PaystubExtraction.pay_date.desc()).all()
+
+    paystub_data = [_paystub_to_dict(p) for p in paystubs]
+
+    # Calculate based on income type
+    if source.income_type == IncomeType.W2_EMPLOYMENT:
+        result = calc_service.calculate_w2_income(paystub_data)
+    elif source.income_type in [IncomeType.SELF_EMPLOYED_SCHEDULE_C, IncomeType.SELF_EMPLOYED_S_CORP]:
+        # Would need tax return data
+        result = calc_service.calculate_w2_income(paystub_data)  # Fallback
+    else:
+        result = calc_service.calculate_w2_income(paystub_data)
+
+    if result.success:
+        source.monthly_qualifying_income = result.monthly_qualifying_income
+        source.annual_qualifying_income = result.annual_qualifying_income
+        source.calculation_method = IncomeCalculationMethod(result.calculation_method) if result.calculation_method else None
+        source.calculation_notes = "\n".join(result.notes)
+        source.calculation_date = datetime.utcnow()
+        source.declining_income_flag = result.flags.get("declining_income", False)
+        source.variable_income_flag = result.flags.get("variable_income", False)
+        source.updated_at = datetime.utcnow()
+        db.commit()
+
+    return result.to_dict()
+
+
+# =============================================================================
+# INCOME SUMMARY ENDPOINTS
+# =============================================================================
+
+@router.get("/borrowers/{borrower_id}/summary")
+async def get_income_summary(
+    borrower_id: int,
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get qualifying income summary for a borrower."""
+    sources = db.query(IncomeSource).filter(
+        IncomeSource.borrower_id == borrower_id,
+        IncomeSource.loan_id == loan_id,
+        IncomeSource.is_active == True,
+    ).all()
+
+    total_monthly = sum(float(s.monthly_qualifying_income or 0) for s in sources)
+    total_annual = sum(float(s.annual_qualifying_income or 0) for s in sources)
+    verified_count = sum(1 for s in sources if s.verification_status == IncomeVerificationStatus.VERIFIED)
+    has_declining = any(s.declining_income_flag for s in sources)
+
+    return {
+        "borrower_id": borrower_id,
+        "loan_id": loan_id,
+        "total_monthly_income": total_monthly,
+        "total_annual_income": total_annual,
+        "source_count": len(sources),
+        "verified_count": verified_count,
+        "has_declining_income": has_declining,
+        "sources": [_format_income_source(s) for s in sources],
+    }
+
+
+@router.get("/loans/{loan_id}/qualifying-income")
+async def get_loan_qualifying_income(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get total qualifying income for a loan (all borrowers)."""
+    sources = db.query(IncomeSource).filter(
+        IncomeSource.loan_id == loan_id,
+        IncomeSource.is_active == True,
+    ).all()
+
+    total_monthly = sum(float(s.monthly_qualifying_income or 0) for s in sources)
+    total_annual = sum(float(s.annual_qualifying_income or 0) for s in sources)
+
+    # Group by borrower
+    by_borrower = {}
+    for source in sources:
+        if source.borrower_id not in by_borrower:
+            by_borrower[source.borrower_id] = {
+                "monthly": 0,
+                "annual": 0,
+                "sources": [],
+            }
+        by_borrower[source.borrower_id]["monthly"] += float(source.monthly_qualifying_income or 0)
+        by_borrower[source.borrower_id]["annual"] += float(source.annual_qualifying_income or 0)
+        by_borrower[source.borrower_id]["sources"].append(_format_income_source(source))
+
+    return {
+        "loan_id": loan_id,
+        "total_monthly_qualifying_income": total_monthly,
+        "total_annual_qualifying_income": total_annual,
+        "by_borrower": by_borrower,
+    }
+
+
+# =============================================================================
+# PAYSTUB EXTRACTION ENDPOINTS
+# =============================================================================
+
+@router.post("/documents/{document_id}/extract")
+async def extract_paystub_data(
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Extract income data from a paystub document using AI.
+
+    The document must exist in smart_documents table.
+    """
+    from models.smart_docs_models import SmartDocument
+
+    # Get the document
+    doc = db.query(SmartDocument).filter(SmartDocument.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Get file content from S3
+    s3_service = get_smart_docs_s3_service()
+    if not doc.storage_key:
+        raise HTTPException(status_code=400, detail="Document has no storage key")
+
+    download_result = s3_service.download_file(doc.storage_key)
+    if not download_result.get("success"):
+        raise HTTPException(status_code=500, detail="Failed to download document")
+
+    # Extract data
+    extractor = get_document_data_extractor()
+    extraction_result = extractor.extract_paystub_for_income(
+        file_content=download_result["content"],
+        mime_type=doc.mime_type or "application/pdf",
+    )
+
+    if not extraction_result.get("success"):
+        raise HTTPException(status_code=500, detail=extraction_result.get("error", "Extraction failed"))
+
+    # Save extraction to database
+    extraction = PaystubExtraction(
+        document_id=document_id,
+        borrower_id=doc.borrower_id,
+        loan_id=doc.loan_id,
+        # Employer
+        employer_name=extraction_result.get("employer_name"),
+        employer_address_line1=extraction_result.get("employer_address_line1"),
+        employer_city=extraction_result.get("employer_city"),
+        employer_state=extraction_result.get("employer_state"),
+        employer_zip=extraction_result.get("employer_zip"),
+        employer_phone=extraction_result.get("employer_phone"),
+        employer_ein=extraction_result.get("employer_ein"),
+        # Employee
+        employee_name=extraction_result.get("employee_name"),
+        employee_ssn_last4=extraction_result.get("employee_ssn_last4"),
+        employee_id=extraction_result.get("employee_id"),
+        hire_date=_parse_date(extraction_result.get("hire_date")),
+        # Pay period
+        pay_period_start=_parse_date(extraction_result.get("pay_period_start")),
+        pay_period_end=_parse_date(extraction_result.get("pay_period_end")),
+        pay_date=_parse_date(extraction_result.get("pay_date")),
+        pay_frequency=_parse_pay_frequency(extraction_result.get("pay_frequency")),
+        # Earnings
+        gross_pay=extraction_result.get("gross_pay"),
+        net_pay=extraction_result.get("net_pay"),
+        regular_hours=extraction_result.get("regular_hours"),
+        overtime_hours=extraction_result.get("overtime_hours"),
+        hourly_rate=extraction_result.get("hourly_rate"),
+        # YTD
+        ytd_gross=extraction_result.get("ytd_gross"),
+        ytd_net=extraction_result.get("ytd_net"),
+        # Calculated
+        calculated_annual_income=extraction_result.get("calculated_annual_income"),
+        calculated_monthly_income=extraction_result.get("calculated_monthly_income"),
+        # Freshness
+        doc_date=_parse_date(extraction_result.get("doc_date")),
+        expires_at=_parse_date(extraction_result.get("expires_at")),
+        is_expired=extraction_result.get("is_expired", False),
+        # Metadata
+        extraction_confidence=extraction_result.get("extraction_confidence"),
+        field_confidences=extraction_result.get("field_confidences"),
+        extraction_model=extraction_result.get("extraction_model"),
+        extraction_warnings=extraction_result.get("extraction_warnings"),
+    )
+
+    db.add(extraction)
+    db.commit()
+    db.refresh(extraction)
+
+    return {
+        "success": True,
+        "extraction_id": extraction.id,
+        "document_id": document_id,
+        "extracted_data": extraction_result,
+    }
+
+
+@router.get("/extractions/{extraction_id}")
+async def get_paystub_extraction(
+    extraction_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get a specific paystub extraction."""
+    extraction = db.query(PaystubExtraction).filter(
+        PaystubExtraction.id == extraction_id
+    ).first()
+
+    if not extraction:
+        raise HTTPException(status_code=404, detail="Extraction not found")
+
+    return _format_paystub_extraction(extraction)
+
+
+@router.get("/documents/{document_id}/extractions")
+async def get_document_extractions(
+    document_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get all extractions for a document."""
+    extractions = db.query(PaystubExtraction).filter(
+        PaystubExtraction.document_id == document_id
+    ).order_by(PaystubExtraction.created_at.desc()).all()
+
+    return {
+        "document_id": document_id,
+        "count": len(extractions),
+        "extractions": [_format_paystub_extraction(e) for e in extractions],
+    }
+
+
+@router.post("/apply-extraction")
+async def apply_extraction_to_profile(
+    request: ApplyExtractionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Apply extracted paystub data to borrower profile.
+
+    Creates or updates:
+    - Employment record
+    - Income source record
+    """
+    extraction = db.query(PaystubExtraction).filter(
+        PaystubExtraction.id == request.extraction_id
+    ).first()
+
+    if not extraction:
+        raise HTTPException(status_code=404, detail="Extraction not found")
+
+    applied_records = {
+        "employment_id": None,
+        "income_source_id": None,
+        "fields_applied": [],
+    }
+
+    # Create/update employment record
+    if request.create_employment and extraction.employer_name:
+        employment = db.query(Employment).filter(
+            Employment.borrower_id == extraction.borrower_id,
+            Employment.loan_id == extraction.loan_id,
+            Employment.employer_name == extraction.employer_name,
+        ).first()
+
+        if not employment:
+            employment = Employment(
+                borrower_id=extraction.borrower_id,
+                loan_id=extraction.loan_id,
+                employer_name=extraction.employer_name,
+            )
+            db.add(employment)
+            db.flush()
+
+        # Update employment fields
+        if "employer_address_line1" in request.fields_to_apply:
+            employment.employer_address_line1 = extraction.employer_address_line1
+            applied_records["fields_applied"].append("employer_address_line1")
+        if "employer_city" in request.fields_to_apply:
+            employment.employer_city = extraction.employer_city
+            applied_records["fields_applied"].append("employer_city")
+        if "employer_state" in request.fields_to_apply:
+            employment.employer_state = extraction.employer_state
+            applied_records["fields_applied"].append("employer_state")
+        if "employer_zip" in request.fields_to_apply:
+            employment.employer_zip = extraction.employer_zip
+            applied_records["fields_applied"].append("employer_zip")
+        if "employer_phone" in request.fields_to_apply:
+            employment.employer_phone = extraction.employer_phone
+            applied_records["fields_applied"].append("employer_phone")
+        if "employer_ein" in request.fields_to_apply:
+            employment.employer_ein = extraction.employer_ein
+            applied_records["fields_applied"].append("employer_ein")
+        if "hire_date" in request.fields_to_apply:
+            employment.start_date = extraction.hire_date
+            applied_records["fields_applied"].append("hire_date")
+        if "pay_frequency" in request.fields_to_apply:
+            employment.pay_frequency = extraction.pay_frequency
+            applied_records["fields_applied"].append("pay_frequency")
+        if "hourly_rate" in request.fields_to_apply:
+            employment.hourly_rate = extraction.hourly_rate
+            employment.is_hourly = True
+            employment.is_salaried = False
+            applied_records["fields_applied"].append("hourly_rate")
+
+        employment.monthly_income = extraction.calculated_monthly_income
+        employment.annual_income = extraction.calculated_annual_income
+        employment.last_updated_from_paystub_at = datetime.utcnow()
+        employment.last_paystub_id = extraction.document_id
+        employment.updated_at = datetime.utcnow()
+
+        applied_records["employment_id"] = employment.id
+
+    # Create/update income source
+    if request.create_income_source:
+        income_source = db.query(IncomeSource).filter(
+            IncomeSource.borrower_id == extraction.borrower_id,
+            IncomeSource.loan_id == extraction.loan_id,
+            IncomeSource.source_name == extraction.employer_name,
+            IncomeSource.income_type == IncomeType.W2_EMPLOYMENT,
+        ).first()
+
+        if not income_source:
+            income_source = IncomeSource(
+                borrower_id=extraction.borrower_id,
+                loan_id=extraction.loan_id,
+                income_type=IncomeType.W2_EMPLOYMENT,
+                source_name=extraction.employer_name,
+                verification_status=IncomeVerificationStatus.DOCUMENTS_RECEIVED,
+            )
+            db.add(income_source)
+            db.flush()
+
+        income_source.gross_monthly_income = extraction.calculated_monthly_income
+        income_source.gross_annual_income = extraction.calculated_annual_income
+        income_source.monthly_qualifying_income = extraction.calculated_monthly_income
+        income_source.annual_qualifying_income = extraction.calculated_annual_income
+        income_source.extracted_data = _paystub_to_dict(extraction)
+        income_source.supporting_document_ids = [extraction.document_id]
+        income_source.updated_at = datetime.utcnow()
+
+        if applied_records.get("employment_id"):
+            income_source.employment_id = applied_records["employment_id"]
+
+        applied_records["income_source_id"] = income_source.id
+
+        # Link extraction to income source
+        extraction.income_source_id = income_source.id
+
+    # Mark extraction as applied
+    extraction.applied_to_profile = True
+    extraction.applied_at = datetime.utcnow()
+    extraction.applied_fields = request.fields_to_apply
+
+    db.commit()
+
+    return {
+        "success": True,
+        "extraction_id": extraction.id,
+        "applied": applied_records,
+    }
+
+
+# =============================================================================
+# EMPLOYMENT ENDPOINTS
+# =============================================================================
+
+@router.get("/borrowers/{borrower_id}/employments")
+async def get_borrower_employments(
+    borrower_id: int,
+    loan_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """Get all employment records for a borrower."""
+    query = db.query(Employment).filter(Employment.borrower_id == borrower_id)
+    if loan_id:
+        query = query.filter(Employment.loan_id == loan_id)
+
+    employments = query.order_by(Employment.created_at.desc()).all()
+
+    return {
+        "borrower_id": borrower_id,
+        "count": len(employments),
+        "employments": [_format_employment(e) for e in employments],
+    }
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def _format_income_source(source: IncomeSource) -> dict:
+    """Format income source for API response."""
+    return {
+        "id": source.id,
+        "borrower_id": source.borrower_id,
+        "loan_id": source.loan_id,
+        "employment_id": source.employment_id,
+        "income_type": source.income_type.value if source.income_type else None,
+        "source_name": source.source_name,
+        "source_description": source.source_description,
+        "is_primary": source.is_primary,
+        "is_active": source.is_active,
+        "gross_monthly_income": float(source.gross_monthly_income) if source.gross_monthly_income else None,
+        "gross_annual_income": float(source.gross_annual_income) if source.gross_annual_income else None,
+        "monthly_qualifying_income": float(source.monthly_qualifying_income) if source.monthly_qualifying_income else None,
+        "annual_qualifying_income": float(source.annual_qualifying_income) if source.annual_qualifying_income else None,
+        "calculation_method": source.calculation_method.value if source.calculation_method else None,
+        "calculation_date": source.calculation_date.isoformat() if source.calculation_date else None,
+        "verification_status": source.verification_status.value if source.verification_status else None,
+        "verified_at": source.verified_at.isoformat() if source.verified_at else None,
+        "trending_direction": source.trending_direction,
+        "declining_income_flag": source.declining_income_flag or False,
+        "variable_income_flag": source.variable_income_flag or False,
+        "created_at": source.created_at.isoformat() if source.created_at else None,
+        "updated_at": source.updated_at.isoformat() if source.updated_at else None,
+    }
+
+
+def _format_paystub_extraction(extraction: PaystubExtraction) -> dict:
+    """Format paystub extraction for API response."""
+    return {
+        "id": extraction.id,
+        "document_id": extraction.document_id,
+        "income_source_id": extraction.income_source_id,
+        "borrower_id": extraction.borrower_id,
+        "loan_id": extraction.loan_id,
+        # Employer
+        "employer_name": extraction.employer_name,
+        "employer_address_line1": extraction.employer_address_line1,
+        "employer_city": extraction.employer_city,
+        "employer_state": extraction.employer_state,
+        "employer_zip": extraction.employer_zip,
+        "employer_phone": extraction.employer_phone,
+        "employer_ein": extraction.employer_ein,
+        # Employee
+        "employee_name": extraction.employee_name,
+        "employee_ssn_last4": extraction.employee_ssn_last4,
+        "employee_id": extraction.employee_id,
+        "hire_date": extraction.hire_date.isoformat() if extraction.hire_date else None,
+        # Pay period
+        "pay_period_start": extraction.pay_period_start.isoformat() if extraction.pay_period_start else None,
+        "pay_period_end": extraction.pay_period_end.isoformat() if extraction.pay_period_end else None,
+        "pay_date": extraction.pay_date.isoformat() if extraction.pay_date else None,
+        "pay_frequency": extraction.pay_frequency.value if extraction.pay_frequency else None,
+        # Earnings
+        "gross_pay": float(extraction.gross_pay) if extraction.gross_pay else None,
+        "net_pay": float(extraction.net_pay) if extraction.net_pay else None,
+        "regular_hours": float(extraction.regular_hours) if extraction.regular_hours else None,
+        "overtime_hours": float(extraction.overtime_hours) if extraction.overtime_hours else None,
+        "hourly_rate": float(extraction.hourly_rate) if extraction.hourly_rate else None,
+        # YTD
+        "ytd_gross": float(extraction.ytd_gross) if extraction.ytd_gross else None,
+        "ytd_net": float(extraction.ytd_net) if extraction.ytd_net else None,
+        # Calculated
+        "calculated_annual_income": float(extraction.calculated_annual_income) if extraction.calculated_annual_income else None,
+        "calculated_monthly_income": float(extraction.calculated_monthly_income) if extraction.calculated_monthly_income else None,
+        # Freshness
+        "doc_date": extraction.doc_date.isoformat() if extraction.doc_date else None,
+        "expires_at": extraction.expires_at.isoformat() if extraction.expires_at else None,
+        "is_expired": extraction.is_expired or False,
+        # Metadata
+        "extraction_confidence": extraction.extraction_confidence,
+        "extraction_model": extraction.extraction_model,
+        "extraction_warnings": extraction.extraction_warnings,
+        "applied_to_profile": extraction.applied_to_profile or False,
+        "applied_at": extraction.applied_at.isoformat() if extraction.applied_at else None,
+        "applied_fields": extraction.applied_fields,
+        "created_at": extraction.created_at.isoformat() if extraction.created_at else None,
+    }
+
+
+def _format_employment(employment: Employment) -> dict:
+    """Format employment record for API response."""
+    return {
+        "id": employment.id,
+        "borrower_id": employment.borrower_id,
+        "loan_id": employment.loan_id,
+        "employer_name": employment.employer_name,
+        "employer_address_line1": employment.employer_address_line1,
+        "employer_city": employment.employer_city,
+        "employer_state": employment.employer_state,
+        "employer_zip": employment.employer_zip,
+        "employer_phone": employment.employer_phone,
+        "job_title": employment.job_title,
+        "start_date": employment.start_date.isoformat() if employment.start_date else None,
+        "end_date": employment.end_date.isoformat() if employment.end_date else None,
+        "is_salaried": employment.is_salaried,
+        "is_hourly": employment.is_hourly,
+        "pay_frequency": employment.pay_frequency.value if employment.pay_frequency else None,
+        "hourly_rate": float(employment.hourly_rate) if employment.hourly_rate else None,
+        "monthly_income": float(employment.monthly_income) if employment.monthly_income else None,
+        "annual_income": float(employment.annual_income) if employment.annual_income else None,
+        "verification_status": employment.verification_status.value if employment.verification_status else None,
+        "last_updated_from_paystub_at": employment.last_updated_from_paystub_at.isoformat() if employment.last_updated_from_paystub_at else None,
+        "created_at": employment.created_at.isoformat() if employment.created_at else None,
+        "updated_at": employment.updated_at.isoformat() if employment.updated_at else None,
+    }
+
+
+def _paystub_to_dict(paystub: PaystubExtraction) -> dict:
+    """Convert paystub extraction to dict for calculation service."""
+    return {
+        "pay_date": paystub.pay_date.isoformat() if paystub.pay_date else None,
+        "pay_frequency": paystub.pay_frequency.value if paystub.pay_frequency else None,
+        "gross_pay": float(paystub.gross_pay) if paystub.gross_pay else None,
+        "net_pay": float(paystub.net_pay) if paystub.net_pay else None,
+        "ytd_gross": float(paystub.ytd_gross) if paystub.ytd_gross else None,
+        "ytd_net": float(paystub.ytd_net) if paystub.ytd_net else None,
+        "hourly_rate": float(paystub.hourly_rate) if paystub.hourly_rate else None,
+        "regular_hours": float(paystub.regular_hours) if paystub.regular_hours else None,
+        "overtime_hours": float(paystub.overtime_hours) if paystub.overtime_hours else None,
+    }
+
+
+def _parse_date(date_str: Optional[str]) -> Optional[date]:
+    """Parse ISO date string to date object."""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_pay_frequency(freq_str: Optional[str]) -> Optional[PayrollFrequency]:
+    """Parse pay frequency string to enum."""
+    if not freq_str:
+        return None
+    try:
+        return PayrollFrequency(freq_str.upper())
+    except ValueError:
+        return None
