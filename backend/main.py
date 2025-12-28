@@ -19927,6 +19927,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load income routes: {e}")
 
+# Include Income Engine routes (Automated Income Intelligence Engine)
+try:
+    from income_engine import income_router as income_engine_router
+    app.include_router(income_engine_router, tags=["Income Intelligence Engine"])
+    logger.info("✅ Income Intelligence Engine routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load income engine routes: {e}")
+
 # Include Morning Check-in routes
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])
