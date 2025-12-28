@@ -20197,6 +20197,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ OAuth routes not loaded: {e}")
 
+# Salesforce Integration routes (OAuth, Webhooks, Sync)
+try:
+    from routes.salesforce_routes import router as salesforce_router
+    app.include_router(salesforce_router, prefix="/api/v1/salesforce", tags=["Salesforce Integration"])
+    logger.info("✅ Salesforce routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Salesforce routes not loaded: {e}")
+
 # Agent Governance routes (Agent Management & Monitoring)
 try:
     from routes.agent_governance_routes import router as agent_governance_router
