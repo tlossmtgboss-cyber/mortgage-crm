@@ -50916,8 +50916,8 @@ def filter_leads_by_permissions(query, user: User, db: Session):
     - leads.view_assigned: See only assigned leads
     """
     try:
-        # Master user can see all leads
-        if user.id == 1:
+        # Master user can see all leads (check both ID and email)
+        if user.id == 1 or user.email == 'admin@perenniaai.com':
             return query
 
         if has_permission(user.id, 'leads.view_all', db):

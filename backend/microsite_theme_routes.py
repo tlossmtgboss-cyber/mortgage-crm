@@ -2089,13 +2089,76 @@ async def cancel_appointment_via_chat(
 
         db.commit()
 
+        cancelled_time = appointment.start_time.strftime("%B %d, %Y at %I:%M %p")
+        lo_name = appointment.lo_name or "Your Loan Officer"
+
+        # Send cancellation email notifications
+        try:
+            from services.notification_service import NotificationService
+            notification_service = NotificationService()
+
+            # Email to the client
+            if appointment.contact_email:
+                notification_service.send_email(
+                    to_email=appointment.contact_email,
+                    subject=f"Appointment Cancelled - {cancelled_time}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #dc2626;">Appointment Cancelled</h2>
+                        <p>Hi {appointment.contact_name},</p>
+                        <p>Your appointment has been cancelled as requested:</p>
+
+                        <div style="background: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
+                            <p style="margin: 0;"><strong>Original Date & Time:</strong> {cancelled_time}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>With:</strong> {lo_name}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Status:</strong> Cancelled</p>
+                            {f'<p style="margin: 10px 0 0 0;"><strong>Reason:</strong> {request.reason}</p>' if request.reason else ''}
+                        </div>
+
+                        <p>If you'd like to reschedule, please visit our website or reply to this email.</p>
+
+                        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                            We hope to connect with you soon!
+                        </p>
+                    </div>
+                    """
+                )
+                logger.info(f"Sent cancellation email to {appointment.contact_email}")
+
+            # Email to the loan officer
+            if appointment.lo_email:
+                notification_service.send_email(
+                    to_email=appointment.lo_email,
+                    subject=f"Appointment Cancelled: {appointment.contact_name} - {cancelled_time}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #dc2626;">Appointment Cancelled</h2>
+                        <p>An appointment has been cancelled:</p>
+
+                        <div style="background: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc2626;">
+                            <p style="margin: 0;"><strong>Contact:</strong> {appointment.contact_name}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Email:</strong> {appointment.contact_email}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Phone:</strong> {appointment.contact_phone or 'Not provided'}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Original Time:</strong> {cancelled_time}</p>
+                            {f'<p style="margin: 10px 0 0 0;"><strong>Reason:</strong> {request.reason}</p>' if request.reason else ''}
+                        </div>
+
+                        <p>This appointment was cancelled by the client via the chat widget.</p>
+                    </div>
+                    """
+                )
+                logger.info(f"Sent cancellation alert to {appointment.lo_email}")
+
+        except Exception as notify_error:
+            logger.warning(f"Failed to send cancellation notifications: {notify_error}")
+
         logger.info(f"Appointment {request.appointment_id} cancelled by {request.contact_email}")
 
         return {
             "success": True,
             "message": "Your appointment has been cancelled successfully.",
             "appointment_id": request.appointment_id,
-            "cancelled_time": appointment.start_time.strftime("%B %d, %Y at %I:%M %p")
+            "cancelled_time": cancelled_time
         }
 
     except Exception as e:

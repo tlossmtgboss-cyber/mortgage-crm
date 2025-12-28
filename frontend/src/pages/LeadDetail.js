@@ -14,6 +14,7 @@ import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
+import IncomeTab from '../components/income/IncomeTab';
 import VideoMeetings from '../components/VideoMeetings';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
@@ -2188,6 +2189,22 @@ function LeadDetail() {
                 Employment
               </button>
               <button
+                onClick={() => setPersonalSubTab('income')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: personalSubTab === 'income' ? '600' : '400',
+                  color: personalSubTab === 'income' ? '#1a73e8' : '#5f6368',
+                  borderBottom: personalSubTab === 'income' ? '2px solid #1a73e8' : '2px solid transparent',
+                  marginBottom: '-1px'
+                }}
+              >
+                Income
+              </button>
+              <button
                 onClick={() => setPersonalSubTab('assets')}
                 style={{
                   padding: '10px 20px',
@@ -2366,6 +2383,18 @@ function LeadDetail() {
                 formData={formData}
                 onFieldChange={handleFieldChange}
                 entityType="leads"
+              />
+            )}
+
+            {/* Income Sub-tab Content */}
+            {personalSubTab === 'income' && (
+              <IncomeTab
+                borrowerId={parseInt(id)}
+                loanId={lead?.loan_id || parseInt(id)}
+                onIncomeChange={(monthly, annual) => {
+                  handleFieldChange('monthly_income', monthly);
+                  handleFieldChange('annual_income', annual);
+                }}
               />
             )}
 
