@@ -94,29 +94,40 @@ const IntegrationSettings = () => {
   };
 
   const handleConnect = async (integrationId) => {
+    console.log('handleConnect called for:', integrationId);
     try {
       const token = localStorage.getItem('token');
+      console.log('Token present:', !!token);
+
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${integrationId}/connect`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
+      console.log('Response status:', res.status);
+
       if (res.ok) {
         const data = await res.json();
-        if (data.data.auth_type === 'oauth2' && data.data.oauth_url) {
-          // Redirect to OAuth
-          window.open(data.data.oauth_url, '_blank');
-          toast.success('OAuth window opened. Complete authorization to connect.');
+        console.log('Response data:', data);
+
+        if (data.data?.auth_type === 'oauth2' && data.data?.oauth_url) {
+          // Redirect to OAuth - use same window to avoid popup blockers
+          console.log('Redirecting to OAuth URL:', data.data.oauth_url);
+          toast.info('Redirecting to Salesforce login...');
+          // Use window.location.href instead of window.open to avoid popup blockers
+          window.location.href = data.data.oauth_url;
         } else {
           toast.success('Integration connected successfully');
           loadIntegrations();
         }
       } else {
         const error = await res.json();
-        toast.error(error.detail?.message || 'Failed to connect');
+        console.error('Connect error:', error);
+        toast.error(error.error?.message || error.detail?.message || 'Failed to connect');
       }
     } catch (err) {
-      toast.error('Failed to connect integration');
+      console.error('Connect exception:', err);
+      toast.error('Failed to connect integration: ' + err.message);
     }
   };
 
