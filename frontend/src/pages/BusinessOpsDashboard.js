@@ -12,9 +12,6 @@ const BusinessOpsDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [services, setServices] = useState([]);
-  const [subscriptions, setSubscriptions] = useState([]);
-  const [forecasts, setForecasts] = useState([]);
-  const [error, setError] = useState(null);
 
   // Fetch dashboard data
   useEffect(() => {
@@ -43,7 +40,6 @@ const BusinessOpsDashboard = () => {
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
-      setError('Failed to load dashboard data');
       // Use mock data for development
       setDashboardData(getMockDashboardData());
       setServices(getMockServices());
@@ -59,10 +55,6 @@ const BusinessOpsDashboard = () => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
-  };
-
-  const formatPercent = (value) => {
-    return `${(value || 0).toFixed(1)}%`;
   };
 
   const tabs = [

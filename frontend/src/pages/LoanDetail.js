@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI } from '../services/api';
 import { toast } from '../utils/toast';
-import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import VoicemailDrop from '../components/VoicemailDrop';
-import VoicemailModal from '../components/VoicemailModal';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
@@ -12,9 +10,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import EscalationModal from '../components/EscalationModal';
-import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
-import RateLockRecommendation from '../components/RateLockRecommendation';
 import VideoMeetings from '../components/VideoMeetings';
 import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
@@ -63,7 +59,7 @@ function LoanDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loan, setLoan] = useState(null);
-  const [activities, setActivities] = useState([]);
+  const [activities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(true);
   const [formData, setFormData] = useState({});
@@ -82,9 +78,9 @@ function LoanDetail() {
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [, setIsListening] = useState(false);
   const [emailHistory, setEmailHistory] = useState([]);
-  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [, setSelectedEmail] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
 
@@ -95,10 +91,10 @@ function LoanDetail() {
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
   const [propertySubTab, setPropertySubTab] = useState('property'); // 'property', 'insurance', 'legal'
-  const [emailArchive, setEmailArchive] = useState([]);
-  const [smsArchive, setSmsArchive] = useState([]);
-  const [callArchive, setCallArchive] = useState([]);
-  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [emailArchive] = useState([]);
+  const [smsArchive] = useState([]);
+  const [callArchive] = useState([]);
+  const [archiveLoading] = useState(false);
 
   // Personal tab sub-tab state
   const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info', 'employment', 'assets'
@@ -109,7 +105,7 @@ function LoanDetail() {
   // Circle of Cashflow state
   const [cashflowOpportunities, setCashflowOpportunities] = useState([]);
   const [cashflowReferrals, setCashflowReferrals] = useState([]);
-  const [cashflowPartners, setCashflowPartners] = useState([]);
+  const [, setCashflowPartners] = useState([]);
   const [cashflowLoading, setCashflowLoading] = useState(false);
 
   // Circle of Influence state
@@ -796,6 +792,7 @@ function LoanDetail() {
     if (id) {
       loadTeamMembers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleVoiceCommand = () => {
@@ -904,7 +901,7 @@ function LoanDetail() {
 
   const handleAction = async (action) => {
     const borrowerPhone = loan.borrower_phone || formData.borrower_phone;
-    const borrowerEmail = loan.borrower_email || formData.borrower_email;
+    const _borrowerEmail = loan.borrower_email || formData.borrower_email; // eslint-disable-line no-unused-vars
 
     switch(action) {
       case 'call':
@@ -981,7 +978,7 @@ function LoanDetail() {
     );
   }
 
-  const currentBorrower = borrowers[activeBorrower] || borrowers[0] || {
+  const _currentBorrower = borrowers[activeBorrower] || borrowers[0] || { // eslint-disable-line no-unused-vars
     data: { name: '', email: '', phone: '' }
   };
 

@@ -1,12 +1,11 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import NotificationBell from './NotificationBell';
 import './Navigation.css';
 
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { userRole } = usePermissions();
 
   const isActive = (path) => location.pathname === path;
@@ -14,14 +13,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   const renderBadge = (count) => {
     if (!count || count === 0) return null;
     return <span className="nav-badge">({count})</span>;
-  };
-
-  const handleLogout = () => {
-    if (window.confirm('Are you sure you want to log out?')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      navigate('/login');
-    }
   };
 
   return (

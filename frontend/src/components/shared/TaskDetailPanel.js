@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { aiAPI, tasksAPI } from '../../services/api';
+import { aiAPI } from '../../services/api';
 import { sanitizeHTML } from '../../utils/sanitize';
 import './TaskDetailPanel.css';
 

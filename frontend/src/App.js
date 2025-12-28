@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
@@ -7,7 +7,6 @@ import { PermissionProvider } from './contexts/PermissionContext';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
-import OnboardingPrompt from './components/OnboardingPrompt';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
@@ -22,7 +21,6 @@ import Registration from './pages/Registration';
 import AccountVerification from './pages/AccountVerification';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
-import Onboarding from './pages/Onboarding';
 import ApplicationSubmitted from './pages/ApplicationSubmitted';
 
 // Lazy load all other pages for instant navigation
@@ -94,7 +92,6 @@ const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
-const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
 const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
 const AIOutreach = lazy(() => import('./pages/AIOutreach'));
 const ConversationIntelligence = lazy(() => import('./pages/ConversationIntelligence'));
@@ -114,7 +111,6 @@ const ApplyVerify = lazy(() => import('./pages/ApplyVerify'));
 const BorrowerOAuthCallback = lazy(() => import('./pages/BorrowerOAuthCallback'));
 const ApplicationAnalytics = lazy(() => import('./pages/ApplicationAnalytics'));
 const BorrowerPortal = lazy(() => import('./pages/BorrowerPortal'));
-const LOMicrosite = lazy(() => import('./pages/microsites/LOMicrosite'));
 const ThemeRenderer = lazy(() => import('./pages/microsites/ThemeRenderer'));
 const ThemePreview = lazy(() => import('./pages/microsites/ThemePreview'));
 const MicrositePreview = lazy(() => import('./pages/microsites/MicrositePreview'));
@@ -139,7 +135,6 @@ const IntegrationSettings = lazy(() => import('./pages/IntegrationSettings'));
 const APIKeysSettings = lazy(() => import('./pages/APIKeysSettings'));
 const CompanyBrandingSettings = lazy(() => import('./pages/CompanyBrandingSettings'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
-const PURLPortal = lazy(() => import('./pages/PURLPortal'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
@@ -148,8 +143,6 @@ const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQ
 const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
 const PartnerPortalView = lazy(() => import('./components/portal/PartnerPortalView'));
 const PerenniaClientPortalUltimate = lazy(() => import('./components/portal/PerenniaClientPortalUltimate'));
-const HomeValueIntelligence = lazy(() => import('./components/portal/HomeValueIntelligence'));
-const PresentationEngine = lazy(() => import('./components/portal/PresentationEngine'));
 const TotalCostAnalysis = lazy(() => import('./components/portal/TotalCostAnalysis'));
 
 // Simple loading component

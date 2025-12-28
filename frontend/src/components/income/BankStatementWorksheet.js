@@ -27,11 +27,6 @@ const CALCULATION_METHODS = [
   },
 ];
 
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
 export default function BankStatementWorksheet({ loanId, borrowerId, borrowerName, onIncomeCalculated }) {
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);

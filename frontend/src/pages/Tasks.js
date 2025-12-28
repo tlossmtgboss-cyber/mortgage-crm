@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI, tasksAPI, reconciliationAPI, aiAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
-import MergeCenter from './MergeCenter';
+import { teamAPI, tasksAPI, reconciliationAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import TaskDetailPanel from '../components/shared/TaskDetailPanel';
 import ReconciliationDetailPanel from '../components/shared/ReconciliationDetailPanel';
@@ -190,7 +189,7 @@ Loan Processor`,
   }
 ];
 
-const mockAiTasks = () => ({
+const mockAiTasks = () => ({ // eslint-disable-line no-unused-vars
   pending: [
     {
       id: 1,
@@ -437,7 +436,7 @@ const mockLeadMetrics = () => ({
   ]
 });
 
-const mockMessages = () => [
+const mockMessages = () => [ // eslint-disable-line no-unused-vars
   {
     id: 1,
     type: 'email',
@@ -632,7 +631,7 @@ function Tasks() {
   const [completingTask, setCompletingTask] = useState(false);
 
   // Layout fix hook
-  const { containerRef, triggerRecalculation } = useLayoutFix([loading]);
+  const { containerRef } = useLayoutFix([loading]);
 
   // Save completed tasks to localStorage whenever it changes
   useEffect(() => {
@@ -649,7 +648,7 @@ function Tasks() {
 
   // Reconciliation tab state
   const [emailQueue, setEmailQueue] = useState([]);
-  const [emailQueueTotal, setEmailQueueTotal] = useState(0);
+  const [, setEmailQueueTotal] = useState(0);
   const [reconciliationStats, setReconciliationStats] = useState({});
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [showDispositionDialog, setShowDispositionDialog] = useState(false);
@@ -666,13 +665,13 @@ function Tasks() {
 
   // Phone tab state (Power Dialer)
   const [phoneTasks, setPhoneTasks] = useState([]);
-  const [phoneContacts, setPhoneContacts] = useState([]);
+  const [, setPhoneContacts] = useState([]);
   const [selectedPhoneTask, setSelectedPhoneTask] = useState(null);
-  const [dialerSession, setDialerSession] = useState(null);
+  const [dialerSession, setDialerSession] = useState(null); // eslint-disable-line no-unused-vars
   const [callStatus, setCallStatus] = useState('idle');
   const [selectedPhoneTaskIds, setSelectedPhoneTaskIds] = useState([]);
-  const [callLogs, setCallLogs] = useState([]);
-  const [dialerSettings, setDialerSettings] = useState(null);
+  const [, setCallLogs] = useState([]);
+  const [, setDialerSettings] = useState(null);
 
   // Disposition options for reconciliation
   const dispositionOptions = [
@@ -831,7 +830,7 @@ function Tasks() {
   }, [activeTab, loadReconciliationData, loadPhoneData]);
 
   // Reconciliation handlers
-  const handleViewEmail = (email) => {
+  const handleViewEmail = (email) => { // eslint-disable-line no-unused-vars
     setSelectedEmail(email);
   };
 
@@ -1137,7 +1136,7 @@ function Tasks() {
   };
 
   // Handler functions
-  const handleSend = (taskId, method, message) => {
+  const handleSend = (taskId, method, _message) => { // eslint-disable-line no-unused-vars
     // method and message are passed from the shared TaskDetailPanel component
     alert(`Task sent via ${method || 'Email'}!`);
     handleComplete(taskId);
@@ -1392,7 +1391,7 @@ function Tasks() {
     aiTasks.pending.forEach((task, idx) => {
       const taskId = `ai-pending-${idx}`;
       if (completedTasks.has(taskId)) {
-        const { id: _originalId, ...taskWithoutId } = task;
+        const { id: _originalId, ...taskWithoutId } = task; // eslint-disable-line no-unused-vars
         tasks.push({
           ...taskWithoutId,
           id: taskId,
@@ -1410,7 +1409,7 @@ function Tasks() {
     aiTasks.waiting.forEach((task, idx) => {
       const taskId = `ai-waiting-${idx}`;
       if (completedTasks.has(taskId)) {
-        const { id: _originalId, ...taskWithoutId } = task;
+        const { id: _originalId, ...taskWithoutId } = task; // eslint-disable-line no-unused-vars
         tasks.push({
           ...taskWithoutId,
           id: taskId,
@@ -1460,7 +1459,7 @@ function Tasks() {
     messages.filter(m => !m.read).forEach((msg, idx) => {
       const msgId = `message-${idx}`;
       if (completedTasks.has(msgId)) {
-        const { id: _originalId, ...msgWithoutId } = msg;
+        const { id: _originalId, ...msgWithoutId } = msg; // eslint-disable-line no-unused-vars
         tasks.push({
           ...msgWithoutId,
           id: msgId,
@@ -1569,7 +1568,7 @@ function Tasks() {
       const taskId = `message-${idx}`;
       if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
         addedTaskIds.add(taskId);
-        const { id: _originalId, ...msgWithoutId } = msg;
+        const { id: _originalId, ...msgWithoutId } = msg; // eslint-disable-line no-unused-vars
         tasks.push({
           ...msgWithoutId,
           id: taskId,
@@ -1717,7 +1716,7 @@ function Tasks() {
     return colors[urgency] || '#6b7280';
   };
 
-  const handleCommClick = (comm) => {
+  const handleCommClick = (comm) => { // eslint-disable-line no-unused-vars
     // Generate detailed content based on type
     let detailedContent = null;
 
@@ -1786,7 +1785,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
   const tabTasks = getTasksForTab();
 
   // Reusable Email Layout Component
-  const TaskEmailLayout = ({ tasks, emptyMessage = "No tasks" }) => {
+  const TaskEmailLayout = ({ tasks, emptyMessage = "No tasks" }) => { // eslint-disable-line no-unused-vars
     const allSelected = tasks.length > 0 && tasks.every(t => selectedTaskIds.has(t.id));
     const someSelected = tasks.some(t => selectedTaskIds.has(t.id));
 
@@ -1884,7 +1883,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
   };
 
   // Reusable Email Layout for Reconciliation
-  const ReconciliationEmailLayout = () => {
+  const ReconciliationEmailLayout = () => { // eslint-disable-line no-unused-vars
     return (
       <div className="email-layout">
         {/* Email List (Left Side) */}
@@ -1955,7 +1954,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
   };
 
   // Reusable Email Layout for Phone Dialer
-  const PhoneEmailLayout = () => {
+  const PhoneEmailLayout = () => { // eslint-disable-line no-unused-vars
     return (
       <div className="email-layout">
         {/* Phone Task List (Left Side) */}

@@ -23,6 +23,7 @@ const IntegrationSettings = () => {
   useEffect(() => {
     loadIntegrations();
     loadCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadIntegrations = async () => {
