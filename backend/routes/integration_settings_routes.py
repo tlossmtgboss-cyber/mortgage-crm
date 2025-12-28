@@ -20,15 +20,35 @@ router = APIRouter(prefix="/api/v1/integration-settings")
 
 # Dependency injection placeholders
 User = None
-get_current_user = None
-get_db = None
+_get_current_user = None
+_get_db = None
 
 def set_dependencies(user_model, current_user_func, db_func):
     """Set dependencies for this router."""
-    global User, get_current_user, get_db
+    global User, _get_current_user, _get_db
     User = user_model
-    get_current_user = current_user_func
-    get_db = db_func
+    _get_current_user = current_user_func
+    _get_db = db_func
+
+
+# Wrapper functions for FastAPI Depends - called at request time
+from fastapi import Request
+from sqlalchemy.orm import Session
+
+def get_db():
+    """Get database session - wrapper that works at request time."""
+    if _get_db is None:
+        raise HTTPException(status_code=500, detail="Database dependency not configured")
+    return next(_get_db())
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - wrapper that works at request time."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 # =============================================================================
