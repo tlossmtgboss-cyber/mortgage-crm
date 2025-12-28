@@ -277,9 +277,10 @@ async def get_needs_list(
     for req in result.get("all_requests", []):
         request_id = req.get("id")
         if request_id:
-            # Get uploaded documents for this request
+            # Get uploaded documents for this request (exclude deleted/superseded)
             uploaded_docs = db.query(SmartDocument).filter(
-                SmartDocument.request_id == request_id
+                SmartDocument.request_id == request_id,
+                SmartDocument.status.notin_(["DELETED", "SUPERSEDED"])
             ).order_by(SmartDocument.created_at.desc()).all()
 
             if uploaded_docs:
@@ -1823,9 +1824,10 @@ async def get_client_queue_detail(
     for req in result.get("requests", []):
         request_id = req.get("id")
         if request_id:
-            # Get uploaded documents for this request
+            # Get uploaded documents for this request (exclude deleted/superseded)
             uploaded_docs = db.query(SmartDocument).filter(
-                SmartDocument.request_id == request_id
+                SmartDocument.request_id == request_id,
+                SmartDocument.status.notin_(["DELETED", "SUPERSEDED"])
             ).order_by(SmartDocument.created_at.desc()).all()
 
             if uploaded_docs:
@@ -2925,12 +2927,12 @@ async def cleanup_orphan_documents(
         doc.reviewed_at = datetime.utcnow()
         doc.reviewed_by = "SYSTEM_CLEANUP"
 
-        # Reset linked request to OPEN
+        # Reset linked request to OPEN (always, since document is being deleted)
         if doc.request_id:
             request = db.query(DocumentRequest).filter(
                 DocumentRequest.id == doc.request_id
             ).first()
-            if request and request.status != RequestStatus.ACCEPTED:
+            if request:
                 request.status = RequestStatus.OPEN
 
         cleaned.append({
