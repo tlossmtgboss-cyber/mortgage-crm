@@ -2278,6 +2278,71 @@ async def reschedule_appointment_via_chat(
 
         db.commit()
 
+        new_time_formatted = new_start_time.strftime("%B %d, %Y at %I:%M %p")
+        lo_name = appointment.lo_name or "Your Loan Officer"
+
+        # Send reschedule email notifications
+        try:
+            from services.notification_service import NotificationService
+            notification_service = NotificationService()
+
+            # Email to the client
+            if appointment.contact_email:
+                notification_service.send_email(
+                    to_email=appointment.contact_email,
+                    subject=f"Appointment Rescheduled - {new_time_formatted}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2563eb;">Appointment Rescheduled</h2>
+                        <p>Hi {appointment.contact_name},</p>
+                        <p>Your appointment has been rescheduled as requested:</p>
+
+                        <div style="background: #eff6ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563eb;">
+                            <p style="margin: 0; color: #6b7280; text-decoration: line-through;"><strong>Original Time:</strong> {old_time}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>New Date & Time:</strong> {new_time_formatted}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>With:</strong> {lo_name}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> {duration} minutes</p>
+                            {f'<p style="margin: 10px 0 0 0;"><strong>Reason:</strong> {request.reason}</p>' if request.reason else ''}
+                        </div>
+
+                        <p>If you need to make any changes, please contact us or reply to this email.</p>
+
+                        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                            We look forward to speaking with you!
+                        </p>
+                    </div>
+                    """
+                )
+                logger.info(f"Sent reschedule confirmation email to {appointment.contact_email}")
+
+            # Email to the loan officer
+            if appointment.lo_email:
+                notification_service.send_email(
+                    to_email=appointment.lo_email,
+                    subject=f"Appointment Rescheduled: {appointment.contact_name} - {new_time_formatted}",
+                    html_content=f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #2563eb;">Appointment Rescheduled</h2>
+                        <p>An appointment has been rescheduled:</p>
+
+                        <div style="background: #eff6ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563eb;">
+                            <p style="margin: 0;"><strong>Contact:</strong> {appointment.contact_name}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Email:</strong> {appointment.contact_email}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>Phone:</strong> {appointment.contact_phone or 'Not provided'}</p>
+                            <p style="margin: 10px 0 0 0; color: #6b7280; text-decoration: line-through;"><strong>Original Time:</strong> {old_time}</p>
+                            <p style="margin: 10px 0 0 0;"><strong>New Time:</strong> {new_time_formatted}</p>
+                            {f'<p style="margin: 10px 0 0 0;"><strong>Reason:</strong> {request.reason}</p>' if request.reason else ''}
+                        </div>
+
+                        <p>This appointment was rescheduled by the client via the chat widget.</p>
+                    </div>
+                    """
+                )
+                logger.info(f"Sent reschedule alert to {appointment.lo_email}")
+
+        except Exception as notify_error:
+            logger.warning(f"Failed to send reschedule notifications: {notify_error}")
+
         logger.info(f"Appointment {request.appointment_id} rescheduled from {old_time} to {new_start_time}")
 
         return {
