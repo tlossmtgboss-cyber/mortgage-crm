@@ -2880,3 +2880,76 @@ async def check_loan_documents_storage(
         "s3_available": s3_service.is_available,
         "documents": results,
     }
+
+
+@router.post("/diagnostic/loan/{loan_id}/cleanup-orphans")
+async def cleanup_orphan_documents(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Clean up orphan documents (those with missing S3 files).
+
+    For each orphan document:
+    - Marks the document as DELETED
+    - Resets the linked request to OPEN so borrower can re-upload
+
+    Returns summary of cleaned up documents.
+    """
+    s3_service = get_smart_docs_s3_service()
+
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.loan_id == loan_id,
+        SmartDocument.status.notin_(["DELETED", "SUPERSEDED"])
+    ).all()
+
+    cleaned = []
+    skipped = []
+
+    for doc in documents:
+        # Check if file exists in S3
+        if doc.storage_key and s3_service.is_available:
+            exists = s3_service.file_exists(doc.storage_key)
+            if exists:
+                skipped.append({
+                    "id": doc.id,
+                    "file_name": doc.file_name,
+                    "reason": "File exists in S3"
+                })
+                continue
+
+        # File doesn't exist - mark as deleted
+        old_status = doc.status
+        doc.status = "DELETED"
+        doc.rejection_reason = "File not found in storage - cleaned up"
+        doc.reviewed_at = datetime.utcnow()
+        doc.reviewed_by = "SYSTEM_CLEANUP"
+
+        # Reset linked request to OPEN
+        if doc.request_id:
+            request = db.query(DocumentRequest).filter(
+                DocumentRequest.id == doc.request_id
+            ).first()
+            if request and request.status != RequestStatus.ACCEPTED:
+                request.status = RequestStatus.OPEN
+
+        cleaned.append({
+            "id": doc.id,
+            "file_name": doc.file_name,
+            "doc_type": doc.doc_type.value if doc.doc_type else None,
+            "previous_status": old_status,
+            "request_id": doc.request_id,
+        })
+
+    db.commit()
+
+    logger.info(f"Cleaned up {len(cleaned)} orphan documents for loan {loan_id}")
+
+    return {
+        "loan_id": loan_id,
+        "cleaned_count": len(cleaned),
+        "skipped_count": len(skipped),
+        "cleaned_documents": cleaned,
+        "skipped_documents": skipped,
+        "message": f"Cleaned up {len(cleaned)} orphan documents"
+    }

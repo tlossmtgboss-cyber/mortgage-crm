@@ -26,6 +26,30 @@ from services.agent_governance_service import AgentGovernanceService
 from models.agent_governance import AgentProfile, AgentExecution, AgentChatSession, AgentChatMessage
 
 logger = logging.getLogger(__name__)
+
+# Initialize OpenAI client lazily
+_openai_client = None
+_openai_enabled = False
+
+def get_openai_client():
+    """Get or create OpenAI client."""
+    global _openai_client, _openai_enabled
+    if _openai_client is None:
+        try:
+            from openai import OpenAI
+            import os
+            api_key = os.getenv("OPENAI_API_KEY")
+            if api_key:
+                _openai_client = OpenAI(api_key=api_key)
+                _openai_enabled = True
+                logger.info("OpenAI client initialized for agent chat")
+            else:
+                logger.warning("OPENAI_API_KEY not set - agent chat will use fallback responses")
+        except ImportError:
+            logger.warning("OpenAI package not installed - agent chat will use fallback responses")
+    return _openai_client, _openai_enabled
+
+
 router = APIRouter(prefix="/api/v1/agents/chat", tags=["agent-chat"])
 
 
