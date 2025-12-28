@@ -295,29 +295,33 @@ const IntegrationSettings = () => {
     }
   };
 
-  // Integration logo URLs - using Clearbit logo API for reliability
+  // Integration logo URLs - using Google's favicon service for reliability
   const getIntegrationLogo = (integrationId) => {
-    const logos = {
-      salesforce: 'https://logo.clearbit.com/salesforce.com',
-      hubspot: 'https://logo.clearbit.com/hubspot.com',
-      twilio: 'https://logo.clearbit.com/twilio.com',
-      ringcentral: 'https://logo.clearbit.com/ringcentral.com',
-      slack: 'https://logo.clearbit.com/slack.com',
-      google_calendar: 'https://ssl.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png',
-      outlook_calendar: 'https://logo.clearbit.com/outlook.com',
-      calendly: 'https://logo.clearbit.com/calendly.com',
-      google_drive: 'https://ssl.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',
-      dropbox: 'https://logo.clearbit.com/dropbox.com',
-      stripe: 'https://logo.clearbit.com/stripe.com',
-      quickbooks: 'https://logo.clearbit.com/quickbooks.intuit.com',
-      mailchimp: 'https://logo.clearbit.com/mailchimp.com',
-      zapier: 'https://logo.clearbit.com/zapier.com',
-      zoom: 'https://logo.clearbit.com/zoom.us',
-      synthflow: 'https://logo.clearbit.com/synthflow.ai',
-      recallai: 'https://logo.clearbit.com/recall.ai',
-      docusign: 'https://logo.clearbit.com/docusign.com'
+    // Google's favicon service is highly reliable and cached
+    const domains = {
+      salesforce: 'salesforce.com',
+      hubspot: 'hubspot.com',
+      twilio: 'twilio.com',
+      ringcentral: 'ringcentral.com',
+      slack: 'slack.com',
+      google_calendar: 'calendar.google.com',
+      outlook_calendar: 'outlook.com',
+      calendly: 'calendly.com',
+      google_drive: 'drive.google.com',
+      dropbox: 'dropbox.com',
+      stripe: 'stripe.com',
+      quickbooks: 'quickbooks.intuit.com',
+      mailchimp: 'mailchimp.com',
+      zapier: 'zapier.com',
+      zoom: 'zoom.us',
+      synthflow: 'synthflow.ai',
+      recallai: 'recall.ai',
+      docusign: 'docusign.com'
     };
-    return logos[integrationId] || null;
+    const domain = domains[integrationId];
+    if (!domain) return null;
+    // Google's favicon service - returns high quality favicons
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
   };
 
   const getCategoryLabel = (category) => {

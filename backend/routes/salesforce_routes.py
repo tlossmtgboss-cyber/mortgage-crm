@@ -1360,6 +1360,76 @@ async def get_loan_sync_status(
     }
 
 
+@router.post("/pull/loan/{loan_id}")
+async def pull_loan_from_salesforce(
+    loan_id: int,
+    request: Request,
+    sf_object: str = Query("MtgPlanner_CRM__Transaction_Property__c", description="Salesforce object to pull from"),
+    db: Session = Depends(get_db)
+):
+    """
+    Pull/refresh a single loan from Salesforce.
+    Updates the CRM loan with the latest data from Salesforce.
+    Requires the loan to have an existing salesforce_id.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Get stored tokens
+    integration = db.execute(text("""
+        SELECT access_token, refresh_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce not connected. Please connect first."
+        )
+
+    access_token = integration[0]
+
+    # Parse instance_url from scopes
+    instance_url = None
+    if integration[2] and "instance_url:" in integration[2]:
+        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce instance URL not found. Please reconnect."
+        )
+
+    from services.salesforce_sync_service import get_salesforce_sync_service
+
+    # Get user's organization
+    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    org_id = user_org[0] if user_org and user_org[0] else 1
+
+    sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
+    success, message, updated_data = sync_service.pull_loan(
+        loan_id, access_token, instance_url, sf_object
+    )
+
+    if success:
+        return {
+            "status": "success",
+            "loan_id": loan_id,
+            "message": message,
+            "updated_fields": list(updated_data.keys()) if updated_data else []
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "loan_id": loan_id,
+                "error": message
+            }
+        )
+
+
 # ============ Admin Migration Endpoint ============
 
 @router.get("/admin/run-migration")

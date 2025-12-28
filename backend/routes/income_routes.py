@@ -1132,3 +1132,97 @@ async def run_income_migration(
     except Exception as e:
         logger.error(f"Migration failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/seed-test-data")
+async def seed_test_income_data(
+    loan_id: int = 1,
+    admin_key: str = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Seed test income data for a loan.
+    Admin endpoint - requires admin_key parameter.
+    """
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    from decimal import Decimal
+
+    results = []
+
+    # Create W-2 Employment Income Source
+    w2_source = IncomeSource(
+        borrower_id=1,
+        loan_id=loan_id,
+        income_type=IncomeType.W2_EMPLOYMENT,
+        source_name="Acme Corporation",
+        source_description="Software Engineer - Full Time W-2 Employment",
+        is_primary=True,
+        verification_status=IncomeVerificationStatus.VERIFIED,
+        monthly_qualifying_income=Decimal("7500.00"),
+        annual_qualifying_income=Decimal("90000.00"),
+        gross_monthly_income=Decimal("7916.67"),
+        gross_annual_income=Decimal("95000.00"),
+        calculation_method="YTD_ANNUALIZED",
+        trending_direction="STABLE",
+    )
+    db.add(w2_source)
+    db.flush()
+    results.append({"source": "W-2 Employment", "name": "Acme Corporation", "monthly": 7500})
+
+    # Create Rental Income Source
+    rental_source = IncomeSource(
+        borrower_id=1,
+        loan_id=loan_id,
+        income_type=IncomeType.RENTAL_SCHEDULE_E,
+        source_name="123 Investment Property",
+        source_description="Schedule E Rental Property - Single Family",
+        is_primary=False,
+        verification_status=IncomeVerificationStatus.DOCUMENTS_RECEIVED,
+        monthly_qualifying_income=Decimal("1200.00"),
+        annual_qualifying_income=Decimal("14400.00"),
+        gross_monthly_income=Decimal("2000.00"),
+        gross_annual_income=Decimal("24000.00"),
+        calculation_method="SCHEDULE_E_2YR_AVG",
+        trending_direction="INCREASING",
+        trending_percentage=Decimal("5.2"),
+    )
+    db.add(rental_source)
+    db.flush()
+    results.append({"source": "Rental Income", "name": "123 Investment Property", "monthly": 1200})
+
+    # Create Self-Employment Income Source
+    self_emp_source = IncomeSource(
+        borrower_id=1,
+        loan_id=loan_id,
+        income_type=IncomeType.SELF_EMPLOYED_SCHEDULE_C,
+        source_name="Johnson Consulting LLC",
+        source_description="Schedule C - Independent Consulting Business",
+        is_primary=False,
+        verification_status=IncomeVerificationStatus.NEEDS_ADDITIONAL_DOCS,
+        monthly_qualifying_income=Decimal("3500.00"),
+        annual_qualifying_income=Decimal("42000.00"),
+        gross_monthly_income=Decimal("5000.00"),
+        gross_annual_income=Decimal("60000.00"),
+        calculation_method="SCHEDULE_C_2YR_AVG_WITH_ADDBACKS",
+        trending_direction="STABLE",
+        declining_income_flag=False,
+    )
+    db.add(self_emp_source)
+    db.flush()
+    results.append({"source": "Self-Employment", "name": "Johnson Consulting LLC", "monthly": 3500})
+
+    db.commit()
+
+    total_monthly = sum(r["monthly"] for r in results)
+
+    return {
+        "success": True,
+        "message": f"Created {len(results)} income sources for loan {loan_id}",
+        "loan_id": loan_id,
+        "sources": results,
+        "total_monthly_income": total_monthly,
+        "total_annual_income": total_monthly * 12,
+    }

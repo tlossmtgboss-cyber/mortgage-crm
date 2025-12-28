@@ -810,6 +810,156 @@ class SalesforceSyncService:
             logger.error(f"Error getting pushable loans: {e}")
             return []
 
+    # =========================================================================
+    # INBOUND SYNC FOR SINGLE RECORD (Pull from Salesforce)
+    # =========================================================================
+
+    def pull_loan(
+        self,
+        loan_id: int,
+        access_token: str,
+        instance_url: str,
+        sf_object: str = "MtgPlanner_CRM__Transaction_Property__c"
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Pull/refresh a single loan from Salesforce.
+
+        Args:
+            loan_id: CRM loan ID
+            access_token: Salesforce OAuth access token
+            instance_url: Salesforce instance URL
+            sf_object: Salesforce object type
+
+        Returns:
+            Tuple of (success, message, updated_data)
+        """
+        import requests
+
+        try:
+            # Get loan's Salesforce ID
+            result = self.db.execute(text("""
+                SELECT salesforce_id FROM loans WHERE id = :loan_id
+            """), {"loan_id": loan_id})
+
+            row = result.fetchone()
+            if not row:
+                return False, f"Loan {loan_id} not found", None
+
+            salesforce_id = row[0]
+            if not salesforce_id:
+                return False, "Loan has no Salesforce ID - cannot pull", None
+
+            # Build SOQL query to fetch the record
+            field_mappings = self.get_field_mappings()
+            sf_fields = list(field_mappings.keys())
+            field_list = ", ".join(sf_fields)
+
+            soql = f"SELECT {field_list} FROM {sf_object} WHERE Id = '{salesforce_id}'"
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Execute SOQL query
+            import urllib.parse
+            encoded_soql = urllib.parse.quote(soql)
+            url = f"{instance_url}/services/data/v59.0/query/?q={encoded_soql}"
+
+            response = requests.get(url, headers=headers, timeout=30)
+
+            if response.status_code != 200:
+                error_msg = response.text
+                logger.error(f"Failed to query Salesforce: {error_msg}")
+                return False, f"Salesforce query failed: {error_msg}", None
+
+            result_data = response.json()
+            records = result_data.get("records", [])
+
+            if not records:
+                return False, f"Record {salesforce_id} not found in Salesforce", None
+
+            sf_record = records[0]
+
+            # Map Salesforce record to CRM format
+            loan_data = self.map_salesforce_to_loan(sf_record)
+
+            # Update the loan in CRM
+            loan_id_result, action = self.upsert_loan(loan_data)
+
+            if action == "error":
+                return False, "Failed to update loan in CRM", None
+
+            return True, f"Loan refreshed from Salesforce", loan_data
+
+        except Exception as e:
+            logger.error(f"Error pulling loan {loan_id} from Salesforce: {e}")
+            return False, str(e), None
+
+    def pull_loan_by_salesforce_id(
+        self,
+        salesforce_id: str,
+        access_token: str,
+        instance_url: str,
+        sf_object: str = "MtgPlanner_CRM__Transaction_Property__c"
+    ) -> Tuple[bool, str, Optional[int]]:
+        """
+        Pull a loan from Salesforce by its Salesforce ID.
+        Creates or updates the loan in CRM.
+
+        Returns:
+            Tuple of (success, message, loan_id)
+        """
+        import requests
+
+        try:
+            # Build SOQL query to fetch the record
+            field_mappings = self.get_field_mappings()
+            sf_fields = list(field_mappings.keys())
+            field_list = ", ".join(sf_fields)
+
+            soql = f"SELECT {field_list} FROM {sf_object} WHERE Id = '{salesforce_id}'"
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Execute SOQL query
+            import urllib.parse
+            encoded_soql = urllib.parse.quote(soql)
+            url = f"{instance_url}/services/data/v59.0/query/?q={encoded_soql}"
+
+            response = requests.get(url, headers=headers, timeout=30)
+
+            if response.status_code != 200:
+                error_msg = response.text
+                logger.error(f"Failed to query Salesforce: {error_msg}")
+                return False, f"Salesforce query failed: {error_msg}", None
+
+            result_data = response.json()
+            records = result_data.get("records", [])
+
+            if not records:
+                return False, f"Record {salesforce_id} not found in Salesforce", None
+
+            sf_record = records[0]
+
+            # Map Salesforce record to CRM format
+            loan_data = self.map_salesforce_to_loan(sf_record)
+
+            # Upsert the loan
+            loan_id, action = self.upsert_loan(loan_data)
+
+            if action == "error":
+                return False, "Failed to upsert loan in CRM", None
+
+            return True, f"Loan {action} from Salesforce", loan_id
+
+        except Exception as e:
+            logger.error(f"Error pulling loan from Salesforce: {e}")
+            return False, str(e), None
+
 
 # Singleton instance
 _sync_service = None
