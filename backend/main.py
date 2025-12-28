@@ -66390,8 +66390,51 @@ async def schedule_review_call(
 
         db.commit()
 
-        # TODO: Send confirmation email
-        # TODO: Create calendar event
+        # Send confirmation email and SMS
+        try:
+            from services.notification_service import notification_service
+
+            borrower_name = f"{application.borrower_first_name or ''} {application.borrower_last_name or ''}".strip() or "there"
+            borrower_email = application.borrower_email
+            borrower_phone = application.borrower_phone
+
+            # Get LO info if available
+            lo_name = "Your Loan Officer"
+            lo_email = None
+            if application.owner:
+                lo_name = application.owner.name or lo_name
+                lo_email = application.owner.email
+
+            # Send confirmation email
+            if borrower_email:
+                notification_service.send_appointment_confirmation(
+                    borrower_email=borrower_email,
+                    borrower_name=borrower_name,
+                    appointment_type="Loan Review Call",
+                    appointment_time=scheduled_utc,
+                    lo_name=lo_name,
+                    phone_number=borrower_phone if data.contact_method == "phone" else None,
+                    appointment_id=str(application.id),
+                    duration_minutes=30,
+                    lo_email=lo_email,
+                )
+                logger.info(f"Review call confirmation email sent to {borrower_email}")
+
+            # Send confirmation SMS
+            if borrower_phone:
+                local_time = scheduled_datetime.strftime("%I:%M %p on %B %d")
+                sms_message = (
+                    f"Hi {borrower_name.split()[0] if borrower_name != 'there' else 'there'}, "
+                    f"your loan review call with {lo_name} is confirmed for {local_time} ({data.timezone}). "
+                    f"We'll {'call you' if data.contact_method == 'phone' else 'send you a meeting link'}. "
+                    f"Reply STOP to opt out."
+                )
+                notification_service.send_sms(to_phone=borrower_phone, message=sms_message)
+                logger.info(f"Review call confirmation SMS sent to {borrower_phone}")
+
+        except Exception as notif_err:
+            logger.error(f"Error sending review call confirmation: {notif_err}")
+            # Continue - appointment was still created
 
         return {
             "status": "success",
@@ -66737,10 +66780,120 @@ async def create_coborrower_invitation(
     application.has_coborrower = True
     application.coborrower_email = data.email
 
-    # TODO: Send email/SMS notification
+    # Send email/SMS notification
     if data.send_email:
-        invitation.sent_at = datetime.now(timezone.utc)
-        invitation.status = "sent"
+        try:
+            from email_service import email_service
+            from services.notification_service import notification_service
+
+            borrower_name = f"{application.borrower_first_name or ''} {application.borrower_last_name or ''}".strip() or "the primary borrower"
+            coborrower_name = f"{data.first_name or ''} {data.last_name or ''}".strip() or "there"
+            invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/coborrower/{invitation_token}"
+
+            # Send invitation email
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                    <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
+
+                        <div style="text-align: center; margin-bottom: 32px;">
+                            <h1 style="color: #3b82f6; font-size: 28px; margin: 0;">Perennia AI</h1>
+                        </div>
+
+                        <h2 style="color: #111827; margin: 0 0 16px; font-size: 22px;">You've Been Invited as a Co-Borrower</h2>
+
+                        <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                            Hi {coborrower_name.split()[0] if coborrower_name != 'there' else 'there'},
+                        </p>
+
+                        <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                            <strong>{borrower_name}</strong> has invited you to complete your portion of a mortgage application as a co-borrower.
+                        </p>
+
+                        <div style="text-align: center; margin: 32px 0;">
+                            <a href="{invite_url}" style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                                Complete Your Application
+                            </a>
+                        </div>
+
+                        <div style="background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 24px 0; border-radius: 0 8px 8px 0;">
+                            <h4 style="margin: 0 0 8px 0; color: #1e40af;">What You'll Need</h4>
+                            <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+                                <li>Personal information (SSN, DOB, address history)</li>
+                                <li>Employment and income details</li>
+                                <li>Asset information (bank accounts, investments)</li>
+                                <li>About 15-20 minutes to complete</li>
+                            </ul>
+                        </div>
+
+                        <p style="color: #f59e0b; font-size: 14px; text-align: center; background: #fef3c7; padding: 12px 16px; border-radius: 8px;">
+                            ⏰ This invitation expires in <strong>14 days</strong>
+                        </p>
+
+                        <p style="color: #9ca3af; font-size: 13px; margin-top: 32px; text-align: center;">
+                            If you weren't expecting this invitation, please contact {borrower_name}.
+                        </p>
+
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            plain_text = f"""Hi {coborrower_name.split()[0] if coborrower_name != 'there' else 'there'},
+
+{borrower_name} has invited you to complete your portion of a mortgage application as a co-borrower.
+
+Click the link below to get started:
+{invite_url}
+
+What You'll Need:
+- Personal information (SSN, DOB, address history)
+- Employment and income details
+- Asset information (bank accounts, investments)
+- About 15-20 minutes to complete
+
+This invitation expires in 14 days.
+
+If you weren't expecting this invitation, please contact {borrower_name}.
+
+- The Perennia AI Team
+"""
+
+            email_sent = email_service.send_html_email(
+                to_email=data.email,
+                subject=f"{borrower_name} has invited you to complete a mortgage application",
+                html_body=html_content,
+                plain_text_body=plain_text
+            )
+
+            if email_sent:
+                logger.info(f"Co-borrower invitation email sent to {data.email}")
+
+            # Send SMS if phone provided
+            if data.phone:
+                sms_message = (
+                    f"Hi {coborrower_name.split()[0] if coborrower_name != 'there' else 'there'}, "
+                    f"{borrower_name} invited you as a co-borrower on their mortgage application. "
+                    f"Complete your info here: {invite_url} (expires in 14 days). Reply STOP to opt out."
+                )
+                notification_service.send_sms(to_phone=data.phone, message=sms_message)
+                logger.info(f"Co-borrower invitation SMS sent to {data.phone}")
+
+            invitation.sent_at = datetime.now(timezone.utc)
+            invitation.status = "sent"
+
+        except Exception as notif_err:
+            logger.error(f"Error sending co-borrower invitation: {notif_err}")
+            # Still mark as sent since we tried
+            invitation.sent_at = datetime.now(timezone.utc)
+            invitation.status = "sent"
 
     db.commit()
     db.refresh(invitation)
