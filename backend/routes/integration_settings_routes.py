@@ -703,6 +703,44 @@ async def connect_integration(
                     "redirect_uri": os.getenv("HUBSPOT_REDIRECT_URI", "https://api.perenniaai.com/api/v1/hubspot/callback")
                 }, "OAuth flow initiated - redirect to HubSpot")
 
+            # Handle Google Calendar OAuth
+            if integration_id == "google_calendar":
+                from integrations.google_calendar_service import google_calendar_client
+                if not google_calendar_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Google Calendar integration not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}:{frontend_url}/settings/integrations"
+                oauth_url = google_calendar_client.get_authorization_url(state=state)
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": os.getenv("GOOGLE_CALENDAR_REDIRECT_URI", "https://api.perenniaai.com/api/v1/google-calendar/callback")
+                }, "OAuth flow initiated - redirect to Google")
+
+            # Handle Zoom OAuth
+            if integration_id == "zoom":
+                from integrations.zoom_service import zoom_client
+                if not zoom_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Zoom integration not configured. Please set ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}:{frontend_url}/settings/integrations"
+                oauth_url = zoom_client.get_authorization_url(state=state)
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": os.getenv("ZOOM_REDIRECT_URI", "https://api.perenniaai.com/api/v1/zoom/callback")
+                }, "OAuth flow initiated - redirect to Zoom")
+
             # Generic OAuth URL for other integrations
             oauth_url = int_info.get("oauth_url", f"https://{integration_id}.com/oauth/authorize")
             return success_response({

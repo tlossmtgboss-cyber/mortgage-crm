@@ -19943,6 +19943,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load income engine routes: {e}")
 
+# Include Unified Income Calculator routes (all 14 income types)
+try:
+    from routes.unified_income_routes import router as unified_income_router
+    app.include_router(unified_income_router, tags=["Unified Income Calculator"])
+    logger.info("✅ Unified Income Calculator routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load unified income routes: {e}")
+
 # Include Morning Check-in routes
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])
@@ -20241,6 +20249,24 @@ try:
     logger.info("✅ HubSpot routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ HubSpot routes not loaded: {e}")
+
+# Google Calendar Integration routes (OAuth, Calendar Sync)
+try:
+    from routes.google_calendar_routes import router as google_calendar_router, set_dependencies as set_google_calendar_deps
+    set_google_calendar_deps(get_db, get_current_user)
+    app.include_router(google_calendar_router, tags=["Google Calendar Integration"])
+    logger.info("✅ Google Calendar routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Google Calendar routes not loaded: {e}")
+
+# Zoom Integration routes (OAuth, Meetings)
+try:
+    from routes.zoom_routes import router as zoom_router, set_dependencies as set_zoom_deps
+    set_zoom_deps(get_db, get_current_user)
+    app.include_router(zoom_router, tags=["Zoom Integration"])
+    logger.info("✅ Zoom routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Zoom routes not loaded: {e}")
 
 # Agent Governance routes (Agent Management & Monitoring)
 try:
