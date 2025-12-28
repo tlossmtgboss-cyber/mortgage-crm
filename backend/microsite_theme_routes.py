@@ -2015,6 +2015,43 @@ async def book_appointment_via_chat(
             notes=request.notes
         )
 
+        # Send SMS confirmation if booking was successful
+        if result.get("success") and request.contact_phone:
+            try:
+                from services.notification_service import NotificationService
+                notification_service = NotificationService()
+
+                lo_name = chat_service.lo_info.get("name", "Your Loan Officer") if chat_service.lo_info else "Your Loan Officer"
+                appointment_time_formatted = appointment_datetime.strftime("%B %d, %Y at %I:%M %p")
+                appointment_id = result.get("appointment_id", "")
+
+                # SMS to the client
+                sms_message = f"Appointment confirmed with {lo_name} on {appointment_time_formatted}. Appointment ID: {appointment_id}. Reply HELP for assistance."
+
+                sms_result = notification_service.send_sms(
+                    to_phone=request.contact_phone,
+                    message=sms_message
+                )
+                if sms_result.get("success"):
+                    logger.info(f"Sent booking confirmation SMS to {request.contact_phone}")
+                else:
+                    logger.warning(f"Failed to send booking SMS: {sms_result.get('error')}")
+
+                # SMS to the loan officer
+                lo_phone = chat_service.lo_info.get("phone") if chat_service.lo_info else None
+                if lo_phone:
+                    lo_sms = f"New appointment: {request.contact_name} booked for {appointment_time_formatted}. Phone: {request.contact_phone}"
+
+                    sms_result = notification_service.send_sms(
+                        to_phone=lo_phone,
+                        message=lo_sms
+                    )
+                    if sms_result.get("success"):
+                        logger.info(f"Sent new booking SMS to LO {lo_phone}")
+
+            except Exception as sms_error:
+                logger.warning(f"Failed to send booking SMS notifications: {sms_error}")
+
         return result
 
     except ValueError as e:
