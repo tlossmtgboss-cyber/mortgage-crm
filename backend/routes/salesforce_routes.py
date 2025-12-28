@@ -636,3 +636,92 @@ async def test_salesforce_connection(
             "connected": False,
             "error": "Query failed - token may be expired"
         }
+
+
+# ============ Admin Migration Endpoint ============
+
+@router.get("/admin/run-migration")
+async def run_salesforce_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """
+    Run Salesforce database migration.
+    Protected by admin API key.
+    """
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = []
+
+    # Add salesforce columns to loans table
+    migrations = [
+        ("Add salesforce_id column", """
+            ALTER TABLE loans ADD COLUMN IF NOT EXISTS salesforce_id VARCHAR(18) UNIQUE
+        """),
+        ("Add salesforce_last_synced_at column", """
+            ALTER TABLE loans ADD COLUMN IF NOT EXISTS salesforce_last_synced_at TIMESTAMP
+        """),
+        ("Add salesforce_sync_status column", """
+            ALTER TABLE loans ADD COLUMN IF NOT EXISTS salesforce_sync_status VARCHAR(20) DEFAULT 'pending'
+        """),
+        ("Create salesforce_id index", """
+            CREATE INDEX IF NOT EXISTS idx_loans_salesforce_id ON loans(salesforce_id)
+        """),
+        ("Create salesforce_sync_logs table", """
+            CREATE TABLE IF NOT EXISTS salesforce_sync_logs (
+                id SERIAL PRIMARY KEY,
+                sync_type VARCHAR(20) NOT NULL,
+                direction VARCHAR(20) DEFAULT 'inbound',
+                salesforce_id VARCHAR(18),
+                loan_id INTEGER REFERENCES loans(id) ON DELETE SET NULL,
+                status VARCHAR(20) NOT NULL,
+                records_processed INTEGER DEFAULT 0,
+                records_created INTEGER DEFAULT 0,
+                records_updated INTEGER DEFAULT 0,
+                records_failed INTEGER DEFAULT 0,
+                error_message TEXT,
+                payload_summary JSONB,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                organization_id INTEGER
+            )
+        """),
+        ("Create salesforce_field_mappings table", """
+            CREATE TABLE IF NOT EXISTS salesforce_field_mappings (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                salesforce_object VARCHAR(100) NOT NULL,
+                salesforce_field VARCHAR(100) NOT NULL,
+                crm_entity VARCHAR(50) NOT NULL,
+                crm_field VARCHAR(100) NOT NULL,
+                transform_type VARCHAR(50),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(organization_id, salesforce_object, salesforce_field)
+            )
+        """),
+    ]
+
+    for name, sql in migrations:
+        try:
+            db.execute(text(sql))
+            db.commit()
+            results.append({"migration": name, "status": "success"})
+            logger.info(f"Migration '{name}' completed successfully")
+        except Exception as e:
+            error_msg = str(e)
+            if "already exists" in error_msg.lower():
+                results.append({"migration": name, "status": "skipped", "reason": "already exists"})
+            else:
+                results.append({"migration": name, "status": "error", "error": error_msg})
+                logger.error(f"Migration '{name}' failed: {e}")
+
+    return {
+        "status": "complete",
+        "migrations": results,
+        "message": f"Processed {len(results)} migrations"
+    }
