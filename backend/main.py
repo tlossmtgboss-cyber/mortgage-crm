@@ -51492,7 +51492,25 @@ async def apply_permission_template(
         removed = {k: v for k, v in old_permissions.items() if k not in new_permissions or not new_permissions[k]}
         unchanged = {k: v for k, v in new_permissions.items() if k in old_permissions and old_permissions[k] == v}
 
-        # TODO: Log to audit log
+        # Log to audit log
+        audit_entry = AuditLog(
+            user_id=user_id,
+            changed_by_id=current_user.id,
+            change_type="permission_template",
+            entity_type="user_permissions",
+            entity_id=user_id,
+            before_state={"permissions": old_permissions},
+            after_state={
+                "permissions": new_permissions,
+                "template_applied": template_name,
+                "added": list(added.keys()),
+                "removed": list(removed.keys())
+            },
+            reason=f"Applied {template_name} permission template"
+        )
+        db.add(audit_entry)
+        db.commit()
+
         logger.info(f"Applied {template_name} template to user {user_id} by {current_user.email}")
 
         return {
@@ -51578,7 +51596,21 @@ async def update_user_permissions(
                     "new_value": new_val
                 })
 
-        # TODO: Log to audit log
+        # Log to audit log
+        if changes:
+            audit_entry = AuditLog(
+                user_id=user_id,
+                changed_by_id=current_user.id,
+                change_type="permission_update",
+                entity_type="user_permissions",
+                entity_id=user_id,
+                before_state={"permissions": old_permissions},
+                after_state={"permissions": new_permissions, "changes": changes},
+                reason=f"Updated {len(changes)} permissions"
+            )
+            db.add(audit_entry)
+            db.commit()
+
         logger.info(f"Updated permissions for user {user_id} by {current_user.email}. Changes: {len(changes)}")
 
         return {
