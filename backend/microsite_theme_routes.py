@@ -1907,6 +1907,15 @@ class CancelAppointmentRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=500, description="Reason for cancellation")
 
 
+class RescheduleAppointmentRequest(BaseModel):
+    """Request model for rescheduling appointments"""
+    appointment_id: str = Field(..., description="The appointment ID (APPT-XXXXXXXX format)")
+    contact_email: str = Field(..., description="Email used when booking (for verification)")
+    new_date: str = Field(..., description="New appointment date (YYYY-MM-DD)")
+    new_time: str = Field(..., description="New appointment time (HH:MM)")
+    reason: Optional[str] = Field(None, max_length=500, description="Reason for rescheduling")
+
+
 @public_router.post("/chat/{user_slug}/message")
 async def chat_with_mortgage_assistant(
     user_slug: str,
@@ -2094,6 +2103,138 @@ async def cancel_appointment_via_chat(
         return {
             "success": False,
             "error": "An error occurred while cancelling. Please try again or contact support."
+        }
+
+
+@public_router.post("/chat/{user_slug}/reschedule")
+async def reschedule_appointment_via_chat(
+    user_slug: str,
+    request: RescheduleAppointmentRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Reschedule an appointment booked via the chat widget.
+    Requires the appointment ID and the email used when booking for verification.
+    Atomically updates the appointment to the new time if the slot is available.
+    """
+    try:
+        from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+        from datetime import datetime, timedelta
+
+        # Find the appointment by appointment_id
+        appointment = db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.appointment_id == request.appointment_id
+        ).first()
+
+        if not appointment:
+            return {
+                "success": False,
+                "error": "Appointment not found. Please check the appointment ID."
+            }
+
+        # Verify email matches (case-insensitive)
+        if appointment.contact_email.lower() != request.contact_email.lower():
+            logger.warning(f"Email mismatch for reschedule {request.appointment_id}")
+            return {
+                "success": False,
+                "error": "Email does not match the booking. Please use the email you provided when scheduling."
+            }
+
+        # Check if already cancelled
+        if appointment.status == AppointmentStatus.CANCELLED.value:
+            return {
+                "success": False,
+                "error": "Cannot reschedule a cancelled appointment. Please book a new appointment."
+            }
+
+        # Check if original appointment is in the past
+        if appointment.start_time < datetime.utcnow():
+            return {
+                "success": False,
+                "error": "Cannot reschedule past appointments."
+            }
+
+        # Parse new datetime
+        try:
+            new_start_time = datetime.strptime(
+                f"{request.new_date} {request.new_time}",
+                "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            return {
+                "success": False,
+                "error": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM for time."
+            }
+
+        # Check new time is in the future
+        if new_start_time < datetime.utcnow():
+            return {
+                "success": False,
+                "error": "Cannot reschedule to a past time."
+            }
+
+        # Calculate new end time based on original duration
+        duration = appointment.duration_minutes or 30
+        new_end_time = new_start_time + timedelta(minutes=duration)
+
+        # Check for conflicts with OTHER appointments (exclude current appointment)
+        conflicting = db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.loan_officer_id == appointment.loan_officer_id,
+            ScheduledAppointment.id != appointment.id,  # Exclude current appointment
+            ScheduledAppointment.status.in_([
+                AppointmentStatus.SCHEDULED.value,
+                AppointmentStatus.CONFIRMED.value
+            ]),
+            ScheduledAppointment.start_time < new_end_time,
+            ScheduledAppointment.end_time > new_start_time
+        ).first()
+
+        if conflicting:
+            return {
+                "success": False,
+                "error": "The new time slot is not available. Please select a different time.",
+                "conflict": True
+            }
+
+        # Store old time for response
+        old_time = appointment.start_time.strftime("%B %d, %Y at %I:%M %p")
+
+        # Update the appointment
+        appointment.start_time = new_start_time
+        appointment.end_time = new_end_time
+
+        # Add reschedule note
+        reschedule_note = f"Rescheduled from {old_time}"
+        if request.reason:
+            reschedule_note += f" - Reason: {request.reason}"
+
+        if appointment.internal_notes:
+            appointment.internal_notes += f"\n{reschedule_note}"
+        else:
+            appointment.internal_notes = reschedule_note
+
+        db.commit()
+
+        logger.info(f"Appointment {request.appointment_id} rescheduled from {old_time} to {new_start_time}")
+
+        return {
+            "success": True,
+            "message": "Your appointment has been rescheduled successfully.",
+            "appointment_id": request.appointment_id,
+            "old_time": old_time,
+            "new_time": new_start_time.strftime("%B %d, %Y at %I:%M %p"),
+            "appointment": {
+                "start_time": new_start_time.isoformat(),
+                "end_time": new_end_time.isoformat(),
+                "duration_minutes": duration
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error rescheduling appointment: {e}")
+        return {
+            "success": False,
+            "error": "An error occurred while rescheduling. Please try again or contact support."
         }
 
 
