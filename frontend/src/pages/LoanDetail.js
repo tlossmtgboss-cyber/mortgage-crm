@@ -21,6 +21,7 @@ import CalendarSidebar from '../components/CalendarSidebar';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import SmartDocumentUpload from '../components/smart-docs/SmartDocumentUpload';
 import IncomeCalculator from '../components/IncomeCalculator';
+import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -101,6 +102,9 @@ function LoanDetail() {
 
   // Personal tab sub-tab state
   const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info', 'employment', 'assets'
+
+  // Income calculator mode
+  const [incomeCalcMode, setIncomeCalcMode] = useState('unified'); // 'unified', 'basic'
 
   // Circle of Cashflow state
   const [cashflowOpportunities, setCashflowOpportunities] = useState([]);
@@ -3035,18 +3039,49 @@ function LoanDetail() {
         {/* Income Tab */}
         {activeTab === 'income' && (
           <div className="info-section">
-            <h2>Income Calculator</h2>
-            <p className="circle-description">
-              Calculate qualifying income following agency guidelines. Add W-2s, Schedule C/E, K-1s,
-              and bank statements to compute monthly income with proper add-backs and trending analysis.
-            </p>
-            <IncomeCalculator
-              loanId={parseInt(id)}
-              borrowerId={1}
-              onIncomeCalculated={(result) => {
-                console.log('Income calculated:', result);
-              }}
-            />
+            <div className="income-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Income Calculator</h2>
+                <p className="circle-description" style={{ margin: '8px 0 0 0' }}>
+                  Calculate qualifying income following agency guidelines for all 14 income types.
+                </p>
+              </div>
+              <div className="income-calc-toggle" style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className={`tab-btn ${incomeCalcMode === 'unified' ? 'active' : ''}`}
+                  onClick={() => setIncomeCalcMode('unified')}
+                  style={{ padding: '8px 16px', fontSize: '13px' }}
+                >
+                  All 14 Types
+                </button>
+                <button
+                  className={`tab-btn ${incomeCalcMode === 'basic' ? 'active' : ''}`}
+                  onClick={() => setIncomeCalcMode('basic')}
+                  style={{ padding: '8px 16px', fontSize: '13px' }}
+                >
+                  Quick Calc
+                </button>
+              </div>
+            </div>
+
+            {incomeCalcMode === 'unified' ? (
+              <UnifiedIncomeCalculator
+                loanId={parseInt(id)}
+                borrowerId={borrowers[activeBorrower]?.id || 1}
+                onIncomeCalculated={(result) => {
+                  console.log('Unified income calculated:', result);
+                  toast.success(`Monthly income: $${result.monthly_income?.toLocaleString() || 0}`);
+                }}
+              />
+            ) : (
+              <IncomeCalculator
+                loanId={parseInt(id)}
+                borrowerId={borrowers[activeBorrower]?.id || 1}
+                onIncomeCalculated={(result) => {
+                  console.log('Income calculated:', result);
+                }}
+              />
+            )}
           </div>
         )}
 
