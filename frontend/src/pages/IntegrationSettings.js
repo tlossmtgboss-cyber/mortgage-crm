@@ -294,19 +294,44 @@ const IntegrationSettings = () => {
     }
   };
 
-  const getCategoryIcon = (category) => {
-    const icons = {
-      crm: '👥',
-      communication: '💬',
-      calendar: '📅',
-      storage: '📁',
-      payment: '💳',
-      marketing: '📧',
-      productivity: '⚡',
-      ai: '🤖',
-      document: '📄'
+  // Integration logo URLs - using official logos where available
+  const getIntegrationLogo = (integrationId) => {
+    const logos = {
+      salesforce: 'https://www.salesforce.com/content/dam/sfdc-docs/www/logos/logo-salesforce.svg',
+      hubspot: 'https://www.hubspot.com/hubfs/HubSpot_Logos/HubSpot-Inversed-Favicon.png',
+      twilio: 'https://www.twilio.com/assets/icons/twilio-icon-512.png',
+      ringcentral: 'https://netstorage.ringcentral.com/dpw/common/rc-logo-orange-symbol.svg',
+      slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
+      google_calendar: 'https://ssl.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png',
+      outlook_calendar: 'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg',
+      calendly: 'https://assets.calendly.com/assets/frontend/media/calendly-eab47f20c77c9ed8f2a0.svg',
+      google_drive: 'https://ssl.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',
+      dropbox: 'https://cfl.dropboxstatic.com/static/images/logo_catalog/dropbox_logo_glyph_2024_m1.svg',
+      stripe: 'https://images.ctfassets.net/fzn2n1nzq965/HTTOloNPhisV9P4hlMPNA/cacf1bb88b9fc492dfad34378d844280/Stripe_logo.svg',
+      quickbooks: 'https://quickbooks.intuit.com/cas/dam/IMAGE/A9dVVgXV/intuit-quickbooks-logo.svg',
+      mailchimp: 'https://eep.io/images/yzco4xsimv0y/5iQiDNUVDyONaZS1K5J3DX/b6dd20fd4c8e93d6d4ae0d1808fa2c31/Freddie_Wink.png',
+      zapier: 'https://cdn.zapier.com/zapier/images/logos/zapier-logo.svg',
+      zoom: 'https://st1.zoom.us/zoom.ico',
+      synthflow: 'https://www.synthflow.ai/favicon.ico',
+      recallai: 'https://www.recall.ai/favicon.ico',
+      docusign: 'https://www.docusign.com/sites/default/files/favicon.ico'
     };
-    return icons[category] || '🔌';
+    return logos[integrationId] || null;
+  };
+
+  const getCategoryLabel = (category) => {
+    const labels = {
+      crm: 'CRM',
+      communication: 'Communication',
+      calendar: 'Calendar',
+      storage: 'Storage',
+      payment: 'Payment',
+      marketing: 'Marketing',
+      productivity: 'Productivity',
+      ai: 'AI',
+      document: 'Document'
+    };
+    return labels[category] || category;
   };
 
   if (loading && integrations.length === 0) {
@@ -371,7 +396,7 @@ const IntegrationSettings = () => {
               className={`tab ${activeTab === cat.id ? 'active' : ''}`}
               onClick={() => setActiveTab(cat.id)}
             >
-              {getCategoryIcon(cat.id)} {cat.name}
+              {cat.name}
             </button>
           ))}
         </div>
@@ -387,8 +412,17 @@ const IntegrationSettings = () => {
               onClick={() => loadIntegrationDetails(integration.id)}
             >
               <div className="card-header">
-                <div className="integration-icon">
-                  {getCategoryIcon(integration.category)}
+                <div className="integration-logo">
+                  {getIntegrationLogo(integration.id) ? (
+                    <img
+                      src={getIntegrationLogo(integration.id)}
+                      alt={`${integration.name} logo`}
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div className="logo-fallback" style={{ display: getIntegrationLogo(integration.id) ? 'none' : 'flex' }}>
+                    {integration.name.charAt(0)}
+                  </div>
                 </div>
                 <div className={`status-badge ${getStatusColor(integration.status)}`}>
                   {integration.status}
@@ -399,7 +433,7 @@ const IntegrationSettings = () => {
                 <p>{integration.description}</p>
               </div>
               <div className="card-footer">
-                <span className="category-tag">{integration.category}</span>
+                <span className="category-tag">{getCategoryLabel(integration.category)}</span>
                 <span className="auth-type">{integration.auth_type}</span>
               </div>
             </div>
@@ -411,7 +445,18 @@ const IntegrationSettings = () => {
           <div className="detail-panel">
             <div className="detail-header">
               <div className="detail-title">
-                <span className="detail-icon">{getCategoryIcon(selectedIntegration.category)}</span>
+                <div className="detail-logo">
+                  {getIntegrationLogo(selectedIntegration.id) ? (
+                    <img
+                      src={getIntegrationLogo(selectedIntegration.id)}
+                      alt={`${selectedIntegration.name} logo`}
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div className="logo-fallback-large" style={{ display: getIntegrationLogo(selectedIntegration.id) ? 'none' : 'flex' }}>
+                    {selectedIntegration.name.charAt(0)}
+                  </div>
+                </div>
                 <h2>{selectedIntegration.name}</h2>
                 <span className={`status-badge ${getStatusColor(selectedIntegration.status)}`}>
                   {selectedIntegration.status}
