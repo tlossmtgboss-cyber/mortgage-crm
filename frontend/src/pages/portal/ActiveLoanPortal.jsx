@@ -186,10 +186,17 @@ const DocumentStatusBadge = ({ status }) => {
     approved: { label: 'Approved', className: 'status-approved' },
     rejected: { label: 'Needs Revision', className: 'status-rejected' },
     uploaded: { label: 'Uploaded', className: 'status-uploaded' },
+    scanning: { label: 'Scanning', className: 'status-pending' },
+    processing: { label: 'Processing', className: 'status-pending' },
+    deleted: { label: 'Removed', className: 'status-rejected' },
+    expired: { label: 'Expired', className: 'status-rejected' },
+    error: { label: 'Error', className: 'status-rejected' },
     outstanding: { label: 'Outstanding', className: 'status-outstanding' },
   };
 
-  const config = statusConfig[status] || statusConfig.pending;
+  // Normalize status to lowercase for lookup
+  const statusLower = (status || 'pending').toLowerCase();
+  const config = statusConfig[statusLower] || statusConfig.pending;
 
   return (
     <span className={`doc-status-badge ${config.className}`}>

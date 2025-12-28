@@ -75,12 +75,22 @@ const StatusBadge = ({ status }) => {
 const DocumentCard = ({ document, onDownload }) => {
   const statusIcons = {
     pending: '⏳',
+    uploaded: '⏳',
+    scanning: '🔍',
+    processing: '⚙️',
     approved: '✓',
-    rejected: '✗'
+    rejected: '✗',
+    deleted: '🗑️',
+    expired: '⏱️',
+    error: '⚠️'
   };
 
+  // Normalize status to lowercase for comparison
+  const statusLower = (document.status || 'pending').toLowerCase();
+  const displayIcon = statusIcons[statusLower] || '⏳';
+
   return (
-    <div className={`document-card status-${document.status}`}>
+    <div className={`document-card status-${statusLower}`}>
       <div className="doc-icon">📄</div>
       <div className="doc-info">
         <div className="doc-name">{document.filename}</div>
@@ -90,7 +100,7 @@ const DocumentCard = ({ document, onDownload }) => {
         </div>
       </div>
       <div className="doc-status">
-        <span className="status-icon">{statusIcons[document.status]}</span>
+        <span className="status-icon">{displayIcon}</span>
         <button className="download-btn" onClick={() => onDownload(document.id)}>
           ↓
         </button>

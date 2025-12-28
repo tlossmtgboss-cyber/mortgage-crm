@@ -236,17 +236,21 @@ function PortalDocumentRequirements({ workspaceSlug, onProgressUpdate }) {
                   {req.documents?.length > 0 && (
                     <div className="uploaded-documents">
                       <h4>Uploaded Documents</h4>
-                      {req.documents.map((doc) => (
-                        <div key={doc.id} className={`uploaded-doc ${doc.status}`}>
-                          <span className="doc-icon">📄</span>
-                          <span className="doc-name">{doc.filename}</span>
-                          <span className={`doc-status ${doc.status}`}>
-                            {doc.status === 'approved' ? '✓ Approved' :
-                             doc.status === 'rejected' ? '✗ Rejected' :
-                             '⏳ Reviewing'}
-                          </span>
-                        </div>
-                      ))}
+                      {req.documents.map((doc) => {
+                        const statusLower = (doc.status || '').toLowerCase();
+                        return (
+                          <div key={doc.id} className={`uploaded-doc ${statusLower}`}>
+                            <span className="doc-icon">📄</span>
+                            <span className="doc-name">{doc.filename}</span>
+                            <span className={`doc-status ${statusLower}`}>
+                              {statusLower === 'approved' ? '✓ Approved' :
+                               statusLower === 'rejected' ? '✗ Rejected' :
+                               statusLower === 'deleted' ? '🗑️ Removed' :
+                               '⏳ Reviewing'}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
