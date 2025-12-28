@@ -382,8 +382,8 @@ INTEGRATIONS = {
 
 @router.get("")
 async def get_all_integrations(
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Get all available integrations with their status."""
     try:
@@ -423,7 +423,7 @@ async def get_all_integrations(
 
 @router.get("/categories")
 async def get_integration_categories(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Get list of integration categories."""
     categories = [
@@ -444,8 +444,8 @@ async def get_integration_categories(
 @router.get("/{integration_id}")
 async def get_integration(
     integration_id: str,
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Get specific integration details and configuration."""
     try:
@@ -491,8 +491,8 @@ async def get_integration(
 async def update_integration_config(
     integration_id: str,
     config: IntegrationConfig,
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Update integration configuration."""
     try:
@@ -547,8 +547,8 @@ async def update_integration_config(
 async def set_integration_credentials(
     integration_id: str,
     credentials: Dict[str, Any],
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Set integration credentials (API keys, OAuth tokens, etc.)."""
     try:
@@ -596,8 +596,8 @@ async def set_integration_credentials(
 @router.post("/{integration_id}/connect")
 async def connect_integration(
     integration_id: str,
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Initiate connection to integration (returns OAuth URL or tests API key)."""
     try:
@@ -661,8 +661,8 @@ async def connect_integration(
 @router.post("/{integration_id}/disconnect")
 async def disconnect_integration(
     integration_id: str,
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Disconnect an integration."""
     try:
@@ -694,8 +694,8 @@ async def disconnect_integration(
 async def trigger_sync(
     integration_id: str,
     sync_type: str = "full",  # full, incremental
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Trigger a manual sync for an integration."""
     try:
@@ -739,8 +739,8 @@ async def trigger_sync(
 async def get_sync_history(
     integration_id: str,
     limit: int = 20,
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Get sync history for an integration."""
     try:
@@ -791,8 +791,8 @@ async def get_sync_history(
 @router.post("/{integration_id}/test")
 async def test_integration(
     integration_id: str,
-    current_user = Depends(lambda: get_current_user),
-    db = Depends(lambda: get_db)
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
 ):
     """Test integration connection and credentials."""
     try:
@@ -829,7 +829,7 @@ async def test_integration(
 
 @router.get("/webhooks")
 async def get_webhook_endpoints(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(get_current_user)
 ):
     """Get webhook endpoints for receiving data from integrations."""
     base_url = "https://api.example.com/webhooks"
