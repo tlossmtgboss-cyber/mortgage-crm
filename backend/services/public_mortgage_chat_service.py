@@ -507,35 +507,49 @@ class PublicMortgageChatService:
 
             formatted_time = appointment_time.strftime('%A, %B %d, %Y at %I:%M %p')
 
-            # Send confirmation email to the contact/lead
+            # Send confirmation email with calendar invite to the contact/lead
             if contact_email:
-                notification_service.send_email(
-                    to_email=contact_email,
-                    subject=f"Appointment Confirmed with {lo_name}",
-                    html_content=f"""
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #1e40af;">Appointment Confirmed!</h2>
-                        <p>Hi {contact_name},</p>
-                        <p>Your appointment has been scheduled:</p>
-
-                        <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                            <p style="margin: 0;"><strong>Date & Time:</strong> {formatted_time}</p>
-                            <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> {duration} minutes</p>
-                            <p style="margin: 10px 0 0 0;"><strong>With:</strong> {lo_name}</p>
-                        </div>
-
-                        <p>{lo_name} will call you at the scheduled time to discuss your mortgage needs.</p>
-
-                        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
-                            Need to reschedule? Reply to this email or call {lo_phone if lo_phone else 'your loan officer'}.
-                        </p>
-                    </div>
-                    """
+                notification_service.send_appointment_confirmation(
+                    borrower_email=contact_email,
+                    borrower_name=contact_name,
+                    appointment_type="Mortgage Consultation",
+                    appointment_time=appointment_time,
+                    lo_name=lo_name,
+                    phone_number=contact_phone,
+                    appointment_id=appointment_id,
+                    duration_minutes=duration,
+                    lo_email=lo_email,
                 )
-                logger.info(f"Sent appointment confirmation to {contact_email}")
+                logger.info(f"Sent appointment confirmation with calendar invite to {contact_email}")
 
-            # Send notification to the loan officer
+            # Send notification to the loan officer with calendar invite
             if lo_email:
+                import base64
+                from utils.calendar_invite import generate_lo_appointment_ics
+
+                # Generate calendar invite for LO
+                lo_attachments = None
+                try:
+                    lo_ics_content = generate_lo_appointment_ics(
+                        appointment_id=appointment_id,
+                        contact_name=contact_name,
+                        contact_email=contact_email,
+                        contact_phone=contact_phone,
+                        start_time=appointment_time,
+                        duration_minutes=duration,
+                        appointment_type="consultation",
+                        loan_officer_name=lo_name,
+                        loan_officer_email=lo_email,
+                    )
+                    lo_ics_base64 = base64.b64encode(lo_ics_content.encode('utf-8')).decode('utf-8')
+                    lo_attachments = [{
+                        'content': lo_ics_base64,
+                        'filename': f'appointment-{appointment_id}.ics',
+                        'type': 'text/calendar',
+                    }]
+                except Exception as e:
+                    logger.warning(f"Failed to generate LO calendar invite: {e}")
+
                 notification_service.send_email(
                     to_email=lo_email,
                     subject=f"New Appointment: {contact_name} - {formatted_time}",
@@ -553,10 +567,12 @@ class PublicMortgageChatService:
                         </div>
 
                         <p>This appointment was scheduled through your AI mortgage assistant.</p>
+                        <p style="color: #6b7280; font-size: 14px;">📅 Calendar invite attached - click to add to your calendar.</p>
                     </div>
-                    """
+                    """,
+                    attachments=lo_attachments,
                 )
-                logger.info(f"Sent new appointment alert to {lo_email}")
+                logger.info(f"Sent new appointment alert with calendar invite to {lo_email}")
 
             logger.info(f"Appointment {appointment_id} notifications sent")
 

@@ -442,8 +442,13 @@ class NotificationService:
         lo_name: str,
         meeting_link: Optional[str] = None,
         phone_number: Optional[str] = None,
+        appointment_id: Optional[str] = None,
+        duration_minutes: int = 30,
+        lo_email: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Send appointment confirmation to borrower."""
+        """Send appointment confirmation to borrower with calendar invite attachment."""
+        import base64
+        from utils.calendar_invite import generate_appointment_ics
 
         formatted_time = appointment_time.strftime("%A, %B %d, %Y at %I:%M %p")
 
@@ -508,10 +513,37 @@ class NotificationService:
         </html>
         """
 
+        # Generate ICS calendar invite attachment
+        attachments = None
+        if appointment_id:
+            try:
+                ics_content = generate_appointment_ics(
+                    appointment_id=appointment_id,
+                    contact_name=borrower_name,
+                    contact_email=borrower_email,
+                    start_time=appointment_time,
+                    duration_minutes=duration_minutes,
+                    appointment_type=appointment_type.lower().replace(" ", "_") if appointment_type else "consultation",
+                    meeting_link=meeting_link,
+                    loan_officer_name=lo_name,
+                    loan_officer_email=lo_email,
+                )
+                # Base64 encode the ICS content
+                ics_base64 = base64.b64encode(ics_content.encode('utf-8')).decode('utf-8')
+                attachments = [{
+                    'content': ics_base64,
+                    'filename': f'appointment-{appointment_id}.ics',
+                    'type': 'text/calendar',
+                }]
+                logger.info(f"Generated calendar invite for appointment {appointment_id}")
+            except Exception as e:
+                logger.warning(f"Failed to generate calendar invite: {e}")
+
         return self.send_email(
             to_email=borrower_email,
             subject=subject,
             html_content=html_content,
+            attachments=attachments,
         )
 
     def send_lo_new_application_alert(
