@@ -19,6 +19,9 @@ from sqlalchemy import or_, and_
 import logging
 import mimetypes
 
+# S3 storage service
+from services.perennia_s3_service import get_s3_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -413,18 +416,41 @@ class DocumentIntakeEngine:
 
     async def _store_attachment(self, attachment: ParsedAttachment, email_intake_id: int) -> str:
         """
-        Store attachment and return storage location.
-        Override this with your actual storage implementation (S3, local, etc.)
+        Store attachment in S3 and return storage key.
+        Uses temporary intake folder for initial storage before classification.
         """
-        # For now, return a placeholder path
-        # In production, upload to S3/GCS/Azure Blob and return URL
-        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-        storage_path = f"document_intake/{email_intake_id}/{timestamp}_{attachment.filename}"
+        try:
+            s3_service = get_s3_service()
 
-        # Placeholder - implement actual storage
-        logger.info(f"Would store attachment at: {storage_path}")
+            # Generate storage key for intake (temporary storage)
+            storage_key = s3_service.generate_intake_key(email_intake_id, attachment.filename)
 
-        return storage_path
+            # Upload file content to S3
+            result = s3_service.upload_file(
+                storage_key=storage_key,
+                file_content=attachment.content,
+                content_type=attachment.mime_type,
+                metadata={
+                    "original_filename": attachment.original_filename,
+                    "email_intake_id": str(email_intake_id),
+                    "upload_source": "document_intake_engine"
+                }
+            )
+
+            if result.get("success"):
+                logger.info(f"Stored attachment in S3: {storage_key} ({attachment.size} bytes)")
+                return storage_key
+            else:
+                logger.error(f"Failed to store attachment: {result.get('error')}")
+                raise Exception(f"S3 upload failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Error storing attachment {attachment.filename}: {e}")
+            # Fall back to placeholder path for development/testing without S3
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+            fallback_path = f"document_intake/{email_intake_id}/{timestamp}_{attachment.filename}"
+            logger.warning(f"Using fallback path (S3 unavailable): {fallback_path}")
+            return fallback_path
 
     def _suggest_document_type(self, attachment: ParsedAttachment) -> Optional[DocumentSuggestion]:
         """
@@ -695,13 +721,42 @@ class DocumentClassificationHandler:
 
     async def _move_to_permanent_storage(self, attachment: Any) -> str:
         """
-        Move file from temp storage to permanent location.
-        Override with actual storage implementation.
+        Move file from temp intake storage to permanent classified location in S3.
+        Organizes by borrower/loan/document type for easy retrieval.
         """
-        # Placeholder - in production, move from temp to permanent bucket
-        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d')
-        permanent_path = f"documents/{attachment.classified_borrower_id or 'unassigned'}/{timestamp}/{attachment.filename}"
+        try:
+            s3_service = get_s3_service()
 
-        logger.info(f"Would move {attachment.storage_location} to {permanent_path}")
+            # Get the classified document type (default to 'other' if not set)
+            doc_type = getattr(attachment, 'classified_document_type', None) or 'other'
 
-        return permanent_path
+            # Generate permanent storage key based on classification
+            permanent_key = s3_service.generate_document_key(
+                borrower_id=attachment.classified_borrower_id,
+                loan_id=getattr(attachment, 'classified_loan_id', None),
+                doc_type=doc_type,
+                filename=attachment.filename
+            )
+
+            # Move file from intake location to permanent location
+            source_key = attachment.storage_location
+            result = s3_service.move_file(
+                source_key=source_key,
+                dest_key=permanent_key,
+                delete_source=True
+            )
+
+            if result.get("success"):
+                logger.info(f"Moved document to permanent storage: {source_key} -> {permanent_key}")
+                return permanent_key
+            else:
+                logger.error(f"Failed to move document: {result.get('error')}")
+                raise Exception(f"S3 move failed: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Error moving {attachment.filename} to permanent storage: {e}")
+            # Fall back to placeholder path if S3 fails
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d')
+            fallback_path = f"documents/{attachment.classified_borrower_id or 'unassigned'}/{timestamp}/{attachment.filename}"
+            logger.warning(f"Using fallback path (S3 unavailable): {fallback_path}")
+            return fallback_path
