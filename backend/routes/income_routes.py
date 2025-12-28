@@ -1054,6 +1054,8 @@ async def run_income_migration(
             "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS requires_24_month_history BOOLEAN DEFAULT FALSE",
             "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS gap_in_employment_flag BOOLEAN DEFAULT FALSE",
             "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS verification_notes TEXT",
+            # income_flags - fix column name (metadata is reserved in SQLAlchemy 2.0)
+            "ALTER TABLE income_flags RENAME COLUMN metadata TO flag_metadata",
             # paystub_extractions - fix column name mismatch (migration used ssn_last4, model uses employee_ssn_last4)
             "ALTER TABLE paystub_extractions RENAME COLUMN ssn_last4 TO employee_ssn_last4",
             # paystub_extractions missing columns

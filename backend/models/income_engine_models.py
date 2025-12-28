@@ -271,7 +271,8 @@ class IncomeFlag(Base):
     affected_document_id = Column(String(255), nullable=True)
 
     # Flag metadata (additional context)
-    metadata = Column(JSON, nullable=True, default=dict)
+    # Note: renamed from 'metadata' to avoid SQLAlchemy 2.0 reserved attribute conflict
+    flag_metadata = Column(JSON, nullable=True, default=dict)
 
     # Resolution tracking
     resolved = Column(Boolean, nullable=False, default=False)
@@ -304,7 +305,7 @@ class IncomeFlag(Base):
             'required_action': self.required_action,
             'affected_stream': self.affected_stream,
             'affected_document_id': self.affected_document_id,
-            'metadata': self.metadata,
+            'metadata': self.flag_metadata,
             'resolved': self.resolved,
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
             'resolution_notes': self.resolution_notes,

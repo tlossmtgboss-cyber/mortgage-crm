@@ -262,8 +262,8 @@ def create_income_flags_table(engine, db_type: str):
             affected_stream VARCHAR(100),
             affected_document_id VARCHAR(255),
 
-            -- Flag metadata
-            metadata TEXT DEFAULT '{}',
+            -- Flag metadata (renamed to avoid SQLAlchemy conflict)
+            flag_metadata TEXT DEFAULT '{}',
 
             -- Resolution tracking
             resolved INTEGER NOT NULL DEFAULT 0,
@@ -298,8 +298,8 @@ def create_income_flags_table(engine, db_type: str):
             affected_stream VARCHAR(100),
             affected_document_id VARCHAR(255),
 
-            -- Flag metadata
-            metadata JSONB DEFAULT '{}'::jsonb,
+            -- Flag metadata (renamed to avoid SQLAlchemy conflict)
+            flag_metadata JSONB DEFAULT '{}'::jsonb,
 
             -- Resolution tracking
             resolved BOOLEAN NOT NULL DEFAULT FALSE,

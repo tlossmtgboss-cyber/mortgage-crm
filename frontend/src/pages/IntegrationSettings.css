@@ -232,6 +232,69 @@
   text-transform: capitalize;
 }
 
+/* Integration Logos */
+.integration-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #f9fafb;
+  overflow: hidden;
+}
+
+.integration-logo img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.logo-fallback {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.detail-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #f9fafb;
+  overflow: hidden;
+}
+
+.detail-logo img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.logo-fallback-large {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  color: white;
+  font-size: 24px;
+  font-weight: 600;
+}
+
 .integration-icon {
   width: 48px;
   height: 48px;
@@ -336,8 +399,8 @@
   flex: 1;
 }
 
-.detail-header .detail-icon {
-  font-size: 32px;
+.detail-header .detail-logo {
+  margin-right: 4px;
 }
 
 .detail-header .detail-title h2 {
