@@ -81,7 +81,6 @@ const MarketDashboard = lazy(() => import('./pages/MarketDashboard'));
 const MorningCheckin = lazy(() => import('./pages/MorningCheckin'));
 const PartnerROIDashboard = lazy(() => import('./pages/PartnerROIDashboard'));
 const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard'));
-const BusinessOpsDashboard = lazy(() => import('./pages/BusinessOpsDashboard'));
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const SLASettings = lazy(() => import('./pages/SLASettings'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
@@ -574,30 +573,6 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ProfitabilityDashboard /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-
-          {/* Business Operations Dashboard */}
-          <Route
-            path="/business-ops"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><BusinessOpsDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

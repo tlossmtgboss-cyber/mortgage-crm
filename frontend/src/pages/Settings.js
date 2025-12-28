@@ -18,6 +18,7 @@ import AIEmailSetup from '../components/AIEmailSetup';
 import AIDailyBlog from './AIDailyBlog';
 import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
 import ApplicationSlidesEditor from '../components/ApplicationSlidesEditor';
+import BusinessOpsDashboard from './BusinessOpsDashboard';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -2727,6 +2728,7 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`} onClick={() => setActiveSection('ai-feedback-log')}><span>AI Feedback Log</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`} onClick={() => setActiveSection('it-helpdesk-admin')}><span>IT Helpdesk Admin</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'api-keys' ? 'active' : ''}`} onClick={() => { setActiveSection('api-keys'); fetchApiKeys(); }}><span>API Keys</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'business-ops' ? 'active' : ''}`} onClick={() => setActiveSection('business-ops')}><span>Business Operations</span></button>
                     </div>
                   )}
                 </div>
@@ -2789,6 +2791,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'it-helpdesk-admin' && (
             <ITHelpdeskAdmin />
+          )}
+
+          {activeSection === 'business-ops' && (
+            <BusinessOpsDashboard />
           )}
 
           {/* MARKETING */}
