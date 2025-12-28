@@ -19,6 +19,7 @@ import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import SmartDocumentUpload from '../components/smart-docs/SmartDocumentUpload';
+import IncomeCalculator from '../components/IncomeCalculator';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -1000,6 +1001,12 @@ function LoanDetail() {
           onClick={() => setActiveTab('smart-docs')}
         >
           Smart Docs
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
+          onClick={() => setActiveTab('income')}
+        >
+          Income
         </button>
         <button
           className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
@@ -2951,6 +2958,24 @@ function LoanDetail() {
               }}
               onDocumentApproved={(result) => {
                 console.log('Document approved:', result);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Income Tab */}
+        {activeTab === 'income' && (
+          <div className="info-section">
+            <h2>Income Calculator</h2>
+            <p className="circle-description">
+              Calculate qualifying income following agency guidelines. Add W-2s, Schedule C/E, K-1s,
+              and bank statements to compute monthly income with proper add-backs and trending analysis.
+            </p>
+            <IncomeCalculator
+              loanId={parseInt(id)}
+              borrowerId={1}
+              onIncomeCalculated={(result) => {
+                console.log('Income calculated:', result);
               }}
             />
           </div>

@@ -2413,6 +2413,67 @@ export const outreachAPI = {
   },
 };
 
+// Income Engine API
+export const incomeAPI = {
+  // Get supported income types
+  getSupportedTypes: async () => {
+    const response = await api.get('/api/v1/income/supported-types');
+    return response.data;
+  },
+
+  // Calculate income from document facts
+  calculate: async (data) => {
+    const response = await api.post('/api/v1/income/calculate', data);
+    return response.data;
+  },
+
+  // Validate documents for calculation
+  validateDocuments: async (data) => {
+    const response = await api.post('/api/v1/income/validate-documents', data);
+    return response.data;
+  },
+
+  // Get income summary for a loan
+  getLoanSummary: async (loanId, borrowerId = 1) => {
+    const response = await api.get(`/api/v1/income/loan/${loanId}/summary`, {
+      params: { borrower_id: borrowerId }
+    });
+    return response.data;
+  },
+
+  // Get income streams for a loan
+  getLoanStreams: async (loanId, borrowerId = 1) => {
+    const response = await api.get(`/api/v1/income/loan/${loanId}/streams`, {
+      params: { borrower_id: borrowerId }
+    });
+    return response.data;
+  },
+
+  // Get income flags for a loan
+  getLoanFlags: async (loanId, borrowerId = 1, severity = null) => {
+    const params = { borrower_id: borrowerId };
+    if (severity) params.severity = severity;
+    const response = await api.get(`/api/v1/income/loan/${loanId}/flags`, { params });
+    return response.data;
+  },
+
+  // Resolve an income flag
+  resolveFlag: async (loanId, flagId, resolutionNote = '', resolvedBy = null) => {
+    const response = await api.post(`/api/v1/income/loan/${loanId}/flags/${flagId}/resolve`, null, {
+      params: { resolution_note: resolutionNote, resolved_by: resolvedBy }
+    });
+    return response.data;
+  },
+
+  // Get income worksheets
+  getWorksheets: async (loanId, borrowerId = 1, worksheetType = null) => {
+    const params = { borrower_id: borrowerId };
+    if (worksheetType) params.worksheet_type = worksheetType;
+    const response = await api.get(`/api/v1/income/loan/${loanId}/worksheets`, { params });
+    return response.data;
+  },
+};
+
 export default api;
 
 // Debug function for console - helps diagnose API issues

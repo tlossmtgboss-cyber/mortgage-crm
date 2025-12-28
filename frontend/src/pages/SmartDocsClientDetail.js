@@ -16,6 +16,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import IncomeTab from '../components/income/IncomeTab';
 import './SmartDocsClientDetail.css';
 
 function SmartDocsClientDetail() {
@@ -30,6 +31,7 @@ function SmartDocsClientDetail() {
   const [selectedDocs, setSelectedDocs] = useState(new Set());
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showIncomeCalculator, setShowIncomeCalculator] = useState(false);
 
   // Fetch client documents
   const fetchClientData = useCallback(async () => {
@@ -561,6 +563,29 @@ function SmartDocsClientDetail() {
               </button>
             </div>
           )}
+
+          {/* Income Calculator Toggle */}
+          <div className="income-toggle-section">
+            <button
+              className={`income-toggle-btn ${showIncomeCalculator ? 'active' : ''}`}
+              onClick={() => setShowIncomeCalculator(!showIncomeCalculator)}
+            >
+              <span className="toggle-icon">📊</span>
+              <span>Income Calculator</span>
+              <span className="toggle-arrow">{showIncomeCalculator ? '▼' : '▶'}</span>
+            </button>
+            {showIncomeCalculator && (
+              <div className="income-calculator-panel">
+                <IncomeTab
+                  loanId={parseInt(loanId)}
+                  borrowerId={1}
+                  onIncomeChange={(monthly, annual) => {
+                    console.log('Income updated:', { monthly, annual });
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* Main Content - Document Viewer */}
