@@ -2149,6 +2149,35 @@ async def cancel_appointment_via_chat(
                 )
                 logger.info(f"Sent cancellation alert to {appointment.lo_email}")
 
+            # SMS to the client
+            if appointment.contact_phone:
+                sms_message = f"Your appointment with {lo_name} on {cancelled_time} has been cancelled."
+                if request.reason:
+                    sms_message += f" Reason: {request.reason}"
+                sms_message += " Reply to reschedule or visit our website."
+
+                sms_result = notification_service.send_sms(
+                    to_phone=appointment.contact_phone,
+                    message=sms_message
+                )
+                if sms_result.get("success"):
+                    logger.info(f"Sent cancellation SMS to {appointment.contact_phone}")
+                else:
+                    logger.warning(f"Failed to send cancellation SMS: {sms_result.get('error')}")
+
+            # SMS to the loan officer
+            if appointment.lo_phone:
+                lo_sms = f"Appointment cancelled: {appointment.contact_name} ({cancelled_time})"
+                if request.reason:
+                    lo_sms += f" - {request.reason}"
+
+                sms_result = notification_service.send_sms(
+                    to_phone=appointment.lo_phone,
+                    message=lo_sms
+                )
+                if sms_result.get("success"):
+                    logger.info(f"Sent cancellation SMS to LO {appointment.lo_phone}")
+
         except Exception as notify_error:
             logger.warning(f"Failed to send cancellation notifications: {notify_error}")
 
@@ -2339,6 +2368,30 @@ async def reschedule_appointment_via_chat(
                     """
                 )
                 logger.info(f"Sent reschedule alert to {appointment.lo_email}")
+
+            # SMS to the client
+            if appointment.contact_phone:
+                sms_message = f"Your appointment with {lo_name} has been rescheduled from {old_time} to {new_time_formatted}."
+
+                sms_result = notification_service.send_sms(
+                    to_phone=appointment.contact_phone,
+                    message=sms_message
+                )
+                if sms_result.get("success"):
+                    logger.info(f"Sent reschedule SMS to {appointment.contact_phone}")
+                else:
+                    logger.warning(f"Failed to send reschedule SMS: {sms_result.get('error')}")
+
+            # SMS to the loan officer
+            if appointment.lo_phone:
+                lo_sms = f"Appointment rescheduled: {appointment.contact_name} moved from {old_time} to {new_time_formatted}"
+
+                sms_result = notification_service.send_sms(
+                    to_phone=appointment.lo_phone,
+                    message=lo_sms
+                )
+                if sms_result.get("success"):
+                    logger.info(f"Sent reschedule SMS to LO {appointment.lo_phone}")
 
         except Exception as notify_error:
             logger.warning(f"Failed to send reschedule notifications: {notify_error}")
