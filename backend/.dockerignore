@@ -2,9 +2,6 @@
 venv/
 .venv/
 env/
-
-# Environment files
-.env
 .env.local
 .env.staging
 
@@ -52,5 +49,14 @@ Thumbs.db
 # Claude
 .claude/
 
-# Node modules
+# Node modules (if any)
 node_modules/
+
+# Documentation
+*.md
+docs/
+
+# Test files
+test_*.py
+tests/
+conftest.py
