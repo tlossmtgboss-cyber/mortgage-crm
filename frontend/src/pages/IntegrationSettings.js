@@ -402,7 +402,7 @@ const IntegrationSettings = () => {
         </div>
 
         {selectedIntegration && (
-          <div className="integration-detail">
+          <div className="detail-panel">
             <div className="detail-header">
               <div className="detail-title">
                 <span className="detail-icon">{getCategoryIcon(selectedIntegration.category)}</span>
