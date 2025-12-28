@@ -28048,16 +28048,12 @@ async def execute_email_response_action(
                 logger.error(f"Failed to create task: {e}")
                 results["errors"].append(f"Task creation failed: {str(e)}")
 
-        # Log the execution
+        # Log the execution timestamp
         db.execute(text("""
             UPDATE email_response_queue
-            SET executed_at = NOW(),
-                execution_result = :result
+            SET executed_at = NOW()
             WHERE id = :queue_id
-        """), {
-            "queue_id": queue_item.id,
-            "result": str(results)
-        })
+        """), {"queue_id": queue_item.id})
 
     except Exception as e:
         logger.error(f"Error executing email response action: {e}")
