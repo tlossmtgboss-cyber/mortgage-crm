@@ -19919,6 +19919,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load portal smart docs routes: {e}")
 
+# Include Income routes (AI-powered income extraction and calculation)
+try:
+    from routes.income_routes import router as income_router
+    app.include_router(income_router, tags=["Income Management"])
+    logger.info("✅ Income Management routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load income routes: {e}")
+
 # Include Morning Check-in routes
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])

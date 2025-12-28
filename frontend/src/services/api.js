@@ -160,11 +160,26 @@ export const leadsAPI = {
     throw lastError;
   },
   bulkUpdateStatus: async (leadIds, status) => {
-    const response = await api.post('/api/v1/leads/bulk-update-status', {
-      lead_ids: leadIds,
-      status: status
-    });
-    return response.data;
+    const maxRetries = 2;
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await api.post('/api/v1/leads/bulk-update-status', {
+          lead_ids: leadIds,
+          status: status
+        });
+        return response.data;
+      } catch (error) {
+        lastError = error;
+        if (error.message === 'Network Error' && attempt < maxRetries) {
+          console.log(`[leadsAPI.bulkUpdateStatus] Retrying after Network Error (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
   },
   getDocuments: async (leadId) => {
     const response = await api.get(`/api/v1/leads/${leadId}/documents`);
