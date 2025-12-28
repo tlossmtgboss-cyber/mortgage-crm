@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from utils.response_helpers import success_response, error_response
+from utils.responses import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
