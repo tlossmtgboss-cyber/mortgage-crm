@@ -589,13 +589,33 @@ async def connect_integration(
         int_info = INTEGRATIONS[integration_id]
 
         if int_info["auth_type"] == "oauth2":
-            # Return OAuth authorization URL
+            # Handle Salesforce OAuth specially
+            if integration_id == "salesforce":
+                from integrations.salesforce_service import salesforce_client
+                if not salesforce_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Salesforce integration not configured", code="NOT_CONFIGURED")
+                    )
+                # Get user_id for state parameter
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}:{frontend_url}/settings/integrations"
+                oauth_url = salesforce_client.get_authorization_url(state=state)
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": os.getenv("SALESFORCE_REDIRECT_URI", "https://api.perenniaai.com/api/v1/salesforce/callback")
+                }, "OAuth flow initiated - redirect to Salesforce")
+
+            # Generic OAuth URL for other integrations
             oauth_url = int_info.get("oauth_url", f"https://{integration_id}.com/oauth/authorize")
             return success_response({
                 "integration_id": integration_id,
                 "auth_type": "oauth2",
                 "oauth_url": oauth_url,
-                "redirect_uri": f"https://api.example.com/oauth/callback/{integration_id}"
+                "redirect_uri": f"https://api.perenniaai.com/oauth/callback/{integration_id}"
             }, "OAuth flow initiated")
         else:
             # Test API key connection
