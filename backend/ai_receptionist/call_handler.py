@@ -30,6 +30,14 @@ from dataclasses import dataclass, field
 from enum import Enum
 from contextlib import asynccontextmanager
 
+# OpenAI for AI-powered responses
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OpenAI = None
+    OPENAI_AVAILABLE = False
+
 from .audio_processor import (
     AudioProcessor,
     STTConfig,
@@ -177,6 +185,24 @@ class TwilioStreamHandler:
         self.vad = VoiceActivityDetector()
         self._transcript_buffer: List[str] = []
         self._is_streaming_stt = False
+
+        # Initialize OpenAI client for AI-powered responses
+        self._openai_client = None
+        self._openai_enabled = False
+        if OPENAI_AVAILABLE:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if api_key:
+                try:
+                    self._openai_client = OpenAI(api_key=api_key)
+                    self._openai_enabled = True
+                    logger.info("OpenAI enabled for AI receptionist responses")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize OpenAI: {e}")
+
+        # AI receptionist configuration
+        self._receptionist_name = os.getenv("AI_RECEPTIONIST_NAME", "Sam")
+        self._business_name = os.getenv("BUSINESS_NAME", "CMG Home Loans")
+        self._lo_name = os.getenv("LO_NAME", "a loan officer")
 
     async def handle_message(self, message: str) -> Optional[Dict[str, Any]]:
         """
@@ -405,52 +431,138 @@ class TwilioStreamHandler:
             "How can I help you today?"
         )
 
+    def _build_receptionist_system_prompt(self) -> str:
+        """Build system prompt for AI receptionist phone conversations."""
+        return f"""You are {self._receptionist_name}, a friendly and professional AI receptionist for {self._business_name}, a mortgage company.
+
+## YOUR ROLE
+You answer phone calls and help callers with mortgage-related questions. You're warm, conversational, and helpful.
+
+## VOICE CONVERSATION GUIDELINES
+- Keep responses SHORT (1-3 sentences max) - this is a phone call, not an email
+- Be conversational and natural - use contractions, speak like a real person
+- Ask ONE question at a time
+- Listen actively and respond to what the caller actually said
+- Don't repeat information they've already given you
+
+## WHAT YOU CAN DO
+- Answer general questions about mortgages, rates, loan types, and the home buying process
+- Explain different loan programs (conventional, FHA, VA, USDA, jumbo)
+- Discuss refinancing options and when it makes sense
+- Schedule appointments or callbacks with {self._lo_name}
+- Transfer to a human loan officer when requested
+
+## WHAT YOU CANNOT DO
+- Quote specific interest rates (they change daily and depend on many factors)
+- Guarantee loan approval or specific terms
+- Provide legal or tax advice
+- Access caller's personal loan information
+
+## TRANSFER REQUESTS
+If someone asks to speak with a human, agent, or loan officer, say:
+"Of course, let me transfer you to one of our loan officers. Please hold for just a moment."
+
+## ENDING CALLS
+If someone says goodbye or thanks you, respond warmly and briefly:
+"Thank you for calling! Have a great day!"
+
+Remember: You're on a phone call. Be brief, natural, and helpful."""
+
     async def _get_response_text(self, transcript: str) -> str:
         """
-        Get response text for transcript.
+        Get AI-powered response text for transcript.
 
-        This is a placeholder - should integrate with conversation engine.
+        Uses OpenAI GPT for intelligent responses with keyword-based fallback.
         """
-        # Simple responses for demo
+        # Try OpenAI first for intelligent responses
+        if self._openai_enabled and self._openai_client and self.context:
+            try:
+                # Build messages from conversation history
+                messages = [{"role": "system", "content": self._build_receptionist_system_prompt()}]
+
+                # Add conversation history (last 10 turns for context)
+                for msg in self.context.conversation_history[-10:]:
+                    messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+                # Add current user message
+                messages.append({"role": "user", "content": transcript})
+
+                # Call OpenAI
+                response = self._openai_client.chat.completions.create(
+                    model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                    messages=messages,
+                    max_tokens=150,  # Keep responses short for phone
+                    temperature=0.7,
+                )
+
+                ai_response = response.choices[0].message.content.strip()
+                logger.info(f"AI response generated: {ai_response[:50]}...")
+                return ai_response
+
+            except Exception as e:
+                logger.error(f"OpenAI response generation failed: {e}")
+                # Fall through to keyword-based fallback
+
+        # Fallback: Simple keyword-based responses
+        return self._get_fallback_response(transcript)
+
+    def _get_fallback_response(self, transcript: str) -> str:
+        """Keyword-based fallback responses when AI is unavailable."""
         transcript_lower = transcript.lower()
 
         if any(word in transcript_lower for word in ["rate", "rates", "interest"]):
             return (
-                "Great question about rates! Current rates depend on several factors "
-                "like your credit score, down payment, and loan type. "
-                "Would you like me to connect you with a loan officer who can give you "
-                "a personalized rate quote?"
+                "Great question about rates! They depend on your credit score "
+                "and down payment. Would you like me to connect you with "
+                f"{self._lo_name} for a personalized quote?"
             )
 
         if any(word in transcript_lower for word in ["refinance", "refi"]):
             return (
-                "I'd be happy to help you explore refinancing options. "
-                "Do you know your current interest rate and approximate loan balance? "
-                "That will help me understand if refinancing makes sense for you."
+                "I'd be happy to help with refinancing. Do you know your "
+                "current rate and loan balance? That helps us see if it makes sense."
             )
 
-        if any(word in transcript_lower for word in ["appointment", "schedule", "meet"]):
+        if any(word in transcript_lower for word in ["appointment", "schedule", "meet", "call back"]):
             return (
-                "Absolutely, I can help schedule an appointment. "
-                "What day works best for you? We have availability this week."
+                "Absolutely, I can help schedule that. "
+                "What day works best for you?"
             )
 
-        if any(word in transcript_lower for word in ["human", "person", "agent", "transfer"]):
+        if any(word in transcript_lower for word in ["human", "person", "agent", "transfer", "speak to"]):
             return (
                 "Of course, let me transfer you to one of our loan officers. "
                 "Please hold for just a moment."
             )
 
         if any(word in transcript_lower for word in ["bye", "goodbye", "thank"]):
+            return "Thank you for calling! Have a great day!"
+
+        if any(word in transcript_lower for word in ["buy", "purchase", "house", "home"]):
             return (
-                "Thank you for calling! Have a great day, and don't hesitate "
-                "to call back if you have any questions."
+                "That's exciting! Are you just starting to look, or have you "
+                "already found a home you're interested in?"
+            )
+
+        if any(word in transcript_lower for word in ["pre-approval", "preapproval", "pre-qualify", "prequalify"]):
+            return (
+                "Getting pre-approved is a great first step! It usually takes "
+                "about 24 hours. Would you like me to schedule a call to get started?"
+            )
+
+        if any(word in transcript_lower for word in ["down payment", "downpayment"]):
+            return (
+                "Down payments can vary from 3% to 20% depending on the loan type. "
+                "Do you have a target amount in mind?"
             )
 
         # Default response
         return (
-            "I understand. Could you tell me a bit more about what you're looking for? "
-            "Are you interested in purchasing a home, refinancing, or something else?"
+            "I'd love to help with that. Could you tell me a bit more about "
+            "what you're looking for?"
         )
 
     async def _set_state(self, state: CallState) -> None:
