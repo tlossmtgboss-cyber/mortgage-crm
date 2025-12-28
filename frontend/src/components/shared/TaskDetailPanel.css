@@ -80,6 +80,43 @@
   color: #374151;
 }
 
+/* Header Right Section */
+.task-detail-panel .detail-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* AI Confidence Badge */
+.task-detail-panel .ai-confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.task-detail-panel .ai-confidence-badge.high {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.task-detail-panel .ai-confidence-badge.medium {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.task-detail-panel .ai-confidence-badge.low {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
 /* Title */
 .task-detail-panel .detail-title {
   margin: 0;

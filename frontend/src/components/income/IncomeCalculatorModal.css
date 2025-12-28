@@ -1,0 +1,605 @@
+/* Modal Overlay */
+.income-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+/* Modal Container */
+.income-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 1000px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Modal Header */
+.income-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.income-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.modal-close-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 24px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+/* Total Income Banner */
+.income-modal .income-total-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  color: white;
+}
+
+.total-label {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.total-amounts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.total-amounts .divider {
+  opacity: 0.5;
+}
+
+/* Loading State */
+.income-modal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Modal Body */
+.income-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tab Navigation */
+.income-modal .income-tabs-nav {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+}
+
+.income-tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 20px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 90px;
+  position: relative;
+}
+
+.income-tab-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.income-tab-btn.active {
+  background: #1e40af;
+  border-color: #1e40af;
+  color: white;
+}
+
+.income-tab-btn.has-income {
+  border-color: #10b981;
+}
+
+.income-tab-btn.has-income:not(.active) {
+  background: #ecfdf5;
+}
+
+.tab-icon {
+  font-size: 24px;
+}
+
+.tab-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tab-amount {
+  font-size: 11px;
+  font-weight: 700;
+  color: #10b981;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.income-tab-btn.active .tab-amount {
+  background: rgba(255,255,255,0.2);
+  color: white;
+}
+
+.tab-docs-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  background: #f59e0b;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Tab Content */
+.income-tab-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.error-banner button {
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.tab-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.title-icon {
+  font-size: 36px;
+}
+
+.tab-title h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.tab-description {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.tab-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn.extract {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+}
+
+.action-btn.extract:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.action-btn.calculate {
+  background: #1e40af;
+  border: 1px solid #1e40af;
+  color: white;
+}
+
+.action-btn.calculate:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Income Source Card */
+.income-source-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.source-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.source-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.source-income-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.income-box {
+  background: white;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.income-box.qualifying {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.income-box label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.income-box .amount {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.income-box.qualifying .amount {
+  color: #059669;
+}
+
+.calculation-method {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+
+.method-label {
+  color: #64748b;
+  margin-right: 8px;
+}
+
+.method-value {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.warning-banner {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.warning-banner::before {
+  content: "⚠️";
+}
+
+.no-income-source {
+  text-align: center;
+  padding: 40px 20px;
+  background: #f8fafc;
+  border: 2px dashed #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.no-income-source p {
+  margin: 0;
+  color: #64748b;
+}
+
+.no-income-source .hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* Documents Section */
+.documents-section {
+  margin-top: 24px;
+}
+
+.documents-section h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.document-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.doc-icon {
+  font-size: 20px;
+}
+
+.doc-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-name {
+  display: block;
+  font-size: 14px;
+  color: #1e293b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-type {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.doc-date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.doc-status .extracted {
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.doc-status .pending {
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.no-documents {
+  text-align: center;
+  padding: 30px 20px;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  border-radius: 8px;
+}
+
+.no-documents p {
+  margin: 0;
+  color: #64748b;
+}
+
+.no-documents .hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* Modal Footer */
+.income-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0 0 16px 16px;
+}
+
+.cancel-btn {
+  padding: 10px 24px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.save-btn {
+  padding: 10px 24px;
+  border: none;
+  background: #1e40af;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .income-modal {
+    max-height: 95vh;
+    margin: 10px;
+  }
+
+  .source-income-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tab-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tab-actions {
+    width: 100%;
+  }
+
+  .action-btn {
+    flex: 1;
+  }
+
+  .income-tabs-nav {
+    padding: 12px 16px;
+  }
+
+  .income-tab-btn {
+    min-width: 80px;
+    padding: 10px 14px;
+  }
+}

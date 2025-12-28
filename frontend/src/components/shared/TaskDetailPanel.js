@@ -629,9 +629,19 @@ const TaskDetailPanel = ({
           <span className="source-icon-large">{task.sourceIcon || getSourceIcon(task.source)}</span>
           <span className="source-name">{task.source || 'Task'}</span>
         </div>
-        {onClose && (
-          <button className="detail-close-btn" onClick={onClose}>×</button>
-        )}
+        <div className="detail-header-right">
+          {task.ai_confidence && (
+            <span
+              className={`ai-confidence-badge ${task.ai_confidence >= 90 ? 'high' : task.ai_confidence >= 70 ? 'medium' : 'low'}`}
+              title={`AI Confidence: ${task.ai_confidence}%`}
+            >
+              🤖 AI Confidence: {task.ai_confidence}%
+            </span>
+          )}
+          {onClose && (
+            <button className="detail-close-btn" onClick={onClose}>×</button>
+          )}
+        </div>
       </div>
 
       {/* Title */}

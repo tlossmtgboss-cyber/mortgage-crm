@@ -1836,6 +1836,14 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 />
                 <span className="source-icon">{task.sourceIcon}</span>
                 <span className="task-title-compact">{task.title}</span>
+                {task.ai_confidence && (
+                  <span
+                    className={`ai-confidence-meter ${task.ai_confidence >= 90 ? 'high' : task.ai_confidence >= 70 ? 'medium' : 'low'}`}
+                    title={`AI Confidence: ${task.ai_confidence}%`}
+                  >
+                    🤖 {task.ai_confidence}%
+                  </span>
+                )}
               </div>
               <div className="inbox-item-meta">
                 <span className="task-client-compact">{task.borrower || task.source}</span>

@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
-import IncomeCalculatorTabs from '../components/income/IncomeCalculatorTabs';
+import IncomeCalculatorModal from '../components/income/IncomeCalculatorModal';
 import './SmartDocsClientDetail.css';
 
 function SmartDocsClientDetail() {
@@ -31,7 +31,7 @@ function SmartDocsClientDetail() {
   const [selectedDocs, setSelectedDocs] = useState(new Set());
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [showIncomeCalculator, setShowIncomeCalculator] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
 
   // Fetch client documents
   const fetchClientData = useCallback(async () => {
@@ -483,6 +483,13 @@ function SmartDocsClientDetail() {
           {client?.email && <span className="client-email">{client.email}</span>}
         </div>
         <div className="header-actions">
+          <button
+            className="income-calc-btn"
+            onClick={() => setShowIncomeModal(true)}
+            title="Income Calculator"
+          >
+            📊 Income
+          </button>
           <label className="reminder-toggle">
             <input
               type="checkbox"
@@ -564,28 +571,6 @@ function SmartDocsClientDetail() {
             </div>
           )}
 
-          {/* Income Calculator Toggle */}
-          <div className="income-toggle-section">
-            <button
-              className={`income-toggle-btn ${showIncomeCalculator ? 'active' : ''}`}
-              onClick={() => setShowIncomeCalculator(!showIncomeCalculator)}
-            >
-              <span className="toggle-icon">📊</span>
-              <span>Income Calculator</span>
-              <span className="toggle-arrow">{showIncomeCalculator ? '▼' : '▶'}</span>
-            </button>
-            {showIncomeCalculator && (
-              <div className="income-calculator-panel">
-                <IncomeCalculatorTabs
-                  loanId={parseInt(loanId)}
-                  borrowerId={1}
-                  onIncomeChange={(monthly, annual) => {
-                    console.log('Income updated:', { monthly, annual });
-                  }}
-                />
-              </div>
-            )}
-          </div>
         </aside>
 
         {/* Main Content - Document Viewer */}
@@ -744,6 +729,17 @@ function SmartDocsClientDetail() {
           )}
         </main>
       </div>
+
+      {/* Income Calculator Modal */}
+      <IncomeCalculatorModal
+        isOpen={showIncomeModal}
+        onClose={() => setShowIncomeModal(false)}
+        loanId={parseInt(loanId)}
+        borrowerId={1}
+        onSave={(income) => {
+          console.log('Income saved:', income);
+        }}
+      />
     </div>
   );
 }
