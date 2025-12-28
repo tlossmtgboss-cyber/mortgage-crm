@@ -1042,6 +1042,85 @@ async def run_income_migration(
 
         db.commit()
 
+        # Add missing columns to income_sources (model has more columns than initial migration)
+        alter_statements = [
+            # income_sources missing columns
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS source_description TEXT",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS gross_monthly_income DECIMAL(15,2)",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS net_monthly_income DECIMAL(15,2)",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS gross_annual_income DECIMAL(15,2)",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS trending_percentage DECIMAL(5,2)",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS months_history INTEGER",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS requires_24_month_history BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS gap_in_employment_flag BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS verification_notes TEXT",
+            # paystub_extractions - fix column name mismatch (migration used ssn_last4, model uses employee_ssn_last4)
+            "ALTER TABLE paystub_extractions RENAME COLUMN ssn_last4 TO employee_ssn_last4",
+            # paystub_extractions missing columns
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS loan_id INTEGER",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_address_line2 VARCHAR(255)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_city VARCHAR(100)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_state VARCHAR(50)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_zip VARCHAR(20)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS tips DECIMAL(12,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS other_earnings DECIMAL(12,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_regular_earnings DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_overtime_earnings DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_tips DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS dental_insurance DECIMAL(10,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS vision_insurance DECIMAL(10,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS life_insurance DECIMAL(10,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS hsa_fsa DECIMAL(10,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS deductions_breakdown JSONB",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_federal_tax DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_state_tax DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_social_security DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_medicare DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_retirement DECIMAL(15,2)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS annualization_method VARCHAR(50)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS field_confidences JSONB",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS extraction_model VARCHAR(64)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS raw_ocr_text TEXT",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS extraction_errors JSONB",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS doc_date DATE",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS is_expired BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS applied_by VARCHAR(100)",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS applied_fields JSONB",
+            "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            # employments missing columns
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS employer_website VARCHAR(255)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'CURRENT'",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS department VARCHAR(255)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS months_employed INTEGER",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS years_in_profession DECIMAL(4,2)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS has_overtime BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS has_bonus BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS has_commission BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS current_base_salary DECIMAL(12,2)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS hourly_rate DECIMAL(8,2)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS average_hours_per_week DECIMAL(4,1)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS monthly_income DECIMAL(12,2)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS annual_income DECIMAL(15,2)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS voe_type VARCHAR(50)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS voe_contact_name VARCHAR(255)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS voe_contact_phone VARCHAR(20)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS voe_contact_email VARCHAR(255)",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMP",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS last_updated_from_paystub_at TIMESTAMP",
+            "ALTER TABLE employments ADD COLUMN IF NOT EXISTS last_paystub_id INTEGER",
+        ]
+
+        for stmt in alter_statements:
+            try:
+                db.execute(text(stmt))
+                results.append({"alter": stmt.split("ADD COLUMN")[-1].split("RENAME")[0][:40] if "ADD" in stmt else stmt[:40], "status": "ok"})
+            except Exception as e:
+                # Ignore errors like "column already exists" or "column doesn't exist for rename"
+                if "does not exist" not in str(e) and "already exists" not in str(e):
+                    results.append({"alter": stmt[:40], "status": "skipped", "note": str(e)[:50]})
+
+        db.commit()
+
         return {
             "success": True,
             "message": "Income tables migration completed",
