@@ -27906,6 +27906,166 @@ async def correct_and_train(
 # EMAIL RESPONSE QUEUE - AI Training for Email Handling
 # ============================================================================
 
+async def execute_email_response_action(
+    queue_item: Any,
+    final_action: str,
+    final_response: str,
+    user_id: int,
+    db: Session
+) -> Dict[str, Any]:
+    """
+    Execute the approved email response action.
+
+    Actions supported:
+    - acknowledge_and_update: Send reply email and update matched entity status
+    - reply: Just send reply email
+    - create_task: Create a task for follow-up
+    - archive: Mark as handled without action
+    - ignore: Do nothing
+
+    Returns dict with execution results.
+    """
+    from email_service import EmailService
+
+    results = {
+        "email_sent": False,
+        "status_updated": False,
+        "task_created": False,
+        "errors": []
+    }
+
+    try:
+        # Actions that require sending an email reply
+        if final_action in ["acknowledge_and_update", "reply", "send_reply"]:
+            if final_response and queue_item.sender_email:
+                try:
+                    email_service = EmailService()
+
+                    # Build reply subject
+                    original_subject = queue_item.subject or "Your Email"
+                    reply_subject = f"Re: {original_subject}" if not original_subject.startswith("Re:") else original_subject
+
+                    # Build HTML response
+                    html_body = f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px;">
+                        <p>{final_response.replace(chr(10), '<br>')}</p>
+                        <br>
+                        <p style="color: #666; font-size: 12px;">
+                            This response was sent on behalf of your loan officer.
+                        </p>
+                    </div>
+                    """
+
+                    # Send the reply
+                    email_sent = email_service.send_html_email(
+                        to_email=queue_item.sender_email,
+                        subject=reply_subject,
+                        html_body=html_body,
+                        plain_text_body=final_response
+                    )
+
+                    results["email_sent"] = email_sent
+                    if email_sent:
+                        logger.info(f"Sent email reply to {queue_item.sender_email} for queue item {queue_item.id}")
+                    else:
+                        results["errors"].append("Email service returned failure")
+
+                except Exception as e:
+                    logger.error(f"Failed to send email reply: {e}")
+                    results["errors"].append(f"Email send failed: {str(e)}")
+
+        # Actions that require updating entity status
+        if final_action in ["acknowledge_and_update", "update_status"]:
+            if queue_item.matched_entity_type and queue_item.matched_entity_id:
+                try:
+                    entity_type = queue_item.matched_entity_type
+                    entity_id = queue_item.matched_entity_id
+                    email_intent = queue_item.email_intent
+
+                    # Map email intent to status update
+                    status_mapping = {
+                        "Clear to Close": "Clear to Close",
+                        "Underwriting Update": "In Underwriting",
+                        "Conditional Approval": "Conditionally Approved",
+                        "Final Approval": "Approved",
+                        "Funded": "Funded",
+                        "Closing Scheduled": "Closing Scheduled",
+                        "Docs Out": "Docs Out",
+                        "Docs Back": "Docs Back"
+                    }
+
+                    new_status = status_mapping.get(email_intent)
+
+                    if new_status and entity_type.lower() == "loan":
+                        # Update loan status
+                        db.execute(text("""
+                            UPDATE loans
+                            SET status = :status,
+                                updated_at = NOW()
+                            WHERE id = :loan_id
+                        """), {"status": new_status, "loan_id": entity_id})
+
+                        # Log the status change
+                        db.execute(text("""
+                            INSERT INTO loan_status_history
+                            (loan_id, old_status, new_status, changed_by, change_reason, created_at)
+                            SELECT :loan_id, status, :new_status, :user_id, :reason, NOW()
+                            FROM loans WHERE id = :loan_id
+                        """), {
+                            "loan_id": entity_id,
+                            "new_status": new_status,
+                            "user_id": user_id,
+                            "reason": f"Auto-updated from email: {queue_item.subject}"
+                        })
+
+                        results["status_updated"] = True
+                        logger.info(f"Updated loan {entity_id} status to {new_status}")
+
+                except Exception as e:
+                    logger.error(f"Failed to update entity status: {e}")
+                    results["errors"].append(f"Status update failed: {str(e)}")
+
+        # Actions that create a task
+        if final_action == "create_task":
+            try:
+                task_title = f"Follow up: {queue_item.subject}"
+                task_description = f"Email from {queue_item.sender_email}\n\nRecommended action: {final_response}"
+
+                db.execute(text("""
+                    INSERT INTO tasks
+                    (title, description, assigned_to, status, priority, created_at, due_date)
+                    VALUES (:title, :description, :user_id, 'pending', 'normal', NOW(), NOW() + INTERVAL '1 day')
+                """), {
+                    "title": task_title,
+                    "description": task_description,
+                    "user_id": user_id
+                })
+
+                results["task_created"] = True
+                logger.info(f"Created follow-up task for queue item {queue_item.id}")
+
+            except Exception as e:
+                logger.error(f"Failed to create task: {e}")
+                results["errors"].append(f"Task creation failed: {str(e)}")
+
+        # Log the execution
+        db.execute(text("""
+            UPDATE email_response_queue
+            SET executed_at = NOW(),
+                execution_result = :result
+            WHERE id = :queue_id
+        """), {
+            "queue_id": queue_item.id,
+            "result": str(results)
+        })
+
+    except Exception as e:
+        logger.error(f"Error executing email response action: {e}")
+        results["errors"].append(str(e))
+
+    return results
+
+
 class EmailResponseApproval(BaseModel):
     """Schema for approving/rejecting email response recommendations"""
     queue_id: int
@@ -28106,15 +28266,23 @@ async def approve_email_response(
 
         db.commit()
 
-        # TODO: Execute the approved action (send email, create task, etc.)
-        # This would integrate with Microsoft Graph for sending, task creation, etc.
+        # Execute the approved action (send email, update status, create task, etc.)
+        execution_result = await execute_email_response_action(
+            queue_item=queue_item,
+            final_action=final_action,
+            final_response=final_response,
+            user_id=current_user.id,
+            db=db
+        )
+        db.commit()  # Commit execution changes
 
         return {
             "status": "success",
-            "message": f"Email response approved. Pattern confidence will increase.",
+            "message": f"Email response approved and executed.",
             "pattern_id": pattern_id,
             "action_taken": final_action,
-            "auto_execute_enabled": approval.enable_auto_execute
+            "auto_execute_enabled": approval.enable_auto_execute,
+            "execution_result": execution_result
         }
 
     except HTTPException:

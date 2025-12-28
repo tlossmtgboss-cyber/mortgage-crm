@@ -1302,6 +1302,18 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
         execution_columns = [
             "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS user_email VARCHAR(255)",
             "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS execution_time_ms FLOAT",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS input_text TEXT",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS input_data JSONB DEFAULT '{}'",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS output_data JSONB DEFAULT '{}'",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS trajectory JSONB DEFAULT '[]'",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS tool_calls JSONB DEFAULT '[]'",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS total_cost NUMERIC(10,4) DEFAULT 0",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS response_time_ms INTEGER",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS success BOOLEAN",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS error_message TEXT",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS started_at TIMESTAMP WITH TIME ZONE",
+            "ALTER TABLE agent_executions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE",
         ]
 
         for sql in execution_columns:
