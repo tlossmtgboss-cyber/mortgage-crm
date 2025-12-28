@@ -662,6 +662,235 @@ async def test_salesforce_connection(
         }
 
 
+# ============ Schema Exploration Endpoints ============
+
+@router.get("/explore/objects")
+async def explore_salesforce_objects(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """List all available Salesforce objects."""
+    user_id = get_current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    integration = db.execute(text("""
+        SELECT access_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(status_code=400, detail="Not connected to Salesforce")
+
+    access_token = integration[0]
+    instance_url = None
+    if integration[1] and "instance_url:" in integration[1]:
+        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(status_code=400, detail="Instance URL not found")
+
+    import requests
+
+    try:
+        # Get global describe (list of all objects)
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.get(
+            f"{instance_url}/services/data/v58.0/sobjects/",
+            headers=headers
+        )
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Filter to relevant objects (custom objects and standard loan-related)
+        relevant_objects = []
+        loan_keywords = ['loan', 'mortgage', 'opportunity', 'account', 'contact', 'lead', 'transaction', 'property', 'mtg']
+
+        for obj in data.get('sobjects', []):
+            obj_name = obj.get('name', '').lower()
+            # Include custom objects and loan-related standard objects
+            if obj.get('custom') or any(kw in obj_name for kw in loan_keywords):
+                relevant_objects.append({
+                    "name": obj.get('name'),
+                    "label": obj.get('label'),
+                    "custom": obj.get('custom'),
+                    "queryable": obj.get('queryable'),
+                    "createable": obj.get('createable'),
+                    "updateable": obj.get('updateable'),
+                })
+
+        return {
+            "instance_url": instance_url,
+            "total_objects": len(data.get('sobjects', [])),
+            "relevant_objects": sorted(relevant_objects, key=lambda x: x['name']),
+            "relevant_count": len(relevant_objects)
+        }
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Salesforce API error: {e}")
+        raise HTTPException(status_code=502, detail=f"Salesforce API error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Failed to explore Salesforce objects: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/explore/objects/{object_name}")
+async def explore_salesforce_object_fields(
+    object_name: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get fields for a specific Salesforce object."""
+    user_id = get_current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    integration = db.execute(text("""
+        SELECT access_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(status_code=400, detail="Not connected to Salesforce")
+
+    access_token = integration[0]
+    instance_url = None
+    if integration[1] and "instance_url:" in integration[1]:
+        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(status_code=400, detail="Instance URL not found")
+
+    import requests
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Get object describe (field details)
+        response = requests.get(
+            f"{instance_url}/services/data/v58.0/sobjects/{object_name}/describe/",
+            headers=headers
+        )
+        response.raise_for_status()
+
+        data = response.json()
+
+        fields = []
+        for field in data.get('fields', []):
+            fields.append({
+                "name": field.get('name'),
+                "label": field.get('label'),
+                "type": field.get('type'),
+                "length": field.get('length'),
+                "custom": field.get('custom'),
+                "nillable": field.get('nillable'),
+                "picklistValues": [pv.get('value') for pv in field.get('picklistValues', [])] if field.get('type') == 'picklist' else None,
+            })
+
+        return {
+            "object_name": object_name,
+            "label": data.get('label'),
+            "custom": data.get('custom'),
+            "field_count": len(fields),
+            "fields": sorted(fields, key=lambda x: x['name'])
+        }
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Salesforce API error: {e}")
+        raise HTTPException(status_code=502, detail=f"Salesforce API error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Failed to describe object: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/explore/query")
+async def explore_salesforce_query(
+    request: Request,
+    object_name: str = Query(..., description="Salesforce object name"),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Query sample records from a Salesforce object."""
+    user_id = get_current_user_id(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    integration = db.execute(text("""
+        SELECT access_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(status_code=400, detail="Not connected to Salesforce")
+
+    access_token = integration[0]
+    instance_url = None
+    if integration[1] and "instance_url:" in integration[1]:
+        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(status_code=400, detail="Instance URL not found")
+
+    from integrations.salesforce_service import salesforce_client
+
+    # First get all queryable fields
+    import requests
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        # Get object describe to find queryable fields
+        describe_response = requests.get(
+            f"{instance_url}/services/data/v58.0/sobjects/{object_name}/describe/",
+            headers=headers
+        )
+        describe_response.raise_for_status()
+        describe_data = describe_response.json()
+
+        # Get important fields (excluding large blob fields)
+        queryable_fields = []
+        for field in describe_data.get('fields', []):
+            if field.get('type') not in ['base64', 'address', 'location']:
+                queryable_fields.append(field.get('name'))
+
+        # Limit fields to avoid query size issues
+        fields_to_query = queryable_fields[:30]  # First 30 fields
+
+        # Build and execute query
+        field_list = ", ".join(fields_to_query)
+        soql = f"SELECT {field_list} FROM {object_name} LIMIT {limit}"
+
+        result = salesforce_client.query(access_token, instance_url, soql)
+
+        if result:
+            return {
+                "object_name": object_name,
+                "query": soql,
+                "total_size": result.get("totalSize", 0),
+                "records": result.get("records", []),
+                "fields_queried": fields_to_query
+            }
+        else:
+            raise HTTPException(status_code=502, detail="Query failed")
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Salesforce API error: {e}")
+        raise HTTPException(status_code=502, detail=f"Salesforce API error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============ Admin Migration Endpoint ============
 
 @router.get("/admin/run-migration")
