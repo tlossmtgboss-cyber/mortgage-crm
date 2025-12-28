@@ -407,12 +407,26 @@ async def get_all_integrations(
 ):
     """Get all available integrations with their status."""
     try:
-        # In production, fetch connection status from database
+        # Get user ID from current_user
+        user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+
+        # Fetch connected integrations from database
+        connected_providers = set()
+        if user_id:
+            from sqlalchemy import text
+            try:
+                result = db.execute(text("""
+                    SELECT provider FROM user_integrations WHERE user_id = :user_id
+                """), {"user_id": int(user_id)}).fetchall()
+                connected_providers = {row[0] for row in result}
+            except Exception as e:
+                logger.warning(f"Could not fetch connected integrations: {e}")
+
         integrations = []
         for int_id, int_info in INTEGRATIONS.items():
             integrations.append({
                 **int_info,
-                "status": "disconnected",  # Would be fetched from DB
+                "status": "connected" if int_id in connected_providers else "disconnected",
                 "connected_at": None,
                 "last_sync": None,
                 "config": None
@@ -430,7 +444,7 @@ async def get_all_integrations(
             "integrations": integrations,
             "by_category": by_category,
             "total": len(integrations),
-            "connected": 0  # Would be counted from DB
+            "connected": len(connected_providers)
         }, "Integrations retrieved")
 
     except Exception as e:
