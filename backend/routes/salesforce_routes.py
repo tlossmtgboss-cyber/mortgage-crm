@@ -168,17 +168,6 @@ async def salesforce_callback(
 
     # Store tokens in user_integrations table
     try:
-        # Fix table schema - alter user_id column to INTEGER if it's VARCHAR
-        try:
-            db.execute(text("""
-                ALTER TABLE user_integrations
-                ALTER COLUMN user_id TYPE INTEGER USING user_id::INTEGER
-            """))
-            db.commit()
-            logger.info("Fixed user_integrations.user_id column type")
-        except Exception:
-            db.rollback()  # Table might not exist or column is already correct
-
         # Ensure table exists with correct schema
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS user_integrations (
@@ -197,6 +186,20 @@ async def salesforce_callback(
             )
         """))
         db.commit()
+
+        # Add missing columns if they don't exist
+        for col, col_type in [
+            ("email", "VARCHAR(255)"),
+            ("provider_user_id", "VARCHAR(255)"),
+            ("scopes", "TEXT"),
+            ("expires_at", "TIMESTAMP"),
+            ("refresh_token", "TEXT"),
+        ]:
+            try:
+                db.execute(text(f"ALTER TABLE user_integrations ADD COLUMN IF NOT EXISTS {col} {col_type}"))
+                db.commit()
+            except Exception:
+                db.rollback()
 
         # Check if integration already exists
         existing = db.execute(text("""
