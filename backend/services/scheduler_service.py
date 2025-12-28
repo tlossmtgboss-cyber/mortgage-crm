@@ -165,6 +165,19 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # LISTING AGENT PORTAL JOBS
+        # =================================================================
+
+        # Listing agent weekly updates - runs every Monday at 9 AM
+        self.scheduler.add_job(
+            func=self.run_listing_weekly_updates,
+            trigger=CronTrigger(day_of_week="mon", hour=9, minute=0),
+            id="listing_weekly_updates",
+            name="Send Listing Agent Weekly Updates",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -925,6 +938,37 @@ class SchedulerService:
 
         except Exception as e:
             logger.error(f"AI autonomous execution job failed: {e}")
+        finally:
+            session.close()
+
+    # =========================================================================
+    # LISTING AGENT PORTAL METHODS
+    # =========================================================================
+
+    def run_listing_weekly_updates(self):
+        """Send weekly updates to listing agents for their active transactions."""
+        logger.info("Running listing agent weekly updates job")
+
+        session = get_db_session()
+
+        try:
+            from jobs.listing_weekly_update_job import run_weekly_updates
+
+            result = run_weekly_updates(dry_run=False)
+
+            logger.info(
+                f"Listing weekly updates complete: "
+                f"{result.get('emails_sent', 0)} emails sent, "
+                f"{result.get('emails_failed', 0)} failed, "
+                f"{result.get('parties_processed', 0)} parties processed"
+            )
+
+            if result.get("errors"):
+                for error in result["errors"][:5]:
+                    logger.warning(f"Listing update error: {error}")
+
+        except Exception as e:
+            logger.error(f"Listing weekly updates job failed: {e}")
         finally:
             session.close()
 

@@ -545,3 +545,60 @@ async def run_migration(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/trigger-weekly-updates")
+async def trigger_weekly_updates(
+    admin_key: str = Query(..., description="Admin API key"),
+    dry_run: bool = Query(False, description="If true, don't send emails"),
+    organization_id: Optional[int] = Query(None, description="Filter by organization"),
+    db: Session = Depends(get_db)
+):
+    """Manually trigger the weekly update job (admin only)"""
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from jobs.listing_weekly_update_job import run_weekly_updates
+
+        result = run_weekly_updates(
+            organization_id=organization_id,
+            dry_run=dry_run
+        )
+
+        return success_response(result, "Weekly updates job completed")
+
+    except Exception as e:
+        logger.error(f"Weekly updates trigger error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/scheduler-status")
+async def get_scheduler_status(
+    admin_key: str = Query(..., description="Admin API key")
+):
+    """Get the status of all scheduled jobs (admin only)"""
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from services.scheduler_service import scheduler_service
+
+        jobs = scheduler_service.get_job_status()
+
+        # Filter to just listing-related jobs
+        listing_jobs = [j for j in jobs if "listing" in j["id"].lower()]
+
+        return success_response({
+            "all_jobs": jobs,
+            "listing_jobs": listing_jobs,
+            "scheduler_running": scheduler_service.scheduler.running
+        })
+
+    except Exception as e:
+        logger.error(f"Scheduler status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

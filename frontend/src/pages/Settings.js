@@ -19,6 +19,7 @@ import AIDailyBlog from './AIDailyBlog';
 import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
 import ApplicationSlidesEditor from '../components/ApplicationSlidesEditor';
 import BusinessOpsDashboard from './BusinessOpsDashboard';
+import IntegrationSettings from './IntegrationSettings';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -361,7 +362,7 @@ function Settings() {
     { id: 'client-portal-settings', label: 'Client Portal Settings', type: 'standalone', section: 'client-portal-settings', navigate: '/settings/client-portal' },
     { id: 'lead-capture', label: 'Lead Capture', type: 'standalone', section: 'lead-capture', navigate: '/settings/lead-capture' },
     { id: 'communication-preferences', label: 'Communication Preferences', type: 'standalone', section: 'communication-preferences', navigate: '/settings/communication' },
-    { id: 'integration-settings', label: 'Integrations', type: 'standalone', section: 'integration-settings', navigate: '/settings/integrations' },
+    { id: 'integration-settings', label: 'Integrations', type: 'standalone', section: 'integration-settings' },
     { id: 'api-keys-settings', label: 'API Keys & Webhooks', type: 'standalone', section: 'api-keys-settings', navigate: '/settings/api-keys' },
     { id: 'company-branding', label: 'Company & Branding', type: 'standalone', section: 'company-branding', navigate: '/settings/company-branding' },
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },

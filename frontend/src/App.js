@@ -122,6 +122,7 @@ const RealtorPortal = lazy(() => import('./pages/RealtorPortal'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const AgentProfile = lazy(() => import('./pages/AgentProfile'));
+const AcquisitionDashboard = lazy(() => import('./pages/AcquisitionDashboard'));
 const AgentGym = lazy(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazy(() => import('./pages/AgentGovernanceSettings'));
 const SmartSchedulerSettings = lazy(() => import('./pages/SmartSchedulerSettings'));
@@ -1144,6 +1145,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AgentDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/acquisition"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AcquisitionDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

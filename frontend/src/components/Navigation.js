@@ -74,6 +74,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             AI Outreach
           </Link>
           <Link
+            to="/acquisition"
+            className={`nav-link ${isActive('/acquisition') ? 'active' : ''}`}
+          >
+            Acquisition
+          </Link>
+          <Link
             to="/conversation-intelligence"
             className={`nav-link ${isActive('/conversation-intelligence') || location.pathname.startsWith('/conversation-intelligence/') ? 'active' : ''}`}
           >
