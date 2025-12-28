@@ -787,3 +787,267 @@ def _parse_pay_frequency(freq_str: Optional[str]) -> Optional[PayrollFrequency]:
         return PayrollFrequency(freq_str.upper())
     except ValueError:
         return None
+
+
+# =============================================================================
+# ADMIN / MIGRATION ENDPOINT
+# =============================================================================
+
+@router.get("/admin/run-migration")
+async def run_income_migration(
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Run income tables migration on the database.
+    Protected by admin key.
+    """
+    import os
+    from sqlalchemy import text
+
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = []
+
+    # Define all tables to create
+    tables_sql = {
+        "income_sources": """
+            CREATE TABLE IF NOT EXISTS income_sources (
+                id SERIAL PRIMARY KEY,
+                borrower_id INTEGER NOT NULL,
+                loan_id INTEGER NOT NULL,
+                employment_id INTEGER,
+                income_type VARCHAR(50) NOT NULL,
+                source_name VARCHAR(255),
+                monthly_qualifying_income DECIMAL(15,2),
+                annual_qualifying_income DECIMAL(15,2),
+                calculation_method VARCHAR(50),
+                calculation_notes TEXT,
+                calculation_date TIMESTAMP,
+                extracted_data JSONB,
+                supporting_document_ids JSONB,
+                trending_direction VARCHAR(20),
+                declining_income_flag BOOLEAN DEFAULT FALSE,
+                variable_income_flag BOOLEAN DEFAULT FALSE,
+                verification_status VARCHAR(50) DEFAULT 'PENDING',
+                verified_by INTEGER,
+                verified_at TIMESTAMP,
+                is_primary BOOLEAN DEFAULT FALSE,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """,
+        "paystub_extractions": """
+            CREATE TABLE IF NOT EXISTS paystub_extractions (
+                id SERIAL PRIMARY KEY,
+                document_id INTEGER NOT NULL,
+                income_source_id INTEGER,
+                borrower_id INTEGER NOT NULL,
+                employer_name VARCHAR(255),
+                employer_address_line1 VARCHAR(255),
+                employer_address_line2 VARCHAR(255),
+                employer_city VARCHAR(100),
+                employer_state VARCHAR(50),
+                employer_zip VARCHAR(20),
+                employer_phone VARCHAR(50),
+                employer_ein VARCHAR(20),
+                employee_name VARCHAR(255),
+                employee_address_line1 VARCHAR(255),
+                employee_city VARCHAR(100),
+                employee_state VARCHAR(50),
+                employee_zip VARCHAR(20),
+                ssn_last4 VARCHAR(4),
+                employee_id VARCHAR(50),
+                hire_date DATE,
+                pay_period_start DATE,
+                pay_period_end DATE,
+                pay_date DATE,
+                pay_frequency VARCHAR(20),
+                gross_pay DECIMAL(12,2),
+                net_pay DECIMAL(12,2),
+                regular_hours DECIMAL(8,2),
+                overtime_hours DECIMAL(8,2),
+                hourly_rate DECIMAL(10,2),
+                regular_earnings DECIMAL(12,2),
+                overtime_earnings DECIMAL(12,2),
+                bonus DECIMAL(12,2),
+                commission DECIMAL(12,2),
+                ytd_gross DECIMAL(15,2),
+                ytd_net DECIMAL(15,2),
+                ytd_bonus DECIMAL(12,2),
+                ytd_commission DECIMAL(12,2),
+                ytd_overtime DECIMAL(12,2),
+                federal_tax DECIMAL(12,2),
+                state_tax DECIMAL(12,2),
+                local_tax DECIMAL(12,2),
+                social_security DECIMAL(12,2),
+                medicare DECIMAL(12,2),
+                retirement_401k DECIMAL(12,2),
+                health_insurance DECIMAL(12,2),
+                other_deductions DECIMAL(12,2),
+                raw_extraction JSONB,
+                extraction_confidence DECIMAL(5,2),
+                expires_at DATE,
+                applied_to_profile BOOLEAN DEFAULT FALSE,
+                applied_at TIMESTAMP,
+                applied_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """,
+        "employments": """
+            CREATE TABLE IF NOT EXISTS employments (
+                id SERIAL PRIMARY KEY,
+                borrower_id INTEGER NOT NULL,
+                loan_id INTEGER NOT NULL,
+                employer_name VARCHAR(255),
+                employer_address_line1 VARCHAR(255),
+                employer_address_line2 VARCHAR(255),
+                employer_city VARCHAR(100),
+                employer_state VARCHAR(50),
+                employer_zip VARCHAR(20),
+                employer_phone VARCHAR(50),
+                employer_ein VARCHAR(20),
+                job_title VARCHAR(255),
+                start_date DATE,
+                end_date DATE,
+                years_employed DECIMAL(5,2),
+                is_current BOOLEAN DEFAULT TRUE,
+                is_self_employed BOOLEAN DEFAULT FALSE,
+                is_salaried BOOLEAN DEFAULT TRUE,
+                is_hourly BOOLEAN DEFAULT FALSE,
+                pay_frequency VARCHAR(20),
+                ownership_percentage DECIMAL(5,2),
+                source_document_ids JSONB,
+                verified_by_voe BOOLEAN DEFAULT FALSE,
+                voe_date DATE,
+                voe_document_id INTEGER,
+                verification_status VARCHAR(50) DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """,
+        "self_employment_income": """
+            CREATE TABLE IF NOT EXISTS self_employment_income (
+                id SERIAL PRIMARY KEY,
+                income_source_id INTEGER NOT NULL,
+                borrower_id INTEGER NOT NULL,
+                tax_year INTEGER NOT NULL,
+                business_name VARCHAR(255),
+                business_type VARCHAR(50),
+                gross_receipts DECIMAL(15,2),
+                cost_of_goods_sold DECIMAL(15,2),
+                gross_profit DECIMAL(15,2),
+                total_expenses DECIMAL(15,2),
+                net_profit_loss DECIMAL(15,2),
+                depreciation DECIMAL(12,2),
+                depletion DECIMAL(12,2),
+                amortization DECIMAL(12,2),
+                business_use_of_home DECIMAL(12,2),
+                meals_entertainment DECIMAL(12,2),
+                non_recurring_expenses DECIMAL(12,2),
+                add_back_total DECIMAL(12,2),
+                adjusted_income DECIMAL(15,2),
+                k1_ordinary_income DECIMAL(15,2),
+                k1_guaranteed_payments DECIMAL(15,2),
+                k1_distributions DECIMAL(15,2),
+                ownership_percentage DECIMAL(5,2),
+                source_document_id INTEGER,
+                extracted_data JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """,
+        "rental_income_properties": """
+            CREATE TABLE IF NOT EXISTS rental_income_properties (
+                id SERIAL PRIMARY KEY,
+                income_source_id INTEGER NOT NULL,
+                borrower_id INTEGER NOT NULL,
+                property_address VARCHAR(500),
+                property_type VARCHAR(50),
+                ownership_percentage DECIMAL(5,2) DEFAULT 100.00,
+                gross_rents_year1 DECIMAL(12,2),
+                gross_rents_year2 DECIMAL(12,2),
+                total_expenses_year1 DECIMAL(12,2),
+                total_expenses_year2 DECIMAL(12,2),
+                depreciation_year1 DECIMAL(12,2),
+                depreciation_year2 DECIMAL(12,2),
+                insurance_year1 DECIMAL(12,2),
+                insurance_year2 DECIMAL(12,2),
+                mortgage_interest_year1 DECIMAL(12,2),
+                mortgage_interest_year2 DECIMAL(12,2),
+                taxes_year1 DECIMAL(12,2),
+                taxes_year2 DECIMAL(12,2),
+                hoa_fees_year1 DECIMAL(12,2),
+                hoa_fees_year2 DECIMAL(12,2),
+                net_rental_income_year1 DECIMAL(12,2),
+                net_rental_income_year2 DECIMAL(12,2),
+                adjusted_income_year1 DECIMAL(12,2),
+                adjusted_income_year2 DECIMAL(12,2),
+                two_year_average DECIMAL(12,2),
+                monthly_qualifying_income DECIMAL(12,2),
+                vacancy_factor_applied BOOLEAN DEFAULT TRUE,
+                vacancy_percentage DECIMAL(5,2) DEFAULT 25.00,
+                is_subject_property BOOLEAN DEFAULT FALSE,
+                lease_document_id INTEGER,
+                schedule_e_document_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """,
+        "income_calculation_history": """
+            CREATE TABLE IF NOT EXISTS income_calculation_history (
+                id SERIAL PRIMARY KEY,
+                income_source_id INTEGER NOT NULL,
+                calculated_by INTEGER,
+                calculation_method VARCHAR(50),
+                monthly_income DECIMAL(15,2),
+                annual_income DECIMAL(15,2),
+                input_data JSONB,
+                calculation_breakdown JSONB,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+    }
+
+    try:
+        for table_name, sql in tables_sql.items():
+            try:
+                db.execute(text(sql))
+                results.append({"table": table_name, "status": "created"})
+                logger.info(f"Created table: {table_name}")
+            except Exception as e:
+                results.append({"table": table_name, "status": "error", "error": str(e)})
+                logger.error(f"Error creating table {table_name}: {e}")
+
+        db.commit()
+
+        # Create indexes
+        indexes = [
+            ("ix_income_sources_borrower", "CREATE INDEX IF NOT EXISTS ix_income_sources_borrower ON income_sources(borrower_id)"),
+            ("ix_income_sources_loan", "CREATE INDEX IF NOT EXISTS ix_income_sources_loan ON income_sources(loan_id)"),
+            ("ix_income_sources_type", "CREATE INDEX IF NOT EXISTS ix_income_sources_type ON income_sources(income_type)"),
+            ("ix_paystub_document", "CREATE INDEX IF NOT EXISTS ix_paystub_document ON paystub_extractions(document_id)"),
+            ("ix_paystub_borrower", "CREATE INDEX IF NOT EXISTS ix_paystub_borrower ON paystub_extractions(borrower_id)"),
+            ("ix_employment_borrower", "CREATE INDEX IF NOT EXISTS ix_employment_borrower ON employments(borrower_id)"),
+        ]
+
+        for idx_name, idx_sql in indexes:
+            try:
+                db.execute(text(idx_sql))
+                results.append({"index": idx_name, "status": "created"})
+            except Exception as e:
+                results.append({"index": idx_name, "status": "error", "error": str(e)})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Income tables migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
