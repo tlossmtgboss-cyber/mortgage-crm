@@ -57,25 +57,85 @@ EXTRACTION_SCHEMAS = {
     DocType.PAYSTUB: {
         "description": "Pay stub / earnings statement",
         "fields": {
-            "employee_name": {"type": "string", "category": "identity", "lead_field": None},
+            # === EMPLOYER INFORMATION ===
             "employer_name": {"type": "string", "category": "employment", "lead_field": "employer_name"},
-            "employer_address": {"type": "string", "category": "employment", "lead_field": None},
-            "pay_date": {"type": "date", "category": "dates", "lead_field": None},
+            "employer_address_line1": {"type": "string", "category": "employment", "lead_field": None},
+            "employer_address_line2": {"type": "string", "category": "employment", "lead_field": None},
+            "employer_city": {"type": "string", "category": "employment", "lead_field": None},
+            "employer_state": {"type": "string", "category": "employment", "lead_field": None},
+            "employer_zip": {"type": "string", "category": "employment", "lead_field": None},
+            "employer_phone": {"type": "string", "category": "employment", "lead_field": None},
+            "employer_ein": {"type": "string", "category": "employment", "lead_field": None},
+
+            # === EMPLOYEE INFORMATION ===
+            "employee_name": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_address_line1": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_address_line2": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_city": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_state": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_zip": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_ssn_last4": {"type": "string", "category": "identity", "lead_field": None},
+            "employee_id": {"type": "string", "category": "identity", "lead_field": None},
+            "hire_date": {"type": "date", "category": "employment", "lead_field": None},
+
+            # === PAY PERIOD INFORMATION ===
             "pay_period_start": {"type": "date", "category": "dates", "lead_field": None},
             "pay_period_end": {"type": "date", "category": "dates", "lead_field": None},
-            "gross_pay": {"type": "currency", "category": "income", "lead_field": None},
-            "net_pay": {"type": "currency", "category": "income", "lead_field": None},
-            "ytd_gross": {"type": "currency", "category": "income", "lead_field": None},
-            "ytd_net": {"type": "currency", "category": "income", "lead_field": None},
+            "pay_date": {"type": "date", "category": "dates", "lead_field": None},
             "pay_frequency": {"type": "enum", "category": "employment", "lead_field": None,
                               "values": ["weekly", "biweekly", "semimonthly", "monthly"]},
+
+            # === CURRENT PERIOD EARNINGS ===
+            "gross_pay": {"type": "currency", "category": "income", "lead_field": None},
+            "net_pay": {"type": "currency", "category": "income", "lead_field": None},
+            "regular_hours": {"type": "number", "category": "income", "lead_field": None},
+            "overtime_hours": {"type": "number", "category": "income", "lead_field": None},
             "hourly_rate": {"type": "currency", "category": "income", "lead_field": None},
-            "hours_worked": {"type": "number", "category": "income", "lead_field": None},
+            "regular_earnings": {"type": "currency", "category": "income", "lead_field": None},
+            "overtime_earnings": {"type": "currency", "category": "income", "lead_field": None},
+            "bonus": {"type": "currency", "category": "income", "lead_field": None},
+            "commission": {"type": "currency", "category": "income", "lead_field": None},
+            "tips": {"type": "currency", "category": "income", "lead_field": None},
+            "other_earnings": {"type": "currency", "category": "income", "lead_field": None},
+
+            # === YEAR-TO-DATE TOTALS ===
+            "ytd_gross": {"type": "currency", "category": "income", "lead_field": None},
+            "ytd_net": {"type": "currency", "category": "income", "lead_field": None},
+            "ytd_regular_earnings": {"type": "currency", "category": "income", "lead_field": None},
+            "ytd_overtime_earnings": {"type": "currency", "category": "income", "lead_field": None},
+            "ytd_bonus": {"type": "currency", "category": "income", "lead_field": None},
+            "ytd_commission": {"type": "currency", "category": "income", "lead_field": None},
+            "ytd_tips": {"type": "currency", "category": "income", "lead_field": None},
+
+            # === CURRENT PERIOD DEDUCTIONS ===
+            "federal_tax": {"type": "currency", "category": "deductions", "lead_field": None},
+            "state_tax": {"type": "currency", "category": "deductions", "lead_field": None},
+            "local_tax": {"type": "currency", "category": "deductions", "lead_field": None},
+            "social_security": {"type": "currency", "category": "deductions", "lead_field": None},
+            "medicare": {"type": "currency", "category": "deductions", "lead_field": None},
+            "health_insurance": {"type": "currency", "category": "deductions", "lead_field": None},
+            "dental_insurance": {"type": "currency", "category": "deductions", "lead_field": None},
+            "vision_insurance": {"type": "currency", "category": "deductions", "lead_field": None},
+            "life_insurance": {"type": "currency", "category": "deductions", "lead_field": None},
+            "retirement_401k": {"type": "currency", "category": "deductions", "lead_field": None},
+            "hsa_fsa": {"type": "currency", "category": "deductions", "lead_field": None},
+            "other_deductions": {"type": "currency", "category": "deductions", "lead_field": None},
+
+            # === YTD DEDUCTIONS ===
+            "ytd_federal_tax": {"type": "currency", "category": "deductions", "lead_field": None},
+            "ytd_state_tax": {"type": "currency", "category": "deductions", "lead_field": None},
+            "ytd_social_security": {"type": "currency", "category": "deductions", "lead_field": None},
+            "ytd_medicare": {"type": "currency", "category": "deductions", "lead_field": None},
+            "ytd_retirement": {"type": "currency", "category": "deductions", "lead_field": None},
         },
         "calculated_fields": {
             "annual_income": {
                 "formula": "Calculate from YTD or extrapolate from period pay",
                 "lead_field": "annual_income"
+            },
+            "monthly_income": {
+                "formula": "Annual income / 12",
+                "lead_field": None
             }
         }
     },
@@ -523,6 +583,195 @@ Respond with ONLY the JSON object, no additional text."""
             return float(gross_pay) * multiplier
 
         return None
+
+    def extract_paystub_for_income(
+        self,
+        file_content: bytes,
+        mime_type: str,
+        ocr_text: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Extract comprehensive paystub data for income tracking system.
+
+        Returns a dictionary structured for the PaystubExtraction model with:
+        - All extracted fields
+        - Calculated annual/monthly income
+        - Expiration date based on pay frequency
+        - Confidence scores and extraction metadata
+        """
+        from datetime import date, timedelta
+
+        result = self.extract(
+            file_content=file_content,
+            mime_type=mime_type,
+            doc_type=DocType.PAYSTUB,
+            ocr_text=ocr_text,
+        )
+
+        if not result.success:
+            return {
+                "success": False,
+                "error": result.error,
+                "extraction_model": self.model,
+            }
+
+        fields = result.extracted_fields
+        confidences = result.confidence_scores
+
+        # Calculate expiration date based on pay frequency
+        pay_frequency = fields.get("pay_frequency", "").upper()
+        pay_date_str = fields.get("pay_date")
+
+        expiration_days = {
+            "WEEKLY": 7,
+            "BIWEEKLY": 30,
+            "SEMIMONTHLY": 30,
+            "MONTHLY": 45,
+        }
+
+        expires_at = None
+        if pay_date_str:
+            try:
+                # Parse pay date (should be ISO format YYYY-MM-DD)
+                pay_date = datetime.strptime(pay_date_str, "%Y-%m-%d").date()
+                days_until_expire = expiration_days.get(pay_frequency, 30)
+                expires_at = pay_date + timedelta(days=days_until_expire)
+            except (ValueError, TypeError):
+                # If pay date parsing fails, use document date + 30 days
+                expires_at = date.today() + timedelta(days=30)
+
+        # Calculate annual and monthly income
+        annual_income = self._calculate_annual_income(fields)
+        monthly_income = annual_income / 12 if annual_income else None
+
+        # Structure for PaystubExtraction model
+        paystub_data = {
+            "success": True,
+
+            # Employer info
+            "employer_name": fields.get("employer_name"),
+            "employer_address_line1": fields.get("employer_address_line1"),
+            "employer_address_line2": fields.get("employer_address_line2"),
+            "employer_city": fields.get("employer_city"),
+            "employer_state": fields.get("employer_state"),
+            "employer_zip": fields.get("employer_zip"),
+            "employer_phone": fields.get("employer_phone"),
+            "employer_ein": fields.get("employer_ein"),
+
+            # Employee info
+            "employee_name": fields.get("employee_name"),
+            "employee_address_line1": fields.get("employee_address_line1"),
+            "employee_address_line2": fields.get("employee_address_line2"),
+            "employee_city": fields.get("employee_city"),
+            "employee_state": fields.get("employee_state"),
+            "employee_zip": fields.get("employee_zip"),
+            "employee_ssn_last4": fields.get("employee_ssn_last4"),
+            "employee_id": fields.get("employee_id"),
+            "hire_date": fields.get("hire_date"),
+
+            # Pay period
+            "pay_period_start": fields.get("pay_period_start"),
+            "pay_period_end": fields.get("pay_period_end"),
+            "pay_date": pay_date_str,
+            "pay_frequency": pay_frequency if pay_frequency else None,
+
+            # Current earnings
+            "gross_pay": self._safe_decimal(fields.get("gross_pay")),
+            "net_pay": self._safe_decimal(fields.get("net_pay")),
+            "regular_hours": self._safe_decimal(fields.get("regular_hours")),
+            "overtime_hours": self._safe_decimal(fields.get("overtime_hours")),
+            "hourly_rate": self._safe_decimal(fields.get("hourly_rate")),
+            "regular_earnings": self._safe_decimal(fields.get("regular_earnings")),
+            "overtime_earnings": self._safe_decimal(fields.get("overtime_earnings")),
+            "bonus": self._safe_decimal(fields.get("bonus")),
+            "commission": self._safe_decimal(fields.get("commission")),
+            "tips": self._safe_decimal(fields.get("tips")),
+            "other_earnings": self._safe_decimal(fields.get("other_earnings")),
+
+            # YTD totals
+            "ytd_gross": self._safe_decimal(fields.get("ytd_gross")),
+            "ytd_net": self._safe_decimal(fields.get("ytd_net")),
+            "ytd_regular_earnings": self._safe_decimal(fields.get("ytd_regular_earnings")),
+            "ytd_overtime_earnings": self._safe_decimal(fields.get("ytd_overtime_earnings")),
+            "ytd_bonus": self._safe_decimal(fields.get("ytd_bonus")),
+            "ytd_commission": self._safe_decimal(fields.get("ytd_commission")),
+            "ytd_tips": self._safe_decimal(fields.get("ytd_tips")),
+
+            # Deductions
+            "federal_tax": self._safe_decimal(fields.get("federal_tax")),
+            "state_tax": self._safe_decimal(fields.get("state_tax")),
+            "local_tax": self._safe_decimal(fields.get("local_tax")),
+            "social_security": self._safe_decimal(fields.get("social_security")),
+            "medicare": self._safe_decimal(fields.get("medicare")),
+            "health_insurance": self._safe_decimal(fields.get("health_insurance")),
+            "dental_insurance": self._safe_decimal(fields.get("dental_insurance")),
+            "vision_insurance": self._safe_decimal(fields.get("vision_insurance")),
+            "life_insurance": self._safe_decimal(fields.get("life_insurance")),
+            "retirement_401k": self._safe_decimal(fields.get("retirement_401k")),
+            "hsa_fsa": self._safe_decimal(fields.get("hsa_fsa")),
+            "other_deductions": self._safe_decimal(fields.get("other_deductions")),
+
+            # YTD Deductions
+            "ytd_federal_tax": self._safe_decimal(fields.get("ytd_federal_tax")),
+            "ytd_state_tax": self._safe_decimal(fields.get("ytd_state_tax")),
+            "ytd_social_security": self._safe_decimal(fields.get("ytd_social_security")),
+            "ytd_medicare": self._safe_decimal(fields.get("ytd_medicare")),
+            "ytd_retirement": self._safe_decimal(fields.get("ytd_retirement")),
+
+            # Calculated fields
+            "calculated_annual_income": annual_income,
+            "calculated_monthly_income": monthly_income,
+            "annualization_method": "ytd_extrapolation" if fields.get("ytd_gross") else "period_multiplier",
+
+            # Freshness
+            "doc_date": pay_date_str,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "is_expired": expires_at < date.today() if expires_at else False,
+
+            # Extraction metadata
+            "extraction_confidence": result.overall_confidence,
+            "field_confidences": confidences,
+            "extraction_model": self.model,
+            "extraction_duration_ms": result.extraction_duration_ms,
+            "detected_names": result.detected_names,
+            "extraction_warnings": [],
+        }
+
+        # Add warnings for missing critical fields
+        if not fields.get("employer_name"):
+            paystub_data["extraction_warnings"].append("Employer name not found")
+        if not fields.get("gross_pay") and not fields.get("ytd_gross"):
+            paystub_data["extraction_warnings"].append("No income amounts found")
+        if not pay_date_str:
+            paystub_data["extraction_warnings"].append("Pay date not found - using current date for expiration")
+
+        return paystub_data
+
+    def _safe_decimal(self, value: Any) -> Optional[float]:
+        """Safely convert a value to float, returning None if invalid."""
+        if value is None:
+            return None
+        try:
+            # Handle string values with currency formatting
+            if isinstance(value, str):
+                value = value.replace("$", "").replace(",", "").strip()
+                if not value:
+                    return None
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
+
+# =============================================================================
+# PAY FREQUENCY EXPIRATION MAPPING
+# =============================================================================
+
+PAY_FREQUENCY_EXPIRATION_DAYS = {
+    "WEEKLY": 7,
+    "BIWEEKLY": 30,
+    "SEMIMONTHLY": 30,
+    "MONTHLY": 45,
+}
 
 
 # Singleton instance

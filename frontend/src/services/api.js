@@ -122,11 +122,42 @@ export const leadsAPI = {
     return response.data;
   },
   delete: async (id) => {
-    await api.delete(`/api/v1/leads/${id}`);
+    const maxRetries = 2;
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await api.delete(`/api/v1/leads/${id}`);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (error.message === 'Network Error' && attempt < maxRetries) {
+          console.log(`[leadsAPI.delete] Retrying after Network Error (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
   },
   bulkDelete: async (leadIds) => {
-    const response = await api.post('/api/v1/leads/bulk-delete', leadIds);
-    return response.data;
+    const maxRetries = 2;
+    let lastError;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await api.post('/api/v1/leads/bulk-delete', leadIds);
+        return response.data;
+      } catch (error) {
+        lastError = error;
+        if (error.message === 'Network Error' && attempt < maxRetries) {
+          console.log(`[leadsAPI.bulkDelete] Retrying after Network Error (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
   },
   getDocuments: async (leadId) => {
     const response = await api.get(`/api/v1/leads/${leadId}/documents`);
