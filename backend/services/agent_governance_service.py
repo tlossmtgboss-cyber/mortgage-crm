@@ -782,6 +782,83 @@ class AgentGovernanceService:
         logger.info(f"Updated health scores for {count} agents")
         return count
 
+    def get_dashboard_data(self) -> Dict[str, Any]:
+        """
+        Get comprehensive dashboard data for agent governance.
+        Combines health, metrics, alerts, and cost data.
+        """
+        # Get system health
+        health = self.get_system_health()
+
+        # Get recent executions summary
+        since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        since_7d = datetime.now(timezone.utc) - timedelta(days=7)
+
+        executions_24h = self.db.query(AgentExecution).filter(
+            AgentExecution.created_at >= since_24h
+        ).all()
+
+        executions_7d = self.db.query(AgentExecution).filter(
+            AgentExecution.created_at >= since_7d
+        ).all()
+
+        # Calculate metrics
+        total_24h = len(executions_24h)
+        success_24h = len([e for e in executions_24h if e.success])
+        failed_24h = total_24h - success_24h
+
+        total_7d = len(executions_7d)
+        success_7d = len([e for e in executions_7d if e.success])
+
+        # Calculate costs
+        cost_24h = sum(float(e.total_cost or 0) for e in executions_24h)
+        cost_7d = sum(float(e.total_cost or 0) for e in executions_7d)
+
+        # Get top agents by usage
+        agent_usage = {}
+        for e in executions_24h:
+            agent_usage[e.agent_name] = agent_usage.get(e.agent_name, 0) + 1
+
+        top_agents = sorted(agent_usage.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        # Get active alerts
+        alerts = self.db.query(AgentAlert).filter(
+            AgentAlert.status == 'active'
+        ).order_by(AgentAlert.created_at.desc()).limit(10).all()
+
+        return {
+            "health": health,
+            "metrics": {
+                "last_24h": {
+                    "total_executions": total_24h,
+                    "successful": success_24h,
+                    "failed": failed_24h,
+                    "success_rate": round((success_24h / total_24h * 100) if total_24h > 0 else 100, 1),
+                    "total_cost": round(cost_24h, 4)
+                },
+                "last_7d": {
+                    "total_executions": total_7d,
+                    "successful": success_7d,
+                    "failed": total_7d - success_7d,
+                    "success_rate": round((success_7d / total_7d * 100) if total_7d > 0 else 100, 1),
+                    "total_cost": round(cost_7d, 4)
+                }
+            },
+            "top_agents": [{"name": name, "executions": count} for name, count in top_agents],
+            "recent_alerts": [
+                {
+                    "id": str(a.id),
+                    "agent_name": a.agent_name,
+                    "alert_type": a.alert_type,
+                    "severity": a.severity,
+                    "title": a.title,
+                    "created_at": a.created_at.isoformat() if a.created_at else None
+                }
+                for a in alerts
+            ],
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+
     # =========================================================================
     # TOOL MANAGEMENT
     # =========================================================================
