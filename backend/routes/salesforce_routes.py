@@ -168,9 +168,10 @@ async def salesforce_callback(
 
     # Store tokens in user_integrations table
     try:
-        # Ensure table exists with correct schema
+        # Drop and recreate table with correct schema (one-time fix for broken table)
+        db.execute(text("DROP TABLE IF EXISTS user_integrations CASCADE"))
         db.execute(text("""
-            CREATE TABLE IF NOT EXISTS user_integrations (
+            CREATE TABLE user_integrations (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 provider VARCHAR(50) NOT NULL,
@@ -186,20 +187,7 @@ async def salesforce_callback(
             )
         """))
         db.commit()
-
-        # Add missing columns if they don't exist
-        for col, col_type in [
-            ("email", "VARCHAR(255)"),
-            ("provider_user_id", "VARCHAR(255)"),
-            ("scopes", "TEXT"),
-            ("expires_at", "TIMESTAMP"),
-            ("refresh_token", "TEXT"),
-        ]:
-            try:
-                db.execute(text(f"ALTER TABLE user_integrations ADD COLUMN IF NOT EXISTS {col} {col_type}"))
-                db.commit()
-            except Exception:
-                db.rollback()
+        logger.info("Recreated user_integrations table with correct schema")
 
         # Check if integration already exists
         existing = db.execute(text("""
