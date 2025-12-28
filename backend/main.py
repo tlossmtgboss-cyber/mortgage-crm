@@ -35994,6 +35994,64 @@ If you received this, email delivery is working!
         return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
 
 
+@app.post("/api/v1/debug/test-appointment-confirmation-email", tags=["Debug"])
+async def test_appointment_confirmation_email(
+    to_email: str = "tloss@me.com",
+    contact_name: str = "Test User",
+    lo_name: str = "Tim Loss",
+    appointment_date: str = "Monday, December 30, 2025 at 02:00 PM"
+):
+    """
+    Send a test appointment confirmation email to verify the email template works.
+    """
+    try:
+        from services.notification_service import NotificationService
+        from datetime import datetime
+
+        notification_service = NotificationService()
+
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1e40af;">Appointment Confirmed!</h2>
+            <p>Hi {contact_name},</p>
+            <p>Your appointment has been scheduled:</p>
+
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0;"><strong>Date & Time:</strong> {appointment_date}</p>
+                <p style="margin: 10px 0 0 0;"><strong>Duration:</strong> 30 minutes</p>
+                <p style="margin: 10px 0 0 0;"><strong>With:</strong> {lo_name}</p>
+            </div>
+
+            <p>{lo_name} will call you at the scheduled time to discuss your mortgage needs.</p>
+
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                Need to reschedule? Reply to this email or contact your loan officer.
+            </p>
+        </div>
+        """
+
+        result = notification_service.send_email(
+            to_email=to_email,
+            subject=f"Appointment Confirmed with {lo_name}",
+            html_content=html_content
+        )
+
+        return {
+            "status": "success" if result else "failed",
+            "email_sent": result,
+            "to_email": to_email,
+            "subject": f"Appointment Confirmed with {lo_name}",
+            "contact_name": contact_name,
+            "appointment_date": appointment_date,
+            "lo_name": lo_name,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Test appointment confirmation email error: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 @app.get("/debug/test-import")
 async def debug_test_import():
     """Test importing the smart scheduler modules"""
