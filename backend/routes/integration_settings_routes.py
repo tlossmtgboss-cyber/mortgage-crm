@@ -741,6 +741,44 @@ async def connect_integration(
                     "redirect_uri": os.getenv("ZOOM_REDIRECT_URI", "https://api.perenniaai.com/api/v1/zoom/callback")
                 }, "OAuth flow initiated - redirect to Zoom")
 
+            # Handle Slack OAuth
+            if integration_id == "slack":
+                from integrations.slack_service import slack_client
+                if not slack_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Slack integration not configured. Please set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}:{frontend_url}/settings/integrations"
+                oauth_url = slack_client.get_authorization_url(state=state)
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": os.getenv("SLACK_REDIRECT_URI", "https://api.perenniaai.com/api/v1/slack/callback")
+                }, "OAuth flow initiated - redirect to Slack")
+
+            # Handle DocuSign OAuth
+            if integration_id == "docusign":
+                from integrations.docusign_service import docusign_client
+                if not docusign_client.enabled:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("DocuSign integration not configured. Please set DOCUSIGN_CLIENT_ID and DOCUSIGN_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+                state = f"{user_id}:{frontend_url}/settings/integrations"
+                oauth_url = docusign_client.get_authorization_url(state=state)
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": os.getenv("DOCUSIGN_REDIRECT_URI", "https://api.perenniaai.com/api/v1/docusign/callback")
+                }, "OAuth flow initiated - redirect to DocuSign")
+
             # Generic OAuth URL for other integrations
             oauth_url = int_info.get("oauth_url", f"https://{integration_id}.com/oauth/authorize")
             return success_response({

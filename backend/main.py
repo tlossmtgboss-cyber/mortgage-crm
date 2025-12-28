@@ -20268,6 +20268,24 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Zoom routes not loaded: {e}")
 
+# Slack Integration routes (OAuth, Messaging)
+try:
+    from routes.slack_routes import router as slack_router, set_dependencies as set_slack_deps
+    set_slack_deps(get_db, get_current_user)
+    app.include_router(slack_router, tags=["Slack Integration"])
+    logger.info("✅ Slack routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Slack routes not loaded: {e}")
+
+# DocuSign Integration routes (OAuth, E-Signatures)
+try:
+    from routes.docusign_routes import router as docusign_router, set_dependencies as set_docusign_deps
+    set_docusign_deps(get_db, get_current_user)
+    app.include_router(docusign_router, tags=["DocuSign Integration"])
+    logger.info("✅ DocuSign routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ DocuSign routes not loaded: {e}")
+
 # Agent Governance routes (Agent Management & Monitoring)
 try:
     from routes.agent_governance_routes import router as agent_governance_router
