@@ -350,14 +350,33 @@ async def get_realtime_metrics(db: Session = Depends(get_db)):
             AIReceptionistError.timestamp >= today_start
         ).scalar() or 0
 
-        # Calculate average response time (placeholder - would need actual response time tracking)
-        avg_response_time = None
+        # Calculate average response time from today's conversations
+        avg_response_time = db.query(func.avg(AIReceptionistConversation.duration_seconds)).filter(
+            and_(
+                AIReceptionistConversation.started_at >= today_start,
+                AIReceptionistConversation.duration_seconds.isnot(None)
+            )
+        ).scalar()
 
-        # Calculate AI coverage (placeholder)
-        ai_coverage = (1 - (escalations_today / max(conversations_today, 1))) * 100 if conversations_today > 0 else 0
+        # If no conversations today, fall back to yesterday's daily metrics
+        if avg_response_time is None:
+            yesterday = today - timedelta(days=1)
+            yesterday_metrics = db.query(AIReceptionistMetricsDaily).filter(
+                AIReceptionistMetricsDaily.date == yesterday
+            ).first()
+            if yesterday_metrics and yesterday_metrics.response_time_avg_seconds:
+                avg_response_time = yesterday_metrics.response_time_avg_seconds
 
-        # Active conversations (placeholder - would need real-time tracking)
-        active_conversations = 0
+        # Calculate AI coverage (% of conversations handled without escalation)
+        ai_coverage = (1 - (escalations_today / max(conversations_today, 1))) * 100 if conversations_today > 0 else 100.0
+
+        # Count active conversations (started but not ended)
+        active_conversations = db.query(func.count(AIReceptionistConversation.id)).filter(
+            and_(
+                AIReceptionistConversation.started_at >= today_start,
+                AIReceptionistConversation.ended_at.is_(None)
+            )
+        ).scalar() or 0
 
         return RealtimeMetrics(
             conversations_today=conversations_today,
@@ -464,11 +483,33 @@ async def get_roi_metrics(
         # Calculate conversion rate
         appointment_to_app_rate = (total_apps_initiated / total_appointments * 100) if total_appointments > 0 else None
 
-        # Calculate cost per interaction (placeholder - would need actual cost tracking)
-        cost_per_interaction = 0.50  # Estimated
+        # Calculate cost per interaction from daily metrics, with fallback
+        if metrics and any(m.cost_per_interaction for m in metrics):
+            # Use average cost from recorded daily metrics
+            cost_values = [m.cost_per_interaction for m in metrics if m.cost_per_interaction]
+            cost_per_interaction = sum(cost_values) / len(cost_values) if cost_values else 0.50
+        else:
+            # Default estimate: ~$0.003 per 1K tokens for GPT-4o-mini, avg 500 tokens per interaction
+            # Plus Twilio SMS (~$0.0075/msg) or voice (~$0.013/min * 2 min avg)
+            # Rough estimate: $0.025 for SMS interactions, $0.03 for voice
+            cost_per_interaction = 0.025
 
-        # Calculate saved missed calls (placeholder)
-        saved_missed_calls = int(total_conversations * 0.35)  # Assume 35% would have been missed
+        # Calculate saved missed calls based on after-hours and overflow conversations
+        # Query for after-hours or high-volume period conversations
+        after_hours_count = db.query(func.count(AIReceptionistActivity.id)).filter(
+            and_(
+                AIReceptionistActivity.timestamp >= datetime.combine(start_date, datetime.min.time()),
+                AIReceptionistActivity.timestamp <= datetime.combine(end_date, datetime.max.time()),
+                AIReceptionistActivity.action_type.in_(['incoming_call', 'incoming_text']),
+                or_(
+                    func.extract('hour', AIReceptionistActivity.timestamp) < 8,
+                    func.extract('hour', AIReceptionistActivity.timestamp) >= 18
+                )
+            )
+        ).scalar() or 0
+        # After-hours calls would likely be missed, plus estimate 20% of daytime calls would go to VM
+        daytime_count = total_conversations - after_hours_count
+        saved_missed_calls = after_hours_count + int(daytime_count * 0.20)
 
         # Calculate total closes from activities with 'closed' lead_stage
         total_closes = db.query(AIReceptionistActivity).filter(
@@ -479,9 +520,11 @@ async def get_roi_metrics(
             )
         ).count()
 
-        # Calculate ROI (placeholder - needs real cost data)
+        # Calculate ROI based on cost per interaction and value created
         total_cost = total_conversations * cost_per_interaction
-        total_value = total_estimated_revenue + (total_saved_hours * 50)  # $50/hour labor cost
+        # Value = estimated revenue from applications + labor cost savings ($50/hr) + saved missed call value ($75 per potential missed lead)
+        missed_call_value = saved_missed_calls * 75  # Value of leads that would have been lost
+        total_value = total_estimated_revenue + (total_saved_hours * 50) + missed_call_value
         roi_percentage = ((total_value - total_cost) / total_cost * 100) if total_cost > 0 else None
 
         # Calculate cost per close
