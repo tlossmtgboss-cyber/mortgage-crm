@@ -2,7 +2,7 @@
 Integration API Routes
 Endpoints for SMS, Email, Teams, and Agentic AI
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -17,7 +17,23 @@ from integrations.microsoft_graph import graph_client
 from integrations.twilio_service import sms_client, SMSTemplates
 from integrations.agentic_ai import agentic_ai, TriggerType
 
+# OpenAI for AI-powered SMS responses
+try:
+    from services.openai_conversation_service import OpenAIConversationService
+    OPENAI_SERVICE_AVAILABLE = True
+except ImportError:
+    OpenAIConversationService = None
+    OPENAI_SERVICE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+# Initialize OpenAI conversation service for SMS
+_openai_sms_service = None
+def get_openai_sms_service():
+    global _openai_sms_service
+    if _openai_sms_service is None and OPENAI_SERVICE_AVAILABLE:
+        _openai_sms_service = OpenAIConversationService()
+    return _openai_sms_service
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
 security = HTTPBearer(auto_error=False)
@@ -206,12 +222,108 @@ async def get_sms_history(
     } for msg in messages]
 
 
+async def process_sms_with_ai(
+    from_number: str,
+    to_number: str,
+    message: str,
+    db: Session
+) -> Optional[str]:
+    """
+    Process incoming SMS with AI and generate a response.
+
+    Returns the AI response text, or None if AI is unavailable.
+    """
+    openai_service = get_openai_sms_service()
+    if not openai_service or not openai_service.enabled:
+        logger.warning("OpenAI service not available for SMS processing")
+        return None
+
+    try:
+        # Normalize phone number for lookup
+        phone_normalized = from_number.replace("+1", "").replace("+", "").replace("-", "").replace(" ", "")
+
+        # Look up lead/client by phone number
+        contact_result = db.execute(text("""
+            SELECT 'lead' as type, id, first_name, email, phone
+            FROM leads
+            WHERE REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '+1', '') = :phone
+            LIMIT 1
+        """), {"phone": phone_normalized})
+        contact = contact_result.fetchone()
+
+        contact_info = {}
+        contact_id = None
+        if contact:
+            contact_info = {
+                "name": contact.first_name,
+                "type": contact.type,
+                "id": contact.id
+            }
+            contact_id = contact.id
+            logger.info(f"Found contact for {from_number}: {contact.first_name} (Lead #{contact.id})")
+        else:
+            logger.info(f"No contact found for {from_number}, treating as new inquiry")
+
+        # Get SMS conversation history for this phone number
+        history_result = db.execute(text("""
+            SELECT message, direction, created_at
+            FROM sms_messages
+            WHERE (from_number = :phone OR to_number = :phone)
+            ORDER BY created_at DESC
+            LIMIT 10
+        """), {"phone": from_number})
+        history_rows = history_result.fetchall()
+
+        # Build conversation history in chronological order
+        conversation_history = []
+        for row in reversed(list(history_rows)):
+            role = "user" if row.direction == "inbound" else "assistant"
+            conversation_history.append({
+                "role": role,
+                "content": row.message
+            })
+
+        # Generate AI response
+        import uuid
+        conversation_id = f"sms_{from_number}_{uuid.uuid4().hex[:8]}"
+
+        response = await openai_service.generate_response(
+            conversation_id=conversation_id,
+            channel="sms",
+            user_message=message,
+            conversation_history=conversation_history,
+            qualification_data=contact_info,
+            conversation_stage="inquiry",
+            persona={
+                "name": os.getenv("AI_SMS_NAME", "Sarah"),
+                "role": "Mortgage Advisor",
+                "company": os.getenv("BUSINESS_NAME", "CMG Home Loans"),
+                "lo_name": os.getenv("LO_NAME", "your loan officer"),
+                "available_times": "Monday-Friday 9am-6pm"
+            },
+            user_id=contact_id
+        )
+
+        ai_text = response.get("text", "")
+        if ai_text:
+            logger.info(f"Generated AI SMS response for {from_number}: {ai_text[:50]}...")
+            return ai_text
+        else:
+            logger.warning("OpenAI returned empty response")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error generating AI SMS response: {e}")
+        return None
+
+
 @router.post("/sms/webhook")
 async def sms_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Webhook for incoming SMS messages from Twilio"""
+    """Webhook for incoming SMS messages from Twilio with AI processing"""
 
     try:
         form_data = await request.form()
@@ -234,10 +346,51 @@ async def sms_webhook(
         )
         db.add(sms_record)
         db.commit()
+        inbound_id = sms_record.id
 
-        # TODO: Use agentic AI to process and respond
+        # Process with AI and send response
+        ai_response = await process_sms_with_ai(from_number, to_number, body, db)
 
-        return {"status": "received"}
+        if ai_response and sms_client.enabled:
+            # Send AI response via Twilio
+            response_sid = await sms_client.send_sms(
+                to_number=from_number,
+                message=ai_response
+            )
+
+            if response_sid:
+                # Store outbound SMS
+                outbound_record = SMSMessage(
+                    to_number=from_number,
+                    from_number=to_number,
+                    message=ai_response,
+                    direction="outbound",
+                    status="sent",
+                    twilio_sid=response_sid
+                )
+                db.add(outbound_record)
+                db.commit()
+
+                logger.info(f"Sent AI response to {from_number}: {ai_response[:50]}...")
+                return {
+                    "status": "processed",
+                    "ai_response_sent": True,
+                    "response_sid": response_sid
+                }
+            else:
+                logger.error("Failed to send SMS response via Twilio")
+                return {
+                    "status": "received",
+                    "ai_response_sent": False,
+                    "error": "Twilio send failed"
+                }
+        else:
+            # AI not available or Twilio not configured
+            return {
+                "status": "received",
+                "ai_response_sent": False,
+                "reason": "AI or Twilio not configured"
+            }
 
     except Exception as e:
         logger.error(f"Error processing SMS webhook: {e}")
