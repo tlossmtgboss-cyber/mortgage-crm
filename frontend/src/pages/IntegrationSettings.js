@@ -145,8 +145,12 @@ const IntegrationSettings = () => {
 
       if (res.ok) {
         toast.success('Integration disconnected');
-        loadIntegrations();
-        setSelectedIntegration(null);
+        // Update local state immediately
+        setSelectedIntegration(prev => prev ? { ...prev, status: 'disconnected' } : null);
+        // Update integrations list
+        setIntegrations(prev => prev.map(int =>
+          int.id === integrationId ? { ...int, status: 'disconnected' } : int
+        ));
       } else {
         const error = await res.json();
         toast.error(error.detail?.message || 'Failed to disconnect');
