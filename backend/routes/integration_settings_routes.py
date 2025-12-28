@@ -421,6 +421,26 @@ async def get_all_integrations(
         )
 
 
+@router.get("/categories")
+async def get_integration_categories(
+    current_user = Depends(lambda: get_current_user)
+):
+    """Get list of integration categories."""
+    categories = [
+        {"id": "crm", "name": "CRM", "description": "Customer Relationship Management"},
+        {"id": "communication", "name": "Communication", "description": "SMS, Voice, and Messaging"},
+        {"id": "calendar", "name": "Calendar", "description": "Scheduling and Appointments"},
+        {"id": "storage", "name": "Storage", "description": "Cloud Storage and Documents"},
+        {"id": "payment", "name": "Payment", "description": "Payment Processing and Billing"},
+        {"id": "marketing", "name": "Marketing", "description": "Email Marketing and Campaigns"},
+        {"id": "productivity", "name": "Productivity", "description": "Automation and Workflows"},
+        {"id": "ai", "name": "AI", "description": "Artificial Intelligence and ML"},
+        {"id": "document", "name": "Document", "description": "Document Management and Signatures"}
+    ]
+
+    return success_response(categories, "Categories retrieved")
+
+
 @router.get("/{integration_id}")
 async def get_integration(
     integration_id: str,
@@ -766,26 +786,6 @@ async def get_sync_history(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response("Failed to fetch sync history", code="FETCH_ERROR")
         )
-
-
-@router.get("/categories")
-async def get_integration_categories(
-    current_user = Depends(lambda: get_current_user)
-):
-    """Get list of integration categories."""
-    categories = [
-        {"id": "crm", "name": "CRM", "description": "Customer Relationship Management"},
-        {"id": "communication", "name": "Communication", "description": "SMS, Voice, and Messaging"},
-        {"id": "calendar", "name": "Calendar", "description": "Scheduling and Appointments"},
-        {"id": "storage", "name": "Storage", "description": "Cloud Storage and Documents"},
-        {"id": "payment", "name": "Payment", "description": "Payment Processing and Billing"},
-        {"id": "marketing", "name": "Marketing", "description": "Email Marketing and Campaigns"},
-        {"id": "productivity", "name": "Productivity", "description": "Automation and Workflows"},
-        {"id": "ai", "name": "AI", "description": "Artificial Intelligence and ML"},
-        {"id": "document", "name": "Document", "description": "Document Management and Signatures"}
-    ]
-
-    return success_response(categories, "Categories retrieved")
 
 
 @router.post("/{integration_id}/test")
