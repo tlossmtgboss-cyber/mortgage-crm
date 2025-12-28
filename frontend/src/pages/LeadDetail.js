@@ -15,6 +15,8 @@ import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import IncomeTab from '../components/income/IncomeTab';
+import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
+import IncomeCalculator from '../components/IncomeCalculator';
 import VideoMeetings from '../components/VideoMeetings';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
@@ -58,6 +60,7 @@ function LeadDetail() {
   const [activeTab, setActiveTab] = useState('loan-details');
   const [personalSubTab, setPersonalSubTab] = useState('info'); // 'info', 'employment', or 'assets'
   const [propertySubTab, setPropertySubTab] = useState('property'); // 'property', 'insurance', or 'legal'
+  const [incomeCalcMode, setIncomeCalcMode] = useState('unified'); // 'unified', 'basic'
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [borrowers, setBorrowers] = useState([]);
@@ -1922,6 +1925,12 @@ function LeadDetail() {
           onClick={() => setActiveTab('circle')}
         >
           Circle
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
+          onClick={() => setActiveTab('income')}
+        >
+          Income
         </button>
         <button
           className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
@@ -3803,6 +3812,56 @@ function LeadDetail() {
                 </div>
               )}
             </div>
+          </div>
+          )}
+
+          {/* Income Tab */}
+          {activeTab === 'income' && (
+          <div className="info-section">
+            <div className="income-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Income Calculator</h2>
+                <p className="circle-description" style={{ margin: '8px 0 0 0' }}>
+                  Calculate qualifying income following agency guidelines for all 14 income types.
+                </p>
+              </div>
+              <div className="income-calc-toggle" style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className={`tab-btn ${incomeCalcMode === 'unified' ? 'active' : ''}`}
+                  onClick={() => setIncomeCalcMode('unified')}
+                  style={{ padding: '8px 16px', fontSize: '13px' }}
+                >
+                  All 14 Types
+                </button>
+                <button
+                  className={`tab-btn ${incomeCalcMode === 'basic' ? 'active' : ''}`}
+                  onClick={() => setIncomeCalcMode('basic')}
+                  style={{ padding: '8px 16px', fontSize: '13px' }}
+                >
+                  Quick Calc
+                </button>
+              </div>
+            </div>
+
+            {incomeCalcMode === 'unified' ? (
+              <UnifiedIncomeCalculator
+                loanId={null}
+                leadId={parseInt(id)}
+                borrowerId={borrowers[activeBorrower]?.id || 1}
+                onIncomeCalculated={(result) => {
+                  console.log('Unified income calculated:', result);
+                }}
+              />
+            ) : (
+              <IncomeCalculator
+                loanId={null}
+                leadId={parseInt(id)}
+                borrowerId={borrowers[activeBorrower]?.id || 1}
+                onIncomeCalculated={(result) => {
+                  console.log('Income calculated:', result);
+                }}
+              />
+            )}
           </div>
           )}
 
