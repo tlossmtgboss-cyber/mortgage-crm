@@ -2955,3 +2955,135 @@ async def cleanup_orphan_documents(
         "skipped_documents": skipped,
         "message": f"Cleaned up {len(cleaned)} orphan documents"
     }
+
+
+@router.get("/diagnostic/all-storage-errors")
+async def check_all_storage_errors(
+    db: Session = Depends(get_db),
+):
+    """
+    Scan all documents across all loans for storage errors.
+    Returns summary by loan and list of missing files.
+    """
+    from sqlalchemy import func
+
+    s3_service = get_smart_docs_s3_service()
+
+    # Get all non-deleted documents grouped by loan
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.status.notin_(["DELETED", "SUPERSEDED"])
+    ).order_by(SmartDocument.loan_id, SmartDocument.id).all()
+
+    by_loan = {}
+    total_missing = 0
+    total_valid = 0
+    missing_docs = []
+
+    for doc in documents:
+        loan_id = doc.loan_id or 0
+
+        if loan_id not in by_loan:
+            by_loan[loan_id] = {"total": 0, "missing": 0, "valid": 0}
+
+        by_loan[loan_id]["total"] += 1
+
+        # Check S3
+        if doc.storage_key and s3_service.is_available:
+            exists = s3_service.file_exists(doc.storage_key)
+            if exists:
+                by_loan[loan_id]["valid"] += 1
+                total_valid += 1
+            else:
+                by_loan[loan_id]["missing"] += 1
+                total_missing += 1
+                missing_docs.append({
+                    "document_id": doc.id,
+                    "loan_id": loan_id,
+                    "file_name": doc.file_name,
+                    "doc_type": doc.doc_type.value if doc.doc_type else None,
+                    "status": doc.status,
+                    "storage_key": doc.storage_key,
+                })
+        else:
+            by_loan[loan_id]["missing"] += 1
+            total_missing += 1
+            missing_docs.append({
+                "document_id": doc.id,
+                "loan_id": loan_id,
+                "file_name": doc.file_name,
+                "doc_type": doc.doc_type.value if doc.doc_type else None,
+                "status": doc.status,
+                "storage_key": doc.storage_key,
+                "error": "No storage key" if not doc.storage_key else "S3 not available",
+            })
+
+    # Filter to only loans with missing files
+    loans_with_errors = {k: v for k, v in by_loan.items() if v["missing"] > 0}
+
+    return {
+        "total_documents": len(documents),
+        "total_valid": total_valid,
+        "total_missing": total_missing,
+        "loans_with_errors": len(loans_with_errors),
+        "by_loan": loans_with_errors,
+        "missing_documents": missing_docs,
+    }
+
+
+@router.post("/diagnostic/cleanup-all-orphans")
+async def cleanup_all_orphan_documents(
+    db: Session = Depends(get_db),
+):
+    """
+    Clean up all orphan documents across all loans.
+    """
+    s3_service = get_smart_docs_s3_service()
+
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.status.notin_(["DELETED", "SUPERSEDED"])
+    ).all()
+
+    cleaned = []
+    skipped = 0
+
+    for doc in documents:
+        # Check if file exists in S3
+        if doc.storage_key and s3_service.is_available:
+            exists = s3_service.file_exists(doc.storage_key)
+            if exists:
+                skipped += 1
+                continue
+
+        # File doesn't exist - mark as deleted
+        old_status = doc.status
+        doc.status = "DELETED"
+        doc.rejection_reason = "File not found in storage - cleaned up"
+        doc.reviewed_at = datetime.utcnow()
+        doc.reviewed_by = "SYSTEM_CLEANUP"
+
+        # Reset linked request to OPEN
+        if doc.request_id:
+            request = db.query(DocumentRequest).filter(
+                DocumentRequest.id == doc.request_id
+            ).first()
+            if request:
+                request.status = RequestStatus.OPEN
+
+        cleaned.append({
+            "id": doc.id,
+            "loan_id": doc.loan_id,
+            "file_name": doc.file_name,
+            "doc_type": doc.doc_type.value if doc.doc_type else None,
+            "previous_status": old_status,
+        })
+
+    db.commit()
+
+    logger.info(f"Cleaned up {len(cleaned)} orphan documents across all loans")
+
+    return {
+        "cleaned_count": len(cleaned),
+        "skipped_count": skipped,
+        "cleaned_documents": cleaned,
+        "message": f"Cleaned up {len(cleaned)} orphan documents"
+    }
