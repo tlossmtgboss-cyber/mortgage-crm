@@ -62,17 +62,25 @@ def get_db():
         db.close()
 
 
-def get_current_user_id(request: Request) -> Optional[int]:
+def get_current_user_id(request: Request, db: Session = None) -> Optional[int]:
     """Extract user ID from JWT token in request."""
     try:
-        from main import get_current_user_from_token
+        import jwt
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            user = get_current_user_from_token(token)
-            return user.get("user_id") if user else None
-    except Exception:
-        pass
+            secret_key = os.getenv("SECRET_KEY", "your-secret-key-here")
+            payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+            email = payload.get("sub")
+            if email and db:
+                # Look up user by email
+                result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
+                if result:
+                    return result[0]
+            # Fallback: try to get user_id from payload
+            return payload.get("user_id")
+    except Exception as e:
+        logger.warning(f"Failed to extract user ID: {e}")
     return None
 
 
@@ -670,7 +678,7 @@ async def explore_salesforce_objects(
     db: Session = Depends(get_db)
 ):
     """List all available Salesforce objects."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -746,7 +754,7 @@ async def explore_salesforce_object_fields(
     db: Session = Depends(get_db)
 ):
     """Get fields for a specific Salesforce object."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -819,7 +827,7 @@ async def explore_salesforce_query(
     db: Session = Depends(get_db)
 ):
     """Query sample records from a Salesforce object."""
-    user_id = get_current_user_id(request)
+    user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
