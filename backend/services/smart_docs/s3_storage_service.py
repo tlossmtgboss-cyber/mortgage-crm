@@ -287,15 +287,17 @@ class SmartDocsS3Service:
         self,
         storage_key: str,
         file_name: Optional[str] = None,
-        expires_in: Optional[int] = None
+        expires_in: Optional[int] = None,
+        inline: bool = False
     ) -> Dict[str, Any]:
         """
-        Generate a presigned URL for downloading a document.
+        Generate a presigned URL for downloading/viewing a document.
 
         Args:
             storage_key: S3 object key
             file_name: Original file name for Content-Disposition
             expires_in: Custom expiry time in seconds
+            inline: If True, use inline disposition for browser viewing
 
         Returns:
             Dict with presigned_url and expiry info
@@ -312,9 +314,10 @@ class SmartDocsS3Service:
                 'Key': storage_key
             }
 
-            # Add download file name
+            # Set content disposition
             if file_name:
-                params['ResponseContentDisposition'] = f'attachment; filename="{file_name}"'
+                disposition = "inline" if inline else "attachment"
+                params['ResponseContentDisposition'] = f'{disposition}; filename="{file_name}"'
 
             presigned_url = self.s3_client.generate_presigned_url(
                 'get_object',

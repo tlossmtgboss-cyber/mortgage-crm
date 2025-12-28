@@ -297,7 +297,8 @@ async def get_needs_list(
                             url_result = s3_service.get_presigned_download_url(
                                 storage_key=latest_doc.storage_key,
                                 file_name=latest_doc.file_name,
-                                expires_in=3600  # 1 hour
+                                expires_in=3600,  # 1 hour
+                                inline=True  # Use inline disposition for iframe viewing
                             )
                             if url_result.get("success"):
                                 req["file_url"] = url_result["presigned_url"]
@@ -1844,7 +1845,8 @@ async def get_client_queue_detail(
                             url_result = s3_service.get_presigned_download_url(
                                 storage_key=latest_doc.storage_key,
                                 file_name=latest_doc.file_name,
-                                expires_in=3600  # 1 hour
+                                expires_in=3600,  # 1 hour
+                                inline=True  # Use inline disposition for iframe viewing
                             )
                             if url_result.get("success"):
                                 req["file_url"] = url_result["presigned_url"]
