@@ -168,6 +168,25 @@ async def salesforce_callback(
 
     # Store tokens in user_integrations table
     try:
+        # Ensure table exists
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_integrations (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                provider VARCHAR(50) NOT NULL,
+                access_token TEXT,
+                refresh_token TEXT,
+                expires_at TIMESTAMP,
+                scopes TEXT,
+                email VARCHAR(255),
+                provider_user_id VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, provider)
+            )
+        """))
+        db.commit()
+
         # Check if integration already exists
         existing = db.execute(text("""
             SELECT id FROM user_integrations
