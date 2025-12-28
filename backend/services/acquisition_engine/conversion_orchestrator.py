@@ -449,6 +449,8 @@ class ConversionOrchestrator:
         campaign_instance_id: Optional[str] = None,
         loan_id: Optional[int] = None,
         loan_amount: Optional[float] = None,
+        estimated_revenue: Optional[float] = None,
+        attribution_type: str = "first_touch",
     ) -> CampaignAttribution:
         """
         Track a conversion event for attribution.
@@ -474,7 +476,7 @@ class ConversionOrchestrator:
             campaign_instance_id=uuid.UUID(campaign_instance_id) if campaign_instance_id else None,
             lead_id=lead_id,
             loan_id=loan_id,
-            attribution_type="first_touch",
+            attribution_type=attribution_type,  # Use the parameter
             attribution_credit=1.0,
             conversion_type=conversion_type,
             conversion_date=datetime.utcnow(),
@@ -490,8 +492,10 @@ class ConversionOrchestrator:
             attribution.is_application = True
         elif conversion_type == "funded":
             attribution.is_funded = True
-            # Estimate revenue (average LO compensation ~1.5% of loan amount)
-            if loan_amount:
+            # Use provided estimated_revenue or calculate from loan amount
+            if estimated_revenue:
+                attribution.estimated_revenue = estimated_revenue
+            elif loan_amount:
                 attribution.estimated_revenue = loan_amount * 0.015
 
         self.db.add(attribution)
@@ -513,7 +517,10 @@ class ConversionOrchestrator:
                     campaign.loans_closed = (campaign.loans_closed or 0) + 1
                     if loan_amount:
                         campaign.total_loan_volume = (campaign.total_loan_volume or 0) + loan_amount
-                        campaign.revenue_attributed = (campaign.revenue_attributed or 0) + (loan_amount * 0.015)
+                    # Use provided estimated_revenue or calculate
+                    revenue = estimated_revenue if estimated_revenue else (loan_amount * 0.015 if loan_amount else 0)
+                    if revenue:
+                        campaign.revenue_attributed = (campaign.revenue_attributed or 0) + revenue
 
                 campaign.calculate_cost_metrics()
 
