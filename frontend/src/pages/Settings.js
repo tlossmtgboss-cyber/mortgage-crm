@@ -5144,6 +5144,10 @@ const API_BASE_URL = isProduction
             <PURLManager />
           )}
 
+          {activeSection === 'integration-settings' && (
+            <IntegrationSettings />
+          )}
+
           {/* User Profile Sections */}
           {activeSection === 'profile-info' && (
             <div className="profile-section">
