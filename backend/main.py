@@ -4974,6 +4974,9 @@ app = FastAPI(
 # No code changes needed to add new user domains
 from middleware.dynamic_cors import DynamicCORSMiddleware
 
+# PHASE 3: Impersonation read-only enforcement middleware
+from middleware.impersonation_middleware import ImpersonationEnforcementMiddleware
+
 # Add security middleware FIRST (order matters - last added = outermost = first to execute)
 # Security middleware runs first, then CORS wraps everything including error responses
 app.add_middleware(SecurityHeadersMiddleware)
@@ -4984,6 +4987,10 @@ app.add_middleware(IPBlockingMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=5000, requests_per_hour=100000)
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
+
+# PHASE 3: Impersonation read-only enforcement
+# Blocks POST/PUT/PATCH/DELETE when impersonation mode is 'read_only'
+app.add_middleware(ImpersonationEnforcementMiddleware, db_session_factory=SessionLocal)
 
 # Dynamic CORS middleware - checks database for allowed custom domains
 # Caches domains in memory for performance, refreshes every 60 seconds
@@ -5293,7 +5300,11 @@ async def get_current_user_flexible(
             ).first()
 
             if impersonated_user:
-                logger.info(f"Impersonation active (flexible): {actual_user.email} → {impersonated_user.email}")
+                logger.info(f"Impersonation active (flexible): {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                # PHASE 3: Store impersonation info on request state for middleware
+                request.state.impersonation_session = session
+                request.state.impersonation_mode = session.mode
+                request.state.actual_user = actual_user
                 return impersonated_user
 
     # No impersonation, return actual user
@@ -39147,6 +39158,9 @@ async def get_scorecard(
 
 @app.post("/api/v1/leads/", response_model=LeadResponse, status_code=201)
 async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    # PHASE 3: Check create permission
+    require_permission_or_403(current_user.id, 'leads.create', db)
+
     db_lead = Lead(
         **lead.model_dump(),
         owner_id=current_user.id,
@@ -40038,13 +40052,12 @@ async def bulk_delete_leads_v2(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
 
-    # Check permissions - allow admin role, master user, or users with specific permission
-    is_admin = getattr(current_user, 'role', None) == 'admin'
+    # PHASE 3: Check delete permission (delete or delete_all)
     is_master = current_user.id == 1
-    has_delete_permission = has_permission(current_user.id, 'leads.delete_all', db)
+    has_delete_permission = has_permission(current_user.id, 'leads.delete', db) or has_permission(current_user.id, 'leads.delete_all', db)
 
-    if not (is_admin or is_master or has_delete_permission):
-        raise HTTPException(status_code=403, detail="You don't have permission to bulk delete leads")
+    if not (is_master or has_delete_permission):
+        raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
 
     if not lead_ids:
         raise HTTPException(status_code=400, detail="No lead IDs provided")
@@ -40274,6 +40287,15 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # PHASE 3: Check edit permission (edit_all or edit_own + ownership)
+    check_resource_access(
+        current_user.id,
+        lead.owner_id,
+        'leads.edit_all',
+        'leads.edit_own',
+        db
+    )
+
     # Capture old status for workflow trigger
     old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
 
@@ -40395,6 +40417,9 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
 
 @app.delete("/api/v1/leads/{lead_id}", status_code=204)
 async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    # PHASE 3: Check delete permission
+    require_permission_or_403(current_user.id, 'leads.delete', db)
+
     # Use the same permission filtering as the list endpoint
     query = db.query(Lead).filter(Lead.id == lead_id)
     query = filter_leads_by_permissions(query, current_user, db)
@@ -40833,13 +40858,12 @@ async def bulk_delete_loans(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
 
-    # Check permissions - allow admin role, master user, or users with specific permission
-    is_admin = getattr(current_user, 'role', None) == 'admin'
+    # PHASE 3: Check delete permission (delete or delete_all)
     is_master = current_user.id == 1
-    has_delete_permission = has_permission(current_user.id, 'loans.delete_all', db)
+    has_delete_permission = has_permission(current_user.id, 'loans.delete', db) or has_permission(current_user.id, 'loans.delete_all', db)
 
-    if not (is_admin or is_master or has_delete_permission):
-        raise HTTPException(status_code=403, detail="You don't have permission to bulk delete loans")
+    if not (is_master or has_delete_permission):
+        raise HTTPException(status_code=403, detail="Permission denied: loans.delete")
 
     if not loan_ids:
         raise HTTPException(status_code=400, detail="No loan IDs provided")
@@ -40907,6 +40931,9 @@ async def create_loan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # PHASE 3: Check create permission
+    require_permission_or_403(current_user.id, 'loans.create', db)
+
     try:
         # Check for duplicate loan number
         existing = db.query(Loan).filter(Loan.loan_number == loan.loan_number).first()
@@ -41481,25 +41508,26 @@ async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: Us
 @app.patch("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        # First check if user has view_all permission
-        has_view_all = has_permission(current_user.id, 'loans.view_all', db)
-
-        if has_view_all:
-            loan = db.query(Loan).filter(Loan.id == loan_id).first()
-        else:
-            # Allow access if loan_officer_id matches current user OR is null (application-created loans)
-            loan = db.query(Loan).filter(
-                Loan.id == loan_id,
-                (Loan.loan_officer_id == current_user.id) | (Loan.loan_officer_id == None)
-            ).first()
+        # Use permission-based filtering to get the loan
+        query = db.query(Loan).filter(Loan.id == loan_id)
+        query = filter_loans_by_permissions(query, current_user, db)
+        loan = query.first()
 
         if not loan:
-            # Check if loan exists but belongs to different user
+            # Check if loan exists but user doesn't have access
             any_loan = db.query(Loan).filter(Loan.id == loan_id).first()
             if any_loan:
-                logger.error(f"Loan {loan_id} exists but loan_officer_id={any_loan.loan_officer_id} != current_user.id={current_user.id}")
-                raise HTTPException(status_code=403, detail=f"Loan belongs to different user (loan_officer_id={any_loan.loan_officer_id})")
+                raise HTTPException(status_code=403, detail="You don't have access to this loan")
             raise HTTPException(status_code=404, detail="Loan not found")
+
+        # PHASE 3: Check edit permission (edit_all or edit_own + ownership)
+        check_resource_access(
+            current_user.id,
+            loan.loan_officer_id or current_user.id,  # Handle null loan_officer_id
+            'loans.edit_all',
+            'loans.edit_own',
+            db
+        )
 
         # Track if stage is changing
         old_stage = loan.stage
@@ -41575,7 +41603,14 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
 
 @app.delete("/api/v1/loans/{loan_id}", status_code=204)
 async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
+    # PHASE 3: Check delete permission
+    require_permission_or_403(current_user.id, 'loans.delete', db)
+
+    # Use permission-based filtering
+    query = db.query(Loan).filter(Loan.id == loan_id)
+    query = filter_loans_by_permissions(query, current_user, db)
+    loan = query.first()
+
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -45262,6 +45297,9 @@ async def convert_loan_to_mum_client(
 
 @app.post("/api/v1/mum-clients/", response_model=MUMClientResponse, status_code=201)
 async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # PHASE 3: Check create permission
+    require_permission_or_403(current_user.id, 'clients.create', db)
+
     try:
         existing = db.query(MUMClient).filter(MUMClient.loan_number == client.loan_number).first()
         if existing:
@@ -45312,7 +45350,10 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
 
 @app.get("/api/v1/mum-clients/")
 async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    clients = db.query(MUMClient).order_by(MUMClient.created_at.desc()).offset(skip).limit(limit).all()
+    # PHASE 3: Apply permission-based filtering
+    query = db.query(MUMClient)
+    query = filter_mum_clients_by_permissions(query, current_user, db)
+    clients = query.order_by(MUMClient.created_at.desc()).offset(skip).limit(limit).all()
 
     # Enhance MUM clients with AI intelligence
     enhanced_clients = []
@@ -45373,9 +45414,12 @@ async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends
 
 @app.get("/api/v1/mum-clients/{client_id}", response_model=MUMClientResponse)
 async def get_mum_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    # Apply permission filter to the query
+    query = db.query(MUMClient).filter(MUMClient.id == client_id)
+    query = filter_mum_clients_by_permissions(query, current_user, db)
+    client = query.first()
     if not client:
-        raise HTTPException(status_code=404, detail="MUM client not found")
+        raise HTTPException(status_code=404, detail="MUM client not found or access denied")
     return client
 
 @app.patch("/api/v1/mum-clients/{client_id}", response_model=MUMClientResponse)
@@ -45383,6 +45427,9 @@ async def update_mum_client(client_id: int, client_update: MUMClientUpdate, db: 
     client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
+
+    # Permission check: must have clients.edit_all or (clients.edit_own and be the owner)
+    check_resource_access(current_user.id, client.user_id or current_user.id, 'clients.edit_all', 'clients.edit_own', db)
 
     for key, value in client_update.dict(exclude_unset=True).items():
         setattr(client, key, value)
@@ -45405,6 +45452,9 @@ async def delete_mum_client(client_id: int, db: Session = Depends(get_db), curre
     client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
+
+    # Permission check: must have clients.delete permission
+    require_permission_or_403(current_user.id, 'clients.delete', db)
 
     db.delete(client)
     db.commit()
@@ -50376,6 +50426,78 @@ def has_permission(user_id: int, permission_key: str, db: Session) -> bool:
         return False
 
 
+def require_permission_or_403(user_id: int, permission_key: str, db: Session) -> None:
+    """
+    PHASE 3: Check permission and raise 403 if not granted.
+
+    Args:
+        user_id: ID of the user to check
+        permission_key: Permission key (e.g., 'leads.create', 'loans.delete')
+        db: Database session
+
+    Raises:
+        HTTPException: 403 Forbidden if user lacks the permission
+    """
+    # Master admin (user ID 1) always has permission
+    if user_id == 1:
+        return
+
+    if not has_permission(user_id, permission_key, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {permission_key}"
+        )
+
+
+def check_resource_access(
+    user_id: int,
+    resource_owner_id: int,
+    edit_all_permission: str,
+    edit_own_permission: str,
+    db: Session
+) -> None:
+    """
+    PHASE 3: Check if user can access/modify a specific resource.
+
+    Allows access if:
+    1. User is master admin (ID 1)
+    2. User has edit_all permission
+    3. User has edit_own permission AND owns the resource
+
+    Args:
+        user_id: ID of the user trying to access
+        resource_owner_id: ID of the user who owns the resource
+        edit_all_permission: Permission key for editing all resources
+        edit_own_permission: Permission key for editing own resources
+        db: Database session
+
+    Raises:
+        HTTPException: 403 if user cannot access the resource
+    """
+    # Master admin always has access
+    if user_id == 1:
+        return
+
+    # Check for edit_all permission
+    if has_permission(user_id, edit_all_permission, db):
+        return
+
+    # Check for edit_own permission + ownership
+    if has_permission(user_id, edit_own_permission, db):
+        if user_id == resource_owner_id:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only modify your own records"
+        )
+
+    # No permission at all
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Permission denied: {edit_all_permission} or {edit_own_permission}"
+    )
+
+
 def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
     """
     Get all permissions for a user
@@ -50517,6 +50639,44 @@ def filter_loans_by_permissions(query, user: User, db: Session):
     except Exception as e:
         logger.error(f"Loan permission filter error: {e}")
         return query.filter(Loan.loan_officer_id == user.id)
+
+
+def filter_mum_clients_by_permissions(query, user: User, db: Session):
+    """
+    PHASE 3: Filter MUM clients query based on user's permissions.
+
+    MUM Clients use 'user_id' field for ownership (not 'owner_id').
+
+    Returns filtered query based on:
+    - Master user (id=1): See all clients
+    - clients.view_all: See all clients
+    - clients.view_team: See team's clients
+    - Default: See only own clients (user_id == current user)
+    """
+    try:
+        # Master user can see all
+        if user.id == 1:
+            return query
+
+        if has_permission(user.id, 'clients.view_all', db):
+            return query
+
+        if has_permission(user.id, 'clients.view_team', db):
+            team_id = getattr(user, 'team_id', None)
+            if team_id:
+                team_member_ids = db.execute(text("""
+                    SELECT id FROM users WHERE team_id = :team_id
+                """), {"team_id": team_id}).fetchall()
+                team_ids = [m[0] for m in team_member_ids]
+                if team_ids:
+                    return query.filter(MUMClient.user_id.in_(team_ids))
+            return query.filter(MUMClient.user_id == user.id)
+
+        # Default: Show only clients owned by the user
+        return query.filter(MUMClient.user_id == user.id)
+    except Exception as e:
+        logger.error(f"MUM client permission filter error: {e}")
+        return query.filter(MUMClient.user_id == user.id)
 
 
 def apply_role_template_to_user(user_id: int, role_name: str, granted_by_id: int, db: Session) -> bool:

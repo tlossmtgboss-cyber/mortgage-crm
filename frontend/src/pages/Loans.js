@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loansAPI } from '../services/api';
 import CalendarSidebar from '../components/CalendarSidebar';
+import PermissionGate from '../components/PermissionGate';
 import './Loans.css';
 
 // Map pipeline stage IDs to filter names
@@ -543,16 +544,20 @@ function Loans() {
         </div>
         <div className="header-actions">
           {selectedLoans.length > 0 && (
-            <button className="btn-danger" onClick={handleBulkDelete}>
-              Delete Selected ({selectedLoans.length})
-            </button>
+            <PermissionGate permission="loans.delete" isWriteOperation showDisabled>
+              <button className="btn-danger" onClick={handleBulkDelete}>
+                Delete Selected ({selectedLoans.length})
+              </button>
+            </PermissionGate>
           )}
           <button className="btn-secondary" onClick={handleExport}>
             Export
           </button>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + New Loan
-          </button>
+          <PermissionGate permission="loans.create" isWriteOperation showDisabled>
+            <button className="btn-primary" onClick={() => setShowModal(true)}>
+              + New Loan
+            </button>
+          </PermissionGate>
         </div>
       </div>
 

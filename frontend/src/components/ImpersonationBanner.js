@@ -59,6 +59,9 @@ function ImpersonationBanner() {
   const impersonatedUser = getImpersonatedUser();
   if (!impersonatedUser) return null;
 
+  // Check if in read-only mode
+  const isReadOnly = impersonationData?.mode === 'read_only';
+
   // PHASE 4: Format permission role for display
   const formatRole = (role) => {
     if (!role) return 'Unknown Role';
@@ -73,7 +76,7 @@ function ImpersonationBanner() {
   };
 
   return (
-    <div className="impersonation-banner">
+    <div className={`impersonation-banner ${isReadOnly ? 'read-only-mode' : 'full-access-mode'}`}>
       <div className="banner-content">
         <div className="banner-icon">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -90,6 +93,28 @@ function ImpersonationBanner() {
           <span className="separator">•</span>
           <span className="user-role">{formatRole(impersonatedUser.permission_role || impersonatedUser.role)}</span>
           <span className="separator">•</span>
+          {isReadOnly && (
+            <>
+              <span className="mode-badge read-only" title="Write operations are disabled in read-only mode">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2C9.23858 2 7 4.23858 7 7V10H6C4.89543 10 4 10.8954 4 12V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V12C20 10.8954 19.1046 10 18 10H17V7C17 4.23858 14.7614 2 12 2ZM9 7C9 5.34315 10.3431 4 12 4C13.6569 4 15 5.34315 15 7V10H9V7Z" fill="currentColor"/>
+                </svg>
+                READ-ONLY
+              </span>
+              <span className="separator">•</span>
+            </>
+          )}
+          {!isReadOnly && (
+            <>
+              <span className="mode-badge full-access" title="Full access mode - all actions are available">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 7V10H6C4.89543 10 4 10.8954 4 12V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V12C20 10.8954 19.1046 10 18 10H9V7C9 5.34315 10.3431 4 12 4C13.3062 4 14.4175 4.83481 14.8293 6H16.8999C16.4367 3.71776 14.419 2 12 2C9.23858 2 7 4.23858 7 7Z" fill="currentColor"/>
+                </svg>
+                FULL ACCESS
+              </span>
+              <span className="separator">•</span>
+            </>
+          )}
           <span className={`timer ${timeLeft < 300 ? 'warning' : ''}`}>
             {formatTime(timeLeft)} remaining
           </span>

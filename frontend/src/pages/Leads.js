@@ -4,10 +4,13 @@ import { leadsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import CalendarSidebar from '../components/CalendarSidebar';
+import PermissionGate from '../components/PermissionGate';
+import { usePermissions } from '../contexts/PermissionContext';
 import './Leads.css';
 
 function Leads() {
   const navigate = useNavigate();
+  const { canPerformAction, isReadOnlyMode } = usePermissions();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -593,9 +596,11 @@ function Leads() {
           <h1>Leads</h1>
           <p>{leads.length} total leads</p>
         </div>
-        <button className="btn-primary" onClick={handleNewLead}>
-          + Add Lead
-        </button>
+        <PermissionGate permission="leads.create" isWriteOperation showDisabled>
+          <button className="btn-primary" onClick={handleNewLead}>
+            + Add Lead
+          </button>
+        </PermissionGate>
       </div>
 
       <div className="filter-tabs">
@@ -625,13 +630,15 @@ function Leads() {
         )}
       </div>
 
-      {/* Bulk Delete Bar - Only for master user */}
-      {isMasterUser && selectedLeads.size > 0 && (
+      {/* Bulk Delete Bar - Only for users with delete permission */}
+      {selectedLeads.size > 0 && (
         <div className="bulk-actions-bar">
           <span className="selected-count">{selectedLeads.size} lead{selectedLeads.size > 1 ? 's' : ''} selected</span>
-          <button className="btn-danger" onClick={handleBulkDelete}>
-            🗑️ Delete Selected
-          </button>
+          <PermissionGate permission="leads.delete" isWriteOperation showDisabled>
+            <button className="btn-danger" onClick={handleBulkDelete}>
+              🗑️ Delete Selected
+            </button>
+          </PermissionGate>
           <button className="btn-secondary" onClick={() => setSelectedLeads(new Set())}>
             Cancel
           </button>

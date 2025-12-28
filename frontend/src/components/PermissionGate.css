@@ -1,0 +1,89 @@
+/* PermissionGate Styles */
+
+.permission-gate-disabled {
+  position: relative;
+  cursor: not-allowed;
+}
+
+.permission-gate-disabled::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.permission-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed !important;
+}
+
+.permission-disabled:hover {
+  cursor: not-allowed !important;
+}
+
+/* Read-only mode styling */
+.permission-gate-readonly {
+  position: relative;
+}
+
+.readonly-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+  cursor: not-allowed !important;
+  position: relative;
+}
+
+.readonly-disabled::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: not-allowed;
+}
+
+/* Visual indicator for disabled buttons */
+button.permission-disabled,
+button.readonly-disabled {
+  background-color: #e0e0e0 !important;
+  border-color: #ccc !important;
+  color: #999 !important;
+}
+
+/* Tooltip styling for permission denied */
+.permission-gate-disabled[title]:hover::before,
+.permission-gate-readonly[title]:hover::before {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: #333;
+  color: white;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 8px;
+}
+
+.permission-gate-disabled[title]:hover::after,
+.permission-gate-readonly[title]:hover::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+  margin-bottom: 2px;
+  z-index: 1000;
+}
