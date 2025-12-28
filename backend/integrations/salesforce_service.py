@@ -4,12 +4,18 @@ Handles CRM sync and API access
 """
 import os
 import logging
-from typing import Optional, Dict, Any
+import secrets
+import hashlib
+import base64
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 import requests
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
+
+# In-memory store for PKCE code verifiers (use Redis in production)
+_pkce_store: Dict[str, str] = {}
 
 
 class SalesforceClient:
@@ -32,13 +38,35 @@ class SalesforceClient:
         else:
             logger.warning("Salesforce API credentials not configured")
 
+    def _generate_pkce(self) -> Tuple[str, str]:
+        """Generate PKCE code verifier and challenge"""
+        # Generate a random code verifier (43-128 characters)
+        code_verifier = secrets.token_urlsafe(64)
+
+        # Create code challenge using S256 method
+        code_challenge_bytes = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        code_challenge = base64.urlsafe_b64encode(code_challenge_bytes).rstrip(b'=').decode('utf-8')
+
+        return code_verifier, code_challenge
+
     def get_authorization_url(self, state: str = None) -> str:
-        """Generate Salesforce OAuth authorization URL"""
+        """Generate Salesforce OAuth authorization URL with PKCE"""
+        # Generate PKCE parameters
+        code_verifier, code_challenge = self._generate_pkce()
+
+        # Store the code verifier for later use in token exchange
+        # Use state as key (or generate a unique key if no state)
+        pkce_key = state or secrets.token_urlsafe(16)
+        _pkce_store[pkce_key] = code_verifier
+        logger.info(f"Stored PKCE verifier for key: {pkce_key[:20]}...")
+
         params = {
             "response_type": "code",
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
             "scope": "api refresh_token offline_access",
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         }
 
         if state:
@@ -46,7 +74,16 @@ class SalesforceClient:
 
         return f"{self.auth_url}?{urlencode(params)}"
 
-    def exchange_code_for_token(self, code: str) -> Optional[Dict[str, Any]]:
+    def get_code_verifier(self, state: str) -> Optional[str]:
+        """Retrieve stored code verifier for token exchange"""
+        verifier = _pkce_store.pop(state, None)
+        if verifier:
+            logger.info(f"Retrieved and removed PKCE verifier for state: {state[:20]}...")
+        else:
+            logger.warning(f"No PKCE verifier found for state: {state[:20]}...")
+        return verifier
+
+    def exchange_code_for_token(self, code: str, code_verifier: str = None) -> Optional[Dict[str, Any]]:
         """Exchange authorization code for access token"""
         if not self.enabled:
             return None
@@ -59,6 +96,11 @@ class SalesforceClient:
                 "client_secret": self.client_secret,
                 "redirect_uri": self.redirect_uri
             }
+
+            # Include code_verifier for PKCE
+            if code_verifier:
+                data["code_verifier"] = code_verifier
+                logger.info("Including PKCE code_verifier in token exchange")
 
             response = requests.post(self.token_url, data=data)
             response.raise_for_status()

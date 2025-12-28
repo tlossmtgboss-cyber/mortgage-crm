@@ -146,8 +146,11 @@ async def salesforce_callback(
     if not user_id:
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
-    # Exchange code for tokens
-    token_data = salesforce_client.exchange_code_for_token(code)
+    # Retrieve PKCE code_verifier using state
+    code_verifier = salesforce_client.get_code_verifier(state) if state else None
+
+    # Exchange code for tokens (with PKCE code_verifier)
+    token_data = salesforce_client.exchange_code_for_token(code, code_verifier=code_verifier)
 
     if not token_data:
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
