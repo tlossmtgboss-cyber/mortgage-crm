@@ -168,7 +168,18 @@ async def salesforce_callback(
 
     # Store tokens in user_integrations table
     try:
-        # Ensure table exists
+        # Fix table schema - alter user_id column to INTEGER if it's VARCHAR
+        try:
+            db.execute(text("""
+                ALTER TABLE user_integrations
+                ALTER COLUMN user_id TYPE INTEGER USING user_id::INTEGER
+            """))
+            db.commit()
+            logger.info("Fixed user_integrations.user_id column type")
+        except Exception:
+            db.rollback()  # Table might not exist or column is already correct
+
+        # Ensure table exists with correct schema
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS user_integrations (
                 id SERIAL PRIMARY KEY,
@@ -191,7 +202,7 @@ async def salesforce_callback(
         existing = db.execute(text("""
             SELECT id FROM user_integrations
             WHERE user_id = :user_id AND provider = 'salesforce'
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": int(user_id)}).fetchone()
 
         if existing:
             # Update existing
@@ -206,7 +217,7 @@ async def salesforce_callback(
                     updated_at = CURRENT_TIMESTAMP
                 WHERE user_id = :user_id AND provider = 'salesforce'
             """), {
-                "user_id": user_id,
+                "user_id": int(user_id),
                 "access_token": token_data.get("access_token"),
                 "refresh_token": token_data.get("refresh_token"),
                 "scopes": f"instance_url:{token_data.get('instance_url', '')}",
@@ -220,7 +231,7 @@ async def salesforce_callback(
                 (user_id, provider, access_token, refresh_token, scopes, email, provider_user_id)
                 VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :email, :provider_user_id)
             """), {
-                "user_id": user_id,
+                "user_id": int(user_id),
                 "access_token": token_data.get("access_token"),
                 "refresh_token": token_data.get("refresh_token"),
                 "scopes": f"instance_url:{token_data.get('instance_url', '')}",
