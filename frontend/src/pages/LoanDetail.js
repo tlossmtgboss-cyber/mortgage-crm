@@ -89,7 +89,6 @@ function LoanDetail() {
 
   // Salesforce sync state
   const [salesforceStatus, setSalesforceStatus] = useState(null);
-  const [salesforcePushing, setSalesforcePushing] = useState(false);
   const [salesforcePulling, setSalesforcePulling] = useState(false);
 
   // Archive state
@@ -838,42 +837,6 @@ function LoanDetail() {
     recognition.start();
   };
 
-  // Salesforce sync handler
-  const handleSalesforcePush = async () => {
-    if (salesforcePushing) return;
-
-    try {
-      setSalesforcePushing(true);
-
-      // First check if Salesforce is connected
-      const status = await salesforceAPI.getStatus();
-      if (!status.connected) {
-        toast.error('Salesforce is not connected. Please connect in Settings → Integrations.');
-        return;
-      }
-
-      // Push the loan to Salesforce
-      const result = await salesforceAPI.pushLoan(id);
-
-      if (result.status === 'success') {
-        toast.success(`Loan ${result.action} in Salesforce`);
-        // Update local state with sync info
-        setSalesforceStatus({
-          salesforce_id: result.salesforce_id,
-          last_synced_at: new Date().toISOString(),
-          sync_status: 'synced',
-          needs_sync: false
-        });
-      }
-    } catch (error) {
-      console.error('Salesforce push error:', error);
-      const errorMsg = error.response?.data?.detail?.error || error.response?.data?.detail || error.message;
-      toast.error(`Failed to push to Salesforce: ${errorMsg}`);
-    } finally {
-      setSalesforcePushing(false);
-    }
-  };
-
   // Salesforce pull handler - refresh data from Salesforce
   const handleSalesforcePull = async () => {
     if (salesforcePulling) return;
@@ -989,9 +952,6 @@ function LoanDetail() {
         } else {
           alert('No client portal found for this loan. Please create one from the loan details.');
         }
-        break;
-      case 'salesforce':
-        handleSalesforcePush();
         break;
       case 'salesforce-pull':
         handleSalesforcePull();
@@ -3931,26 +3891,15 @@ function LoanDetail() {
             <span className="icon">🚨</span>
             <span>Escalation</span>
           </button>
-          <button
-            className={`action-btn salesforce ${salesforcePushing ? 'loading' : ''} ${salesforceStatus?.is_linked ? 'synced' : ''}`}
-            onClick={() => handleAction('salesforce')}
-            title={salesforceStatus?.is_linked
-              ? `Synced: ${salesforceStatus.salesforce_id} - Click to update`
-              : 'Push loan to Salesforce'}
-            disabled={salesforcePushing}
-          >
-            <span className="icon">{salesforcePushing ? '⏳' : '☁️'}</span>
-            <span>{salesforcePushing ? 'Syncing...' : (salesforceStatus?.is_linked ? 'Update SF' : 'Push to SF')}</span>
-          </button>
           {salesforceStatus?.is_linked && (
             <button
               className={`action-btn salesforce-pull ${salesforcePulling ? 'loading' : ''}`}
               onClick={() => handleAction('salesforce-pull')}
-              title={`Pull latest data from Salesforce (${salesforceStatus.salesforce_id})`}
+              title={`Sync from Salesforce (${salesforceStatus.salesforce_id})`}
               disabled={salesforcePulling}
             >
-              <span className="icon">{salesforcePulling ? '⏳' : '⬇️'}</span>
-              <span>{salesforcePulling ? 'Pulling...' : 'Pull from SF'}</span>
+              <span className="icon">{salesforcePulling ? '⏳' : '☁️'}</span>
+              <span>{salesforcePulling ? 'Syncing...' : 'Sync from SF'}</span>
             </button>
           )}
         </div>

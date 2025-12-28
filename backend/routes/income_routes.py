@@ -356,50 +356,46 @@ async def extract_income_from_documents(
         db.add(source)
         db.flush()
 
-    # Extract data from documents
+    # Extract data from documents using actual SmartDocument fields
     extracted_income = {}
 
     for doc in documents:
-        if doc.extracted_data:
-            extracted = doc.extracted_data
+        # Check if document has any extracted data
+        has_data = (
+            doc.extracted_dates or
+            doc.extracted_names or
+            doc.extracted_employer or
+            doc.extracted_amount
+        )
+        if not has_data:
+            continue
 
-            # Aggregate paystub data
-            doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower()
+        doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower() if doc.doc_type else ''
 
+        # Get employer name from document
+        if doc.extracted_employer:
+            source.source_name = doc.extracted_employer
+            extracted_income['employer_name'] = doc.extracted_employer
+
+        # Get amount (could be gross pay, YTD, etc. depending on doc type)
+        if doc.extracted_amount:
             if 'paystub' in doc_type_str:
-                if 'gross_pay' in extracted:
-                    extracted_income['last_gross_pay'] = extracted.get('gross_pay')
-                if 'ytd_gross' in extracted:
-                    extracted_income['ytd_gross'] = extracted.get('ytd_gross')
-                if 'pay_frequency' in extracted:
-                    extracted_income['pay_frequency'] = extracted.get('pay_frequency')
-                if 'employer_name' in extracted:
-                    source.source_name = extracted.get('employer_name')
-
-            # Aggregate W-2 data
+                # For paystubs, extracted_amount is typically gross pay
+                extracted_income['last_gross_pay'] = float(doc.extracted_amount)
             elif 'w2' in doc_type_str:
-                if 'wages_tips_other' in extracted:
-                    extracted_income['w2_wages'] = extracted.get('wages_tips_other')
-                if 'employer_name' in extracted:
-                    source.source_name = extracted.get('employer_name')
+                # For W-2s, extracted_amount is wages
+                extracted_income['w2_wages'] = float(doc.extracted_amount)
+            elif 'bank' in doc_type_str:
+                # For bank statements, this might be total deposits
+                extracted_income['total_deposits'] = float(doc.extracted_amount)
+
+        # Extract dates (might contain pay_date, period_end, etc.)
+        if doc.extracted_dates:
+            for date_key, date_val in doc.extracted_dates.items():
+                extracted_income[date_key] = date_val
 
     # Calculate income based on extracted data
-    if 'ytd_gross' in extracted_income:
-        ytd = Decimal(str(extracted_income['ytd_gross']))
-        freq = extracted_income.get('pay_frequency', 'biweekly').lower()
-
-        # Annualize YTD income
-        annual = ytd * Decimal('12') / Decimal('10')  # Assume ~10 months of YTD
-        monthly = annual / Decimal('12')
-
-        source.gross_annual_income = annual
-        source.gross_monthly_income = monthly
-        source.monthly_qualifying_income = monthly
-        source.annual_qualifying_income = annual
-        source.calculation_method = IncomeCalculationMethod.YTD_ANNUALIZED
-        source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
-
-    elif 'w2_wages' in extracted_income:
+    if 'w2_wages' in extracted_income:
         annual = Decimal(str(extracted_income['w2_wages']))
         monthly = annual / Decimal('12')
 
@@ -408,6 +404,33 @@ async def extract_income_from_documents(
         source.monthly_qualifying_income = monthly
         source.annual_qualifying_income = annual
         source.calculation_method = IncomeCalculationMethod.TWO_YEAR_AVERAGE
+        source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
+
+    elif 'last_gross_pay' in extracted_income:
+        # For paystubs, annualize the gross pay based on assumed bi-weekly frequency
+        gross_pay = Decimal(str(extracted_income['last_gross_pay']))
+
+        # Assume bi-weekly (26 pay periods) if not specified
+        annual = gross_pay * Decimal('26')
+        monthly = annual / Decimal('12')
+
+        source.gross_annual_income = annual
+        source.gross_monthly_income = monthly
+        source.monthly_qualifying_income = monthly
+        source.annual_qualifying_income = annual
+        source.calculation_method = IncomeCalculationMethod.CURRENT_PERIOD
+        source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
+
+    elif 'total_deposits' in extracted_income:
+        # For bank statements, average deposits as monthly income
+        monthly = Decimal(str(extracted_income['total_deposits']))
+        annual = monthly * Decimal('12')
+
+        source.gross_annual_income = annual
+        source.gross_monthly_income = monthly
+        source.monthly_qualifying_income = monthly
+        source.annual_qualifying_income = annual
+        source.calculation_method = IncomeCalculationMethod.BANK_STATEMENT
         source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
 
     source.updated_at = datetime.utcnow()
@@ -433,19 +456,26 @@ async def get_loan_extractions(
     """Get all extracted income data for a loan, organized by income type."""
     from models.smart_docs_models import SmartDocument
 
+    # Get documents with any extracted data
     documents = db.query(SmartDocument).filter(
-        SmartDocument.loan_id == loan_id,
-        SmartDocument.extracted_data.isnot(None)
+        SmartDocument.loan_id == loan_id
     ).all()
 
     extractions = {}
 
     for doc in documents:
-        if not doc.extracted_data:
+        # Check if document has any extracted data
+        has_data = (
+            doc.extracted_dates or
+            doc.extracted_names or
+            doc.extracted_employer or
+            doc.extracted_amount
+        )
+        if not has_data:
             continue
 
         # Map document type to income type
-        doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower()
+        doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower() if doc.doc_type else ''
 
         if any(p in doc_type_str for p in ['paystub', 'w2', 'offer']):
             income_type = "W2_EMPLOYMENT"
@@ -461,10 +491,20 @@ async def get_loan_extractions(
         if income_type not in extractions:
             extractions[income_type] = {}
 
-        # Merge extracted data
-        for key, value in doc.extracted_data.items():
-            if value is not None:
-                extractions[income_type][key] = value
+        # Add extracted data from individual fields
+        if doc.extracted_employer:
+            extractions[income_type]["employer"] = doc.extracted_employer
+        if doc.extracted_amount:
+            extractions[income_type]["amount"] = float(doc.extracted_amount)
+        if doc.extracted_dates:
+            for date_key, date_val in doc.extracted_dates.items():
+                extractions[income_type][date_key] = date_val
+        if doc.extracted_names:
+            if isinstance(doc.extracted_names, dict):
+                for name_key, name_val in doc.extracted_names.items():
+                    extractions[income_type][name_key] = name_val
+            elif isinstance(doc.extracted_names, list):
+                extractions[income_type]["names"] = doc.extracted_names
 
     return {"extractions": extractions}
 
