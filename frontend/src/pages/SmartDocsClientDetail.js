@@ -255,6 +255,168 @@ function SmartDocsClientDetail() {
     }
   };
 
+  // Approve document
+  const handleApprove = async (doc) => {
+    if (!window.confirm(`Approve this ${getDocTypeName(doc.doc_type)}?`)) return;
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const reviewer = user.email || user.name || 'Unknown';
+
+      // Get document ID from document object
+      const documentId = doc.document_id || doc.id;
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/approve?reviewer=${encodeURIComponent(reviewer)}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
+      if (response.ok) {
+        alert('Document approved!');
+        fetchClientData(); // Refresh data
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to approve document'}`);
+      }
+    } catch (err) {
+      console.error('Error approving document:', err);
+      alert('Error approving document');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reject document
+  const handleReject = async (doc) => {
+    const reason = window.prompt('Enter rejection reason:');
+    if (!reason) return;
+
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const reviewer = user.email || user.name || 'Unknown';
+
+      const documentId = doc.document_id || doc.id;
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/reject`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reviewer,
+            reason,
+            rejection_category: 'OTHER'
+          })
+        }
+      );
+
+      if (response.ok) {
+        alert('Document rejected');
+        fetchClientData();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to reject document'}`);
+      }
+    } catch (err) {
+      console.error('Error rejecting document:', err);
+      alert('Error rejecting document');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Delete document
+  const handleDelete = async (doc) => {
+    if (!window.confirm(`Delete this ${getDocTypeName(doc.doc_type)}? This will allow the borrower to re-upload.`)) return;
+
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const reviewer = user.email || user.name || 'Unknown';
+
+      const documentId = doc.document_id || doc.id;
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}?reviewer=${encodeURIComponent(reviewer)}`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
+      if (response.ok) {
+        alert('Document deleted');
+        fetchClientData();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to delete document'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting document:', err);
+      alert('Error deleting document');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Re-request document
+  const handleReRequest = async (doc) => {
+    if (!window.confirm(`Re-request this ${getDocTypeName(doc.doc_type)}? The borrower will be notified to upload again.`)) return;
+
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const reviewer = user.email || user.name || 'Unknown';
+
+      // Re-request uses the request_id, not document_id
+      const requestId = doc.id; // Document request ID
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/request/${requestId}/re-request`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reviewer,
+            notes: 'Re-requested via Smart Docs portal'
+          })
+        }
+      );
+
+      if (response.ok) {
+        alert('Document re-requested! Borrower will be notified.');
+        fetchClientData();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to re-request document'}`);
+      }
+    } catch (err) {
+      console.error('Error re-requesting document:', err);
+      alert('Error re-requesting document');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Check if document has an uploaded file
+  const hasUploadedDocument = (doc) => {
+    return doc.document_id || doc.file_url || doc.s3_url || doc.filename || doc.status === 'PENDING_REVIEW';
+  };
+
   // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
@@ -429,22 +591,85 @@ function SmartDocsClientDetail() {
                   </span>
                 </div>
                 <div className="doc-actions">
-                  <button
-                    className="icon-btn"
-                    onClick={() => handleDownloadSingle(selectedDoc)}
-                    title="Download"
-                  >
-                    ⬇️
-                  </button>
-                  <button
-                    className="icon-btn"
-                    onClick={() => handleEmailSingle(selectedDoc)}
-                    title="Email"
-                  >
-                    ✉️
-                  </button>
+                  {/* File actions - only show if document has been uploaded */}
+                  {hasUploadedDocument(selectedDoc) && (
+                    <>
+                      <button
+                        className="icon-btn"
+                        onClick={() => handleDownloadSingle(selectedDoc)}
+                        title="Download"
+                      >
+                        ⬇️
+                      </button>
+                      <button
+                        className="icon-btn"
+                        onClick={() => handleEmailSingle(selectedDoc)}
+                        title="Email"
+                      >
+                        ✉️
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
+
+              {/* Review Actions Bar - shown for documents pending review */}
+              {hasUploadedDocument(selectedDoc) && selectedDoc.status !== 'APPROVED' && selectedDoc.status !== 'ACCEPTED' && (
+                <div className="review-actions-bar">
+                  <span className="review-label">Review Actions:</span>
+                  <div className="review-buttons">
+                    <button
+                      className="action-btn approve-btn"
+                      onClick={() => handleApprove(selectedDoc)}
+                      disabled={actionLoading}
+                      title="Approve this document"
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      className="action-btn reject-btn"
+                      onClick={() => handleReject(selectedDoc)}
+                      disabled={actionLoading}
+                      title="Reject this document"
+                    >
+                      ✗ Reject
+                    </button>
+                    <button
+                      className="action-btn delete-btn"
+                      onClick={() => handleDelete(selectedDoc)}
+                      disabled={actionLoading}
+                      title="Delete this document"
+                    >
+                      🗑️ Delete
+                    </button>
+                    <button
+                      className="action-btn rerequest-btn"
+                      onClick={() => handleReRequest(selectedDoc)}
+                      disabled={actionLoading}
+                      title="Request a new upload"
+                    >
+                      🔄 Re-request
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Show re-request for documents awaiting upload */}
+              {!hasUploadedDocument(selectedDoc) && selectedDoc.status === 'OPEN' && (
+                <div className="review-actions-bar">
+                  <span className="review-label">Actions:</span>
+                  <div className="review-buttons">
+                    <button
+                      className="action-btn rerequest-btn"
+                      onClick={() => handleReRequest(selectedDoc)}
+                      disabled={actionLoading}
+                      title="Send reminder to borrower"
+                    >
+                      🔄 Send Reminder
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Document Preview */}
               <div className="document-preview">

@@ -78,6 +78,26 @@ class ManualReviewBody(BaseModel):
     notes: Optional[str] = None
 
 
+class DeleteDocumentBody(BaseModel):
+    """Request to delete (trash) a document."""
+    reviewer: str
+    reason: Optional[str] = None
+
+
+class RejectDocumentBody(BaseModel):
+    """Request to reject a document."""
+    reviewer: str
+    reason: str
+    rejection_category: Optional[str] = None  # SCREENSHOT, EXPIRED, POOR_QUALITY, INCOMPLETE, WRONG_TYPE, OTHER
+
+
+class ReRequestDocumentBody(BaseModel):
+    """Request to re-request a document (reset request to OPEN)."""
+    reviewer: str
+    notes: Optional[str] = None
+    new_due_date: Optional[str] = None  # ISO date string
+
+
 class UpdatePayrollFrequencyBody(BaseModel):
     """Request to update payroll frequency."""
     borrower_id: int
@@ -918,6 +938,242 @@ async def reprocess_document(
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# =============================================================================
+# Document Actions (Delete, Reject, Re-request)
+# =============================================================================
+
+@router.delete("/document/{document_id}")
+async def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    reviewer: str = Query(..., description="User performing the delete"),
+    reason: Optional[str] = Query(None, description="Reason for deletion"),
+):
+    """
+    Delete (trash) a document.
+
+    Sets the document status to DELETED and optionally deletes from S3.
+    The document can be restored later if needed.
+    """
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Store deletion info
+    old_status = document.status
+    document.status = "DELETED"
+    document.reviewed_at = datetime.utcnow()
+    document.reviewed_by = reviewer
+    document.rejection_reason = reason or "Deleted by user"
+
+    # Update linked request status if exists
+    if document.request_id:
+        request = db.query(DocumentRequest).filter(
+            DocumentRequest.id == document.request_id
+        ).first()
+        if request:
+            # Reset request to OPEN so borrower can re-upload
+            request.status = RequestStatus.OPEN
+
+    db.commit()
+
+    logger.info(f"Document {document_id} deleted by {reviewer} (was: {old_status})")
+
+    return {
+        "document_id": document_id,
+        "status": "DELETED",
+        "previous_status": old_status,
+        "deleted_by": reviewer,
+        "deleted_at": datetime.utcnow().isoformat(),
+        "message": "Document deleted successfully"
+    }
+
+
+@router.post("/document/{document_id}/reject")
+async def reject_document(
+    document_id: int,
+    body: RejectDocumentBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Reject a document with a reason.
+
+    Sets the document status to REJECTED and stores the rejection reason.
+    Updates the linked request to allow re-upload.
+    """
+    from models.smart_docs_models import RejectionCategory
+
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Update document status
+    document.status = "REJECTED"
+    document.decision = DocumentDecision.REJECT
+    document.rejection_reason = body.reason
+    document.reviewed_at = datetime.utcnow()
+    document.reviewed_by = body.reviewer
+
+    # Set rejection category if provided
+    if body.rejection_category:
+        try:
+            document.rejection_category = RejectionCategory(body.rejection_category)
+        except ValueError:
+            pass  # Invalid category, skip
+
+    # Update linked request to allow re-upload
+    if document.request_id:
+        request = db.query(DocumentRequest).filter(
+            DocumentRequest.id == document.request_id
+        ).first()
+        if request:
+            request.status = RequestStatus.OPEN
+
+    db.commit()
+
+    logger.info(f"Document {document_id} rejected by {body.reviewer}: {body.reason}")
+
+    return {
+        "document_id": document_id,
+        "status": "REJECTED",
+        "rejection_reason": body.reason,
+        "rejection_category": body.rejection_category,
+        "rejected_by": body.reviewer,
+        "rejected_at": datetime.utcnow().isoformat(),
+        "message": "Document rejected successfully"
+    }
+
+
+@router.post("/document/{document_id}/approve")
+async def approve_document(
+    document_id: int,
+    reviewer: str = Query(..., description="User performing the approval"),
+    notes: Optional[str] = Query(None, description="Approval notes"),
+    db: Session = Depends(get_db),
+):
+    """
+    Approve a document.
+
+    Sets the document status to APPROVED and updates the linked request.
+    """
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Update document status
+    document.status = "APPROVED"
+    document.decision = DocumentDecision.ACCEPT
+    document.reviewed_at = datetime.utcnow()
+    document.reviewed_by = reviewer
+
+    # Update linked request
+    if document.request_id:
+        request = db.query(DocumentRequest).filter(
+            DocumentRequest.id == document.request_id
+        ).first()
+        if request:
+            request.status = RequestStatus.ACCEPTED
+
+    db.commit()
+
+    logger.info(f"Document {document_id} approved by {reviewer}")
+
+    return {
+        "document_id": document_id,
+        "status": "APPROVED",
+        "approved_by": reviewer,
+        "approved_at": datetime.utcnow().isoformat(),
+        "notes": notes,
+        "message": "Document approved successfully"
+    }
+
+
+@router.post("/request/{request_id}/re-request")
+async def re_request_document(
+    request_id: int,
+    body: ReRequestDocumentBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Re-request a document (reset request to OPEN).
+
+    Clears any linked documents and resets the request to allow fresh upload.
+    Optionally sets a new due date.
+    """
+    from datetime import timedelta
+
+    request = db.query(DocumentRequest).filter(
+        DocumentRequest.id == request_id
+    ).first()
+
+    if not request:
+        raise HTTPException(status_code=404, detail="Document request not found")
+
+    old_status = request.status
+
+    # Reset request status
+    request.status = RequestStatus.OPEN
+    request.updated_at = datetime.utcnow()
+
+    # Set new due date if provided
+    if body.new_due_date:
+        try:
+            request.due_date = datetime.fromisoformat(body.new_due_date.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+    elif not request.due_date or request.due_date < datetime.utcnow():
+        # Default to 7 days from now
+        request.due_date = datetime.utcnow() + timedelta(days=7)
+
+    # Mark any linked documents as superseded
+    linked_docs = db.query(SmartDocument).filter(
+        SmartDocument.request_id == request_id,
+        SmartDocument.status.notin_(["DELETED"])
+    ).all()
+
+    superseded_count = 0
+    for doc in linked_docs:
+        if doc.status not in ["APPROVED", "ACCEPTED"]:
+            doc.status = "SUPERSEDED"
+            doc.rejection_reason = f"Re-requested by {body.reviewer}"
+            superseded_count += 1
+
+    db.commit()
+
+    # Send notification to borrower
+    try:
+        notification_service = SmartDocsNotificationService(db)
+        notification_service.send_request_reminder(request)
+        notification_sent = True
+    except Exception as e:
+        logger.warning(f"Failed to send re-request notification: {e}")
+        notification_sent = False
+
+    logger.info(f"Request {request_id} re-requested by {body.reviewer} (was: {old_status})")
+
+    return {
+        "request_id": request_id,
+        "status": "OPEN",
+        "previous_status": old_status.value if hasattr(old_status, 'value') else str(old_status),
+        "re_requested_by": body.reviewer,
+        "re_requested_at": datetime.utcnow().isoformat(),
+        "due_date": request.due_date.isoformat() if request.due_date else None,
+        "superseded_documents": superseded_count,
+        "notification_sent": notification_sent,
+        "notes": body.notes,
+        "message": "Document re-requested successfully"
+    }
 
 
 @router.get("/documents/{loan_id}")
