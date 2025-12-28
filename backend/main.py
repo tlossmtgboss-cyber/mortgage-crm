@@ -61776,13 +61776,89 @@ async def send_email_verification(
             db, current_user.id, "email"
         )
 
-        # TODO: Send actual email with token.token
-        # For now, return the code in response (DEVELOPMENT ONLY)
-        logger.info(f"Email verification code for user {current_user.id}: {token.token}")
+        # Send actual verification email
+        try:
+            from email_service import email_service
+
+            user_name = current_user.name or email.split('@')[0]
+
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                    <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
+
+                        <div style="text-align: center; margin-bottom: 32px;">
+                            <h1 style="color: #3b82f6; font-size: 28px; margin: 0;">Perennia AI</h1>
+                        </div>
+
+                        <h2 style="color: #111827; margin: 0 0 16px; font-size: 22px;">Verify Your Email</h2>
+
+                        <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                            Hi {user_name},
+                        </p>
+
+                        <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                            Use the verification code below to verify your email address:
+                        </p>
+
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+                            <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">Your Verification Code</p>
+                            <p style="margin: 0; color: #111827; font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">
+                                {token.token}
+                            </p>
+                        </div>
+
+                        <p style="color: #6b7280; font-size: 14px; text-align: center;">
+                            This code expires in 10 minutes.
+                        </p>
+
+                        <p style="color: #9ca3af; font-size: 13px; margin-top: 32px; text-align: center;">
+                            If you didn't request this code, you can safely ignore this email.
+                        </p>
+
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            plain_text = f"""Hi {user_name},
+
+Use this verification code to verify your email address:
+
+{token.token}
+
+This code expires in 10 minutes.
+
+If you didn't request this code, you can safely ignore this email.
+
+- The Perennia AI Team
+"""
+
+            email_sent = email_service.send_html_email(
+                to_email=email,
+                subject="Your Perennia AI Verification Code",
+                html_body=html_content,
+                plain_text_body=plain_text
+            )
+
+            if email_sent:
+                logger.info(f"Email verification code sent to {email} for user {current_user.id}")
+            else:
+                logger.warning(f"Failed to send email verification to {email}, but code was created")
+
+        except Exception as email_err:
+            logger.error(f"Error sending verification email: {email_err}")
+            # Continue anyway - code was created
 
         return {
             "message": "Verification code sent to email",
-            "code": token.token,  # REMOVE IN PRODUCTION
             "expires_at": token.expires_at
         }
 
@@ -61884,13 +61960,33 @@ async def send_sms_verification(
             db, current_user.id, "sms"
         )
 
-        # TODO: Send actual SMS with token.token
-        # For now, return the code in response (DEVELOPMENT ONLY)
-        logger.info(f"SMS verification code for user {current_user.id}: {token.token}")
+        # Send actual SMS with verification code
+        try:
+            from services.notification_service import notification_service
+
+            user_name = current_user.name.split()[0] if current_user.name else "there"
+
+            sms_message = (
+                f"Hi {user_name}, your Perennia AI verification code is: {token.token}. "
+                f"This code expires in 10 minutes. Reply STOP to opt out."
+            )
+
+            sms_result = notification_service.send_sms(
+                to_phone=phone,
+                message=sms_message
+            )
+
+            if sms_result.get("success"):
+                logger.info(f"SMS verification code sent to {phone} for user {current_user.id}")
+            else:
+                logger.warning(f"Failed to send SMS verification to {phone}: {sms_result.get('error')}")
+
+        except Exception as sms_err:
+            logger.error(f"Error sending verification SMS: {sms_err}")
+            # Continue anyway - code was created
 
         return {
             "message": "Verification code sent via SMS",
-            "code": token.token,  # REMOVE IN PRODUCTION
             "expires_at": token.expires_at
         }
 
@@ -62613,8 +62709,107 @@ async def create_employee_invite(
     db.commit()
     db.refresh(invite)
 
-    # TODO: Send invite email with token
+    # Send invite email with token
     invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/accept-invite?token={invite_token}"
+
+    try:
+        from email_service import email_service
+
+        user_name = f"{request.first_name} {request.last_name}"
+        inviter_name = current_user.name or current_user.email.split('@')[0]
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
+
+                    <div style="text-align: center; margin-bottom: 32px;">
+                        <h1 style="color: #3b82f6; font-size: 28px; margin: 0;">Perennia AI</h1>
+                    </div>
+
+                    <h2 style="color: #111827; margin: 0 0 16px; font-size: 22px;">Welcome to the Team, {request.first_name}!</h2>
+
+                    <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                        {inviter_name} has invited you to join Perennia AI as a <strong>{request.permission_role.title()}</strong>.
+                    </p>
+
+                    <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                        Click the button below to set up your password and activate your account:
+                    </p>
+
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="{invite_url}" style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            Accept Invite &amp; Set Password
+                        </a>
+                    </div>
+
+                    <div style="background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 24px 0; border-radius: 0 8px 8px 0;">
+                        <h4 style="margin: 0 0 8px 0; color: #1e40af;">What's Next?</h4>
+                        <ul style="margin: 0; padding-left: 20px; color: #4b5563;">
+                            <li>Set your secure password</li>
+                            <li>Review your assigned responsibilities</li>
+                            <li>Access your personalized dashboard</li>
+                            <li>Start managing your pipeline</li>
+                        </ul>
+                    </div>
+
+                    <p style="color: #f59e0b; font-size: 14px; text-align: center; background: #fef3c7; padding: 12px 16px; border-radius: 8px;">
+                        ⏰ This invite expires in <strong>7 days</strong>
+                    </p>
+
+                    <p style="color: #9ca3af; font-size: 13px; margin-top: 32px; text-align: center;">
+                        If you didn't expect this invitation, please contact your administrator.
+                    </p>
+
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        plain_text = f"""Welcome to the Team, {request.first_name}!
+
+{inviter_name} has invited you to join Perennia AI as a {request.permission_role.title()}.
+
+Click the link below to set up your password and activate your account:
+
+{invite_url}
+
+What's Next?
+- Set your secure password
+- Review your assigned responsibilities
+- Access your personalized dashboard
+- Start managing your pipeline
+
+This invite expires in 7 days.
+
+If you didn't expect this invitation, please contact your administrator.
+
+- The Perennia AI Team
+"""
+
+        email_sent = email_service.send_html_email(
+            to_email=request.email,
+            subject=f"You're Invited to Join Perennia AI - {request.permission_role.title()}",
+            html_body=html_content,
+            plain_text_body=plain_text
+        )
+
+        if email_sent:
+            logger.info(f"Employee invite email sent to {request.email}")
+        else:
+            logger.warning(f"Failed to send invite email to {request.email}, invite still created")
+
+    except Exception as email_err:
+        logger.error(f"Error sending invite email: {email_err}")
+        # Continue anyway - invite was created
+
     logger.info(f"Employee invite created: {request.email}, URL: {invite_url}")
 
     return {
