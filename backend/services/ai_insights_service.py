@@ -2,6 +2,16 @@
 AI Insights Service for Profitability Intelligence.
 Uses Claude to analyze profitability data and provide intelligent insights,
 natural language queries, and recommendations.
+
+Caching Strategy:
+- Natural language queries: 1 hour TTL (data changes frequently)
+- Recommendations: 6 hours TTL (strategic, changes less often)
+- Hiring analysis: 24 hours TTL (based on monthly data)
+- Executive digest: 24 hours TTL (weekly report)
+- Anomaly detection: 1 hour TTL (needs fresh data)
+- Scenario comparison: 6 hours TTL (planning scenarios)
+
+Estimated savings: $10k-15k/month at scale
 """
 
 import os
@@ -12,6 +22,7 @@ from sqlalchemy.orm import Session
 import anthropic
 
 from services.profitability_service import ProfitabilityService
+from services.llm_cache_service import llm_cache, LLMCacheService
 from models.profitability import (
     ProfitabilityInsight, EmployeeCost, ProfitabilityRole,
     RevenueRecord, Expense
@@ -29,9 +40,11 @@ class AIInsightsService:
             api_key=os.getenv("ANTHROPIC_API_KEY")
         )
 
+    @llm_cache.cached(ttl=LLMCacheService.TTL_MEDIUM, prefix="insights:query")
     def query_natural_language(self, question: str, month: Optional[date] = None) -> Dict[str, Any]:
         """
         Answer natural language questions about profitability.
+        Cached for 1 hour (data changes frequently).
 
         Examples:
         - "Who are my top 3 loan officers by ROI?"
@@ -84,8 +97,10 @@ Provide a clear, data-driven answer with specific metrics and actionable recomme
             "generated_at": datetime.utcnow().isoformat()
         }
 
+    @llm_cache.cached(ttl=LLMCacheService.TTL_LONG, prefix="insights:recommendations")
     def generate_smart_recommendations(self, month: Optional[date] = None) -> List[Dict[str, Any]]:
-        """Generate AI-powered recommendations based on profitability data."""
+        """Generate AI-powered recommendations based on profitability data.
+        Cached for 6 hours (strategic insights, changes less often)."""
         if not month:
             month = date.today().replace(day=1)
 
@@ -143,13 +158,15 @@ Return a JSON array of recommendation objects."""
 
         return recommendations
 
+    @llm_cache.cached(ttl=LLMCacheService.TTL_DAILY, prefix="insights:hiring")
     def analyze_hiring_decision(
         self,
         role_name: str,
         salary: float,
         month: Optional[date] = None
     ) -> Dict[str, Any]:
-        """Analyze whether to hire for a specific role."""
+        """Analyze whether to hire for a specific role.
+        Cached for 24 hours (based on monthly data)."""
         if not month:
             month = date.today().replace(day=1)
 
@@ -200,8 +217,10 @@ Provide a detailed hiring analysis with ROI projections."""
             "generated_at": datetime.utcnow().isoformat()
         }
 
+    @llm_cache.cached(ttl=LLMCacheService.TTL_DAILY, prefix="insights:digest")
     def generate_executive_digest(self, month: Optional[date] = None) -> Dict[str, Any]:
-        """Generate a weekly executive digest email content."""
+        """Generate a weekly executive digest email content.
+        Cached for 24 hours (weekly report)."""
         if not month:
             month = date.today().replace(day=1)
 
@@ -245,8 +264,10 @@ Create a professional executive digest email."""
             "generated_at": datetime.utcnow().isoformat()
         }
 
+    @llm_cache.cached(ttl=LLMCacheService.TTL_MEDIUM, prefix="insights:anomalies")
     def detect_anomalies(self, month: Optional[date] = None) -> List[Dict[str, Any]]:
-        """Detect unusual patterns or anomalies in profitability data."""
+        """Detect unusual patterns or anomalies in profitability data.
+        Cached for 1 hour (needs fresh data)."""
         if not month:
             month = date.today().replace(day=1)
 
@@ -290,12 +311,14 @@ Return a JSON array of anomaly objects, or empty array if no anomalies detected.
 
         return anomalies
 
+    @llm_cache.cached(ttl=LLMCacheService.TTL_LONG, prefix="insights:scenarios")
     def compare_scenarios(
         self,
         scenarios: List[Dict[str, Any]],
         month: Optional[date] = None
     ) -> Dict[str, Any]:
-        """Compare multiple scenarios and provide AI recommendation."""
+        """Compare multiple scenarios and provide AI recommendation.
+        Cached for 6 hours (planning scenarios)."""
         if not month:
             month = date.today().replace(day=1)
 

@@ -7,6 +7,12 @@ Handles:
 - Voice profile application
 - Topic mining from source documents
 - Image prompt generation
+
+Caching Strategy:
+- Topic mining: 6 hours TTL (same source should return consistent topics)
+- Social content: 1 hour TTL (same blog content for same platforms)
+- Image prompts: 24 hours TTL (same title/excerpt should be consistent)
+- Blog posts: Not cached (users want unique content each time)
 """
 
 import os
@@ -17,6 +23,8 @@ import hashlib
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import httpx
+
+from services.llm_cache_service import llm_cache, LLMCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +312,7 @@ Respond with valid JSON in this format:
 
         return prompt + compliance_text
 
+    @llm_cache.async_cached(ttl=LLMCacheService.TTL_MEDIUM, prefix="blog:social")
     async def generate_social_content(
         self,
         blog_content: str,
@@ -313,6 +322,7 @@ Respond with valid JSON in this format:
     ) -> Dict[str, str]:
         """
         Generate social media posts from blog content.
+        Cached for 1 hour (same blog + platforms = same social posts).
 
         Args:
             blog_content: The blog post markdown
@@ -372,6 +382,7 @@ Each post should:
             logger.error(f"Social content generation failed: {e}")
             return {}
 
+    @llm_cache.async_cached(ttl=LLMCacheService.TTL_LONG, prefix="blog:topics")
     async def mine_topics_from_content(
         self,
         source_text: str,
@@ -381,6 +392,7 @@ Each post should:
     ) -> List[Dict[str, Any]]:
         """
         Mine blog topic ideas from source content.
+        Cached for 6 hours (same source should return consistent topics).
 
         Args:
             source_text: Source document text
@@ -435,13 +447,15 @@ Focus on topics that would be valuable to {industry} consumers and position the 
             logger.error(f"Topic mining failed: {e}")
             return []
 
+    @llm_cache.async_cached(ttl=LLMCacheService.TTL_DAILY, prefix="blog:image")
     async def generate_image_prompt(
         self,
         blog_title: str,
         blog_excerpt: str,
         brand_style: str = "professional, modern",
     ) -> str:
-        """Generate a detailed prompt for image generation."""
+        """Generate a detailed prompt for image generation.
+        Cached for 24 hours (same title/excerpt = same prompt)."""
         if not self.enabled:
             return ""
 
