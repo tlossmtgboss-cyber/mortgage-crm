@@ -899,6 +899,248 @@ async def explore_salesforce_query(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============ Import Loans Endpoint ============
+
+@router.post("/import/closed-loans")
+async def import_closed_loans(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Import closed loans/opportunities from Salesforce."""
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    integration = db.execute(text("""
+        SELECT access_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(status_code=400, detail="Not connected to Salesforce")
+
+    access_token = integration[0]
+    instance_url = None
+    if integration[1] and "instance_url:" in integration[1]:
+        instance_url = integration[1].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(status_code=400, detail="Instance URL not found")
+
+    import requests
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    results = {
+        "imported": 0,
+        "updated": 0,
+        "skipped": 0,
+        "errors": [],
+        "loans": []
+    }
+
+    try:
+        # First, discover what objects are available
+        sobjects_response = requests.get(f"{instance_url}/services/data/v58.0/sobjects/", headers=headers)
+        sobjects_response.raise_for_status()
+        available_objects = {obj['name']: obj for obj in sobjects_response.json().get('sobjects', [])}
+
+        # Try different possible loan objects in order of preference
+        loan_objects_to_try = [
+            ("MtgPlanner_CRM__Transaction_Property__c", "MtgPlanner_CRM__Status__c", ["Closed", "Funded"]),
+            ("Opportunity", "StageName", ["Closed Won", "Closed", "Funded"]),
+            ("Loan__c", "Status__c", ["Closed", "Funded", "Closed Won"]),
+        ]
+
+        found_object = None
+        status_field = None
+        closed_values = None
+
+        for obj_name, status_fld, closed_vals in loan_objects_to_try:
+            if obj_name in available_objects and available_objects[obj_name].get('queryable'):
+                found_object = obj_name
+                status_field = status_fld
+                closed_values = closed_vals
+                break
+
+        if not found_object:
+            return {
+                "status": "error",
+                "message": "No loan object found in Salesforce. Available custom objects: " +
+                          ", ".join([k for k, v in available_objects.items() if v.get('custom')])[:500],
+                "results": results
+            }
+
+        logger.info(f"Using Salesforce object: {found_object}")
+
+        # Get object fields
+        describe_response = requests.get(
+            f"{instance_url}/services/data/v58.0/sobjects/{found_object}/describe/",
+            headers=headers
+        )
+        describe_response.raise_for_status()
+        describe_data = describe_response.json()
+
+        # Build field list (exclude binary fields)
+        queryable_fields = []
+        field_info = {}
+        for field in describe_data.get('fields', []):
+            if field.get('type') not in ['base64', 'address', 'location']:
+                queryable_fields.append(field.get('name'))
+                field_info[field.get('name')] = {
+                    'label': field.get('label'),
+                    'type': field.get('type')
+                }
+
+        # Build WHERE clause for closed loans
+        status_conditions = " OR ".join([f"{status_field} = '{val}'" for val in closed_values])
+
+        # Query closed loans
+        field_list = ", ".join(queryable_fields[:40])  # Limit fields
+        soql = f"SELECT {field_list} FROM {found_object} WHERE ({status_conditions}) ORDER BY LastModifiedDate DESC LIMIT 200"
+
+        logger.info(f"Executing SOQL: {soql[:200]}...")
+
+        query_response = requests.get(
+            f"{instance_url}/services/data/v58.0/query/",
+            headers=headers,
+            params={"q": soql}
+        )
+        query_response.raise_for_status()
+        query_data = query_response.json()
+
+        records = query_data.get('records', [])
+        logger.info(f"Found {len(records)} closed loans in Salesforce")
+
+        # Get user's organization
+        user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+        org_id = user_org[0] if user_org and user_org[0] else 1
+
+        # Field mapping - try to map common Salesforce fields to our loan fields
+        field_mapping = {
+            # Standard Opportunity fields
+            'Name': 'loan_number',
+            'Amount': 'loan_amount',
+            'CloseDate': 'funded_at',
+            'StageName': 'status',
+            'AccountId': 'salesforce_account_id',
+            # Common custom fields
+            'Property_Address__c': 'property_address',
+            'Borrower_Name__c': 'borrower_name',
+            'Loan_Amount__c': 'loan_amount',
+            'Interest_Rate__c': 'interest_rate',
+            'Loan_Type__c': 'loan_type',
+            'Property_Type__c': 'property_type',
+            'Close_Date__c': 'funded_at',
+            # MtgPlanner fields
+            'MtgPlanner_CRM__Property_Address__c': 'property_address',
+            'MtgPlanner_CRM__Loan_Amount__c': 'loan_amount',
+            'MtgPlanner_CRM__Borrower_Name__c': 'borrower_name',
+        }
+
+        for record in records:
+            try:
+                sf_id = record.get('Id')
+
+                # Check if already imported
+                existing = db.execute(text(
+                    "SELECT id FROM loans WHERE salesforce_id = :sf_id"
+                ), {"sf_id": sf_id}).fetchone()
+
+                # Map fields
+                loan_data = {
+                    'salesforce_id': sf_id,
+                    'organization_id': org_id,
+                    'created_by_user_id': user_id,
+                    'loan_officer_id': user_id,
+                    'status': 'funded',
+                    'salesforce_sync_status': 'synced',
+                    'salesforce_last_synced_at': datetime.utcnow(),
+                }
+
+                # Try to map all available fields
+                for sf_field, crm_field in field_mapping.items():
+                    if sf_field in record and record[sf_field]:
+                        loan_data[crm_field] = record[sf_field]
+
+                # Try to get borrower name from various possible fields
+                if 'borrower_name' not in loan_data or not loan_data.get('borrower_name'):
+                    for name_field in ['Name', 'Borrower_Name__c', 'MtgPlanner_CRM__Borrower_Name__c', 'Contact_Name__c']:
+                        if name_field in record and record[name_field]:
+                            loan_data['borrower_name'] = record[name_field]
+                            break
+
+                # Try to get loan amount
+                if 'loan_amount' not in loan_data or not loan_data.get('loan_amount'):
+                    for amt_field in ['Amount', 'Loan_Amount__c', 'MtgPlanner_CRM__Loan_Amount__c']:
+                        if amt_field in record and record[amt_field]:
+                            loan_data['loan_amount'] = float(record[amt_field])
+                            break
+
+                # Generate loan number if not present
+                if 'loan_number' not in loan_data or not loan_data.get('loan_number'):
+                    loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
+
+                if existing:
+                    # Update existing loan
+                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'salesforce_id'])
+                    db.execute(text(f"""
+                        UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
+                        WHERE salesforce_id = :salesforce_id
+                    """), loan_data)
+                    results['updated'] += 1
+                else:
+                    # Insert new loan
+                    columns = ", ".join(loan_data.keys())
+                    placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
+                    db.execute(text(f"""
+                        INSERT INTO loans ({columns}, created_at, updated_at)
+                        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """), loan_data)
+                    results['imported'] += 1
+
+                results['loans'].append({
+                    'salesforce_id': sf_id,
+                    'name': loan_data.get('borrower_name') or loan_data.get('loan_number'),
+                    'amount': loan_data.get('loan_amount'),
+                    'action': 'updated' if existing else 'imported'
+                })
+
+            except Exception as e:
+                logger.error(f"Error importing loan {record.get('Id')}: {e}")
+                results['errors'].append({
+                    'salesforce_id': record.get('Id'),
+                    'error': str(e)
+                })
+                results['skipped'] += 1
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Imported {results['imported']} loans, updated {results['updated']}, {results['skipped']} errors",
+            "salesforce_object": found_object,
+            "total_found": len(records),
+            "results": results
+        }
+
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Salesforce API error: {e}")
+        error_detail = str(e)
+        try:
+            error_detail = e.response.json()
+        except:
+            pass
+        raise HTTPException(status_code=502, detail=f"Salesforce API error: {error_detail}")
+    except Exception as e:
+        logger.error(f"Import failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============ Admin Migration Endpoint ============
 
 @router.get("/admin/run-migration")
