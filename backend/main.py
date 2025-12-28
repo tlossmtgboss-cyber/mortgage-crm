@@ -20221,6 +20221,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Salesforce routes not loaded: {e}")
 
+# HubSpot Integration routes (OAuth, CRM Sync)
+try:
+    from routes.hubspot_routes import router as hubspot_router
+    app.include_router(hubspot_router, tags=["HubSpot Integration"])
+    logger.info("✅ HubSpot routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ HubSpot routes not loaded: {e}")
+
 # Agent Governance routes (Agent Management & Monitoring)
 try:
     from routes.agent_governance_routes import router as agent_governance_router
