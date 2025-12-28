@@ -60,16 +60,16 @@ class SalesforceClient:
         _pkce_store[pkce_key] = code_verifier
         logger.info(f"Stored PKCE verifier for key: {pkce_key[:20]}...")
 
-        # Use 'full' scope which is commonly enabled, or minimal scopes
-        # The Connected App in Salesforce must have these scopes enabled
+        # Request only scopes that are enabled in the Connected App
+        # If no scope specified, Salesforce uses the scopes configured in the Connected App
         params = {
             "response_type": "code",
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
-            "scope": "full refresh_token",
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
+        # Don't specify scope - let Salesforce use the default scopes from Connected App config
 
         if state:
             params["state"] = state
