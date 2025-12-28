@@ -711,7 +711,22 @@ async def disconnect_integration(
                 detail=error_response(f"Integration '{integration_id}' not found", code="NOT_FOUND")
             )
 
-        # In production, revoke tokens and clear credentials
+        # Get user ID from current_user
+        user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+
+        if user_id:
+            from sqlalchemy import text
+            try:
+                # Delete the integration record from database
+                db.execute(text("""
+                    DELETE FROM user_integrations
+                    WHERE user_id = :user_id AND provider = :provider
+                """), {"user_id": int(user_id), "provider": integration_id})
+                db.commit()
+                logger.info(f"Disconnected {integration_id} for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error disconnecting integration: {e}")
+                db.rollback()
 
         return success_response({
             "integration_id": integration_id,
