@@ -1077,3 +1077,100 @@ async def list_blueprints(
         }
         for b in blueprints
     ]
+
+
+# =============================================================================
+# ADMIN ENDPOINTS
+# =============================================================================
+
+@router.post("/admin/run-migration")
+async def run_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db),
+):
+    """
+    Run acquisition engine table migration.
+    Creates all required tables if they don't exist.
+    """
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(403, "Invalid admin key")
+
+    try:
+        # Import models to ensure they're registered
+        from models.acquisition_engine.campaign_models import CampaignBlueprint, CampaignInstance
+        from models.acquisition_engine.event_models import AcquisitionEvent
+        from models.acquisition_engine.scoring_models import LeadTemperature, CampaignAttribution
+
+        # Create tables
+        from database import engine, Base
+
+        # Create only acquisition engine tables
+        tables_to_create = [
+            CampaignBlueprint.__table__,
+            CampaignInstance.__table__,
+            AcquisitionEvent.__table__,
+            LeadTemperature.__table__,
+            CampaignAttribution.__table__,
+        ]
+
+        created_tables = []
+        for table in tables_to_create:
+            try:
+                table.create(engine, checkfirst=True)
+                created_tables.append(table.name)
+            except Exception as e:
+                logger.warning(f"Table {table.name} creation: {e}")
+
+        # Seed default blueprints if none exist
+        existing_blueprints = db.query(CampaignBlueprint).count()
+        if existing_blueprints == 0:
+            default_blueprints = [
+                CampaignBlueprint(
+                    name="Purchase Buyer - First Time Homebuyer",
+                    description="Optimized for first-time homebuyers with educational content",
+                    goal_type="PURCHASE_BUYERS",
+                    version="1.0",
+                    is_active=True,
+                    is_default=True,
+                    min_budget=500,
+                    max_budget=10000,
+                    recommended_budget=2000,
+                ),
+                CampaignBlueprint(
+                    name="Refinance - Rate & Term",
+                    description="Target existing homeowners for rate reduction opportunities",
+                    goal_type="REFI_PROSPECTS",
+                    version="1.0",
+                    is_active=True,
+                    is_default=True,
+                    min_budget=300,
+                    max_budget=5000,
+                    recommended_budget=1500,
+                ),
+                CampaignBlueprint(
+                    name="Realtor Referral Network",
+                    description="Build and nurture realtor referral relationships",
+                    goal_type="REFERRAL_PARTNERS",
+                    version="1.0",
+                    is_active=True,
+                    is_default=True,
+                    min_budget=200,
+                    max_budget=3000,
+                    recommended_budget=1000,
+                ),
+            ]
+            for bp in default_blueprints:
+                db.add(bp)
+            db.commit()
+            logger.info(f"Seeded {len(default_blueprints)} default blueprints")
+
+        return {
+            "success": True,
+            "message": "Acquisition engine migration completed",
+            "tables_created": created_tables,
+            "blueprints_seeded": existing_blueprints == 0,
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(500, f"Migration failed: {e}")
