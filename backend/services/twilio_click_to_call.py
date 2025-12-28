@@ -281,7 +281,8 @@ class ClickToCallService:
         lo_phone = self._get_lo_phone(call_request.loan_officer_id)
         if not lo_phone:
             logger.error(f"No phone for LO {call_request.loan_officer_id}")
-            # TODO: Notify borrower that LO is unavailable
+            # Notify borrower that LO is unavailable
+            self._notify_borrower_lo_unavailable(call_request, "no_phone")
             return
 
         try:
@@ -299,7 +300,8 @@ class ClickToCallService:
 
         except Exception as e:
             logger.error(f"Failed to call LO: {e}")
-            # TODO: Notify borrower that LO is unavailable, offer scheduling
+            # Notify borrower that LO is unavailable, offer scheduling
+            self._notify_borrower_lo_unavailable(call_request, "call_failed")
 
     def generate_lo_twiml(self, call_request_id: UUID) -> str:
         """
@@ -437,8 +439,9 @@ class ClickToCallService:
             call_request.ended_at = datetime.now(timezone.utc)
             self.db.commit()
 
-            # TODO: Notify borrower that LO is unavailable via chat
-            # This would be handled by the frontend polling the call status
+            # Notify borrower that LO is unavailable via SMS
+            # Frontend also polls call status for UI updates
+            self._notify_borrower_lo_unavailable(call_request, "declined")
 
             logger.info(f"LO declined call {call_request_id}")
 
@@ -503,6 +506,56 @@ class ClickToCallService:
             return result.first_name or result.full_name
 
         return None
+
+    def _notify_borrower_lo_unavailable(self, call_request: CallRequest, reason: str):
+        """
+        Send SMS notification to borrower when LO is unavailable.
+
+        Informs the borrower and offers scheduling as an alternative.
+        """
+        try:
+            from services.notification_service import notification_service
+
+            borrower_phone = call_request.caller_phone
+            borrower_name = call_request.caller_name or "there"
+            lo_name = self._get_lo_name(call_request.loan_officer_id) or DEFAULT_LO_NAME
+
+            if not borrower_phone:
+                logger.warning(f"No phone to notify borrower for call {call_request.id}")
+                return
+
+            # Build message based on reason
+            if reason == "declined":
+                message = (
+                    f"Hi {borrower_name.split()[0] if borrower_name != 'there' else 'there'}, "
+                    f"{lo_name} is currently with another client. "
+                    f"We'll reach out shortly to schedule a convenient time to talk. "
+                    f"Reply STOP to opt out."
+                )
+            elif reason == "call_failed":
+                message = (
+                    f"Hi {borrower_name.split()[0] if borrower_name != 'there' else 'there'}, "
+                    f"we couldn't complete your call with {lo_name} at this time. "
+                    f"We'll contact you shortly to schedule a callback. "
+                    f"Reply STOP to opt out."
+                )
+            else:  # no_phone, no_answer, etc.
+                message = (
+                    f"Hi {borrower_name.split()[0] if borrower_name != 'there' else 'there'}, "
+                    f"{lo_name} is temporarily unavailable. "
+                    f"We'll reach out soon to schedule a time that works for you. "
+                    f"Reply STOP to opt out."
+                )
+
+            result = notification_service.send_sms(to_phone=borrower_phone, message=message)
+
+            if result.get("success"):
+                logger.info(f"LO unavailable SMS sent to {borrower_phone} for call {call_request.id}")
+            else:
+                logger.warning(f"Failed to send LO unavailable SMS: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Error sending LO unavailable notification: {e}")
 
     def handle_lo_unavailable(self, call_request_id: UUID, reason: str = "no_answer"):
         """

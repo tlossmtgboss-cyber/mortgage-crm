@@ -53892,7 +53892,134 @@ async def emergency_revoke_access(
 
         db.commit()
 
-        # TODO: Send notifications to HR, Security, etc. based on body.notify
+        # Send notifications to HR, Security, etc. based on body.notify
+        notifications_sent = []
+        if body.notify:
+            try:
+                from email_service import email_service
+
+                revoked_user_name = user.name or user.email
+                revoker_name = current_user.name or current_user.email
+                revocation_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+                # Build notification email content
+                html_content = f"""
+                <!DOCTYPE html>
+                <html>
+                <head><meta charset="utf-8"></head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f6f9fc;">
+                    <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+                        <div style="background: #dc2626; color: white; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                            <h2 style="margin: 0; font-size: 18px;">⚠️ Emergency Access Revocation</h2>
+                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Revocation ID:</td>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; font-weight: 600;">{revocation_id}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">User:</td>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; font-weight: 600;">{revoked_user_name} ({user.email})</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Revoked By:</td>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">{revoker_name}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Time:</td>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">{revocation_time}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Reason:</td>
+                                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">{body.reason.replace('_', ' ').title()}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; color: #6b7280;">Details:</td>
+                                <td style="padding: 8px 0;">{body.details}</td>
+                            </tr>
+                        </table>
+
+                        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0;">
+                            <p style="margin: 0; color: #92400e;">
+                                <strong>Actions Taken:</strong><br>
+                                • Account disabled<br>
+                                • {sessions_terminated} active sessions terminated<br>
+                                • {permissions_revoked} permissions revoked
+                            </p>
+                        </div>
+
+                        <p style="color: #9ca3af; font-size: 12px; margin-top: 24px; text-align: center;">
+                            This is an automated security notification from Perennia AI.
+                        </p>
+
+                    </div>
+                </body>
+                </html>
+                """
+
+                plain_text = f"""EMERGENCY ACCESS REVOCATION
+
+Revocation ID: {revocation_id}
+User: {revoked_user_name} ({user.email})
+Revoked By: {revoker_name}
+Time: {revocation_time}
+Reason: {body.reason.replace('_', ' ').title()}
+Details: {body.details}
+
+Actions Taken:
+- Account disabled
+- {sessions_terminated} active sessions terminated
+- {permissions_revoked} permissions revoked
+
+This is an automated security notification from Perennia AI.
+"""
+
+                # Get email addresses for each notification target
+                notification_emails = {}
+
+                if "hr" in body.notify:
+                    hr_email = os.getenv("HR_NOTIFICATION_EMAIL", "hr@perenniaai.com")
+                    notification_emails["hr"] = hr_email
+
+                if "security" in body.notify:
+                    security_email = os.getenv("SECURITY_NOTIFICATION_EMAIL", "security@perenniaai.com")
+                    notification_emails["security"] = security_email
+
+                if "manager" in body.notify and user.manager_id:
+                    manager = db.query(User).filter(User.id == user.manager_id).first()
+                    if manager and manager.email:
+                        notification_emails["manager"] = manager.email
+
+                if "employee" in body.notify:
+                    notification_emails["employee"] = user.email
+
+                # Send notifications
+                for target, email_addr in notification_emails.items():
+                    try:
+                        if target == "employee":
+                            # Different subject for the employee
+                            subject = "Important: Your Account Access Has Been Suspended"
+                        else:
+                            subject = f"[SECURITY] Emergency Access Revocation - {revoked_user_name}"
+
+                        sent = email_service.send_html_email(
+                            to_email=email_addr,
+                            subject=subject,
+                            html_body=html_content,
+                            plain_text_body=plain_text
+                        )
+
+                        if sent:
+                            notifications_sent.append(target)
+                            logger.info(f"Emergency revocation notification sent to {target}: {email_addr}")
+
+                    except Exception as send_err:
+                        logger.error(f"Failed to send notification to {target}: {send_err}")
+
+            except Exception as notif_err:
+                logger.error(f"Error sending revocation notifications: {notif_err}")
 
         return {
             "success": True,
@@ -53900,7 +54027,7 @@ async def emergency_revoke_access(
             "revoked_at": datetime.now(timezone.utc).isoformat(),
             "sessions_terminated": sessions_terminated,
             "permissions_revoked": permissions_revoked,
-            "notifications_sent": body.notify,
+            "notifications_sent": notifications_sent,
             "account_status": "disabled"
         }
 
