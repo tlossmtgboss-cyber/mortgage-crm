@@ -675,9 +675,8 @@ async def merge_documents(
     and returns the merged file.
     """
     from fastapi.responses import StreamingResponse
-    from pypdf import PdfMerger, PdfReader
+    from pypdf import PdfWriter, PdfReader
     import io
-    import tempfile
 
     if not request.document_ids:
         raise HTTPException(status_code=400, detail="No document IDs provided")
@@ -701,8 +700,8 @@ async def merge_documents(
     if not s3_service.is_available:
         raise HTTPException(status_code=503, detail="Document storage not available")
 
-    # Download and merge PDFs
-    merger = PdfMerger()
+    # Download and merge PDFs using PdfWriter (pypdf 4.x)
+    writer = PdfWriter()
     merged_any = False
     errors = []
 
@@ -723,7 +722,8 @@ async def merge_documents(
             # Check if it's a PDF
             if doc.mime_type == "application/pdf" or doc.file_name.lower().endswith('.pdf'):
                 pdf_reader = PdfReader(io.BytesIO(file_data))
-                merger.append(pdf_reader)
+                for page in pdf_reader.pages:
+                    writer.add_page(page)
                 merged_any = True
             else:
                 # For non-PDF files, skip with warning
@@ -740,8 +740,7 @@ async def merge_documents(
 
     # Write merged PDF to bytes
     output = io.BytesIO()
-    merger.write(output)
-    merger.close()
+    writer.write(output)
     output.seek(0)
 
     # Get loan info for filename
@@ -769,7 +768,7 @@ async def merge_and_email_documents(
     Downloads specified documents from S3, merges them into a single PDF,
     and sends via email.
     """
-    from pypdf import PdfMerger, PdfReader
+    from pypdf import PdfWriter, PdfReader
     import io
 
     if not request.document_ids:
@@ -805,8 +804,8 @@ async def merge_and_email_documents(
         else:
             raise HTTPException(status_code=400, detail="No recipient email provided or available")
 
-    # Download and merge PDFs
-    merger = PdfMerger()
+    # Download and merge PDFs using PdfWriter (pypdf 4.x)
+    writer = PdfWriter()
     merged_any = False
     doc_names = []
 
@@ -824,7 +823,8 @@ async def merge_and_email_documents(
 
             if doc.mime_type == "application/pdf" or doc.file_name.lower().endswith('.pdf'):
                 pdf_reader = PdfReader(io.BytesIO(file_data))
-                merger.append(pdf_reader)
+                for page in pdf_reader.pages:
+                    writer.add_page(page)
                 merged_any = True
                 doc_names.append(doc.file_name)
         except Exception as e:
@@ -835,8 +835,7 @@ async def merge_and_email_documents(
 
     # Write merged PDF to bytes
     output = io.BytesIO()
-    merger.write(output)
-    merger.close()
+    writer.write(output)
     pdf_bytes = output.getvalue()
 
     # Send email with attachment

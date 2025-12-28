@@ -677,9 +677,21 @@ async def get_agent_dashboard(
     db: Session = Depends(get_db)
 ):
     """Get comprehensive agent dashboard data."""
-    service = AgentGovernanceService(db)
-    dashboard = service.get_dashboard_data()
-    return dashboard
+    try:
+        service = AgentGovernanceService(db)
+        dashboard = service.get_dashboard_data()
+        return dashboard
+    except Exception as e:
+        logger.error(f"Error getting agent dashboard: {e}")
+        # Return minimal data rather than error
+        return {
+            "agents": {"total": 0, "active": 0, "paused": 0, "maintenance": 0, "by_health": {}},
+            "executions": {"total_24h": 0, "successful": 0, "failed": 0, "avg_time_ms": 0},
+            "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+            "top_agents": [],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(e)
+        }
 
 
 @router.get("/health")
@@ -729,51 +741,73 @@ async def get_agent_statistics(
     db: Session = Depends(get_db)
 ):
     """Get aggregate statistics across all agents."""
-    service = AgentGovernanceService(db)
+    try:
+        service = AgentGovernanceService(db)
 
-    # Get execution stats
-    exec_result = service.list_executions(days=days, limit=10000)
-    executions = exec_result["executions"]
+        # Get execution stats
+        exec_result = service.list_executions(days=days, limit=10000)
+        executions = exec_result["executions"]
 
-    total_executions = len(executions)
-    successful = len([e for e in executions if e.success])
-    failed = len([e for e in executions if e.success == False])
+        total_executions = len(executions)
+        successful = len([e for e in executions if e.success])
+        failed = len([e for e in executions if e.success == False])
 
-    # Calculate average execution time
-    exec_times = [e.execution_time_ms for e in executions if e.execution_time_ms]
-    avg_exec_time = sum(exec_times) / len(exec_times) if exec_times else 0
+        # Calculate average execution time
+        exec_times = [e.execution_time_ms for e in executions if e.execution_time_ms]
+        avg_exec_time = sum(exec_times) / len(exec_times) if exec_times else 0
 
-    # Calculate total tokens
-    tokens = [e.tokens_used for e in executions if e.tokens_used]
-    total_tokens = sum(tokens)
+        # Calculate total tokens
+        tokens = [e.tokens_used for e in executions if e.tokens_used]
+        total_tokens = sum(tokens)
 
-    # Get alert stats
-    alert_result = service.list_alerts(days=days, limit=10000)
-    alerts = alert_result["alerts"]
+        # Get alert stats
+        alert_result = service.list_alerts(days=days, limit=10000)
+        alerts = alert_result["alerts"]
 
-    return {
-        "period_days": days,
-        "executions": {
-            "total": total_executions,
-            "successful": successful,
-            "failed": failed,
-            "success_rate": (successful / total_executions * 100) if total_executions > 0 else 0,
-            "avg_execution_time_ms": round(avg_exec_time, 2),
-            "total_tokens_used": total_tokens
-        },
-        "alerts": {
-            "total": len(alerts),
-            "active": len([a for a in alerts if a.status == "active"]),
-            "acknowledged": len([a for a in alerts if a.status == "acknowledged"]),
-            "resolved": len([a for a in alerts if a.status == "resolved"]),
-            "by_severity": {
-                "critical": len([a for a in alerts if a.severity == "critical"]),
-                "high": len([a for a in alerts if a.severity == "high"]),
-                "medium": len([a for a in alerts if a.severity == "medium"]),
-                "low": len([a for a in alerts if a.severity == "low"])
+        return {
+            "period_days": days,
+            "executions": {
+                "total": total_executions,
+                "successful": successful,
+                "failed": failed,
+                "success_rate": (successful / total_executions * 100) if total_executions > 0 else 0,
+                "avg_execution_time_ms": round(avg_exec_time, 2),
+                "total_tokens_used": total_tokens
+            },
+            "alerts": {
+                "total": len(alerts),
+                "active": len([a for a in alerts if a.status == "active"]),
+                "acknowledged": len([a for a in alerts if a.status == "acknowledged"]),
+                "resolved": len([a for a in alerts if a.status == "resolved"]),
+                "by_severity": {
+                    "critical": len([a for a in alerts if a.severity == "critical"]),
+                    "high": len([a for a in alerts if a.severity == "high"]),
+                    "medium": len([a for a in alerts if a.severity == "medium"]),
+                    "low": len([a for a in alerts if a.severity == "low"])
+                }
             }
         }
-    }
+    except Exception as e:
+        logger.error(f"Error getting agent statistics: {e}")
+        return {
+            "period_days": days,
+            "executions": {
+                "total": 0,
+                "successful": 0,
+                "failed": 0,
+                "success_rate": 0,
+                "avg_execution_time_ms": 0,
+                "total_tokens_used": 0
+            },
+            "alerts": {
+                "total": 0,
+                "active": 0,
+                "acknowledged": 0,
+                "resolved": 0,
+                "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0}
+            },
+            "error": str(e)
+        }
 
 
 # ============================================================================

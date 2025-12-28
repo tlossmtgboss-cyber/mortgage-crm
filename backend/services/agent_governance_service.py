@@ -688,6 +688,95 @@ class AgentGovernanceService:
         return alert
 
     # =========================================================================
+    # DASHBOARD
+    # =========================================================================
+
+    def get_dashboard_data(self) -> Dict[str, Any]:
+        """
+        Get comprehensive dashboard data combining agents, executions, and alerts.
+        """
+        try:
+            # Get all agents
+            agents = self.db.query(AgentProfile).all()
+
+            # Agent summary
+            agent_summary = {
+                "total": len(agents),
+                "active": len([a for a in agents if a.status == 'active']),
+                "paused": len([a for a in agents if a.status == 'paused']),
+                "maintenance": len([a for a in agents if a.status == 'maintenance']),
+                "by_health": {
+                    "healthy": len([a for a in agents if a.health_status == 'healthy']),
+                    "warning": len([a for a in agents if a.health_status == 'warning']),
+                    "critical": len([a for a in agents if a.health_status == 'critical']),
+                }
+            }
+
+            # Recent executions (last 24h)
+            since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+            recent_execs = self.db.query(AgentExecution).filter(
+                AgentExecution.created_at >= since_24h
+            ).all()
+
+            exec_summary = {
+                "total_24h": len(recent_execs),
+                "successful": len([e for e in recent_execs if e.success]),
+                "failed": len([e for e in recent_execs if e.success == False]),
+                "avg_time_ms": round(
+                    sum(e.execution_time_ms or 0 for e in recent_execs) / len(recent_execs), 2
+                ) if recent_execs else 0
+            }
+
+            # Active alerts
+            active_alerts = self.db.query(AgentAlert).filter(
+                AgentAlert.status == 'active'
+            ).all()
+
+            alert_summary = {
+                "total_active": len(active_alerts),
+                "critical": len([a for a in active_alerts if a.severity == 'critical']),
+                "high": len([a for a in active_alerts if a.severity == 'high']),
+                "medium": len([a for a in active_alerts if a.severity == 'medium']),
+                "low": len([a for a in active_alerts if a.severity == 'low']),
+            }
+
+            # Top agents by execution count
+            top_agents = []
+            for agent in agents[:10]:
+                exec_count = self.db.query(AgentExecution).filter(
+                    AgentExecution.agent_id == agent.id,
+                    AgentExecution.created_at >= since_24h
+                ).count()
+                top_agents.append({
+                    "name": agent.agent_name,
+                    "display_name": agent.display_name,
+                    "status": agent.status,
+                    "health": agent.health_status,
+                    "executions_24h": exec_count
+                })
+
+            top_agents.sort(key=lambda x: x["executions_24h"], reverse=True)
+
+            return {
+                "agents": agent_summary,
+                "executions": exec_summary,
+                "alerts": alert_summary,
+                "top_agents": top_agents[:5],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error getting dashboard data: {e}")
+            # Return minimal data on error
+            return {
+                "agents": {"total": 0, "active": 0, "paused": 0, "maintenance": 0, "by_health": {}},
+                "executions": {"total_24h": 0, "successful": 0, "failed": 0, "avg_time_ms": 0},
+                "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+                "top_agents": [],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(e)
+            }
+
+    # =========================================================================
     # SYSTEM HEALTH
     # =========================================================================
 

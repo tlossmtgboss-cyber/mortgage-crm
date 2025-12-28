@@ -421,6 +421,173 @@ class PerenniaS3Service:
         """
         return self.verify_upload(storage_key)
 
+    def upload_file(
+        self,
+        storage_key: str,
+        file_content: bytes,
+        content_type: str,
+        metadata: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Upload file content directly to S3.
+
+        Args:
+            storage_key: S3 object key
+            file_content: File bytes to upload
+            content_type: MIME type of the file
+            metadata: Optional custom metadata
+
+        Returns:
+            Dict with success status and storage info
+        """
+        from io import BytesIO
+
+        # Validate content type
+        if content_type not in self.allowed_content_types:
+            return {
+                "success": False,
+                "error": f"Content type '{content_type}' not allowed",
+                "allowed_types": self.allowed_content_types
+            }
+
+        # Validate file size
+        file_size = len(file_content)
+        if file_size > self.max_file_size:
+            return {
+                "success": False,
+                "error": f"File size {file_size} exceeds maximum {self.max_file_size} bytes"
+            }
+
+        try:
+            extra_args = {
+                'ContentType': content_type
+            }
+
+            if metadata:
+                extra_args['Metadata'] = metadata
+
+            # Upload using upload_fileobj for efficient streaming
+            self.s3_client.upload_fileobj(
+                BytesIO(file_content),
+                self.bucket_name,
+                storage_key,
+                ExtraArgs=extra_args
+            )
+
+            logger.info(f"Uploaded {file_size} bytes to s3://{self.bucket_name}/{storage_key}")
+
+            return {
+                "success": True,
+                "storage_key": storage_key,
+                "bucket": self.bucket_name,
+                "file_size": file_size,
+                "content_type": content_type,
+                "s3_uri": f"s3://{self.bucket_name}/{storage_key}"
+            }
+
+        except ClientError as e:
+            logger.error(f"Error uploading file to S3: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def move_file(
+        self,
+        source_key: str,
+        dest_key: str,
+        delete_source: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Move a file within S3 (copy then delete).
+
+        Args:
+            source_key: Source object key
+            dest_key: Destination object key
+            delete_source: Whether to delete source after copy
+
+        Returns:
+            Dict with success status
+        """
+        try:
+            # Copy to new location
+            copy_result = self.copy_document(source_key, dest_key)
+            if not copy_result.get("success"):
+                return copy_result
+
+            # Delete source if requested
+            if delete_source:
+                delete_result = self.delete_document(source_key)
+                if not delete_result.get("success"):
+                    logger.warning(f"Failed to delete source after move: {source_key}")
+
+            logger.info(f"Moved s3://{self.bucket_name}/{source_key} to {dest_key}")
+
+            return {
+                "success": True,
+                "source_key": source_key,
+                "dest_key": dest_key,
+                "deleted_source": delete_source
+            }
+
+        except ClientError as e:
+            logger.error(f"Error moving file: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def generate_intake_key(
+        self,
+        email_intake_id: int,
+        filename: str
+    ) -> str:
+        """
+        Generate storage key for document intake (temp storage).
+
+        Format: intake/{email_intake_id}/{uuid}.{extension}
+
+        Args:
+            email_intake_id: Email intake record ID
+            filename: Original filename
+
+        Returns:
+            Storage key string
+        """
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
+        unique_id = uuid.uuid4().hex
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        return f"intake/{email_intake_id}/{timestamp}_{unique_id}.{ext}"
+
+    def generate_document_key(
+        self,
+        borrower_id: Optional[int],
+        loan_id: Optional[int],
+        doc_type: str,
+        filename: str
+    ) -> str:
+        """
+        Generate permanent storage key for classified document.
+
+        Format: documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
+
+        Args:
+            borrower_id: Borrower ID (optional)
+            loan_id: Loan ID (optional)
+            doc_type: Document type (e.g., 'W2', 'BANK_STATEMENT')
+            filename: Original filename
+
+        Returns:
+            Storage key string
+        """
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
+        unique_id = uuid.uuid4().hex
+
+        borrower_folder = str(borrower_id) if borrower_id else 'unassigned'
+        loan_folder = str(loan_id) if loan_id else 'general'
+
+        return f"documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
+
     def list_loan_documents(
         self,
         loan_id: int,
