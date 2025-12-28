@@ -1,5 +1,5 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI, partnersAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
@@ -1276,6 +1276,17 @@ function LeadDetail() {
     setSaveTimeout(newTimeout);
   };
 
+  // Stable callback for income changes to prevent infinite loops
+  const handleIncomeChange = useCallback((monthly, annual) => {
+    // Only update if values actually changed
+    setFormData(prev => {
+      if (prev.monthly_income !== monthly || prev.annual_income !== annual) {
+        return { ...prev, monthly_income: monthly, annual_income: annual };
+      }
+      return prev;
+    });
+  }, []);
+
   const handleAddNote = async (e) => {
     e.preventDefault();
     if (!noteText.trim()) return;
@@ -2391,10 +2402,7 @@ function LeadDetail() {
               <IncomeTab
                 borrowerId={parseInt(id)}
                 loanId={lead?.loan_id || parseInt(id)}
-                onIncomeChange={(monthly, annual) => {
-                  handleFieldChange('monthly_income', monthly);
-                  handleFieldChange('annual_income', annual);
-                }}
+                onIncomeChange={handleIncomeChange}
               />
             )}
 

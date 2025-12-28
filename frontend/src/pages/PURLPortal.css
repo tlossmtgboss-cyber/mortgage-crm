@@ -1638,6 +1638,34 @@
   border: 2px dashed var(--portal-gray-200);
 }
 
+/* Checklist Upload Button */
+.checklist-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: var(--portal-primary);
+  color: white;
+  border-radius: var(--portal-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.checklist-upload-btn:hover {
+  background: var(--portal-primary-dark);
+  transform: translateY(-1px);
+}
+
+.checklist-upload-btn:disabled {
+  background: var(--portal-gray-400);
+  cursor: not-allowed;
+  transform: none;
+}
+
 .upload-cta-btn {
   display: block;
   width: 100%;

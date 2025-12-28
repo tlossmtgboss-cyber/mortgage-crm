@@ -65,20 +65,26 @@ export default function IncomeTab({ borrowerId, loanId, onIncomeChange }) {
         hasDecliningIncome: data.has_declining_income || false,
       });
 
-      if (onIncomeChange) {
-        onIncomeChange(data.total_monthly_income, data.total_annual_income);
-      }
+      // Return the data so we can use it in useEffect
+      return { monthly: data.total_monthly_income, annual: data.total_annual_income };
     } catch (err) {
       console.error('Error fetching income:', err);
       setError(err.message);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [borrowerId, loanId, token, onIncomeChange]);
+  }, [borrowerId, loanId, token]); // Note: onIncomeChange intentionally omitted to prevent loops
 
   useEffect(() => {
-    fetchIncomeSources();
-  }, [fetchIncomeSources]);
+    const loadData = async () => {
+      const result = await fetchIncomeSources();
+      if (result && onIncomeChange) {
+        onIncomeChange(result.monthly, result.annual);
+      }
+    };
+    loadData();
+  }, [fetchIncomeSources, onIncomeChange]);
 
   const handleAddSource = async (incomeType) => {
     try {

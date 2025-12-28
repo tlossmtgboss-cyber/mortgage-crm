@@ -627,7 +627,9 @@ const LoanSummaryCard = ({ loan, workspace, contacts }) => {
 };
 
 // Needs List Card - Shows conditions/tasks from loan application submission
-const NeedsListCard = ({ tasks, onViewAll }) => {
+const NeedsListCard = ({ tasks, onViewAll, onUpload, showUploadButtons = false }) => {
+  const [uploadingId, setUploadingId] = useState(null);
+
   // Filter to show pending tasks (conditions that need to be completed)
   const pendingTasks = tasks?.filter(t =>
     t.status === 'open' || t.status === 'TODO' || t.status === 'IN_PROGRESS'
@@ -670,15 +672,27 @@ const NeedsListCard = ({ tasks, onViewAll }) => {
     na: 'N/A',
   };
 
+  const handleFileSelect = async (task, event) => {
+    const file = event.target.files?.[0];
+    if (!file || !onUpload) return;
+
+    setUploadingId(task.id);
+    try {
+      await onUpload(task, file);
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
   // If no tasks, show empty state
   if (!tasks || tasks.length === 0) {
     return (
       <div className="document-checklist-card">
         <div className="checklist-header">
-          <h3>Your Needs List</h3>
+          <h3>Documents Needed</h3>
         </div>
         <div className="checklist-empty">
-          <p>Your task list will appear here once your application is processed.</p>
+          <p>Your document checklist will appear here once your application is processed.</p>
         </div>
       </div>
     );
@@ -687,16 +701,17 @@ const NeedsListCard = ({ tasks, onViewAll }) => {
   return (
     <div className="document-checklist-card">
       <div className="checklist-header">
-        <h3>Your Needs List</h3>
+        <h3>Documents Needed</h3>
         <span className="completion-badge">{completionPct}% Complete</span>
       </div>
 
-      <ProgressBar percentage={completionPct} label="Tasks" />
+      <ProgressBar percentage={completionPct} label="Documents" />
 
       <div className="checklist-items">
-        {/* Show pending tasks first (max 5) */}
-        {pendingTasks.slice(0, 5).map((task) => {
+        {/* Show pending tasks/documents */}
+        {pendingTasks.map((task) => {
           const displayStatus = getDisplayStatus(task.status);
+          const isUploading = uploadingId === task.id;
           return (
             <div key={task.id} className={`checklist-item status-${displayStatus}`}>
               <span className="checklist-icon">{statusIcons[displayStatus]}</span>
@@ -706,13 +721,26 @@ const NeedsListCard = ({ tasks, onViewAll }) => {
                   <span className="checklist-due">Due: {new Date(task.due_at).toLocaleDateString()}</span>
                 )}
               </div>
-              <span className={`checklist-status status-${displayStatus}`}>{statusLabels[displayStatus]}</span>
+              {showUploadButtons && onUpload && displayStatus === 'needed' ? (
+                <label className="checklist-upload-btn">
+                  <input
+                    type="file"
+                    onChange={(e) => handleFileSelect(task, e)}
+                    disabled={isUploading}
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    style={{ display: 'none' }}
+                  />
+                  {isUploading ? 'Uploading...' : 'Choose File'}
+                </label>
+              ) : (
+                <span className={`checklist-status status-${displayStatus}`}>{statusLabels[displayStatus]}</span>
+              )}
             </div>
           );
         })}
 
-        {/* Show recent completed tasks (max 2) */}
-        {completedTasks.slice(0, 2).map((task) => (
+        {/* Show completed tasks */}
+        {completedTasks.map((task) => (
           <div key={task.id} className="checklist-item status-done">
             <span className="checklist-icon">{statusIcons.done}</span>
             <span className="checklist-label">{task.title}</span>
@@ -721,7 +749,7 @@ const NeedsListCard = ({ tasks, onViewAll }) => {
         ))}
       </div>
 
-      {pendingTasks.length > 5 && (
+      {pendingTasks.length > 10 && onViewAll && (
         <button className="upload-cta-btn" onClick={onViewAll}>
           View All {pendingTasks.length} Items
         </button>
@@ -955,6 +983,65 @@ export default function PURLPortal() {
     } finally {
       setUploading(false);
       event.target.value = '';
+    }
+  };
+
+  // Handle document upload for specific task/document need
+  const handleTaskDocumentUpload = async (task, file) => {
+    if (!file) return;
+
+    try {
+      // Upload document for this specific task
+      try {
+        const uploadData = await api.getDocumentUploadUrl(slug, {
+          filename: file.name,
+          contentType: file.type,
+          doc_type: task.title, // Associate with the task/document type
+          task_id: task.id,
+        });
+
+        // Upload to S3
+        const s3Response = await fetch(uploadData.upload_url, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type,
+          },
+        });
+
+        if (!s3Response.ok) {
+          throw new Error(`Upload failed: ${s3Response.status}`);
+        }
+
+        // Complete upload
+        await api.completeDocumentUpload(slug, {
+          documentKey: uploadData.document_key,
+          filename: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+          task_id: task.id,
+        });
+      } catch (s3Error) {
+        console.warn('S3 upload failed, trying direct upload:', s3Error);
+        await api.uploadDocumentDirect(slug, file, { task_id: task.id });
+      }
+
+      // Mark task as in progress after upload
+      await api.updateTask(slug, task.id, {
+        status: 'IN_PROGRESS',
+      });
+
+      // Refresh tasks and documents
+      const tasksData = await api.getWorkspaceTasks(slug);
+      setTasks(tasksData.tasks || []);
+
+      const docsData = await api.getWorkspaceDocuments(slug);
+      setDocuments(docsData.documents || []);
+
+      alert(`${task.title} uploaded successfully! It will be reviewed shortly.`);
+    } catch (err) {
+      console.error('Task document upload failed:', err);
+      alert(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
     }
   };
 
@@ -1226,7 +1313,15 @@ export default function PURLPortal() {
         {/* Documents Tab */}
         {activeTab === 'documents' && (
           <div className="tab-content documents-tab">
-            {/* Smart Docs Requirements */}
+            {/* Document Needs List - Primary upload interface with file upload buttons */}
+            <NeedsListCard
+              tasks={tasks}
+              onViewAll={() => setActiveTab('tasks')}
+              onUpload={handleTaskDocumentUpload}
+              showUploadButtons={true}
+            />
+
+            {/* Smart Docs Requirements (additional requirements from SmartDocs system) */}
             <PortalDocumentRequirements
               workspaceSlug={slug}
               onProgressUpdate={(progress) => {

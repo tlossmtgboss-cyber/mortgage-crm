@@ -373,8 +373,9 @@ const IntegrationSettings = () => {
         </div>
       </div>
 
-      <div className="content-layout">
-        <div className="integrations-grid">
+      <div className={`integration-content ${selectedIntegration ? '' : 'no-selection'}`}>
+        <div className="marketplace-panel">
+          <div className="integrations-grid">
           {filteredIntegrations.map(integration => (
             <div
               key={integration.id}
@@ -399,6 +400,7 @@ const IntegrationSettings = () => {
               </div>
             </div>
           ))}
+          </div>
         </div>
 
         {selectedIntegration && (
