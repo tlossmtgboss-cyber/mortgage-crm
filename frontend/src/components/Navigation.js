@@ -153,24 +153,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               👥 Team
             </Link>
           )}
-          {(userRole === 'management' || userRole === 'admin') && (
-            <Link
-              to="/admin/settings"
-              className={`nav-link ${isActive('/admin/settings') ? 'active' : ''}`}
-              title="Admin Settings"
-            >
-              🔧 Admin
-            </Link>
-          )}
-          {(userRole === 'management' || userRole === 'admin') && (
-            <Link
-              to="/admin/domains"
-              className={`nav-link ${isActive('/admin/domains') ? 'active' : ''}`}
-              title="Custom Domains"
-            >
-              🌐 Domains
-            </Link>
-          )}
           <Link
             to="/settings"
             className={`settings-link ${isActive('/settings') ? 'active' : ''}`}

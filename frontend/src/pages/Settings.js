@@ -364,7 +364,9 @@ function Settings() {
     { id: 'api-keys-settings', label: 'API Keys & Webhooks', type: 'standalone', section: 'api-keys-settings', navigate: '/settings/api-keys' },
     { id: 'company-branding', label: 'Company & Branding', type: 'standalone', section: 'company-branding', navigate: '/settings/company-branding' },
     { id: 'data-management', label: 'Data Management', type: 'standalone', section: 'data-management', navigate: '/data-upload' },
-    { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' }
+    { id: 'master-admin', label: 'Master Administrator', type: 'parent', section: 'masterAdmin' },
+    { id: 'admin-settings', label: 'Admin Settings', type: 'standalone', section: 'admin-settings', navigate: '/admin/settings', adminOnly: true },
+    { id: 'custom-domains', label: 'Custom Domains', type: 'standalone', section: 'custom-domains', navigate: '/admin/domains', adminOnly: true }
   ];
 
   // Load sidebar order from localStorage or use defaults
@@ -2729,6 +2731,11 @@ const API_BASE_URL = isProduction
                   )}
                 </div>
               );
+            }
+
+            // Skip adminOnly items if user is not admin/management
+            if (item.adminOnly && currentUser.role !== 'admin' && currentUser.role !== 'management') {
+              return null;
             }
 
             // Render other standalone items
