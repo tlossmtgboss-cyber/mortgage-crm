@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
+import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
 import './IntegrationSettings.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -582,6 +583,18 @@ const IntegrationSettings = () => {
                 </div>
               </div>
             </div>
+
+            {/* Salesforce Field Mapping - only show for Salesforce */}
+            {selectedIntegration.id === 'salesforce' && (
+              <div className="detail-section">
+                <SalesforceFieldMapping
+                  isConnected={selectedIntegration.status === 'connected'}
+                  onMappingSaved={() => {
+                    toast.success('Field mapping updated');
+                  }}
+                />
+              </div>
+            )}
 
             {/* Features */}
             {selectedIntegration.features && (
