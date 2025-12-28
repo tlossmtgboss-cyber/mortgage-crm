@@ -1900,6 +1900,13 @@ class BookAppointmentRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class CancelAppointmentRequest(BaseModel):
+    """Request model for cancelling appointments"""
+    appointment_id: str = Field(..., description="The appointment ID (APPT-XXXXXXXX format)")
+    contact_email: str = Field(..., description="Email used when booking (for verification)")
+    reason: Optional[str] = Field(None, max_length=500, description="Reason for cancellation")
+
+
 @public_router.post("/chat/{user_slug}/message")
 async def chat_with_mortgage_assistant(
     user_slug: str,
@@ -2012,6 +2019,81 @@ async def book_appointment_via_chat(
         return {
             "success": False,
             "error": str(e)
+        }
+
+
+@public_router.post("/chat/{user_slug}/cancel")
+async def cancel_appointment_via_chat(
+    user_slug: str,
+    request: CancelAppointmentRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Cancel an appointment booked via the chat widget.
+    Requires the appointment ID and the email used when booking for verification.
+    """
+    try:
+        from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+        from datetime import datetime
+
+        # Find the appointment by appointment_id
+        appointment = db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.appointment_id == request.appointment_id
+        ).first()
+
+        if not appointment:
+            return {
+                "success": False,
+                "error": "Appointment not found. Please check the appointment ID."
+            }
+
+        # Verify email matches (case-insensitive)
+        if appointment.contact_email.lower() != request.contact_email.lower():
+            logger.warning(f"Email mismatch for appointment {request.appointment_id}: "
+                          f"provided {request.contact_email}, expected {appointment.contact_email}")
+            return {
+                "success": False,
+                "error": "Email does not match the booking. Please use the email you provided when scheduling."
+            }
+
+        # Check if already cancelled
+        if appointment.status == AppointmentStatus.CANCELLED.value:
+            return {
+                "success": False,
+                "error": "This appointment has already been cancelled."
+            }
+
+        # Check if appointment is in the past
+        if appointment.start_time < datetime.utcnow():
+            return {
+                "success": False,
+                "error": "Cannot cancel past appointments."
+            }
+
+        # Cancel the appointment
+        appointment.status = AppointmentStatus.CANCELLED.value
+        appointment.cancelled_at = datetime.utcnow()
+        if request.reason:
+            appointment.internal_notes = f"Cancelled by user: {request.reason}"
+        else:
+            appointment.internal_notes = "Cancelled by user via chat widget"
+
+        db.commit()
+
+        logger.info(f"Appointment {request.appointment_id} cancelled by {request.contact_email}")
+
+        return {
+            "success": True,
+            "message": "Your appointment has been cancelled successfully.",
+            "appointment_id": request.appointment_id,
+            "cancelled_time": appointment.start_time.strftime("%B %d, %Y at %I:%M %p")
+        }
+
+    except Exception as e:
+        logger.error(f"Error cancelling appointment: {e}")
+        return {
+            "success": False,
+            "error": "An error occurred while cancelling. Please try again or contact support."
         }
 
 
