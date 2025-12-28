@@ -20223,7 +20223,8 @@ except Exception as e:
 
 # HubSpot Integration routes (OAuth, CRM Sync)
 try:
-    from routes.hubspot_routes import router as hubspot_router
+    from routes.hubspot_routes import router as hubspot_router, set_dependencies as set_hubspot_deps
+    set_hubspot_deps(get_db, get_current_user)
     app.include_router(hubspot_router, tags=["HubSpot Integration"])
     logger.info("✅ HubSpot routes loaded")
 except Exception as e:

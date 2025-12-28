@@ -4,21 +4,46 @@ Handles OAuth and CRM sync operations
 """
 import os
 import logging
-from typing import Optional
+from typing import Optional, Callable
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from database import get_db
-from auth import get_current_user
 from utils.response_helpers import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/hubspot", tags=["hubspot"])
+
+# Dependency injection placeholders
+_get_db: Optional[Callable] = None
+_get_current_user: Optional[Callable] = None
+
+
+def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
+    """Set dependencies at runtime from main.py."""
+    global _get_db, _get_current_user
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func
+
+
+def get_db():
+    """Get database session - wrapper that works at request time."""
+    if _get_db is None:
+        raise HTTPException(status_code=500, detail="Database dependency not configured")
+    return next(_get_db())
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - wrapper that works at request time."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
 
 
 @router.get("/auth")
