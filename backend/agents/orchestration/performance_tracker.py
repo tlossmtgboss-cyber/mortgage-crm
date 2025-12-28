@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
 import uuid
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -152,6 +152,83 @@ class PerformanceTracker:
 
         return outcome_id
 
+    async def _fetch_executions_from_db(self, agent_id: str, start_date: datetime) -> List[Dict]:
+        """Fetch executions from database."""
+        if not self.db_session:
+            return []
+
+        try:
+            query = text("""
+                SELECT conversation_id, agent_id, stage, prompt_tokens, completion_tokens,
+                       total_tokens, latency_ms, model_used, created_at
+                FROM agent_executions
+                WHERE agent_id = :agent_id AND created_at >= :start_date
+                ORDER BY created_at DESC
+            """)
+            result = await self.db_session.execute(query, {
+                "agent_id": agent_id,
+                "start_date": start_date
+            })
+            rows = result.fetchall()
+            return [
+                {
+                    "conversation_id": row[0],
+                    "agent_id": row[1],
+                    "stage": row[2],
+                    "prompt_tokens": row[3] or 0,
+                    "completion_tokens": row[4] or 0,
+                    "total_tokens": row[5] or 0,
+                    "latency_ms": row[6] or 0,
+                    "model_used": row[7],
+                    "executed_at": row[8],
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            logger.error(f"Failed to fetch executions from database: {e}")
+            return []
+
+    async def _fetch_outcomes_from_db(self, agent_id: str, start_date: datetime) -> List[Dict]:
+        """Fetch outcomes from database."""
+        if not self.db_session:
+            return []
+
+        try:
+            query = text("""
+                SELECT conversation_id, agent_id, user_id, outcome_type,
+                       total_messages, agent_messages, user_messages,
+                       qualification_complete, booking_made, revenue_generated,
+                       created_at, completed_at
+                FROM conversation_outcomes
+                WHERE agent_id = :agent_id AND created_at >= :start_date
+                ORDER BY created_at DESC
+            """)
+            result = await self.db_session.execute(query, {
+                "agent_id": agent_id,
+                "start_date": start_date
+            })
+            rows = result.fetchall()
+            return [
+                {
+                    "conversation_id": row[0],
+                    "agent_id": row[1],
+                    "user_id": row[2],
+                    "outcome_type": row[3],
+                    "total_messages": row[4] or 0,
+                    "agent_messages": row[5] or 0,
+                    "user_messages": row[6] or 0,
+                    "qualification_complete": row[7],
+                    "booking_made": row[8],
+                    "revenue_generated": float(row[9]) if row[9] else 0,
+                    "created_at": row[10],
+                    "completed_at": row[11],
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            logger.error(f"Failed to fetch outcomes from database: {e}")
+            return []
+
     async def get_agent_metrics(
         self,
         agent_id: str,
@@ -169,15 +246,23 @@ class PerformanceTracker:
         """
         start_date = datetime.utcnow() - timedelta(days=days)
 
-        # Filter data
-        executions = [
+        # Try to fetch from database first, fall back to in-memory
+        if self.db_session:
+            executions = await self._fetch_executions_from_db(agent_id, start_date)
+            outcomes = await self._fetch_outcomes_from_db(agent_id, start_date)
+        else:
+            executions = []
+            outcomes = []
+
+        # Combine with in-memory data
+        executions.extend([
             e for e in self._in_memory_executions
             if e.get("agent_id") == agent_id and e.get("executed_at", datetime.min) >= start_date
-        ]
-        outcomes = [
+        ])
+        outcomes.extend([
             o for o in self._in_memory_outcomes
             if o.get("agent_id") == agent_id and o.get("created_at", datetime.min) >= start_date
-        ]
+        ])
 
         if not outcomes:
             return self._empty_metrics(agent_id, days)
@@ -246,10 +331,16 @@ class PerformanceTracker:
         """
         start_date = datetime.utcnow() - timedelta(days=days)
 
-        executions = [
+        # Fetch from database and combine with in-memory
+        if self.db_session:
+            executions = await self._fetch_executions_from_db(agent_id, start_date)
+        else:
+            executions = []
+
+        executions.extend([
             e for e in self._in_memory_executions
             if e.get("agent_id") == agent_id and e.get("executed_at", datetime.min) >= start_date
-        ]
+        ])
 
         # Group by stage
         by_stage: Dict[str, List[Dict]] = {}
@@ -309,10 +400,16 @@ class PerformanceTracker:
         """
         start_date = datetime.utcnow() - timedelta(days=days)
 
-        executions = [
+        # Fetch from database and combine with in-memory
+        if self.db_session:
+            executions = await self._fetch_executions_from_db(agent_id, start_date)
+        else:
+            executions = []
+
+        executions.extend([
             e for e in self._in_memory_executions
             if e.get("agent_id") == agent_id and e.get("executed_at", datetime.min) >= start_date
-        ]
+        ])
 
         # Group by day
         by_day: Dict[str, List[Dict]] = {}
@@ -383,15 +480,96 @@ class PerformanceTracker:
         }
 
     async def _persist_execution(self, execution: Dict) -> None:
-        """Persist execution to database"""
-        # TODO: Implement database persistence
-        # For now, use in-memory storage
-        self._in_memory_executions.append(execution)
+        """Persist execution to database using agent_executions table."""
+        if not self.db_session:
+            self._in_memory_executions.append(execution)
+            return
+
+        try:
+            # Convert metadata to JSON string for storage
+            import json
+            metadata_json = json.dumps(execution.get("metadata", {}))
+
+            # Insert into agent_executions table
+            query = text("""
+                INSERT INTO agent_executions (
+                    conversation_id, agent_id, stage, prompt_tokens, completion_tokens,
+                    total_tokens, latency_ms, model_used, response_text, metadata, created_at
+                ) VALUES (
+                    :conversation_id, :agent_id, :stage, :prompt_tokens, :completion_tokens,
+                    :total_tokens, :latency_ms, :model_used, :response_text, :metadata, :created_at
+                )
+            """)
+
+            await self.db_session.execute(query, {
+                "conversation_id": execution.get("conversation_id"),
+                "agent_id": execution.get("agent_id"),
+                "stage": execution.get("stage", "unknown"),
+                "prompt_tokens": execution.get("prompt_tokens", 0),
+                "completion_tokens": execution.get("completion_tokens", 0),
+                "total_tokens": execution.get("total_tokens", 0),
+                "latency_ms": execution.get("latency_ms", 0),
+                "model_used": execution.get("model_used"),
+                "response_text": execution.get("response_text"),
+                "metadata": metadata_json,
+                "created_at": execution.get("executed_at", datetime.utcnow()),
+            })
+            await self.db_session.commit()
+
+            logger.debug(f"Persisted execution {execution.get('id')} to database")
+
+        except Exception as e:
+            logger.error(f"Failed to persist execution to database: {e}")
+            # Fall back to in-memory storage
+            self._in_memory_executions.append(execution)
 
     async def _persist_outcome(self, outcome: Dict) -> None:
-        """Persist outcome to database"""
-        # TODO: Implement database persistence
-        self._in_memory_outcomes.append(outcome)
+        """Persist outcome to database using conversation_outcomes table."""
+        if not self.db_session:
+            self._in_memory_outcomes.append(outcome)
+            return
+
+        try:
+            import json
+            metrics_json = json.dumps(outcome.get("metrics", {}))
+
+            query = text("""
+                INSERT INTO conversation_outcomes (
+                    conversation_id, agent_id, user_id, outcome_type,
+                    total_messages, agent_messages, user_messages,
+                    qualification_complete, booking_made, revenue_generated,
+                    metrics, created_at, completed_at
+                ) VALUES (
+                    :conversation_id, :agent_id, :user_id, :outcome_type,
+                    :total_messages, :agent_messages, :user_messages,
+                    :qualification_complete, :booking_made, :revenue_generated,
+                    :metrics, :created_at, :completed_at
+                )
+            """)
+
+            await self.db_session.execute(query, {
+                "conversation_id": outcome.get("conversation_id"),
+                "agent_id": outcome.get("agent_id"),
+                "user_id": outcome.get("user_id"),
+                "outcome_type": outcome.get("outcome_type", "unknown"),
+                "total_messages": outcome.get("total_messages", 0),
+                "agent_messages": outcome.get("agent_messages", 0),
+                "user_messages": outcome.get("user_messages", 0),
+                "qualification_complete": outcome.get("qualification_complete", False),
+                "booking_made": outcome.get("booking_made", False),
+                "revenue_generated": outcome.get("revenue_generated"),
+                "metrics": metrics_json,
+                "created_at": outcome.get("created_at", datetime.utcnow()),
+                "completed_at": outcome.get("completed_at"),
+            })
+            await self.db_session.commit()
+
+            logger.debug(f"Persisted outcome {outcome.get('id')} to database")
+
+        except Exception as e:
+            logger.error(f"Failed to persist outcome to database: {e}")
+            # Fall back to in-memory storage
+            self._in_memory_outcomes.append(outcome)
 
 
 class ABTestTracker:
