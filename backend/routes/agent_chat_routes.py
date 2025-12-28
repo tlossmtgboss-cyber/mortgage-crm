@@ -367,12 +367,13 @@ async def send_message_stream(
             # Start streaming indicator
             yield f"data: {json.dumps({'type': 'start', 'user_message_id': user_message.id})}\n\n"
 
-            # Simulate streaming response (would integrate with actual agent)
+            # Generate streaming response using OpenAI
             response_parts = await generate_streaming_response(
                 agent=agent,
                 message=message.content,
                 session=session,
-                context=message.context
+                context=message.context,
+                db=db
             )
 
             for part in response_parts:
@@ -531,6 +532,63 @@ async def quick_agent_action(
 # Helper Functions
 # ============================================================================
 
+def _build_agent_system_prompt(agent: AgentProfile, context: Optional[Dict[str, Any]]) -> str:
+    """Build system prompt for an agent based on its profile."""
+    agent_name = agent.display_name or agent.agent_name
+    description = agent.description or f"A specialized {agent.category} agent"
+
+    # Get agent-specific configuration
+    config = agent.config or {}
+    custom_prompt = config.get("system_prompt", "")
+    capabilities = config.get("capabilities", [])
+
+    # Agent category-specific context
+    category_context = {
+        "core_crm": """You specialize in core CRM operations including:
+- Pipeline analysis and loan tracking
+- Compliance checking and regulatory adherence
+- Lead management and nurturing
+- Document tracking and status updates
+
+You have access to loan data, borrower information, and pipeline metrics.""",
+
+        "extended": """You provide extended mortgage services including:
+- Team coaching and performance analysis
+- Appointment scheduling and calendar management
+- Rate analysis and market updates
+- Communication templates and outreach
+
+You can analyze trends and provide actionable recommendations.""",
+
+        "custom": """You are a customizable agent that can be configured for specific workflows and tasks.
+You adapt to the user's needs and provide tailored assistance."""
+    }
+
+    base_prompt = f"""You are {agent_name}, an AI assistant at Perennia AI - a mortgage CRM and AI platform.
+
+{description}
+
+{category_context.get(agent.category, category_context['custom'])}
+
+{custom_prompt}
+
+Guidelines:
+- Be concise and professional
+- Provide specific, actionable information when possible
+- If you need more context to help effectively, ask clarifying questions
+- When discussing loans or borrower data, maintain confidentiality
+- Use clear formatting for lists and data
+"""
+
+    if capabilities:
+        base_prompt += f"\nYour specific capabilities: {', '.join(capabilities)}"
+
+    if context:
+        base_prompt += f"\n\nCurrent context: {json.dumps(context, default=str)}"
+
+    return base_prompt
+
+
 async def generate_agent_response(
     agent: AgentProfile,
     message: str,
@@ -539,34 +597,74 @@ async def generate_agent_response(
     db: Session
 ) -> Dict[str, Any]:
     """
-    Generate agent response based on agent type and message.
-    This is a placeholder - would integrate with actual agent implementation.
+    Generate agent response using OpenAI.
+    Falls back to template responses if OpenAI is unavailable.
     """
-    # In production, this would:
-    # 1. Load the appropriate agent based on category
-    # 2. Pass message and context to the agent
-    # 3. Execute any tool calls
-    # 4. Return the response
+    import os
 
+    client, enabled = get_openai_client()
     agent_name = agent.display_name or agent.agent_name
 
-    # Placeholder response based on agent category
-    agent_responses = {
-        "core_crm": f"I've analyzed your request based on the query: '{message}'. I can help with pipeline analysis, compliance checking, lead management, and document tracking. What would you like me to focus on?",
-        "extended": f"Based on your request about '{message}', I can provide specialized assistance. This includes coaching, scheduling, rate analysis, and more. How can I help?",
-        "custom": f"I'm a custom agent ready to assist with: '{message}'. Please let me know what specific help you need.",
+    if enabled and client:
+        try:
+            # Build conversation history from session
+            messages = [{"role": "system", "content": _build_agent_system_prompt(agent, context)}]
+
+            # Add conversation history if in a session
+            if session:
+                history = db.query(AgentChatMessage).filter(
+                    AgentChatMessage.session_id == session.id
+                ).order_by(AgentChatMessage.created_at.desc()).limit(10).all()
+
+                # Add in chronological order
+                for msg in reversed(history):
+                    messages.append({"role": msg.role, "content": msg.content})
+
+            # Add current message
+            messages.append({"role": "user", "content": message})
+
+            # Call OpenAI
+            model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=1000,
+                temperature=0.7
+            )
+
+            content = response.choices[0].message.content.strip()
+            tokens_used = response.usage.total_tokens if response.usage else len(content) // 4
+
+            return {
+                "content": content,
+                "tool_calls": None,
+                "tools_used": [],
+                "tokens_used": tokens_used,
+                "model": model
+            }
+
+        except Exception as e:
+            logger.error(f"OpenAI API error for agent {agent_name}: {e}")
+            # Fall through to fallback response
+
+    # Fallback response when OpenAI is unavailable
+    fallback_responses = {
+        "core_crm": f"I'm {agent_name}, your CRM assistant. I can help with pipeline analysis, compliance checking, lead management, and document tracking. What would you like me to help with regarding: '{message[:100]}...'?",
+        "extended": f"I'm {agent_name}, and I specialize in coaching, scheduling, and rate analysis. Regarding your question about '{message[:100]}...', how can I assist you?",
+        "custom": f"I'm {agent_name}, ready to help with your request. Could you provide more details about: '{message[:100]}...'?",
     }
 
-    response_content = agent_responses.get(
+    response_content = fallback_responses.get(
         agent.category,
-        f"I'm {agent_name}, and I can help you with: '{message}'. How would you like me to assist further?"
+        f"I'm {agent_name}. I'd be happy to help with your request about '{message[:100]}...'. What specific information do you need?"
     )
 
     return {
         "content": response_content,
         "tool_calls": None,
         "tools_used": [],
-        "tokens_used": len(response_content) // 4  # Rough estimate
+        "tokens_used": len(response_content) // 4,
+        "model": "fallback"
     }
 
 
@@ -574,15 +672,58 @@ async def generate_streaming_response(
     agent: AgentProfile,
     message: str,
     session: AgentChatSession,
-    context: Optional[Dict[str, Any]]
+    context: Optional[Dict[str, Any]],
+    db: Session = None
 ) -> List[str]:
     """
-    Generate streaming response parts.
+    Generate streaming response using OpenAI streaming API.
     Returns list of strings to be streamed.
+    Falls back to chunked template response if OpenAI unavailable.
     """
+    import os
+
+    client, enabled = get_openai_client()
     agent_name = agent.display_name or agent.agent_name
 
-    # Generate full response first (in production, this would be actual streaming)
+    if enabled and client:
+        try:
+            # Build messages for OpenAI
+            messages = [{"role": "system", "content": _build_agent_system_prompt(agent, context)}]
+
+            # Add conversation history if available
+            if session and db:
+                history = db.query(AgentChatMessage).filter(
+                    AgentChatMessage.session_id == session.id
+                ).order_by(AgentChatMessage.created_at.desc()).limit(10).all()
+
+                for msg in reversed(history):
+                    messages.append({"role": msg.role, "content": msg.content})
+
+            messages.append({"role": "user", "content": message})
+
+            # Use OpenAI streaming
+            model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=1000,
+                temperature=0.7,
+                stream=True
+            )
+
+            # Collect chunks from stream
+            chunks = []
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    chunks.append(chunk.choices[0].delta.content)
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"OpenAI streaming error for agent {agent_name}: {e}")
+            # Fall through to fallback
+
+    # Fallback: Generate template response and chunk it
     full_response = f"I'm {agent_name}. "
     full_response += f"Based on your message about '{message[:50]}...', "
     full_response += "here's my analysis:\n\n"
@@ -591,6 +732,6 @@ async def generate_streaming_response(
     full_response += "3. Recommendations will follow\n\n"
     full_response += "Would you like me to elaborate on any specific point?"
 
-    # Break into chunks for streaming
+    # Break into chunks for streaming effect
     chunk_size = 20
     return [full_response[i:i + chunk_size] for i in range(0, len(full_response), chunk_size)]
