@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/token",
-      "destination": "https://mortgage-crm-production-7a9a.up.railway.app/token"
+      "destination": "https://api.perenniaai.com/token"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://mortgage-crm-production-7a9a.up.railway.app/api/:path*"
+      "destination": "https://api.perenniaai.com/api/:path*"
     },
     {
       "source": "/((?!api|token|static|_next|favicon.ico).*)",
