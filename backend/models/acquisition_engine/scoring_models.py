@@ -4,8 +4,8 @@ LeadTemperature - Computed lead scoring based on behavioral events
 CampaignAttribution - Revenue attribution tracking
 """
 
-from sqlalchemy import Column, String, Integer, Numeric, DateTime, Boolean, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Integer, Numeric, DateTime, Boolean, ForeignKey, Index, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid

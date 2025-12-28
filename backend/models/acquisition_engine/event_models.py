@@ -3,8 +3,8 @@ Event Models for Acquisition Engine
 AcquisitionEvent - Behavioral event tracking for lead scoring and attribution
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index, Boolean, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -137,7 +137,7 @@ class AcquisitionEvent(Base):
     event_source = Column(String(50))  # EventSource enum
 
     # Event-specific payload
-    event_payload = Column(JSONB, default=dict)
+    event_payload = Column(JSON, default=dict)
     # Examples:
     # PAGE_VIEW: {"url": "/rates", "referrer": "google.com", "time_on_page": 45}
     # FORM_SUBMITTED: {"form_id": "contact", "fields": {"loan_amount": 500000}}
@@ -150,7 +150,7 @@ class AcquisitionEvent(Base):
     lead_temperature = Column(String(20))  # COLD, WARM, HOT, REPEAT
 
     # Segment memberships at time of event
-    segment_memberships = Column(JSONB, default=list)  # Array of segment IDs
+    segment_memberships = Column(JSON, default=list)  # Array of segment IDs
 
     # Temperature impact (how much this event affected temperature)
     temperature_impact = Column(Integer, default=0)  # Points added
@@ -187,7 +187,7 @@ class AcquisitionEvent(Base):
 
     # Processing tracking
     processed_at = Column(DateTime)  # When event was processed for temperature/triggers
-    triggered_actions = Column(JSONB, default=list)  # List of actions triggered by this event
+    triggered_actions = Column(JSON, default=list)  # List of actions triggered by this event
 
     def __repr__(self):
         return f"<AcquisitionEvent {self.event_type} lead={self.lead_id}>"

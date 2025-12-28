@@ -177,18 +177,42 @@ class EventService:
     def _process_triggers(self, event: AcquisitionEvent):
         """
         Process triggers based on event type.
-        In production, this would dispatch to a background task queue.
+        Dispatches to the conversion orchestrator for processing.
         """
         triggered_actions = []
 
-        # Hot lead triggers
+        # Hot lead triggers - dispatch to speed-to-lead
         if event.is_hot_signal and event.lead_id:
             triggered_actions.append({
                 "action": "speed_to_lead",
                 "triggered_at": datetime.utcnow().isoformat(),
             })
-            # TODO: Dispatch to speed-to-lead service
             logger.info(f"Hot lead trigger: lead_id={event.lead_id}")
+
+            # Dispatch to conversion orchestrator (runs in background)
+            try:
+                import asyncio
+                from services.acquisition_engine.conversion_orchestrator import ConversionOrchestrator
+
+                orchestrator = ConversionOrchestrator(self.db)
+
+                # Try to get or create event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Schedule as task if loop is already running
+                        asyncio.create_task(orchestrator.process_event(event))
+                    else:
+                        # Run directly if no loop
+                        loop.run_until_complete(orchestrator.process_event(event))
+                except RuntimeError:
+                    # No event loop - create one
+                    asyncio.run(orchestrator.process_event(event))
+
+                triggered_actions[-1]["dispatched"] = True
+            except Exception as e:
+                logger.error(f"Failed to dispatch to conversion orchestrator: {e}")
+                triggered_actions[-1]["error"] = str(e)
 
         # Update event with triggered actions
         event.triggered_actions = triggered_actions

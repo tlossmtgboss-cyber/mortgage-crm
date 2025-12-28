@@ -4,8 +4,8 @@ CampaignBlueprint - Immutable templates for campaign strategies
 CampaignInstance - Runtime campaign state and metrics
 """
 
-from sqlalchemy import Column, String, Integer, Numeric, DateTime, Boolean, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Integer, Numeric, DateTime, Boolean, Text, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -70,11 +70,11 @@ class CampaignBlueprint(Base):
     is_default = Column(Boolean, default=False)  # Default blueprint for goal type
 
     # Template References - IDs of sequences to activate
-    sms_sequence_ids = Column(JSONB, default=list)  # List of SMS sequence IDs
-    email_sequence_ids = Column(JSONB, default=list)  # List of email sequence IDs
+    sms_sequence_ids = Column(JSON, default=list)  # List of SMS sequence IDs
+    email_sequence_ids = Column(JSON, default=list)  # List of email sequence IDs
 
     # Dialer Configuration
-    dialer_rules = Column(JSONB, default=dict)
+    dialer_rules = Column(JSON, default=dict)
     # Example: {
     #   "priority": "URGENT",
     #   "max_attempts": 5,
@@ -84,7 +84,7 @@ class CampaignBlueprint(Base):
     # }
 
     # Speed-to-Lead Configuration
-    speed_to_lead_config = Column(JSONB, default=dict)
+    speed_to_lead_config = Column(JSON, default=dict)
     # Example: {
     #   "hot_lead_sla_seconds": 300,  # 5 minutes
     #   "warm_lead_sla_seconds": 3600,  # 1 hour
@@ -100,7 +100,7 @@ class CampaignBlueprint(Base):
     recommended_budget = Column(Numeric(10, 2))
 
     # Targeting Defaults
-    default_targeting = Column(JSONB, default=dict)
+    default_targeting = Column(JSON, default=dict)
     # Example: {
     #   "property_types": ["single_family", "condo"],
     #   "loan_types": ["conventional", "fha"],
@@ -149,7 +149,7 @@ class CampaignInstance(Base):
     # LO Inputs
     budget_type = Column(String(20), nullable=False, default="DAILY")  # BudgetType enum
     budget_amount = Column(Numeric(10, 2), nullable=False)
-    market_geo = Column(JSONB, nullable=False)
+    market_geo = Column(JSON, nullable=False)
     # Example: {
     #   "state": "CA",
     #   "metro": "San Francisco",
@@ -161,10 +161,10 @@ class CampaignInstance(Base):
     capacity_leads_per_week = Column(Integer)
 
     # Runtime Configuration (copied from blueprint, can be customized)
-    sms_sequences_active = Column(JSONB, default=list)
-    email_sequences_active = Column(JSONB, default=list)
-    dialer_config = Column(JSONB, default=dict)
-    speed_to_lead_config = Column(JSONB, default=dict)
+    sms_sequences_active = Column(JSON, default=list)
+    email_sequences_active = Column(JSON, default=list)
+    dialer_config = Column(JSON, default=dict)
+    speed_to_lead_config = Column(JSON, default=dict)
 
     # Runtime State
     status = Column(String(20), nullable=False, default="DRAFT")  # CampaignStatus enum
