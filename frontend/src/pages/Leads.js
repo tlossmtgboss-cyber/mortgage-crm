@@ -630,15 +630,21 @@ function Leads() {
         )}
       </div>
 
-      {/* Bulk Delete Bar - Only for users with delete permission */}
+      {/* Bulk Delete Bar - Only for users with delete permission or master users */}
       {selectedLeads.size > 0 && (
         <div className="bulk-actions-bar">
           <span className="selected-count">{selectedLeads.size} lead{selectedLeads.size > 1 ? 's' : ''} selected</span>
-          <PermissionGate permission="leads.delete" isWriteOperation showDisabled>
+          {isMasterUser ? (
             <button className="btn-danger" onClick={handleBulkDelete}>
               🗑️ Delete Selected
             </button>
-          </PermissionGate>
+          ) : (
+            <PermissionGate permission="leads.delete" isWriteOperation showDisabled>
+              <button className="btn-danger" onClick={handleBulkDelete}>
+                🗑️ Delete Selected
+              </button>
+            </PermissionGate>
+          )}
           <button className="btn-secondary" onClick={() => setSelectedLeads(new Set())}>
             Cancel
           </button>
