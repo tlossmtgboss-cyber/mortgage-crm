@@ -446,6 +446,32 @@ async def resume_campaign(
     return {"status": "active", "resumed_at": datetime.utcnow()}
 
 
+@router.post("/campaigns/{campaign_id}/activate")
+async def activate_campaign(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+):
+    """Manually activate a campaign (for campaigns stuck in LAUNCHING status)"""
+    campaign = db.query(CampaignInstance).filter(
+        CampaignInstance.id == uuid.UUID(campaign_id)
+    ).first()
+
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+
+    if campaign.status == CampaignStatus.ACTIVE.value:
+        return {"status": "active", "message": "Campaign is already active", "activated_at": campaign.activated_at}
+
+    if campaign.status not in [CampaignStatus.LAUNCHING.value, CampaignStatus.PAUSED.value]:
+        raise HTTPException(400, f"Cannot activate campaign in {campaign.status} status")
+
+    campaign.status = CampaignStatus.ACTIVE.value
+    campaign.activated_at = datetime.utcnow()
+    db.commit()
+
+    return {"status": "active", "activated_at": campaign.activated_at}
+
+
 # =============================================================================
 # EVENT ENDPOINTS
 # =============================================================================
