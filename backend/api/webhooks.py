@@ -659,8 +659,101 @@ async def execute_email_response_pattern(
 
         # Execute based on response type
         if response_type == "auto_reply" and config.get("template_id"):
-            # TODO: Send auto-reply using template
-            logger.info(f"[GRAPH WEBHOOK] Would send auto-reply using template {config.get('template_id')}")
+            # Send auto-reply using template
+            try:
+                from email_service import email_service
+                import re
+
+                # Fetch the template
+                template_result = await db.execute(text("""
+                    SELECT id, name, subject, body, is_html, variables
+                    FROM email_templates
+                    WHERE id = :template_id AND is_active = true
+                """), {"template_id": config.get("template_id")})
+                template_row = template_result.fetchone()
+
+                if template_row:
+                    # Extract sender info
+                    sender_email_addr = email.get("from", {}).get("emailAddress", {}).get("address", "")
+                    sender_name = email.get("from", {}).get("emailAddress", {}).get("name", "")
+                    if not sender_name:
+                        sender_name = sender_email_addr.split("@")[0].replace(".", " ").title()
+
+                    original_subject = email.get("subject", "")
+
+                    # Build template variables
+                    template_vars = {
+                        "firstName": sender_name.split()[0] if sender_name else "there",
+                        "senderName": sender_name,
+                        "senderEmail": sender_email_addr,
+                        "originalSubject": original_subject,
+                        "companyName": os.getenv("COMPANY_NAME", "Perennia AI"),
+                        "supportEmail": os.getenv("SUPPORT_EMAIL", "support@perenniaai.com"),
+                    }
+
+                    # Render subject and body with variables
+                    rendered_subject = template_row.subject
+                    rendered_body = template_row.body
+
+                    for var_name, var_value in template_vars.items():
+                        # Support both {varName} and {{varName}} patterns
+                        rendered_subject = re.sub(
+                            rf"\{{\{{?\s*{var_name}\s*\}}?\}}",
+                            str(var_value),
+                            rendered_subject,
+                            flags=re.IGNORECASE
+                        )
+                        rendered_body = re.sub(
+                            rf"\{{\{{?\s*{var_name}\s*\}}?\}}",
+                            str(var_value),
+                            rendered_body,
+                            flags=re.IGNORECASE
+                        )
+
+                    # Determine reply subject
+                    reply_subject = rendered_subject
+                    if not reply_subject.lower().startswith("re:") and original_subject:
+                        reply_subject = f"Re: {original_subject}"
+
+                    # Send the email
+                    from_email_addr = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+
+                    if template_row.is_html:
+                        email_sent = email_service.send_html_email(
+                            to_email=sender_email_addr,
+                            subject=reply_subject,
+                            html_body=rendered_body,
+                            plain_text_body=re.sub(r'<[^>]+>', '', rendered_body),  # Strip HTML for plain text
+                            from_email=from_email_addr,
+                            reply_to=from_email_addr
+                        )
+                    else:
+                        email_sent = email_service.send_html_email(
+                            to_email=sender_email_addr,
+                            subject=reply_subject,
+                            html_body=f"<pre style='font-family: sans-serif;'>{rendered_body}</pre>",
+                            plain_text_body=rendered_body,
+                            from_email=from_email_addr,
+                            reply_to=from_email_addr
+                        )
+
+                    if email_sent:
+                        logger.info(f"[GRAPH WEBHOOK] Auto-reply sent to {sender_email_addr} using template {template_row.name}")
+
+                        # Update template usage stats
+                        await db.execute(text("""
+                            UPDATE email_templates
+                            SET updated_at = :now
+                            WHERE id = :template_id
+                        """), {"now": datetime.utcnow(), "template_id": config.get("template_id")})
+                        await db.commit()
+                    else:
+                        logger.warning(f"[GRAPH WEBHOOK] Failed to send auto-reply to {sender_email_addr}")
+                else:
+                    logger.warning(f"[GRAPH WEBHOOK] Template {config.get('template_id')} not found or inactive")
+
+            except Exception as email_err:
+                logger.error(f"[GRAPH WEBHOOK] Error sending auto-reply: {email_err}", exc_info=True)
 
         elif response_type == "create_task":
             # Create a task
