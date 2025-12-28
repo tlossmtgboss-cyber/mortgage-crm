@@ -113,6 +113,60 @@ STAGE_MAPPING = {
     "Rejected": "DENIED",
 }
 
+# Reverse stage mapping (CRM stage -> Salesforce status)
+REVERSE_STAGE_MAPPING = {
+    "APPLICATION": "Application",
+    "PROCESSING": "Processing",
+    "SUBMITTED": "Submitted",
+    "UNDERWRITING": "Underwriting",
+    "APPROVED": "Approved",
+    "CLEAR_TO_CLOSE": "Clear to Close",
+    "DOCS_OUT": "Docs Out",
+    "DOCS_SIGNED": "Docs Signed",
+    "FUNDED": "Funded",
+    "CANCELLED": "Cancelled",
+    "DENIED": "Denied",
+}
+
+# Default outbound field mappings (CRM field -> Salesforce field)
+# Only include fields that should be pushed to Salesforce
+DEFAULT_OUTBOUND_MAPPING = {
+    # Loan details
+    "loan_amount": ("MtgPlanner_CRM__Loan_Amount__c", "decimal"),
+    "amount": ("MtgPlanner_CRM__Loan_Amount__c", "decimal"),
+    "loan_type": ("MtgPlanner_CRM__Loan_Type__c", None),
+    "program": ("MtgPlanner_CRM__Loan_Program__c", None),
+    "interest_rate": ("MtgPlanner_CRM__Interest_Rate__c", "decimal"),
+    "lender": ("MtgPlanner_CRM__Lender__c", None),
+
+    # Property info
+    "property_address": ("MtgPlanner_CRM__Property_Address__c", None),
+    "property_city": ("MtgPlanner_CRM__Property_City__c", None),
+    "property_state": ("MtgPlanner_CRM__Property_State__c", None),
+    "property_zip": ("MtgPlanner_CRM__Property_Zip__c", None),
+    "purchase_price": ("MtgPlanner_CRM__Purchase_Price__c", "decimal"),
+    "down_payment": ("MtgPlanner_CRM__Down_Payment__c", "decimal"),
+
+    # Borrower info
+    "borrower_name": ("MtgPlanner_CRM__Borrower_Name__c", None),
+    "borrower_first_name": ("MtgPlanner_CRM__Borrower_First_Name__c", None),
+    "borrower_last_name": ("MtgPlanner_CRM__Borrower_Last_Name__c", None),
+    "borrower_email": ("MtgPlanner_CRM__Borrower_Email__c", None),
+    "borrower_phone": ("MtgPlanner_CRM__Borrower_Phone__c", None),
+
+    # Co-borrower
+    "coborrower_name": ("MtgPlanner_CRM__CoBorrower_Name__c", None),
+    "co_borrower_email": ("MtgPlanner_CRM__CoBorrower_Email__c", None),
+
+    # Status and dates
+    "stage": ("MtgPlanner_CRM__Status__c", "reverse_stage_mapping"),
+    "status": ("MtgPlanner_CRM__Status__c", "reverse_stage_mapping"),
+    "closing_date": ("MtgPlanner_CRM__Closing_Date__c", "date_to_string"),
+    "lock_date": ("MtgPlanner_CRM__Lock_Date__c", "date_to_string"),
+    "lock_expiration_date": ("MtgPlanner_CRM__Lock_Expiration__c", "date_to_string"),
+    "application_date": ("MtgPlanner_CRM__Application_Date__c", "date_to_string"),
+}
+
 
 class SalesforceSyncService:
     """Service for syncing Salesforce data to the CRM."""
@@ -444,7 +498,7 @@ class SalesforceSyncService:
 
         return result
 
-    def log_sync_event(self, result: SyncResult, payload: Optional[Dict] = None):
+    def log_sync_event(self, result: SyncResult, payload: Optional[Dict] = None, direction: str = "inbound"):
         """Log a sync event to the database."""
         try:
             payload_summary = None
@@ -463,10 +517,12 @@ class SalesforceSyncService:
                  records_updated, records_failed, error_message, payload_summary,
                  started_at, completed_at, user_id, organization_id)
                 VALUES
-                ('webhook', 'inbound', :status, :processed, :created, :updated,
+                (:sync_type, :direction, :status, :processed, :created, :updated,
                  :failed, :errors, :payload, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
                  :user_id, :org_id)
             """), {
+                "sync_type": "push" if direction == "outbound" else "webhook",
+                "direction": direction,
                 "status": result.status.value,
                 "processed": result.records_processed,
                 "created": result.records_created,
@@ -480,6 +536,279 @@ class SalesforceSyncService:
             self.db.commit()
         except Exception as e:
             logger.error(f"Failed to log sync event: {e}")
+
+    # =========================================================================
+    # OUTBOUND SYNC METHODS (CRM -> Salesforce)
+    # =========================================================================
+
+    def transform_value_outbound(self, value: Any, transform_type: Optional[str]) -> Any:
+        """Transform a CRM value to Salesforce format."""
+        if value is None:
+            return None
+
+        if transform_type is None:
+            return value
+
+        if transform_type == "decimal":
+            try:
+                return float(value) if value else None
+            except (ValueError, TypeError):
+                return None
+
+        if transform_type == "date_to_string":
+            # Convert date object to Salesforce date string (YYYY-MM-DD)
+            if hasattr(value, 'strftime'):
+                return value.strftime("%Y-%m-%d")
+            if isinstance(value, str):
+                return value[:10] if len(value) >= 10 else value
+            return None
+
+        if transform_type == "datetime_to_string":
+            # Convert datetime to ISO format for Salesforce
+            if hasattr(value, 'isoformat'):
+                return value.isoformat()
+            return str(value) if value else None
+
+        if transform_type == "reverse_stage_mapping":
+            # Map CRM stage to Salesforce status
+            stage_str = str(value).upper() if value else "APPLICATION"
+            return REVERSE_STAGE_MAPPING.get(stage_str, "Application")
+
+        if transform_type == "boolean":
+            return bool(value)
+
+        return value
+
+    def get_outbound_field_mappings(self) -> Dict[str, Tuple[str, Optional[str]]]:
+        """Get outbound field mappings (CRM -> Salesforce)."""
+        # Try to load custom outbound mappings from database
+        try:
+            result = self.db.execute(text("""
+                SELECT crm_field, salesforce_field, transform_type
+                FROM salesforce_field_mappings
+                WHERE organization_id = :org_id
+                  AND salesforce_object = 'MtgPlanner_CRM__Transaction_Property__c'
+                  AND is_active = true
+                  AND direction = 'outbound'
+            """), {"org_id": self.organization_id})
+
+            custom_mappings = {}
+            for row in result.fetchall():
+                custom_mappings[row[0]] = (row[1], row[2])
+
+            if custom_mappings:
+                logger.info(f"Loaded {len(custom_mappings)} custom outbound field mappings")
+                return custom_mappings
+        except Exception as e:
+            logger.warning(f"Could not load custom outbound field mappings: {e}")
+
+        return DEFAULT_OUTBOUND_MAPPING
+
+    def map_loan_to_salesforce(self, loan_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Map CRM loan fields to Salesforce record format."""
+        field_mappings = self.get_outbound_field_mappings()
+        sf_record = {}
+
+        for crm_field, (sf_field, transform_type) in field_mappings.items():
+            if crm_field in loan_data:
+                value = loan_data[crm_field]
+                transformed_value = self.transform_value_outbound(value, transform_type)
+                if transformed_value is not None:
+                    sf_record[sf_field] = transformed_value
+
+        return sf_record
+
+    def push_loan(
+        self,
+        loan_id: int,
+        access_token: str,
+        instance_url: str,
+        sf_object: str = "MtgPlanner_CRM__Transaction_Property__c"
+    ) -> Tuple[bool, str, Optional[str]]:
+        """
+        Push a single loan to Salesforce.
+
+        Returns:
+            Tuple of (success, action, salesforce_id)
+            action is 'created', 'updated', or 'error'
+        """
+        import requests
+
+        try:
+            # Fetch loan data
+            result = self.db.execute(text("""
+                SELECT * FROM loans WHERE id = :loan_id
+            """), {"loan_id": loan_id})
+
+            row = result.fetchone()
+            if not row:
+                return False, "error", f"Loan {loan_id} not found"
+
+            # Convert row to dict
+            loan_data = dict(row._mapping)
+
+            # Map to Salesforce format
+            sf_record = self.map_loan_to_salesforce(loan_data)
+
+            if not sf_record:
+                return False, "error", "No fields to sync"
+
+            # Check if loan already has a Salesforce ID
+            salesforce_id = loan_data.get("salesforce_id")
+
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            if salesforce_id:
+                # Update existing record
+                url = f"{instance_url}/services/data/v59.0/sobjects/{sf_object}/{salesforce_id}"
+                response = requests.patch(url, headers=headers, json=sf_record, timeout=30)
+
+                if response.status_code == 204:
+                    # Update sync metadata in CRM
+                    self._update_loan_sync_status(loan_id, salesforce_id, "synced")
+                    logger.info(f"Updated Salesforce record {salesforce_id} for loan {loan_id}")
+                    return True, "updated", salesforce_id
+                else:
+                    error_msg = response.text
+                    logger.error(f"Failed to update Salesforce record: {error_msg}")
+                    return False, "error", error_msg
+            else:
+                # Create new record
+                url = f"{instance_url}/services/data/v59.0/sobjects/{sf_object}"
+                response = requests.post(url, headers=headers, json=sf_record, timeout=30)
+
+                if response.status_code == 201:
+                    result_data = response.json()
+                    new_sf_id = result_data.get("id")
+
+                    # Update CRM loan with Salesforce ID
+                    self._update_loan_sync_status(loan_id, new_sf_id, "synced")
+                    logger.info(f"Created Salesforce record {new_sf_id} for loan {loan_id}")
+                    return True, "created", new_sf_id
+                else:
+                    error_msg = response.text
+                    logger.error(f"Failed to create Salesforce record: {error_msg}")
+                    return False, "error", error_msg
+
+        except Exception as e:
+            logger.error(f"Error pushing loan {loan_id} to Salesforce: {e}")
+            return False, "error", str(e)
+
+    def _update_loan_sync_status(self, loan_id: int, salesforce_id: str, status: str):
+        """Update loan sync status in the database."""
+        try:
+            self.db.execute(text("""
+                UPDATE loans
+                SET salesforce_id = :sf_id,
+                    salesforce_last_synced_at = CURRENT_TIMESTAMP,
+                    salesforce_sync_status = :status,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :loan_id
+            """), {
+                "sf_id": salesforce_id,
+                "status": status,
+                "loan_id": loan_id
+            })
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to update loan sync status: {e}")
+            self.db.rollback()
+
+    def push_loans_batch(
+        self,
+        loan_ids: List[int],
+        access_token: str,
+        instance_url: str,
+        sf_object: str = "MtgPlanner_CRM__Transaction_Property__c"
+    ) -> SyncResult:
+        """
+        Push multiple loans to Salesforce.
+
+        Args:
+            loan_ids: List of loan IDs to push
+            access_token: Salesforce OAuth access token
+            instance_url: Salesforce instance URL
+            sf_object: Salesforce object to push to
+
+        Returns:
+            SyncResult with details of the operation
+        """
+        result = SyncResult(status=SyncStatus.SUCCESS)
+        result.records_processed = len(loan_ids)
+
+        for loan_id in loan_ids:
+            try:
+                success, action, sf_id_or_error = self.push_loan(
+                    loan_id, access_token, instance_url, sf_object
+                )
+
+                if success:
+                    if action == "created":
+                        result.records_created += 1
+                        result.created_loan_ids.append(loan_id)
+                    elif action == "updated":
+                        result.records_updated += 1
+                        result.updated_loan_ids.append(loan_id)
+                else:
+                    result.records_failed += 1
+                    result.errors.append(f"Loan {loan_id}: {sf_id_or_error}")
+
+            except Exception as e:
+                result.records_failed += 1
+                result.errors.append(f"Loan {loan_id}: {str(e)}")
+                logger.error(f"Error pushing loan {loan_id}: {e}")
+
+        # Determine overall status
+        if result.records_failed == result.records_processed:
+            result.status = SyncStatus.FAILED
+        elif result.records_failed > 0:
+            result.status = SyncStatus.PARTIAL
+
+        # Log the sync event
+        self.log_sync_event(result, {"loan_ids": loan_ids}, direction="outbound")
+
+        return result
+
+    def get_pushable_loans(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get loans that can be pushed to Salesforce.
+        Returns loans that have been modified since last sync or never synced.
+        """
+        try:
+            result = self.db.execute(text("""
+                SELECT id, loan_number, stage, borrower_name,
+                       salesforce_id, salesforce_last_synced_at, updated_at
+                FROM loans
+                WHERE organization_id = :org_id
+                  AND (
+                      salesforce_id IS NULL
+                      OR salesforce_last_synced_at IS NULL
+                      OR updated_at > salesforce_last_synced_at
+                  )
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """), {"org_id": self.organization_id, "limit": limit})
+
+            loans = []
+            for row in result.fetchall():
+                loans.append({
+                    "id": row[0],
+                    "loan_number": row[1],
+                    "stage": row[2],
+                    "borrower_name": row[3],
+                    "salesforce_id": row[4],
+                    "last_synced_at": row[5].isoformat() if row[5] else None,
+                    "updated_at": row[6].isoformat() if row[6] else None,
+                    "needs_sync": True
+                })
+
+            return loans
+        except Exception as e:
+            logger.error(f"Error getting pushable loans: {e}")
+            return []
 
 
 # Singleton instance

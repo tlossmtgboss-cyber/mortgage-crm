@@ -1141,6 +1141,225 @@ async def import_closed_loans(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============ Outbound Sync (Push) Endpoints ============
+
+class PushLoanRequest(BaseModel):
+    loan_id: int
+    sf_object: Optional[str] = "MtgPlanner_CRM__Transaction_Property__c"
+
+
+class PushBatchRequest(BaseModel):
+    loan_ids: list
+    sf_object: Optional[str] = "MtgPlanner_CRM__Transaction_Property__c"
+
+
+@router.post("/push/loan/{loan_id}")
+async def push_loan_to_salesforce(
+    loan_id: int,
+    request: Request,
+    sf_object: str = Query("MtgPlanner_CRM__Transaction_Property__c", description="Salesforce object to push to"),
+    db: Session = Depends(get_db)
+):
+    """
+    Push a single loan to Salesforce.
+    Creates a new record if no salesforce_id exists, otherwise updates existing record.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Get stored tokens
+    integration = db.execute(text("""
+        SELECT access_token, refresh_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce not connected. Please connect first."
+        )
+
+    access_token = integration[0]
+
+    # Parse instance_url from scopes
+    instance_url = None
+    if integration[2] and "instance_url:" in integration[2]:
+        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce instance URL not found. Please reconnect."
+        )
+
+    from services.salesforce_sync_service import get_salesforce_sync_service
+
+    # Get user's organization
+    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    org_id = user_org[0] if user_org and user_org[0] else 1
+
+    sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
+    success, action, result_data = sync_service.push_loan(
+        loan_id, access_token, instance_url, sf_object
+    )
+
+    if success:
+        return {
+            "status": "success",
+            "action": action,
+            "loan_id": loan_id,
+            "salesforce_id": result_data,
+            "message": f"Loan {loan_id} {action} in Salesforce"
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "action": action,
+                "loan_id": loan_id,
+                "error": result_data
+            }
+        )
+
+
+@router.post("/push/batch", response_model=SyncResponse)
+async def push_loans_batch_to_salesforce(
+    request: Request,
+    batch_request: PushBatchRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Push multiple loans to Salesforce.
+    Creates new records for loans without salesforce_id, updates existing records.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Get stored tokens
+    integration = db.execute(text("""
+        SELECT access_token, refresh_token, scopes FROM user_integrations
+        WHERE user_id = :user_id AND provider = 'salesforce'
+    """), {"user_id": user_id}).fetchone()
+
+    if not integration or not integration[0]:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce not connected. Please connect first."
+        )
+
+    access_token = integration[0]
+
+    # Parse instance_url from scopes
+    instance_url = None
+    if integration[2] and "instance_url:" in integration[2]:
+        instance_url = integration[2].split("instance_url:")[1].split(",")[0]
+
+    if not instance_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Salesforce instance URL not found. Please reconnect."
+        )
+
+    from services.salesforce_sync_service import get_salesforce_sync_service
+
+    # Get user's organization
+    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    org_id = user_org[0] if user_org and user_org[0] else 1
+
+    sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
+    result = sync_service.push_loans_batch(
+        batch_request.loan_ids,
+        access_token,
+        instance_url,
+        batch_request.sf_object
+    )
+
+    return SyncResponse(
+        status=result.status.value,
+        records_processed=result.records_processed,
+        records_created=result.records_created,
+        records_updated=result.records_updated,
+        records_failed=result.records_failed,
+        errors=result.errors,
+        message=f"Pushed {result.records_processed} loans: {result.records_created} created, {result.records_updated} updated"
+    )
+
+
+@router.get("/push/pending")
+async def get_pending_push_loans(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """
+    Get loans that need to be pushed to Salesforce.
+    Returns loans that have been modified since last sync or never synced.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    from services.salesforce_sync_service import get_salesforce_sync_service
+
+    # Get user's organization
+    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    org_id = user_org[0] if user_org and user_org[0] else 1
+
+    sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
+    loans = sync_service.get_pushable_loans(limit=limit)
+
+    return {
+        "count": len(loans),
+        "loans": loans,
+        "message": f"Found {len(loans)} loans pending sync to Salesforce"
+    }
+
+
+@router.get("/loan/{loan_id}/sync-status")
+async def get_loan_sync_status(
+    loan_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get Salesforce sync status for a specific loan."""
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    loan = db.execute(text("""
+        SELECT id, loan_number, salesforce_id, salesforce_last_synced_at,
+               salesforce_sync_status, updated_at
+        FROM loans
+        WHERE id = :loan_id
+    """), {"loan_id": loan_id}).fetchone()
+
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Determine if loan needs sync
+    needs_sync = False
+    if not loan[2]:  # No salesforce_id
+        needs_sync = True
+    elif not loan[3]:  # Never synced
+        needs_sync = True
+    elif loan[5] and loan[3] and loan[5] > loan[3]:  # Updated after last sync
+        needs_sync = True
+
+    return {
+        "loan_id": loan[0],
+        "loan_number": loan[1],
+        "salesforce_id": loan[2],
+        "last_synced_at": loan[3].isoformat() if loan[3] else None,
+        "sync_status": loan[4],
+        "updated_at": loan[5].isoformat() if loan[5] else None,
+        "needs_sync": needs_sync,
+        "is_linked": loan[2] is not None
+    }
+
+
 # ============ Admin Migration Endpoint ============
 
 @router.get("/admin/run-migration")

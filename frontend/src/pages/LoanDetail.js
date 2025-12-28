@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI } from '../services/api';
+import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI } from '../services/api';
+import { toast } from '../utils/toast';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import VoicemailDrop from '../components/VoicemailDrop';
 import VoicemailModal from '../components/VoicemailModal';
@@ -85,6 +86,10 @@ function LoanDetail() {
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
+
+  // Salesforce sync state
+  const [salesforceStatus, setSalesforceStatus] = useState(null);
+  const [salesforcePushing, setSalesforcePushing] = useState(false);
 
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
@@ -832,6 +837,59 @@ function LoanDetail() {
     recognition.start();
   };
 
+  // Salesforce sync handler
+  const handleSalesforcePush = async () => {
+    if (salesforcePushing) return;
+
+    try {
+      setSalesforcePushing(true);
+
+      // First check if Salesforce is connected
+      const status = await salesforceAPI.getStatus();
+      if (!status.connected) {
+        toast.error('Salesforce is not connected. Please connect in Settings → Integrations.');
+        return;
+      }
+
+      // Push the loan to Salesforce
+      const result = await salesforceAPI.pushLoan(id);
+
+      if (result.status === 'success') {
+        toast.success(`Loan ${result.action} in Salesforce`);
+        // Update local state with sync info
+        setSalesforceStatus({
+          salesforce_id: result.salesforce_id,
+          last_synced_at: new Date().toISOString(),
+          sync_status: 'synced',
+          needs_sync: false
+        });
+      }
+    } catch (error) {
+      console.error('Salesforce push error:', error);
+      const errorMsg = error.response?.data?.detail?.error || error.response?.data?.detail || error.message;
+      toast.error(`Failed to push to Salesforce: ${errorMsg}`);
+    } finally {
+      setSalesforcePushing(false);
+    }
+  };
+
+  // Fetch Salesforce sync status when loan loads
+  useEffect(() => {
+    const fetchSalesforceStatus = async () => {
+      try {
+        const status = await salesforceAPI.getLoanSyncStatus(id);
+        setSalesforceStatus(status);
+      } catch (error) {
+        // Silently fail - Salesforce may not be configured
+        console.log('Salesforce status not available:', error.message);
+      }
+    };
+
+    if (id) {
+      fetchSalesforceStatus();
+    }
+  }, [id]);
+
   const handleAction = async (action) => {
     const borrowerPhone = loan.borrower_phone || formData.borrower_phone;
     const borrowerEmail = loan.borrower_email || formData.borrower_email;
@@ -886,6 +944,9 @@ function LoanDetail() {
         } else {
           alert('No client portal found for this loan. Please create one from the loan details.');
         }
+        break;
+      case 'salesforce':
+        handleSalesforcePush();
         break;
       default:
         break;
@@ -3821,6 +3882,17 @@ function LoanDetail() {
           >
             <span className="icon">🚨</span>
             <span>Escalation</span>
+          </button>
+          <button
+            className={`action-btn salesforce ${salesforcePushing ? 'loading' : ''} ${salesforceStatus?.is_linked ? 'synced' : ''}`}
+            onClick={() => handleAction('salesforce')}
+            title={salesforceStatus?.is_linked
+              ? `Synced: ${salesforceStatus.salesforce_id} - Click to update`
+              : 'Push loan to Salesforce'}
+            disabled={salesforcePushing}
+          >
+            <span className="icon">{salesforcePushing ? '⏳' : '☁️'}</span>
+            <span>{salesforcePushing ? 'Syncing...' : (salesforceStatus?.is_linked ? 'Update SF' : 'Push to SF')}</span>
           </button>
         </div>
       </div>

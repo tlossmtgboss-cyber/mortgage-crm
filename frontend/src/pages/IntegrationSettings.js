@@ -295,27 +295,27 @@ const IntegrationSettings = () => {
     }
   };
 
-  // Integration logo URLs - using official logos where available
+  // Integration logo URLs - using Clearbit logo API for reliability
   const getIntegrationLogo = (integrationId) => {
     const logos = {
-      salesforce: 'https://www.salesforce.com/content/dam/sfdc-docs/www/logos/logo-salesforce.svg',
-      hubspot: 'https://www.hubspot.com/hubfs/HubSpot_Logos/HubSpot-Inversed-Favicon.png',
-      twilio: 'https://www.twilio.com/assets/icons/twilio-icon-512.png',
-      ringcentral: 'https://netstorage.ringcentral.com/dpw/common/rc-logo-orange-symbol.svg',
-      slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
+      salesforce: 'https://logo.clearbit.com/salesforce.com',
+      hubspot: 'https://logo.clearbit.com/hubspot.com',
+      twilio: 'https://logo.clearbit.com/twilio.com',
+      ringcentral: 'https://logo.clearbit.com/ringcentral.com',
+      slack: 'https://logo.clearbit.com/slack.com',
       google_calendar: 'https://ssl.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png',
-      outlook_calendar: 'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg',
-      calendly: 'https://assets.calendly.com/assets/frontend/media/calendly-eab47f20c77c9ed8f2a0.svg',
+      outlook_calendar: 'https://logo.clearbit.com/outlook.com',
+      calendly: 'https://logo.clearbit.com/calendly.com',
       google_drive: 'https://ssl.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',
-      dropbox: 'https://cfl.dropboxstatic.com/static/images/logo_catalog/dropbox_logo_glyph_2024_m1.svg',
-      stripe: 'https://images.ctfassets.net/fzn2n1nzq965/HTTOloNPhisV9P4hlMPNA/cacf1bb88b9fc492dfad34378d844280/Stripe_logo.svg',
-      quickbooks: 'https://quickbooks.intuit.com/cas/dam/IMAGE/A9dVVgXV/intuit-quickbooks-logo.svg',
-      mailchimp: 'https://eep.io/images/yzco4xsimv0y/5iQiDNUVDyONaZS1K5J3DX/b6dd20fd4c8e93d6d4ae0d1808fa2c31/Freddie_Wink.png',
-      zapier: 'https://cdn.zapier.com/zapier/images/logos/zapier-logo.svg',
-      zoom: 'https://st1.zoom.us/zoom.ico',
-      synthflow: 'https://www.synthflow.ai/favicon.ico',
-      recallai: 'https://www.recall.ai/favicon.ico',
-      docusign: 'https://www.docusign.com/sites/default/files/favicon.ico'
+      dropbox: 'https://logo.clearbit.com/dropbox.com',
+      stripe: 'https://logo.clearbit.com/stripe.com',
+      quickbooks: 'https://logo.clearbit.com/quickbooks.intuit.com',
+      mailchimp: 'https://logo.clearbit.com/mailchimp.com',
+      zapier: 'https://logo.clearbit.com/zapier.com',
+      zoom: 'https://logo.clearbit.com/zoom.us',
+      synthflow: 'https://logo.clearbit.com/synthflow.ai',
+      recallai: 'https://logo.clearbit.com/recall.ai',
+      docusign: 'https://logo.clearbit.com/docusign.com'
     };
     return logos[integrationId] || null;
   };

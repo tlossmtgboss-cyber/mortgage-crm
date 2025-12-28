@@ -2474,6 +2474,104 @@ export const incomeAPI = {
   },
 };
 
+// Salesforce Integration API
+export const salesforceAPI = {
+  // Get connection status
+  getStatus: async () => {
+    const response = await api.get('/api/v1/salesforce/status');
+    return response.data;
+  },
+
+  // Connect to Salesforce (returns auth URL)
+  connect: async (redirectUrl = null) => {
+    const params = redirectUrl ? { redirect_url: redirectUrl } : {};
+    const response = await api.get('/api/v1/salesforce/connect', { params });
+    return response.data;
+  },
+
+  // Disconnect from Salesforce
+  disconnect: async () => {
+    const response = await api.delete('/api/v1/salesforce/disconnect');
+    return response.data;
+  },
+
+  // Test connection
+  testConnection: async () => {
+    const response = await api.get('/api/v1/salesforce/test-connection');
+    return response.data;
+  },
+
+  // Push single loan to Salesforce
+  pushLoan: async (loanId, sfObject = null) => {
+    const params = sfObject ? { sf_object: sfObject } : {};
+    const response = await api.post(`/api/v1/salesforce/push/loan/${loanId}`, null, { params });
+    return response.data;
+  },
+
+  // Push multiple loans to Salesforce
+  pushBatch: async (loanIds, sfObject = null) => {
+    const response = await api.post('/api/v1/salesforce/push/batch', {
+      loan_ids: loanIds,
+      sf_object: sfObject || 'MtgPlanner_CRM__Transaction_Property__c'
+    });
+    return response.data;
+  },
+
+  // Get loans pending push
+  getPendingLoans: async (limit = 50) => {
+    const response = await api.get('/api/v1/salesforce/push/pending', { params: { limit } });
+    return response.data;
+  },
+
+  // Get sync status for a loan
+  getLoanSyncStatus: async (loanId) => {
+    const response = await api.get(`/api/v1/salesforce/loan/${loanId}/sync-status`);
+    return response.data;
+  },
+
+  // Full sync from Salesforce
+  fullSync: async () => {
+    const response = await api.post('/api/v1/salesforce/sync/full');
+    return response.data;
+  },
+
+  // Get sync history
+  getSyncHistory: async (limit = 20) => {
+    const response = await api.get('/api/v1/salesforce/sync/history', { params: { limit } });
+    return response.data;
+  },
+
+  // Import closed loans
+  importClosedLoans: async () => {
+    const response = await api.post('/api/v1/salesforce/import/closed-loans');
+    return response.data;
+  },
+
+  // Get field mappings
+  getMappings: async () => {
+    const response = await api.get('/api/v1/salesforce/mappings');
+    return response.data;
+  },
+
+  // Save field mapping
+  saveMapping: async (mapping) => {
+    const response = await api.post('/api/v1/salesforce/mappings', mapping);
+    return response.data;
+  },
+
+  // Explore objects
+  getObjects: async () => {
+    const response = await api.get('/api/v1/salesforce/explore/objects');
+    return response.data;
+  },
+
+  // Get object fields
+  getObjectFields: async (objectName) => {
+    const response = await api.get(`/api/v1/salesforce/explore/objects/${objectName}`);
+    return response.data;
+  },
+};
+
 export default api;
 
 // Debug function for console - helps diagnose API issues
