@@ -477,17 +477,36 @@ async def get_integration(
 
         integration = INTEGRATIONS[integration_id].copy()
 
-        # In production, fetch config and status from database
-        integration["status"] = "disconnected"
+        # Get user ID from current_user
+        user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+
+        # Check if user has this integration connected
+        is_connected = False
+        connected_email = None
+        if user_id:
+            from sqlalchemy import text
+            try:
+                result = db.execute(text("""
+                    SELECT email, created_at FROM user_integrations
+                    WHERE user_id = :user_id AND provider = :provider
+                """), {"user_id": int(user_id), "provider": integration_id}).fetchone()
+                if result:
+                    is_connected = True
+                    connected_email = result[0] if result[0] else None
+            except Exception as e:
+                logger.warning(f"Could not check integration status: {e}")
+
+        integration["status"] = "connected" if is_connected else "disconnected"
+        integration["connected_email"] = connected_email
         integration["config"] = {
-            "enabled": False,
+            "enabled": is_connected,
             "sync_enabled": True,
             "sync_interval_minutes": 60,
             "sync_direction": "bidirectional",
             "field_mappings": {},
             "filters": {}
         }
-        integration["credentials_set"] = False
+        integration["credentials_set"] = is_connected
         integration["last_sync"] = None
         integration["sync_stats"] = {
             "total_synced": 0,
