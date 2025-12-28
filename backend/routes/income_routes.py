@@ -288,6 +288,188 @@ async def calculate_income(
 
 
 # =============================================================================
+# DOCUMENT EXTRACTION ENDPOINTS
+# =============================================================================
+
+@router.post("/extract-from-documents")
+async def extract_income_from_documents(
+    loan_id: int,
+    borrower_id: int,
+    income_type: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Extract income data from uploaded documents for a specific income type.
+    Creates or updates income source with extracted values.
+    """
+    from models.smart_docs_models import SmartDocument, DocType
+    from decimal import Decimal
+
+    # Map income types to document types
+    income_to_doc_types = {
+        "W2_EMPLOYMENT": ["paystub", "w2", "offer_letter", "voe"],
+        "SELF_EMPLOYED_SCHEDULE_C": ["tax_return", "schedule_c", "profit_loss"],
+        "RENTAL_SCHEDULE_E": ["tax_return", "schedule_e", "lease"],
+        "SELF_EMPLOYED_S_CORP": ["tax_return", "k1"],
+        "BANK_STATEMENT": ["bank_statement"],
+    }
+
+    doc_type_patterns = income_to_doc_types.get(income_type, [])
+    if not doc_type_patterns:
+        raise HTTPException(status_code=400, detail=f"Unknown income type: {income_type}")
+
+    # Find documents for this loan matching the income type
+    all_docs = db.query(SmartDocument).filter(
+        SmartDocument.loan_id == loan_id
+    ).all()
+
+    # Filter by doc_type pattern
+    documents = []
+    for doc in all_docs:
+        doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower()
+        if any(pattern.lower() in doc_type_str for pattern in doc_type_patterns):
+            documents.append(doc)
+
+    if not documents:
+        raise HTTPException(status_code=404, detail="No documents found for this income type")
+
+    # Get or create income source
+    try:
+        income_type_enum = IncomeType(income_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid income type: {income_type}")
+
+    source = db.query(IncomeSource).filter(
+        IncomeSource.loan_id == loan_id,
+        IncomeSource.borrower_id == borrower_id,
+        IncomeSource.income_type == income_type_enum
+    ).first()
+
+    if not source:
+        source = IncomeSource(
+            borrower_id=borrower_id,
+            loan_id=loan_id,
+            income_type=income_type_enum,
+            is_primary=False,
+            verification_status=IncomeVerificationStatus.DOCUMENTS_RECEIVED,
+        )
+        db.add(source)
+        db.flush()
+
+    # Extract data from documents
+    extracted_income = {}
+
+    for doc in documents:
+        if doc.extracted_data:
+            extracted = doc.extracted_data
+
+            # Aggregate paystub data
+            doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower()
+
+            if 'paystub' in doc_type_str:
+                if 'gross_pay' in extracted:
+                    extracted_income['last_gross_pay'] = extracted.get('gross_pay')
+                if 'ytd_gross' in extracted:
+                    extracted_income['ytd_gross'] = extracted.get('ytd_gross')
+                if 'pay_frequency' in extracted:
+                    extracted_income['pay_frequency'] = extracted.get('pay_frequency')
+                if 'employer_name' in extracted:
+                    source.source_name = extracted.get('employer_name')
+
+            # Aggregate W-2 data
+            elif 'w2' in doc_type_str:
+                if 'wages_tips_other' in extracted:
+                    extracted_income['w2_wages'] = extracted.get('wages_tips_other')
+                if 'employer_name' in extracted:
+                    source.source_name = extracted.get('employer_name')
+
+    # Calculate income based on extracted data
+    if 'ytd_gross' in extracted_income:
+        ytd = Decimal(str(extracted_income['ytd_gross']))
+        freq = extracted_income.get('pay_frequency', 'biweekly').lower()
+
+        # Annualize YTD income
+        annual = ytd * Decimal('12') / Decimal('10')  # Assume ~10 months of YTD
+        monthly = annual / Decimal('12')
+
+        source.gross_annual_income = annual
+        source.gross_monthly_income = monthly
+        source.monthly_qualifying_income = monthly
+        source.annual_qualifying_income = annual
+        source.calculation_method = IncomeCalculationMethod.YTD_ANNUALIZED
+        source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
+
+    elif 'w2_wages' in extracted_income:
+        annual = Decimal(str(extracted_income['w2_wages']))
+        monthly = annual / Decimal('12')
+
+        source.gross_annual_income = annual
+        source.gross_monthly_income = monthly
+        source.monthly_qualifying_income = monthly
+        source.annual_qualifying_income = annual
+        source.calculation_method = IncomeCalculationMethod.TWO_YEAR_AVERAGE
+        source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
+
+    source.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(source)
+
+    return {
+        "success": True,
+        "message": f"Extracted income from {len(documents)} documents",
+        "source_id": source.id,
+        "source_name": source.source_name,
+        "monthly_income": float(source.monthly_qualifying_income or 0),
+        "annual_income": float(source.annual_qualifying_income or 0),
+        "extracted_fields": list(extracted_income.keys()),
+    }
+
+
+@router.get("/loan/{loan_id}/extractions")
+async def get_loan_extractions(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get all extracted income data for a loan, organized by income type."""
+    from models.smart_docs_models import SmartDocument
+
+    documents = db.query(SmartDocument).filter(
+        SmartDocument.loan_id == loan_id,
+        SmartDocument.extracted_data.isnot(None)
+    ).all()
+
+    extractions = {}
+
+    for doc in documents:
+        if not doc.extracted_data:
+            continue
+
+        # Map document type to income type
+        doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower()
+
+        if any(p in doc_type_str for p in ['paystub', 'w2', 'offer']):
+            income_type = "W2_EMPLOYMENT"
+        elif 'tax' in doc_type_str or 'schedule' in doc_type_str:
+            income_type = "SELF_EMPLOYED_SCHEDULE_C"
+        elif 'bank' in doc_type_str:
+            income_type = "BANK_STATEMENT"
+        elif 'lease' in doc_type_str:
+            income_type = "RENTAL_SCHEDULE_E"
+        else:
+            income_type = "OTHER"
+
+        if income_type not in extractions:
+            extractions[income_type] = {}
+
+        # Merge extracted data
+        for key, value in doc.extracted_data.items():
+            if value is not None:
+                extractions[income_type][key] = value
+
+    return {"extractions": extractions}
+
+
+# =============================================================================
 # INCOME SUMMARY ENDPOINTS
 # =============================================================================
 

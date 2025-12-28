@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
-import IncomeTab from '../components/income/IncomeTab';
+import IncomeCalculatorTabs from '../components/income/IncomeCalculatorTabs';
 import './SmartDocsClientDetail.css';
 
 function SmartDocsClientDetail() {
@@ -576,7 +576,7 @@ function SmartDocsClientDetail() {
             </button>
             {showIncomeCalculator && (
               <div className="income-calculator-panel">
-                <IncomeTab
+                <IncomeCalculatorTabs
                   loanId={parseInt(loanId)}
                   borrowerId={1}
                   onIncomeChange={(monthly, annual) => {
