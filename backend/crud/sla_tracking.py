@@ -953,19 +953,92 @@ def calculate_target_hours(sla_measure: SLAMeasure) -> float:
     return sla_measure.target_value
 
 
+def is_business_hour(dt: datetime) -> bool:
+    """Check if a datetime falls within business hours (9 AM - 5 PM, Mon-Fri)."""
+    # Check if it's a weekday (Monday = 0, Sunday = 6)
+    if dt.weekday() >= 5:  # Saturday or Sunday
+        return False
+    # Check if it's within business hours (9 AM to 5 PM)
+    return 9 <= dt.hour < 17
+
+
+def get_next_business_hour(dt: datetime) -> datetime:
+    """Get the next business hour start from a given datetime."""
+    # If it's a weekend, move to Monday 9 AM
+    while dt.weekday() >= 5:
+        dt = dt + timedelta(days=1)
+        dt = dt.replace(hour=9, minute=0, second=0, microsecond=0)
+
+    # If before business hours, move to 9 AM same day
+    if dt.hour < 9:
+        return dt.replace(hour=9, minute=0, second=0, microsecond=0)
+
+    # If after business hours, move to 9 AM next business day
+    if dt.hour >= 17:
+        dt = dt + timedelta(days=1)
+        dt = dt.replace(hour=9, minute=0, second=0, microsecond=0)
+        # Skip weekends
+        while dt.weekday() >= 5:
+            dt = dt + timedelta(days=1)
+        return dt
+
+    # Already in business hours
+    return dt
+
+
 def calculate_deadline(
     start_time: datetime,
     target_hours: float,
     business_hours_only: bool = False
 ) -> datetime:
-    """Calculate the deadline based on start time and target hours."""
+    """Calculate the deadline based on start time and target hours.
+
+    Args:
+        start_time: When the SLA clock starts
+        target_hours: Number of hours until deadline
+        business_hours_only: If True, only count business hours (9 AM - 5 PM, Mon-Fri)
+
+    Returns:
+        The calculated deadline datetime
+    """
     if not business_hours_only:
         return start_time + timedelta(hours=target_hours)
 
-    # Business hours calculation (simplified)
-    # TODO: Implement proper business hours/holiday logic
-    # For now, just use calendar hours
-    return start_time + timedelta(hours=target_hours)
+    # Business hours calculation
+    # Business hours: 9 AM - 5 PM (8 hours per day)
+    # Business days: Monday - Friday
+
+    remaining_hours = target_hours
+    current_time = get_next_business_hour(start_time)
+
+    while remaining_hours > 0:
+        # Calculate hours remaining in current business day
+        end_of_day = current_time.replace(hour=17, minute=0, second=0, microsecond=0)
+        hours_left_today = (end_of_day - current_time).total_seconds() / 3600
+
+        if hours_left_today <= 0:
+            # Move to next business day
+            current_time = current_time + timedelta(days=1)
+            current_time = current_time.replace(hour=9, minute=0, second=0, microsecond=0)
+            # Skip weekends
+            while current_time.weekday() >= 5:
+                current_time = current_time + timedelta(days=1)
+            continue
+
+        if remaining_hours <= hours_left_today:
+            # Deadline is within today's business hours
+            current_time = current_time + timedelta(hours=remaining_hours)
+            remaining_hours = 0
+        else:
+            # Use up today's remaining hours and move to next business day
+            remaining_hours -= hours_left_today
+            current_time = current_time + timedelta(days=1)
+            current_time = current_time.replace(hour=9, minute=0, second=0, microsecond=0)
+            # Skip weekends
+            while current_time.weekday() >= 5:
+                current_time = current_time + timedelta(days=1)
+
+    return current_time
 
 
 def calculate_snapshot_metrics(
