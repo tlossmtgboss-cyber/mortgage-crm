@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './IncomeCalculatorModal.css';
+import BankStatementWorksheet from './BankStatementWorksheet';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -63,7 +64,7 @@ const VERIFICATION_STATUSES = {
   'CALCULATED': { label: 'Calculated', color: '#8b5cf6', bgColor: '#ede9fe' },
 };
 
-export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowerId, onSave }) {
+export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowerId, borrowerName, onSave }) {
   const [activeTab, setActiveTab] = useState('W2_EMPLOYMENT');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -327,121 +328,140 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
 
             {/* Active Tab Content */}
             <div className="income-tab-content">
-              {error && (
-                <div className="error-banner">
-                  {error}
-                  <button onClick={() => setError(null)}>Dismiss</button>
-                </div>
-              )}
-
-              <div className="tab-header">
-                <div className="tab-title">
-                  <span className="title-icon">{activeTabConfig?.icon}</span>
-                  <div>
-                    <h3>{activeTabConfig?.label}</h3>
-                    <p className="tab-description">{activeTabConfig?.description}</p>
-                  </div>
-                </div>
-                <div className="tab-actions">
-                  <button
-                    className="action-btn extract"
-                    onClick={() => handleExtractIncome(activeTab)}
-                    disabled={saving || tabDocuments.length === 0}
-                  >
-                    {saving ? 'Extracting...' : 'Extract from Docs'}
-                  </button>
-                  <button
-                    className="action-btn calculate"
-                    onClick={() => handleCalculateIncome(activeTab)}
-                    disabled={saving}
-                  >
-                    {saving ? 'Calculating...' : 'Calculate Income'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Income Source Card */}
-              {tabIncomeSource ? (
-                <div className="income-source-card">
-                  <div className="source-header">
-                    <h4>{tabIncomeSource.source_name || activeTabConfig?.label}</h4>
-                    <span
-                      className="status-badge"
-                      style={{
-                        backgroundColor: VERIFICATION_STATUSES[tabIncomeSource.verification_status]?.bgColor,
-                        color: VERIFICATION_STATUSES[tabIncomeSource.verification_status]?.color,
-                      }}
-                    >
-                      {VERIFICATION_STATUSES[tabIncomeSource.verification_status]?.label}
-                    </span>
-                  </div>
-                  <div className="source-income-grid">
-                    <div className="income-box">
-                      <label>Gross Monthly</label>
-                      <span className="amount">{formatCurrency(tabIncomeSource.gross_monthly_income)}</span>
-                    </div>
-                    <div className="income-box">
-                      <label>Gross Annual</label>
-                      <span className="amount">{formatCurrency(tabIncomeSource.gross_annual_income)}</span>
-                    </div>
-                    <div className="income-box qualifying">
-                      <label>Qualifying Monthly</label>
-                      <span className="amount">{formatCurrency(tabIncomeSource.monthly_qualifying_income)}</span>
-                    </div>
-                    <div className="income-box qualifying">
-                      <label>Qualifying Annual</label>
-                      <span className="amount">{formatCurrency(tabIncomeSource.annual_qualifying_income)}</span>
-                    </div>
-                  </div>
-                  {tabIncomeSource.calculation_method && (
-                    <div className="calculation-method">
-                      <span className="method-label">Calculation Method:</span>
-                      <span className="method-value">{tabIncomeSource.calculation_method.replace(/_/g, ' ')}</span>
-                    </div>
-                  )}
-                  {tabIncomeSource.declining_income_flag && (
-                    <div className="warning-banner">
-                      Income is declining - using conservative calculation method
-                    </div>
-                  )}
-                </div>
+              {activeTab === 'BANK_STATEMENT' ? (
+                /* Bank Statement Worksheet - Full Non-QM functionality */
+                <BankStatementWorksheet
+                  loanId={loanId}
+                  borrowerId={borrowerId}
+                  borrowerName={borrowerName}
+                  onIncomeCalculated={(income) => {
+                    setTotalIncome(prev => ({
+                      monthly: prev.monthly + income.monthly,
+                      annual: prev.annual + income.annual,
+                    }));
+                    setHasChanges(true);
+                  }}
+                />
               ) : (
-                <div className="no-income-source">
-                  <p>No income calculated for this type yet.</p>
-                  <p className="hint">Upload documents and click "Extract from Docs" to start.</p>
-                </div>
-              )}
+                /* Standard Income Tab Content */
+                <>
+                  {error && (
+                    <div className="error-banner">
+                      {error}
+                      <button onClick={() => setError(null)}>Dismiss</button>
+                    </div>
+                  )}
 
-              {/* Documents Section */}
-              <div className="documents-section">
-                <h4>Supporting Documents ({tabDocuments.length})</h4>
-                {tabDocuments.length > 0 ? (
-                  <div className="documents-list">
-                    {tabDocuments.map(doc => (
-                      <div key={doc.id} className="document-row">
-                        <div className="doc-icon">📄</div>
-                        <div className="doc-info">
-                          <span className="doc-name">{doc.file_name || doc.filename}</span>
-                          <span className="doc-type">{doc.doc_type || doc.document_type}</span>
+                  <div className="tab-header">
+                    <div className="tab-title">
+                      <span className="title-icon">{activeTabConfig?.icon}</span>
+                      <div>
+                        <h3>{activeTabConfig?.label}</h3>
+                        <p className="tab-description">{activeTabConfig?.description}</p>
+                      </div>
+                    </div>
+                    <div className="tab-actions">
+                      <button
+                        className="action-btn extract"
+                        onClick={() => handleExtractIncome(activeTab)}
+                        disabled={saving || tabDocuments.length === 0}
+                      >
+                        {saving ? 'Extracting...' : 'Extract from Docs'}
+                      </button>
+                      <button
+                        className="action-btn calculate"
+                        onClick={() => handleCalculateIncome(activeTab)}
+                        disabled={saving}
+                      >
+                        {saving ? 'Calculating...' : 'Calculate Income'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Income Source Card */}
+                  {tabIncomeSource ? (
+                    <div className="income-source-card">
+                      <div className="source-header">
+                        <h4>{tabIncomeSource.source_name || activeTabConfig?.label}</h4>
+                        <span
+                          className="status-badge"
+                          style={{
+                            backgroundColor: VERIFICATION_STATUSES[tabIncomeSource.verification_status]?.bgColor,
+                            color: VERIFICATION_STATUSES[tabIncomeSource.verification_status]?.color,
+                          }}
+                        >
+                          {VERIFICATION_STATUSES[tabIncomeSource.verification_status]?.label}
+                        </span>
+                      </div>
+                      <div className="source-income-grid">
+                        <div className="income-box">
+                          <label>Gross Monthly</label>
+                          <span className="amount">{formatCurrency(tabIncomeSource.gross_monthly_income)}</span>
                         </div>
-                        <div className="doc-date">{formatDate(doc.doc_date || doc.upload_date)}</div>
-                        <div className="doc-status">
-                          {doc.extraction_status === 'completed' ? (
-                            <span className="extracted">Extracted</span>
-                          ) : (
-                            <span className="pending">Pending</span>
-                          )}
+                        <div className="income-box">
+                          <label>Gross Annual</label>
+                          <span className="amount">{formatCurrency(tabIncomeSource.gross_annual_income)}</span>
+                        </div>
+                        <div className="income-box qualifying">
+                          <label>Qualifying Monthly</label>
+                          <span className="amount">{formatCurrency(tabIncomeSource.monthly_qualifying_income)}</span>
+                        </div>
+                        <div className="income-box qualifying">
+                          <label>Qualifying Annual</label>
+                          <span className="amount">{formatCurrency(tabIncomeSource.annual_qualifying_income)}</span>
                         </div>
                       </div>
-                    ))}
+                      {tabIncomeSource.calculation_method && (
+                        <div className="calculation-method">
+                          <span className="method-label">Calculation Method:</span>
+                          <span className="method-value">{tabIncomeSource.calculation_method.replace(/_/g, ' ')}</span>
+                        </div>
+                      )}
+                      {tabIncomeSource.declining_income_flag && (
+                        <div className="warning-banner">
+                          Income is declining - using conservative calculation method
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="no-income-source">
+                      <p>No income calculated for this type yet.</p>
+                      <p className="hint">Upload documents and click "Extract from Docs" to start.</p>
+                    </div>
+                  )}
+
+                  {/* Documents Section */}
+                  <div className="documents-section">
+                    <h4>Supporting Documents ({tabDocuments.length})</h4>
+                    {tabDocuments.length > 0 ? (
+                      <div className="documents-list">
+                        {tabDocuments.map(doc => (
+                          <div key={doc.id} className="document-row">
+                            <div className="doc-icon">📄</div>
+                            <div className="doc-info">
+                              <span className="doc-name">{doc.file_name || doc.filename}</span>
+                              <span className="doc-type">{doc.doc_type || doc.document_type}</span>
+                            </div>
+                            <div className="doc-date">{formatDate(doc.doc_date || doc.upload_date)}</div>
+                            <div className="doc-status">
+                              {doc.extraction_status === 'completed' ? (
+                                <span className="extracted">Extracted</span>
+                              ) : (
+                                <span className="pending">Pending</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="no-documents">
+                        <p>No documents uploaded for this income type.</p>
+                        <p className="hint">Upload paystubs, W-2s, tax returns, etc. in the Documents section.</p>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="no-documents">
-                    <p>No documents uploaded for this income type.</p>
-                    <p className="hint">Upload paystubs, W-2s, tax returns, etc. in the Documents section.</p>
-                  </div>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
         )}

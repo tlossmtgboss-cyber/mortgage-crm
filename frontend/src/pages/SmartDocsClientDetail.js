@@ -736,6 +736,7 @@ function SmartDocsClientDetail() {
         onClose={() => setShowIncomeModal(false)}
         loanId={parseInt(loanId)}
         borrowerId={1}
+        borrowerName={client?.name}
         onSave={(income) => {
           console.log('Income saved:', income);
         }}

@@ -19927,6 +19927,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load income routes: {e}")
 
+# Include Bank Statement routes (Non-QM bank statement worksheet extraction)
+try:
+    from routes.bank_statement_routes import router as bank_statement_router
+    app.include_router(bank_statement_router, tags=["Bank Statement Worksheets"])
+    logger.info("✅ Bank Statement Worksheet routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load bank statement routes: {e}")
+
 # Include Income Engine routes (Automated Income Intelligence Engine)
 try:
     from income_engine import income_router as income_engine_router
@@ -19969,6 +19977,10 @@ app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
 # Include Financial Intelligence routes (Phase 3)
 from financial_intelligence_routes import router as financial_intelligence_router
 app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
+
+# Include Business Operations Dashboard routes
+from routes.business_operations_routes import router as business_ops_router
+app.include_router(business_ops_router, tags=["Business Operations"])
 
 # Include AI Daily Blog + PDF Content Factory routes
 from blog_routes import router as blog_router
