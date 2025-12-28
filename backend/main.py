@@ -40457,15 +40457,19 @@ async def bulk_update_lead_status(
     Bulk update status/stage for multiple leads.
     Body: { "lead_ids": [1, 2, 3], "status": "Withdraw" }
     """
+    logger.info(f"[bulk-update-status] Request received from user {current_user.id} ({current_user.email})")
     try:
         body = await request.json()
+        logger.info(f"[bulk-update-status] Request body: {body}")
         lead_ids = body.get('lead_ids', body.get('ids', []))
         new_status = body.get('status', body.get('stage'))
 
         if isinstance(lead_ids, list) == False:
             lead_ids = [lead_ids]
         lead_ids = [int(id) for id in lead_ids]
+        logger.info(f"[bulk-update-status] Parsed {len(lead_ids)} lead IDs, new_status={new_status}")
     except Exception as e:
+        logger.error(f"[bulk-update-status] Failed to parse request: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
 
     if not lead_ids:
@@ -40506,17 +40510,21 @@ async def bulk_update_lead_status(
 
     try:
         db.commit()
+        logger.info(f"[bulk-update-status] Successfully committed. Updated {updated_count}, errors: {len(errors)}")
     except Exception as e:
         db.rollback()
+        logger.error(f"[bulk-update-status] Failed to commit: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save changes: {str(e)}")
 
-    return {
+    result = {
         "success": True,
         "updated_count": updated_count,
         "new_status": new_status,
         "errors": errors,
         "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "")
     }
+    logger.info(f"[bulk-update-status] Returning result: {result}")
+    return result
 
 
 @app.get("/api/v1/leads/{lead_id}")
