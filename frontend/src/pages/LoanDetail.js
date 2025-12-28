@@ -900,7 +900,7 @@ function LoanDetail() {
       if (result.status === 'success') {
         toast.success('Loan refreshed from Salesforce');
         // Reload the loan data to show updated fields
-        fetchLoan();
+        loadLoanData();
         // Update sync status
         setSalesforceStatus({
           ...salesforceStatus,

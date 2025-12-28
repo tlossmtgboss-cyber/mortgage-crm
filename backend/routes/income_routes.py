@@ -1150,74 +1150,83 @@ async def seed_test_income_data(
 
     from decimal import Decimal
 
-    results = []
+    try:
+        results = []
 
-    # Create W-2 Employment Income Source
-    w2_source = IncomeSource(
-        borrower_id=1,
-        loan_id=loan_id,
-        income_type=IncomeType.W2_EMPLOYMENT,
-        source_name="Acme Corporation",
-        source_description="Software Engineer - Full Time W-2 Employment",
-        is_primary=True,
-        verification_status=IncomeVerificationStatus.VERIFIED,
-        monthly_qualifying_income=Decimal("7500.00"),
-        annual_qualifying_income=Decimal("90000.00"),
-        gross_monthly_income=Decimal("7916.67"),
-        gross_annual_income=Decimal("95000.00"),
-        calculation_method=IncomeCalculationMethod.YTD_ANNUALIZED,
-    )
-    db.add(w2_source)
-    db.flush()
-    results.append({"source": "W-2 Employment", "name": "Acme Corporation", "monthly": 7500})
+        # Create W-2 Employment Income Source
+        w2_source = IncomeSource(
+            borrower_id=1,
+            loan_id=loan_id,
+            income_type=IncomeType.W2_EMPLOYMENT,
+            source_name="Acme Corporation",
+            source_description="Software Engineer - Full Time W-2 Employment",
+            is_primary=True,
+            verification_status=IncomeVerificationStatus.VERIFIED,
+            monthly_qualifying_income=Decimal("7500.00"),
+            annual_qualifying_income=Decimal("90000.00"),
+            gross_monthly_income=Decimal("7916.67"),
+            gross_annual_income=Decimal("95000.00"),
+            calculation_method=IncomeCalculationMethod.YTD_ANNUALIZED,
+        )
+        db.add(w2_source)
+        db.flush()
+        results.append({"source": "W-2 Employment", "name": "Acme Corporation", "monthly": 7500})
 
-    # Create Rental Income Source
-    rental_source = IncomeSource(
-        borrower_id=1,
-        loan_id=loan_id,
-        income_type=IncomeType.RENTAL_SCHEDULE_E,
-        source_name="123 Investment Property",
-        source_description="Schedule E Rental Property - Single Family",
-        is_primary=False,
-        verification_status=IncomeVerificationStatus.DOCUMENTS_RECEIVED,
-        monthly_qualifying_income=Decimal("1200.00"),
-        annual_qualifying_income=Decimal("14400.00"),
-        gross_monthly_income=Decimal("2000.00"),
-        gross_annual_income=Decimal("24000.00"),
-        calculation_method=IncomeCalculationMethod.SCHEDULE_E_AVERAGE,
-    )
-    db.add(rental_source)
-    db.flush()
-    results.append({"source": "Rental Income", "name": "123 Investment Property", "monthly": 1200})
+        # Create Rental Income Source
+        rental_source = IncomeSource(
+            borrower_id=1,
+            loan_id=loan_id,
+            income_type=IncomeType.RENTAL_SCHEDULE_E,
+            source_name="123 Investment Property",
+            source_description="Schedule E Rental Property - Single Family",
+            is_primary=False,
+            verification_status=IncomeVerificationStatus.DOCUMENTS_RECEIVED,
+            monthly_qualifying_income=Decimal("1200.00"),
+            annual_qualifying_income=Decimal("14400.00"),
+            gross_monthly_income=Decimal("2000.00"),
+            gross_annual_income=Decimal("24000.00"),
+            calculation_method=IncomeCalculationMethod.SCHEDULE_E_AVERAGE,
+        )
+        db.add(rental_source)
+        db.flush()
+        results.append({"source": "Rental Income", "name": "123 Investment Property", "monthly": 1200})
 
-    # Create Self-Employment Income Source
-    self_emp_source = IncomeSource(
-        borrower_id=1,
-        loan_id=loan_id,
-        income_type=IncomeType.SELF_EMPLOYED_SCHEDULE_C,
-        source_name="Johnson Consulting LLC",
-        source_description="Schedule C - Independent Consulting Business",
-        is_primary=False,
-        verification_status=IncomeVerificationStatus.NEEDS_ADDITIONAL_DOCS,
-        monthly_qualifying_income=Decimal("3500.00"),
-        annual_qualifying_income=Decimal("42000.00"),
-        gross_monthly_income=Decimal("5000.00"),
-        gross_annual_income=Decimal("60000.00"),
-        calculation_method=IncomeCalculationMethod.TWO_YEAR_AVERAGE,
-    )
-    db.add(self_emp_source)
-    db.flush()
-    results.append({"source": "Self-Employment", "name": "Johnson Consulting LLC", "monthly": 3500})
+        # Create Self-Employment Income Source
+        self_emp_source = IncomeSource(
+            borrower_id=1,
+            loan_id=loan_id,
+            income_type=IncomeType.SELF_EMPLOYED_SCHEDULE_C,
+            source_name="Johnson Consulting LLC",
+            source_description="Schedule C - Independent Consulting Business",
+            is_primary=False,
+            verification_status=IncomeVerificationStatus.NEEDS_ADDITIONAL_DOCS,
+            monthly_qualifying_income=Decimal("3500.00"),
+            annual_qualifying_income=Decimal("42000.00"),
+            gross_monthly_income=Decimal("5000.00"),
+            gross_annual_income=Decimal("60000.00"),
+            calculation_method=IncomeCalculationMethod.TWO_YEAR_AVERAGE,
+        )
+        db.add(self_emp_source)
+        db.flush()
+        results.append({"source": "Self-Employment", "name": "Johnson Consulting LLC", "monthly": 3500})
 
-    db.commit()
+        db.commit()
 
-    total_monthly = sum(r["monthly"] for r in results)
+        total_monthly = sum(r["monthly"] for r in results)
 
-    return {
-        "success": True,
-        "message": f"Created {len(results)} income sources for loan {loan_id}",
-        "loan_id": loan_id,
-        "sources": results,
-        "total_monthly_income": total_monthly,
-        "total_annual_income": total_monthly * 12,
-    }
+        return {
+            "success": True,
+            "message": f"Created {len(results)} income sources for loan {loan_id}",
+            "loan_id": loan_id,
+            "sources": results,
+            "total_monthly_income": total_monthly,
+            "total_annual_income": total_monthly * 12,
+        }
+    except Exception as e:
+        logger.error(f"Seed test data failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }
