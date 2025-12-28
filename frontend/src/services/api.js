@@ -14,6 +14,7 @@ export const API_BASE_URL = (isProduction || isNativeApp)
 // Create axios instance with mobile app identification
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000, // 30 second timeout
   headers: {
     'Content-Type': 'application/json',
     // Identify mobile app requests to bypass IP blocking middleware
