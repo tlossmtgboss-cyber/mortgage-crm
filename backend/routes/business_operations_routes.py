@@ -1508,3 +1508,65 @@ async def get_break_even_analysis(
         "avg_mrr_per_customer": avg_mrr,
         "is_profitable": current_mrr >= current_costs
     }
+
+
+# =============================================================================
+# ADMIN ENDPOINTS
+# =============================================================================
+
+@router.get("/admin/run-migration")
+async def run_business_ops_migration(
+    admin_key: str = Query(..., description="Admin API key for authorization"),
+    db: Session = Depends(get_db)
+):
+    """
+    Run the business operations migration to create tables and seed data.
+    This endpoint is for initial deployment setup.
+    """
+    import os
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from sqlalchemy import text, inspect
+
+        # Check if tables already exist
+        inspector = inspect(db.get_bind())
+        existing_tables = inspector.get_table_names()
+
+        if 'service_providers' in existing_tables:
+            # Tables exist, check if seeded
+            count = db.execute(text("SELECT COUNT(*) FROM service_providers")).scalar()
+            if count > 0:
+                return {
+                    "status": "already_exists",
+                    "message": f"Business operations tables already exist with {count} service providers",
+                    "tables": [t for t in existing_tables if t in [
+                        'service_providers', 'service_usage_records', 'service_invoices',
+                        'subscription_revenue', 'usage_revenue', 'marketing_campaigns',
+                        'marketing_metrics', 'business_forecasts', 'business_kpis', 'budget_alerts'
+                    ]]
+                }
+
+        # Run migration
+        from migrations.add_business_operations_tables import run_migration
+        run_migration()
+
+        # Verify
+        inspector = inspect(db.get_bind())
+        new_tables = inspector.get_table_names()
+        created = [t for t in new_tables if t in [
+            'service_providers', 'service_usage_records', 'service_invoices',
+            'subscription_revenue', 'usage_revenue', 'marketing_campaigns',
+            'marketing_metrics', 'business_forecasts', 'business_kpis', 'budget_alerts'
+        ]]
+
+        return {
+            "status": "success",
+            "message": f"Migration completed successfully. Created {len(created)} tables.",
+            "tables_created": created
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
