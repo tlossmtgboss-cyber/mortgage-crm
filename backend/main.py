@@ -20864,6 +20864,46 @@ async def debug_appointments_status(db: Session = Depends(get_db)):
         except Exception as e:
             result["legacy_appointments_error"] = str(e)
 
+        # Check chat widget appointments (scheduled_appointments table)
+        result["chat_widget_appointments"] = []
+        try:
+            table_check = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'scheduled_appointments'
+                )
+            """)).scalar()
+
+            if table_check:
+                chat_appts = db.execute(text("""
+                    SELECT
+                        sa.id, sa.appointment_id, sa.appointment_type, sa.start_time, sa.status,
+                        sa.contact_name, sa.contact_email, sa.contact_phone,
+                        sa.lo_name, sa.created_at
+                    FROM scheduled_appointments sa
+                    WHERE sa.status = 'scheduled'
+                    ORDER BY sa.created_at DESC
+                    LIMIT 10
+                """)).fetchall()
+
+                for row in chat_appts:
+                    result["chat_widget_appointments"].append({
+                        "id": row[0],
+                        "appointment_id": row[1],
+                        "type": row[2],
+                        "start_time": row[3].isoformat() if row[3] else None,
+                        "status": row[4],
+                        "contact_name": row[5],
+                        "contact_email": row[6],
+                        "contact_phone": row[7],
+                        "lo_name": row[8] or '',
+                        "created_at": row[9].isoformat() if row[9] else None
+                    })
+            else:
+                result["chat_widget_appointments_note"] = "scheduled_appointments table does not exist"
+        except Exception as e:
+            result["chat_widget_appointments_error"] = str(e)
+
         # Check sent reminders
         try:
             reminders = db.execute(text("""
@@ -20884,10 +20924,41 @@ async def debug_appointments_status(db: Session = Depends(get_db)):
         except Exception as e:
             result["reminders_error"] = str(e)
 
+        # Check chat widget reminders
+        result["chat_widget_reminders"] = []
+        try:
+            table_check = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'chat_appointment_reminders'
+                )
+            """)).scalar()
+
+            if table_check:
+                chat_reminders = db.execute(text("""
+                    SELECT appointment_id, channel, hours_before, status, sent_at
+                    FROM chat_appointment_reminders
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                """)).fetchall()
+
+                for row in chat_reminders:
+                    result["chat_widget_reminders"].append({
+                        "appointment_id": row[0],
+                        "channel": row[1],
+                        "hours_before": row[2],
+                        "status": row[3],
+                        "sent_at": row[4].isoformat() if row[4] else None
+                    })
+        except Exception as e:
+            result["chat_widget_reminders_error"] = str(e)
+
         result["summary"] = {
             "scheduler_appointments_count": len(result["scheduler_appointments"]),
             "legacy_appointments_count": len(result["legacy_appointments"]),
-            "reminders_sent_count": len(result["reminders_sent"])
+            "chat_widget_appointments_count": len(result["chat_widget_appointments"]),
+            "reminders_sent_count": len(result["reminders_sent"]),
+            "chat_widget_reminders_count": len(result["chat_widget_reminders"])
         }
 
         return result
@@ -40307,6 +40378,78 @@ async def bulk_delete_leads_v2(
         "deleted_count": deleted_count,
         "errors": errors,
         "message": f"Successfully deleted {deleted_count} leads" + (f" with {len(errors)} errors" if errors else "")
+    }
+
+
+@app.post("/api/v1/leads/bulk-update-status")
+async def bulk_update_lead_status(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Bulk update status/stage for multiple leads.
+    Body: { "lead_ids": [1, 2, 3], "status": "Withdraw" }
+    """
+    try:
+        body = await request.json()
+        lead_ids = body.get('lead_ids', body.get('ids', []))
+        new_status = body.get('status', body.get('stage'))
+
+        if isinstance(lead_ids, list) == False:
+            lead_ids = [lead_ids]
+        lead_ids = [int(id) for id in lead_ids]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request body: {str(e)}")
+
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+    if not new_status:
+        raise HTTPException(status_code=400, detail="No status provided")
+
+    # PHASE 3: Check update permission (master users bypass)
+    is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
+    if not is_master:
+        has_update_permission = has_permission(current_user.id, 'leads.update', db) or has_permission(current_user.id, 'leads.update_all', db)
+        if not has_update_permission:
+            raise HTTPException(status_code=403, detail="Permission denied: leads.update")
+
+    updated_count = 0
+    errors = []
+
+    for lead_id in lead_ids:
+        try:
+            # Apply permission filtering
+            query = db.query(Lead).filter(Lead.id == lead_id)
+            if not is_master:
+                query = filter_leads_by_permissions(query, current_user, db)
+            lead = query.first()
+
+            if not lead:
+                errors.append(f"Lead {lead_id} not found or access denied")
+                continue
+
+            # Update the stage
+            lead.stage = new_status
+            lead.updated_at = datetime.utcnow()
+            updated_count += 1
+
+        except Exception as e:
+            errors.append(f"Failed to update lead {lead_id}: {str(e)}")
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save changes: {str(e)}")
+
+    return {
+        "success": True,
+        "updated_count": updated_count,
+        "new_status": new_status,
+        "errors": errors,
+        "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "")
     }
 
 

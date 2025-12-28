@@ -159,6 +159,13 @@ export const leadsAPI = {
     }
     throw lastError;
   },
+  bulkUpdateStatus: async (leadIds, status) => {
+    const response = await api.post('/api/v1/leads/bulk-update-status', {
+      lead_ids: leadIds,
+      status: status
+    });
+    return response.data;
+  },
   getDocuments: async (leadId) => {
     const response = await api.get(`/api/v1/leads/${leadId}/documents`);
     return response.data;

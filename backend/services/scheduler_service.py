@@ -431,6 +431,11 @@ class SchedulerService:
             # =====================================================================
             self._send_smart_scheduler_reminders(session, notifier)
 
+            # =====================================================================
+            # PART 3: Chat widget appointments (scheduled_appointments table)
+            # =====================================================================
+            self._send_chat_widget_reminders(session, notifier)
+
         except Exception as e:
             logger.error(f"Appointment reminder job failed: {e}")
         finally:
@@ -598,6 +603,182 @@ class SchedulerService:
 
         except Exception as e:
             logger.error(f"Failed to send reminder for smart appointment: {e}")
+            session.rollback()
+
+    def _send_chat_widget_reminders(self, session, notifier):
+        """Send cascading reminders for chat widget appointments (scheduled_appointments table)."""
+        try:
+            # Check if scheduled_appointments table exists
+            table_check = session.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'scheduled_appointments'
+                )
+            """))
+            if not table_check.scalar():
+                logger.debug("scheduled_appointments table doesn't exist, skipping chat widget reminders")
+                return
+
+            # Check if chat_appointment_reminders table exists, create if not
+            reminders_table_check = session.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'chat_appointment_reminders'
+                )
+            """))
+            if not reminders_table_check.scalar():
+                session.execute(text("""
+                    CREATE TABLE IF NOT EXISTS chat_appointment_reminders (
+                        id SERIAL PRIMARY KEY,
+                        appointment_id VARCHAR(50) NOT NULL,
+                        channel VARCHAR(20) NOT NULL,
+                        hours_before INTEGER NOT NULL,
+                        status VARCHAR(20) DEFAULT 'SENT',
+                        sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_chat_appt_reminders_appt_id
+                    ON chat_appointment_reminders(appointment_id)
+                """))
+                session.commit()
+                logger.info("Created chat_appointment_reminders table")
+
+            # 24-hour reminders for chat widget appointments
+            query_24h = text("""
+                SELECT
+                    sa.id,
+                    sa.appointment_id,
+                    sa.appointment_type as title,
+                    sa.start_time as scheduled_start,
+                    sa.contact_name as attendee_name,
+                    sa.contact_email as attendee_email,
+                    sa.contact_phone as attendee_phone,
+                    sa.lo_name
+                FROM scheduled_appointments sa
+                WHERE sa.start_time BETWEEN NOW() + INTERVAL '23 hours' AND NOW() + INTERVAL '25 hours'
+                AND UPPER(sa.status) = 'SCHEDULED'
+                AND NOT EXISTS (
+                    SELECT 1 FROM chat_appointment_reminders cr
+                    WHERE cr.appointment_id = sa.appointment_id
+                    AND cr.hours_before = 24
+                    AND UPPER(cr.status) IN ('SENT', 'DELIVERED')
+                )
+            """)
+
+            result_24h = session.execute(query_24h)
+            appointments_24h = result_24h.fetchall()
+
+            for appt in appointments_24h:
+                self._send_reminder_for_chat_appt(session, notifier, appt, 24)
+
+            # 1-hour reminders for chat widget appointments
+            query_1h = text("""
+                SELECT
+                    sa.id,
+                    sa.appointment_id,
+                    sa.appointment_type as title,
+                    sa.start_time as scheduled_start,
+                    sa.contact_name as attendee_name,
+                    sa.contact_email as attendee_email,
+                    sa.contact_phone as attendee_phone,
+                    sa.lo_name
+                FROM scheduled_appointments sa
+                WHERE sa.start_time BETWEEN NOW() + INTERVAL '50 minutes' AND NOW() + INTERVAL '70 minutes'
+                AND UPPER(sa.status) = 'SCHEDULED'
+                AND NOT EXISTS (
+                    SELECT 1 FROM chat_appointment_reminders cr
+                    WHERE cr.appointment_id = sa.appointment_id
+                    AND cr.hours_before = 1
+                    AND UPPER(cr.status) IN ('SENT', 'DELIVERED')
+                )
+            """)
+
+            result_1h = session.execute(query_1h)
+            appointments_1h = result_1h.fetchall()
+
+            for appt in appointments_1h:
+                self._send_reminder_for_chat_appt(session, notifier, appt, 1)
+
+            logger.info(f"Chat widget reminders: {len(appointments_24h)} 24h, {len(appointments_1h)} 1h")
+
+        except Exception as e:
+            logger.error(f"Chat widget reminders failed: {e}")
+            session.rollback()
+
+    def _send_reminder_for_chat_appt(self, session, notifier, appt, hours_before: int):
+        """Send reminder for a chat widget appointment and record it."""
+        try:
+            appt_dict = dict(appt._mapping)
+            lo_name = appt_dict.get('lo_name', '') or 'Your Loan Officer'
+            appointment_id = appt_dict["appointment_id"]
+
+            # Determine reminder message based on hours
+            if hours_before == 24:
+                reminder_prefix = "Reminder: Tomorrow - "
+            elif hours_before == 1:
+                reminder_prefix = "Starting Soon: "
+            else:
+                reminder_prefix = "Reminder: "
+
+            email_sent = False
+            sms_sent = False
+
+            # Send email reminder
+            if appt_dict.get("attendee_email"):
+                try:
+                    email_result = notifier.send_appointment_confirmation(
+                        borrower_email=appt_dict["attendee_email"],
+                        borrower_name=appt_dict.get("attendee_name", "there"),
+                        appointment_type=f"{reminder_prefix}Consultation with {lo_name}",
+                        appointment_time=appt_dict["scheduled_start"],
+                        lo_name=lo_name,
+                        meeting_link=None,
+                    )
+                    email_sent = email_result.get("success", False)
+                    if email_sent:
+                        logger.info(f"Email reminder sent for chat appointment {appointment_id}")
+                except Exception as e:
+                    logger.error(f"Failed to send email reminder for chat appointment {appointment_id}: {e}")
+
+            # Send SMS reminder
+            if appt_dict.get("attendee_phone"):
+                try:
+                    sms_result = notifier.send_appointment_reminder_sms(
+                        borrower_phone=appt_dict["attendee_phone"],
+                        borrower_name=appt_dict.get("attendee_name", "there"),
+                        appointment_time=appt_dict["scheduled_start"],
+                        lo_name=lo_name,
+                        meeting_link=None,
+                    )
+                    sms_sent = sms_result.get("success", False)
+                    if sms_sent:
+                        logger.info(f"SMS reminder sent for chat appointment {appointment_id}")
+                except Exception as e:
+                    logger.error(f"Failed to send SMS reminder for chat appointment {appointment_id}: {e}")
+
+            # Record the reminder
+            if email_sent or sms_sent:
+                if email_sent:
+                    session.execute(text("""
+                        INSERT INTO chat_appointment_reminders
+                        (appointment_id, channel, hours_before, status, sent_at, created_at)
+                        VALUES (:appt_id, 'EMAIL', :hours_before, 'SENT', NOW(), NOW())
+                    """), {"appt_id": appointment_id, "hours_before": hours_before})
+
+                if sms_sent:
+                    session.execute(text("""
+                        INSERT INTO chat_appointment_reminders
+                        (appointment_id, channel, hours_before, status, sent_at, created_at)
+                        VALUES (:appt_id, 'SMS', :hours_before, 'SENT', NOW(), NOW())
+                    """), {"appt_id": appointment_id, "hours_before": hours_before})
+
+                session.commit()
+                logger.info(f"Sent {hours_before}h reminder for chat appointment {appointment_id} (email={email_sent}, sms={sms_sent})")
+
+        except Exception as e:
+            logger.error(f"Failed to send reminder for chat appointment: {e}")
             session.rollback()
 
     def cleanup_stale_applications(self):

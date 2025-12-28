@@ -30,6 +30,7 @@ function Leads() {
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState(new Set());
   const [isMasterUser, setIsMasterUser] = useState(false);
+  const [bulkStatusSelection, setBulkStatusSelection] = useState('');
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -433,6 +434,40 @@ function Leads() {
     }
   };
 
+  const handleBulkStatusUpdate = async () => {
+    if (selectedLeads.size === 0 || !bulkStatusSelection) return;
+
+    const count = selectedLeads.size;
+    if (!window.confirm(`Are you sure you want to change ${count} lead${count > 1 ? 's' : ''} to "${bulkStatusSelection}"?`)) {
+      return;
+    }
+
+    try {
+      const leadIds = Array.from(selectedLeads);
+      console.log('Bulk updating leads:', leadIds, 'to status:', bulkStatusSelection);
+      const result = await leadsAPI.bulkUpdateStatus(leadIds, bulkStatusSelection);
+      console.log('Bulk update result:', result);
+
+      // Clear selection
+      setSelectedLeads(new Set());
+      setBulkStatusSelection('');
+
+      // Clear cache and reload
+      localStorage.removeItem('leads_data');
+      localStorage.removeItem('leads_data_time');
+      loadLeads();
+
+      alert(result.message || `Successfully updated ${result.updated_count} leads to "${bulkStatusSelection}"`);
+    } catch (err) {
+      console.error('Failed to bulk update leads:', err);
+      const errorDetail = err.response?.data?.detail;
+      const errorMessage = typeof errorDetail === 'string'
+        ? errorDetail
+        : (errorDetail?.message || err.message || 'Unknown error');
+      alert('Failed to update leads: ' + errorMessage);
+    }
+  };
+
   const resetForm = () => {
     setBorrowers([{
       first_name: '',
@@ -630,10 +665,37 @@ function Leads() {
         )}
       </div>
 
-      {/* Bulk Delete Bar - Only for users with delete permission or master users */}
+      {/* Bulk Actions Bar - Only for users with appropriate permissions or master users */}
       {selectedLeads.size > 0 && (
         <div className="bulk-actions-bar">
           <span className="selected-count">{selectedLeads.size} lead{selectedLeads.size > 1 ? 's' : ''} selected</span>
+
+          {/* Bulk Status Change */}
+          <select
+            value={bulkStatusSelection}
+            onChange={(e) => setBulkStatusSelection(e.target.value)}
+            className="bulk-status-select"
+          >
+            <option value="">Change Status To...</option>
+            <option value="New">New</option>
+            <option value="Attempted Contact">Attempted Contact</option>
+            <option value="Prospect">Prospect</option>
+            <option value="Application">Application</option>
+            <option value="Pre-Qualified">Pre-Qualified</option>
+            <option value="Pre-Approved">Pre-Approved</option>
+            <option value="Long-Term Nurture">Nurture</option>
+            <option value="Withdrawn">Withdrawn</option>
+            <option value="Does Not Qualify">Does Not Qualify</option>
+          </select>
+          <button
+            className="btn-primary"
+            onClick={handleBulkStatusUpdate}
+            disabled={!bulkStatusSelection}
+          >
+            Apply Status
+          </button>
+
+          {/* Bulk Delete */}
           {isMasterUser ? (
             <button className="btn-danger" onClick={handleBulkDelete}>
               🗑️ Delete Selected
@@ -645,7 +707,7 @@ function Leads() {
               </button>
             </PermissionGate>
           )}
-          <button className="btn-secondary" onClick={() => setSelectedLeads(new Set())}>
+          <button className="btn-secondary" onClick={() => { setSelectedLeads(new Set()); setBulkStatusSelection(''); }}>
             Cancel
           </button>
         </div>

@@ -1,0 +1,503 @@
+.paystub-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.paystub-modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 1400px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Header */
+.paystub-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  color: white;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.paystub-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.ai-extraction-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.sparkle {
+  font-size: 14px;
+}
+
+.paystub-modal-header .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.paystub-modal-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Error Banner */
+.extraction-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 14px;
+}
+
+.error-icon {
+  font-size: 18px;
+}
+
+.extraction-error button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #991b1b;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.extraction-error button:hover {
+  text-decoration: underline;
+}
+
+/* Body */
+.paystub-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Document Preview Panel */
+.document-preview-panel {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.preview-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.preview-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.preview-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.document-iframe {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+}
+
+.preview-loading,
+.preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.preview-loading .loading-spinner,
+.comparison-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.preview-placeholder .doc-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.preview-placeholder p,
+.preview-loading p,
+.comparison-loading p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Comparison Panel */
+.comparison-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.comparison-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.sections-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Comparison Section */
+.comparison-section {
+  margin-bottom: 24px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.comparison-section:last-child {
+  margin-bottom: 0;
+}
+
+.comparison-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comparison-section h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.section-count {
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.select-all-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.select-all-btn:hover {
+  text-decoration: underline;
+}
+
+/* Comparison Table */
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comparison-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.comparison-table th:first-child {
+  width: 40px;
+  text-align: center;
+}
+
+.comparison-table th:nth-child(3),
+.comparison-table th:nth-child(4) {
+  width: 150px;
+}
+
+.comparison-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.comparison-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.comparison-table tbody tr.selected {
+  background: #eff6ff;
+}
+
+.comparison-table tbody tr.selected:hover {
+  background: #dbeafe;
+}
+
+.comparison-table td {
+  padding: 12px;
+  font-size: 13px;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.comparison-table tr:last-child td {
+  border-bottom: none;
+}
+
+.checkbox-cell {
+  text-align: center;
+}
+
+.checkbox-cell input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.field-label {
+  font-weight: 500;
+  color: #111827;
+}
+
+.current-value {
+  color: #6b7280;
+}
+
+.extracted-value {
+  color: #111827;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.change-indicator {
+  background: #dcfce7;
+  color: #166534;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.comparison-table tr.different .extracted-value {
+  color: #059669;
+}
+
+/* Footer */
+.paystub-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.footer-info {
+  font-size: 14px;
+}
+
+.selected-info {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.hint-text {
+  color: #6b7280;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.apply-btn {
+  padding: 10px 24px;
+  border: none;
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.apply-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.apply-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .paystub-modal-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 300px 1fr;
+  }
+
+  .document-preview-panel {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+}
+
+@media (max-width: 640px) {
+  .paystub-modal-content {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .paystub-modal-header {
+    padding: 16px;
+  }
+
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .paystub-modal-header h2 {
+    font-size: 18px;
+  }
+
+  .paystub-modal-body {
+    grid-template-rows: 200px 1fr;
+  }
+
+  .comparison-table th:nth-child(3),
+  .comparison-table th:nth-child(4) {
+    width: auto;
+  }
+
+  .paystub-modal-footer {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .footer-actions {
+    width: 100%;
+  }
+
+  .cancel-btn,
+  .apply-btn {
+    flex: 1;
+  }
+}

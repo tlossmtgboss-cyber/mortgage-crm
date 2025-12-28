@@ -10,6 +10,7 @@ import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
+import IncomeTab from '../components/income/IncomeTab';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
 import NeedsListView from '../components/smart-docs/NeedsListView';
 import './LeadDetail.css';
@@ -97,8 +98,8 @@ function ClientProfile() {
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam) {
-      // Valid tabs: personal, loan-details, employment, circle-of-trust, documents, important-dates, communications
-      const validTabs = ['personal', 'loan-details', 'employment', 'circle-of-trust', 'documents', 'important-dates', 'communications'];
+      // Valid tabs: personal, loan-details, employment, income, circle-of-trust, documents, important-dates, communications
+      const validTabs = ['personal', 'loan-details', 'employment', 'income', 'circle-of-trust', 'documents', 'important-dates', 'communications'];
       if (validTabs.includes(tabParam)) {
         setActiveTab(tabParam);
       }
@@ -854,6 +855,12 @@ function ClientProfile() {
           Employment
         </button>
         <button
+          className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
+          onClick={() => setActiveTab('income')}
+        >
+          Income
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
@@ -1032,6 +1039,19 @@ function ClientProfile() {
               formData={formData}
               onFieldChange={handleFieldChange}
               entityType="loans"
+            />
+          )}
+
+          {/* Income Tab */}
+          {activeTab === 'income' && (
+            <IncomeTab
+              borrowerId={activeBorrower + 1}
+              loanId={parseInt(id)}
+              onIncomeChange={(monthly, annual) => {
+                // Update the loan's qualifying income fields
+                handleFieldChange('monthly_income', monthly);
+                handleFieldChange('annual_income', annual);
+              }}
             />
           )}
 

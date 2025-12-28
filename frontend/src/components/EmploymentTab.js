@@ -1,9 +1,69 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { leadsAPI } from '../services/api';
 import './EmploymentTab.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+const VERIFICATION_STATUSES = {
+  'PENDING': { label: 'Pending Verification', color: '#6b7280', bgColor: '#f3f4f6' },
+  'DOCUMENTS_RECEIVED': { label: 'Docs Received', color: '#d97706', bgColor: '#fef3c7' },
+  'VERIFIED': { label: 'Verified', color: '#059669', bgColor: '#d1fae5' },
+  'NEEDS_VOE': { label: 'Needs VOE', color: '#dc2626', bgColor: '#fee2e2' },
+  'VOE_ORDERED': { label: 'VOE Ordered', color: '#7c3aed', bgColor: '#ede9fe' },
+  'VOE_COMPLETE': { label: 'VOE Complete', color: '#059669', bgColor: '#d1fae5' },
+};
+
 export default function EmploymentTab({ leadId, formData, onFieldChange, entityType = 'leads' }) {
   const [calculating, setCalculating] = useState(false);
+  const [employmentVerification, setEmploymentVerification] = useState(null);
+  const [linkedIncomeSource, setLinkedIncomeSource] = useState(null);
+  const [lastPaystubUpdate, setLastPaystubUpdate] = useState(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
+
+  const token = localStorage.getItem('token');
+
+  // Fetch employment verification status and linked income source
+  const fetchVerificationStatus = useCallback(async () => {
+    if (!leadId) return;
+
+    setVerificationLoading(true);
+    try {
+      // Fetch income sources for this borrower to find linked employment income
+      const response = await fetch(
+        `${API_BASE}/api/v1/income/borrowers/${leadId}/sources?income_type=W2_EMPLOYMENT`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const sources = data.sources || [];
+
+        if (sources.length > 0) {
+          const primarySource = sources.find(s => s.is_primary) || sources[0];
+          setLinkedIncomeSource(primarySource);
+          setEmploymentVerification(primarySource.verification_status || 'PENDING');
+
+          // Get last paystub update date
+          if (primarySource.calculation_date) {
+            setLastPaystubUpdate(new Date(primarySource.calculation_date));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching verification status:', err);
+    } finally {
+      setVerificationLoading(false);
+    }
+  }, [leadId, token]);
+
+  useEffect(() => {
+    fetchVerificationStatus();
+  }, [fetchVerificationStatus]);
 
   // Calculate AI scores when relevant fields change
   useEffect(() => {
@@ -59,16 +119,66 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
     onFieldChange
   ]);
 
+  const getVerificationStatus = (status) => {
+    return VERIFICATION_STATUSES[status] || VERIFICATION_STATUSES['PENDING'];
+  };
+
+  const formatDate = (date) => {
+    if (!date) return null;
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   return (
     <div className="employment-tab">
       {/* SECTION 1: Employment Overview */}
       <div className="employment-section">
         <h3 className="section-header-with-score">
           <span>Employment Overview</span>
-          <span className="header-score">
-            Referral Score: {formData.referral_source_rating || '...'} {formData.referral_source_score || 0}/100
-          </span>
+          <div className="header-badges">
+            {!verificationLoading && employmentVerification && (
+              <span
+                className="verification-badge"
+                style={{
+                  backgroundColor: getVerificationStatus(employmentVerification).bgColor,
+                  color: getVerificationStatus(employmentVerification).color,
+                }}
+              >
+                {getVerificationStatus(employmentVerification).label}
+              </span>
+            )}
+            <span className="header-score">
+              Referral Score: {formData.referral_source_rating || '...'} {formData.referral_source_score || 0}/100
+            </span>
+          </div>
         </h3>
+
+        {/* Paystub Update Info */}
+        {(lastPaystubUpdate || linkedIncomeSource) && (
+          <div className="paystub-info-banner">
+            {lastPaystubUpdate && (
+              <span className="paystub-date">
+                <span className="info-icon">📄</span>
+                Last updated from paystub: {formatDate(lastPaystubUpdate)}
+              </span>
+            )}
+            {linkedIncomeSource && (
+              <span className="income-link">
+                <span className="info-icon">💰</span>
+                Linked to income source: {linkedIncomeSource.source_name || 'W-2 Employment'}
+                {linkedIncomeSource.monthly_qualifying_income && (
+                  <span className="income-amount">
+                    ${linkedIncomeSource.monthly_qualifying_income.toLocaleString()}/mo
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="info-grid compact">
           <div className="info-field">
             <label>Employment Status</label>
