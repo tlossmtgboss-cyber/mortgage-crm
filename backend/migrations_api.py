@@ -889,6 +889,51 @@ async def fix_referral_partner_links(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/add-income-intelligence-engine")
+async def run_income_intelligence_engine_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the Income Intelligence Engine tables migration.
+
+    Creates tables for automated income calculation:
+    - income_summaries: Single source of truth for calculated qualifying income
+    - income_calculation_details: Detailed breakdown per income stream (audit trail)
+    - income_flags: Conditions, warnings, and required actions
+    - mileage_depreciation_rates: IRS mileage rate configuration
+    - income_worksheets: Generated Excel worksheet tracking
+
+    Also seeds mileage depreciation rates for 2021-2024.
+    """
+    try:
+        from migrations.add_income_intelligence_engine import run_migration
+
+        logger.info("Starting Income Intelligence Engine tables migration...")
+        run_migration()
+
+        return {
+            "status": "success",
+            "message": "Income Intelligence Engine tables created successfully",
+            "tables_created": [
+                "income_summaries",
+                "income_calculation_details",
+                "income_flags",
+                "mileage_depreciation_rates",
+                "income_worksheets"
+            ],
+            "mileage_rates_seeded": {
+                "2021": "$0.26/mile",
+                "2022": "$0.26/mile",
+                "2023": "$0.28/mile",
+                "2024": "$0.30/mile"
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Income Intelligence Engine migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/seed-ci-qa-rubrics")
 async def seed_ci_qa_rubrics(
     admin: Any = Depends(verify_admin_access)
