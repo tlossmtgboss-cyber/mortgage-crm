@@ -117,7 +117,7 @@ class CapacityService:
             SELECT COUNT(*) as count
             FROM loans
             WHERE loan_officer_id = :user_id
-            AND status NOT IN ('funded', 'cancelled', 'denied', 'withdrawn')
+            AND stage NOT IN ('funded', 'cancelled', 'denied', 'withdrawn')
         """)
         files_result = self.db.execute(files_query, {"user_id": user_id}).fetchone()
         current_files = files_result.count if files_result else 0
