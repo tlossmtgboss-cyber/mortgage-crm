@@ -200,14 +200,15 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
 
         // Filter tabs based on supported types
         if (types.length > 0) {
-          const supportedCodes = types.map(t => t.type_code);
+          // Backend returns 'key' field matching tab IDs (e.g., 'W2_EMPLOYMENT')
+          const supportedKeys = types.map(t => t.key);
           const filteredTabs = ALL_INCOME_TABS.filter(tab =>
-            supportedCodes.includes(tab.id)
+            supportedKeys.includes(tab.id)
           );
           setIncomeTabs(filteredTabs.length > 0 ? filteredTabs : ALL_INCOME_TABS);
 
           // Set first supported type as active tab if current isn't supported
-          if (filteredTabs.length > 0 && !supportedCodes.includes(activeTab)) {
+          if (filteredTabs.length > 0 && !supportedKeys.includes(activeTab)) {
             setActiveTab(filteredTabs[0].id);
           }
         }
