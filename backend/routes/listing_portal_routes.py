@@ -125,24 +125,32 @@ async def create_transaction(
 
 @router.get("/transactions")
 async def list_transactions(
+    loan_id: Optional[int] = Query(None, description="Filter by loan ID"),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List all transactions for the current organization"""
+    """List all transactions for the current organization, optionally filtered by loan_id"""
     from sqlalchemy import text
 
     org_id = current_user.get("organization_id", 1) if isinstance(current_user, dict) else getattr(current_user, "organization_id", 1)
 
-    result = db.execute(text("""
+    # Build query with optional loan_id filter
+    params = {"org_id": org_id}
+    loan_filter = ""
+    if loan_id is not None:
+        loan_filter = "AND t.loan_id = :loan_id"
+        params["loan_id"] = loan_id
+
+    result = db.execute(text(f"""
         SELECT
             t.id, t.loan_id, t.property_address, t.property_city, t.property_state,
             t.purchase_price, t.target_close_date, t.current_status, t.is_active,
             t.created_at,
             (SELECT COUNT(*) FROM transaction_parties p WHERE p.transaction_id = t.id AND p.is_active = true) as party_count
         FROM listing_transactions t
-        WHERE t.organization_id = :org_id AND t.is_active = true
+        WHERE t.organization_id = :org_id AND t.is_active = true {loan_filter}
         ORDER BY t.created_at DESC
-    """), {"org_id": org_id})
+    """), params)
 
     transactions = [
         {
