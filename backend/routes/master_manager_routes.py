@@ -7,11 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from pydantic import BaseModel, Field
 
 from database import get_db
 from services.capacity_service import CapacityService, get_capacity_service
+from services.performance_service import PerformanceService, get_performance_service
 
 
 router = APIRouter(prefix="/api/v1/master-manager", tags=["Master Manager"])
@@ -765,6 +766,247 @@ async def resolve_alert(
         "id": result.id,
         "title": result.title,
         "status": "resolved"
+    }
+
+
+# =============================================================================
+# PERFORMANCE ROUTES
+# =============================================================================
+
+@router.get("/performance/dashboard")
+async def get_performance_dashboard(
+    period_type: str = Query("monthly", description="daily, weekly, or monthly"),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get performance dashboard summary with leaderboard and trends."""
+    service = get_performance_service(db)
+    dashboard = await service.get_performance_dashboard(
+        period_type=period_type,
+        organization_id=organization_id
+    )
+    return dashboard
+
+
+@router.get("/performance/leaderboard")
+async def get_performance_leaderboard(
+    period_type: str = Query("monthly", description="daily, weekly, or monthly"),
+    period_start: Optional[date] = None,
+    organization_id: Optional[int] = None,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get performance leaderboard for the specified period."""
+    service = get_performance_service(db)
+    leaderboard = await service.get_performance_leaderboard(
+        period_type=period_type,
+        period_start=period_start,
+        organization_id=organization_id,
+        limit=limit
+    )
+    return {
+        "period_type": period_type,
+        "period_start": period_start.isoformat() if period_start else None,
+        "leaderboard": leaderboard,
+        "total": len(leaderboard)
+    }
+
+
+@router.get("/performance/user/{user_id}")
+async def get_user_performance(
+    user_id: int,
+    period_type: str = Query("monthly", description="daily, weekly, or monthly"),
+    limit: int = Query(12, ge=1, le=24),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get performance history for a specific user."""
+    service = get_performance_service(db)
+    history = await service.get_user_performance(
+        user_id=user_id,
+        period_type=period_type,
+        limit=limit,
+        organization_id=organization_id
+    )
+
+    if not history:
+        return {
+            "user_id": user_id,
+            "period_type": period_type,
+            "history": [],
+            "message": "No performance data found for this user"
+        }
+
+    return {
+        "user_id": user_id,
+        "user_name": history[0]["user_name"] if history else None,
+        "period_type": period_type,
+        "history": history,
+        "total_periods": len(history)
+    }
+
+
+@router.post("/performance/calculate/daily")
+async def calculate_daily_performance(
+    target_date: Optional[date] = None,
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Calculate daily performance.
+    If user_id is provided, calculates for that user only.
+    Otherwise, calculates for all users.
+    """
+    service = get_performance_service(db)
+    calc_date = target_date or (date.today() - timedelta(days=1))
+
+    if user_id:
+        try:
+            metrics = await service.calculate_daily_performance(
+                user_id=user_id,
+                target_date=calc_date,
+                organization_id=organization_id
+            )
+            return {
+                "message": f"Calculated daily performance for user {user_id}",
+                "date": calc_date.isoformat(),
+                "user_id": user_id,
+                "overall_score": metrics.overall_score,
+                "grade": metrics.performance_grade
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    else:
+        count = await service.calculate_all_daily_performance(
+            target_date=calc_date,
+            organization_id=organization_id
+        )
+        return {
+            "message": f"Calculated daily performance for {count} users",
+            "date": calc_date.isoformat(),
+            "users_calculated": count
+        }
+
+
+@router.post("/performance/calculate/weekly")
+async def calculate_weekly_performance(
+    week_start: Optional[date] = None,
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Calculate weekly performance.
+    week_start should be a Monday. If not provided, uses the start of last week.
+    """
+    service = get_performance_service(db)
+
+    # Default to start of last week
+    if week_start is None:
+        today = date.today()
+        # Go back to Monday of last week
+        days_since_monday = today.weekday()
+        week_start = today - timedelta(days=days_since_monday + 7)
+
+    if user_id:
+        try:
+            metrics = await service.calculate_weekly_performance(
+                user_id=user_id,
+                week_start=week_start,
+                organization_id=organization_id
+            )
+            return {
+                "message": f"Calculated weekly performance for user {user_id}",
+                "week_start": week_start.isoformat(),
+                "user_id": user_id,
+                "overall_score": metrics.overall_score,
+                "grade": metrics.performance_grade
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    else:
+        count = await service.calculate_all_weekly_performance(
+            week_start=week_start,
+            organization_id=organization_id
+        )
+        return {
+            "message": f"Calculated weekly performance for {count} users",
+            "week_start": week_start.isoformat(),
+            "users_calculated": count
+        }
+
+
+@router.post("/performance/calculate/monthly")
+async def calculate_monthly_performance(
+    month_start: Optional[date] = None,
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Calculate monthly performance.
+    month_start should be the 1st of the month. If not provided, uses the start of last month.
+    """
+    service = get_performance_service(db)
+
+    # Default to start of last month
+    if month_start is None:
+        today = date.today()
+        if today.month == 1:
+            month_start = date(today.year - 1, 12, 1)
+        else:
+            month_start = date(today.year, today.month - 1, 1)
+
+    if user_id:
+        try:
+            metrics = await service.calculate_monthly_performance(
+                user_id=user_id,
+                month_start=month_start,
+                organization_id=organization_id
+            )
+            return {
+                "message": f"Calculated monthly performance for user {user_id}",
+                "month_start": month_start.isoformat(),
+                "user_id": user_id,
+                "overall_score": metrics.overall_score,
+                "grade": metrics.performance_grade
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+    else:
+        count = await service.calculate_all_monthly_performance(
+            month_start=month_start,
+            organization_id=organization_id
+        )
+        return {
+            "message": f"Calculated monthly performance for {count} users",
+            "month_start": month_start.isoformat(),
+            "users_calculated": count
+        }
+
+
+@router.get("/performance/promotion-candidates")
+async def get_promotion_candidates(
+    min_score: float = Query(85, ge=0, le=100, description="Minimum average score"),
+    min_months: int = Query(3, ge=1, le=12, description="Minimum months of sustained performance"),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get list of users who are potential promotion candidates based on sustained high performance."""
+    service = get_performance_service(db)
+    candidates = await service.identify_promotion_candidates(
+        organization_id=organization_id,
+        min_score=min_score,
+        min_months=min_months
+    )
+    return {
+        "criteria": {
+            "min_score": min_score,
+            "min_months": min_months
+        },
+        "candidates": candidates,
+        "total": len(candidates)
     }
 
 
