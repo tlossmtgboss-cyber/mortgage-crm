@@ -28,9 +28,15 @@ class OpenAIConversationService:
             self.client = None
         else:
             try:
-                self.client = OpenAI(api_key=self.api_key)
+                import httpx
+                # Configure client with optimized connection settings
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    timeout=httpx.Timeout(30.0, connect=5.0),  # Fast connect, reasonable total
+                    max_retries=1,  # Minimize retry delays for faster perceived response
+                )
                 self.enabled = True
-                logger.info(f"OpenAI conversation service initialized with model: {self.model}")
+                logger.info(f"OpenAI conversation service initialized with model: {self.model} (optimized)")
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI: {e}")
                 self.enabled = False

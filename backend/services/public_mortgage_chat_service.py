@@ -23,6 +23,43 @@ logger = logging.getLogger(__name__)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
+# Pre-initialized clients for faster responses (avoid cold start on each request)
+_openai_client = None
+_anthropic_client = None
+
+def _get_openai_client():
+    """Get or create shared OpenAI client with optimized settings."""
+    global _openai_client
+    if _openai_client is None and OPENAI_API_KEY:
+        try:
+            import openai
+            import httpx
+            _openai_client = openai.OpenAI(
+                api_key=OPENAI_API_KEY,
+                timeout=httpx.Timeout(30.0, connect=5.0),  # Fast connect timeout
+                max_retries=1,
+            )
+            logger.info("OpenAI client initialized for public chat (shared)")
+        except Exception as e:
+            logger.error(f"Failed to initialize OpenAI client: {e}")
+    return _openai_client
+
+def _get_anthropic_client():
+    """Get or create shared Anthropic client."""
+    global _anthropic_client
+    if _anthropic_client is None and ANTHROPIC_API_KEY:
+        try:
+            import anthropic
+            _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            logger.info("Anthropic client initialized for public chat (shared)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Anthropic client: {e}")
+    return _anthropic_client
+
+# Pre-initialize clients at module load
+_get_openai_client()
+_get_anthropic_client()
+
 
 class PublicMortgageChatService:
     """
@@ -664,13 +701,10 @@ class PublicMortgageChatService:
         }
 
     def _call_openai(self, messages: List[Dict]) -> str:
-        """Call OpenAI API"""
-        import openai
-
-        if not OPENAI_API_KEY:
+        """Call OpenAI API using shared client for speed."""
+        client = _get_openai_client()
+        if not client:
             raise Exception("OpenAI API key not configured")
-
-        client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -682,13 +716,10 @@ class PublicMortgageChatService:
         return response.choices[0].message.content
 
     def _call_anthropic(self, messages: List[Dict]) -> str:
-        """Call Anthropic API as fallback"""
-        import anthropic
-
-        if not ANTHROPIC_API_KEY:
+        """Call Anthropic API as fallback using shared client."""
+        client = _get_anthropic_client()
+        if not client:
             raise Exception("Anthropic API key not configured")
-
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         # Convert messages format
         system_content = ""

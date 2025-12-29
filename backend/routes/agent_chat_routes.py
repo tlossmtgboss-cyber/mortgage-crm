@@ -27,26 +27,40 @@ from models.agent_governance import AgentProfile, AgentExecution, AgentChatSessi
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client lazily
+# Initialize OpenAI client eagerly at module load for faster first request
 _openai_client = None
 _openai_enabled = False
 
-def get_openai_client():
-    """Get or create OpenAI client."""
+def _init_openai_client():
+    """Initialize OpenAI client at module load."""
     global _openai_client, _openai_enabled
-    if _openai_client is None:
-        try:
-            from openai import OpenAI
-            import os
-            api_key = os.getenv("OPENAI_API_KEY")
-            if api_key:
-                _openai_client = OpenAI(api_key=api_key)
-                _openai_enabled = True
-                logger.info("OpenAI client initialized for agent chat")
-            else:
-                logger.warning("OPENAI_API_KEY not set - agent chat will use fallback responses")
-        except ImportError:
-            logger.warning("OpenAI package not installed - agent chat will use fallback responses")
+    try:
+        from openai import OpenAI
+        import os
+        import httpx
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            # Configure client with connection pooling and optimized timeouts
+            _openai_client = OpenAI(
+                api_key=api_key,
+                timeout=httpx.Timeout(30.0, connect=5.0),  # Fast connect, reasonable total
+                max_retries=1,  # Minimize retry delays
+            )
+            _openai_enabled = True
+            logger.info("OpenAI client initialized for agent chat (eager loading)")
+        else:
+            logger.warning("OPENAI_API_KEY not set - agent chat will use fallback responses")
+    except ImportError:
+        logger.warning("OpenAI package not installed - agent chat will use fallback responses")
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenAI client: {e}")
+
+# Initialize immediately
+_init_openai_client()
+
+def get_openai_client():
+    """Get OpenAI client (already initialized)."""
+    global _openai_client, _openai_enabled
     return _openai_client, _openai_enabled
 
 
@@ -340,7 +354,7 @@ async def send_message_stream(
     message: ChatMessageCreate,
     db: Session = Depends(get_db)
 ):
-    """Send a message and stream the agent response."""
+    """Send a message and stream the agent response with true streaming from OpenAI."""
     try:
         session = db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
         if not session:
@@ -349,6 +363,11 @@ async def send_message_stream(
         agent = db.query(AgentProfile).filter(AgentProfile.id == session.agent_id).first()
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+
+        # Fetch conversation history (limit to last 6 for speed)
+        history = db.query(AgentChatMessage).filter(
+            AgentChatMessage.session_id == session_id
+        ).order_by(AgentChatMessage.created_at.desc()).limit(6).all()
 
         # Create user message first
         user_message = AgentChatMessage(
@@ -360,28 +379,54 @@ async def send_message_stream(
         db.commit()
         db.refresh(user_message)
 
-        async def generate_stream() -> AsyncGenerator[str, None]:
-            """Generate streaming response."""
-            full_response = ""
+        # Pre-build messages for OpenAI
+        messages = [{"role": "system", "content": _build_agent_system_prompt(agent, message.context)}]
+        for msg in reversed(history):
+            messages.append({"role": msg.role, "content": msg.content})
+        messages.append({"role": "user", "content": message.content})
 
-            # Start streaming indicator
+        async def generate_stream() -> AsyncGenerator[str, None]:
+            """Generate true streaming response directly from OpenAI."""
+            import os
+            full_response = ""
+            client, enabled = get_openai_client()
+            agent_name = agent.display_name or agent.agent_name
+
+            # Start streaming indicator immediately
             yield f"data: {json.dumps({'type': 'start', 'user_message_id': user_message.id})}\n\n"
 
-            # Generate streaming response using OpenAI
-            response_parts = await generate_streaming_response(
-                agent=agent,
-                message=message.content,
-                session=session,
-                context=message.context,
-                db=db
-            )
+            if enabled and client:
+                try:
+                    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+                    # True streaming - iterate directly over OpenAI stream
+                    stream = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=1000,
+                        temperature=0.7,
+                        stream=True
+                    )
 
-            for part in response_parts:
-                full_response += part
-                yield f"data: {json.dumps({'type': 'content', 'content': part})}\n\n"
-                await asyncio.sleep(0.05)  # Small delay for streaming effect
+                    for chunk in stream:
+                        if chunk.choices[0].delta.content:
+                            content = chunk.choices[0].delta.content
+                            full_response += content
+                            # Stream immediately - no artificial delay!
+                            yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
 
-            # Save complete message to database
+                except Exception as e:
+                    logger.error(f"OpenAI streaming error: {e}")
+                    # Fallback response
+                    fallback = f"I'm {agent_name}. I'd be happy to help with your request. Could you provide more details?"
+                    full_response = fallback
+                    yield f"data: {json.dumps({'type': 'content', 'content': fallback})}\n\n"
+            else:
+                # Fallback when OpenAI unavailable
+                fallback = f"I'm {agent_name}. I'd be happy to help with your request about '{message.content[:50]}...'. What specific information do you need?"
+                full_response = fallback
+                yield f"data: {json.dumps({'type': 'content', 'content': fallback})}\n\n"
+
+            # Save complete message to database (async after streaming)
             from database import SessionLocal
             async_db = SessionLocal()
             try:
@@ -409,7 +454,12 @@ async def send_message_stream(
 
         return StreamingResponse(
             generate_stream(),
-            media_type="text/event-stream"
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+            }
         )
 
     except HTTPException:
@@ -589,6 +639,39 @@ Guidelines:
     return base_prompt
 
 
+# Simple in-memory cache for quick responses (avoids Redis overhead for hot paths)
+_response_cache: Dict[str, tuple] = {}  # key -> (response, timestamp)
+_CACHE_TTL_SECONDS = 300  # 5 minutes for quick cache
+
+def _get_cache_key(agent_id: int, message: str, context_hash: str = "") -> str:
+    """Generate cache key for response."""
+    import hashlib
+    normalized = message.lower().strip()[:200]  # Normalize and limit length
+    key_input = f"{agent_id}:{normalized}:{context_hash}"
+    return hashlib.sha256(key_input.encode()).hexdigest()[:24]
+
+def _check_cache(cache_key: str) -> Optional[Dict[str, Any]]:
+    """Check if response is cached and still valid."""
+    if cache_key in _response_cache:
+        response, timestamp = _response_cache[cache_key]
+        if (datetime.utcnow() - timestamp).total_seconds() < _CACHE_TTL_SECONDS:
+            logger.debug(f"Cache hit for {cache_key[:12]}...")
+            return response
+        else:
+            del _response_cache[cache_key]
+    return None
+
+def _set_cache(cache_key: str, response: Dict[str, Any]):
+    """Cache a response."""
+    # Limit cache size to prevent memory issues
+    if len(_response_cache) > 1000:
+        # Remove oldest entries
+        oldest_keys = sorted(_response_cache.keys(),
+                            key=lambda k: _response_cache[k][1])[:100]
+        for k in oldest_keys:
+            del _response_cache[k]
+    _response_cache[cache_key] = (response, datetime.utcnow())
+
 async def generate_agent_response(
     agent: AgentProfile,
     message: str,
@@ -597,7 +680,7 @@ async def generate_agent_response(
     db: Session
 ) -> Dict[str, Any]:
     """
-    Generate agent response using OpenAI.
+    Generate agent response using OpenAI with caching.
     Falls back to template responses if OpenAI is unavailable.
     """
     import os
@@ -605,16 +688,25 @@ async def generate_agent_response(
     client, enabled = get_openai_client()
     agent_name = agent.display_name or agent.agent_name
 
+    # Check cache for non-session (quick action) requests
+    cache_key = None
+    if not session:
+        cache_key = _get_cache_key(agent.id, message)
+        cached = _check_cache(cache_key)
+        if cached:
+            cached["from_cache"] = True
+            return cached
+
     if enabled and client:
         try:
             # Build conversation history from session
             messages = [{"role": "system", "content": _build_agent_system_prompt(agent, context)}]
 
-            # Add conversation history if in a session
+            # Add conversation history if in a session (reduced to 6 messages for speed)
             if session:
                 history = db.query(AgentChatMessage).filter(
                     AgentChatMessage.session_id == session.id
-                ).order_by(AgentChatMessage.created_at.desc()).limit(10).all()
+                ).order_by(AgentChatMessage.created_at.desc()).limit(6).all()
 
                 # Add in chronological order
                 for msg in reversed(history):
@@ -635,13 +727,20 @@ async def generate_agent_response(
             content = response.choices[0].message.content.strip()
             tokens_used = response.usage.total_tokens if response.usage else len(content) // 4
 
-            return {
+            result = {
                 "content": content,
                 "tool_calls": None,
                 "tools_used": [],
                 "tokens_used": tokens_used,
-                "model": model
+                "model": model,
+                "from_cache": False
             }
+
+            # Cache non-session responses
+            if cache_key and len(content) > 50:
+                _set_cache(cache_key, result)
+
+            return result
 
         except Exception as e:
             logger.error(f"OpenAI API error for agent {agent_name}: {e}")
@@ -664,74 +763,10 @@ async def generate_agent_response(
         "tool_calls": None,
         "tools_used": [],
         "tokens_used": len(response_content) // 4,
-        "model": "fallback"
+        "model": "fallback",
+        "from_cache": False
     }
 
 
-async def generate_streaming_response(
-    agent: AgentProfile,
-    message: str,
-    session: AgentChatSession,
-    context: Optional[Dict[str, Any]],
-    db: Session = None
-) -> List[str]:
-    """
-    Generate streaming response using OpenAI streaming API.
-    Returns list of strings to be streamed.
-    Falls back to chunked template response if OpenAI unavailable.
-    """
-    import os
-
-    client, enabled = get_openai_client()
-    agent_name = agent.display_name or agent.agent_name
-
-    if enabled and client:
-        try:
-            # Build messages for OpenAI
-            messages = [{"role": "system", "content": _build_agent_system_prompt(agent, context)}]
-
-            # Add conversation history if available
-            if session and db:
-                history = db.query(AgentChatMessage).filter(
-                    AgentChatMessage.session_id == session.id
-                ).order_by(AgentChatMessage.created_at.desc()).limit(10).all()
-
-                for msg in reversed(history):
-                    messages.append({"role": msg.role, "content": msg.content})
-
-            messages.append({"role": "user", "content": message})
-
-            # Use OpenAI streaming
-            model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-            stream = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=1000,
-                temperature=0.7,
-                stream=True
-            )
-
-            # Collect chunks from stream
-            chunks = []
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    chunks.append(chunk.choices[0].delta.content)
-
-            return chunks
-
-        except Exception as e:
-            logger.error(f"OpenAI streaming error for agent {agent_name}: {e}")
-            # Fall through to fallback
-
-    # Fallback: Generate template response and chunk it
-    full_response = f"I'm {agent_name}. "
-    full_response += f"Based on your message about '{message[:50]}...', "
-    full_response += "here's my analysis:\n\n"
-    full_response += "1. I've reviewed the relevant data\n"
-    full_response += "2. Key findings are being processed\n"
-    full_response += "3. Recommendations will follow\n\n"
-    full_response += "Would you like me to elaborate on any specific point?"
-
-    # Break into chunks for streaming effect
-    chunk_size = 20
-    return [full_response[i:i + chunk_size] for i in range(0, len(full_response), chunk_size)]
+# NOTE: generate_streaming_response was removed - streaming is now done directly
+# in send_message_stream() for true real-time streaming without buffering
