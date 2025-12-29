@@ -197,11 +197,17 @@ async def get_loan_income_sources(
     type_mapping = {
         IncomeType.W2_EMPLOYMENT: "W2_SALARY",
         IncomeType.COMMISSION: "COMMISSION",
+        IncomeType.OVERTIME: "OT_BONUS",
+        IncomeType.BONUS: "OT_BONUS",
         IncomeType.SOCIAL_SECURITY: "NONTAX_SS",
-        IncomeType.PENSION: "NONTAX_OTHER",
+        IncomeType.RETIREMENT_PENSION: "NONTAX_OTHER",
+        IncomeType.ALIMONY_CHILD_SUPPORT: "NONTAX_OTHER",
         IncomeType.BANK_STATEMENT: "BANK_PERSONAL",
-        IncomeType.RENTAL: "RENTAL_SCHEDULE_E",
+        IncomeType.RENTAL_SCHEDULE_E: "RENTAL_SCHEDULE_E",
         IncomeType.SELF_EMPLOYED_SCHEDULE_C: "SELF_EMPLOYMENT_1084",
+        IncomeType.SELF_EMPLOYED_S_CORP: "SELF_EMPLOYMENT_1084",
+        IncomeType.SELF_EMPLOYED_PARTNERSHIP: "SELF_EMPLOYMENT_1084",
+        IncomeType.CONTRACTOR_1099: "COMMISSION",
     }
 
     formatted_sources = []
