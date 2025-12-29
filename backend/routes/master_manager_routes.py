@@ -1351,7 +1351,8 @@ async def assign_role_to_user(
     try:
         # Get role details
         role_query = text("""
-            SELECT id, role_name, role_category, capacity_defaults
+            SELECT id, role_name, role_category,
+                   default_max_files, default_max_leads, default_max_tasks_daily
             FROM mm_role_definitions
             WHERE id = :role_id
         """)
@@ -1361,10 +1362,9 @@ async def assign_role_to_user(
             raise HTTPException(status_code=404, detail=f"Role {role_id} not found")
 
         # Get capacity defaults from role
-        defaults = role.capacity_defaults or {}
-        max_files = defaults.get("max_files", 25)
-        max_leads = defaults.get("max_leads", 50)
-        max_tasks = defaults.get("max_tasks", 30)
+        max_files = role.default_max_files or 25
+        max_leads = role.default_max_leads or 50
+        max_tasks = role.default_max_tasks_daily or 30
 
         # Update capacity record with role
         update_query = text("""
