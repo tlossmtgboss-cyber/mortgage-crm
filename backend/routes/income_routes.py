@@ -179,6 +179,56 @@ async def create_income_source(
     return _format_income_source(source)
 
 
+@router.get("/loans/{loan_id}/sources")
+async def get_loan_income_sources(
+    loan_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get all income sources for a loan.
+    Returns sources with their current data for populating the income calculator.
+    """
+    sources = db.query(IncomeSource).filter(
+        IncomeSource.loan_id == loan_id,
+        IncomeSource.is_active == True
+    ).order_by(IncomeSource.is_primary.desc(), IncomeSource.created_at).all()
+
+    # Map IncomeType enum to frontend income type IDs
+    type_mapping = {
+        IncomeType.W2_EMPLOYMENT: "W2_SALARY",
+        IncomeType.COMMISSION: "COMMISSION",
+        IncomeType.SOCIAL_SECURITY: "NONTAX_SS",
+        IncomeType.PENSION: "NONTAX_OTHER",
+        IncomeType.BANK_STATEMENT: "BANK_PERSONAL",
+        IncomeType.RENTAL: "RENTAL_SCHEDULE_E",
+        IncomeType.SELF_EMPLOYED_SCHEDULE_C: "SELF_EMPLOYMENT_1084",
+    }
+
+    formatted_sources = []
+    for source in sources:
+        frontend_type = type_mapping.get(source.income_type, source.income_type.value if source.income_type else None)
+        formatted_sources.append({
+            "id": source.id,
+            "income_type": frontend_type,
+            "income_type_raw": source.income_type.value if source.income_type else None,
+            "source_name": source.source_name,
+            "monthly_qualifying_income": float(source.monthly_qualifying_income) if source.monthly_qualifying_income else None,
+            "annual_qualifying_income": float(source.annual_qualifying_income) if source.annual_qualifying_income else None,
+            "is_verified": source.is_verified,
+            "verification_status": source.verification_status.value if source.verification_status else None,
+            "is_primary": source.is_primary,
+            "notes": source.notes,
+            "created_at": source.created_at.isoformat() if source.created_at else None,
+            "updated_at": source.updated_at.isoformat() if source.updated_at else None,
+        })
+
+    return {
+        "loan_id": loan_id,
+        "count": len(formatted_sources),
+        "sources": formatted_sources,
+    }
+
+
 @router.get("/sources/{source_id}")
 async def get_income_source(
     source_id: int,

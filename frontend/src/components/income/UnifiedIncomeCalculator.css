@@ -755,3 +755,584 @@
     break-inside: avoid;
   }
 }
+
+/* ==========================================
+   Existing Income Sources from Application
+   ========================================== */
+
+.uic-existing-sources {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.existing-sources-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.existing-sources-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.sources-count {
+  background: #10b981;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.loading-sources {
+  padding: 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.existing-sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.existing-source-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 2px solid #d1fae5;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.existing-source-card:hover {
+  border-color: #10b981;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  transform: translateY(-1px);
+}
+
+.existing-source-card.active {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.source-icon {
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ecfdf5;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.source-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-type {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.source-employer {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.source-amount {
+  font-size: 13px;
+  font-weight: 600;
+  color: #059669;
+}
+
+.source-status {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.source-status.status-verified {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.source-status.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.source-status.status-review {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.existing-sources-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #059669;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ==========================================
+   UIC Tabs & Form Components
+   ========================================== */
+
+.uic-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.uic-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+}
+
+.uic-tab:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.uic-tab.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.uic-tab .tab-icon {
+  font-size: 16px;
+}
+
+.uic-tab .tab-label {
+  font-weight: 500;
+}
+
+.uic-form-container {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.uic-form-section {
+  margin-bottom: 24px;
+}
+
+.uic-form-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.uic-form-section .form-description {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.uic-form-section .form-note {
+  margin: 12px 0 0 0;
+  font-size: 13px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.uic-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.uic-form-grid .form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.uic-form-grid .form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.uic-form-grid .form-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.uic-form-grid .form-field input,
+.uic-form-grid .form-field select,
+.uic-form-grid .form-field textarea {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1f2937;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.uic-form-grid .form-field input:focus,
+.uic-form-grid .form-field select:focus,
+.uic-form-grid .form-field textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.uic-form-grid .checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.uic-form-grid .checkbox-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+}
+
+.uic-form-grid .checkbox-field label {
+  margin-bottom: 0;
+}
+
+.uic-form-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0 16px 0;
+}
+
+.uic-form-divider::before,
+.uic-form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.uic-form-divider span {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.uic-actions {
+  margin-top: 24px;
+}
+
+.uic-calculate-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.uic-calculate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.uic-calculate-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.uic-error {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.uic-results {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f0fdf4;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+}
+
+.uic-results .results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.uic-results .results-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.uic-results .results-income {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.uic-results .income-box {
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.uic-results .income-box label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #065f46;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.uic-results .income-box .amount {
+  font-size: 24px;
+  font-weight: 700;
+  color: #059669;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+}
+
+.uic-results .results-method {
+  text-align: center;
+  font-size: 13px;
+  color: #059669;
+  margin-bottom: 16px;
+}
+
+.uic-results .results-warnings {
+  margin-bottom: 16px;
+}
+
+.uic-results .results-warnings .warning-item {
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.uic-results .results-steps {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #a7f3d0;
+}
+
+.uic-results .results-steps h5 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #065f46;
+}
+
+.uic-results .step-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.uic-results .step-item .step-num {
+  color: #059669;
+  font-weight: 600;
+  min-width: 20px;
+}
+
+.uic-results .step-item .step-desc {
+  flex: 1;
+  color: #374151;
+}
+
+.uic-results .step-item .step-result {
+  font-weight: 600;
+  color: #059669;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+}
+
+.uic-results .auto-approve-banner {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #dbeafe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.confidence-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.confidence-badge.confidence-auto-approve {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.confidence-badge.confidence-high {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.confidence-badge.confidence-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.confidence-badge.confidence-low {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.confidence-badge.confidence-manual {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Review Queue */
+.uic-review-queue {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.uic-review-queue h5 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.uic-review-queue .queue-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uic-review-queue .queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.uic-review-queue .queue-item .item-type {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.uic-review-queue .queue-item .item-amount {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  color: #059669;
+  font-weight: 500;
+}
+
+.uic-review-queue .queue-item .item-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.uic-review-queue .queue-item.status-pending .item-status {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.uic-review-queue .queue-item.status-approved .item-status {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.uic-review-queue .queue-item.status-rejected .item-status {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@media (max-width: 768px) {
+  .existing-sources-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .uic-tabs {
+    gap: 6px;
+  }
+
+  .uic-tab {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .uic-tab .tab-icon {
+    font-size: 14px;
+  }
+
+  .uic-results .results-income {
+    grid-template-columns: 1fr;
+  }
+}

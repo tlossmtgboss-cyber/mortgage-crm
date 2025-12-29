@@ -93,6 +93,8 @@ export default function UnifiedIncomeCalculator({ loanId, borrowerId, borrowerNa
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [reviewQueue, setReviewQueue] = useState([]);
+  const [existingSources, setExistingSources] = useState([]);
+  const [loadingSources, setLoadingSources] = useState(false);
 
   // Form state for each income type
   const [formData, setFormData] = useState({
@@ -175,6 +177,26 @@ export default function UnifiedIncomeCalculator({ loanId, borrowerId, borrowerNa
 
   const token = localStorage.getItem('token');
 
+  // Fetch existing income sources from application
+  const fetchExistingSources = useCallback(async () => {
+    if (!loanId) return;
+    setLoadingSources(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/income/loans/${loanId}/sources`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setExistingSources(data.sources || []);
+      }
+    } catch (err) {
+      console.error('Error fetching existing income sources:', err);
+    } finally {
+      setLoadingSources(false);
+    }
+  }, [loanId, token]);
+
   // Fetch review queue
   const fetchReviewQueue = useCallback(async () => {
     if (!loanId) return;
@@ -193,8 +215,9 @@ export default function UnifiedIncomeCalculator({ loanId, borrowerId, borrowerNa
   }, [loanId, token]);
 
   useEffect(() => {
+    fetchExistingSources();
     fetchReviewQueue();
-  }, [fetchReviewQueue]);
+  }, [fetchExistingSources, fetchReviewQueue]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -377,6 +400,88 @@ export default function UnifiedIncomeCalculator({ loanId, borrowerId, borrowerNa
     if (score >= 80) return 'confidence-medium';
     if (score >= 60) return 'confidence-low';
     return 'confidence-manual';
+  };
+
+  // Handle selecting an existing income source to pre-fill the form
+  const handleSelectExistingSource = (source) => {
+    // Switch to the correct income type tab (use income_type from backend)
+    const incomeTypeId = source.income_type || source.income_type_id;
+    setActiveType(incomeTypeId);
+    setResult(null);
+    setError(null);
+
+    // Pre-fill form data based on income type
+    const updates = {};
+    const monthlyIncome = source.monthly_qualifying_income || source.monthly_income;
+    const sourceName = source.source_name || source.employer_name;
+
+    switch (incomeTypeId) {
+      case 'W2_SALARY':
+        if (monthlyIncome) {
+          updates.baseSalary = (monthlyIncome).toFixed(2);
+          updates.salaryPayFrequency = 'MONTHLY';
+        }
+        break;
+      case 'W2_HOURLY':
+        if (monthlyIncome) {
+          // Estimate hourly rate from monthly (assume 40 hrs/week biweekly)
+          updates.hourlyRate = (monthlyIncome / 173.33).toFixed(2);
+          updates.hoursPerPeriod = '40';
+          updates.payFrequency = 'BI_WEEKLY';
+        }
+        break;
+      case 'NONTAX_SS':
+        if (monthlyIncome) {
+          updates.annualSSBenefit = (monthlyIncome * 12).toFixed(2);
+          updates.hasSSDocumentation = false;
+        }
+        break;
+      case 'NONTAX_OTHER':
+        if (monthlyIncome) {
+          updates.otherAnnualAmount = (monthlyIncome * 12).toFixed(2);
+          updates.otherIncomeType = 'pension';
+        }
+        break;
+      case 'SELF_EMPLOYMENT_1084':
+        if (monthlyIncome) {
+          updates.schCNetProfit = (monthlyIncome * 12).toFixed(2);
+          updates.businessType = 'sole_prop';
+          updates.seOwnershipPct = '100';
+        }
+        if (sourceName) {
+          updates.businessName = sourceName;
+        }
+        break;
+      case 'RENTAL_SCHEDULE_E':
+        if (monthlyIncome) {
+          updates.grossRentsLine3 = (monthlyIncome * 12).toFixed(2);
+        }
+        break;
+      default:
+        break;
+    }
+
+    setFormData(prev => ({ ...prev, ...updates }));
+  };
+
+  // Get status badge class
+  const getStatusBadgeClass = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'verified': return 'status-verified';
+      case 'pending_verification': return 'status-pending';
+      case 'needs_review': return 'status-review';
+      default: return 'status-pending';
+    }
+  };
+
+  // Get status display text
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'verified': return 'Verified';
+      case 'pending_verification': return 'Pending';
+      case 'needs_review': return 'Needs Review';
+      default: return 'Pending';
+    }
   };
 
   const renderW2HourlyForm = () => (
@@ -1088,6 +1193,54 @@ export default function UnifiedIncomeCalculator({ loanId, borrowerId, borrowerNa
 
   return (
     <div className="unified-income-calculator">
+      {/* Existing Income Sources from Application */}
+      {(existingSources.length > 0 || loadingSources) && (
+        <div className="uic-existing-sources">
+          <div className="existing-sources-header">
+            <h4>Income Sources from Application</h4>
+            <span className="sources-count">{existingSources.length} source{existingSources.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          {loadingSources ? (
+            <div className="loading-sources">Loading income sources...</div>
+          ) : (
+            <div className="existing-sources-grid">
+              {existingSources.map((source, idx) => {
+                const incomeTypeId = source.income_type || source.income_type_id;
+                const incomeType = INCOME_TYPES.find(t => t.id === incomeTypeId);
+                const monthlyIncome = source.monthly_qualifying_income || source.monthly_income;
+                const sourceName = source.source_name || source.employer_name;
+                return (
+                  <div
+                    key={source.id || idx}
+                    className={`existing-source-card ${activeType === incomeTypeId ? 'active' : ''}`}
+                    onClick={() => handleSelectExistingSource(source)}
+                  >
+                    <div className="source-icon">{incomeType?.icon || '💵'}</div>
+                    <div className="source-info">
+                      <div className="source-type">{incomeType?.label || incomeTypeId}</div>
+                      {sourceName && (
+                        <div className="source-employer">{sourceName}</div>
+                      )}
+                      <div className="source-amount">
+                        {monthlyIncome ? formatCurrency(monthlyIncome) + '/mo' : 'Needs calculation'}
+                      </div>
+                    </div>
+                    <div className={`source-status ${getStatusBadgeClass(source.verification_status)}`}>
+                      {getStatusText(source.verification_status)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="existing-sources-hint">
+            Click on a source to pre-fill the calculator and verify the income
+          </div>
+        </div>
+      )}
+
       {/* Income Type Tabs */}
       <div className="uic-tabs">
         {INCOME_TYPES.map(type => (

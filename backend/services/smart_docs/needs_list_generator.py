@@ -68,6 +68,7 @@ class NeedsListGenerator:
         is_self_employed: bool = False,
         has_bankruptcy: bool = False,
         property_type: Optional[str] = None,
+        income_types: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Generate a complete needs list for a loan application.
@@ -76,18 +77,19 @@ class NeedsListGenerator:
             loan_id: The loan ID to generate needs list for
             loan_program: CONVENTIONAL, FHA, VA, USDA
             occupancy_type: PRIMARY, SECOND_HOME, INVESTMENT
-            income_type: W2, SELF_EMPLOYED, RETIREMENT
+            income_type: W2, SELF_EMPLOYED, RETIREMENT (legacy broad type)
             borrower_id: Primary borrower ID
             co_borrower_id: Optional co-borrower ID
             has_gift_funds: Whether gift funds are being used
             is_self_employed: Whether borrower is self-employed
             has_bankruptcy: Whether borrower has bankruptcy history
             property_type: Type of property (for condo requirements, etc.)
+            income_types: List of specific income types (e.g., ['W2_SALARY', 'RENTAL_SCHEDULE_E'])
 
         Returns:
             Dict with generated needs list details
         """
-        logger.info(f"Generating needs list for loan {loan_id}")
+        logger.info(f"Generating needs list for loan {loan_id}, income_types={income_types}")
 
         # Find matching template
         template = self._find_matching_template(
@@ -135,6 +137,15 @@ class NeedsListGenerator:
                     priority=RequestPriority.HIGH,
                 )
             )
+
+        # Add income-type-specific document requests
+        if income_types:
+            income_requests = self._generate_income_type_specific_requests(
+                loan_id=loan_id,
+                borrower_id=borrower_id,
+                income_types=income_types
+            )
+            requests.extend(income_requests)
 
         # Bulk insert all requests
         self.db.add_all(requests)
@@ -335,6 +346,92 @@ class NeedsListGenerator:
             )
         )
 
+        return requests
+
+    def _generate_income_type_specific_requests(
+        self,
+        loan_id: int,
+        borrower_id: int,
+        income_types: List[str]
+    ) -> List[DocumentRequest]:
+        """
+        Generate document requests specific to the selected income types.
+        This ensures we request exactly the documents needed for each income type
+        the borrower selected during application.
+        """
+        requests = []
+        seen_doc_types = set()  # Avoid duplicates
+
+        # Income type to document requirements mapping
+        # Uses existing DocType values - SSA_LETTER, PENSION_STATEMENT, BUSINESS_LICENSE use OTHER
+        income_doc_requirements = {
+            "W2_HOURLY": [
+                {"doc_type": DocType.PAYSTUB, "title": "Recent Pay Stubs", "description": "Most recent 30 days of pay stubs showing hourly rate and hours worked", "count": 2, "freshness": 30, "auto_renew": True},
+                {"doc_type": DocType.W2, "title": "W-2 Forms", "description": "W-2s for the past 2 years", "count": 2},
+            ],
+            "W2_SALARY": [
+                {"doc_type": DocType.PAYSTUB, "title": "Recent Pay Stubs", "description": "Most recent 30 days of pay stubs", "count": 2, "freshness": 30, "auto_renew": True},
+                {"doc_type": DocType.W2, "title": "W-2 Forms", "description": "W-2s for the past 2 years", "count": 2},
+            ],
+            "OT_BONUS": [
+                {"doc_type": DocType.PAYSTUB, "title": "YTD Pay Stubs", "description": "Pay stubs showing year-to-date overtime/bonus", "count": 2, "freshness": 30, "auto_renew": True},
+                {"doc_type": DocType.W2, "title": "W-2 Forms", "description": "W-2s showing overtime/bonus for past 2 years", "count": 2},
+            ],
+            "COMMISSION": [
+                {"doc_type": DocType.PAYSTUB, "title": "Commission Pay Stubs", "description": "Pay stubs showing commission earnings YTD", "count": 2, "freshness": 30, "auto_renew": True},
+                {"doc_type": DocType.W2, "title": "W-2 Forms", "description": "W-2s for the past 2 years", "count": 2},
+                {"doc_type": DocType.TAX_RETURN, "title": "Tax Returns with Form 2106", "description": "Tax returns with unreimbursed employee expenses if applicable", "count": 2},
+            ],
+            "NONTAX_SS": [
+                {"doc_type": DocType.OTHER, "title": "Social Security Award Letter", "description": "SSA-1099 or benefit verification letter showing monthly benefit amount", "count": 1},
+            ],
+            "NONTAX_OTHER": [
+                {"doc_type": DocType.OTHER, "title": "Pension/Retirement Statement", "description": "Proof of pension, IRA, or retirement income", "count": 1},
+                {"doc_type": DocType.BANK_STATEMENT, "title": "Bank Statements", "description": "Bank statements showing deposits", "count": 2, "freshness": 90},
+            ],
+            "BANK_PERSONAL": [
+                {"doc_type": DocType.BANK_STATEMENT, "title": "Personal Bank Statements (12-24 months)", "description": "Complete personal bank statements for income qualification", "count": 12, "freshness": 90, "auto_renew": True},
+            ],
+            "BANK_BUSINESS": [
+                {"doc_type": DocType.BANK_STATEMENT, "title": "Business Bank Statements (12-24 months)", "description": "Complete business bank statements for income qualification", "count": 12, "freshness": 90, "auto_renew": True},
+                {"doc_type": DocType.OTHER, "title": "Business License", "description": "Current business license or registration", "count": 1},
+            ],
+            "RENTAL_SCHEDULE_E": [
+                {"doc_type": DocType.TAX_RETURN, "title": "Tax Returns with Schedule E", "description": "Tax returns with Schedule E showing rental income/loss", "count": 2},
+                {"doc_type": DocType.LEASE_AGREEMENT, "title": "Lease Agreements", "description": "Current signed lease agreements for rental properties", "count": 1},
+            ],
+            "SELF_EMPLOYMENT_1084": [
+                {"doc_type": DocType.TAX_RETURN, "title": "Personal Tax Returns", "description": "Complete personal tax returns for past 2 years", "count": 2},
+                {"doc_type": DocType.BUSINESS_TAX_RETURN, "title": "Business Tax Returns", "description": "Business tax returns (Schedule C, K-1, 1120/1120S) for past 2 years", "count": 2},
+                {"doc_type": DocType.PROFIT_LOSS, "title": "Year-to-Date P&L", "description": "Current year profit and loss statement signed by borrower", "count": 1, "freshness": 90, "auto_renew": True},
+                {"doc_type": DocType.OTHER, "title": "Business License", "description": "Current business license or registration", "count": 1},
+            ],
+        }
+
+        for income_type in income_types:
+            requirements = income_doc_requirements.get(income_type, [])
+
+            for req in requirements:
+                doc_type = req["doc_type"]
+                # Skip if we've already added this doc type
+                if doc_type in seen_doc_types:
+                    continue
+                seen_doc_types.add(doc_type)
+
+                request = self._create_request(
+                    loan_id=loan_id,
+                    borrower_id=borrower_id,
+                    doc_type=doc_type,
+                    title=req["title"],
+                    description=req["description"],
+                    required_count=req.get("count", 1),
+                    priority=RequestPriority.HIGH,
+                    freshness_days=req.get("freshness"),
+                    auto_renew=req.get("auto_renew", False),
+                )
+                requests.append(request)
+
+        logger.info(f"Generated {len(requests)} income-type-specific document requests for loan {loan_id}")
         return requests
 
     def _generate_co_borrower_requirements(

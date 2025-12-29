@@ -15,6 +15,32 @@ import './PURLApplication.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+// Income types matching the unified income calculator
+const INCOME_TYPE_OPTIONS = {
+  employed: [
+    { id: 'W2_HOURLY', label: 'W-2 Hourly', icon: '⏰', description: 'Paid hourly with regular hours' },
+    { id: 'W2_SALARY', label: 'W-2 Salary', icon: '💼', description: 'Fixed salary compensation' },
+    { id: 'OT_BONUS', label: 'Overtime & Bonus', icon: '💰', description: 'Regular overtime or bonus income' },
+    { id: 'COMMISSION', label: 'Commission', icon: '📊', description: 'Sales commission income' },
+  ],
+  self_employed: [
+    { id: 'SELF_EMPLOYMENT_1084', label: 'Self-Employment (1084)', icon: '📑', description: 'Schedule C, K-1, or corporate income' },
+    { id: 'BANK_BUSINESS', label: 'Bank Statement Business', icon: '🏢', description: '12-24 months business deposits' },
+    { id: 'BANK_PERSONAL', label: 'Bank Statement Personal', icon: '🏦', description: '12-24 months personal deposits' },
+  ],
+  retired: [
+    { id: 'NONTAX_SS', label: 'Social Security', icon: '🏛️', description: 'SSA benefits (25% gross-up available)' },
+    { id: 'NONTAX_OTHER', label: 'Pension/Retirement', icon: '📋', description: 'Pension, IRA, 401k distributions' },
+  ],
+  not_employed: [
+    { id: 'NONTAX_SS', label: 'Social Security/Disability', icon: '🏛️', description: 'SSA or SSDI benefits' },
+    { id: 'NONTAX_OTHER', label: 'Other Income', icon: '📋', description: 'Alimony, child support, trust income' },
+  ],
+  additional: [
+    { id: 'RENTAL_SCHEDULE_E', label: 'Rental Income', icon: '🏠', description: 'Schedule E rental properties' },
+  ]
+};
+
 // Form steps configuration
 const FORM_STEPS = [
   {
@@ -25,7 +51,8 @@ const FORM_STEPS = [
   {
     id: 'employment',
     title: 'Employment & Income',
-    fields: ['employment_status', 'employer_name', 'job_title', 'years_employed', 'annual_income']
+    fields: ['employment_status', 'income_types', 'employer_name', 'job_title', 'years_employed', 'annual_income'],
+    hasIncomeTypeSelector: true
   },
   {
     id: 'loan',
@@ -151,6 +178,84 @@ const CurrencyInput = ({ value, onChange, placeholder, ...props }) => {
         placeholder={placeholder}
         {...props}
       />
+    </div>
+  );
+};
+
+// Income Type Selector component
+const IncomeTypeSelector = ({ employmentStatus, selectedTypes, onChange }) => {
+  // Get income types based on employment status
+  const primaryOptions = INCOME_TYPE_OPTIONS[employmentStatus] || [];
+  const additionalOptions = INCOME_TYPE_OPTIONS.additional || [];
+
+  const handleToggle = (typeId) => {
+    const current = selectedTypes || [];
+    if (current.includes(typeId)) {
+      onChange(current.filter(t => t !== typeId));
+    } else {
+      onChange([...current, typeId]);
+    }
+  };
+
+  if (!employmentStatus) {
+    return (
+      <div className="income-type-selector">
+        <label>Income Types</label>
+        <p className="selector-hint">Please select your employment status first</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="income-type-selector">
+      <label>Select Your Income Types <span className="required">*</span></label>
+      <p className="selector-hint">Choose all that apply - this helps us request the right documents</p>
+
+      <div className="income-type-section">
+        <h4>Primary Income</h4>
+        <div className="income-type-grid">
+          {primaryOptions.map(type => (
+            <div
+              key={type.id}
+              className={`income-type-card ${(selectedTypes || []).includes(type.id) ? 'selected' : ''}`}
+              onClick={() => handleToggle(type.id)}
+            >
+              <div className="type-icon">{type.icon}</div>
+              <div className="type-info">
+                <div className="type-label">{type.label}</div>
+                <div className="type-description">{type.description}</div>
+              </div>
+              <div className="type-checkbox">
+                {(selectedTypes || []).includes(type.id) ? '✓' : '○'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {additionalOptions.length > 0 && (
+        <div className="income-type-section">
+          <h4>Additional Income (Optional)</h4>
+          <div className="income-type-grid">
+            {additionalOptions.map(type => (
+              <div
+                key={type.id}
+                className={`income-type-card ${(selectedTypes || []).includes(type.id) ? 'selected' : ''}`}
+                onClick={() => handleToggle(type.id)}
+              >
+                <div className="type-icon">{type.icon}</div>
+                <div className="type-info">
+                  <div className="type-label">{type.label}</div>
+                  <div className="type-description">{type.description}</div>
+                </div>
+                <div className="type-checkbox">
+                  {(selectedTypes || []).includes(type.id) ? '✓' : '○'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -649,15 +754,28 @@ export default function PURLApplication() {
           ) : !isLastStep ? (
             /* Regular form fields */
             <div className="form-fields">
-              {currentStepConfig.fields.map(field => (
-                <FormField
-                  key={field}
-                  name={field}
-                  value={formData[field]}
-                  onChange={handleFieldChange}
-                  error={errors[field]}
-                />
-              ))}
+              {currentStepConfig.fields.map(field => {
+                // Special handling for income_types field
+                if (field === 'income_types') {
+                  return (
+                    <IncomeTypeSelector
+                      key={field}
+                      employmentStatus={formData.employment_status}
+                      selectedTypes={formData.income_types}
+                      onChange={(types) => handleFieldChange('income_types', types)}
+                    />
+                  );
+                }
+                return (
+                  <FormField
+                    key={field}
+                    name={field}
+                    value={formData[field]}
+                    onChange={handleFieldChange}
+                    error={errors[field]}
+                  />
+                );
+              })}
             </div>
           ) : (
             /* Review step */

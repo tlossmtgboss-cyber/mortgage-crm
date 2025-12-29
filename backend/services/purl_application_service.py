@@ -673,10 +673,15 @@ class PURLApplicationService:
 
             income_type = self._map_income_type(employment_status)
 
+            # Get selected income types from application (new explicit selection)
+            selected_income_types = self._get_income_types_from_application(data)
+            logger.info(f"Selected income types for loan {loan_id}: {selected_income_types}")
+
             # Determine flags from application data
             is_self_employed = (
                 employment_status in ["self_employed", "self-employed", "business_owner"] or
-                self_employed_value in ["yes", "side_business"]
+                self_employed_value in ["yes", "side_business"] or
+                any(t in selected_income_types for t in ["SELF_EMPLOYMENT_1084", "BANK_BUSINESS", "BANK_PERSONAL"])
             )
             has_gift_funds = (
                 data.get("has_gift_funds", False) or
@@ -699,6 +704,14 @@ class PURLApplicationService:
             if has_coborrower:
                 co_borrower_id = 2  # Placeholder - in real system, create/lookup co-borrower
 
+            # Create income source records for each selected income type
+            self._create_income_sources_from_types(
+                loan_id=loan_id,
+                borrower_id=borrower_id,
+                income_types=selected_income_types,
+                application_data=data
+            )
+
             # Generate the needs list
             generator = NeedsListGenerator(self.db)
             result = generator.generate_needs_list(
@@ -712,6 +725,7 @@ class PURLApplicationService:
                 is_self_employed=is_self_employed,
                 has_bankruptcy=has_bankruptcy,
                 property_type=data.get("property_type"),
+                income_types=selected_income_types,  # Pass selected income types
             )
 
             logger.info(
@@ -765,3 +779,108 @@ class PURLApplicationService:
             return "RETIREMENT"
         else:
             return "W2"
+
+    def _get_income_types_from_application(self, data: Dict[str, Any]) -> List[str]:
+        """
+        Get selected income types from application data.
+        Returns the explicit income_types array if present,
+        otherwise maps from employment_status.
+        """
+        # Check for explicitly selected income types
+        income_types = data.get("income_types")
+        if income_types and isinstance(income_types, list) and len(income_types) > 0:
+            return income_types
+
+        # Fall back to mapping from employment status
+        employment_status = data.get("employment_status", "").lower()
+        base_type = self._map_income_type(employment_status)
+
+        # Map broad type to specific income types
+        if base_type == "SELF_EMPLOYED":
+            return ["SELF_EMPLOYMENT_1084"]
+        elif base_type == "RETIREMENT":
+            return ["NONTAX_SS"]
+        else:
+            return ["W2_SALARY"]  # Default W2 type
+
+    def _create_income_sources_from_types(
+        self,
+        loan_id: int,
+        borrower_id: int,
+        income_types: List[str],
+        application_data: Dict[str, Any]
+    ):
+        """
+        Create IncomeSource records for each selected income type.
+        These will be populated with actual data when documents are uploaded and extracted.
+        """
+        try:
+            from models.income_models import IncomeSource, IncomeType
+
+            # Map income type IDs to IncomeType enum values
+            type_mapping = {
+                "W2_HOURLY": IncomeType.W2_EMPLOYMENT,
+                "W2_SALARY": IncomeType.W2_EMPLOYMENT,
+                "OT_BONUS": IncomeType.W2_EMPLOYMENT,
+                "COMMISSION": IncomeType.COMMISSION,
+                "NONTAX_SS": IncomeType.SOCIAL_SECURITY,
+                "NONTAX_OTHER": IncomeType.PENSION,
+                "BANK_PERSONAL": IncomeType.BANK_STATEMENT,
+                "BANK_BUSINESS": IncomeType.BANK_STATEMENT,
+                "RENTAL_SCHEDULE_E": IncomeType.RENTAL,
+                "SELF_EMPLOYMENT_1084": IncomeType.SELF_EMPLOYED_SCHEDULE_C,
+            }
+
+            for income_type_id in income_types:
+                income_type = type_mapping.get(income_type_id)
+                if not income_type:
+                    logger.warning(f"Unknown income type: {income_type_id}, skipping")
+                    continue
+
+                # Check if income source already exists for this loan/borrower/type
+                existing = self.db.query(IncomeSource).filter(
+                    IncomeSource.loan_id == loan_id,
+                    IncomeSource.borrower_id == borrower_id,
+                    IncomeSource.income_type == income_type
+                ).first()
+
+                if existing:
+                    logger.info(f"Income source already exists for {income_type_id}, skipping")
+                    continue
+
+                # Create new income source record
+                source_name = self._get_income_source_name(income_type_id, application_data)
+                income_source = IncomeSource(
+                    loan_id=loan_id,
+                    borrower_id=borrower_id,
+                    income_type=income_type,
+                    source_name=source_name,
+                    is_verified=False,
+                    verification_status="pending",
+                    monthly_qualifying_income=None,  # Will be populated when docs extracted
+                    notes=f"Created from application income type selection: {income_type_id}"
+                )
+                self.db.add(income_source)
+                logger.info(f"Created income source for {income_type_id} on loan {loan_id}")
+
+            self.db.commit()
+
+        except Exception as e:
+            logger.error(f"Failed to create income sources: {e}")
+            self.db.rollback()
+
+    def _get_income_source_name(self, income_type_id: str, data: Dict[str, Any]) -> str:
+        """Get a descriptive name for the income source based on type and application data."""
+        name_map = {
+            "W2_HOURLY": data.get("employer_name") or "W-2 Hourly Income",
+            "W2_SALARY": data.get("employer_name") or "W-2 Salary Income",
+            "OT_BONUS": data.get("employer_name") or "Overtime & Bonus",
+            "COMMISSION": data.get("employer_name") or "Commission Income",
+            "NONTAX_SS": "Social Security Benefits",
+            "NONTAX_OTHER": "Other Non-Taxable Income",
+            "BANK_PERSONAL": "Personal Bank Statement Income",
+            "BANK_BUSINESS": data.get("employer_name") or "Business Bank Statement Income",
+            "RENTAL_SCHEDULE_E": "Rental Property Income",
+            "SELF_EMPLOYMENT_1084": data.get("employer_name") or "Self-Employment Income",
+        }
+        return name_map.get(income_type_id, income_type_id)
