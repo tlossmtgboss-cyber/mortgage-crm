@@ -3,6 +3,8 @@
  *
  * Handles all API interactions for the AI Avatar system.
  * Supports avatar profile management, training, and video generation.
+ *
+ * Updated: 2025-12-29 - Added test endpoint fallbacks
  */
 
 import axios from 'axios';
