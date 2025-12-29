@@ -1569,3 +1569,229 @@ async def run_income_migration(
             "error": str(e),
             "error_type": type(e).__name__,
         }
+
+
+# =============================================================================
+# SUPPORTED TYPES & LOAN SUMMARY ENDPOINTS
+# =============================================================================
+
+# Income type definitions with metadata
+INCOME_TYPE_DEFINITIONS = {
+    "W2_EMPLOYMENT": {
+        "key": "W2_EMPLOYMENT",
+        "label": "W-2 Employment",
+        "description": "Salary and wage income from W-2 employment",
+        "icon": "W-2",
+        "color": "#3b82f6",
+        "requires_documents": ["paystubs", "w2"],
+        "employment_types": ["employed", "full_time", "part_time"],
+    },
+    "SELF_EMPLOYED_SCHEDULE_C": {
+        "key": "SELF_EMPLOYED_SCHEDULE_C",
+        "label": "Self-Employment (Schedule C)",
+        "description": "Self-employment income from Schedule C",
+        "icon": "SCH C",
+        "color": "#8b5cf6",
+        "requires_documents": ["tax_returns", "schedule_c"],
+        "employment_types": ["self_employed"],
+    },
+    "RENTAL_SCHEDULE_E": {
+        "key": "RENTAL_SCHEDULE_E",
+        "label": "Rental Income",
+        "description": "Rental income from Schedule E",
+        "icon": "RENTAL",
+        "color": "#10b981",
+        "requires_documents": ["tax_returns", "schedule_e", "lease_agreements"],
+        "employment_types": ["employed", "self_employed", "retired"],  # Anyone can have rental
+    },
+    "PARTNERSHIP_SCORP": {
+        "key": "PARTNERSHIP_SCORP",
+        "label": "K-1 Partnership/S-Corp",
+        "description": "Income from K-1 partnerships or S-corporations",
+        "icon": "K-1",
+        "color": "#f59e0b",
+        "requires_documents": ["k1_forms", "tax_returns"],
+        "employment_types": ["self_employed"],
+    },
+    "BANK_STATEMENT": {
+        "key": "BANK_STATEMENT",
+        "label": "Bank Statement",
+        "description": "Income calculated from 12-24 months of bank statements",
+        "icon": "BANK",
+        "color": "#ec4899",
+        "requires_documents": ["bank_statements_12_months"],
+        "employment_types": ["self_employed"],  # Typically for self-employed with write-offs
+    },
+    "SOCIAL_SECURITY": {
+        "key": "SOCIAL_SECURITY",
+        "label": "Social Security",
+        "description": "Social Security retirement or disability benefits",
+        "icon": "SS",
+        "color": "#06b6d4",
+        "requires_documents": ["ssa_1099", "award_letter"],
+        "employment_types": ["retired", "disabled"],
+    },
+    "RETIREMENT_PENSION": {
+        "key": "RETIREMENT_PENSION",
+        "label": "Pension/Retirement",
+        "description": "Pension or retirement account distributions",
+        "icon": "PENSION",
+        "color": "#14b8a6",
+        "requires_documents": ["1099_r", "pension_statement"],
+        "employment_types": ["retired"],
+    },
+    "OTHER": {
+        "key": "OTHER",
+        "label": "Other Income",
+        "description": "Other documented income sources",
+        "icon": "OTHER",
+        "color": "#6b7280",
+        "requires_documents": ["supporting_documentation"],
+        "employment_types": ["employed", "self_employed", "retired", "unemployed"],
+    },
+}
+
+
+@router.get("/supported-types")
+async def get_supported_income_types(
+    loan_id: Optional[int] = None,
+    borrower_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Get supported income types, optionally filtered by borrower's employment status.
+
+    If loan_id or borrower_id is provided, returns only income types relevant
+    to that borrower's declared employment type from their application.
+    """
+    from sqlalchemy import text
+
+    # Default to all types
+    employment_status = None
+    is_self_employed = False
+    has_rental = False
+
+    # Try to get employment info from loan/lead data
+    if loan_id:
+        # Check leads table for employment_status
+        result = db.execute(text("""
+            SELECT l.employment_status, l.is_self_employed,
+                   COALESCE(ld.has_rental_income, false) as has_rental
+            FROM leads l
+            LEFT JOIN loan_details ld ON ld.loan_id = :loan_id
+            WHERE l.id = (SELECT lead_id FROM loans WHERE id = :loan_id)
+        """), {"loan_id": loan_id}).fetchone()
+
+        if result:
+            employment_status = result.employment_status
+            is_self_employed = result.is_self_employed or (employment_status == 'self_employed')
+            has_rental = result.has_rental if hasattr(result, 'has_rental') else False
+
+        # Also check existing income sources for this loan
+        existing_sources = db.query(IncomeSource).filter(
+            IncomeSource.loan_id == loan_id,
+            IncomeSource.is_active == True
+        ).all()
+
+        existing_types = [s.income_type.value if s.income_type else None for s in existing_sources]
+    else:
+        existing_types = []
+
+    # Build filtered list of income types based on employment status
+    filtered_types = []
+
+    for type_key, type_info in INCOME_TYPE_DEFINITIONS.items():
+        include_type = False
+
+        if employment_status is None:
+            # No employment info - show all types
+            include_type = True
+        elif employment_status == 'self_employed' or is_self_employed:
+            # Self-employed: Show Schedule C, Bank Statement, K-1, Rental, Other
+            if type_key in ['SELF_EMPLOYED_SCHEDULE_C', 'BANK_STATEMENT', 'PARTNERSHIP_SCORP',
+                           'RENTAL_SCHEDULE_E', 'OTHER']:
+                include_type = True
+        elif employment_status == 'employed':
+            # W-2 Employee: Show W-2, Rental (if applicable), Other
+            if type_key in ['W2_EMPLOYMENT', 'OTHER']:
+                include_type = True
+            if type_key == 'RENTAL_SCHEDULE_E' and has_rental:
+                include_type = True
+        elif employment_status == 'retired':
+            # Retired: Show SS, Pension, Rental, Other
+            if type_key in ['SOCIAL_SECURITY', 'RETIREMENT_PENSION', 'RENTAL_SCHEDULE_E', 'OTHER']:
+                include_type = True
+        else:
+            # Default - show common types
+            include_type = True
+
+        if include_type:
+            filtered_types.append({
+                **type_info,
+                "already_exists": type_key in existing_types,
+            })
+
+    return {
+        "success": True,
+        "employment_status": employment_status,
+        "is_self_employed": is_self_employed,
+        "types": filtered_types,
+        "total_count": len(filtered_types),
+    }
+
+
+@router.get("/loan/{loan_id}/summary")
+async def get_loan_income_summary(
+    loan_id: int,
+    borrower_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Get income summary for a loan, optionally filtered by borrower.
+
+    This endpoint is used by the Income Calculator modal to display
+    existing calculated income for the loan.
+    """
+    query = db.query(IncomeSource).filter(
+        IncomeSource.loan_id == loan_id,
+        IncomeSource.is_active == True,
+    )
+
+    if borrower_id:
+        query = query.filter(IncomeSource.borrower_id == borrower_id)
+
+    sources = query.all()
+
+    total_monthly = sum(float(s.monthly_qualifying_income or 0) for s in sources)
+    total_annual = sum(float(s.annual_qualifying_income or 0) for s in sources)
+    verified_count = sum(1 for s in sources if s.verification_status == IncomeVerificationStatus.VERIFIED)
+    has_declining = any(s.declining_income_flag for s in sources)
+
+    # Group by income type
+    by_type = {}
+    for source in sources:
+        type_key = source.income_type.value if source.income_type else "OTHER"
+        if type_key not in by_type:
+            by_type[type_key] = {
+                "count": 0,
+                "monthly": 0,
+                "annual": 0,
+                "sources": [],
+            }
+        by_type[type_key]["count"] += 1
+        by_type[type_key]["monthly"] += float(source.monthly_qualifying_income or 0)
+        by_type[type_key]["annual"] += float(source.annual_qualifying_income or 0)
+        by_type[type_key]["sources"].append(_format_income_source(source))
+
+    return {
+        "success": True,
+        "loan_id": loan_id,
+        "borrower_id": borrower_id,
+        "total_monthly_income": total_monthly,
+        "total_annual_income": total_annual,
+        "source_count": len(sources),
+        "verified_count": verified_count,
+        "has_declining_income": has_declining,
+        "by_type": by_type,
+        "sources": [_format_income_source(s) for s in sources],
+    }

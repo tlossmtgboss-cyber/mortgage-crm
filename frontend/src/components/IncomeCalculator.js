@@ -4,11 +4,29 @@ import './IncomeCalculator.css';
 
 const INCOME_TYPE_INFO = {
   W2_WAGES: { icon: '💼', label: 'W-2 Employment', color: '#3b82f6' },
+  W2_EMPLOYMENT: { icon: '💼', label: 'W-2 Employment', color: '#3b82f6' },
   SELF_EMPLOYMENT: { icon: '🏢', label: 'Self-Employment', color: '#8b5cf6' },
+  SELF_EMPLOYED_SCHEDULE_C: { icon: '🏢', label: 'Schedule C', color: '#8b5cf6' },
   RENTAL: { icon: '🏠', label: 'Rental Income', color: '#10b981' },
+  RENTAL_SCHEDULE_E: { icon: '🏠', label: 'Rental (Schedule E)', color: '#10b981' },
   PARTNERSHIP_SCORP: { icon: '🤝', label: 'K-1 Partnership/S-Corp', color: '#f59e0b' },
   CCORP: { icon: '🏛️', label: 'C-Corporation', color: '#6366f1' },
   BANK_STATEMENT: { icon: '🏦', label: 'Bank Statement', color: '#ec4899' },
+  SOCIAL_SECURITY: { icon: '🏛️', label: 'Social Security', color: '#0ea5e9' },
+  RETIREMENT_PENSION: { icon: '💰', label: 'Retirement/Pension', color: '#14b8a6' },
+  OTHER: { icon: '📄', label: 'Other Income', color: '#6b7280' },
+};
+
+// Map backend type codes to button configurations
+const INCOME_TYPE_BUTTONS = {
+  W2_EMPLOYMENT: { key: 'w2', label: 'Add W-2', icon: '💼', addFn: 'addW2Entry' },
+  SELF_EMPLOYED_SCHEDULE_C: { key: 'scheduleC', label: 'Add Schedule C', icon: '🏢', addFn: 'addScheduleCEntry' },
+  BANK_STATEMENT: { key: 'bankStatement', label: 'Add Bank Stmt', icon: '🏦', addFn: 'addBankStatementEntry' },
+  PARTNERSHIP_SCORP: { key: 'k1', label: 'Add K-1', icon: '🤝', addFn: 'addK1Entry' },
+  RENTAL_SCHEDULE_E: { key: 'scheduleE', label: 'Add Rental (Sch E)', icon: '🏠', addFn: 'addScheduleEEntry' },
+  SOCIAL_SECURITY: { key: 'socialSecurity', label: 'Add Social Security', icon: '🏛️', addFn: 'addSocialSecurityEntry' },
+  RETIREMENT_PENSION: { key: 'retirement', label: 'Add Retirement', icon: '💰', addFn: 'addRetirementEntry' },
+  OTHER: { key: 'other', label: 'Add Other', icon: '📄', addFn: 'addOtherEntry' },
 };
 
 const SEVERITY_STYLES = {
@@ -28,6 +46,7 @@ function IncomeCalculator({ loanId, borrowerId = 1, onIncomeCalculated }) {
 
   // Supported types
   const [supportedTypes, setSupportedTypes] = useState([]);
+  const [employmentStatus, setEmploymentStatus] = useState(null);
 
   // Input forms
   const [selectedType, setSelectedType] = useState(null);
@@ -39,10 +58,10 @@ function IncomeCalculator({ loanId, borrowerId = 1, onIncomeCalculated }) {
     bankStatement: []
   });
 
-  // Load supported income types on mount
+  // Load supported income types when loanId changes
   useEffect(() => {
     loadSupportedTypes();
-  }, []);
+  }, [loanId, borrowerId]);
 
   // Try to load existing calculation for this loan
   useEffect(() => {
@@ -53,10 +72,22 @@ function IncomeCalculator({ loanId, borrowerId = 1, onIncomeCalculated }) {
 
   const loadSupportedTypes = async () => {
     try {
-      const types = await incomeAPI.getSupportedTypes();
+      const response = await incomeAPI.getSupportedTypes(loanId, borrowerId);
+      // The API returns { types: [...], employment_status: '...' }
+      const types = response?.types || response || [];
       setSupportedTypes(types);
+      setEmploymentStatus(response?.employment_status || null);
     } catch (err) {
       console.error('Failed to load income types:', err);
+      setEmploymentStatus(null);
+      // Fallback to showing all types if API fails
+      setSupportedTypes([
+        { type_code: 'W2_EMPLOYMENT' },
+        { type_code: 'SELF_EMPLOYED_SCHEDULE_C' },
+        { type_code: 'BANK_STATEMENT' },
+        { type_code: 'PARTNERSHIP_SCORP' },
+        { type_code: 'RENTAL_SCHEDULE_E' },
+      ]);
     }
   };
 
@@ -263,6 +294,16 @@ function IncomeCalculator({ loanId, borrowerId = 1, onIncomeCalculated }) {
     }).format(amount || 0);
   };
 
+  const formatEmploymentStatus = (status) => {
+    const labels = {
+      'employed': 'W-2 Employee',
+      'self_employed': 'Self-Employed',
+      'retired': 'Retired',
+      'unemployed': 'Unemployed',
+    };
+    return labels[status] || status || 'Unknown';
+  };
+
   const renderSummaryView = () => {
     if (!calculationResult) {
       return (
@@ -406,30 +447,67 @@ function IncomeCalculator({ loanId, borrowerId = 1, onIncomeCalculated }) {
         <div className="income-input-header">
           <h3>Income Sources</h3>
           <p>Add all income sources for this borrower. Two years of history is typically required.</p>
+          {employmentStatus && (
+            <div className="income-employment-notice">
+              <span className="employment-badge">{formatEmploymentStatus(employmentStatus)}</span>
+              <span className="employment-hint">
+                Showing income types based on application employment status
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Income Type Buttons */}
+        {/* Income Type Buttons - Dynamic based on borrower's employment type */}
         <div className="income-type-buttons">
-          <button className="income-type-btn" onClick={addW2Entry}>
-            <span className="income-type-icon">💼</span>
-            <span>Add W-2</span>
-          </button>
-          <button className="income-type-btn" onClick={addScheduleCEntry}>
-            <span className="income-type-icon">🏢</span>
-            <span>Add Schedule C</span>
-          </button>
-          <button className="income-type-btn" onClick={addScheduleEEntry}>
-            <span className="income-type-icon">🏠</span>
-            <span>Add Rental (Sch E)</span>
-          </button>
-          <button className="income-type-btn" onClick={addK1Entry}>
-            <span className="income-type-icon">🤝</span>
-            <span>Add K-1</span>
-          </button>
-          <button className="income-type-btn" onClick={addBankStatementEntry}>
-            <span className="income-type-icon">🏦</span>
-            <span>Add Bank Stmt</span>
-          </button>
+          {supportedTypes.length > 0 ? (
+            supportedTypes.map((typeInfo) => {
+              const typeCode = typeInfo.type_code || typeInfo;
+              const buttonConfig = INCOME_TYPE_BUTTONS[typeCode];
+              if (!buttonConfig) return null;
+
+              // Map button addFn to actual function
+              const addFunctions = {
+                addW2Entry,
+                addScheduleCEntry,
+                addScheduleEEntry,
+                addK1Entry,
+                addBankStatementEntry,
+              };
+              const addFn = addFunctions[buttonConfig.addFn];
+              if (!addFn) return null;
+
+              return (
+                <button key={typeCode} className="income-type-btn" onClick={addFn}>
+                  <span className="income-type-icon">{buttonConfig.icon}</span>
+                  <span>{buttonConfig.label}</span>
+                </button>
+              );
+            })
+          ) : (
+            // Fallback: show all buttons if no supported types loaded
+            <>
+              <button className="income-type-btn" onClick={addW2Entry}>
+                <span className="income-type-icon">💼</span>
+                <span>Add W-2</span>
+              </button>
+              <button className="income-type-btn" onClick={addScheduleCEntry}>
+                <span className="income-type-icon">🏢</span>
+                <span>Add Schedule C</span>
+              </button>
+              <button className="income-type-btn" onClick={addScheduleEEntry}>
+                <span className="income-type-icon">🏠</span>
+                <span>Add Rental (Sch E)</span>
+              </button>
+              <button className="income-type-btn" onClick={addK1Entry}>
+                <span className="income-type-icon">🤝</span>
+                <span>Add K-1</span>
+              </button>
+              <button className="income-type-btn" onClick={addBankStatementEntry}>
+                <span className="income-type-icon">🏦</span>
+                <span>Add Bank Stmt</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* W-2 Entries */}

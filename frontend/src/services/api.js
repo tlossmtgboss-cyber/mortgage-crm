@@ -2415,9 +2415,12 @@ export const outreachAPI = {
 
 // Income Engine API
 export const incomeAPI = {
-  // Get supported income types
-  getSupportedTypes: async () => {
-    const response = await api.get('/api/v1/income/supported-types');
+  // Get supported income types (filtered by borrower's employment if loanId provided)
+  getSupportedTypes: async (loanId = null, borrowerId = null) => {
+    const params = {};
+    if (loanId) params.loan_id = loanId;
+    if (borrowerId) params.borrower_id = borrowerId;
+    const response = await api.get('/api/v1/income/supported-types', { params });
     return response.data;
   },
 
