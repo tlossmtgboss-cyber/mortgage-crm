@@ -90,8 +90,8 @@ async def create_project(
         service = get_project_service()
         project = service.create_project(
             db=db,
-            organization_id=current_user.get("organization_id"),
-            created_by=current_user.get("id"),
+            organization_id=getattr(current_user, "organization_id", None),
+            created_by=current_user.id,
             title=request.title,
             source_type=request.source_type.value,
             source_text=request.source_text,
@@ -128,7 +128,7 @@ async def list_projects(
         service = get_project_service()
         projects, total = service.list_projects(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             status=status,
             category=category,
             search=search,
@@ -409,7 +409,7 @@ async def list_render_jobs(
         render_service = get_render_service()
         jobs, total = render_service.list_render_jobs(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             project_id=project_id,
             state=state,
             limit=limit,
@@ -513,7 +513,7 @@ async def list_videos(
         tag_list = tags.split(",") if tags else None
         videos, total = hosting_service.list_videos(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             folder_path=folder_path,
             visibility=visibility,
             search=search,
@@ -560,7 +560,7 @@ async def publish_video(
         # Create library entry
         video = hosting_service.create_video(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             title=request.title or job.get("project_title", "Untitled Video"),
             description=request.description,
             project_id=job.get("project_id"),
@@ -715,7 +715,7 @@ async def get_analytics_overview(
         hosting_service = get_hosting_service()
         stats = hosting_service.get_org_video_stats(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             days=days,
         )
         return success_response(data=stats)
@@ -785,7 +785,7 @@ async def get_viewer_engagement(
         hosting_service = get_hosting_service()
         engagement = hosting_service.get_viewer_engagement(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             video_id=video_id,
             lead_id=lead_id,
             limit=limit,
@@ -811,7 +811,7 @@ async def list_cta_overlays(
         hosting_service = get_hosting_service()
         overlays = hosting_service.list_cta_overlays(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             cta_type=cta_type,
         )
         return success_response(data={"overlays": overlays})
@@ -831,7 +831,7 @@ async def create_cta_overlay(
         hosting_service = get_hosting_service()
         overlay = hosting_service.create_cta_overlay(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             name=request.name,
             cta_type=request.cta_type.value,
             **request.model_dump(exclude={"name", "cta_type"})
@@ -876,7 +876,7 @@ async def list_brand_templates(
         service = get_project_service()
         templates = service.list_brand_templates(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
         )
         return success_response(data={"templates": templates})
     except Exception as e:
@@ -895,7 +895,7 @@ async def create_brand_template(
         service = get_project_service()
         template = service.create_brand_template(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
             **request.model_dump()
         )
         return success_response(data=template, message="Brand template created")
@@ -959,7 +959,7 @@ async def list_voice_profiles(
         service = get_project_service()
         profiles = service.list_voice_profiles(
             db=db,
-            organization_id=current_user.get("organization_id"),
+            organization_id=getattr(current_user, "organization_id", None),
         )
         return success_response(data={"profiles": profiles})
     except Exception as e:
@@ -978,8 +978,8 @@ async def create_voice_profile(
         service = get_project_service()
         profile = service.create_voice_profile(
             db=db,
-            organization_id=current_user.get("organization_id"),
-            user_id=current_user.get("id"),
+            organization_id=getattr(current_user, "organization_id", None),
+            user_id=current_user.id,
             **request.model_dump()
         )
         return success_response(data=profile, message="Voice profile created")
