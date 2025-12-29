@@ -1407,6 +1407,37 @@ async def assign_role_to_user(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/admin/fix-duplicate-capacities")
+async def fix_duplicate_capacities(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Remove duplicate capacity records, keeping one per user."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        delete_query = text("""
+            DELETE FROM mm_talent_capacity
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM mm_talent_capacity
+                GROUP BY user_id
+            )
+        """)
+        result = db.execute(delete_query)
+        deleted_count = result.rowcount
+        db.commit()
+
+        return {
+            "message": f"Removed {deleted_count} duplicate capacity records",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/admin/initialize-capacities")
 async def initialize_capacities(
     admin_key: str = Query(..., description="Admin API key"),
