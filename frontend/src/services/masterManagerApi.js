@@ -225,6 +225,168 @@ export const initializeCapacities = async () => {
   return response.json();
 };
 
+// =============================================================================
+// RECRUITING ENDPOINTS
+// =============================================================================
+
+export const getRecruitingPipelineMetrics = async (days = 90) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/pipeline/metrics?days=${days}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch pipeline metrics');
+  return response.json();
+};
+
+export const getRecruitingDashboardStats = async () => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/dashboard/stats`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch dashboard stats');
+  return response.json();
+};
+
+export const getUpcomingInterviews = async (limit = 10) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/dashboard/upcoming-interviews?limit=${limit}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch upcoming interviews');
+  return response.json();
+};
+
+export const getCandidates = async (params = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.status) searchParams.append('status', params.status);
+  if (params.role_id) searchParams.append('role_id', params.role_id);
+  if (params.source) searchParams.append('source', params.source);
+  if (params.search) searchParams.append('search', params.search);
+  if (params.limit) searchParams.append('limit', params.limit);
+  if (params.offset) searchParams.append('offset', params.offset);
+
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates?${searchParams}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch candidates');
+  return response.json();
+};
+
+export const getCandidateDetail = async (candidateId) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch candidate');
+  return response.json();
+};
+
+export const createCandidate = async (data) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to create candidate');
+  return response.json();
+};
+
+export const updateCandidateStatus = async (candidateId, status, reason = null) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/status`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ status, reason })
+  });
+  if (!response.ok) throw new Error('Failed to update candidate status');
+  return response.json();
+};
+
+export const getJobPostings = async (params = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.is_published !== undefined) searchParams.append('is_published', params.is_published);
+  if (params.limit) searchParams.append('limit', params.limit);
+
+  const response = await fetch(`${API_URL}/api/v1/recruiting/job-postings?${searchParams}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch job postings');
+  return response.json();
+};
+
+export const createJobPosting = async (data) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/job-postings`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to create job posting');
+  return response.json();
+};
+
+export const publishJobPosting = async (postingId) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/job-postings/${postingId}/publish`, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to publish job posting');
+  return response.json();
+};
+
+export const scheduleInterview = async (candidateId, data) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/interviews`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to schedule interview');
+  return response.json();
+};
+
+export const submitInterviewFeedback = async (interviewId, feedback) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/interviews/${interviewId}/feedback`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(feedback)
+  });
+  if (!response.ok) throw new Error('Failed to submit feedback');
+  return response.json();
+};
+
+export const getOffers = async (status = null) => {
+  const params = status ? `?status=${status}` : '';
+  const response = await fetch(`${API_URL}/api/v1/recruiting/offers${params}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch offers');
+  return response.json();
+};
+
+export const createOffer = async (candidateId, data) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/offers`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to create offer');
+  return response.json();
+};
+
+export const sendOffer = async (offerId, expiresInDays = 7) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/offers/${offerId}/send`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ expires_in_days: expiresInDays })
+  });
+  if (!response.ok) throw new Error('Failed to send offer');
+  return response.json();
+};
+
+export const addCandidateNote = async (candidateId, data) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/notes`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to add note');
+  return response.json();
+};
+
 export default {
   getCapacityOverview,
   getCapacityByRole,
@@ -245,5 +407,22 @@ export default {
   acknowledgeAlert,
   resolveAlert,
   runMigration,
-  initializeCapacities
+  initializeCapacities,
+  // Recruiting
+  getRecruitingPipelineMetrics,
+  getRecruitingDashboardStats,
+  getUpcomingInterviews,
+  getCandidates,
+  getCandidateDetail,
+  createCandidate,
+  updateCandidateStatus,
+  getJobPostings,
+  createJobPosting,
+  publishJobPosting,
+  scheduleInterview,
+  submitInterviewFeedback,
+  getOffers,
+  createOffer,
+  sendOffer,
+  addCandidateNote
 };

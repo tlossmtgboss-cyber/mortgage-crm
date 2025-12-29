@@ -663,6 +663,288 @@ class JobPosting(Base):
 
 
 # =============================================================================
+# INTERVIEW MODEL (For Recruiting - Phase 2)
+# =============================================================================
+
+class InterviewType(str, Enum):
+    PHONE_SCREEN = "phone_screen"
+    VIDEO = "video"
+    IN_PERSON = "in_person"
+    PANEL = "panel"
+    TECHNICAL = "technical"
+    CULTURE = "culture"
+    FINAL = "final"
+
+
+class InterviewStatus(str, Enum):
+    SCHEDULED = "scheduled"
+    CONFIRMED = "confirmed"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    NO_SHOW = "no_show"
+    CANCELLED = "cancelled"
+    RESCHEDULED = "rescheduled"
+
+
+class Interview(Base):
+    """
+    Interview scheduling and feedback tracking.
+    """
+    __tablename__ = "mm_interviews"
+    __table_args__ = (
+        Index('ix_mm_interview_candidate', 'candidate_id'),
+        Index('ix_mm_interview_scheduled', 'scheduled_at'),
+        {'extend_existing': True}
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("mm_candidates.id"), nullable=False, index=True)
+
+    # Interview Details
+    interview_type = Column(String(30), default=InterviewType.VIDEO.value)
+    interview_round = Column(Integer, default=1)  # 1st, 2nd, 3rd round
+    title = Column(String(200))  # e.g., "Phone Screen with HR"
+
+    # Scheduling
+    scheduled_at = Column(DateTime, nullable=False)
+    duration_minutes = Column(Integer, default=30)
+    timezone = Column(String(50), default="America/New_York")
+    location = Column(String(255))  # Physical location or meeting link
+    meeting_link = Column(Text)  # Zoom/Teams/etc link
+    calendar_event_id = Column(String(255))  # External calendar ID
+
+    # Interviewers
+    interviewer_user_ids = Column(JSON, default=list)  # List of user IDs
+    primary_interviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Status
+    status = Column(String(30), default=InterviewStatus.SCHEDULED.value, index=True)
+    confirmation_sent_at = Column(DateTime)
+    reminder_sent_at = Column(DateTime)
+
+    # Feedback
+    feedback = Column(JSON, default=dict)
+    # Structure: {
+    #   "interviewer_id": {
+    #     "overall_score": 1-5,
+    #     "technical_score": 1-5,
+    #     "culture_score": 1-5,
+    #     "communication_score": 1-5,
+    #     "recommendation": "strong_hire" | "hire" | "no_hire" | "strong_no_hire",
+    #     "strengths": ["..."],
+    #     "concerns": ["..."],
+    #     "notes": "..."
+    #   }
+    # }
+    overall_score = Column(Float)  # Aggregated score
+    recommendation = Column(String(30))  # hire, no_hire, next_round, hold
+    decision_notes = Column(Text)
+
+    # Completed
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    no_show_reason = Column(String(255))
+    cancellation_reason = Column(String(255))
+
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    candidate = relationship("Candidate", foreign_keys=[candidate_id])
+    primary_interviewer = relationship("User", foreign_keys=[primary_interviewer_id])
+
+
+# =============================================================================
+# OFFER MODEL (For Recruiting - Phase 2)
+# =============================================================================
+
+class OfferStatus(str, Enum):
+    DRAFT = "draft"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    SENT = "sent"
+    VIEWED = "viewed"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+    WITHDRAWN = "withdrawn"
+    NEGOTIATING = "negotiating"
+
+
+class Offer(Base):
+    """
+    Job offers with approval workflow.
+    """
+    __tablename__ = "mm_offers"
+    __table_args__ = (
+        Index('ix_mm_offer_candidate', 'candidate_id'),
+        Index('ix_mm_offer_status', 'status'),
+        {'extend_existing': True}
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    candidate_id = Column(Integer, ForeignKey("mm_candidates.id"), nullable=False, index=True)
+    job_posting_id = Column(Integer, ForeignKey("mm_job_postings.id"), nullable=True)
+
+    # Offer Details
+    offer_number = Column(String(50), unique=True, index=True)  # e.g., "OFF-2024-001"
+    role_title = Column(String(200), nullable=False)
+    role_definition_id = Column(Integer, ForeignKey("mm_role_definitions.id"), nullable=True)
+    department = Column(String(100))
+    reports_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Compensation
+    salary_amount = Column(Integer, nullable=False)
+    salary_type = Column(String(20), default="salary")  # hourly, salary
+    bonus_amount = Column(Integer)
+    bonus_type = Column(String(30))  # signing, performance, guaranteed
+    commission_structure = Column(JSON)  # Commission details if applicable
+    equity_amount = Column(Integer)
+    equity_type = Column(String(30))  # stock_options, rsu, phantom
+
+    # Benefits
+    benefits_summary = Column(Text)
+    pto_days = Column(Integer)
+    health_insurance = Column(Boolean, default=True)
+    retirement_match_pct = Column(Float)
+
+    # Terms
+    employment_type = Column(String(30), default="full_time")  # full_time, part_time, contract
+    start_date = Column(Date)
+    is_remote = Column(Boolean, default=False)
+    work_location = Column(String(255))
+
+    # Status & Workflow
+    status = Column(String(30), default=OfferStatus.DRAFT.value, index=True)
+    approval_chain = Column(JSON, default=list)
+    # Structure: [{"user_id": 1, "approved": true, "approved_at": "...", "notes": "..."}]
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime)
+
+    # Sending
+    sent_at = Column(DateTime)
+    sent_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    viewed_at = Column(DateTime)
+    expires_at = Column(DateTime)
+    offer_letter_url = Column(Text)  # Generated PDF or DocuSign link
+
+    # Response
+    responded_at = Column(DateTime)
+    response_notes = Column(Text)
+
+    # Negotiation
+    negotiation_history = Column(JSON, default=list)
+    # Structure: [{"date": "...", "requested": {...}, "counter": {...}, "notes": "..."}]
+    counter_offer_count = Column(Integer, default=0)
+
+    # Acceptance
+    accepted_at = Column(DateTime)
+    signature_url = Column(Text)  # Signed offer letter
+    onboarding_started = Column(Boolean, default=False)
+
+    # Decline/Withdrawal
+    declined_at = Column(DateTime)
+    declined_reason = Column(String(100))
+    declined_notes = Column(Text)
+    withdrawn_at = Column(DateTime)
+    withdrawn_reason = Column(Text)
+
+    # Internal Notes
+    internal_notes = Column(Text)
+
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    candidate = relationship("Candidate", foreign_keys=[candidate_id])
+    job_posting = relationship("JobPosting", foreign_keys=[job_posting_id])
+    role_definition = relationship("RoleDefinition", foreign_keys=[role_definition_id])
+    reports_to = relationship("User", foreign_keys=[reports_to_user_id])
+
+
+# =============================================================================
+# CANDIDATE ACTIVITY LOG (For Recruiting - Phase 2)
+# =============================================================================
+
+class CandidateActivity(Base):
+    """
+    Activity log for candidate pipeline - tracks all touchpoints.
+    """
+    __tablename__ = "mm_candidate_activities"
+    __table_args__ = (
+        Index('ix_mm_cand_activity_candidate', 'candidate_id'),
+        Index('ix_mm_cand_activity_created', 'created_at'),
+        {'extend_existing': True}
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    candidate_id = Column(Integer, ForeignKey("mm_candidates.id"), nullable=False, index=True)
+
+    # Activity Details
+    activity_type = Column(String(50), nullable=False, index=True)
+    # Types: status_change, email_sent, email_opened, call, interview_scheduled,
+    #        interview_completed, assessment_sent, assessment_completed,
+    #        offer_sent, offer_viewed, offer_accepted, offer_declined,
+    #        note_added, document_uploaded, feedback_submitted
+
+    description = Column(Text)
+    metadata = Column(JSON, default=dict)
+    # Flexible data based on activity type
+
+    # Associated entities
+    interview_id = Column(Integer, ForeignKey("mm_interviews.id"), nullable=True)
+    offer_id = Column(Integer, ForeignKey("mm_offers.id"), nullable=True)
+
+    # Actor
+    performed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_automated = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Relationships
+    candidate = relationship("Candidate", foreign_keys=[candidate_id])
+
+
+# =============================================================================
+# CANDIDATE NOTE (For Recruiting - Phase 2)
+# =============================================================================
+
+class CandidateNote(Base):
+    """
+    Notes and comments on candidates from team members.
+    """
+    __tablename__ = "mm_candidate_notes"
+    __table_args__ = (
+        Index('ix_mm_cand_note_candidate', 'candidate_id'),
+        {'extend_existing': True}
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    candidate_id = Column(Integer, ForeignKey("mm_candidates.id"), nullable=False, index=True)
+
+    # Note Content
+    note_type = Column(String(30), default="general")
+    # Types: general, interview, reference_check, background_check, hiring_decision
+    content = Column(Text, nullable=False)
+    is_private = Column(Boolean, default=False)  # Only visible to author
+
+    # Author
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    candidate = relationship("Candidate", foreign_keys=[candidate_id])
+    author = relationship("User", foreign_keys=[created_by])
+
+
+# =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 

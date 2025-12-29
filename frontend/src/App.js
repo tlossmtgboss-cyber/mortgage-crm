@@ -125,6 +125,7 @@ const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const AgentProfile = lazy(() => import('./pages/AgentProfile'));
 const AcquisitionDashboard = lazy(() => import('./pages/AcquisitionDashboard'));
 const MasterManagerCapacity = lazy(() => import('./pages/MasterManager/CapacityCommandCenter'));
+const MasterManagerRecruiting = lazy(() => import('./pages/MasterManager/RecruitingDashboard'));
 const AgentGym = lazy(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazy(() => import('./pages/AgentGovernanceSettings'));
 const SmartSchedulerSettings = lazy(() => import('./pages/SmartSchedulerSettings'));
@@ -1191,6 +1192,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MasterManagerCapacity /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/master-manager/recruiting"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MasterManagerRecruiting /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

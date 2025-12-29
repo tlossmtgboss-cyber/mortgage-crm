@@ -611,3 +611,397 @@
   justify-content: flex-end;
   gap: 12px;
 }
+
+/* ==================================
+   RECRUITING DASHBOARD STYLES
+   ================================== */
+
+/* Tabs */
+.mm-tabs {
+  display: flex;
+  gap: 4px;
+  background: white;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mm-tab {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mm-tab:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.mm-tab.active {
+  background: #3b82f6;
+  color: white;
+}
+
+/* Metrics Grid */
+.mm-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .mm-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.mm-metric-card {
+  padding: 16px;
+}
+
+.mm-metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mm-metric-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.mm-metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Pipeline Stages */
+.mm-pipeline-stages {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mm-pipeline-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 80px;
+}
+
+.mm-stage-count {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.mm-stage-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Interviews List */
+.mm-interviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mm-interview-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.mm-interview-time {
+  font-size: 13px;
+  font-weight: 500;
+  color: #3b82f6;
+  min-width: 150px;
+}
+
+.mm-interview-details {
+  flex: 1;
+}
+
+.mm-interview-candidate {
+  font-weight: 500;
+  color: #111827;
+}
+
+.mm-interview-type {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.mm-interview-interviewer {
+  font-size: 13px;
+  color: #6b7280;
+  min-width: 150px;
+}
+
+/* Input */
+.mm-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mm-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.mm-textarea {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.mm-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Badge */
+.mm-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.mm-badge-info {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* Inline Select */
+.mm-select-inline {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 100px;
+  border: none;
+  cursor: pointer;
+}
+
+/* Jobs Grid */
+.mm-jobs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.mm-job-card {
+  padding: 20px;
+}
+
+.mm-job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.mm-job-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mm-status-published {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.mm-status-draft {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.mm-status-sent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mm-status-accepted {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.mm-status-declined {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.mm-job-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.mm-job-salary {
+  font-size: 15px;
+  font-weight: 500;
+  color: #059669;
+  margin-bottom: 16px;
+}
+
+.mm-job-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+}
+
+.mm-job-stat .mm-stat-value {
+  font-size: 20px;
+}
+
+.mm-btn-full {
+  width: 100%;
+}
+
+/* Empty Card */
+.mm-empty-card {
+  text-align: center;
+  color: #6b7280;
+  padding: 40px;
+}
+
+/* Modal Enhancements */
+.mm-modal-large {
+  max-width: 600px;
+}
+
+.mm-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.mm-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.mm-modal-close:hover {
+  color: #6b7280;
+}
+
+/* Form */
+.mm-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.mm-form-group {
+  margin-bottom: 16px;
+}
+
+.mm-form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.mm-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.mm-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+/* Candidate Detail */
+.mm-candidate-detail {
+  display: grid;
+  gap: 20px;
+}
+
+.mm-detail-section {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 16px;
+}
+
+.mm-detail-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mm-detail-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.mm-detail-section p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.mm-detail-section p strong {
+  color: #6b7280;
+  font-weight: 500;
+}

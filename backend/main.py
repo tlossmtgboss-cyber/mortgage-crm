@@ -20009,6 +20009,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Master Manager routes: {e}")
 
+# Include Recruiting Engine routes (Phase 2)
+try:
+    from routes.recruiting_routes import router as recruiting_router
+    app.include_router(recruiting_router, tags=["Recruiting"])
+    logger.info("✅ Recruiting Engine routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruiting routes: {e}")
+
 # Include Acquisition Engine routes (lead scoring, speed-to-lead)
 try:
     from routes.acquisition_engine_routes import router as acquisition_router
