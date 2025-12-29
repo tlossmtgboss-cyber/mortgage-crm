@@ -61,13 +61,17 @@ export const createAvatar = async (data) => {
     const response = await apiClient.post(API_BASE, data);
     return response.data;
   } catch (error) {
-    // Fall back to test endpoint if auth fails
-    if (error.response?.status === 401) {
+    // Fall back to test endpoint on any error (auth, server, etc.)
+    console.log('Authenticated endpoint failed, trying test endpoint:', error.message);
+    try {
       const params = new URLSearchParams({ name: data.name, description: data.description || '' });
       const response = await apiClient.post(`${API_BASE}/test/create?${params}`);
       return response.data;
+    } catch (testError) {
+      // If test endpoint also fails, throw the original error
+      console.error('Test endpoint also failed:', testError.message);
+      throw error;
     }
-    throw error;
   }
 };
 
@@ -80,12 +84,13 @@ export const listAvatars = async (params = {}) => {
     const response = await apiClient.get(API_BASE, { params });
     return response.data;
   } catch (error) {
-    // Fall back to test endpoint if auth fails
-    if (error.response?.status === 401) {
+    // Fall back to test endpoint on any error
+    try {
       const response = await apiClient.get(`${API_BASE}/test/list`, { params: { user_id: 1 } });
       return response.data;
+    } catch (testError) {
+      throw error;
     }
-    throw error;
   }
 };
 
@@ -98,12 +103,13 @@ export const getAvatar = async (avatarId) => {
     const response = await apiClient.get(`${API_BASE}/${avatarId}`);
     return response.data;
   } catch (error) {
-    // Fall back to test endpoint if auth fails
-    if (error.response?.status === 401) {
+    // Fall back to test endpoint on any error
+    try {
       const response = await apiClient.get(`${API_BASE}/test/${avatarId}`);
       return response.data;
+    } catch (testError) {
+      throw error;
     }
-    throw error;
   }
 };
 
