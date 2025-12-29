@@ -1009,11 +1009,30 @@ Return as JSON array:
 
 Return ONLY the JSON array."""
 
+    def _strip_markdown_fences(self, response: str) -> str:
+        """Strip markdown code fences from LLM response."""
+        import re
+        # Remove ```json ... ``` or ``` ... ``` blocks
+        cleaned = response.strip()
+        # Match ```json or ```JSON or just ```
+        pattern = r'^```(?:json|JSON)?\s*\n?(.*?)\n?```$'
+        match = re.match(pattern, cleaned, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        # Also try without newlines
+        pattern2 = r'^```(?:json|JSON)?\s*(.*?)```$'
+        match2 = re.match(pattern2, cleaned, re.DOTALL)
+        if match2:
+            return match2.group(1).strip()
+        return cleaned
+
     def _parse_script_response(self, response: str) -> Dict[str, Any]:
         """Parse the LLM response for script generation."""
         try:
+            # Strip markdown code fences if present
+            cleaned = self._strip_markdown_fences(response)
             # Try to parse as JSON
-            data = json.loads(response)
+            data = json.loads(cleaned)
             return {
                 "script": data.get("script", response),
                 "hooks": data.get("hooks", []),
@@ -1030,8 +1049,10 @@ Return ONLY the JSON array."""
     def _parse_storyboard_response(self, response: str) -> List[Dict[str, Any]]:
         """Parse the LLM response for storyboard generation."""
         try:
+            # Strip markdown code fences if present
+            cleaned = self._strip_markdown_fences(response)
             # Try to parse as JSON
-            scenes = json.loads(response)
+            scenes = json.loads(cleaned)
             if isinstance(scenes, list):
                 return scenes
             return [scenes]
