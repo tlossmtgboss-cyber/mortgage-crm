@@ -547,10 +547,25 @@ class RecruitingService:
         organization_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Create a job posting."""
+        import json
+        import re
 
         # Generate slug from title
-        import re
         slug = re.sub(r'[^a-z0-9]+', '-', data.get("title", "").lower()).strip('-')
+
+        # Convert text fields to JSONB format (as arrays)
+        def to_jsonb(val):
+            if val is None:
+                return None
+            if isinstance(val, (list, dict)):
+                return json.dumps(val)
+            # Convert string to array of lines
+            if isinstance(val, str):
+                lines = [line.strip() for line in val.split(',') if line.strip()]
+                if not lines:
+                    lines = [val]
+                return json.dumps(lines)
+            return json.dumps([str(val)])
 
         query = text("""
             INSERT INTO mm_job_postings (
@@ -561,7 +576,7 @@ class RecruitingService:
                 created_by
             ) VALUES (
                 :org_id, :title, :slug, :role_id,
-                :summary, :description, :requirements, :responsibilities, :benefits,
+                :summary, :description, :requirements::jsonb, :responsibilities::jsonb, :benefits::jsonb,
                 :salary_min, :salary_max, :salary_type,
                 :is_published, :is_remote, :location, :employment_type,
                 :created_by
@@ -576,9 +591,9 @@ class RecruitingService:
             "role_id": data.get("role_definition_id"),
             "summary": data.get("summary"),
             "description": data.get("description"),
-            "requirements": data.get("requirements"),
-            "responsibilities": data.get("responsibilities"),
-            "benefits": data.get("benefits"),
+            "requirements": to_jsonb(data.get("requirements")),
+            "responsibilities": to_jsonb(data.get("responsibilities")),
+            "benefits": to_jsonb(data.get("benefits")),
             "salary_min": data.get("salary_min"),
             "salary_max": data.get("salary_max"),
             "salary_type": data.get("salary_type", "salary"),
