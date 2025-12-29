@@ -506,3 +506,68 @@ async def get_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     return {"success": True, "job": job}
+
+
+# =============================================================================
+# Test Endpoints (No Auth Required)
+# =============================================================================
+
+@router.post("/test/create", response_model=dict)
+async def test_create_avatar(
+    name: str = Query(..., description="Avatar name"),
+    description: str = Query("", description="Avatar description"),
+    db: Session = Depends(get_db)
+):
+    """Create a test avatar without authentication (for development/testing)."""
+    try:
+        from models.avatar_models import AvatarProfileCreate
+
+        data = AvatarProfileCreate(name=name, description=description)
+        profile = avatar_service.create_profile(
+            db=db,
+            data=data,
+            user_id=1,  # Default test user
+            organization_id=1
+        )
+        return {"success": True, "avatar": profile, "message": "Test avatar created"}
+    except Exception as e:
+        logger.error(f"Failed to create test avatar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/test/list", response_model=dict)
+async def test_list_avatars(
+    db: Session = Depends(get_db)
+):
+    """List all avatars without authentication (for development/testing)."""
+    try:
+        avatars, total = avatar_service.list_profiles(
+            db=db,
+            user_id=None,  # List all
+            organization_id=None,
+            status=None,
+            page=1,
+            page_size=50
+        )
+        return {"success": True, "avatars": avatars, "total": total}
+    except Exception as e:
+        logger.error(f"Failed to list test avatars: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/test/{avatar_id}", response_model=dict)
+async def test_get_avatar(
+    avatar_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get avatar details without authentication (for development/testing)."""
+    try:
+        profile = avatar_service.get_profile(db=db, avatar_id=avatar_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Avatar not found")
+        return {"success": True, "avatar": profile}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get test avatar: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
