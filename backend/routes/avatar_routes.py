@@ -537,13 +537,14 @@ async def test_create_avatar(
 
 @router.get("/test/list", response_model=dict)
 async def test_list_avatars(
+    user_id: int = Query(1, description="User ID to list avatars for"),
     db: Session = Depends(get_db)
 ):
-    """List all avatars without authentication (for development/testing)."""
+    """List avatars without authentication (for development/testing)."""
     try:
         avatars, total = avatar_service.list_profiles(
             db=db,
-            user_id=None,  # List all
+            user_id=user_id,
             organization_id=None,
             status=None,
             page=1,
