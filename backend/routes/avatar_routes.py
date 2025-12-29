@@ -653,6 +653,70 @@ async def get_job(
 # Test Endpoints (No Auth Required)
 # =============================================================================
 
+@router.get("/test/health", response_model=dict)
+async def avatar_health_check(db: Session = Depends(get_db)):
+    """Health check endpoint to diagnose avatar system issues."""
+    from sqlalchemy import text
+    results = {
+        "database_connection": False,
+        "table_exists": False,
+        "can_create_table": False,
+        "avatar_count": 0,
+        "errors": []
+    }
+
+    try:
+        # Test 1: Database connection
+        db.execute(text("SELECT 1"))
+        results["database_connection"] = True
+    except Exception as e:
+        results["errors"].append(f"Database connection failed: {str(e)}")
+        return results
+
+    try:
+        # Test 2: Check if table exists
+        result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'video_avatar_profiles'
+            )
+        """))
+        results["table_exists"] = result.scalar()
+    except Exception as e:
+        results["errors"].append(f"Table check failed: {str(e)}")
+
+    try:
+        # Test 3: Try to create table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS video_avatar_profiles (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                user_id INTEGER,
+                organization_id INTEGER,
+                description TEXT,
+                status VARCHAR(50) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        db.commit()
+        results["can_create_table"] = True
+        results["table_exists"] = True
+    except Exception as e:
+        results["errors"].append(f"Table creation failed: {str(e)}")
+        db.rollback()
+
+    try:
+        # Test 4: Count existing avatars
+        if results["table_exists"]:
+            count_result = db.execute(text("SELECT COUNT(*) FROM video_avatar_profiles"))
+            results["avatar_count"] = count_result.scalar()
+    except Exception as e:
+        results["errors"].append(f"Count query failed: {str(e)}")
+
+    return results
+
+
 @router.post("/test/create", response_model=dict)
 async def test_create_avatar(
     name: str = Query(..., description="Avatar name"),
