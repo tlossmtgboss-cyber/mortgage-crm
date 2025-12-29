@@ -1,0 +1,89 @@
+# AI Avatar ML Services
+# Docker Compose for voice cloning and lip sync services
+
+version: '3.8'
+
+services:
+  voice-clone:
+    build:
+      context: ./voice-clone
+      dockerfile: Dockerfile
+    container_name: avatar-voice-clone
+    ports:
+      - "5501:5501"
+    volumes:
+      - voice_models:/models/xtts
+      - voice_samples:/data/voice_samples
+      - voice_outputs:/data/outputs
+    environment:
+      - XTTS_MODEL_DIR=/models/xtts
+      - VOICE_SAMPLES_DIR=/data/voice_samples
+      - OUTPUT_DIR=/data/outputs
+      - PRELOAD_MODEL=true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  lip-sync:
+    build:
+      context: ./lip-sync
+      dockerfile: Dockerfile
+    container_name: avatar-lip-sync
+    ports:
+      - "5502:5502"
+    volumes:
+      - lipsync_models:/models
+      - lipsync_outputs:/data/outputs
+      - lipsync_temp:/tmp/lipsync
+      # Mount Wav2Lip checkpoints from host (download separately)
+      # - ./models/wav2lip_gan.pth:/models/wav2lip_gan.pth:ro
+      # - ./models/s3fd.pth:/models/s3fd.pth:ro
+    environment:
+      - WAV2LIP_DIR=/app/Wav2Lip
+      - WAV2LIP_CHECKPOINT=/models/wav2lip_gan.pth
+      - FACE_DETECT_MODEL=/models/s3fd.pth
+      - OUTPUT_DIR=/data/outputs
+      - TEMP_DIR=/tmp/lipsync
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5502/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  voice_models:
+    driver: local
+  voice_samples:
+    driver: local
+  voice_outputs:
+    driver: local
+  lipsync_models:
+    driver: local
+  lipsync_outputs:
+    driver: local
+  lipsync_temp:
+    driver: local
+
+networks:
+  default:
+    name: avatar-ml-network

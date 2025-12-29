@@ -19748,6 +19748,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Workflow SLA routes: {e}")
 
+# Include Master Manager routes (Talent & Capacity OS)
+try:
+    from routes.master_manager_routes import router as master_manager_router
+    app.include_router(master_manager_router, tags=["Master Manager"])
+    logger.info("✅ Master Manager routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Master Manager routes: {e}")
+
 # Include Smart Scheduler routes (AI-native appointment scheduling)
 try:
     from smart_scheduler_models import create_smart_scheduler_models
@@ -20319,6 +20327,15 @@ try:
     logger.info("✅ Video OS routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Video OS routes not loaded: {e}")
+
+# Avatar routes (AI avatar profile management and video generation)
+try:
+    from routes.avatar_routes import router as avatar_router, set_dependencies as set_avatar_deps
+    set_avatar_deps(get_db, get_current_user)
+    app.include_router(avatar_router, tags=["AI Avatars"])
+    logger.info("✅ Avatar routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Avatar routes not loaded: {e}")
 
 # Agent Governance routes (Agent Management & Monitoring)
 try:

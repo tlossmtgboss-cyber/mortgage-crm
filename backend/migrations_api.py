@@ -1025,3 +1025,30 @@ async def run_video_os_migration(
         logger.error(f"Video OS migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/add-avatar-tables")
+async def run_avatar_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """Run the AI Avatar tables migration."""
+    try:
+        from migrations.add_avatar_tables import run_migration
+
+        logger.info("Starting Avatar tables migration...")
+        result = run_migration()
+
+        if result.get("success"):
+            return {
+                "status": "success",
+                "message": "Avatar tables created successfully"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Avatar migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

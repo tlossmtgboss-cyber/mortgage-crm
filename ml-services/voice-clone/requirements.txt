@@ -1,0 +1,23 @@
+# Voice Cloning Service Dependencies
+# Requires CUDA for GPU acceleration
+
+# Core ML
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# Coqui TTS (XTTS v2)
+TTS>=0.22.0
+
+# API
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+numpy>=1.24.0
+
+# Utilities
+pydantic>=2.0.0
+aiofiles>=23.0.0
