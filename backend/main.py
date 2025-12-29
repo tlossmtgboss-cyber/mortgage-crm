@@ -19934,6 +19934,20 @@ except Exception as e:
 try:
     from routes.income_routes import router as income_router
     app.include_router(income_router, tags=["Income Management"])
+
+    # Auto-create income tables if they don't exist
+    try:
+        from models.income_models import (
+            IncomeSource, PaystubExtraction, Employment,
+            SelfEmploymentIncome, RentalIncomeProperty, IncomeCalculationHistory
+        )
+        for model in [IncomeSource, PaystubExtraction, Employment,
+                      SelfEmploymentIncome, RentalIncomeProperty, IncomeCalculationHistory]:
+            model.__table__.create(engine, checkfirst=True)
+        logger.info("✅ Income tables verified/created")
+    except Exception as table_err:
+        logger.warning(f"Could not auto-create income tables: {table_err}")
+
     logger.info("✅ Income Management routes loaded")
 except Exception as e:
     logger.warning(f"Could not load income routes: {e}")
