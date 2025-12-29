@@ -10,7 +10,6 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date
 from database import get_db
-from auth import get_current_user
 from services.recruiting_service import RecruitingService
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["recruiting"])
@@ -136,13 +135,13 @@ class CandidateNoteCreate(BaseModel):
 @router.get("/pipeline/metrics")
 async def get_pipeline_metrics(
     days: int = Query(90, ge=7, le=365),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Get recruiting pipeline metrics."""
     service = RecruitingService(db)
     metrics = await service.get_pipeline_metrics(
-        organization_id=current_user.organization_id,
+        organization_id=organization_id,
         days=days
     )
     return {
@@ -167,13 +166,13 @@ async def list_candidates(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """List candidates with filters."""
     service = RecruitingService(db)
     candidates = await service.get_candidates(
-        organization_id=current_user.organization_id,
+        organization_id=organization_id,
         status=status,
         role_id=role_id,
         source=source,
@@ -187,14 +186,14 @@ async def list_candidates(
 @router.get("/candidates/{candidate_id}")
 async def get_candidate(
     candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Get detailed candidate information."""
     service = RecruitingService(db)
     candidate = await service.get_candidate_detail(
         candidate_id=candidate_id,
-        organization_id=current_user.organization_id
+        organization_id=organization_id
     )
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -204,15 +203,16 @@ async def get_candidate(
 @router.post("/candidates")
 async def create_candidate(
     data: CandidateCreate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Create a new candidate."""
     service = RecruitingService(db)
     result = await service.create_candidate(
         data=data.model_dump(),
-        created_by=current_user.id,
-        organization_id=current_user.organization_id
+        created_by=user_id or 1,
+        organization_id=organization_id
     )
     return result
 
@@ -221,8 +221,9 @@ async def create_candidate(
 async def update_candidate_status(
     candidate_id: int,
     data: CandidateStatusUpdate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Update candidate status."""
     service = RecruitingService(db)
@@ -230,9 +231,9 @@ async def update_candidate_status(
         result = await service.update_candidate_status(
             candidate_id=candidate_id,
             new_status=data.status,
-            updated_by=current_user.id,
+            updated_by=user_id or 1,
             reason=data.reason,
-            organization_id=current_user.organization_id
+            organization_id=organization_id
         )
         return result
     except ValueError as e:
@@ -247,13 +248,13 @@ async def update_candidate_status(
 async def list_job_postings(
     is_published: Optional[bool] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """List job postings."""
     service = RecruitingService(db)
     postings = await service.get_job_postings(
-        organization_id=current_user.organization_id,
+        organization_id=organization_id,
         is_published=is_published,
         limit=limit
     )
@@ -263,15 +264,16 @@ async def list_job_postings(
 @router.post("/job-postings")
 async def create_job_posting(
     data: JobPostingCreate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Create a new job posting."""
     service = RecruitingService(db)
     result = await service.create_job_posting(
         data=data.model_dump(),
-        created_by=current_user.id,
-        organization_id=current_user.organization_id
+        created_by=user_id or 1,
+        organization_id=organization_id
     )
     return result
 
@@ -280,12 +282,10 @@ async def create_job_posting(
 async def update_job_posting(
     posting_id: int,
     data: JobPostingUpdate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Update a job posting."""
-    from sqlalchemy import text
-
     update_fields = []
     params = {"id": posting_id}
 
@@ -306,7 +306,7 @@ async def update_job_posting(
         AND (:org_id IS NULL OR organization_id = :org_id)
         RETURNING id
     """)
-    params["org_id"] = current_user.organization_id
+    params["org_id"] = organization_id
 
     result = db.execute(query, params).fetchone()
     if not result:
@@ -319,12 +319,10 @@ async def update_job_posting(
 @router.post("/job-postings/{posting_id}/publish")
 async def publish_job_posting(
     posting_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Publish a job posting."""
-    from sqlalchemy import text
-
     result = db.execute(text("""
         UPDATE mm_job_postings
         SET is_published = true,
@@ -333,7 +331,7 @@ async def publish_job_posting(
         WHERE id = :id
         AND (:org_id IS NULL OR organization_id = :org_id)
         RETURNING id, slug
-    """), {"id": posting_id, "org_id": current_user.organization_id}).fetchone()
+    """), {"id": posting_id, "org_id": organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
@@ -345,12 +343,10 @@ async def publish_job_posting(
 @router.post("/job-postings/{posting_id}/unpublish")
 async def unpublish_job_posting(
     posting_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Unpublish a job posting."""
-    from sqlalchemy import text
-
     result = db.execute(text("""
         UPDATE mm_job_postings
         SET is_published = false,
@@ -358,7 +354,7 @@ async def unpublish_job_posting(
         WHERE id = :id
         AND (:org_id IS NULL OR organization_id = :org_id)
         RETURNING id
-    """), {"id": posting_id, "org_id": current_user.organization_id}).fetchone()
+    """), {"id": posting_id, "org_id": organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
@@ -374,12 +370,9 @@ async def unpublish_job_posting(
 @router.get("/candidates/{candidate_id}/interviews")
 async def list_candidate_interviews(
     candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """List all interviews for a candidate."""
-    from sqlalchemy import text
-
     results = db.execute(text("""
         SELECT
             i.id, i.interview_type, i.interview_round, i.title,
@@ -417,16 +410,17 @@ async def list_candidate_interviews(
 async def schedule_interview(
     candidate_id: int,
     data: InterviewSchedule,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Schedule an interview for a candidate."""
     service = RecruitingService(db)
     result = await service.schedule_interview(
         candidate_id=candidate_id,
         data=data.model_dump(),
-        created_by=current_user.id,
-        organization_id=current_user.organization_id
+        created_by=user_id or 1,
+        organization_id=organization_id
     )
     return result
 
@@ -435,17 +429,18 @@ async def schedule_interview(
 async def submit_feedback(
     interview_id: int,
     data: InterviewFeedback,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Submit feedback for an interview."""
     service = RecruitingService(db)
     try:
         result = await service.submit_interview_feedback(
             interview_id=interview_id,
-            interviewer_id=current_user.id,
+            interviewer_id=user_id or 1,
             feedback=data.model_dump(),
-            organization_id=current_user.organization_id
+            organization_id=organization_id
         )
         return result
     except ValueError as e:
@@ -456,12 +451,9 @@ async def submit_feedback(
 async def update_interview_status(
     interview_id: int,
     status: str = Query(..., description="New status: scheduled, confirmed, completed, cancelled, no_show"),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Update interview status."""
-    from sqlalchemy import text
-
     valid_statuses = ["scheduled", "confirmed", "completed", "cancelled", "no_show"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
@@ -489,12 +481,10 @@ async def update_interview_status(
 async def list_offers(
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """List all offers."""
-    from sqlalchemy import text
-
     query = text("""
         SELECT
             o.id, o.offer_number, o.role_title, o.salary_amount,
@@ -510,7 +500,7 @@ async def list_offers(
     """)
 
     results = db.execute(query, {
-        "org_id": current_user.organization_id,
+        "org_id": organization_id,
         "status": status,
         "limit": limit
     }).fetchall()
@@ -538,16 +528,17 @@ async def list_offers(
 async def create_offer(
     candidate_id: int,
     data: OfferCreate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Create an offer for a candidate."""
     service = RecruitingService(db)
     result = await service.create_offer(
         candidate_id=candidate_id,
         data=data.model_dump(),
-        created_by=current_user.id,
-        organization_id=current_user.organization_id
+        created_by=user_id or 1,
+        organization_id=organization_id
     )
     return result
 
@@ -555,12 +546,10 @@ async def create_offer(
 @router.get("/offers/{offer_id}")
 async def get_offer(
     offer_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Get offer details."""
-    from sqlalchemy import text
-
     result = db.execute(text("""
         SELECT
             o.*,
@@ -572,7 +561,7 @@ async def get_offer(
         LEFT JOIN users u ON u.id = o.reports_to_user_id
         WHERE o.id = :id
         AND (:org_id IS NULL OR o.organization_id = :org_id)
-    """), {"id": offer_id, "org_id": current_user.organization_id}).fetchone()
+    """), {"id": offer_id, "org_id": organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Offer not found")
@@ -595,8 +584,8 @@ async def get_offer(
         "benefits": {
             "summary": result.benefits_summary,
             "pto_days": result.pto_days,
-            "health_insurance": result.health_insurance,
-            "retirement_match_pct": result.retirement_match_pct
+            "health_insurance": getattr(result, 'health_insurance', None),
+            "retirement_match_pct": getattr(result, 'retirement_match_pct', None)
         },
         "terms": {
             "employment_type": result.employment_type,
@@ -608,7 +597,7 @@ async def get_offer(
         "sent_at": result.sent_at.isoformat() if result.sent_at else None,
         "expires_at": result.expires_at.isoformat() if result.expires_at else None,
         "responded_at": result.responded_at.isoformat() if result.responded_at else None,
-        "negotiation_count": result.counter_offer_count
+        "negotiation_count": getattr(result, 'counter_offer_count', 0)
     }
 
 
@@ -616,17 +605,18 @@ async def get_offer(
 async def send_offer(
     offer_id: int,
     data: OfferSend,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Send an offer to the candidate."""
     service = RecruitingService(db)
     try:
         result = await service.send_offer(
             offer_id=offer_id,
-            sent_by=current_user.id,
+            sent_by=user_id or 1,
             expires_in_days=data.expires_in_days,
-            organization_id=current_user.organization_id
+            organization_id=organization_id
         )
         return result
     except ValueError as e:
@@ -637,8 +627,8 @@ async def send_offer(
 async def respond_to_offer(
     offer_id: int,
     data: OfferResponse,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Record candidate's response to an offer."""
     service = RecruitingService(db)
@@ -646,7 +636,7 @@ async def respond_to_offer(
         offer_id=offer_id,
         accepted=data.accepted,
         notes=data.notes,
-        organization_id=current_user.organization_id
+        organization_id=organization_id
     )
     return result
 
@@ -655,12 +645,10 @@ async def respond_to_offer(
 async def withdraw_offer(
     offer_id: int,
     reason: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Withdraw an offer."""
-    from sqlalchemy import text
-
     result = db.execute(text("""
         UPDATE mm_offers
         SET status = 'withdrawn',
@@ -670,7 +658,7 @@ async def withdraw_offer(
         WHERE id = :id
         AND (:org_id IS NULL OR organization_id = :org_id)
         RETURNING id, candidate_id
-    """), {"id": offer_id, "reason": reason, "org_id": current_user.organization_id}).fetchone()
+    """), {"id": offer_id, "reason": reason, "org_id": organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Offer not found")
@@ -687,12 +675,10 @@ async def withdraw_offer(
 async def list_candidate_notes(
     candidate_id: int,
     include_private: bool = False,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """List notes for a candidate."""
-    from sqlalchemy import text
-
     query = text("""
         SELECT
             n.id, n.note_type, n.content, n.is_private, n.created_at,
@@ -707,7 +693,7 @@ async def list_candidate_notes(
     results = db.execute(query, {
         "candidate_id": candidate_id,
         "include_private": include_private,
-        "user_id": current_user.id
+        "user_id": user_id or 0
     }).fetchall()
 
     return {
@@ -729,12 +715,11 @@ async def list_candidate_notes(
 async def create_candidate_note(
     candidate_id: int,
     data: CandidateNoteCreate,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Create a note for a candidate."""
-    from sqlalchemy import text
-
     result = db.execute(text("""
         INSERT INTO mm_candidate_notes (
             organization_id, candidate_id, note_type, content, is_private, created_by
@@ -743,12 +728,12 @@ async def create_candidate_note(
         )
         RETURNING id
     """), {
-        "org_id": current_user.organization_id,
+        "org_id": organization_id,
         "candidate_id": candidate_id,
         "note_type": data.note_type,
         "content": data.content,
         "is_private": data.is_private,
-        "created_by": current_user.id
+        "created_by": user_id or 1
     }).fetchone()
 
     db.commit()
@@ -763,12 +748,9 @@ async def create_candidate_note(
 async def list_candidate_activities(
     candidate_id: int,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """List activity feed for a candidate."""
-    from sqlalchemy import text
-
     results = db.execute(text("""
         SELECT
             a.id, a.activity_type, a.description, a.created_at,
@@ -804,14 +786,10 @@ async def list_candidate_activities(
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Get recruiting dashboard statistics."""
-    from sqlalchemy import text
-
-    org_id = current_user.organization_id
-
     # Get various stats in parallel
     candidates_stats = db.execute(text("""
         SELECT
@@ -823,7 +801,7 @@ async def get_dashboard_stats(
         FROM mm_candidates
         WHERE is_active = true
         AND (:org_id IS NULL OR organization_id = :org_id)
-    """), {"org_id": org_id}).fetchone()
+    """), {"org_id": organization_id}).fetchone()
 
     interviews_stats = db.execute(text("""
         SELECT
@@ -832,7 +810,7 @@ async def get_dashboard_stats(
             COUNT(CASE WHEN status = 'completed' AND completed_at >= CURRENT_DATE - 7 THEN 1 END) as completed_this_week
         FROM mm_interviews
         WHERE (:org_id IS NULL OR organization_id = :org_id)
-    """), {"org_id": org_id}).fetchone()
+    """), {"org_id": organization_id}).fetchone()
 
     offers_stats = db.execute(text("""
         SELECT
@@ -841,37 +819,37 @@ async def get_dashboard_stats(
             COUNT(CASE WHEN status = 'accepted' AND accepted_at >= CURRENT_DATE - 30 THEN 1 END) as accepted_this_month
         FROM mm_offers
         WHERE (:org_id IS NULL OR organization_id = :org_id)
-    """), {"org_id": org_id}).fetchone()
+    """), {"org_id": organization_id}).fetchone()
 
     positions_stats = db.execute(text("""
         SELECT
             COUNT(CASE WHEN is_published = true THEN 1 END) as open,
-            SUM(CASE WHEN is_published = true THEN views ELSE 0 END) as total_views,
-            SUM(CASE WHEN is_published = true THEN applications ELSE 0 END) as total_applications
+            COALESCE(SUM(CASE WHEN is_published = true THEN views ELSE 0 END), 0) as total_views,
+            COALESCE(SUM(CASE WHEN is_published = true THEN applications ELSE 0 END), 0) as total_applications
         FROM mm_job_postings
         WHERE (:org_id IS NULL OR organization_id = :org_id)
-    """), {"org_id": org_id}).fetchone()
+    """), {"org_id": organization_id}).fetchone()
 
     return {
         "candidates": {
-            "total_active": candidates_stats.total,
-            "new": candidates_stats.new,
-            "interviewing": candidates_stats.interviewing,
-            "offer_stage": candidates_stats.offer_stage,
-            "applied_this_week": candidates_stats.this_week
+            "total_active": candidates_stats.total if candidates_stats else 0,
+            "new": candidates_stats.new if candidates_stats else 0,
+            "interviewing": candidates_stats.interviewing if candidates_stats else 0,
+            "offer_stage": candidates_stats.offer_stage if candidates_stats else 0,
+            "applied_this_week": candidates_stats.this_week if candidates_stats else 0
         },
         "interviews": {
-            "upcoming": interviews_stats.upcoming,
-            "today": interviews_stats.today,
-            "completed_this_week": interviews_stats.completed_this_week
+            "upcoming": interviews_stats.upcoming if interviews_stats else 0,
+            "today": interviews_stats.today if interviews_stats else 0,
+            "completed_this_week": interviews_stats.completed_this_week if interviews_stats else 0
         },
         "offers": {
-            "draft": offers_stats.draft,
-            "pending_response": offers_stats.pending_response,
-            "accepted_this_month": offers_stats.accepted_this_month
+            "draft": offers_stats.draft if offers_stats else 0,
+            "pending_response": offers_stats.pending_response if offers_stats else 0,
+            "accepted_this_month": offers_stats.accepted_this_month if offers_stats else 0
         },
         "positions": {
-            "open": positions_stats.open,
+            "open": positions_stats.open if positions_stats else 0,
             "total_views": positions_stats.total_views or 0,
             "total_applications": positions_stats.total_applications or 0
         }
@@ -881,12 +859,10 @@ async def get_dashboard_stats(
 @router.get("/dashboard/upcoming-interviews")
 async def get_upcoming_interviews(
     limit: int = Query(10, ge=1, le=50),
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
 ):
     """Get upcoming interviews for the dashboard."""
-    from sqlalchemy import text
-
     results = db.execute(text("""
         SELECT
             i.id, i.interview_type, i.title, i.scheduled_at, i.duration_minutes,
@@ -902,7 +878,7 @@ async def get_upcoming_interviews(
         AND (:org_id IS NULL OR i.organization_id = :org_id)
         ORDER BY i.scheduled_at ASC
         LIMIT :limit
-    """), {"org_id": current_user.organization_id, "limit": limit}).fetchall()
+    """), {"org_id": organization_id, "limit": limit}).fetchall()
 
     return {
         "interviews": [
