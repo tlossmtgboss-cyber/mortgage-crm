@@ -576,7 +576,7 @@ class RecruitingService:
                 created_by
             ) VALUES (
                 :org_id, :title, :slug, :role_id,
-                :summary, :description, :requirements::jsonb, :responsibilities::jsonb, :benefits::jsonb,
+                :summary, :description, CAST(:requirements AS jsonb), CAST(:responsibilities AS jsonb), CAST(:benefits AS jsonb),
                 :salary_min, :salary_max, :salary_type,
                 :is_published, :is_remote, :location, :employment_type,
                 :created_by

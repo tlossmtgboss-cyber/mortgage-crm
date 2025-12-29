@@ -917,6 +917,84 @@ async def get_upcoming_interviews(
 # ADMIN ENDPOINTS
 # =============================================================================
 
+@router.post("/admin/seed-test-data")
+async def seed_test_data(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Seed test candidates and job postings."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    import json
+    results = {"candidates": [], "job_postings": [], "errors": []}
+
+    try:
+        # Create test candidates
+        candidates = [
+            ("Sarah", "Johnson", "sarah.johnson@example.com", "555-123-4567", "linkedin", "Senior Loan Officer", 8, 6, True),
+            ("Michael", "Chen", "michael.chen@example.com", "555-234-5678", "referral", "Loan Processor", 4, 3, True),
+            ("Emily", "Rodriguez", "emily.rodriguez@example.com", "555-345-6789", "indeed", "Junior Loan Officer", 1, 0, False),
+            ("David", "Williams", "david.williams@example.com", "555-456-7890", "website", "Senior Loan Officer", 10, 8, True),
+            ("Jessica", "Martinez", "jessica.martinez@example.com", "555-567-8901", "referral", "Loan Processor", 3, 2, True),
+        ]
+
+        for c in candidates:
+            try:
+                result = db.execute(text("""
+                    INSERT INTO mm_candidates (
+                        first_name, last_name, email, phone, source,
+                        target_role_name, years_experience, years_mortgage_experience,
+                        has_mortgage_experience, status, applied_at, is_active
+                    ) VALUES (
+                        :first_name, :last_name, :email, :phone, :source,
+                        :target_role, :years_exp, :years_mortgage,
+                        :has_mortgage, 'new', CURRENT_TIMESTAMP, true
+                    )
+                    RETURNING id
+                """), {
+                    "first_name": c[0], "last_name": c[1], "email": c[2], "phone": c[3],
+                    "source": c[4], "target_role": c[5], "years_exp": c[6],
+                    "years_mortgage": c[7], "has_mortgage": c[8]
+                }).fetchone()
+                results["candidates"].append({"id": result.id, "name": f"{c[0]} {c[1]}"})
+            except Exception as e:
+                results["errors"].append(f"Candidate {c[0]} {c[1]}: {str(e)}")
+
+        # Create test job postings
+        job_postings = [
+            ("Senior Loan Officer", "senior-loan-officer", "Experienced LO for growing team", 80000, 150000, "Charlotte, NC"),
+            ("Loan Processor", "loan-processor", "Detail-oriented processor", 50000, 70000, "Remote"),
+            ("Junior Loan Officer", "junior-loan-officer", "Entry-level opportunity", 45000, 60000, "Atlanta, GA"),
+        ]
+
+        for jp in job_postings:
+            try:
+                result = db.execute(text("""
+                    INSERT INTO mm_job_postings (
+                        title, slug, summary, salary_min, salary_max, location,
+                        is_published, employment_type, requirements, responsibilities, benefits
+                    ) VALUES (
+                        :title, :slug, :summary, :salary_min, :salary_max, :location,
+                        true, 'full_time', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb
+                    )
+                    RETURNING id, slug
+                """), {
+                    "title": jp[0], "slug": jp[1], "summary": jp[2],
+                    "salary_min": jp[3], "salary_max": jp[4], "location": jp[5]
+                }).fetchone()
+                results["job_postings"].append({"id": result.id, "slug": result.slug})
+            except Exception as e:
+                results["errors"].append(f"Job {jp[0]}: {str(e)}")
+
+        db.commit()
+        return results
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Seed failed: {str(e)}")
+
+
 @router.post("/admin/run-migration")
 async def run_recruiting_migration(
     admin_key: str = Query(..., description="Admin API key"),
