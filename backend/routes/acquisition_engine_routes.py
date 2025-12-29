@@ -298,23 +298,78 @@ async def launch_campaign(
 
 async def _activate_campaign(campaign_id: str):
     """Background task to activate campaign"""
-    from database import get_session
-    db = get_session()
+    from database import SessionLocal
+    db = SessionLocal()
     try:
         campaign = db.query(CampaignInstance).filter(
             CampaignInstance.id == uuid.UUID(campaign_id)
         ).first()
 
         if campaign:
-            # TODO: Activate SMS sequences
-            # TODO: Activate Email sequences
-            # TODO: Set up dialer queue rules
-            # TODO: Generate funnel URL
+            # Activate SMS sequences
+            if campaign.sms_sequences_active:
+                for seq_id in campaign.sms_sequences_active:
+                    try:
+                        db.execute(text("""
+                            UPDATE sms_sequences
+                            SET status = 'active', campaign_instance_id = :campaign_id
+                            WHERE id = :seq_id
+                        """), {"campaign_id": str(campaign.id), "seq_id": seq_id})
+                        logger.info(f"Activated SMS sequence {seq_id} for campaign {campaign_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not activate SMS sequence {seq_id}: {e}")
+
+            # Activate Email sequences
+            if campaign.email_sequences_active:
+                for seq_id in campaign.email_sequences_active:
+                    try:
+                        db.execute(text("""
+                            UPDATE email_sequences
+                            SET status = 'active', campaign_instance_id = :campaign_id
+                            WHERE id = :seq_id
+                        """), {"campaign_id": str(campaign.id), "seq_id": seq_id})
+                        logger.info(f"Activated Email sequence {seq_id} for campaign {campaign_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not activate Email sequence {seq_id}: {e}")
+
+            # Set up dialer queue rules
+            if campaign.dialer_config:
+                try:
+                    dialer_rules = campaign.dialer_config
+                    db.execute(text("""
+                        INSERT INTO dialer_queue_rules (
+                            campaign_instance_id, priority, max_attempts,
+                            retry_interval_minutes, active, created_at
+                        ) VALUES (
+                            :campaign_id, :priority, :max_attempts,
+                            :retry_interval, true, :created_at
+                        )
+                        ON CONFLICT (campaign_instance_id) DO UPDATE SET
+                            priority = :priority,
+                            max_attempts = :max_attempts,
+                            retry_interval_minutes = :retry_interval,
+                            active = true
+                    """), {
+                        "campaign_id": str(campaign.id),
+                        "priority": dialer_rules.get("priority", "NORMAL"),
+                        "max_attempts": dialer_rules.get("max_attempts", 3),
+                        "retry_interval": dialer_rules.get("retry_interval_minutes", 30),
+                        "created_at": datetime.utcnow(),
+                    })
+                    logger.info(f"Set up dialer queue rules for campaign {campaign_id}")
+                except Exception as e:
+                    logger.warning(f"Could not set up dialer rules: {e}")
+
+            # Generate funnel URL
+            funnel_slug = f"c-{campaign_id[:8]}"
+            funnel_url = f"https://app.perenniaai.com/funnel/{funnel_slug}"
+            campaign.funnel_url = funnel_url
+            campaign.funnel_slug = funnel_slug
 
             campaign.status = CampaignStatus.ACTIVE.value
             campaign.activated_at = datetime.utcnow()
             db.commit()
-            logger.info(f"Campaign {campaign_id} activated")
+            logger.info(f"Campaign {campaign_id} activated with funnel URL: {funnel_url}")
     except Exception as e:
         logger.error(f"Failed to activate campaign {campaign_id}: {e}")
         if campaign:
@@ -727,9 +782,48 @@ async def get_speed_to_lead_metrics(
     missed_sla = sum(c.hot_leads_missed_sla or 0 for c in campaigns)
     compliance = (within_sla / total_hot * 100) if total_hot > 0 else 100
 
-    # Average response time
-    avg_times = [c.avg_speed_to_first_contact_seconds for c in campaigns if c.avg_speed_to_first_contact_seconds]
-    avg_response = int(sum(avg_times) / len(avg_times)) if avg_times else 0
+    # Get actual response times from events for percentile calculation
+    since = datetime.utcnow() - timedelta(days=days)
+    try:
+        event_filter = "ae.event_timestamp >= :since"
+        params = {"since": since}
+        if campaign_id:
+            event_filter += " AND ae.campaign_instance_id = :campaign_id"
+            params["campaign_id"] = campaign_id
+
+        response_times_result = db.execute(text(f"""
+            SELECT (ae.event_payload->>'response_time_seconds')::int as response_time
+            FROM acquisition_events ae
+            WHERE {event_filter}
+            AND ae.event_type IN ('SPEED_TO_LEAD_SUCCESS', 'SLA_BREACH')
+            AND ae.event_payload->>'response_time_seconds' IS NOT NULL
+            ORDER BY response_time
+        """), params).fetchall()
+
+        response_times = [r.response_time for r in response_times_result if r.response_time is not None]
+    except Exception as e:
+        logger.warning(f"Could not fetch response times from events: {e}")
+        response_times = []
+
+    # Calculate percentiles
+    if response_times:
+        response_times_sorted = sorted(response_times)
+        n = len(response_times_sorted)
+        avg_response = int(sum(response_times_sorted) / n)
+
+        # P50 (median)
+        p50_idx = int(n * 0.5)
+        p50_response = response_times_sorted[min(p50_idx, n - 1)]
+
+        # P90
+        p90_idx = int(n * 0.9)
+        p90_response = response_times_sorted[min(p90_idx, n - 1)]
+    else:
+        # Fall back to campaign averages if no event data
+        avg_times = [c.avg_speed_to_first_contact_seconds for c in campaigns if c.avg_speed_to_first_contact_seconds]
+        avg_response = int(sum(avg_times) / len(avg_times)) if avg_times else 0
+        p50_response = avg_response
+        p90_response = int(avg_response * 1.5) if avg_response else 0
 
     return SpeedToLeadMetrics(
         total_hot_leads=total_hot,
@@ -737,8 +831,8 @@ async def get_speed_to_lead_metrics(
         missed_sla=missed_sla,
         compliance_rate=round(compliance, 2),
         avg_response_time_seconds=avg_response,
-        p50_response_time_seconds=avg_response,  # TODO: Calculate actual percentiles
-        p90_response_time_seconds=avg_response * 2,  # TODO: Calculate actual percentiles
+        p50_response_time_seconds=p50_response,
+        p90_response_time_seconds=p90_response,
     )
 
 
@@ -963,6 +1057,14 @@ async def get_campaign_funnel(
     if not campaign:
         raise HTTPException(404, "Campaign not found")
 
+    # Calculate cost per meeting and cost per application
+    total_spend = float(campaign.total_spend or 0)
+    meetings_booked = campaign.meetings_booked or 0
+    applications_started = campaign.applications_started or 0
+
+    cost_per_meeting = round(total_spend / meetings_booked, 2) if meetings_booked > 0 else None
+    cost_per_application = round(total_spend / applications_started, 2) if applications_started > 0 else None
+
     return {
         "campaign": {
             "id": str(campaign.id),
@@ -974,10 +1076,10 @@ async def get_campaign_funnel(
         "funnel": metrics.get("funnel", {}),
         "conversion_rates": metrics.get("conversion_rates", {}),
         "cost_metrics": {
-            "total_spend": float(campaign.total_spend or 0),
+            "total_spend": total_spend,
             "cost_per_lead": float(campaign.cost_per_lead) if campaign.cost_per_lead else None,
-            "cost_per_meeting": None,  # TODO: Calculate
-            "cost_per_application": None,  # TODO: Calculate
+            "cost_per_meeting": cost_per_meeting,
+            "cost_per_application": cost_per_application,
             "cost_per_funded": float(campaign.cost_per_funded_loan) if campaign.cost_per_funded_loan else None,
         },
         "revenue_metrics": {

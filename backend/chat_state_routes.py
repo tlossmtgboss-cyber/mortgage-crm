@@ -56,11 +56,8 @@ try:
 except ImportError:
     BusinessHoursValidator = None
 
-try:
-    from services.chat_analytics import ChatAnalytics, get_analytics_summary
-except ImportError:
-    ChatAnalytics = None
-    get_analytics_summary = None
+# Import ChatAnalytics - now properly available
+from services.chat_analytics import ChatAnalytics, get_analytics_summary
 
 logger = logging.getLogger(__name__)
 
@@ -833,9 +830,6 @@ async def get_conversion_funnel(
     db: Session = Depends(get_db),
 ):
     """Get detailed conversion funnel analytics"""
-    if ChatAnalytics is None:
-        raise HTTPException(status_code=501, detail="Enhanced analytics not available")
-
     analytics = ChatAnalytics(db)
     return analytics.get_conversion_funnel(
         days=days,
@@ -850,9 +844,6 @@ async def get_cta_effectiveness(
     db: Session = Depends(get_db),
 ):
     """Get CTA effectiveness by type"""
-    if ChatAnalytics is None:
-        raise HTTPException(status_code=501, detail="Enhanced analytics not available")
-
     analytics = ChatAnalytics(db)
     return {
         "by_type": analytics.get_cta_effectiveness_by_type(days),
@@ -867,9 +858,6 @@ async def get_intent_signal_distribution(
     db: Session = Depends(get_db),
 ):
     """Get distribution of intent signals"""
-    if ChatAnalytics is None:
-        raise HTTPException(status_code=501, detail="Enhanced analytics not available")
-
     analytics = ChatAnalytics(db)
     return {
         "distribution": analytics.get_intent_distribution(days, microsite_id),
@@ -883,9 +871,6 @@ async def get_phase_dropoff_analysis(
     db: Session = Depends(get_db),
 ):
     """Get phase drop-off analysis"""
-    if ChatAnalytics is None:
-        raise HTTPException(status_code=501, detail="Enhanced analytics not available")
-
     analytics = ChatAnalytics(db)
     return analytics.get_phase_drop_off_analysis(days)
 
@@ -896,9 +881,6 @@ async def get_daily_session_trend(
     db: Session = Depends(get_db),
 ):
     """Get daily session and conversion trend"""
-    if ChatAnalytics is None:
-        raise HTTPException(status_code=501, detail="Enhanced analytics not available")
-
     analytics = ChatAnalytics(db)
     return {
         "trend": analytics.get_daily_session_trend(days),

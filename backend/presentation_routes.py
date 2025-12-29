@@ -18,12 +18,8 @@ import math
 
 from database import get_db
 
-# Import models - these will be created by migration
-try:
-    from models.presentation import PresentationScenario, QuoteRequest, ScenarioType, QuoteRequestStatus
-except ImportError:
-    # Models not yet created - will work after migration
-    pass
+# Import models - now properly available
+from models.presentation import PresentationScenario, QuoteRequest, ScenarioType, QuoteRequestStatus
 
 router = APIRouter(prefix="/api/presentation", tags=["Presentation Engine"])
 
@@ -355,10 +351,6 @@ def save_scenario(
     db: Session = Depends(get_db),
 ):
     """Save a presentation scenario for future reference"""
-    try:
-        from models.presentation import PresentationScenario, ScenarioType
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     # Map string to enum
     scenario_type_map = {
@@ -447,10 +439,6 @@ def get_scenarios(
     db: Session = Depends(get_db),
 ):
     """Get saved scenarios for a loan"""
-    try:
-        from models.presentation import PresentationScenario, ScenarioType
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     query = db.query(PresentationScenario).filter(PresentationScenario.loan_id == loan_id)
 
@@ -482,10 +470,6 @@ def get_scenario(
     db: Session = Depends(get_db),
 ):
     """Get a specific scenario by ID"""
-    try:
-        from models.presentation import PresentationScenario
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     scenario = db.query(PresentationScenario).filter(
         PresentationScenario.id == scenario_id
@@ -506,10 +490,6 @@ def update_scenario(
     db: Session = Depends(get_db),
 ):
     """Update a saved scenario"""
-    try:
-        from models.presentation import PresentationScenario
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     scenario = db.query(PresentationScenario).filter(
         PresentationScenario.id == scenario_id
@@ -537,10 +517,6 @@ def delete_scenario(
     db: Session = Depends(get_db),
 ):
     """Delete a saved scenario"""
-    try:
-        from models.presentation import PresentationScenario
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     scenario = db.query(PresentationScenario).filter(
         PresentationScenario.id == scenario_id
@@ -567,10 +543,6 @@ def submit_quote_request(
     db: Session = Depends(get_db),
 ):
     """Submit a quote request from the PresentationEngine"""
-    try:
-        from models.presentation import QuoteRequest, ScenarioType, QuoteRequestStatus
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     # Map string to enum
     quote_type_map = {
@@ -617,10 +589,6 @@ def get_quote_requests(
     db: Session = Depends(get_db),
 ):
     """Get quote requests for a loan"""
-    try:
-        from models.presentation import QuoteRequest, QuoteRequestStatus
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     query = db.query(QuoteRequest).filter(QuoteRequest.loan_id == loan_id)
 
@@ -651,10 +619,6 @@ def get_quote_request(
     db: Session = Depends(get_db),
 ):
     """Get a specific quote request"""
-    try:
-        from models.presentation import QuoteRequest
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     quote = db.query(QuoteRequest).filter(QuoteRequest.id == quote_id).first()
 
@@ -671,10 +635,6 @@ def update_quote_request(
     db: Session = Depends(get_db),
 ):
     """Update a quote request (for LO to respond)"""
-    try:
-        from models.presentation import QuoteRequest, QuoteRequestStatus
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     quote = db.query(QuoteRequest).filter(QuoteRequest.id == quote_id).first()
 
@@ -721,10 +681,6 @@ def get_pending_quotes_for_user(
     db: Session = Depends(get_db),
 ):
     """Get pending quote requests assigned to a specific loan officer"""
-    try:
-        from models.presentation import QuoteRequest, QuoteRequestStatus
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
     from main import Loan
 

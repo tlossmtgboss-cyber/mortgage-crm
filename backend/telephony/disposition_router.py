@@ -13,24 +13,48 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Dependency placeholders (to be set by main app)
+# Dependency handling (with fallback implementations)
 # =============================================================================
 
+_custom_get_db = None
+_custom_get_current_user = None
+
+
 def get_db():
-    """Database session dependency - must be overridden by main app"""
-    raise NotImplementedError("get_db must be overridden")
+    """Database session dependency - uses custom or fallback"""
+    if _custom_get_db:
+        return _custom_get_db()
+
+    # Fallback to database module
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+    except ImportError:
+        raise NotImplementedError("get_db must be overridden or database module must be available")
 
 
 def get_current_user():
-    """Current user dependency - must be overridden by main app"""
-    raise NotImplementedError("get_current_user must be overridden")
+    """Current user dependency - uses custom or fallback"""
+    if _custom_get_current_user:
+        return _custom_get_current_user()
+
+    # Return a mock user for standalone operation
+    class MockUser:
+        id = 1
+        name = "System User"
+
+    return MockUser()
 
 
 def set_dependencies(db_dependency, user_dependency):
     """Set the dependency functions from the main app"""
-    global get_db, get_current_user
-    get_db = db_dependency
-    get_current_user = user_dependency
+    global _custom_get_db, _custom_get_current_user
+    _custom_get_db = db_dependency
+    _custom_get_current_user = user_dependency
 
 
 # =============================================================================

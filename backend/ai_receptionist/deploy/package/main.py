@@ -160,11 +160,72 @@ async def handle_call_status(request: Request):
 
     call_sid = form_data.get("CallSid")
     call_status = form_data.get("CallStatus")
+    call_duration = form_data.get("CallDuration")
+    from_number = form_data.get("From")
+    to_number = form_data.get("To")
+    direction = form_data.get("Direction")
+    timestamp = form_data.get("Timestamp")
 
     logger.info(f"Call status update: {call_sid} -> {call_status}")
 
     # Update call log in database
-    # TODO: Implement database update
+    try:
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            if database_url.startswith("postgres://"):
+                database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+            engine = create_engine(database_url)
+            Session = sessionmaker(bind=engine)
+            db = Session()
+
+            try:
+                # Check if call log exists
+                existing = db.execute(text("""
+                    SELECT id FROM ai_receptionist_call_logs WHERE call_sid = :call_sid
+                """), {"call_sid": call_sid}).fetchone()
+
+                if existing:
+                    # Update existing record
+                    db.execute(text("""
+                        UPDATE ai_receptionist_call_logs
+                        SET status = :status,
+                            duration_seconds = :duration,
+                            updated_at = NOW()
+                        WHERE call_sid = :call_sid
+                    """), {
+                        "call_sid": call_sid,
+                        "status": call_status,
+                        "duration": int(call_duration) if call_duration else None,
+                    })
+                else:
+                    # Insert new record
+                    db.execute(text("""
+                        INSERT INTO ai_receptionist_call_logs (
+                            call_sid, status, from_number, to_number,
+                            direction, duration_seconds, created_at, updated_at
+                        ) VALUES (
+                            :call_sid, :status, :from_number, :to_number,
+                            :direction, :duration, NOW(), NOW()
+                        )
+                    """), {
+                        "call_sid": call_sid,
+                        "status": call_status,
+                        "from_number": from_number,
+                        "to_number": to_number,
+                        "direction": direction,
+                        "duration": int(call_duration) if call_duration else None,
+                    })
+
+                db.commit()
+                logger.info(f"Updated call log for {call_sid}")
+            finally:
+                db.close()
+    except Exception as e:
+        logger.error(f"Failed to update call log: {e}")
 
     return {"status": "received"}
 
@@ -208,22 +269,168 @@ async def voice_stream(websocket: WebSocket, call_sid: str):
 @app.get("/api/calls")
 async def get_recent_calls(limit: int = 20):
     """Get recent call logs."""
-    # TODO: Implement database query
-    return {"calls": [], "total": 0}
+    try:
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {"calls": [], "total": 0, "message": "Database not configured"}
+
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+        engine = create_engine(database_url)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+
+        try:
+            # Get recent calls
+            result = db.execute(text("""
+                SELECT
+                    id, call_sid, status, from_number, to_number,
+                    direction, duration_seconds, transcript,
+                    callback_requested, callback_reason,
+                    created_at, updated_at
+                FROM ai_receptionist_call_logs
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """), {"limit": limit}).fetchall()
+
+            # Get total count
+            total = db.execute(text("""
+                SELECT COUNT(*) FROM ai_receptionist_call_logs
+            """)).scalar()
+
+            calls = []
+            for row in result:
+                calls.append({
+                    "id": row.id,
+                    "call_sid": row.call_sid,
+                    "status": row.status,
+                    "from_number": row.from_number,
+                    "to_number": row.to_number,
+                    "direction": row.direction,
+                    "duration_seconds": row.duration_seconds,
+                    "transcript": row.transcript,
+                    "callback_requested": row.callback_requested,
+                    "callback_reason": row.callback_reason,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                })
+
+            return {"calls": calls, "total": total or 0}
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to get calls: {e}")
+        return {"calls": [], "total": 0, "error": str(e)}
 
 
 @app.get("/api/calls/{call_sid}")
 async def get_call_details(call_sid: str):
     """Get details for a specific call."""
-    # TODO: Implement database query
-    return {"call_sid": call_sid, "status": "not_found"}
+    try:
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {"call_sid": call_sid, "status": "not_found", "message": "Database not configured"}
+
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+        engine = create_engine(database_url)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+
+        try:
+            result = db.execute(text("""
+                SELECT
+                    id, call_sid, status, from_number, to_number,
+                    direction, duration_seconds, transcript,
+                    callback_requested, callback_reason,
+                    intent_detected, sentiment, summary,
+                    created_at, updated_at
+                FROM ai_receptionist_call_logs
+                WHERE call_sid = :call_sid
+            """), {"call_sid": call_sid}).fetchone()
+
+            if not result:
+                return {"call_sid": call_sid, "status": "not_found"}
+
+            return {
+                "id": result.id,
+                "call_sid": result.call_sid,
+                "status": result.status,
+                "from_number": result.from_number,
+                "to_number": result.to_number,
+                "direction": result.direction,
+                "duration_seconds": result.duration_seconds,
+                "transcript": result.transcript,
+                "callback_requested": result.callback_requested,
+                "callback_reason": result.callback_reason,
+                "intent_detected": result.intent_detected,
+                "sentiment": result.sentiment,
+                "summary": result.summary,
+                "created_at": result.created_at.isoformat() if result.created_at else None,
+                "updated_at": result.updated_at.isoformat() if result.updated_at else None,
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to get call details: {e}")
+        return {"call_sid": call_sid, "status": "error", "error": str(e)}
 
 
 @app.get("/api/callbacks")
 async def get_pending_callbacks():
     """Get pending callback requests."""
-    # TODO: Implement database query
-    return {"callbacks": [], "total": 0}
+    try:
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import sessionmaker
+
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return {"callbacks": [], "total": 0, "message": "Database not configured"}
+
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+        engine = create_engine(database_url)
+        Session = sessionmaker(bind=engine)
+        db = Session()
+
+        try:
+            # Get callbacks where callback was requested
+            result = db.execute(text("""
+                SELECT
+                    id, call_sid, from_number, callback_reason,
+                    intent_detected, summary, created_at
+                FROM ai_receptionist_call_logs
+                WHERE callback_requested = true
+                ORDER BY created_at DESC
+            """)).fetchall()
+
+            callbacks = []
+            for row in result:
+                callbacks.append({
+                    "id": row.id,
+                    "call_sid": row.call_sid,
+                    "phone_number": row.from_number,
+                    "reason": row.callback_reason,
+                    "intent": row.intent_detected,
+                    "summary": row.summary,
+                    "requested_at": row.created_at.isoformat() if row.created_at else None,
+                })
+
+            return {"callbacks": callbacks, "total": len(callbacks)}
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Failed to get callbacks: {e}")
+        return {"callbacks": [], "total": 0, "error": str(e)}
 
 
 @app.get("/api/metrics")
