@@ -169,7 +169,7 @@ async def list_transactions(
         for row in result.fetchall()
     ]
 
-    return success_response({"transactions": transactions})
+    return success_response("Transactions retrieved", {"transactions": transactions})
 
 
 @router.get("/transactions/{transaction_id}")
@@ -189,7 +189,7 @@ async def get_transaction(
     milestones = listing_portal_service.get_milestones(db, transaction_id)
     unread = listing_portal_service.get_unread_count(db, transaction_id, for_party=False)
 
-    return success_response({
+    return success_response("Transaction details retrieved", {
         "transaction": transaction,
         "parties": parties,
         "milestones": milestones,
@@ -336,7 +336,7 @@ async def get_messages(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
     listing_portal_service.mark_messages_read(db, transaction_id, reader_user_id=user_id)
 
-    return success_response({"messages": messages})
+    return success_response("Messages retrieved", {"messages": messages})
 
 
 # =============================================================================
@@ -380,7 +380,7 @@ async def validate_session(
     if not session_data:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    return success_response(session_data)
+    return success_response("Session valid", session_data)
 
 
 # Helper to get party from session
@@ -423,7 +423,7 @@ async def portal_dashboard(
     # Get recent messages (preview)
     messages = listing_portal_service.get_messages(db, transaction["id"], limit=5)
 
-    return success_response({
+    return success_response("Dashboard data retrieved", {
         "party": {
             "id": party["id"],
             "name": f"{party['first_name']} {party['last_name']}",
@@ -464,7 +464,7 @@ async def portal_get_messages(
     # Mark LO messages as read
     listing_portal_service.mark_messages_read(db, transaction["id"], reader_party_id=party["id"])
 
-    return success_response({"messages": messages})
+    return success_response("Messages retrieved", {"messages": messages})
 
 
 @router.post("/portal/messages")
@@ -601,7 +601,7 @@ async def get_scheduler_status(
         # Filter to just listing-related jobs
         listing_jobs = [j for j in jobs if "listing" in j["id"].lower()]
 
-        return success_response({
+        return success_response("Scheduler status retrieved", {
             "all_jobs": jobs,
             "listing_jobs": listing_jobs,
             "scheduler_running": scheduler_service.scheduler.running
