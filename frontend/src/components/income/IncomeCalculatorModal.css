@@ -13,6 +13,12 @@
   padding: 20px;
 }
 
+/* When modal has been dragged, don't center it */
+.income-modal-overlay.dragged {
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
 /* Modal Container */
 .income-modal {
   background: white;
@@ -24,6 +30,18 @@
   flex-direction: column;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   animation: modalSlideIn 0.3s ease;
+  pointer-events: auto;
+}
+
+/* When modal is being dragged */
+.income-modal.dragging {
+  box-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+
+/* When modal has been moved from center */
+.income-modal.dragged {
+  position: relative;
 }
 
 @keyframes modalSlideIn {
@@ -37,13 +55,39 @@
   }
 }
 
-/* Modal Header */
+/* Modal Header - Draggable */
 .income-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
   border-bottom: 1px solid #e2e8f0;
+  cursor: grab;
+  user-select: none;
+}
+
+.income-modal-header:active,
+.income-modal-header.dragging {
+  cursor: grabbing;
+}
+
+.income-modal-header .header-drag-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.income-modal-header .drag-indicator {
+  color: #94a3b8;
+  font-size: 16px;
+  letter-spacing: 2px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.income-modal-header:hover .drag-indicator {
+  opacity: 1;
+  color: #64748b;
 }
 
 .income-modal-header h2 {

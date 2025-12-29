@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from database import get_db
 from services.capacity_service import CapacityService, get_capacity_service
 from services.performance_service import PerformanceService, get_performance_service
+from services.risk_detection_service import RiskDetectionService, get_risk_detection_service
 
 
 router = APIRouter(prefix="/api/v1/master-manager", tags=["Master Manager"])
@@ -1008,6 +1009,251 @@ async def get_promotion_candidates(
         "candidates": candidates,
         "total": len(candidates)
     }
+
+
+# =============================================================================
+# RISK DETECTION ROUTES
+# =============================================================================
+
+@router.get("/risk/dashboard")
+async def get_risk_dashboard(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get comprehensive risk dashboard with all risk metrics."""
+    service = get_risk_detection_service(db)
+    dashboard = await service.get_risk_dashboard(organization_id)
+    return dashboard
+
+
+@router.get("/risk/burnout")
+async def get_all_burnout_risks(
+    min_risk_score: float = Query(0, ge=0, le=100, description="Minimum risk score filter"),
+    organization_id: Optional[int] = None,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """Get burnout risk assessment for all users."""
+    service = get_risk_detection_service(db)
+    risks = await service.get_all_burnout_risks(
+        organization_id=organization_id,
+        min_risk_score=min_risk_score,
+        limit=limit
+    )
+    return {
+        "risks": [
+            {
+                "user_id": r.user_id,
+                "user_name": r.user_name,
+                "role_name": r.role_name,
+                "overall_risk_score": r.overall_risk_score,
+                "risk_level": r.risk_level,
+                "contributing_factors": r.contributing_factors,
+                "recommendations": r.recommendations
+            }
+            for r in risks
+        ],
+        "total": len(risks),
+        "high_risk_count": len([r for r in risks if r.risk_level in ["high", "critical"]])
+    }
+
+
+@router.get("/risk/burnout/{user_id}")
+async def get_user_burnout_risk(
+    user_id: int,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get detailed burnout risk assessment for a specific user."""
+    service = get_risk_detection_service(db)
+    try:
+        assessment = await service.calculate_burnout_risk(user_id, organization_id)
+        return {
+            "user_id": assessment.user_id,
+            "user_name": assessment.user_name,
+            "role_name": assessment.role_name,
+            "overall_risk_score": assessment.overall_risk_score,
+            "risk_level": assessment.risk_level,
+            "factor_scores": assessment.factor_scores,
+            "contributing_factors": assessment.contributing_factors,
+            "recommendations": assessment.recommendations,
+            "trend": assessment.trend,
+            "assessed_at": assessment.assessed_at.isoformat() if assessment.assessed_at else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/risk/attrition")
+async def get_all_attrition_risks(
+    min_risk_score: float = Query(0, ge=0, le=100, description="Minimum risk score filter"),
+    organization_id: Optional[int] = None,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """Get attrition risk assessment for all users."""
+    service = get_risk_detection_service(db)
+    risks = await service.get_all_attrition_risks(
+        organization_id=organization_id,
+        min_risk_score=min_risk_score,
+        limit=limit
+    )
+    return {
+        "risks": [
+            {
+                "user_id": r.user_id,
+                "user_name": r.user_name,
+                "role_name": r.role_name,
+                "overall_risk_score": r.overall_risk_score,
+                "risk_level": r.risk_level,
+                "contributing_factors": r.contributing_factors,
+                "recommendations": r.recommendations
+            }
+            for r in risks
+        ],
+        "total": len(risks),
+        "high_risk_count": len([r for r in risks if r.risk_level in ["high", "critical"]])
+    }
+
+
+@router.get("/risk/attrition/{user_id}")
+async def get_user_attrition_risk(
+    user_id: int,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get detailed attrition risk assessment for a specific user."""
+    service = get_risk_detection_service(db)
+    try:
+        assessment = await service.calculate_attrition_risk(user_id, organization_id)
+        return {
+            "user_id": assessment.user_id,
+            "user_name": assessment.user_name,
+            "role_name": assessment.role_name,
+            "overall_risk_score": assessment.overall_risk_score,
+            "risk_level": assessment.risk_level,
+            "factor_scores": assessment.factor_scores,
+            "contributing_factors": assessment.contributing_factors,
+            "recommendations": assessment.recommendations,
+            "estimated_departure_window": assessment.estimated_departure_window,
+            "assessed_at": assessment.assessed_at.isoformat() if assessment.assessed_at else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/risk/spof")
+async def get_single_points_of_failure(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Identify single points of failure - critical knowledge holders without backup."""
+    service = get_risk_detection_service(db)
+    spof_risks = await service.identify_single_points_of_failure(organization_id)
+    return {
+        "spof_risks": [
+            {
+                "user_id": r.user_id,
+                "user_name": r.user_name,
+                "role_name": r.role_name,
+                "criticality_score": r.criticality_score,
+                "risk_level": r.risk_level,
+                "unique_capabilities": r.unique_capabilities,
+                "coverage_gap": r.coverage_gap,
+                "backup_users": r.backup_users,
+                "knowledge_transfer_status": r.knowledge_transfer_status,
+                "recommended_actions": r.recommended_actions
+            }
+            for r in spof_risks
+        ],
+        "total": len(spof_risks),
+        "critical_count": len([r for r in spof_risks if r.risk_level == "critical"])
+    }
+
+
+@router.get("/risk/coverage-gaps")
+async def get_coverage_gaps(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Identify roles or capabilities with insufficient coverage."""
+    service = get_risk_detection_service(db)
+    gaps = await service.get_coverage_gaps(organization_id)
+    return gaps
+
+
+@router.get("/risk/key-dependencies")
+async def get_key_person_dependencies(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Identify key person dependencies across the organization."""
+    service = get_risk_detection_service(db)
+    dependencies = await service.get_key_person_dependencies(organization_id)
+    return dependencies
+
+
+@router.get("/risk/alerts")
+async def get_risk_alerts(
+    min_severity: str = Query("warning", description="Minimum severity: info, warning, high, critical"),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Generate and return current risk alerts."""
+    service = get_risk_detection_service(db)
+    alerts = await service.generate_risk_alerts(
+        organization_id=organization_id,
+        min_severity=min_severity
+    )
+    return {
+        "alerts": alerts,
+        "total": len(alerts),
+        "by_severity": {
+            "critical": len([a for a in alerts if a["severity"] == "critical"]),
+            "high": len([a for a in alerts if a["severity"] == "high"]),
+            "warning": len([a for a in alerts if a["severity"] == "warning"]),
+            "info": len([a for a in alerts if a["severity"] == "info"])
+        }
+    }
+
+
+@router.post("/risk/calculate")
+async def calculate_all_risks(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Recalculate all risk scores for all users."""
+    service = get_risk_detection_service(db)
+    result = await service.calculate_all_risks(organization_id)
+    return result
+
+
+@router.post("/risk/calculate/{user_id}")
+async def calculate_user_risks(
+    user_id: int,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Calculate all risk scores for a specific user."""
+    service = get_risk_detection_service(db)
+    try:
+        burnout = await service.calculate_burnout_risk(user_id, organization_id)
+        attrition = await service.calculate_attrition_risk(user_id, organization_id)
+
+        return {
+            "user_id": user_id,
+            "burnout_risk": {
+                "score": burnout.overall_risk_score,
+                "level": burnout.risk_level
+            },
+            "attrition_risk": {
+                "score": attrition.overall_risk_score,
+                "level": attrition.risk_level
+            },
+            "calculated_at": datetime.now(timezone.utc).isoformat()
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # =============================================================================

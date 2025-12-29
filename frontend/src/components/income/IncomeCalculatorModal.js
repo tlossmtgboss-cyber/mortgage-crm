@@ -1,8 +1,68 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './IncomeCalculatorModal.css';
 import BankStatementWorksheet from './BankStatementWorksheet';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+// Custom hook for draggable modal
+function useDraggable() {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasBeenDragged, setHasBeenDragged] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const modalRef = useRef(null);
+
+  const handleMouseDown = useCallback((e) => {
+    // Only drag from header, not close button
+    if (e.target.closest('.modal-close-btn')) return;
+
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    };
+    e.preventDefault();
+  }, [position]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return;
+
+    setHasBeenDragged(true);
+    setPosition({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y,
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  const resetPosition = useCallback(() => {
+    setPosition({ x: 0, y: 0 });
+    setHasBeenDragged(false);
+  }, []);
+
+  return {
+    position,
+    isDragging,
+    hasBeenDragged,
+    handleMouseDown,
+    modalRef,
+    resetPosition,
+  };
+}
 
 // Income type configurations
 const INCOME_TABS = [
@@ -74,7 +134,17 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
   const [error, setError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
 
+  // Draggable modal hook
+  const { position, isDragging, hasBeenDragged, handleMouseDown, modalRef, resetPosition } = useDraggable();
+
   const token = localStorage.getItem('token');
+
+  // Reset position when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      resetPosition();
+    }
+  }, [isOpen, resetPosition]);
 
   // Fetch income sources for the loan
   const fetchIncomeSources = useCallback(async () => {
@@ -274,11 +344,28 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
   const tabIncomeSource = getIncomeSourceForType(activeTab);
 
   return (
-    <div className="income-modal-overlay" onClick={onClose}>
-      <div className="income-modal" onClick={e => e.stopPropagation()}>
-        {/* Modal Header */}
-        <div className="income-modal-header">
-          <h2>Income Calculator</h2>
+    <div
+      className={`income-modal-overlay ${hasBeenDragged ? 'dragged' : ''}`}
+      onClick={hasBeenDragged ? undefined : onClose}
+    >
+      <div
+        ref={modalRef}
+        className={`income-modal ${isDragging ? 'dragging' : ''} ${hasBeenDragged ? 'dragged' : ''}`}
+        onClick={e => e.stopPropagation()}
+        style={hasBeenDragged ? {
+          transform: `translate(${position.x}px, ${position.y}px)`,
+          transition: isDragging ? 'none' : 'box-shadow 0.2s ease',
+        } : undefined}
+      >
+        {/* Modal Header - Draggable */}
+        <div
+          className={`income-modal-header ${isDragging ? 'dragging' : ''}`}
+          onMouseDown={handleMouseDown}
+        >
+          <div className="header-drag-area">
+            <span className="drag-indicator">⋮⋮</span>
+            <h2>Income Calculator</h2>
+          </div>
           <button className="modal-close-btn" onClick={onClose}>&times;</button>
         </div>
 
