@@ -170,47 +170,46 @@ def _create_avatar_tables(db: Session):
         raise
 
 
+# Track if tables have been initialized (check once per process, not per request)
+_tables_initialized = False
+
+
 def ensure_avatar_tables(db: Session):
-    """Create avatar tables if they don't exist (idempotent)."""
+    """Create avatar tables if they don't exist. Only checks once per process for efficiency."""
+    global _tables_initialized
+
+    # Skip if already initialized this process (scales well with many requests)
+    if _tables_initialized:
+        return
+
     from sqlalchemy import text
     try:
-        # Use CREATE TABLE IF NOT EXISTS - idempotent, no need to check first
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS video_avatar_profiles (
-                id SERIAL PRIMARY KEY,
-                organization_id INTEGER,
-                user_id INTEGER,
-                name VARCHAR(255) NOT NULL,
-                description TEXT,
-                training_video_url TEXT,
-                training_video_duration_seconds FLOAT,
-                training_video_size_bytes BIGINT,
-                reference_image_url TEXT,
-                voice_sample_url TEXT,
-                voice_model_id VARCHAR(255),
-                default_background VARCHAR(50) DEFAULT 'transparent',
-                default_resolution VARCHAR(20) DEFAULT '1080x1920',
-                crop_style VARCHAR(50) DEFAULT 'portrait',
-                lip_sync_quality VARCHAR(20) DEFAULT 'high',
-                voice_similarity FLOAT DEFAULT 0.85,
-                status VARCHAR(50) DEFAULT 'pending',
-                training_progress INTEGER DEFAULT 0,
-                training_started_at TIMESTAMP,
-                training_completed_at TIMESTAMP,
-                training_error TEXT,
-                total_videos_generated INTEGER DEFAULT 0,
-                total_duration_generated_seconds FLOAT DEFAULT 0,
-                last_used_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
+        # Quick check if table exists using information_schema (read-only, fast)
+        result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'video_avatar_profiles'
             )
         """))
-        db.commit()
-        logger.info("Avatar tables ensured")
+        if result.scalar():
+            _tables_initialized = True
+            return
+
+        # Table doesn't exist - create it (only happens once)
+        logger.info("Creating avatar tables (first time setup)...")
+        _create_avatar_tables(db)
+        _tables_initialized = True
+
     except Exception as e:
         logger.error(f"Failed to ensure avatar tables: {e}")
         db.rollback()
-        raise
+        # Try to create tables anyway
+        try:
+            _create_avatar_tables(db)
+            _tables_initialized = True
+        except Exception as create_error:
+            logger.error(f"Failed to create avatar tables: {create_error}")
+            raise
 
 
 # =============================================================================
