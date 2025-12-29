@@ -208,13 +208,20 @@ async def create_candidate(
     db: Session = Depends(get_db)
 ):
     """Create a new candidate."""
-    service = RecruitingService(db)
-    result = await service.create_candidate(
-        data=data.model_dump(),
-        created_by=user_id or 1,
-        organization_id=organization_id
-    )
-    return result
+    try:
+        service = RecruitingService(db)
+        result = await service.create_candidate(
+            data=data.model_dump(),
+            created_by=user_id or 1,
+            organization_id=organization_id
+        )
+        return result
+    except Exception as e:
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error: {str(e)}\n\nTraceback: {traceback.format_exc()}"
+        )
 
 
 @router.patch("/candidates/{candidate_id}/status")
@@ -269,13 +276,20 @@ async def create_job_posting(
     db: Session = Depends(get_db)
 ):
     """Create a new job posting."""
-    service = RecruitingService(db)
-    result = await service.create_job_posting(
-        data=data.model_dump(),
-        created_by=user_id or 1,
-        organization_id=organization_id
-    )
-    return result
+    try:
+        service = RecruitingService(db)
+        result = await service.create_job_posting(
+            data=data.model_dump(),
+            created_by=user_id or 1,
+            organization_id=organization_id
+        )
+        return result
+    except Exception as e:
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error: {str(e)}\n\nTraceback: {traceback.format_exc()}"
+        )
 
 
 @router.patch("/job-postings/{posting_id}")
