@@ -76,8 +76,114 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 
 # =============================================================================
+# Database Table Management
+# =============================================================================
+
+def _create_avatar_tables(db: Session):
+    """Create avatar tables in the database."""
+    from sqlalchemy import text
+
+    logger.info("Creating avatar tables...")
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS video_avatar_profiles (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER,
+                user_id INTEGER,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                training_video_url TEXT,
+                training_video_duration_seconds FLOAT,
+                training_video_size_bytes BIGINT,
+                reference_image_url TEXT,
+                voice_sample_url TEXT,
+                voice_model_id VARCHAR(255),
+                default_background VARCHAR(50) DEFAULT 'transparent',
+                default_resolution VARCHAR(20) DEFAULT '1080x1920',
+                crop_style VARCHAR(50) DEFAULT 'portrait',
+                lip_sync_quality VARCHAR(20) DEFAULT 'high',
+                voice_similarity FLOAT DEFAULT 0.85,
+                status VARCHAR(50) DEFAULT 'pending',
+                training_progress INTEGER DEFAULT 0,
+                training_started_at TIMESTAMP,
+                training_completed_at TIMESTAMP,
+                training_error TEXT,
+                total_videos_generated INTEGER DEFAULT 0,
+                total_duration_generated_seconds FLOAT DEFAULT 0,
+                last_used_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS video_avatar_jobs (
+                id SERIAL PRIMARY KEY,
+                job_id VARCHAR(50) UNIQUE NOT NULL,
+                avatar_id INTEGER REFERENCES video_avatar_profiles(id) ON DELETE CASCADE,
+                project_id INTEGER,
+                scene_id INTEGER,
+                script_text TEXT NOT NULL,
+                duration_hint_seconds FLOAT,
+                emotion VARCHAR(50) DEFAULT 'neutral',
+                speaking_rate FLOAT DEFAULT 1.0,
+                audio_url TEXT,
+                video_url TEXT,
+                duration_seconds FLOAT,
+                status VARCHAR(50) DEFAULT 'pending',
+                progress INTEGER DEFAULT 0,
+                current_step VARCHAR(100),
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                voice_generation_ms INTEGER,
+                lip_sync_generation_ms INTEGER
+            )
+        """))
+
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS video_avatar_analytics (
+                id SERIAL PRIMARY KEY,
+                avatar_id INTEGER REFERENCES video_avatar_profiles(id) ON DELETE CASCADE,
+                event_type VARCHAR(50) NOT NULL,
+                event_data JSONB,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        # Create indexes
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_profiles_user ON video_avatar_profiles(user_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_profiles_org ON video_avatar_profiles(organization_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_profiles_status ON video_avatar_profiles(status)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_jobs_avatar ON video_avatar_jobs(avatar_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_jobs_status ON video_avatar_jobs(status)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_jobs_job_id ON video_avatar_jobs(job_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_avatar_analytics_avatar ON video_avatar_analytics(avatar_id)"))
+
+        db.commit()
+        logger.info("Avatar tables created successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to create avatar tables: {e}")
+        db.rollback()
+        raise
+
+
+def ensure_avatar_tables(db: Session):
+    """Quick check and create avatar tables if needed."""
+    from sqlalchemy import text
+    try:
+        db.execute(text("SELECT 1 FROM video_avatar_profiles LIMIT 1"))
+    except Exception:
+        # Tables don't exist - create them
+        _create_avatar_tables(db)
+
+
+# =============================================================================
 # Avatar Profile CRUD
 # =============================================================================
+
 
 @router.post("", response_model=dict)
 async def create_avatar(
@@ -87,6 +193,9 @@ async def create_avatar(
 ):
     """Create a new avatar profile."""
     try:
+        # Ensure tables exist
+        ensure_avatar_tables(db)
+
         profile = avatar_service.create_profile(
             db=db,
             data=data,
@@ -520,6 +629,9 @@ async def test_create_avatar(
 ):
     """Create a test avatar without authentication (for development/testing)."""
     try:
+        # Ensure tables exist before creating avatar
+        ensure_avatar_tables(db)
+
         from models.avatar_models import AvatarProfileCreate
 
         data = AvatarProfileCreate(name=name, description=description)
@@ -542,6 +654,9 @@ async def test_list_avatars(
 ):
     """List avatars without authentication (for development/testing)."""
     try:
+        # Ensure tables exist
+        ensure_avatar_tables(db)
+
         avatars, total = avatar_service.list_profiles(
             db=db,
             user_id=user_id,
@@ -563,6 +678,9 @@ async def test_get_avatar(
 ):
     """Get avatar details without authentication (for development/testing)."""
     try:
+        # Ensure tables exist
+        ensure_avatar_tables(db)
+
         profile = avatar_service.get_profile(db=db, avatar_id=avatar_id)
         if not profile:
             raise HTTPException(status_code=404, detail="Avatar not found")
