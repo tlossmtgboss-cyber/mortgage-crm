@@ -19,7 +19,7 @@ Endpoints:
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.orm import Session
 
 from models.avatar_models import (
@@ -60,17 +60,19 @@ def set_dependencies(db_dep, user_dep):
 
 
 def get_db():
-    """Get database session dependency."""
+    """Get database session - wrapper that works at request time."""
     if _db_dependency is None:
         raise HTTPException(status_code=500, detail="Database dependency not configured")
-    return _db_dependency
+    return next(_db_dependency())
 
 
-def get_current_user():
-    """Get current user dependency."""
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user - wrapper that works at request time."""
     if _user_dependency is None:
-        raise HTTPException(status_code=500, detail="User dependency not configured")
-    return _user_dependency
+        raise HTTPException(status_code=500, detail="Auth dependency not configured")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _user_dependency(token=token, request=request, db=db)
 
 
 # =============================================================================
