@@ -77,6 +77,9 @@ from workflows.workflow_actions import WorkflowActionExecutor
 # Import SLA tracking service for automatic milestone tracking
 from services.sla_tracking_service import track_lead_created, track_lead_stage_change, track_loan_created, track_loan_stage_change
 
+# Import capacity update for Master Manager integration
+from services.capacity_service import update_capacity_on_assignment
+
 # Import profitability models for AI financial context
 from models.profitability import ProfitabilitySnapshot, ProfitabilityLoan, Expense, EmployeeCost
 
@@ -39639,6 +39642,12 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     except Exception as e:
         logger.warning(f"Failed to fire new lead trigger: {e}")
 
+    # Update Master Manager capacity for the assigned user
+    try:
+        await update_capacity_on_assignment(db, current_user.id)
+    except Exception as e:
+        logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
+
     logger.info(f"Lead created: {lead_name} (Score: {lead_score})")
     return db_lead
 
@@ -41490,6 +41499,12 @@ async def create_loan(
         db.add(db_loan)
         db.commit()
         db.refresh(db_loan)
+
+        # Update Master Manager capacity for the loan officer
+        try:
+            await update_capacity_on_assignment(db, current_user.id)
+        except Exception as e:
+            logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
 
         logger.info(f"Loan created: {db_loan.loan_number} - ${db_loan.amount:,.0f}")
         return db_loan
@@ -57239,6 +57254,20 @@ async def startup_event():
         logger.info("✅ Agent monitoring scheduler jobs added (health checks every 5min, metrics hourly, daily cleanup)")
     except Exception as e:
         logger.warning(f"⚠️ Agent monitoring scheduler not loaded: {e}")
+
+    # Add Master Manager capacity recalculation job
+    try:
+        from jobs.capacity_recalculation_job import recalculate_all_capacities_job
+        scheduler.add_job(
+            recalculate_all_capacities_job,
+            trigger=IntervalTrigger(minutes=15),
+            id='capacity_recalculation',
+            name='Recalculate user capacities',
+            replace_existing=True
+        )
+        logger.info("✅ Master Manager capacity recalculation job added (runs every 15 minutes)")
+    except Exception as e:
+        logger.warning(f"⚠️ Capacity recalculation job not added: {e}")
 
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")

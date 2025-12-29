@@ -679,3 +679,48 @@ class CapacityService:
 def get_capacity_service(db: Session) -> CapacityService:
     """Factory function to get CapacityService instance."""
     return CapacityService(db)
+
+
+# =========================================================================
+# HELPER FUNCTIONS FOR INTEGRATION
+# =========================================================================
+
+async def update_capacity_on_assignment(
+    db: Session,
+    user_id: int,
+    organization_id: Optional[int] = None
+) -> None:
+    """
+    Quick capacity update after a lead/loan is assigned.
+    Call this after create_lead or create_loan to keep capacity in sync.
+
+    This is a lightweight update that just recalculates for one user.
+    """
+    try:
+        service = CapacityService(db)
+        metrics = await service.calculate_user_capacity(user_id, organization_id)
+        await service._update_capacity_record(metrics, organization_id)
+    except Exception as e:
+        # Don't fail the main operation if capacity update fails
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Failed to update capacity for user {user_id}: {e}"
+        )
+
+
+def sync_update_capacity(db: Session, user_id: int, organization_id: Optional[int] = None) -> None:
+    """
+    Synchronous wrapper for capacity update.
+    Use this when you can't await in the calling context.
+    """
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Already in async context, schedule as task
+            asyncio.create_task(update_capacity_on_assignment(db, user_id, organization_id))
+        else:
+            loop.run_until_complete(update_capacity_on_assignment(db, user_id, organization_id))
+    except RuntimeError:
+        # No event loop, create one
+        asyncio.run(update_capacity_on_assignment(db, user_id, organization_id))
