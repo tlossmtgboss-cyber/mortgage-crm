@@ -1,0 +1,848 @@
+"""
+Master Manager Platform - API Routes
+Capacity tracking, talent state, performance, and recruiting endpoints.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from typing import List, Optional, Dict, Any
+from datetime import datetime, date, timezone
+from pydantic import BaseModel, Field
+
+from database import get_db
+from services.capacity_service import CapacityService, get_capacity_service
+
+
+router = APIRouter(prefix="/api/v1/master-manager", tags=["Master Manager"])
+
+
+# =============================================================================
+# PYDANTIC MODELS
+# =============================================================================
+
+class CapacityLimitsUpdate(BaseModel):
+    max_files: Optional[int] = Field(None, ge=1, le=100)
+    max_leads: Optional[int] = Field(None, ge=1, le=500)
+    max_tasks: Optional[int] = Field(None, ge=1, le=100)
+
+
+class AvailabilityUpdate(BaseModel):
+    is_available: bool
+    status: str = "active"  # active, on_leave, training, suspended
+    return_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class TalentStateUpdate(BaseModel):
+    state: str
+    reason: Optional[str] = None
+
+
+class RoleDefinitionCreate(BaseModel):
+    role_name: str
+    role_category: str = "operations"
+    description: Optional[str] = None
+    default_max_files: int = 25
+    default_max_leads: int = 50
+    default_max_tasks_daily: int = 30
+    expected_throughput: Optional[Dict[str, Any]] = None
+    learning_curve_days: int = 90
+    replacement_difficulty: int = 5
+    required_skills: Optional[List[str]] = None
+
+
+class UserCapacityCreate(BaseModel):
+    user_id: int
+    role_definition_id: Optional[int] = None
+    max_files_concurrent: int = 25
+    max_leads_concurrent: int = 50
+    max_tasks_daily: int = 30
+
+
+# =============================================================================
+# CAPACITY COMMAND CENTER ROUTES
+# =============================================================================
+
+@router.get("/capacity/overview")
+async def get_capacity_overview(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get team-level capacity overview."""
+    service = get_capacity_service(db)
+    overview = await service.get_team_capacity_overview(organization_id)
+
+    return {
+        "total_members": overview.total_members,
+        "status_breakdown": {
+            "available": overview.available_count,
+            "near_capacity": overview.near_capacity_count,
+            "at_capacity": overview.at_capacity_count,
+            "over_capacity": overview.over_capacity_count
+        },
+        "avg_capacity_pct": overview.avg_capacity_pct,
+        "file_capacity": {
+            "total": overview.total_file_capacity,
+            "used": overview.used_file_capacity,
+            "available": overview.total_file_capacity - overview.used_file_capacity,
+            "utilization_pct": round((overview.used_file_capacity / max(overview.total_file_capacity, 1)) * 100, 1)
+        },
+        "alerts": {
+            "surge_risk": overview.surge_risk,
+            "bottleneck_roles": overview.bottleneck_roles
+        }
+    }
+
+
+@router.get("/capacity/by-role")
+async def get_capacity_by_role(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get capacity metrics grouped by role."""
+    service = get_capacity_service(db)
+    by_role = await service.get_capacity_by_role(organization_id)
+
+    return {
+        "roles": by_role,
+        "total_roles": len(by_role)
+    }
+
+
+@router.get("/capacity/users")
+async def get_all_user_capacities(
+    organization_id: Optional[int] = None,
+    status: Optional[str] = Query(None, description="Filter by capacity status"),
+    role: Optional[str] = Query(None, description="Filter by role name"),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db)
+):
+    """Get capacity metrics for all users."""
+    service = get_capacity_service(db)
+    users = await service.get_all_user_capacities(
+        organization_id=organization_id,
+        status_filter=status,
+        role_filter=role,
+        limit=limit
+    )
+
+    return {
+        "users": users,
+        "total": len(users)
+    }
+
+
+@router.get("/capacity/user/{user_id}")
+async def get_user_capacity(
+    user_id: int,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get detailed capacity metrics for a specific user."""
+    service = get_capacity_service(db)
+    try:
+        metrics = await service.calculate_user_capacity(user_id, organization_id)
+        return {
+            "user_id": metrics.user_id,
+            "user_name": metrics.user_name,
+            "role_name": metrics.role_name,
+            "current": {
+                "files": metrics.current_files,
+                "leads": metrics.current_leads,
+                "tasks": metrics.current_tasks
+            },
+            "limits": {
+                "max_files": metrics.max_files,
+                "max_leads": metrics.max_leads,
+                "max_tasks": metrics.max_tasks
+            },
+            "capacity_pct": {
+                "files": metrics.file_capacity_pct,
+                "leads": metrics.lead_capacity_pct,
+                "tasks": metrics.task_capacity_pct,
+                "overall": metrics.overall_capacity_pct
+            },
+            "status": metrics.capacity_status,
+            "is_available": metrics.is_available,
+            "risk": {
+                "burnout": metrics.burnout_risk,
+                "attrition": metrics.attrition_risk
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/capacity/user/{user_id}/limits")
+async def update_user_capacity_limits(
+    user_id: int,
+    limits: CapacityLimitsUpdate,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Update capacity limits for a user."""
+    service = get_capacity_service(db)
+    try:
+        result = await service.update_user_capacity_limits(
+            user_id=user_id,
+            max_files=limits.max_files,
+            max_leads=limits.max_leads,
+            max_tasks=limits.max_tasks,
+            organization_id=organization_id
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/capacity/user/{user_id}/availability")
+async def update_user_availability(
+    user_id: int,
+    availability: AvailabilityUpdate,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Update user availability status."""
+    service = get_capacity_service(db)
+    result = await service.set_user_availability(
+        user_id=user_id,
+        is_available=availability.is_available,
+        status=availability.status,
+        return_date=availability.return_date,
+        notes=availability.notes,
+        organization_id=organization_id
+    )
+    return result
+
+
+@router.post("/capacity/recalculate")
+async def recalculate_all_capacities(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Trigger recalculation of all user capacities."""
+    service = get_capacity_service(db)
+    count = await service.recalculate_all_capacities(organization_id)
+    return {
+        "message": f"Recalculated capacity for {count} users",
+        "users_updated": count
+    }
+
+
+@router.post("/capacity/user")
+async def create_user_capacity(
+    data: UserCapacityCreate,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Create capacity record for a user."""
+    query = text("""
+        INSERT INTO mm_talent_capacity (
+            organization_id, user_id, role_definition_id,
+            max_files_concurrent, max_leads_concurrent, max_tasks_daily,
+            created_at, updated_at
+        )
+        VALUES (
+            :org_id, :user_id, :role_id,
+            :max_files, :max_leads, :max_tasks,
+            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET
+            role_definition_id = EXCLUDED.role_definition_id,
+            max_files_concurrent = EXCLUDED.max_files_concurrent,
+            max_leads_concurrent = EXCLUDED.max_leads_concurrent,
+            max_tasks_daily = EXCLUDED.max_tasks_daily,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING id
+    """)
+
+    result = db.execute(query, {
+        "org_id": organization_id,
+        "user_id": data.user_id,
+        "role_id": data.role_definition_id,
+        "max_files": data.max_files_concurrent,
+        "max_leads": data.max_leads_concurrent,
+        "max_tasks": data.max_tasks_daily
+    }).fetchone()
+    db.commit()
+
+    # Calculate initial capacity
+    service = get_capacity_service(db)
+    metrics = await service.calculate_user_capacity(data.user_id, organization_id)
+
+    return {
+        "id": result.id,
+        "user_id": data.user_id,
+        "initial_capacity_pct": metrics.overall_capacity_pct,
+        "status": metrics.capacity_status
+    }
+
+
+# =============================================================================
+# ASSIGNMENT OPTIMIZATION ROUTES
+# =============================================================================
+
+@router.get("/assignment/suggest")
+async def suggest_assignment(
+    role: str,
+    entity_type: str = Query("loan", description="lead, loan, or task"),
+    complexity: str = Query("normal", description="simple, normal, or complex"),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get assignment recommendation based on capacity and performance."""
+    service = get_capacity_service(db)
+    suggestion = await service.suggest_optimal_assignment(
+        entity_type=entity_type,
+        role_needed=role,
+        organization_id=organization_id,
+        complexity=complexity
+    )
+
+    if not suggestion:
+        return {
+            "recommendation": None,
+            "message": f"No available users found for role '{role}'"
+        }
+
+    return {
+        "recommendation": {
+            "user_id": suggestion["recommended_user_id"],
+            "user_name": suggestion["recommended_user_name"],
+            "role": suggestion["role"],
+            "capacity_pct": suggestion["current_capacity_pct"],
+            "available_slots": suggestion["available_slots"],
+            "score": suggestion["recommendation_score"],
+            "reasoning": suggestion["reasoning"]
+        },
+        "alternatives": suggestion["alternatives"]
+    }
+
+
+@router.get("/assignment/available")
+async def get_available_users(
+    role: str,
+    min_capacity: float = Query(25, ge=0, le=100, description="Minimum available capacity %"),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get list of available users for a role."""
+    service = get_capacity_service(db)
+    available = await service.get_available_users_for_role(
+        role_name=role,
+        min_capacity_pct=min_capacity,
+        organization_id=organization_id
+    )
+
+    return {
+        "role": role,
+        "available_users": available,
+        "count": len(available)
+    }
+
+
+# =============================================================================
+# ROLE DEFINITIONS ROUTES
+# =============================================================================
+
+@router.get("/roles")
+async def get_role_definitions(
+    organization_id: Optional[int] = None,
+    category: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get all role definitions."""
+    query = text("""
+        SELECT
+            id, role_name, role_category, description,
+            default_max_files, default_max_leads, default_max_tasks_daily,
+            expected_throughput, learning_curve_days, replacement_difficulty,
+            required_skills, is_active, created_at
+        FROM mm_role_definitions
+        WHERE (:org_id IS NULL OR organization_id = :org_id OR organization_id IS NULL)
+        AND (:category IS NULL OR role_category = :category)
+        AND is_active = true
+        ORDER BY role_category, role_name
+    """)
+
+    results = db.execute(query, {
+        "org_id": organization_id,
+        "category": category
+    }).fetchall()
+
+    return {
+        "roles": [
+            {
+                "id": r.id,
+                "role_name": r.role_name,
+                "role_category": r.role_category,
+                "description": r.description,
+                "capacity_defaults": {
+                    "max_files": r.default_max_files,
+                    "max_leads": r.default_max_leads,
+                    "max_tasks": r.default_max_tasks_daily
+                },
+                "expected_throughput": r.expected_throughput,
+                "learning_curve_days": r.learning_curve_days,
+                "replacement_difficulty": r.replacement_difficulty,
+                "required_skills": r.required_skills or []
+            }
+            for r in results
+        ],
+        "total": len(results)
+    }
+
+
+@router.post("/roles")
+async def create_role_definition(
+    role: RoleDefinitionCreate,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Create a new role definition."""
+    query = text("""
+        INSERT INTO mm_role_definitions (
+            organization_id, role_name, role_category, description,
+            default_max_files, default_max_leads, default_max_tasks_daily,
+            expected_throughput, learning_curve_days, replacement_difficulty,
+            required_skills, created_at, updated_at
+        )
+        VALUES (
+            :org_id, :role_name, :role_category, :description,
+            :max_files, :max_leads, :max_tasks,
+            :throughput, :learning_days, :replacement,
+            :skills, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+        RETURNING id
+    """)
+
+    import json
+    result = db.execute(query, {
+        "org_id": organization_id,
+        "role_name": role.role_name,
+        "role_category": role.role_category,
+        "description": role.description,
+        "max_files": role.default_max_files,
+        "max_leads": role.default_max_leads,
+        "max_tasks": role.default_max_tasks_daily,
+        "throughput": json.dumps(role.expected_throughput) if role.expected_throughput else "{}",
+        "learning_days": role.learning_curve_days,
+        "replacement": role.replacement_difficulty,
+        "skills": json.dumps(role.required_skills) if role.required_skills else "[]"
+    }).fetchone()
+    db.commit()
+
+    return {
+        "id": result.id,
+        "role_name": role.role_name,
+        "message": f"Role '{role.role_name}' created successfully"
+    }
+
+
+# =============================================================================
+# TALENT STATE ROUTES
+# =============================================================================
+
+@router.get("/talent/readiness")
+async def get_talent_readiness_board(
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get talent readiness board - users grouped by state."""
+    query = text("""
+        SELECT
+            ts.state,
+            COUNT(*) as count,
+            json_agg(json_build_object(
+                'user_id', ts.user_id,
+                'user_name', u.full_name,
+                'role', rd.role_name,
+                'state_reason', ts.state_reason,
+                'state_changed_at', ts.state_changed_at,
+                'capacity_pct', tc.overall_capacity_pct,
+                'is_new_hire', ts.is_new_hire,
+                'ramp_progress', ts.ramp_progress_pct,
+                'promotion_eligible', ts.promotion_eligible
+            )) as users
+        FROM mm_talent_state ts
+        JOIN users u ON u.id = ts.user_id
+        LEFT JOIN mm_talent_capacity tc ON tc.user_id = ts.user_id
+        LEFT JOIN mm_role_definitions rd ON rd.id = tc.role_definition_id
+        WHERE (:org_id IS NULL OR ts.organization_id = :org_id)
+        GROUP BY ts.state
+        ORDER BY ts.state
+    """)
+
+    results = db.execute(query, {"org_id": organization_id}).fetchall()
+
+    # Organize into board columns
+    board = {
+        "active": [],
+        "near_capacity": [],
+        "over_capacity": [],
+        "new_hire": [],
+        "bench_training": [],
+        "bench_warm": [],
+        "promotion_ready": [],
+        "at_risk": [],
+        "exit_likely": [],
+        "on_leave": []
+    }
+
+    for r in results:
+        if r.state in board:
+            board[r.state] = r.users or []
+
+    return {
+        "board": board,
+        "summary": {
+            state: len(users) for state, users in board.items()
+        }
+    }
+
+
+@router.put("/talent/{user_id}/state")
+async def update_talent_state(
+    user_id: int,
+    state_update: TalentStateUpdate,
+    changed_by: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Update talent state for a user."""
+    # Get current state for history
+    current = db.execute(text("""
+        SELECT state, overall_capacity_pct
+        FROM mm_talent_state ts
+        LEFT JOIN mm_talent_capacity tc ON tc.user_id = ts.user_id
+        WHERE ts.user_id = :user_id
+    """), {"user_id": user_id}).fetchone()
+
+    # Update state
+    query = text("""
+        UPDATE mm_talent_state
+        SET
+            state = :new_state,
+            state_reason = :reason,
+            state_changed_at = CURRENT_TIMESTAMP,
+            state_changed_by = :changed_by,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = :user_id
+        AND (:org_id IS NULL OR organization_id = :org_id)
+        RETURNING *
+    """)
+
+    result = db.execute(query, {
+        "user_id": user_id,
+        "new_state": state_update.state,
+        "reason": state_update.reason,
+        "changed_by": changed_by,
+        "org_id": organization_id
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Talent state not found for user {user_id}")
+
+    # Add to history
+    history_query = text("""
+        INSERT INTO mm_talent_state_history (
+            organization_id, user_id, previous_state, new_state,
+            reason, changed_by, capacity_pct_at_change, created_at
+        )
+        VALUES (
+            :org_id, :user_id, :prev_state, :new_state,
+            :reason, :changed_by, :capacity, CURRENT_TIMESTAMP
+        )
+    """)
+
+    db.execute(history_query, {
+        "org_id": organization_id,
+        "user_id": user_id,
+        "prev_state": current.state if current else None,
+        "new_state": state_update.state,
+        "reason": state_update.reason,
+        "changed_by": changed_by,
+        "capacity": current.overall_capacity_pct if current else None
+    })
+    db.commit()
+
+    return {
+        "user_id": user_id,
+        "previous_state": current.state if current else None,
+        "new_state": state_update.state,
+        "reason": state_update.reason
+    }
+
+
+@router.get("/talent/{user_id}/state")
+async def get_talent_state(
+    user_id: int,
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Get talent state for a user."""
+    query = text("""
+        SELECT
+            ts.*,
+            u.full_name,
+            rd.role_name
+        FROM mm_talent_state ts
+        JOIN users u ON u.id = ts.user_id
+        LEFT JOIN mm_talent_capacity tc ON tc.user_id = ts.user_id
+        LEFT JOIN mm_role_definitions rd ON rd.id = tc.role_definition_id
+        WHERE ts.user_id = :user_id
+        AND (:org_id IS NULL OR ts.organization_id = :org_id)
+    """)
+
+    result = db.execute(query, {
+        "user_id": user_id,
+        "org_id": organization_id
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Talent state not found for user {user_id}")
+
+    return {
+        "user_id": result.user_id,
+        "user_name": result.full_name,
+        "role_name": result.role_name,
+        "state": result.state,
+        "state_reason": result.state_reason,
+        "state_changed_at": result.state_changed_at.isoformat() if result.state_changed_at else None,
+        "new_hire": {
+            "is_new_hire": result.is_new_hire,
+            "is_in_ramp": result.is_in_ramp,
+            "hire_date": result.hire_date.isoformat() if result.hire_date else None,
+            "ramp_day": result.ramp_day,
+            "ramp_progress_pct": result.ramp_progress_pct
+        },
+        "promotion": {
+            "eligible": result.promotion_eligible,
+            "readiness_score": result.promotion_readiness_score,
+            "blocked_reason": result.promotion_blocked_reason
+        },
+        "pip": {
+            "has_active": result.has_active_pip,
+            "start_date": result.pip_start_date.isoformat() if result.pip_start_date else None,
+            "end_date": result.pip_end_date.isoformat() if result.pip_end_date else None
+        },
+        "exit_risk": {
+            "level": result.exit_risk_level,
+            "factors": result.exit_risk_factors
+        }
+    }
+
+
+# =============================================================================
+# ALERTS ROUTES
+# =============================================================================
+
+@router.get("/alerts")
+async def get_capacity_alerts(
+    organization_id: Optional[int] = None,
+    status: str = Query("open", description="open, acknowledged, resolved, all"),
+    severity: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db)
+):
+    """Get capacity and risk alerts."""
+    status_filter = "AND status = :status" if status != "all" else ""
+
+    query = text(f"""
+        SELECT
+            a.*,
+            u.full_name as user_name,
+            rd.role_name
+        FROM mm_capacity_alerts a
+        LEFT JOIN users u ON u.id = a.user_id
+        LEFT JOIN mm_role_definitions rd ON rd.id = a.role_definition_id
+        WHERE (:org_id IS NULL OR a.organization_id = :org_id)
+        {status_filter}
+        AND (:severity IS NULL OR a.severity = :severity)
+        ORDER BY
+            CASE a.severity
+                WHEN 'critical' THEN 1
+                WHEN 'warning' THEN 2
+                ELSE 3
+            END,
+            a.created_at DESC
+        LIMIT :limit
+    """)
+
+    results = db.execute(query, {
+        "org_id": organization_id,
+        "status": status if status != "all" else None,
+        "severity": severity,
+        "limit": limit
+    }).fetchall()
+
+    return {
+        "alerts": [
+            {
+                "id": r.id,
+                "alert_type": r.alert_type,
+                "severity": r.severity,
+                "title": r.title,
+                "description": r.description,
+                "user_id": r.user_id,
+                "user_name": r.user_name,
+                "role_name": r.role_name,
+                "status": r.status,
+                "metrics": r.metrics_snapshot,
+                "recommended_actions": r.recommended_actions,
+                "created_at": r.created_at.isoformat()
+            }
+            for r in results
+        ],
+        "total": len(results)
+    }
+
+
+@router.put("/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(
+    alert_id: int,
+    acknowledged_by: int,
+    db: Session = Depends(get_db)
+):
+    """Acknowledge an alert."""
+    query = text("""
+        UPDATE mm_capacity_alerts
+        SET
+            status = 'acknowledged',
+            acknowledged_at = CURRENT_TIMESTAMP,
+            acknowledged_by = :by_user
+        WHERE id = :alert_id
+        RETURNING id, title
+    """)
+
+    result = db.execute(query, {
+        "alert_id": alert_id,
+        "by_user": acknowledged_by
+    }).fetchone()
+    db.commit()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
+
+    return {
+        "id": result.id,
+        "title": result.title,
+        "status": "acknowledged"
+    }
+
+
+@router.put("/alerts/{alert_id}/resolve")
+async def resolve_alert(
+    alert_id: int,
+    resolved_by: int,
+    notes: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Resolve an alert."""
+    query = text("""
+        UPDATE mm_capacity_alerts
+        SET
+            status = 'resolved',
+            resolved_at = CURRENT_TIMESTAMP,
+            resolved_by = :by_user,
+            resolution_notes = :notes
+        WHERE id = :alert_id
+        RETURNING id, title
+    """)
+
+    result = db.execute(query, {
+        "alert_id": alert_id,
+        "by_user": resolved_by,
+        "notes": notes
+    }).fetchone()
+    db.commit()
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
+
+    return {
+        "id": result.id,
+        "title": result.title,
+        "status": "resolved"
+    }
+
+
+# =============================================================================
+# ADMIN / MIGRATION ROUTES
+# =============================================================================
+
+@router.post("/admin/run-migration")
+async def run_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Run the Master Manager database migration."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from migrations.add_master_manager_tables import run_migration
+        run_migration()
+        return {"message": "Migration completed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/initialize-capacities")
+async def initialize_capacities(
+    admin_key: str = Query(..., description="Admin API key"),
+    organization_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Initialize capacity records for all active users."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    # Get all active users without capacity records
+    query = text("""
+        INSERT INTO mm_talent_capacity (organization_id, user_id, created_at, updated_at)
+        SELECT
+            u.organization_id,
+            u.id,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+        FROM users u
+        LEFT JOIN mm_talent_capacity tc ON tc.user_id = u.id
+        WHERE u.is_active = true
+        AND tc.id IS NULL
+        AND (:org_id IS NULL OR u.organization_id = :org_id)
+        RETURNING user_id
+    """)
+
+    results = db.execute(query, {"org_id": organization_id}).fetchall()
+    db.commit()
+
+    # Also create talent state records
+    state_query = text("""
+        INSERT INTO mm_talent_state (organization_id, user_id, state, created_at, updated_at)
+        SELECT
+            u.organization_id,
+            u.id,
+            'active',
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+        FROM users u
+        LEFT JOIN mm_talent_state ts ON ts.user_id = u.id
+        WHERE u.is_active = true
+        AND ts.id IS NULL
+        AND (:org_id IS NULL OR u.organization_id = :org_id)
+    """)
+
+    db.execute(state_query, {"org_id": organization_id})
+    db.commit()
+
+    # Recalculate all capacities
+    service = get_capacity_service(db)
+    count = await service.recalculate_all_capacities(organization_id)
+
+    return {
+        "message": f"Initialized {len(results)} capacity records and calculated {count} users",
+        "users_created": len(results),
+        "users_calculated": count
+    }

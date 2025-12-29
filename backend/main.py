@@ -19990,6 +19990,14 @@ app.include_router(financial_intelligence_router, tags=["Financial Intelligence"
 from routes.business_operations_routes import router as business_ops_router
 app.include_router(business_ops_router, tags=["Business Operations"])
 
+# Include Master Manager Platform routes (capacity, talent, recruiting)
+try:
+    from routes.master_manager_routes import router as master_manager_router
+    app.include_router(master_manager_router, tags=["Master Manager"])
+    logger.info("✅ Master Manager routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Master Manager routes: {e}")
+
 # Include Acquisition Engine routes (lead scoring, speed-to-lead)
 try:
     from routes.acquisition_engine_routes import router as acquisition_router
