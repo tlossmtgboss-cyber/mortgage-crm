@@ -789,6 +789,49 @@ async def run_migration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/admin/fix-duplicate-roles")
+async def fix_duplicate_roles(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Remove duplicate role definitions, keeping only one of each role_name."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Delete duplicates keeping the lowest ID for each role_name
+        delete_query = text("""
+            DELETE FROM mm_role_definitions
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM mm_role_definitions
+                GROUP BY role_name
+            )
+        """)
+        result = db.execute(delete_query)
+        deleted_count = result.rowcount
+        db.commit()
+
+        # Get remaining roles
+        roles_query = text("""
+            SELECT id, role_name, role_category
+            FROM mm_role_definitions
+            ORDER BY role_category, role_name
+        """)
+        roles = db.execute(roles_query).fetchall()
+
+        return {
+            "message": f"Removed {deleted_count} duplicate roles",
+            "remaining_roles": [
+                {"id": r[0], "role_name": r[1], "role_category": r[2]}
+                for r in roles
+            ]
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/admin/initialize-capacities")
 async def initialize_capacities(
     admin_key: str = Query(..., description="Admin API key"),
