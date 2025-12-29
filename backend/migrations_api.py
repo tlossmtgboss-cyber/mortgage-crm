@@ -995,3 +995,33 @@ async def seed_ci_qa_rubrics(
         logger.error(f"CI QA rubrics seeding error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/add-video-os-tables")
+async def run_video_os_migration(
+    admin: Any = Depends(verify_admin_access)
+):
+    """
+    Run the Video OS tables migration.
+    Creates tables for video projects, render jobs, hosting, and analytics.
+    """
+    try:
+        from migrations.add_video_os_tables import run_migration
+
+        logger.info("Starting Video OS tables migration...")
+        result = run_migration()
+
+        if result.get("success"):
+            return {
+                "status": "success",
+                "message": "Video OS tables created successfully"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Video OS migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

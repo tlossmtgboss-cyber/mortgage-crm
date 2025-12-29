@@ -180,42 +180,41 @@ class VideoRenderWorker:
         """Execute the full render pipeline."""
         from services.video_render_service import video_render_service, RenderState
 
-        # job["id"] is the integer database ID for service calls
+        # ctx.render_job_db_id is the integer database ID for service calls
         # ctx.job_id is the string job ID (e.g., "VRJ-XXXX") for logging
-        render_job_id = job["id"]
-        job_id_str = ctx.job_id
+        db_id = ctx.render_job_db_id
 
         # Stage 1: Generate/verify script
-        video_render_service.update_progress(db, render_job_id, 5, "Preparing script")
+        video_render_service.update_progress(db, db_id, 5, "Preparing script")
         self._ensure_script(db, ctx)
-        video_render_service.transition_state(db, render_job_id, RenderState.SCRIPTED)
+        video_render_service.transition_state(db, db_id, RenderState.SCRIPTED)
 
         # Stage 2: Generate voiceover
-        video_render_service.update_progress(db, render_job_id, 15, "Generating voiceover")
+        video_render_service.update_progress(db, db_id, 15, "Generating voiceover")
         self._generate_voiceover(db, ctx)
-        video_render_service.transition_state(db, render_job_id, RenderState.VOICED)
+        video_render_service.transition_state(db, db_id, RenderState.VOICED)
 
         # Stage 3: Generate storyboard visuals
-        video_render_service.update_progress(db, render_job_id, 30, "Generating storyboard")
+        video_render_service.update_progress(db, db_id, 30, "Generating storyboard")
         self._ensure_storyboard(db, ctx)
-        video_render_service.transition_state(db, render_job_id, RenderState.STORYBOARDED)
+        video_render_service.transition_state(db, db_id, RenderState.STORYBOARDED)
 
         # Stage 4: Generate visuals
-        video_render_service.update_progress(db, render_job_id, 50, "Generating visuals")
+        video_render_service.update_progress(db, db_id, 50, "Generating visuals")
         self._generate_visuals(db, ctx)
-        video_render_service.transition_state(db, render_job_id, RenderState.VISUALIZED)
+        video_render_service.transition_state(db, db_id, RenderState.VISUALIZED)
 
         # Stage 5: Render video
-        video_render_service.update_progress(db, render_job_id, 70, "Rendering video")
-        video_render_service.transition_state(db, render_job_id, RenderState.RENDERING)
+        video_render_service.update_progress(db, db_id, 70, "Rendering video")
+        video_render_service.transition_state(db, db_id, RenderState.RENDERING)
         output_path = self._render_video(db, ctx)
 
         # Stage 6: Post-processing
-        video_render_service.update_progress(db, render_job_id, 90, "Post-processing")
+        video_render_service.update_progress(db, db_id, 90, "Post-processing")
         final_path = self._post_process(db, ctx, output_path)
 
         # Stage 7: Upload and finalize
-        video_render_service.update_progress(db, render_job_id, 95, "Uploading")
+        video_render_service.update_progress(db, db_id, 95, "Uploading")
         video_url = self._upload_video(ctx, final_path)
 
         # Get video metadata
@@ -224,7 +223,7 @@ class VideoRenderWorker:
         # Save artifact
         video_render_service.add_artifact(
             db=db,
-            render_job_id=render_job_id,
+            render_job_id=db_id,
             artifact_type="final_video",
             file_url=video_url,
             file_size_bytes=file_size,
@@ -233,12 +232,12 @@ class VideoRenderWorker:
             resolution=ctx.resolution,
         )
 
-        # Complete the job
-        video_render_service.complete_job(db, job_id_str, duration, file_size)
-        video_render_service.update_progress(db, render_job_id, 100, "Complete")
-        video_render_service.transition_state(db, render_job_id, RenderState.RENDERED)
+        # Complete the job (uses string job_id for lookup)
+        video_render_service.complete_job(db, ctx.job_id, duration, file_size)
+        video_render_service.update_progress(db, db_id, 100, "Complete")
+        video_render_service.transition_state(db, db_id, RenderState.RENDERED)
 
-        logger.info(f"Job {job_id_str} completed successfully")
+        logger.info(f"Job {ctx.job_id} completed successfully")
 
     # =========================================================================
     # PIPELINE STAGES
@@ -276,7 +275,7 @@ class VideoRenderWorker:
             # Save as artifact
             video_render_service.add_artifact(
                 db=db,
-                render_job_id=ctx.job_id,
+                render_job_id=ctx.render_job_db_id,
                 artifact_type=f"voiceover_scene_{i}",
                 file_url=str(audio_path),
                 duration_seconds=duration,
@@ -336,7 +335,7 @@ class VideoRenderWorker:
 
                 video_render_service.add_artifact(
                     db=db,
-                    render_job_id=ctx.job_id,
+                    render_job_id=ctx.render_job_db_id,
                     artifact_type=f"visual_scene_{i}",
                     file_url=str(image_path),
                     mime_type="image/png",
