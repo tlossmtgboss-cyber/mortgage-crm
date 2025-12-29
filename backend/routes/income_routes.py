@@ -1511,3 +1511,61 @@ async def seed_test_income_data(
             "error": str(e),
             "error_type": type(e).__name__,
         }
+
+
+@router.get("/admin/run-migration")
+async def run_income_migration(
+    admin_key: str = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Run database migration to create income tables.
+    This endpoint is public for initial setup.
+    """
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    from sqlalchemy import inspect, text
+    from models.income_models import (
+        IncomeSource, PaystubExtraction, Employment,
+        SelfEmploymentIncome, RentalIncomeProperty, IncomeCalculationHistory
+    )
+    from database import Base, engine
+
+    try:
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+
+        tables_to_create = [
+            ('income_sources', IncomeSource),
+            ('paystub_extractions', PaystubExtraction),
+            ('employments', Employment),
+            ('self_employment_income', SelfEmploymentIncome),
+            ('rental_income_properties', RentalIncomeProperty),
+            ('income_calculation_history', IncomeCalculationHistory),
+        ]
+
+        created = []
+        already_exists = []
+
+        for table_name, model in tables_to_create:
+            if table_name in existing_tables:
+                already_exists.append(table_name)
+            else:
+                model.__table__.create(engine, checkfirst=True)
+                created.append(table_name)
+
+        return {
+            "success": True,
+            "created_tables": created,
+            "already_existed": already_exists,
+            "message": f"Created {len(created)} tables, {len(already_exists)} already existed",
+        }
+    except Exception as e:
+        logger.error(f"Income migration failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }

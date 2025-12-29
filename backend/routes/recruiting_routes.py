@@ -5,6 +5,7 @@ API endpoints for Master Manager Platform Phase 2 - Recruiting Engine.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date
