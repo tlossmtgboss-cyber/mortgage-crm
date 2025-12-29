@@ -325,15 +325,19 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to extract income');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to extract income from documents');
       }
 
       await fetchIncomeSources();
       setHasChanges(true);
     } catch (err) {
       console.error('Error extracting income:', err);
-      setError(err.message);
+      // Don't show raw "Failed to fetch" errors - provide user-friendly message
+      const message = err.message === 'Failed to fetch'
+        ? 'Unable to connect to server. Please try again.'
+        : err.message;
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -348,7 +352,7 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
       const source = getIncomeSourceForType(incomeType);
       if (!source) {
         // Create income source first
-        await fetch(
+        const createResponse = await fetch(
           `${API_BASE}/api/v1/income/borrowers/${borrowerId}/sources`,
           {
             method: 'POST',
@@ -363,13 +367,17 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
             }),
           }
         );
+        if (!createResponse.ok) {
+          const errorData = await createResponse.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to create income source');
+        }
         await fetchIncomeSources();
       }
 
       // Trigger calculation
       const updatedSource = getIncomeSourceForType(incomeType) || source;
       if (updatedSource) {
-        await fetch(
+        const calcResponse = await fetch(
           `${API_BASE}/api/v1/income/sources/${updatedSource.id}/calculate`,
           {
             method: 'POST',
@@ -378,13 +386,21 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
             },
           }
         );
+        if (!calcResponse.ok) {
+          const errorData = await calcResponse.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to calculate income');
+        }
       }
 
       await fetchIncomeSources();
       setHasChanges(true);
     } catch (err) {
       console.error('Error calculating income:', err);
-      setError(err.message);
+      // Don't show raw "Failed to fetch" errors - provide user-friendly message
+      const message = err.message === 'Failed to fetch'
+        ? 'Unable to connect to server. Please try again.'
+        : err.message;
+      setError(message);
     } finally {
       setSaving(false);
     }
