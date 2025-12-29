@@ -18,6 +18,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import SmartDocumentUpload from '../components/smart-docs/SmartDocumentUpload';
 import IncomeCalculator from '../components/IncomeCalculator';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
+import PortalSelectorModal from '../components/PortalSelectorModal';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -78,6 +79,7 @@ function LoanDetail() {
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [showPortalSelector, setShowPortalSelector] = useState(false);
   const [, setIsListening] = useState(false);
   const [emailHistory, setEmailHistory] = useState([]);
   const [, setSelectedEmail] = useState(null);
@@ -947,12 +949,8 @@ function LoanDetail() {
         }
         break;
       case 'client_portal':
-        // Open client portal for this loan
-        if (loan.workspace_slug) {
-          window.open(`${window.location.origin}/portal/${loan.workspace_slug}`, '_blank');
-        } else {
-          alert('No client portal found for this loan. Please create one from the loan details.');
-        }
+        // Open portal selector modal to choose between Client, Buyer's Agent, or Listing Agent portals
+        setShowPortalSelector(true);
         break;
       case 'salesforce-pull':
         handleSalesforcePull();
@@ -3624,6 +3622,15 @@ function LoanDetail() {
         />
       )}
 
+      {/* Portal Selector Modal */}
+      {loan && (
+        <PortalSelectorModal
+          isOpen={showPortalSelector}
+          onClose={() => setShowPortalSelector(false)}
+          loan={loan}
+        />
+      )}
+
       {/* UVIP Video Meetings Modal */}
       {showVideoMeetings && (
         <div className="modal-overlay" onClick={() => setShowVideoMeetings(false)}>
@@ -3910,10 +3917,10 @@ function LoanDetail() {
           <button
             className="action-btn portal"
             onClick={() => handleAction('client_portal')}
-            title="Open or create client portal"
+            title="Access Client, Buyer's Agent, or Listing Agent portals"
           >
             <span className="icon">🌐</span>
-            <span>Client Portal</span>
+            <span>Portals</span>
           </button>
           <button
             className="action-btn escalation"

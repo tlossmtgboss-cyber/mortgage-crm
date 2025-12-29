@@ -142,6 +142,10 @@ const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
+const IncomeCalculatorPopout = lazy(() => import('./pages/IncomeCalculatorPopout'));
+const ListingPortalTransactions = lazy(() => import('./pages/ListingPortalTransactions'));
+const ListingPortalTransactionDetail = lazy(() => import('./pages/ListingPortalTransactionDetail'));
+const ListingAgentPortal = lazy(() => import('./pages/ListingAgentPortal'));
 
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
@@ -287,6 +291,9 @@ function App() {
           {/* Realtor Portal (public - token-based auth) */}
           <Route path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />
 
+          {/* Listing Agent Portal (public - magic link auth) */}
+          <Route path="/listing-agent-portal" element={<LazyPage><ListingAgentPortal /></LazyPage>} />
+
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />
           <Route path="/accept-invite" element={<LazyPage><AcceptInvite /></LazyPage>} />
@@ -346,6 +353,9 @@ function App() {
           {/* Total Cost Analysis - Mortgage Coach style comparison tool */}
           <Route path="/portal/tca/:loanId" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />
           <Route path="/analysis/:token" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />
+
+          {/* Income Calculator Popout - Opens in separate window for multi-monitor viewing */}
+          <Route path="/income-calculator-popout" element={<LazyPage><IncomeCalculatorPopout /></LazyPage>} />
 
           {/* Partner Portal - Realtor/Partner view with magic link access */}
           <Route path="/partner/:token" element={<LazyPage><PartnerPortalView /></LazyPage>} />
@@ -1910,6 +1920,53 @@ function App() {
               </PrivateRoute>
             }
           />
+
+          {/* Listing Agent Portal Admin (transactions management) */}
+          <Route
+            path="/listing-portal"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ListingPortalTransactions /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/listing-portal/transactions/:transactionId"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ListingPortalTransactionDetail /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
           <Route
             path="/ai-blog"
             element={
