@@ -920,3 +920,23 @@ async def get_upcoming_interviews(
             for r in results
         ]
     }
+
+
+# =============================================================================
+# ADMIN ENDPOINTS
+# =============================================================================
+
+@router.post("/admin/run-migration")
+async def run_recruiting_migration(
+    admin_key: str = Query(..., description="Admin API key")
+):
+    """Run the recruiting tables migration."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from migrations.add_recruiting_tables import run_migration
+        result = run_migration()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
