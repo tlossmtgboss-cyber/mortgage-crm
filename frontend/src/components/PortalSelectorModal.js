@@ -84,15 +84,44 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       if (response.ok) {
         const data = await response.json();
         const transaction = data.data?.transactions?.find(t => t.loan_id === loan.id);
-        setPortalStatus(prev => ({
-          ...prev,
-          listingAgent: {
-            exists: !!transaction,
-            loading: false,
-            url: transaction ? `/listing-portal/transactions/${transaction.id}` : null,
-            transactionId: transaction?.id || null,
-          },
-        }));
+
+        if (transaction) {
+          // Fetch transaction details to get party portal URLs
+          const detailResponse = await fetch(
+            `${API_BASE_URL}/api/v1/listing-portal/transactions/${transaction.id}`,
+            { headers: getAuthHeaders() }
+          );
+
+          let publicPortalUrl = null;
+          let adminUrl = `/listing-portal/transactions/${transaction.id}`;
+
+          if (detailResponse.ok) {
+            const detailData = await detailResponse.json();
+            const parties = detailData.data?.parties || [];
+            // Find first party with an active portal URL
+            const partyWithPortal = parties.find(p => p.portal_url);
+            if (partyWithPortal) {
+              publicPortalUrl = partyWithPortal.portal_url;
+            }
+          }
+
+          setPortalStatus(prev => ({
+            ...prev,
+            listingAgent: {
+              exists: true,
+              loading: false,
+              url: publicPortalUrl || adminUrl,
+              adminUrl: adminUrl,
+              transactionId: transaction.id,
+              hasPublicPortal: !!publicPortalUrl,
+            },
+          }));
+        } else {
+          setPortalStatus(prev => ({
+            ...prev,
+            listingAgent: { exists: false, loading: false, url: null },
+          }));
+        }
       } else {
         setPortalStatus(prev => ({
           ...prev,
@@ -115,8 +144,14 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       listingAgent: portalStatus.listingAgent.url,
     };
 
-    if (urls[type]) {
-      window.open(`${window.location.origin}${urls[type]}`, '_blank');
+    const url = urls[type];
+    if (url) {
+      // Check if URL is absolute or relative
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        window.open(url, '_blank');
+      } else {
+        window.open(`${window.location.origin}${url}`, '_blank');
+      }
     }
   };
 
@@ -179,15 +214,20 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
           if (response.ok) {
             const data = await response.json();
             const transactionId = data.data?.id;
+            const adminUrl = `/listing-portal/transactions/${transactionId}`;
             setPortalStatus(prev => ({
               ...prev,
               listingAgent: {
                 exists: true,
                 loading: false,
-                url: `/listing-portal/transactions/${transactionId}`,
+                url: adminUrl,  // Admin view since no party invited yet
+                adminUrl: adminUrl,
                 transactionId,
+                hasPublicPortal: false,
               },
             }));
+            // Navigate to admin view to add listing agent
+            window.open(`${window.location.origin}${adminUrl}`, '_blank');
           } else {
             throw new Error('Failed to create listing agent portal');
           }

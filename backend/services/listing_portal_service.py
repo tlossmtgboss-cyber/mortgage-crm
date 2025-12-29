@@ -261,7 +261,7 @@ class ListingPortalService:
             return None
 
     def get_party(self, db: Session, party_id: int) -> Optional[Dict[str, Any]]:
-        """Get party details"""
+        """Get party details including portal invite info"""
         try:
             result = db.execute(text("""
                 SELECT
@@ -269,14 +269,26 @@ class ListingPortalService:
                     p.first_name, p.last_name, p.phone, p.company_name,
                     p.license_number, p.notify_weekly_updates,
                     p.notify_milestone_changes, p.notify_messages,
-                    p.unsubscribed_at, p.is_active, p.created_at
+                    p.unsubscribed_at, p.is_active, p.created_at,
+                    i.token as invite_token, i.expires_at as invite_expires_at,
+                    i.revoked_at as invite_revoked_at
                 FROM transaction_parties p
+                LEFT JOIN listing_portal_invites i ON i.party_id = p.id
+                    AND i.revoked_at IS NULL
+                    AND i.expires_at > NOW()
                 WHERE p.id = :id
+                ORDER BY i.created_at DESC
+                LIMIT 1
             """), {"id": party_id})
             row = result.fetchone()
 
             if not row:
                 return None
+
+            # Build portal URL if invite token exists
+            portal_url = None
+            if row.invite_token:
+                portal_url = f"{self.frontend_url}/listing-agent-portal?token={row.invite_token}"
 
             return {
                 "id": row.id,
@@ -293,7 +305,9 @@ class ListingPortalService:
                 "notify_messages": row.notify_messages,
                 "unsubscribed_at": row.unsubscribed_at,
                 "is_active": row.is_active,
-                "created_at": row.created_at
+                "created_at": row.created_at,
+                "portal_url": portal_url,
+                "has_active_invite": row.invite_token is not None
             }
 
         except Exception as e:
@@ -356,7 +370,7 @@ class ListingPortalService:
 
             if row:
                 party = self.get_party(db, party_id)
-                portal_url = f"{self.frontend_url}/listing-portal?token={token}"
+                portal_url = f"{self.frontend_url}/listing-agent-portal?token={token}"
 
                 return {
                     "id": row.id,
