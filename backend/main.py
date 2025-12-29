@@ -20303,6 +20303,15 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Listing Agent Portal routes not loaded: {e}")
 
+# Video OS routes (Internal video generation, hosting, and analytics)
+try:
+    from routes.video_os_routes import router as video_os_router, set_dependencies as set_video_os_deps
+    set_video_os_deps(get_db, get_current_user)
+    app.include_router(video_os_router, tags=["Video OS"])
+    logger.info("✅ Video OS routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Video OS routes not loaded: {e}")
+
 # Agent Governance routes (Agent Management & Monitoring)
 try:
     from routes.agent_governance_routes import router as agent_governance_router
