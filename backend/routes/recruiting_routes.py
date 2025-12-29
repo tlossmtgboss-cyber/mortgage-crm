@@ -928,7 +928,8 @@ async def get_upcoming_interviews(
 
 @router.post("/admin/run-migration")
 async def run_recruiting_migration(
-    admin_key: str = Query(..., description="Admin API key")
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
 ):
     """Run the recruiting tables migration."""
     if admin_key != "perennia-admin-2024":
