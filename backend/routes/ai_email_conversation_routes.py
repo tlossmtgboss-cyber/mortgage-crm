@@ -1000,9 +1000,14 @@ async def generate_ai_response(
         """), {"conv_id": conversation_id}).fetchall()
 
         # Build conversation history for the AI service
+        # IMPORTANT: Exclude the last message if it's from the user, since it's
+        # passed separately as user_message to avoid duplicate messages in the prompt
         conversation_history = []
-        for msg in messages_result:
+        for i, msg in enumerate(messages_result):
             role = "assistant" if msg.direction == "outbound" else "user"
+            # Skip the last user message - it will be added separately as user_message
+            if i == len(messages_result) - 1 and role == "user":
+                continue
             conversation_history.append({
                 "role": role,
                 "content": msg.body_text or ""
@@ -1071,6 +1076,13 @@ Loan Information:
         phase = result.get("trust_phase", 1)
         turn_count = result.get("turn_count", 0)
 
+        # Log AI response details for debugging
+        logger.info(f"AI response generated for {conversation_id}: {len(ai_response)} chars, phase={phase}, turn={turn_count}")
+        if result.get("error"):
+            logger.warning(f"AI service returned error for {conversation_id}: {result.get('error')}")
+        if not result.get("ai_generated", True):
+            logger.warning(f"Fallback response used for {conversation_id} - OpenAI may not be configured")
+
         # Format response email
         reply_subject = f"Re: {subject}" if not subject.startswith("Re:") else subject
 
@@ -1121,6 +1133,9 @@ Loan Information:
             email_headers["In-Reply-To"] = last_msg.message_id
             email_headers["References"] = last_msg.message_id
 
+        # Log email sending attempt
+        logger.info(f"Sending AI response email for {conversation_id} to {user_email}")
+
         success = email_service.send_html_email(
             to_email=user_email,
             subject=reply_subject,
@@ -1130,35 +1145,40 @@ Loan Information:
             headers=email_headers
         )
 
+        # Store AI response in database (regardless of email success)
+        # This ensures the response is captured even if email fails
+        db.execute(text("""
+            INSERT INTO ai_email_messages
+            (conversation_id, direction, from_email, to_email, subject,
+             body_text, body_html, ai_generated, ai_model, created_at)
+            VALUES (:conv_id, 'outbound', :from_email, :to_email, :subject,
+                    :body_text, :body_html, true, :ai_model, NOW())
+        """), {
+            "conv_id": conversation_id,
+            "from_email": os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"),
+            "to_email": user_email,
+            "subject": reply_subject,
+            "body_text": ai_response,
+            "body_html": html_response,
+            "ai_model": result.get("model", "gpt-4o-mini")
+        })
+
+        db.execute(text("""
+            UPDATE ai_email_conversations
+            SET last_message_at = NOW(),
+                message_count = COALESCE(message_count, 0) + 1
+            WHERE conversation_id = :conv_id
+        """), {"conv_id": conversation_id})
+
+        db.commit()
+
         if success:
-            # Store AI response
-            db.execute(text("""
-                INSERT INTO ai_email_messages
-                (conversation_id, direction, from_email, to_email, subject,
-                 body_text, body_html, ai_generated, ai_model, created_at)
-                VALUES (:conv_id, 'outbound', :from_email, :to_email, :subject,
-                        :body_text, :body_html, true, 'gpt-4o-mini', NOW())
-            """), {
-                "conv_id": conversation_id,
-                "from_email": os.getenv("SENDGRID_FROM_EMAIL", "noreply@mortgagecrm.com"),
-                "to_email": user_email,
-                "subject": reply_subject,
-                "body_text": ai_response,
-                "body_html": html_response
-            })
-
-            db.execute(text("""
-                UPDATE ai_email_conversations
-                SET last_message_at = NOW(),
-                    message_count = COALESCE(message_count, 0) + 1
-                WHERE conversation_id = :conv_id
-            """), {"conv_id": conversation_id})
-
-            db.commit()
-
             logger.info(f"AI response sent for conversation {conversation_id} (phase {phase}, turn {turn_count})")
         else:
-            logger.error(f"Failed to send AI response for conversation {conversation_id}")
+            logger.error(f"Failed to send AI response email for conversation {conversation_id}")
+            logger.error(f"  To: {user_email}, Subject: {reply_subject}")
+            logger.error(f"  Reply-To: {tagged_reply_to}")
+            logger.error(f"  AI Response was generated and stored, but email delivery failed.")
 
     except Exception as e:
         import traceback
