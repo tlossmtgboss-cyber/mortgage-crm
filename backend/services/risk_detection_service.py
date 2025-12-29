@@ -45,10 +45,14 @@ class BurnoutRiskAssessment:
     """Burnout risk assessment for a user."""
     user_id: int
     user_name: str
-    risk_score: float  # 0-100
+    role_name: Optional[str]
+    overall_risk_score: float  # 0-100
     risk_level: str
-    factors: List[Dict[str, Any]]
+    factor_scores: Dict[str, float]
+    contributing_factors: List[Dict[str, Any]]
     recommendations: List[str]
+    trend: Optional[str] = None  # improving, stable, declining
+    assessed_at: Optional[datetime] = None
 
 
 @dataclass
@@ -56,21 +60,29 @@ class AttritionRiskAssessment:
     """Attrition risk assessment for a user."""
     user_id: int
     user_name: str
-    risk_score: float  # 0-100
+    role_name: Optional[str]
+    overall_risk_score: float  # 0-100
     risk_level: str
-    factors: List[Dict[str, Any]]
-    retention_actions: List[str]
+    factor_scores: Dict[str, float]
+    contributing_factors: List[Dict[str, Any]]
+    recommendations: List[str]
+    estimated_departure_window: Optional[str] = None
+    assessed_at: Optional[datetime] = None
 
 
 @dataclass
 class SPOFRisk:
     """Single point of failure risk."""
-    role_name: str
-    user_id: int
+    user_id: Optional[int]
     user_name: str
-    severity: str
-    backup_count: int
-    recommendations: List[str]
+    role_name: str
+    criticality_score: float
+    risk_level: str
+    unique_capabilities: List[str]
+    coverage_gap: float
+    backup_users: List[Dict[str, Any]]
+    knowledge_transfer_status: str
+    recommended_actions: List[str]
 
 
 # =============================================================================
@@ -137,8 +149,11 @@ class RiskDetectionService:
         """
         # Get user info
         user_query = text("""
-            SELECT u.id, u.full_name, u.organization_id
+            SELECT u.id, u.full_name, u.organization_id,
+                   rd.role_name
             FROM users u
+            LEFT JOIN mm_talent_capacity tc ON tc.user_id = u.id
+            LEFT JOIN mm_role_definitions rd ON rd.id = tc.role_definition_id
             WHERE u.id = :user_id
         """)
         user = self.db.execute(user_query, {"user_id": user_id}).fetchone()
@@ -245,10 +260,14 @@ class RiskDetectionService:
         return BurnoutRiskAssessment(
             user_id=user_id,
             user_name=user.full_name or "Unknown",
-            risk_score=round(overall_score, 1),
+            role_name=user.role_name,
+            overall_risk_score=round(overall_score, 1),
             risk_level=risk_level,
-            factors=factors,
-            recommendations=recommendations
+            factor_scores=scores,
+            contributing_factors=factors,
+            recommendations=recommendations,
+            trend=None,  # Could be calculated from historical data
+            assessed_at=datetime.now(timezone.utc)
         )
 
     async def _get_capacity_history(
@@ -531,9 +550,12 @@ class RiskDetectionService:
             SELECT
                 u.id, u.full_name, u.organization_id, u.created_at,
                 ts.hire_date, ts.is_new_hire, ts.last_promotion_at,
-                ts.has_active_pip, ts.exit_risk_level
+                ts.has_active_pip, ts.exit_risk_level,
+                rd.role_name
             FROM users u
             LEFT JOIN mm_talent_state ts ON ts.user_id = u.id
+            LEFT JOIN mm_talent_capacity tc ON tc.user_id = u.id
+            LEFT JOIN mm_role_definitions rd ON rd.id = tc.role_definition_id
             WHERE u.id = :user_id
         """)
         user = self.db.execute(user_query, {"user_id": user_id}).fetchone()
@@ -623,16 +645,29 @@ class RiskDetectionService:
         # Generate retention actions
         retention_actions = self._generate_retention_actions(factors, overall_score, user)
 
+        # Estimate departure window based on risk level
+        estimated_window = None
+        if overall_score >= 80:
+            estimated_window = "0-3 months"
+        elif overall_score >= 60:
+            estimated_window = "3-6 months"
+        elif overall_score >= 40:
+            estimated_window = "6-12 months"
+
         # Update database with new risk score
         await self._update_attrition_risk_score(user_id, overall_score, organization_id)
 
         return AttritionRiskAssessment(
             user_id=user_id,
             user_name=user.full_name or "Unknown",
-            risk_score=round(overall_score, 1),
+            role_name=user.role_name,
+            overall_risk_score=round(overall_score, 1),
             risk_level=risk_level,
-            factors=factors,
-            retention_actions=retention_actions
+            factor_scores=scores,
+            contributing_factors=factors,
+            recommendations=retention_actions,
+            estimated_departure_window=estimated_window,
+            assessed_at=datetime.now(timezone.utc)
         )
 
     def _calculate_tenure_risk(self, user) -> float:
@@ -886,9 +921,13 @@ class RiskDetectionService:
         spof_risks = []
 
         for r in results:
+            difficulty = r.replacement_difficulty or 5
+            criticality_score = difficulty * 10  # 0-100 scale
+
             if r.user_id is None:
                 # Empty role - critical coverage gap
-                severity = "critical"
+                risk_level = "critical"
+                criticality_score = 100
                 recommendations = [
                     f"URGENT: No one assigned to {r.role_name} role",
                     "Immediately identify candidates or contractors",
@@ -896,15 +935,14 @@ class RiskDetectionService:
                 ]
             else:
                 # Single person in role
-                difficulty = r.replacement_difficulty or 5
                 if difficulty >= 8:
-                    severity = "critical"
+                    risk_level = "critical"
                 elif difficulty >= 6:
-                    severity = "high"
+                    risk_level = "high"
                 elif difficulty >= 4:
-                    severity = "medium"
+                    risk_level = "medium"
                 else:
-                    severity = "low"
+                    risk_level = "low"
 
                 recommendations = [
                     f"Identify and train backup for {r.role_name}",
@@ -912,7 +950,7 @@ class RiskDetectionService:
                     "Consider cross-training adjacent roles"
                 ]
 
-            # Get backup count from coverage map
+            # Get backup info from coverage map
             backup_query = text("""
                 SELECT backup_user_ids
                 FROM mm_coverage_map
@@ -922,7 +960,7 @@ class RiskDetectionService:
                 )
             """)
 
-            backup_count = 0
+            backup_users = []
             try:
                 backup_result = self.db.execute(backup_query, {
                     "user_id": r.user_id,
@@ -930,17 +968,21 @@ class RiskDetectionService:
                 }).fetchone()
 
                 if backup_result and backup_result.backup_user_ids:
-                    backup_count = len(backup_result.backup_user_ids)
+                    backup_users = [{"user_id": uid} for uid in backup_result.backup_user_ids]
             except Exception:
                 pass
 
             spof_risks.append(SPOFRisk(
-                role_name=r.role_name,
                 user_id=r.user_id,
                 user_name=r.user_name or "Unassigned",
-                severity=severity,
-                backup_count=backup_count,
-                recommendations=recommendations
+                role_name=r.role_name,
+                criticality_score=criticality_score,
+                risk_level=risk_level,
+                unique_capabilities=[r.role_name],
+                coverage_gap=100 if len(backup_users) == 0 else 50,
+                backup_users=backup_users,
+                knowledge_transfer_status="not_started" if len(backup_users) == 0 else "partial",
+                recommended_actions=recommendations
             ))
 
         return spof_risks
@@ -1145,6 +1187,92 @@ class RiskDetectionService:
 
         return count
 
+    async def get_all_burnout_risks(
+        self,
+        organization_id: Optional[int] = None,
+        min_risk_score: float = 0,
+        limit: int = 50
+    ) -> List[BurnoutRiskAssessment]:
+        """Get burnout risk assessments for all users above threshold."""
+        users_query = text("""
+            SELECT DISTINCT tc.user_id
+            FROM mm_talent_capacity tc
+            JOIN users u ON u.id = tc.user_id
+            WHERE u.is_active = true
+            AND tc.is_available = true
+            AND (tc.burnout_risk_score >= :min_score OR tc.burnout_risk_score IS NULL)
+            AND (:org_id IS NULL OR tc.organization_id = :org_id)
+            ORDER BY tc.burnout_risk_score DESC NULLS LAST
+            LIMIT :limit
+        """)
+
+        users = self.db.execute(users_query, {
+            "org_id": organization_id,
+            "min_score": min_risk_score,
+            "limit": limit
+        }).fetchall()
+
+        assessments = []
+        for user_row in users:
+            try:
+                assessment = await self.calculate_burnout_risk(user_row.user_id, organization_id)
+                if assessment.overall_risk_score >= min_risk_score:
+                    assessments.append(assessment)
+            except Exception as e:
+                logger.warning(f"Failed to get burnout risk for user {user_row.user_id}: {e}")
+
+        return sorted(assessments, key=lambda x: x.overall_risk_score, reverse=True)
+
+    async def get_all_attrition_risks(
+        self,
+        organization_id: Optional[int] = None,
+        min_risk_score: float = 0,
+        limit: int = 50
+    ) -> List[AttritionRiskAssessment]:
+        """Get attrition risk assessments for all users above threshold."""
+        users_query = text("""
+            SELECT DISTINCT tc.user_id
+            FROM mm_talent_capacity tc
+            JOIN users u ON u.id = tc.user_id
+            WHERE u.is_active = true
+            AND (tc.attrition_risk_score >= :min_score OR tc.attrition_risk_score IS NULL)
+            AND (:org_id IS NULL OR tc.organization_id = :org_id)
+            ORDER BY tc.attrition_risk_score DESC NULLS LAST
+            LIMIT :limit
+        """)
+
+        users = self.db.execute(users_query, {
+            "org_id": organization_id,
+            "min_score": min_risk_score,
+            "limit": limit
+        }).fetchall()
+
+        assessments = []
+        for user_row in users:
+            try:
+                assessment = await self.calculate_attrition_risk(user_row.user_id, organization_id)
+                if assessment.overall_risk_score >= min_risk_score:
+                    assessments.append(assessment)
+            except Exception as e:
+                logger.warning(f"Failed to get attrition risk for user {user_row.user_id}: {e}")
+
+        return sorted(assessments, key=lambda x: x.overall_risk_score, reverse=True)
+
+    async def calculate_all_risks(
+        self,
+        organization_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Calculate all risk scores for all users."""
+        burnout_count = await self.calculate_all_burnout_risks(organization_id)
+        attrition_count = await self.calculate_all_attrition_risks(organization_id)
+
+        return {
+            "message": f"Calculated risks for all users",
+            "burnout_users_calculated": burnout_count,
+            "attrition_users_calculated": attrition_count,
+            "calculated_at": datetime.now(timezone.utc).isoformat()
+        }
+
     # =========================================================================
     # RISK DASHBOARD
     # =========================================================================
@@ -1186,8 +1314,8 @@ class RiskDetectionService:
 
         # Get SPOFs
         spofs = await self.identify_single_points_of_failure(organization_id)
-        critical_spofs = [s for s in spofs if s.severity == "critical"]
-        high_spofs = [s for s in spofs if s.severity == "high"]
+        critical_spofs = [s for s in spofs if s.risk_level == "critical"]
+        high_spofs = [s for s in spofs if s.risk_level == "high"]
 
         # Get coverage gaps
         gaps = await self.get_coverage_gaps(organization_id)
@@ -1293,9 +1421,13 @@ class RiskDetectionService:
 
     async def generate_risk_alerts(
         self,
-        organization_id: Optional[int] = None
+        organization_id: Optional[int] = None,
+        min_severity: str = "warning"
     ) -> List[Dict[str, Any]]:
         """Generate alerts for detected risks."""
+        severity_order = {"info": 0, "warning": 1, "high": 2, "critical": 3}
+        min_severity_level = severity_order.get(min_severity, 1)
+
         alerts = []
 
         # Get high-risk burnout users
@@ -1373,22 +1505,28 @@ class RiskDetectionService:
         # Add SPOF alerts
         spofs = await self.identify_single_points_of_failure(organization_id)
         for spof in spofs:
-            if spof.severity in ["critical", "high"]:
+            if spof.risk_level in ["critical", "high"]:
                 alerts.append({
                     "alert_type": AlertType.SPOF_DETECTED.value,
-                    "severity": spof.severity,
+                    "severity": spof.risk_level,
                     "title": f"SPOF: {spof.role_name}",
                     "description": f"{spof.user_name} is the only person in {spof.role_name} role",
                     "user_id": spof.user_id,
                     "user_name": spof.user_name,
                     "metrics": {
                         "role": spof.role_name,
-                        "backup_count": spof.backup_count
+                        "backup_count": len(spof.backup_users)
                     },
-                    "recommended_actions": spof.recommendations
+                    "recommended_actions": spof.recommended_actions
                 })
 
-        return alerts
+        # Filter by minimum severity
+        filtered_alerts = [
+            a for a in alerts
+            if severity_order.get(a.get("severity", "info"), 0) >= min_severity_level
+        ]
+
+        return filtered_alerts
 
 
 # =============================================================================
