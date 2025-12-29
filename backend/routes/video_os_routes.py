@@ -91,7 +91,7 @@ async def create_project(
         project = service.create_project(
             db=db,
             organization_id=getattr(current_user, "organization_id", None),
-            created_by=current_user.id,
+            user_id=current_user.id,
             title=request.title,
             source_type=request.source_type.value,
             source_text=request.source_text,
