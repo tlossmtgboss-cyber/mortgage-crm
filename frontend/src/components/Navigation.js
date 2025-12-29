@@ -152,14 +152,14 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               >
                 Capacity
               </Link>
-              <Link
-                to="/master-manager/recruiting"
-                className={`nav-link ${isActive('/master-manager/recruiting') ? 'active' : ''}`}
-              >
-                Recruiting
-              </Link>
             </>
           )}
+          <Link
+            to="/master-manager/recruiting"
+            className={`nav-link ${isActive('/master-manager/recruiting') ? 'active' : ''}`}
+          >
+            Recruiting
+          </Link>
         </div>
 
         <div className="nav-actions">
