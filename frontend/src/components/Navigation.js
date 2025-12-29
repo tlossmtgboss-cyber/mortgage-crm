@@ -136,6 +136,16 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Profitability
           </Link>
+
+          {/* Master Manager - Capacity & Talent OS - Management/Admin only */}
+          {(userRole === 'management' || userRole === 'admin' || userRole === 'manager') && (
+            <Link
+              to="/master-manager"
+              className={`nav-link ${isActive('/master-manager') ? 'active' : ''}`}
+            >
+              Capacity
+            </Link>
+          )}
         </div>
 
         <div className="nav-actions">
