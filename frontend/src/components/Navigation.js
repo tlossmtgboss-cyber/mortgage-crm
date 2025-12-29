@@ -74,6 +74,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             AI Outreach
           </Link>
           <Link
+            to="/avatar-studio"
+            className={`nav-link ${isActive('/avatar-studio') ? 'active' : ''}`}
+          >
+            Avatar Studio
+          </Link>
+          <Link
             to="/acquisition"
             className={`nav-link ${isActive('/acquisition') ? 'active' : ''}`}
           >
