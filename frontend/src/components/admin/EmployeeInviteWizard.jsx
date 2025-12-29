@@ -30,7 +30,11 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
 
   const [errors, setErrors] = useState({});
 
-  const API_BASE = 'https://api.perenniaai.com/api';
+  // Use dynamic API base URL based on environment
+  const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  const API_BASE = isProduction
+    ? 'https://api.perenniaai.com/api'
+    : (process.env.REACT_APP_API_URL || 'http://localhost:8000') + '/api';
 
   // Load options on mount
   useEffect(() => {
