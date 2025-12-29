@@ -1337,6 +1337,76 @@ async def fix_duplicate_roles(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/admin/assign-role")
+async def assign_role_to_user(
+    admin_key: str = Query(..., description="Admin API key"),
+    user_id: int = Query(..., description="User ID"),
+    role_id: int = Query(..., description="Role definition ID"),
+    db: Session = Depends(get_db)
+):
+    """Assign a role to a user's capacity record."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Get role details
+        role_query = text("""
+            SELECT id, role_name, role_category, capacity_defaults
+            FROM mm_role_definitions
+            WHERE id = :role_id
+        """)
+        role = db.execute(role_query, {"role_id": role_id}).fetchone()
+
+        if not role:
+            raise HTTPException(status_code=404, detail=f"Role {role_id} not found")
+
+        # Get capacity defaults from role
+        defaults = role.capacity_defaults or {}
+        max_files = defaults.get("max_files", 25)
+        max_leads = defaults.get("max_leads", 50)
+        max_tasks = defaults.get("max_tasks", 30)
+
+        # Update capacity record with role
+        update_query = text("""
+            UPDATE mm_talent_capacity
+            SET role_definition_id = :role_id,
+                max_files_concurrent = :max_files,
+                max_leads_concurrent = :max_leads,
+                max_tasks_daily = :max_tasks,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = :user_id
+            RETURNING id
+        """)
+        result = db.execute(update_query, {
+            "role_id": role_id,
+            "user_id": user_id,
+            "max_files": max_files,
+            "max_leads": max_leads,
+            "max_tasks": max_tasks
+        }).fetchone()
+        db.commit()
+
+        if not result:
+            raise HTTPException(status_code=404, detail=f"No capacity record for user {user_id}")
+
+        return {
+            "message": f"Assigned role '{role.role_name}' to user {user_id}",
+            "user_id": user_id,
+            "role_id": role_id,
+            "role_name": role.role_name,
+            "capacity_limits": {
+                "max_files": max_files,
+                "max_leads": max_leads,
+                "max_tasks": max_tasks
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/admin/initialize-capacities")
 async def initialize_capacities(
     admin_key: str = Query(..., description="Admin API key"),
