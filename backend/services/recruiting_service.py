@@ -384,7 +384,7 @@ class RecruitingService:
     async def create_candidate(
         self,
         data: Dict[str, Any],
-        created_by: int,
+        created_by: Optional[int] = None,
         organization_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Create a new candidate."""

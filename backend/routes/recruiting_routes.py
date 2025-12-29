@@ -212,7 +212,7 @@ async def create_candidate(
         service = RecruitingService(db)
         result = await service.create_candidate(
             data=data.model_dump(),
-            created_by=user_id or 1,
+            created_by=user_id,
             organization_id=organization_id
         )
         return result
