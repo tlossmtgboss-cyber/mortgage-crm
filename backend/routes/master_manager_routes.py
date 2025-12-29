@@ -1031,6 +1031,23 @@ async def run_migration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/admin/run-recruiting-migration")
+async def run_recruiting_migration(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Run the Phase 2 Recruiting tables migration."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from migrations.add_recruiting_tables import run_migration
+        result = run_migration()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/admin/fix-duplicate-roles")
 async def fix_duplicate_roles(
     admin_key: str = Query(..., description="Admin API key"),
