@@ -174,9 +174,20 @@ def ensure_avatar_tables(db: Session):
     """Quick check and create avatar tables if needed."""
     from sqlalchemy import text
     try:
-        db.execute(text("SELECT 1 FROM video_avatar_profiles LIMIT 1"))
-    except Exception:
-        # Tables don't exist - create them
+        # Use information_schema to check if table exists (doesn't fail if table missing)
+        result = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'video_avatar_profiles'
+            )
+        """))
+        table_exists = result.scalar()
+        if not table_exists:
+            _create_avatar_tables(db)
+    except Exception as e:
+        # Rollback any failed transaction before attempting table creation
+        logger.warning(f"Error checking for avatar tables: {e}")
+        db.rollback()
         _create_avatar_tables(db)
 
 
