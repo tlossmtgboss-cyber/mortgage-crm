@@ -647,3 +647,31 @@
     padding: 10px 14px;
   }
 }
+
+/* Employment Status Notice */
+.employment-status-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 1px solid #bae6fd;
+}
+
+.employment-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  background: #0369a1;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.employment-hint {
+  color: #075985;
+  font-size: 13px;
+}

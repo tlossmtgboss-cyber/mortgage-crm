@@ -64,8 +64,8 @@ function useDraggable() {
   };
 }
 
-// Income type configurations
-const INCOME_TABS = [
+// Income type configurations - All available types
+const ALL_INCOME_TABS = [
   {
     id: 'W2_EMPLOYMENT',
     label: 'W-2 Employment',
@@ -91,6 +91,14 @@ const INCOME_TABS = [
     description: 'Rental property income from Schedule E',
   },
   {
+    id: 'PARTNERSHIP_SCORP',
+    label: 'S-Corp / K-1',
+    shortLabel: 'K-1',
+    icon: '🏢',
+    docTypes: ['k1', 'tax_return', 'corporate_tax_return'],
+    description: 'Income from S-Corporation or Partnership K-1',
+  },
+  {
     id: 'SELF_EMPLOYED_S_CORP',
     label: 'S-Corp / K-1',
     shortLabel: 'K-1',
@@ -107,12 +115,28 @@ const INCOME_TABS = [
     description: 'Non-QM bank statement income program',
   },
   {
+    id: 'SOCIAL_SECURITY',
+    label: 'Social Security',
+    shortLabel: 'SS',
+    icon: '🏛️',
+    docTypes: ['social_security', 'ssa_1099'],
+    description: 'Social Security retirement benefits',
+  },
+  {
+    id: 'RETIREMENT_PENSION',
+    label: 'Retirement/Pension',
+    shortLabel: 'Pension',
+    icon: '💰',
+    docTypes: ['pension', '1099_r', 'retirement_statement'],
+    description: 'Pension and retirement income',
+  },
+  {
     id: 'OTHER',
     label: 'Other Income',
     shortLabel: 'Other',
     icon: '📄',
-    docTypes: ['other_income', 'social_security', 'pension', 'alimony'],
-    description: 'Social Security, Pension, Alimony, etc.',
+    docTypes: ['other_income', 'alimony', 'child_support'],
+    description: 'Other qualifying income sources',
   },
 ];
 
@@ -133,6 +157,9 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
   const [totalIncome, setTotalIncome] = useState({ monthly: 0, annual: 0 });
   const [error, setError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [supportedTypes, setSupportedTypes] = useState([]);
+  const [employmentStatus, setEmploymentStatus] = useState(null);
+  const [incomeTabs, setIncomeTabs] = useState(ALL_INCOME_TABS);
 
   // Draggable modal hook
   const { position, isDragging, hasBeenDragged, handleMouseDown, modalRef, resetPosition } = useDraggable();
@@ -145,6 +172,52 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
       resetPosition();
     }
   }, [isOpen, resetPosition]);
+
+  // Fetch supported income types based on borrower's employment status
+  const fetchSupportedTypes = useCallback(async () => {
+    if (!loanId) return;
+
+    try {
+      const params = new URLSearchParams();
+      params.append('loan_id', loanId);
+      if (borrowerId) params.append('borrower_id', borrowerId);
+
+      const response = await fetch(
+        `${API_BASE}/api/v1/income/supported-types?${params}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const types = data.types || [];
+        setSupportedTypes(types);
+        setEmploymentStatus(data.employment_status || null);
+
+        // Filter tabs based on supported types
+        if (types.length > 0) {
+          const supportedCodes = types.map(t => t.type_code);
+          const filteredTabs = ALL_INCOME_TABS.filter(tab =>
+            supportedCodes.includes(tab.id)
+          );
+          setIncomeTabs(filteredTabs.length > 0 ? filteredTabs : ALL_INCOME_TABS);
+
+          // Set first supported type as active tab if current isn't supported
+          if (filteredTabs.length > 0 && !supportedCodes.includes(activeTab)) {
+            setActiveTab(filteredTabs[0].id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching supported types:', err);
+      // Fallback to all tabs on error
+      setIncomeTabs(ALL_INCOME_TABS);
+    }
+  }, [loanId, borrowerId, token, activeTab]);
 
   // Fetch income sources for the loan
   const fetchIncomeSources = useCallback(async () => {
@@ -173,6 +246,7 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
       }
     } catch (err) {
       console.error('Error fetching income sources:', err);
+      // Don't set error state for load failures - just log
     }
   }, [borrowerId, loanId, token]);
 
@@ -204,16 +278,17 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
     if (isOpen) {
       const loadData = async () => {
         setLoading(true);
-        await Promise.all([fetchIncomeSources(), fetchDocuments()]);
+        setError(null);
+        await Promise.all([fetchSupportedTypes(), fetchIncomeSources(), fetchDocuments()]);
         setLoading(false);
       };
       loadData();
     }
-  }, [isOpen, fetchIncomeSources, fetchDocuments]);
+  }, [isOpen, fetchSupportedTypes, fetchIncomeSources, fetchDocuments]);
 
   // Get documents for a specific income type
   const getDocumentsForType = (incomeType) => {
-    const tabConfig = INCOME_TABS.find(t => t.id === incomeType);
+    const tabConfig = ALL_INCOME_TABS.find(t => t.id === incomeType);
     if (!tabConfig) return [];
 
     return documents.filter(doc => {
@@ -337,9 +412,19 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
     return new Date(dateStr).toLocaleDateString();
   };
 
+  const formatEmploymentStatus = (status) => {
+    const labels = {
+      'employed': 'W-2 Employee',
+      'self_employed': 'Self-Employed',
+      'retired': 'Retired',
+      'unemployed': 'Unemployed',
+    };
+    return labels[status] || status || 'Unknown';
+  };
+
   if (!isOpen) return null;
 
-  const activeTabConfig = INCOME_TABS.find(t => t.id === activeTab);
+  const activeTabConfig = ALL_INCOME_TABS.find(t => t.id === activeTab);
   const tabDocuments = getDocumentsForType(activeTab);
   const tabIncomeSource = getIncomeSourceForType(activeTab);
 
@@ -386,9 +471,9 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
           </div>
         ) : (
           <div className="income-modal-body">
-            {/* Tab Navigation */}
+            {/* Tab Navigation - Dynamic based on borrower's employment type */}
             <div className="income-tabs-nav">
-              {INCOME_TABS.map(tab => {
+              {incomeTabs.map(tab => {
                 const source = getIncomeSourceForType(tab.id);
                 const docs = getDocumentsForType(tab.id);
                 const hasIncome = source?.monthly_qualifying_income > 0;
@@ -412,6 +497,14 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
                 );
               })}
             </div>
+
+            {/* Employment Status Notice */}
+            {employmentStatus && (
+              <div className="employment-status-notice">
+                <span className="employment-badge">{formatEmploymentStatus(employmentStatus)}</span>
+                <span className="employment-hint">Showing income types for this employment status</span>
+              </div>
+            )}
 
             {/* Active Tab Content */}
             <div className="income-tab-content">
