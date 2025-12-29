@@ -213,6 +213,8 @@ async def get_loan_income_sources(
     formatted_sources = []
     for source in sources:
         frontend_type = type_mapping.get(source.income_type, source.income_type.value if source.income_type else None)
+        verification_status_value = source.verification_status.value if source.verification_status else "PENDING"
+        is_verified = verification_status_value == "VERIFIED"
         formatted_sources.append({
             "id": source.id,
             "income_type": frontend_type,
@@ -220,10 +222,10 @@ async def get_loan_income_sources(
             "source_name": source.source_name,
             "monthly_qualifying_income": float(source.monthly_qualifying_income) if source.monthly_qualifying_income else None,
             "annual_qualifying_income": float(source.annual_qualifying_income) if source.annual_qualifying_income else None,
-            "is_verified": source.is_verified,
-            "verification_status": source.verification_status.value if source.verification_status else None,
+            "is_verified": is_verified,
+            "verification_status": verification_status_value,
             "is_primary": source.is_primary,
-            "notes": source.notes,
+            "notes": getattr(source, 'verification_notes', None) or getattr(source, 'calculation_notes', None),
             "created_at": source.created_at.isoformat() if source.created_at else None,
             "updated_at": source.updated_at.isoformat() if source.updated_at else None,
         })
