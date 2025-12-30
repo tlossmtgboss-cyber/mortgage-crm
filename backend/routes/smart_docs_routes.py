@@ -1211,6 +1211,17 @@ async def get_loan_documents(
     }
 
 
+# Alias route for backward compatibility
+@router.get("/loan/{loan_id}/documents")
+async def get_loan_documents_alias(
+    loan_id: int,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Alias for /documents/{loan_id} - backward compatibility."""
+    return await get_loan_documents(loan_id, status, db)
+
+
 # =============================================================================
 # Freshness & Expiration
 # =============================================================================

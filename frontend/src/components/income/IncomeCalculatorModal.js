@@ -181,8 +181,9 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
     if (!loanId) return;
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/v1/smart-docs/loan/${loanId}/documents`,
+      // Try the correct endpoint first
+      let response = await fetch(
+        `${API_BASE}/api/v1/smart-docs/documents/${loanId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -191,9 +192,23 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
         }
       );
 
+      // Fallback to needs-list endpoint which has document info
+      if (!response.ok) {
+        response = await fetch(
+          `${API_BASE}/api/v1/smart-docs/needs-list/${loanId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+      }
+
       if (response.ok) {
         const data = await response.json();
-        setDocuments(data.documents || data || []);
+        // Handle both response formats
+        setDocuments(data.documents || data.all_requests || data || []);
       }
     } catch (err) {
       console.error('Error fetching documents:', err);
@@ -270,10 +285,14 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
     setError(null);
 
     try {
-      const source = getIncomeSourceForType(incomeType);
-      if (!source) {
-        // Create income source first
-        await fetch(
+      let sourceId = null;
+      const existingSource = getIncomeSourceForType(incomeType);
+
+      if (existingSource) {
+        sourceId = existingSource.id;
+      } else {
+        // Create income source first and capture the returned source
+        const createResponse = await fetch(
           `${API_BASE}/api/v1/income/borrowers/${borrowerId}/sources`,
           {
             method: 'POST',
@@ -288,28 +307,54 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
             }),
           }
         );
-        await fetchIncomeSources();
+
+        if (!createResponse.ok) {
+          const errorData = await createResponse.json();
+          throw new Error(errorData.detail || 'Failed to create income source');
+        }
+
+        // Get the newly created source ID from the response
+        const newSource = await createResponse.json();
+        sourceId = newSource.id;
       }
 
-      // Trigger calculation
-      const updatedSource = getIncomeSourceForType(incomeType) || source;
-      if (updatedSource) {
-        await fetch(
-          `${API_BASE}/api/v1/income/sources/${updatedSource.id}/calculate`,
+      // Trigger calculation with the source ID
+      if (sourceId) {
+        const calcResponse = await fetch(
+          `${API_BASE}/api/v1/income/sources/${sourceId}/calculate`,
           {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
             },
           }
         );
+
+        if (!calcResponse.ok) {
+          const errorData = await calcResponse.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to calculate income');
+        }
+
+        // Check the calculation result
+        const calcResult = await calcResponse.json();
+        if (!calcResult.success) {
+          // Not a fatal error, but show info to user
+          const message = calcResult.error || 'No paystub data found. Please extract income from documents first.';
+          setError(message);
+        }
       }
 
       await fetchIncomeSources();
       setHasChanges(true);
     } catch (err) {
       console.error('Error calculating income:', err);
-      setError(err.message);
+      // Provide more helpful error messages
+      if (err.message === 'Failed to fetch') {
+        setError('Unable to connect to server. Please check your connection and try again.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setSaving(false);
     }
