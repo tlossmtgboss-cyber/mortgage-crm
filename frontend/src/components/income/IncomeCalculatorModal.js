@@ -270,10 +270,14 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
     setError(null);
 
     try {
-      const source = getIncomeSourceForType(incomeType);
-      if (!source) {
-        // Create income source first
-        await fetch(
+      let sourceId = null;
+      const existingSource = getIncomeSourceForType(incomeType);
+
+      if (existingSource) {
+        sourceId = existingSource.id;
+      } else {
+        // Create income source first and capture the returned source
+        const createResponse = await fetch(
           `${API_BASE}/api/v1/income/borrowers/${borrowerId}/sources`,
           {
             method: 'POST',
@@ -288,14 +292,21 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
             }),
           }
         );
-        await fetchIncomeSources();
+
+        if (!createResponse.ok) {
+          const errorData = await createResponse.json();
+          throw new Error(errorData.detail || 'Failed to create income source');
+        }
+
+        // Get the newly created source ID from the response
+        const newSource = await createResponse.json();
+        sourceId = newSource.id;
       }
 
-      // Trigger calculation
-      const updatedSource = getIncomeSourceForType(incomeType) || source;
-      if (updatedSource) {
-        await fetch(
-          `${API_BASE}/api/v1/income/sources/${updatedSource.id}/calculate`,
+      // Trigger calculation with the source ID
+      if (sourceId) {
+        const calcResponse = await fetch(
+          `${API_BASE}/api/v1/income/sources/${sourceId}/calculate`,
           {
             method: 'POST',
             headers: {
@@ -303,6 +314,11 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
             },
           }
         );
+
+        if (!calcResponse.ok) {
+          const errorData = await calcResponse.json();
+          throw new Error(errorData.detail || 'Failed to calculate income');
+        }
       }
 
       await fetchIncomeSources();
