@@ -331,17 +331,20 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
           }
         );
 
+        const calcResult = await calcResponse.json().catch(() => null);
+
         if (!calcResponse.ok) {
-          const errorData = await calcResponse.json().catch(() => ({}));
-          throw new Error(errorData.detail || 'Failed to calculate income');
+          throw new Error(calcResult?.detail || 'Failed to calculate income');
         }
 
         // Check the calculation result
-        const calcResult = await calcResponse.json();
-        if (!calcResult.success) {
+        if (calcResult && !calcResult.success) {
           // Not a fatal error, but show info to user
-          const message = calcResult.error || 'No paystub data found. Please extract income from documents first.';
-          setError(message);
+          // Ensure we display a string, not an object/array
+          const errorMsg = typeof calcResult.error === 'string'
+            ? calcResult.error
+            : 'No paystub data found. Please extract income from documents first.';
+          setError(errorMsg);
         }
       }
 
@@ -349,11 +352,12 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
       setHasChanges(true);
     } catch (err) {
       console.error('Error calculating income:', err);
-      // Provide more helpful error messages
-      if (err.message === 'Failed to fetch') {
+      // Provide more helpful error messages - ensure it's a string
+      const errMessage = typeof err.message === 'string' ? err.message : String(err);
+      if (errMessage === 'Failed to fetch') {
         setError('Unable to connect to server. Please check your connection and try again.');
       } else {
-        setError(err.message);
+        setError(errMessage);
       }
     } finally {
       setSaving(false);
