@@ -141,6 +141,18 @@ export async function manualReview(documentId, decision, reviewer, notes = null)
   return handleResponse(response);
 }
 
+/**
+ * Update document type
+ */
+export async function updateDocumentType(documentId, docType) {
+  const response = await fetch(`${API_BASE}/document/${documentId}/type`, {
+    method: 'PATCH',
+    headers: getHeaders(),
+    body: JSON.stringify({ doc_type: docType }),
+  });
+  return handleResponse(response);
+}
+
 // =============================================================================
 // Freshness & Expiration
 // =============================================================================
@@ -372,6 +384,7 @@ export const smartDocsAPI = {
   getDocument,
   getLoanDocuments,
   manualReview,
+  updateDocumentType,
   // Freshness
   getExpiringDocuments,
   runExpirationCheck,

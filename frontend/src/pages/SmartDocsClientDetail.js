@@ -32,6 +32,32 @@ function SmartDocsClientDetail() {
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [editingDocType, setEditingDocType] = useState(false);
+
+  // Document types available for selection
+  const DOC_TYPES = [
+    { value: 'DRIVERS_LICENSE', label: "Driver's License" },
+    { value: 'PAYSTUB', label: 'Pay Stubs' },
+    { value: 'W2', label: 'W-2 Forms' },
+    { value: 'TAX_RETURN', label: 'Tax Returns' },
+    { value: 'BUSINESS_TAX_RETURN', label: 'Business Tax Returns' },
+    { value: 'PROFIT_LOSS', label: 'Profit & Loss' },
+    { value: 'BALANCE_SHEET', label: 'Balance Sheet' },
+    { value: 'BANK_STATEMENT', label: 'Bank Statements' },
+    { value: 'INVESTMENT_STATEMENT', label: 'Investment Statements' },
+    { value: 'GIFT_LETTER', label: 'Gift Letter' },
+    { value: 'LOE', label: 'Letter of Explanation' },
+    { value: 'LEASE_AGREEMENT', label: 'Lease Agreement' },
+    { value: 'FHA_CERT', label: 'FHA Certificate' },
+    { value: 'VA_COE', label: 'VA COE' },
+    { value: 'DD214', label: 'DD-214' },
+    { value: 'BANKRUPTCY_DISCHARGE', label: 'Bankruptcy Discharge' },
+    { value: 'PURCHASE_CONTRACT', label: 'Purchase Contract' },
+    { value: 'APPRAISAL', label: 'Appraisal' },
+    { value: 'TITLE_REPORT', label: 'Title Report' },
+    { value: 'HOMEOWNERS_INSURANCE', label: "Homeowner's Insurance" },
+    { value: 'OTHER', label: 'Other' },
+  ];
 
   // Fetch client documents
   const fetchClientData = useCallback(async () => {
@@ -414,6 +440,40 @@ function SmartDocsClientDetail() {
     }
   };
 
+  // Update document type
+  const handleUpdateDocType = async (doc, newDocType) => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const documentId = doc.document_id || doc.id;
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/type`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ doc_type: newDocType })
+        }
+      );
+
+      if (response.ok) {
+        setEditingDocType(false);
+        fetchClientData();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to update document type'}`);
+      }
+    } catch (err) {
+      console.error('Error updating document type:', err);
+      alert('Error updating document type');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Check if document has an uploaded file
   const hasUploadedDocument = (doc) => {
     return doc.document_id || doc.file_url || doc.s3_url || doc.filename || doc.status === 'PENDING_REVIEW';
@@ -455,7 +515,29 @@ function SmartDocsClientDetail() {
       'drivers_license': "Driver's License",
       'purchase_contract': 'Purchase Contract',
       'hoa_docs': 'HOA Documents',
-      'gift_letter': 'Gift Letter'
+      'gift_letter': 'Gift Letter',
+      // Uppercase enum values from backend
+      'DRIVERS_LICENSE': "Driver's License",
+      'PAYSTUB': 'Pay Stubs',
+      'W2': 'W-2 Forms',
+      'TAX_RETURN': 'Tax Returns',
+      'BUSINESS_TAX_RETURN': 'Business Tax Returns',
+      'PROFIT_LOSS': 'Profit & Loss',
+      'BALANCE_SHEET': 'Balance Sheet',
+      'BANK_STATEMENT': 'Bank Statements',
+      'INVESTMENT_STATEMENT': 'Investment Statements',
+      'GIFT_LETTER': 'Gift Letter',
+      'LOE': 'Letter of Explanation',
+      'LEASE_AGREEMENT': 'Lease Agreement',
+      'FHA_CERT': 'FHA Certificate',
+      'VA_COE': 'VA COE',
+      'DD214': 'DD-214',
+      'BANKRUPTCY_DISCHARGE': 'Bankruptcy Discharge',
+      'PURCHASE_CONTRACT': 'Purchase Contract',
+      'APPRAISAL': 'Appraisal',
+      'TITLE_REPORT': 'Title Report',
+      'HOMEOWNERS_INSURANCE': "Homeowner's Insurance",
+      'OTHER': 'Other'
     };
     return names[docType] || docType?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Document';
   };
@@ -581,7 +663,40 @@ function SmartDocsClientDetail() {
               <div className="document-info-bar">
                 <div className="info-group">
                   <label>Document Type</label>
-                  <span>{getDocTypeName(selectedDoc.doc_type)}</span>
+                  {editingDocType ? (
+                    <div className="doc-type-edit">
+                      <select
+                        value={selectedDoc.doc_type?.toUpperCase() || 'OTHER'}
+                        onChange={(e) => handleUpdateDocType(selectedDoc, e.target.value)}
+                        disabled={actionLoading}
+                        autoFocus
+                      >
+                        {DOC_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="cancel-edit-btn"
+                        onClick={() => setEditingDocType(false)}
+                        title="Cancel"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="doc-type-display">
+                      {getDocTypeName(selectedDoc.doc_type)}
+                      <button
+                        className="edit-type-btn"
+                        onClick={() => setEditingDocType(true)}
+                        title="Edit document type"
+                      >
+                        ✏️
+                      </button>
+                    </span>
+                  )}
                 </div>
                 <div className="info-group">
                   <label>Document Date</label>

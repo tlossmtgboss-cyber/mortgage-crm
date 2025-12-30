@@ -2034,6 +2034,11 @@ class UpdateDocumentNameBody(BaseModel):
     display_name: str
 
 
+class UpdateDocumentTypeBody(BaseModel):
+    """Request to update document type."""
+    doc_type: str  # DocType enum value
+
+
 class ApproveDocumentBody(BaseModel):
     """Request to approve a document."""
     reviewer: str
@@ -2432,6 +2437,62 @@ async def update_document_name(
     return {
         "document_id": document_id,
         "display_name": body.display_name,
+        "updated": True,
+    }
+
+
+@router.patch("/document/{document_id}/type")
+async def update_document_type(
+    document_id: int,
+    body: UpdateDocumentTypeBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Update document type.
+
+    Used when a document was uploaded under the wrong type (e.g., W2 uploaded as Driver's License).
+    This updates both the SmartDocument and the associated DocumentRequest.
+    """
+    # Get document
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Validate and convert doc_type
+    try:
+        new_doc_type = DocType(body.doc_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid document type: {body.doc_type}. Valid types: {[t.value for t in DocType]}"
+        )
+
+    old_doc_type = document.doc_type
+
+    # Update document type
+    document.doc_type = new_doc_type
+    document.updated_at = datetime.utcnow()
+
+    # If the document is linked to a request, update that too
+    if document.request_id:
+        request = db.query(DocumentRequest).filter(
+            DocumentRequest.id == document.request_id
+        ).first()
+        if request:
+            request.doc_type = new_doc_type
+            request.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    logger.info(f"Document {document_id} type changed from {old_doc_type} to {new_doc_type}")
+
+    return {
+        "document_id": document_id,
+        "old_doc_type": old_doc_type.value if old_doc_type else None,
+        "new_doc_type": new_doc_type.value,
         "updated": True,
     }
 

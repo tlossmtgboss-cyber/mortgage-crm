@@ -377,6 +377,73 @@
 .info-group .status-value.expired { color: #dc2626; }
 .info-group .status-value.open { color: #6b7280; }
 
+/* Document Type Edit */
+.doc-type-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-type-btn {
+  padding: 2px 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.edit-type-btn:hover {
+  opacity: 1;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+.doc-type-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-type-edit select {
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: white;
+  color: #111827;
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.doc-type-edit select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.doc-type-edit select:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.cancel-edit-btn {
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-edit-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
 .doc-actions {
   margin-left: auto;
   display: flex;
