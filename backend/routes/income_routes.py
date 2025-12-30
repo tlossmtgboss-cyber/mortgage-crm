@@ -1084,6 +1084,75 @@ def _parse_pay_frequency(freq_str: Optional[str]) -> Optional[PayrollFrequency]:
 # ADMIN / MIGRATION ENDPOINT
 # =============================================================================
 
+@router.get("/admin/fix-paystub-columns")
+async def fix_paystub_columns(
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """Add missing columns to paystub_extractions table."""
+    from sqlalchemy import text
+
+    expected_key = os.getenv("ADMIN_API_KEY", "perennia-admin-2024")
+    if admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    results = []
+    alter_statements = [
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS calculated_annual_income DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS calculated_monthly_income DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS annualization_method VARCHAR(50)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS raw_ocr_text TEXT",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS extraction_errors JSONB",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS doc_date DATE",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS is_expired BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS applied_fields JSONB",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS loan_id INTEGER",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS field_confidences JSONB",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS extraction_model VARCHAR(64)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS extraction_warnings JSONB",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_address_line2 VARCHAR(255)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_city VARCHAR(100)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_state VARCHAR(50)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS employee_zip VARCHAR(20)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS tips DECIMAL(12,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS other_earnings DECIMAL(12,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_regular_earnings DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_overtime_earnings DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_tips DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS dental_insurance DECIMAL(10,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS vision_insurance DECIMAL(10,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS life_insurance DECIMAL(10,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS hsa_fsa DECIMAL(10,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS deductions_breakdown JSONB",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_federal_tax DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_state_tax DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_social_security DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_medicare DECIMAL(15,2)",
+        "ALTER TABLE paystub_extractions ADD COLUMN IF NOT EXISTS ytd_retirement DECIMAL(15,2)",
+    ]
+
+    try:
+        for stmt in alter_statements:
+            try:
+                db.execute(text(stmt))
+                col_name = stmt.split("ADD COLUMN IF NOT EXISTS ")[1].split()[0]
+                results.append({"column": col_name, "status": "added"})
+            except Exception as e:
+                col_name = stmt.split("ADD COLUMN IF NOT EXISTS ")[1].split()[0] if "ADD COLUMN" in stmt else "unknown"
+                results.append({"column": col_name, "status": "skipped", "error": str(e)[:50]})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Processed {len(results)} column alterations",
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Fix paystub columns failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/admin/run-migration")
 async def run_income_migration(
     admin_key: str = None,
