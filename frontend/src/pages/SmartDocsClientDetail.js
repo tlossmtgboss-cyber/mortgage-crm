@@ -33,6 +33,9 @@ function SmartDocsClientDetail() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [editingDocType, setEditingDocType] = useState(false);
+  const [editingDocDate, setEditingDocDate] = useState(false);
+  const [editingExpiration, setEditingExpiration] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   // Document types available for selection
   const DOC_TYPES = [
@@ -474,6 +477,86 @@ function SmartDocsClientDetail() {
     }
   };
 
+  // Update document dates
+  const handleUpdateDates = async (doc, docDate, expirationDate) => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const documentId = doc.document_id || doc.id;
+
+      const body = {};
+      if (docDate !== undefined) body.doc_date = docDate || '';
+      if (expirationDate !== undefined) body.expiration_date = expirationDate || '';
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/dates`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        }
+      );
+
+      if (response.ok) {
+        setEditingDocDate(false);
+        setEditingExpiration(false);
+        fetchClientData();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to update dates'}`);
+      }
+    } catch (err) {
+      console.error('Error updating dates:', err);
+      alert('Error updating dates');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // AI Extract document data
+  const handleAIExtract = async (doc) => {
+    setExtracting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const documentId = doc.document_id || doc.id;
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/extract`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`AI Extraction Complete!\n\nDetected Type: ${result.detected_doc_type || 'Unknown'}\nConfidence: ${Math.round((result.overall_confidence || 0) * 100)}%`);
+        fetchClientData();
+      } else {
+        const error = await response.json();
+        alert(`Extraction failed: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error extracting document:', err);
+      alert('Error running AI extraction');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Format date for input field (YYYY-MM-DD)
+  const formatDateForInput = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toISOString().split('T')[0];
+  };
+
   // Check if document has an uploaded file
   const hasUploadedDocument = (doc) => {
     return doc.document_id || doc.file_url || doc.s3_url || doc.filename || doc.status === 'PENDING_REVIEW';
@@ -689,25 +772,79 @@ function SmartDocsClientDetail() {
                     <span className="doc-type-display">
                       {getDocTypeName(selectedDoc.doc_type)}
                       <button
-                        className="edit-type-btn"
+                        className="edit-btn"
                         onClick={() => setEditingDocType(true)}
                         title="Edit document type"
                       >
-                        ✏️
+                        Edit
                       </button>
                     </span>
                   )}
                 </div>
                 <div className="info-group">
                   <label>Document Date</label>
-                  <span>{formatDate(selectedDoc.doc_date)}</span>
+                  {editingDocDate ? (
+                    <div className="date-edit">
+                      <input
+                        type="date"
+                        defaultValue={formatDateForInput(selectedDoc.doc_date)}
+                        onChange={(e) => handleUpdateDates(selectedDoc, e.target.value, undefined)}
+                        disabled={actionLoading}
+                        autoFocus
+                      />
+                      <button
+                        className="cancel-edit-btn"
+                        onClick={() => setEditingDocDate(false)}
+                        title="Cancel"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="editable-value">
+                      {formatDate(selectedDoc.doc_date)}
+                      <button
+                        className="edit-btn"
+                        onClick={() => setEditingDocDate(true)}
+                        title="Edit document date"
+                      >
+                        Edit
+                      </button>
+                    </span>
+                  )}
                 </div>
                 <div className="info-group">
                   <label>Expiration</label>
-                  <span className={isExpired(selectedDoc) ? 'expired-text' : ''}>
-                    {formatDate(selectedDoc.expiration_date)}
-                    {isExpired(selectedDoc) && ' (Expired)'}
-                  </span>
+                  {editingExpiration ? (
+                    <div className="date-edit">
+                      <input
+                        type="date"
+                        defaultValue={formatDateForInput(selectedDoc.expiration_date || selectedDoc.doc_expires_at)}
+                        onChange={(e) => handleUpdateDates(selectedDoc, undefined, e.target.value)}
+                        disabled={actionLoading}
+                        autoFocus
+                      />
+                      <button
+                        className="cancel-edit-btn"
+                        onClick={() => setEditingExpiration(false)}
+                        title="Cancel"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <span className={`editable-value ${isExpired(selectedDoc) ? 'expired-text' : ''}`}>
+                      {formatDate(selectedDoc.expiration_date || selectedDoc.doc_expires_at)}
+                      {isExpired(selectedDoc) && ' (Expired)'}
+                      <button
+                        className="edit-btn"
+                        onClick={() => setEditingExpiration(true)}
+                        title="Edit expiration date"
+                      >
+                        Edit
+                      </button>
+                    </span>
+                  )}
                 </div>
                 <div className="info-group">
                   <label>Status</label>
@@ -716,6 +853,17 @@ function SmartDocsClientDetail() {
                   </span>
                 </div>
                 <div className="doc-actions">
+                  {/* AI Extraction button */}
+                  {hasUploadedDocument(selectedDoc) && (
+                    <button
+                      className="ai-extract-btn"
+                      onClick={() => handleAIExtract(selectedDoc)}
+                      disabled={extracting || actionLoading}
+                      title="AI auto-detect document type and extract dates"
+                    >
+                      {extracting ? '...' : '🤖 AI Extract'}
+                    </button>
+                  )}
                   {/* File actions - only show if document has been uploaded */}
                   {hasUploadedDocument(selectedDoc) && (
                     <>

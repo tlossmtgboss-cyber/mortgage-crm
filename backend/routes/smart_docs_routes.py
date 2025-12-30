@@ -2497,6 +2497,75 @@ async def update_document_type(
     }
 
 
+class UpdateDocumentDatesBody(BaseModel):
+    """Request to update document dates."""
+    doc_date: Optional[str] = None  # ISO date string
+    expiration_date: Optional[str] = None  # ISO date string
+
+
+@router.patch("/document/{document_id}/dates")
+async def update_document_dates(
+    document_id: int,
+    body: UpdateDocumentDatesBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Update document date and/or expiration date.
+
+    Used to manually set or correct dates that were not extracted properly.
+    """
+    from datetime import datetime as dt
+
+    # Get document
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    updates = {}
+
+    # Parse and update doc_date
+    if body.doc_date is not None:
+        if body.doc_date == "" or body.doc_date.lower() == "null":
+            document.doc_date = None
+            updates["doc_date"] = None
+        else:
+            try:
+                parsed_date = dt.fromisoformat(body.doc_date.replace('Z', '+00:00'))
+                document.doc_date = parsed_date
+                updates["doc_date"] = parsed_date.isoformat()
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid doc_date format: {body.doc_date}")
+
+    # Parse and update expiration_date
+    if body.expiration_date is not None:
+        if body.expiration_date == "" or body.expiration_date.lower() == "null":
+            document.doc_expires_at = None
+            document.is_expired = False
+            updates["expiration_date"] = None
+        else:
+            try:
+                parsed_date = dt.fromisoformat(body.expiration_date.replace('Z', '+00:00'))
+                document.doc_expires_at = parsed_date
+                document.is_expired = parsed_date < dt.utcnow()
+                updates["expiration_date"] = parsed_date.isoformat()
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid expiration_date format: {body.expiration_date}")
+
+    document.updated_at = dt.utcnow()
+    db.commit()
+
+    logger.info(f"Document {document_id} dates updated: {updates}")
+
+    return {
+        "document_id": document_id,
+        "updates": updates,
+        "updated": True,
+    }
+
+
 @router.post("/document/{document_id}/review-approve")
 async def approve_document_with_review(
     document_id: int,

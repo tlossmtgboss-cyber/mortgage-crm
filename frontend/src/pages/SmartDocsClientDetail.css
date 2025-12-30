@@ -444,6 +444,83 @@
   color: #374151;
 }
 
+/* Edit Button - Text style */
+.edit-btn {
+  padding: 2px 8px;
+  margin-left: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #2563eb;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.edit-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+/* Editable value container */
+.editable-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Date edit container */
+.date-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-edit input[type="date"] {
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: white;
+  color: #111827;
+  cursor: pointer;
+}
+
+.date-edit input[type="date"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* AI Extract Button */
+.ai-extract-btn {
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-extract-btn:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.ai-extract-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .doc-actions {
   margin-left: auto;
   display: flex;
