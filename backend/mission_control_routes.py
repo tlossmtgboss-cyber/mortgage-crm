@@ -418,3 +418,233 @@ async def refresh_system_check(db: Session = Depends(get_db)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to trigger system check: {str(e)}")
+
+
+# ============================================================================
+# ADDITIONAL ENDPOINTS FOR FRONTEND DASHBOARD
+# ============================================================================
+
+@router.get("/health")
+async def get_ai_health_score(
+    days: int = 7,
+    db: Session = Depends(get_db)
+):
+    """Get AI health score and component breakdowns for the dashboard."""
+    try:
+        # Calculate health scores from ai_colleague_actions
+        result = db.execute(text("""
+            SELECT
+                COUNT(*) as total_actions,
+                COUNT(CASE WHEN autonomy_level = 'full' THEN 1 END) as autonomous_actions,
+                COUNT(CASE WHEN outcome = 'success' THEN 1 END) as successful_actions,
+                COUNT(CASE WHEN approved_by_user_id IS NOT NULL THEN 1 END) as approved_actions,
+                AVG(COALESCE(confidence_score, 0)) as avg_confidence
+            FROM ai_colleague_actions
+            WHERE created_at >= CURRENT_DATE - :days
+        """), {"days": days}).fetchone()
+
+        if not result or result[0] == 0:
+            return {
+                "overall_score": 0,
+                "health_status": "needs_attention",
+                "metrics": {
+                    "total_actions": 0,
+                    "autonomous_actions": 0,
+                    "successful_actions": 0,
+                    "approved_actions": 0
+                },
+                "component_scores": {
+                    "autonomy": 0,
+                    "accuracy": 0,
+                    "approval": 0,
+                    "confidence": 0
+                }
+            }
+
+        total = result[0] or 1
+        autonomous = result[1] or 0
+        successful = result[2] or 0
+        approved = result[3] or 0
+        avg_conf = float(result[4] or 0)
+
+        # Calculate component scores (0-100)
+        autonomy_score = (autonomous / total * 100) if total > 0 else 0
+        accuracy_score = (successful / total * 100) if total > 0 else 0
+        approval_score = (approved / total * 100) if total > 0 else 0
+        confidence_score = avg_conf
+
+        # Overall score is weighted average
+        overall_score = (
+            autonomy_score * 0.25 +
+            accuracy_score * 0.35 +
+            approval_score * 0.20 +
+            confidence_score * 0.20
+        )
+
+        # Determine health status
+        if overall_score >= 80:
+            health_status = "excellent"
+        elif overall_score >= 60:
+            health_status = "good"
+        elif overall_score >= 40:
+            health_status = "fair"
+        else:
+            health_status = "needs_attention"
+
+        return {
+            "overall_score": round(overall_score, 1),
+            "health_status": health_status,
+            "metrics": {
+                "total_actions": total,
+                "autonomous_actions": autonomous,
+                "successful_actions": successful,
+                "approved_actions": approved
+            },
+            "component_scores": {
+                "autonomy": round(autonomy_score, 1),
+                "accuracy": round(accuracy_score, 1),
+                "approval": round(approval_score, 1),
+                "confidence": round(confidence_score, 1)
+            }
+        }
+
+    except Exception as e:
+        # Return defaults if tables don't exist yet
+        return {
+            "overall_score": 0,
+            "health_status": "needs_attention",
+            "metrics": {"total_actions": 0, "autonomous_actions": 0, "successful_actions": 0, "approved_actions": 0},
+            "component_scores": {"autonomy": 0, "accuracy": 0, "approval": 0, "confidence": 0},
+            "error": str(e)
+        }
+
+
+@router.get("/metrics")
+async def get_ai_metrics(
+    days: int = 7,
+    agent_name: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get AI metrics breakdown by agent."""
+    try:
+        params = {"days": days}
+        agent_filter = ""
+        if agent_name:
+            agent_filter = "AND agent_name = :agent_name"
+            params["agent_name"] = agent_name
+
+        result = db.execute(text(f"""
+            SELECT
+                agent_name,
+                COUNT(*) as total,
+                COUNT(CASE WHEN autonomy_level = 'full' THEN 1 END) as autonomous,
+                COUNT(CASE WHEN outcome = 'success' THEN 1 END) as successful,
+                AVG(COALESCE(confidence_score, 0)) as avg_confidence
+            FROM ai_colleague_actions
+            WHERE created_at >= CURRENT_DATE - :days
+            {agent_filter}
+            GROUP BY agent_name
+            ORDER BY total DESC
+        """), params).fetchall()
+
+        agents = {}
+        for row in result:
+            total = row[1] or 1
+            agents[row[0]] = {
+                "total": row[1],
+                "autonomous": row[2] or 0,
+                "autonomy_rate": round((row[2] or 0) / total * 100, 1),
+                "success_rate": round((row[3] or 0) / total * 100, 1),
+                "avg_confidence": round(float(row[4] or 0), 1)
+            }
+
+        return {"agents": agents, "period_days": days}
+
+    except Exception as e:
+        return {"agents": {}, "period_days": days, "error": str(e)}
+
+
+@router.get("/recent-actions")
+async def get_recent_actions(
+    limit: int = 20,
+    agent_name: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get recent AI actions for the activity feed."""
+    try:
+        params = {"limit": limit}
+        agent_filter = ""
+        if agent_name:
+            agent_filter = "WHERE agent_name = :agent_name"
+            params["agent_name"] = agent_name
+
+        result = db.execute(text(f"""
+            SELECT
+                id, agent_name, action_type, autonomy_level,
+                outcome, confidence_score, reasoning, created_at
+            FROM ai_colleague_actions
+            {agent_filter}
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """), params).fetchall()
+
+        actions = []
+        for row in result:
+            actions.append({
+                "id": row[0],
+                "agent_name": row[1],
+                "action_type": row[2],
+                "autonomy_level": row[3],
+                "outcome": row[4],
+                "confidence_score": round(float(row[5]), 1) if row[5] else None,
+                "reasoning": row[6],
+                "created_at": row[7].isoformat() if row[7] else None
+            })
+
+        return {"actions": actions, "count": len(actions)}
+
+    except Exception as e:
+        return {"actions": [], "count": 0, "error": str(e)}
+
+
+@router.get("/insights")
+async def get_ai_insights(
+    limit: int = 10,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get AI-discovered insights and patterns."""
+    try:
+        params = {"limit": limit}
+        status_filter = ""
+        if status:
+            status_filter = "WHERE status = :status"
+            params["status"] = status
+
+        result = db.execute(text(f"""
+            SELECT
+                id, insight_type, pattern_description, pattern_confidence,
+                recommended_action, priority, status, discovered_at
+            FROM ai_journey_insights
+            {status_filter}
+            ORDER BY discovered_at DESC
+            LIMIT :limit
+        """), params).fetchall()
+
+        insights = []
+        for row in result:
+            insights.append({
+                "id": row[0],
+                "insight_type": row[1],
+                "pattern_description": row[2],
+                "pattern_confidence": round(float(row[3]), 1) if row[3] else None,
+                "recommended_action": row[4],
+                "priority": row[5],
+                "status": row[6],
+                "discovered_at": row[7].isoformat() if row[7] else None
+            })
+
+        return {"insights": insights, "count": len(insights)}
+
+    except Exception as e:
+        return {"insights": [], "count": 0, "error": str(e)}

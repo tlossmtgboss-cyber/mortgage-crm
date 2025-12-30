@@ -33,10 +33,10 @@ function MissionControl() {
       // Load all data in parallel
       const agentParam = selectedAgent ? `&agent_name=${selectedAgent}` : '';
       const [healthRes, metricsRes, actionsRes, insightsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v1/mission-control/health?days=${metricsView}`, { headers }),
-        fetch(`${API_BASE_URL}/api/v1/mission-control/metrics?days=${metricsView}${agentParam}`, { headers }),
-        fetch(`${API_BASE_URL}/api/v1/mission-control/recent-actions?limit=20${agentParam}`, { headers }),
-        fetch(`${API_BASE_URL}/api/v1/mission-control/insights?limit=10&status=active`, { headers })
+        fetch(`${API_BASE_URL}/api/mission-control/health?days=${metricsView}`, { headers }),
+        fetch(`${API_BASE_URL}/api/mission-control/metrics?days=${metricsView}${agentParam}`, { headers }),
+        fetch(`${API_BASE_URL}/api/mission-control/recent-actions?limit=20${agentParam}`, { headers }),
+        fetch(`${API_BASE_URL}/api/mission-control/insights?limit=10&status=active`, { headers })
       ]);
 
       if (healthRes.ok) {

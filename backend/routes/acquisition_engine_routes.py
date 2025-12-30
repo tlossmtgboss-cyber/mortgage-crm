@@ -297,31 +297,175 @@ async def launch_campaign(
 
 
 async def _activate_campaign(campaign_id: str):
-    """Background task to activate campaign"""
+    """Background task to activate campaign with full sequence and dialer setup"""
     from database import get_session
+    import hashlib
+    import json as json_module
+
     db = get_session()
+    campaign = None
+
     try:
         campaign = db.query(CampaignInstance).filter(
             CampaignInstance.id == uuid.UUID(campaign_id)
         ).first()
 
-        if campaign:
-            # TODO: Activate SMS sequences
-            # TODO: Activate Email sequences
-            # TODO: Set up dialer queue rules
-            # TODO: Generate funnel URL
+        if not campaign:
+            logger.error(f"Campaign {campaign_id} not found")
+            return
 
-            campaign.status = CampaignStatus.ACTIVE.value
-            campaign.activated_at = datetime.utcnow()
-            db.commit()
-            logger.info(f"Campaign {campaign_id} activated")
+        activation_log = []
+
+        # 1. ACTIVATE SMS SEQUENCES
+        sms_sequences = campaign.sms_sequences_active or []
+        if sms_sequences:
+            try:
+                # Create/activate SMS sequence entries in automated outreach
+                for seq_config in sms_sequences:
+                    seq_id = seq_config if isinstance(seq_config, (int, str)) else seq_config.get('id')
+                    # Link campaign to outreach campaign if sequence exists
+                    db.execute(text("""
+                        INSERT INTO campaign_sequence_links (
+                            acquisition_campaign_id, outreach_campaign_id,
+                            sequence_type, status, created_at
+                        ) VALUES (
+                            :campaign_id, :seq_id, 'sms', 'active', :created_at
+                        ) ON CONFLICT (acquisition_campaign_id, outreach_campaign_id, sequence_type)
+                        DO UPDATE SET status = 'active', updated_at = :created_at
+                    """), {
+                        "campaign_id": str(campaign.id),
+                        "seq_id": str(seq_id),
+                        "created_at": datetime.utcnow()
+                    })
+                activation_log.append(f"SMS: {len(sms_sequences)} sequences activated")
+                logger.info(f"Campaign {campaign_id}: Activated {len(sms_sequences)} SMS sequences")
+            except Exception as e:
+                activation_log.append(f"SMS: Warning - {str(e)[:50]}")
+                logger.warning(f"SMS sequence activation warning: {e}")
+
+        # 2. ACTIVATE EMAIL SEQUENCES
+        email_sequences = campaign.email_sequences_active or []
+        if email_sequences:
+            try:
+                for seq_config in email_sequences:
+                    seq_id = seq_config if isinstance(seq_config, (int, str)) else seq_config.get('id')
+                    db.execute(text("""
+                        INSERT INTO campaign_sequence_links (
+                            acquisition_campaign_id, outreach_campaign_id,
+                            sequence_type, status, created_at
+                        ) VALUES (
+                            :campaign_id, :seq_id, 'email', 'active', :created_at
+                        ) ON CONFLICT (acquisition_campaign_id, outreach_campaign_id, sequence_type)
+                        DO UPDATE SET status = 'active', updated_at = :created_at
+                    """), {
+                        "campaign_id": str(campaign.id),
+                        "seq_id": str(seq_id),
+                        "created_at": datetime.utcnow()
+                    })
+                activation_log.append(f"Email: {len(email_sequences)} sequences activated")
+                logger.info(f"Campaign {campaign_id}: Activated {len(email_sequences)} email sequences")
+            except Exception as e:
+                activation_log.append(f"Email: Warning - {str(e)[:50]}")
+                logger.warning(f"Email sequence activation warning: {e}")
+
+        # 3. SET UP DIALER QUEUE RULES
+        dialer_config = campaign.dialer_config or {}
+        if dialer_config:
+            try:
+                # Create dialer queue for this campaign
+                queue_id = str(uuid.uuid4())
+                priority = dialer_config.get('priority', 5)
+                max_attempts = dialer_config.get('max_attempts', 3)
+
+                db.execute(text("""
+                    INSERT INTO dialer_queues (
+                        id, campaign_id, name, priority, max_attempts,
+                        call_window_start, call_window_end,
+                        status, created_at
+                    ) VALUES (
+                        :id, :campaign_id, :name, :priority, :max_attempts,
+                        :window_start, :window_end, 'active', :created_at
+                    ) ON CONFLICT (campaign_id) DO UPDATE SET
+                        priority = :priority,
+                        max_attempts = :max_attempts,
+                        status = 'active',
+                        updated_at = :created_at
+                """), {
+                    "id": queue_id,
+                    "campaign_id": str(campaign.id),
+                    "name": f"Queue: {campaign.name}",
+                    "priority": priority,
+                    "max_attempts": max_attempts,
+                    "window_start": dialer_config.get('call_window_start', '09:00'),
+                    "window_end": dialer_config.get('call_window_end', '20:00'),
+                    "created_at": datetime.utcnow()
+                })
+                activation_log.append(f"Dialer: Queue created (priority={priority})")
+                logger.info(f"Campaign {campaign_id}: Dialer queue created with priority {priority}")
+            except Exception as e:
+                activation_log.append(f"Dialer: Warning - {str(e)[:50]}")
+                logger.warning(f"Dialer queue setup warning: {e}")
+
+        # 4. GENERATE FUNNEL URL
+        try:
+            # Generate unique funnel URL based on campaign
+            funnel_hash = hashlib.sha256(
+                f"{campaign.id}-{campaign.name}-{campaign.goal_type}".encode()
+            ).hexdigest()[:12]
+
+            base_url = "https://apply.perennia.ai"
+            funnel_url = f"{base_url}/c/{funnel_hash}"
+
+            campaign.funnel_url = funnel_url
+            campaign.funnel_tracking_code = funnel_hash
+
+            # Store tracking configuration
+            db.execute(text("""
+                INSERT INTO campaign_tracking (
+                    campaign_id, tracking_code, funnel_url,
+                    utm_source, utm_medium, utm_campaign,
+                    created_at
+                ) VALUES (
+                    :campaign_id, :tracking_code, :funnel_url,
+                    :utm_source, :utm_medium, :utm_campaign,
+                    :created_at
+                ) ON CONFLICT (campaign_id) DO UPDATE SET
+                    tracking_code = :tracking_code,
+                    funnel_url = :funnel_url,
+                    updated_at = :created_at
+            """), {
+                "campaign_id": str(campaign.id),
+                "tracking_code": funnel_hash,
+                "funnel_url": funnel_url,
+                "utm_source": "perennia_acquisition",
+                "utm_medium": "campaign",
+                "utm_campaign": campaign.name.lower().replace(" ", "_"),
+                "created_at": datetime.utcnow()
+            })
+            activation_log.append(f"Funnel: {funnel_url}")
+            logger.info(f"Campaign {campaign_id}: Funnel URL generated: {funnel_url}")
+        except Exception as e:
+            activation_log.append(f"Funnel: Warning - {str(e)[:50]}")
+            logger.warning(f"Funnel URL generation warning: {e}")
+
+        # 5. MARK CAMPAIGN AS ACTIVE
+        campaign.status = CampaignStatus.ACTIVE.value
+        campaign.activated_at = datetime.utcnow()
+        campaign.activation_log = json_module.dumps(activation_log)
+
+        db.commit()
+        logger.info(f"Campaign {campaign_id} fully activated: {activation_log}")
+
     except Exception as e:
         logger.error(f"Failed to activate campaign {campaign_id}: {e}")
         if campaign:
             campaign.status = CampaignStatus.ERROR.value
             campaign.last_error = str(e)
             campaign.error_count = (campaign.error_count or 0) + 1
-            db.commit()
+            try:
+                db.commit()
+            except:
+                db.rollback()
     finally:
         db.close()
 

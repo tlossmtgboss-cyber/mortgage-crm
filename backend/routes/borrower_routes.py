@@ -902,3 +902,470 @@ async def get_scheduled_calls(
             for c in calls
         ]
     }
+
+
+# =============================================================================
+# NOTIFICATION ROUTES
+# =============================================================================
+
+class NotificationPreferencesRequest(BaseModel):
+    email_enabled: Optional[bool] = None
+    sms_enabled: Optional[bool] = None
+    push_enabled: Optional[bool] = None
+    status_updates: Optional[bool] = None
+    document_requests: Optional[bool] = None
+    milestone_updates: Optional[bool] = None
+    marketing_updates: Optional[bool] = None
+    quiet_hours_start: Optional[str] = None  # "21:00"
+    quiet_hours_end: Optional[str] = None    # "08:00"
+    digest_frequency: Optional[str] = None   # "immediate", "daily", "weekly"
+
+
+@router.get("/notifications")
+async def get_notifications(
+    req: Request,
+    db: Session = Depends(get_db),
+    status: Optional[str] = Query(None, description="Filter by status: read, unread, all"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """Get borrower notifications with filtering and pagination."""
+    borrower = get_borrower_from_token(req, db)
+
+    # Build dynamic query based on filters
+    query_conditions = ["borrower_id = :borrower_id"]
+    params = {"borrower_id": borrower["id"], "limit": limit, "offset": offset}
+
+    if status == "read":
+        query_conditions.append("read_at IS NOT NULL")
+    elif status == "unread":
+        query_conditions.append("read_at IS NULL")
+
+    if category:
+        query_conditions.append("category = :category")
+        params["category"] = category
+
+    where_clause = " AND ".join(query_conditions)
+
+    # Get notifications
+    notifications = db.execute(text(f"""
+        SELECT id, title, message, category, channel, priority,
+               read_at, clicked_at, created_at, action_url, metadata
+        FROM borrower_notifications
+        WHERE {where_clause}
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+    """), params).fetchall()
+
+    # Get total count for pagination
+    count_result = db.execute(text(f"""
+        SELECT COUNT(*) FROM borrower_notifications
+        WHERE {where_clause}
+    """), params).fetchone()
+
+    return {
+        "notifications": [
+            {
+                "id": n[0],
+                "title": n[1],
+                "message": n[2],
+                "category": n[3],
+                "channel": n[4],
+                "priority": n[5],
+                "read_at": safe_isoformat(n[6]),
+                "clicked_at": safe_isoformat(n[7]),
+                "created_at": safe_isoformat(n[8]),
+                "action_url": n[9],
+                "metadata": json.loads(n[10]) if n[10] else {},
+                "is_read": n[6] is not None,
+            }
+            for n in notifications
+        ],
+        "total": count_result[0] if count_result else 0,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/notifications/unread-count")
+async def get_unread_notification_count(
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    """Get count of unread notifications."""
+    borrower = get_borrower_from_token(req, db)
+
+    result = db.execute(text("""
+        SELECT COUNT(*) FROM borrower_notifications
+        WHERE borrower_id = :borrower_id AND read_at IS NULL
+    """), {"borrower_id": borrower["id"]}).fetchone()
+
+    return {
+        "unread_count": result[0] if result else 0,
+    }
+
+
+@router.get("/notifications/{notification_id}")
+async def get_notification(
+    notification_id: str,
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    """Get a specific notification."""
+    borrower = get_borrower_from_token(req, db)
+
+    result = db.execute(text("""
+        SELECT id, title, message, category, channel, priority,
+               read_at, clicked_at, created_at, action_url, metadata
+        FROM borrower_notifications
+        WHERE id = :id AND borrower_id = :borrower_id
+    """), {"id": notification_id, "borrower_id": borrower["id"]}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    return {
+        "id": result[0],
+        "title": result[1],
+        "message": result[2],
+        "category": result[3],
+        "channel": result[4],
+        "priority": result[5],
+        "read_at": safe_isoformat(result[6]),
+        "clicked_at": safe_isoformat(result[7]),
+        "created_at": safe_isoformat(result[8]),
+        "action_url": result[9],
+        "metadata": json.loads(result[10]) if result[10] else {},
+        "is_read": result[6] is not None,
+    }
+
+
+@router.patch("/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: str,
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    """Mark a notification as read."""
+    borrower = get_borrower_from_token(req, db)
+
+    # Verify ownership
+    result = db.execute(text("""
+        SELECT id FROM borrower_notifications
+        WHERE id = :id AND borrower_id = :borrower_id
+    """), {"id": notification_id, "borrower_id": borrower["id"]}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    # Mark as read
+    db.execute(text("""
+        UPDATE borrower_notifications
+        SET read_at = :read_at
+        WHERE id = :id AND read_at IS NULL
+    """), {"id": notification_id, "read_at": datetime.utcnow()})
+    db.commit()
+
+    return {"success": True, "message": "Notification marked as read"}
+
+
+@router.post("/notifications/mark-all-read")
+async def mark_all_notifications_read(
+    req: Request,
+    db: Session = Depends(get_db),
+    category: Optional[str] = Query(None, description="Only mark specific category as read"),
+):
+    """Mark all notifications as read."""
+    borrower = get_borrower_from_token(req, db)
+
+    params = {"borrower_id": borrower["id"], "read_at": datetime.utcnow()}
+
+    if category:
+        params["category"] = category
+        db.execute(text("""
+            UPDATE borrower_notifications
+            SET read_at = :read_at
+            WHERE borrower_id = :borrower_id AND read_at IS NULL AND category = :category
+        """), params)
+    else:
+        db.execute(text("""
+            UPDATE borrower_notifications
+            SET read_at = :read_at
+            WHERE borrower_id = :borrower_id AND read_at IS NULL
+        """), params)
+
+    db.commit()
+
+    return {"success": True, "message": "All notifications marked as read"}
+
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    """Delete a notification."""
+    borrower = get_borrower_from_token(req, db)
+
+    # Verify ownership and delete
+    result = db.execute(text("""
+        DELETE FROM borrower_notifications
+        WHERE id = :id AND borrower_id = :borrower_id
+        RETURNING id
+    """), {"id": notification_id, "borrower_id": borrower["id"]}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    db.commit()
+
+    return {"success": True, "message": "Notification deleted"}
+
+
+@router.get("/notification-preferences")
+async def get_notification_preferences(
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    """Get borrower notification preferences."""
+    borrower = get_borrower_from_token(req, db)
+
+    result = db.execute(text("""
+        SELECT email_enabled, sms_enabled, push_enabled,
+               status_updates, document_requests, milestone_updates, marketing_updates,
+               quiet_hours_start, quiet_hours_end, digest_frequency,
+               updated_at
+        FROM borrower_notification_preferences
+        WHERE borrower_id = :borrower_id
+    """), {"borrower_id": borrower["id"]}).fetchone()
+
+    if not result:
+        # Return defaults if no preferences set
+        return {
+            "email_enabled": True,
+            "sms_enabled": True,
+            "push_enabled": True,
+            "status_updates": True,
+            "document_requests": True,
+            "milestone_updates": True,
+            "marketing_updates": False,
+            "quiet_hours_start": "21:00",
+            "quiet_hours_end": "08:00",
+            "digest_frequency": "immediate",
+            "updated_at": None,
+        }
+
+    return {
+        "email_enabled": result[0],
+        "sms_enabled": result[1],
+        "push_enabled": result[2],
+        "status_updates": result[3],
+        "document_requests": result[4],
+        "milestone_updates": result[5],
+        "marketing_updates": result[6],
+        "quiet_hours_start": result[7],
+        "quiet_hours_end": result[8],
+        "digest_frequency": result[9],
+        "updated_at": safe_isoformat(result[10]),
+    }
+
+
+@router.patch("/notification-preferences")
+async def update_notification_preferences(
+    request: NotificationPreferencesRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+):
+    """Update borrower notification preferences."""
+    borrower = get_borrower_from_token(req, db)
+
+    # Check if preferences exist
+    existing = db.execute(text("""
+        SELECT id FROM borrower_notification_preferences
+        WHERE borrower_id = :borrower_id
+    """), {"borrower_id": borrower["id"]}).fetchone()
+
+    # Build update fields dynamically
+    update_fields = []
+    params = {"borrower_id": borrower["id"], "updated_at": datetime.utcnow()}
+
+    if request.email_enabled is not None:
+        update_fields.append("email_enabled = :email_enabled")
+        params["email_enabled"] = request.email_enabled
+    if request.sms_enabled is not None:
+        update_fields.append("sms_enabled = :sms_enabled")
+        params["sms_enabled"] = request.sms_enabled
+    if request.push_enabled is not None:
+        update_fields.append("push_enabled = :push_enabled")
+        params["push_enabled"] = request.push_enabled
+    if request.status_updates is not None:
+        update_fields.append("status_updates = :status_updates")
+        params["status_updates"] = request.status_updates
+    if request.document_requests is not None:
+        update_fields.append("document_requests = :document_requests")
+        params["document_requests"] = request.document_requests
+    if request.milestone_updates is not None:
+        update_fields.append("milestone_updates = :milestone_updates")
+        params["milestone_updates"] = request.milestone_updates
+    if request.marketing_updates is not None:
+        update_fields.append("marketing_updates = :marketing_updates")
+        params["marketing_updates"] = request.marketing_updates
+    if request.quiet_hours_start is not None:
+        update_fields.append("quiet_hours_start = :quiet_hours_start")
+        params["quiet_hours_start"] = request.quiet_hours_start
+    if request.quiet_hours_end is not None:
+        update_fields.append("quiet_hours_end = :quiet_hours_end")
+        params["quiet_hours_end"] = request.quiet_hours_end
+    if request.digest_frequency is not None:
+        update_fields.append("digest_frequency = :digest_frequency")
+        params["digest_frequency"] = request.digest_frequency
+
+    update_fields.append("updated_at = :updated_at")
+
+    if existing:
+        # Update existing preferences
+        db.execute(text(f"""
+            UPDATE borrower_notification_preferences
+            SET {', '.join(update_fields)}
+            WHERE borrower_id = :borrower_id
+        """), params)
+    else:
+        # Insert new preferences with defaults
+        db.execute(text("""
+            INSERT INTO borrower_notification_preferences (
+                borrower_id, email_enabled, sms_enabled, push_enabled,
+                status_updates, document_requests, milestone_updates, marketing_updates,
+                quiet_hours_start, quiet_hours_end, digest_frequency, updated_at
+            ) VALUES (
+                :borrower_id,
+                COALESCE(:email_enabled, true),
+                COALESCE(:sms_enabled, true),
+                COALESCE(:push_enabled, true),
+                COALESCE(:status_updates, true),
+                COALESCE(:document_requests, true),
+                COALESCE(:milestone_updates, true),
+                COALESCE(:marketing_updates, false),
+                COALESCE(:quiet_hours_start, '21:00'),
+                COALESCE(:quiet_hours_end, '08:00'),
+                COALESCE(:digest_frequency, 'immediate'),
+                :updated_at
+            )
+        """), {
+            **params,
+            "email_enabled": params.get("email_enabled"),
+            "sms_enabled": params.get("sms_enabled"),
+            "push_enabled": params.get("push_enabled"),
+            "status_updates": params.get("status_updates"),
+            "document_requests": params.get("document_requests"),
+            "milestone_updates": params.get("milestone_updates"),
+            "marketing_updates": params.get("marketing_updates"),
+            "quiet_hours_start": params.get("quiet_hours_start"),
+            "quiet_hours_end": params.get("quiet_hours_end"),
+            "digest_frequency": params.get("digest_frequency"),
+        })
+
+    db.commit()
+
+    return {"success": True, "message": "Notification preferences updated"}
+
+
+@router.post("/notifications/subscribe")
+async def subscribe_to_notifications(
+    req: Request,
+    db: Session = Depends(get_db),
+    loan_id: Optional[int] = Query(None, description="Subscribe to specific loan updates"),
+    channel: str = Query("all", description="Channel to subscribe: email, sms, push, all"),
+):
+    """Subscribe to notification channels or specific loan updates."""
+    borrower = get_borrower_from_token(req, db)
+
+    if loan_id:
+        # Verify loan ownership
+        loan = db.execute(text("""
+            SELECT id FROM borrower_applications
+            WHERE id = :loan_id AND borrower_profile_id = :borrower_id
+        """), {"loan_id": loan_id, "borrower_id": borrower["id"]}).fetchone()
+
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        # Subscribe to loan updates
+        db.execute(text("""
+            INSERT INTO borrower_loan_subscriptions (borrower_id, loan_id, channel, subscribed_at)
+            VALUES (:borrower_id, :loan_id, :channel, :subscribed_at)
+            ON CONFLICT (borrower_id, loan_id, channel) DO UPDATE SET subscribed_at = :subscribed_at
+        """), {
+            "borrower_id": borrower["id"],
+            "loan_id": loan_id,
+            "channel": channel,
+            "subscribed_at": datetime.utcnow(),
+        })
+    else:
+        # Update general channel preferences
+        channel_field = f"{channel}_enabled" if channel != "all" else None
+
+        if channel_field:
+            db.execute(text(f"""
+                UPDATE borrower_notification_preferences
+                SET {channel_field} = true, updated_at = :updated_at
+                WHERE borrower_id = :borrower_id
+            """), {"borrower_id": borrower["id"], "updated_at": datetime.utcnow()})
+        else:
+            db.execute(text("""
+                UPDATE borrower_notification_preferences
+                SET email_enabled = true, sms_enabled = true, push_enabled = true, updated_at = :updated_at
+                WHERE borrower_id = :borrower_id
+            """), {"borrower_id": borrower["id"], "updated_at": datetime.utcnow()})
+
+    db.commit()
+
+    return {"success": True, "message": f"Subscribed to {'loan ' + str(loan_id) if loan_id else channel} notifications"}
+
+
+@router.post("/notifications/unsubscribe")
+async def unsubscribe_from_notifications(
+    req: Request,
+    db: Session = Depends(get_db),
+    loan_id: Optional[int] = Query(None, description="Unsubscribe from specific loan"),
+    channel: str = Query("all", description="Channel to unsubscribe: email, sms, push, all"),
+    category: Optional[str] = Query(None, description="Category to unsubscribe: marketing, status_updates"),
+):
+    """Unsubscribe from notification channels or categories."""
+    borrower = get_borrower_from_token(req, db)
+
+    if loan_id:
+        # Unsubscribe from specific loan
+        db.execute(text("""
+            DELETE FROM borrower_loan_subscriptions
+            WHERE borrower_id = :borrower_id AND loan_id = :loan_id
+            AND (:channel = 'all' OR channel = :channel)
+        """), {"borrower_id": borrower["id"], "loan_id": loan_id, "channel": channel})
+    elif category:
+        # Unsubscribe from category
+        category_field = category
+        db.execute(text(f"""
+            UPDATE borrower_notification_preferences
+            SET {category_field} = false, updated_at = :updated_at
+            WHERE borrower_id = :borrower_id
+        """), {"borrower_id": borrower["id"], "updated_at": datetime.utcnow()})
+    else:
+        # Disable channel
+        if channel == "all":
+            db.execute(text("""
+                UPDATE borrower_notification_preferences
+                SET email_enabled = false, sms_enabled = false, push_enabled = false, updated_at = :updated_at
+                WHERE borrower_id = :borrower_id
+            """), {"borrower_id": borrower["id"], "updated_at": datetime.utcnow()})
+        else:
+            channel_field = f"{channel}_enabled"
+            db.execute(text(f"""
+                UPDATE borrower_notification_preferences
+                SET {channel_field} = false, updated_at = :updated_at
+                WHERE borrower_id = :borrower_id
+            """), {"borrower_id": borrower["id"], "updated_at": datetime.utcnow()})
+
+    db.commit()
+
+    return {"success": True, "message": "Unsubscribed from notifications"}
