@@ -114,6 +114,18 @@ export class CRMAPIClient {
     return data;
   }
 
+  async getContactLoans(contactId: string): Promise<any[]> {
+    try {
+      const { data } = await this.client.get(`/api/contacts/${contactId}/loans`);
+      return data.loans || data || [];
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
   // ==================== LEADS ====================
 
   async createLead(leadData: any): Promise<any> {
@@ -129,11 +141,53 @@ export class CRMAPIClient {
     return data;
   }
 
+  async scoreLead(qualificationData: any, leadId?: string): Promise<any> {
+    if (leadId) {
+      const { data } = await this.client.post(`/api/leads/${leadId}/score`, qualificationData);
+      return data;
+    }
+    // Anonymous lead scoring (no lead ID yet)
+    const { data } = await this.client.post('/api/leads/score', qualificationData);
+    return data;
+  }
+
   // ==================== APPOINTMENTS ====================
 
   async createAppointment(appointmentData: any): Promise<any> {
     const { data } = await this.client.post('/api/appointments', appointmentData);
     return data;
+  }
+
+  async getAvailability(loId: string, params?: { date?: string; days?: number }): Promise<any> {
+    const { data } = await this.client.get(`/api/users/${loId}/availability`, { params });
+    return data;
+  }
+
+  async createCallback(callbackData: any): Promise<any> {
+    const { data } = await this.client.post('/api/callbacks', callbackData);
+    return data;
+  }
+
+  async findAvailableLOs(criteria?: { specialty?: string; language?: string }): Promise<any[]> {
+    const { data } = await this.client.get('/api/users/available-los', { params: criteria });
+    return data.users || data || [];
+  }
+
+  async getCurrentRates(params?: { loanType?: string }): Promise<any> {
+    try {
+      const { data } = await this.client.get('/api/rates/current', { params });
+      return data;
+    } catch (error) {
+      // Return default rates if API unavailable
+      return {
+        conventional30: 6.875,
+        conventional15: 6.125,
+        fha30: 6.5,
+        va30: 6.25,
+        jumbo30: 7.125,
+        lastUpdated: new Date().toISOString()
+      };
+    }
   }
 
   // ==================== TASKS ====================
