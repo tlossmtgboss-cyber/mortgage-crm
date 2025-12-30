@@ -1424,3 +1424,85 @@ View the full report in HTML format.
     except Exception as e:
         logger.error(f"Failed to send SLA report email: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+
+# ============ SLA Monitoring Agent Endpoint ============
+
+@router.post("/jobs/run-sla-monitoring")
+async def trigger_sla_monitoring(
+    organization_id: int = 1,
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger SLA monitoring agent to check milestones and create tasks.
+
+    This endpoint should be called periodically (e.g., every 15 minutes) to:
+    1. Check all active loans/leads for milestone progress
+    2. Create tasks when milestones reach 90% of SLA target (at-risk)
+    3. Create urgent tasks when milestones breach 100% of SLA target (overdue)
+    4. Assign tasks to appropriate team members based on milestone type
+
+    The monitoring agent uses the existing SLA measures configuration
+    and assigns tasks based on the Team Member tab in client profiles.
+    """
+    try:
+        from services.sla_monitoring_agent import SLAMonitoringAgent
+
+        agent = SLAMonitoringAgent(db, organization_id)
+        results = agent.run_monitoring()
+
+        return {
+            "status": "success",
+            "message": "SLA monitoring completed",
+            "results": results
+        }
+    except ImportError as e:
+        logger.error(f"Failed to import SLA monitoring agent: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="SLA monitoring agent not available"
+        )
+    except Exception as e:
+        logger.error(f"SLA monitoring failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"SLA monitoring failed: {str(e)}"
+        )
+
+
+@router.get("/jobs/sla-monitoring-status")
+async def get_sla_monitoring_status(
+    organization_id: int = 1,
+    db: Session = Depends(get_db)
+):
+    """
+    Get the current status of SLA monitoring - milestones at risk and overdue.
+
+    Returns a summary of:
+    - Total active milestones being tracked
+    - Milestones at risk (>=90% of SLA target)
+    - Milestones overdue (>=100% of SLA target)
+    - Recent tasks created by the monitoring agent
+    """
+    try:
+        from services.sla_monitoring_agent import SLAMonitoringAgent
+
+        agent = SLAMonitoringAgent(db, organization_id)
+        status = agent.get_monitoring_status()
+
+        return {
+            "status": "success",
+            "data": status
+        }
+    except ImportError as e:
+        logger.error(f"Failed to import SLA monitoring agent: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="SLA monitoring agent not available"
+        )
+    except Exception as e:
+        logger.error(f"Failed to get monitoring status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get status: {str(e)}"
+        )
