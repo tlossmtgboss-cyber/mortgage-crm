@@ -1250,22 +1250,18 @@ async def get_client_portal_status(
         partner_access = db.execute(text("""
             SELECT
                 rp.id as partner_id,
-                rp.first_name,
-                rp.last_name,
+                rp.name,
                 rp.email,
-                l.id as lead_id,
-                l.borrower_name
+                l.id as lead_id
             FROM referral_partners rp
             JOIN leads l ON l.referral_partner_id = rp.id
             WHERE l.id = :lead_id
             UNION
             SELECT
                 rp.id as partner_id,
-                rp.first_name,
-                rp.last_name,
+                rp.name,
                 rp.email,
-                lo.lead_id as lead_id,
-                lo.borrower_name
+                lo.lead_id as lead_id
             FROM referral_partners rp
             JOIN loans lo ON lo.referral_partner_id = rp.id
             WHERE lo.id = :lead_id OR lo.lead_id = :lead_id
@@ -1278,8 +1274,8 @@ async def get_client_portal_status(
                     "has_portal": True,
                     "portal_url": f"/realtor-portal?lead_id={lead_id}",
                     "partner_id": partner_access[0],
-                    "partner_name": f"{partner_access[1] or ''} {partner_access[2] or ''}".strip(),
-                    "partner_email": partner_access[3]
+                    "partner_name": partner_access[1] or "",
+                    "partner_email": partner_access[2]
                 }
             }
         else:
