@@ -109,6 +109,13 @@ class ApplyExtractionRequest(BaseModel):
     create_income_source: bool = True
 
 
+class ExtractIncomeFromDocumentsRequest(BaseModel):
+    """Request model for extracting income from documents."""
+    loan_id: int
+    borrower_id: int
+    income_type: str
+
+
 class IncomeSummaryResponse(BaseModel):
     """Response model for income summary."""
     borrower_id: int
@@ -351,9 +358,7 @@ async def calculate_income(
 
 @router.post("/extract-from-documents")
 async def extract_income_from_documents(
-    loan_id: int,
-    borrower_id: int,
-    income_type: str,
+    request: ExtractIncomeFromDocumentsRequest,
     db: Session = Depends(get_db),
 ):
     """
@@ -362,6 +367,11 @@ async def extract_income_from_documents(
     """
     from models.smart_docs_models import SmartDocument, DocType
     from decimal import Decimal
+
+    # Extract parameters from request body
+    loan_id = request.loan_id
+    borrower_id = request.borrower_id
+    income_type = request.income_type
 
     # Map income types to document types
     income_to_doc_types = {

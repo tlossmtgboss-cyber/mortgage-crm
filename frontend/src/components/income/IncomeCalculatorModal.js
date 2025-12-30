@@ -242,6 +242,38 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
     return incomeSources.find(s => s.income_type === incomeType);
   };
 
+  // Helper function to format error messages from API responses
+  const formatErrorMessage = (errorData) => {
+    if (!errorData) return 'An unknown error occurred';
+
+    // If it's already a string, return it
+    if (typeof errorData === 'string') return errorData;
+
+    // If it's an array (like Pydantic validation errors), format each item
+    if (Array.isArray(errorData)) {
+      return errorData.map(err => {
+        if (typeof err === 'string') return err;
+        if (err.msg) return err.msg;
+        if (err.message) return err.message;
+        if (err.loc && err.msg) return `${err.loc.join('.')}: ${err.msg}`;
+        return JSON.stringify(err);
+      }).join('; ');
+    }
+
+    // If it's an object with detail property
+    if (errorData.detail) {
+      return formatErrorMessage(errorData.detail);
+    }
+
+    // If it's an object with message property
+    if (errorData.message) return errorData.message;
+    if (errorData.msg) return errorData.msg;
+    if (errorData.error) return formatErrorMessage(errorData.error);
+
+    // Last resort: stringify it
+    return JSON.stringify(errorData);
+  };
+
   // Extract income from documents
   const handleExtractIncome = async (incomeType) => {
     setSaving(true);
@@ -266,7 +298,7 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to extract income');
+        throw new Error(formatErrorMessage(errorData));
       }
 
       await fetchIncomeSources();
@@ -310,7 +342,7 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
 
         if (!createResponse.ok) {
           const errorData = await createResponse.json();
-          throw new Error(errorData.detail || 'Failed to create income source');
+          throw new Error(formatErrorMessage(errorData) || 'Failed to create income source');
         }
 
         // Get the newly created source ID from the response
@@ -333,14 +365,14 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
 
         if (!calcResponse.ok) {
           const errorData = await calcResponse.json().catch(() => ({}));
-          throw new Error(errorData.detail || 'Failed to calculate income');
+          throw new Error(formatErrorMessage(errorData) || 'Failed to calculate income');
         }
 
         // Check the calculation result
         const calcResult = await calcResponse.json();
         if (!calcResult.success) {
           // Not a fatal error, but show info to user
-          const message = calcResult.error || 'No paystub data found. Please extract income from documents first.';
+          const message = formatErrorMessage(calcResult.error) || 'No paystub data found. Please extract income from documents first.';
           setError(message);
         }
       }
@@ -411,7 +443,29 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
             <span className="drag-indicator">⋮⋮</span>
             <h2>Income Calculator</h2>
           </div>
-          <button className="modal-close-btn" onClick={onClose}>&times;</button>
+          <div className="header-actions">
+            <button
+              className="popout-btn"
+              onClick={() => {
+                // Open in new window that can be moved to another monitor
+                const width = 1000;
+                const height = 700;
+                const left = window.screenX + 50;
+                const top = window.screenY + 50;
+                const popoutUrl = `/income-calculator-popout?loanId=${loanId}&borrowerId=${borrowerId}&borrowerName=${encodeURIComponent(borrowerName || '')}`;
+                window.open(
+                  popoutUrl,
+                  'IncomeCalculator',
+                  `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                );
+                onClose();
+              }}
+              title="Open in new window (move to another monitor)"
+            >
+              ⧉
+            </button>
+            <button className="modal-close-btn" onClick={onClose}>&times;</button>
+          </div>
         </div>
 
         {/* Total Income Banner */}
