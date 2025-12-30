@@ -16,6 +16,7 @@ import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import SmartDocumentUpload from '../components/smart-docs/SmartDocumentUpload';
+import LoanSmartDocsTab from '../components/smart-docs/LoanSmartDocsTab';
 import IncomeCalculator from '../components/IncomeCalculator';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import PortalSelectorModal from '../components/PortalSelectorModal';
@@ -3008,25 +3009,11 @@ function LoanDetail() {
         {/* Smart Docs Tab */}
         {activeTab === 'smart-docs' && (
           <div className="info-section">
-            <h2>Smart Documents</h2>
-            <p className="circle-description">
-              Upload and manage loan documents. AI-powered extraction automatically parses
-              document data for review and comparison.
-            </p>
-            <SmartDocumentUpload
+            <LoanSmartDocsTab
               loanId={parseInt(id)}
               borrowerId={loan?.borrower_id}
-              profileType="loan"
-              profileId={parseInt(id)}
               borrowerName={loan?.borrower_name || ''}
               coBorrowerName={loan?.coborrower_name || ''}
-              autoOpenReview={true}
-              onUploadComplete={(result) => {
-                console.log('Document uploaded:', result);
-              }}
-              onDocumentApproved={(result) => {
-                console.log('Document approved:', result);
-              }}
             />
           </div>
         )}
