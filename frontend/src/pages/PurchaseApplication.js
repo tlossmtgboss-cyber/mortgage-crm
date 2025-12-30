@@ -1631,6 +1631,15 @@ export default function PurchaseApplication() {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
+
+        // Check if this is a completed/submitted application (at final 'schedule' stage)
+        // If so, clear it and start fresh - user should go to client portal instead
+        if (parsed.currentStage === 'schedule') {
+          console.log('[PurchaseApplication] Found completed application at schedule stage - clearing to start fresh');
+          localStorage.removeItem(STORAGE_KEY);
+          return; // Start fresh with initial state
+        }
+
         if (parsed.declarations) setDeclarations(parsed.declarations);
         if (parsed.profileData) setProfileData(parsed.profileData);
         if (parsed.incomeData) setIncomeData(parsed.incomeData);
@@ -2177,7 +2186,11 @@ export default function PurchaseApplication() {
         }
       }
 
-      // Success - show the submission success lightbox
+      // Success - clear localStorage to prevent resuming submitted application
+      localStorage.removeItem(STORAGE_KEY);
+      console.log('[PurchaseApplication] Cleared localStorage after successful submission');
+
+      // Show the submission success lightbox
       if (result.data?.portal_url) {
         console.log('[PurchaseApplication] Setting portal URL:', result.data.portal_url);
         setPortalUrlForRedirect(result.data.portal_url);

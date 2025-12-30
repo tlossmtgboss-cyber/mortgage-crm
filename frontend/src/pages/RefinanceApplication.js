@@ -1479,6 +1479,15 @@ export default function RefinanceApplication() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const data = JSON.parse(saved);
+
+        // Check if this is a completed/submitted application (at final 'schedule' stage)
+        // If so, clear it and start fresh - user should go to client portal instead
+        if (data.currentStage === 'schedule') {
+          console.log('[RefinanceApplication] Found completed application at schedule stage - clearing to start fresh');
+          localStorage.removeItem(STORAGE_KEY);
+          return; // Start fresh with initial state
+        }
+
         if (data.userAccount?.isLoggedIn) {
           setDeclarations(data.declarations || {});
           setProfileData(data.profileData || {});
@@ -1619,7 +1628,11 @@ export default function RefinanceApplication() {
         localStorage.setItem('borrower_email', profileData.email);
       }
 
-      // Success - show the submission success lightbox
+      // Success - clear localStorage to prevent resuming submitted application
+      localStorage.removeItem(STORAGE_KEY);
+      console.log('[RefinanceApplication] Cleared localStorage after successful submission');
+
+      // Show the submission success lightbox
       if (result.data?.portal_url) {
         console.log('[RefinanceApplication] Setting portal URL:', result.data.portal_url);
         setPortalUrlForRedirect(result.data.portal_url);
