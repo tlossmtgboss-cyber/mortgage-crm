@@ -141,6 +141,7 @@ const CompanyBrandingSettings = lazy(() => import('./pages/CompanyBrandingSettin
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
+const ListingAgentPortal = lazy(() => import('./pages/portal/ListingAgentPortal'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
 
 // Portal Components - Real-time borrower and partner portals
@@ -1527,6 +1528,13 @@ function App() {
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
+            }
+          />
+          {/* Listing Agent Portal - Transaction-scoped portal for listing agents */}
+          <Route
+            path="/listing-agent-portal"
+            element={
+              <LazyPage><ListingAgentPortal /></LazyPage>
             }
           />
           {/* Public PURL Portal - Smart Container Routes to Lead/Active/MUM stages */}
