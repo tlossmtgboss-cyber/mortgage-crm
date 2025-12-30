@@ -4045,8 +4045,9 @@ function LeadDetail() {
           {/* SLA Dates Tab */}
           {activeTab === 'important-dates' && (
           <div className="tab-content sla-dates-tab">
-            <div className="sla-dates-compact">
-              <div className="sla-section-header">SLA Milestone Dates</div>
+            {/* Lead Stage Milestones */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Lead Milestones</h3>
               <div className="dates-grid">
                 <div className="date-field">
                   <label>Lead Received</label>
@@ -4105,15 +4106,7 @@ function LeadDetail() {
                   />
                 </div>
                 <div className="date-field">
-                  <label>Credit Pulled</label>
-                  <input
-                    type="date"
-                    value={formData.credit_pulled_date || ''}
-                    onChange={(e) => handleFieldChange('credit_pulled_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>Pre-Approval Sub</label>
+                  <label>Pre-Approval Submitted</label>
                   <input
                     type="date"
                     value={formData.preapproval_submission_date || ''}
@@ -4129,19 +4122,19 @@ function LeadDetail() {
                   />
                 </div>
                 <div className="date-field">
-                  <label>Realtor Referral</label>
-                  <input
-                    type="date"
-                    value={formData.realtor_referral_date || ''}
-                    onChange={(e) => handleFieldChange('realtor_referral_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
                   <label>Pre-Approval Exp</label>
                   <input
                     type="date"
                     value={formData.preapproval_expiration_date || ''}
                     onChange={(e) => handleFieldChange('preapproval_expiration_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Realtor Referral</label>
+                  <input
+                    type="date"
+                    value={formData.realtor_referral_date || ''}
+                    onChange={(e) => handleFieldChange('realtor_referral_date', e.target.value)}
                   />
                 </div>
                 <div className="date-field">
@@ -4153,8 +4146,359 @@ function LeadDetail() {
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="sla-section-header" style={{ marginTop: '8px' }}>Status History</div>
+            {/* Contract & Property Dates */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Contract & Property</h3>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Contract Received</label>
+                  <input
+                    type="date"
+                    value={formData.contract_received_date || ''}
+                    onChange={(e) => handleFieldChange('contract_received_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Appraisal Ordered</label>
+                  <input
+                    type="date"
+                    value={formData.appraisal_ordered_date || ''}
+                    onChange={(e) => handleFieldChange('appraisal_ordered_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Appraisal Due Date</label>
+                  <input
+                    type="date"
+                    value={formData.appraisal_due_date || ''}
+                    onChange={(e) => handleFieldChange('appraisal_due_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Appraisal Received</label>
+                  <input
+                    type="date"
+                    value={formData.appraisal_received_date || ''}
+                    onChange={(e) => handleFieldChange('appraisal_received_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Title Ordered</label>
+                  <input
+                    type="date"
+                    value={formData.title_ordered_date || ''}
+                    onChange={(e) => handleFieldChange('title_ordered_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Title Received</label>
+                  <input
+                    type="date"
+                    value={formData.title_received_date || ''}
+                    onChange={(e) => handleFieldChange('title_received_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Hazard Insurance Ordered</label>
+                  <input
+                    type="date"
+                    value={formData.hazard_insurance_ordered_date || ''}
+                    onChange={(e) => handleFieldChange('hazard_insurance_ordered_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Hazard Insurance Received</label>
+                  <input
+                    type="date"
+                    value={formData.hazard_insurance_received_date || ''}
+                    onChange={(e) => handleFieldChange('hazard_insurance_received_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Flood Insurance Ordered</label>
+                  <input
+                    type="date"
+                    value={formData.flood_insurance_ordered_date || ''}
+                    onChange={(e) => handleFieldChange('flood_insurance_ordered_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Flood Insurance Received</label>
+                  <input
+                    type="date"
+                    value={formData.flood_insurance_received_date || ''}
+                    onChange={(e) => handleFieldChange('flood_insurance_received_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Credit Ordered</label>
+                  <input
+                    type="date"
+                    value={formData.credit_ordered_date || ''}
+                    onChange={(e) => handleFieldChange('credit_ordered_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Credit Received</label>
+                  <input
+                    type="date"
+                    value={formData.credit_received_date || ''}
+                    onChange={(e) => handleFieldChange('credit_received_date', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Important Dates */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Important Dates</h3>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Date File Created</label>
+                  <input
+                    type="date"
+                    value={formData.file_created_date || ''}
+                    onChange={(e) => handleFieldChange('file_created_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Application Date</label>
+                  <input
+                    type="date"
+                    value={formData.application_date || ''}
+                    onChange={(e) => handleFieldChange('application_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Scheduled Approval Date</label>
+                  <input
+                    type="date"
+                    value={formData.scheduled_approval_date || ''}
+                    onChange={(e) => handleFieldChange('scheduled_approval_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Original Approved Date</label>
+                  <input
+                    type="date"
+                    value={formData.original_approved_date || ''}
+                    onChange={(e) => handleFieldChange('original_approved_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Original Disclosed Date</label>
+                  <input
+                    type="date"
+                    value={formData.original_disclosed_date || ''}
+                    onChange={(e) => handleFieldChange('original_disclosed_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Signing Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.signing_date || ''}
+                    onChange={(e) => handleFieldChange('signing_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Scheduled Closing Date</label>
+                  <input
+                    type="date"
+                    value={formData.scheduled_closing_date || ''}
+                    onChange={(e) => handleFieldChange('scheduled_closing_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Scheduled Funding Date</label>
+                  <input
+                    type="date"
+                    value={formData.scheduled_funding_date || ''}
+                    onChange={(e) => handleFieldChange('scheduled_funding_date', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Loan Processing */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Loan Processing</h3>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Disclosures Sent</label>
+                  <input
+                    type="date"
+                    value={formData.initial_disclosures_sent_date || ''}
+                    onChange={(e) => handleFieldChange('initial_disclosures_sent_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Disclosures Signed</label>
+                  <input
+                    type="date"
+                    value={formData.initial_disclosures_signed_date || ''}
+                    onChange={(e) => handleFieldChange('initial_disclosures_signed_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Processor Submit</label>
+                  <input
+                    type="date"
+                    value={formData.processor_submission_date || ''}
+                    onChange={(e) => handleFieldChange('processor_submission_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>UW Submission</label>
+                  <input
+                    type="date"
+                    value={formData.underwriting_submission_date || ''}
+                    onChange={(e) => handleFieldChange('underwriting_submission_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Conditional Approval</label>
+                  <input
+                    type="date"
+                    value={formData.conditional_approval_date || ''}
+                    onChange={(e) => handleFieldChange('conditional_approval_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Conditions Sent</label>
+                  <input
+                    type="date"
+                    value={formData.conditions_sent_date || ''}
+                    onChange={(e) => handleFieldChange('conditions_sent_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Conditions Received</label>
+                  <input
+                    type="date"
+                    value={formData.conditions_received_date || ''}
+                    onChange={(e) => handleFieldChange('conditions_received_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Clear to Close</label>
+                  <input
+                    type="date"
+                    value={formData.clear_to_close_date || ''}
+                    onChange={(e) => handleFieldChange('clear_to_close_date', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Lock Information */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Lock Information</h3>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Date Locked</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.rate_lock_date || ''}
+                    onChange={(e) => handleFieldChange('rate_lock_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Lock Exp. Date</label>
+                  <input
+                    type="date"
+                    value={formData.rate_lock_expiration_date || ''}
+                    onChange={(e) => handleFieldChange('rate_lock_expiration_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Lock Days</label>
+                  <input
+                    type="number"
+                    value={formData.lock_days || ''}
+                    onChange={(e) => handleFieldChange('lock_days', e.target.value)}
+                  />
+                </div>
+                <div className="date-field checkbox-field">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={formData.floating || false}
+                      onChange={(e) => handleFieldChange('floating', e.target.checked)}
+                    />
+                    Floating
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Follow Up */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Follow Up</h3>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Follow Up Date</label>
+                  <input
+                    type="date"
+                    value={formData.follow_up_date || ''}
+                    onChange={(e) => handleFieldChange('follow_up_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Follow Up Flag</label>
+                  <input
+                    type="text"
+                    value={formData.follow_up_flag || ''}
+                    onChange={(e) => handleFieldChange('follow_up_flag', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Closing */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Closing</h3>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>CD Sent</label>
+                  <input
+                    type="date"
+                    value={formData.closing_disclosure_sent_date || ''}
+                    onChange={(e) => handleFieldChange('closing_disclosure_sent_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>CD Signed</label>
+                  <input
+                    type="date"
+                    value={formData.cd_received_signed_date || ''}
+                    onChange={(e) => handleFieldChange('cd_received_signed_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Closing Scheduled</label>
+                  <input
+                    type="date"
+                    value={formData.closing_scheduled_date || ''}
+                    onChange={(e) => handleFieldChange('closing_scheduled_date', e.target.value)}
+                  />
+                </div>
+                <div className="date-field">
+                  <label>Funding Date</label>
+                  <input
+                    type="date"
+                    value={formData.funded_date || ''}
+                    onChange={(e) => handleFieldChange('funded_date', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Status History */}
+            <div className="dates-section">
+              <h3 className="dates-section-title">Status History</h3>
               {stageHistoryLoading ? (
                 <div className="loading-state" style={{ fontSize: '11px', padding: '6px' }}>Loading...</div>
               ) : stageHistory.length === 0 ? (
