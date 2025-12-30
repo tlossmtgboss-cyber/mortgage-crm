@@ -1245,8 +1245,7 @@ async def get_client_portal_status(
         - partner_id: int - ID of the partner with access (if exists)
     """
     try:
-        # Check if this lead/loan has a referral partner assigned
-        # First try direct lead lookup, then via loan's lead_id
+        # Check if this lead has a referral partner assigned
         partner_access = db.execute(text("""
             SELECT
                 rp.id as partner_id,
@@ -1255,15 +1254,6 @@ async def get_client_portal_status(
             FROM referral_partners rp
             JOIN leads l ON l.referral_partner_id = rp.id
             WHERE l.id = :lead_id
-            UNION
-            SELECT
-                rp.id as partner_id,
-                rp.name,
-                rp.email
-            FROM referral_partners rp
-            JOIN leads l ON l.referral_partner_id = rp.id
-            JOIN loans lo ON lo.lead_id = l.id
-            WHERE lo.id = :lead_id
             LIMIT 1
         """), {"lead_id": lead_id}).fetchone()
 
