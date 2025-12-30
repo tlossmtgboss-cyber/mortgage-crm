@@ -16,6 +16,7 @@ import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import SmartDocumentUpload from '../components/smart-docs/SmartDocumentUpload';
+import NeedsListView from '../components/smart-docs/NeedsListView';
 import IncomeCalculator from '../components/IncomeCalculator';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import PortalSelectorModal from '../components/PortalSelectorModal';
@@ -3008,26 +3009,63 @@ function LoanDetail() {
         {/* Smart Docs Tab */}
         {activeTab === 'smart-docs' && (
           <div className="info-section">
-            <h2>Smart Documents</h2>
-            <p className="circle-description">
-              Upload and manage loan documents. AI-powered extraction automatically parses
-              document data for review and comparison.
-            </p>
-            <SmartDocumentUpload
+            <div className="smart-docs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+              <div>
+                <h2>Smart Documents</h2>
+                <p className="circle-description">
+                  Upload and manage loan documents. AI-powered extraction automatically parses
+                  document data for review and comparison.
+                </p>
+              </div>
+              <a
+                href={`/smart-docs/client/${id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: '8px 16px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                Open Full View ↗
+              </a>
+            </div>
+
+            {/* Document Requirements / Needs List */}
+            <NeedsListView
               loanId={parseInt(id)}
               borrowerId={loan?.borrower_id}
-              profileType="loan"
-              profileId={parseInt(id)}
-              borrowerName={loan?.borrower_name || ''}
-              coBorrowerName={loan?.coborrower_name || ''}
-              autoOpenReview={true}
-              onUploadComplete={(result) => {
+              onDocumentUploaded={(result) => {
                 console.log('Document uploaded:', result);
               }}
-              onDocumentApproved={(result) => {
-                console.log('Document approved:', result);
-              }}
             />
+
+            {/* Upload Section */}
+            <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e5e7eb' }}>
+              <h3 style={{ marginBottom: '16px' }}>Upload Document</h3>
+              <SmartDocumentUpload
+                loanId={parseInt(id)}
+                borrowerId={loan?.borrower_id}
+                profileType="loan"
+                profileId={parseInt(id)}
+                borrowerName={loan?.borrower_name || ''}
+                coBorrowerName={loan?.coborrower_name || ''}
+                autoOpenReview={true}
+                onUploadComplete={(result) => {
+                  console.log('Document uploaded:', result);
+                }}
+                onDocumentApproved={(result) => {
+                  console.log('Document approved:', result);
+                }}
+              />
+            </div>
           </div>
         )}
 
