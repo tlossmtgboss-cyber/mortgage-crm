@@ -44,12 +44,15 @@ const EmployerAutocomplete = ({
   // Initialize Google Places services when script is loaded
   useEffect(() => {
     if (isGoogleScriptLoaded && window.google && window.google.maps && window.google.maps.places) {
+      console.log('EmployerAutocomplete: Initializing Google Places services');
       autocompleteService.current = new window.google.maps.places.AutocompleteService();
 
       const dummyDiv = document.createElement('div');
       placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
       sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
       setIsGoogleLoaded(true);
+    } else if (isGoogleScriptLoaded) {
+      console.warn('EmployerAutocomplete: Script loaded but window.google.maps.places not available');
     }
   }, [isGoogleScriptLoaded]);
 
@@ -100,6 +103,11 @@ const EmployerAutocomplete = ({
 
     autocompleteService.current.getPlacePredictions(request, (predictions, status) => {
       setIsLoading(false);
+
+      // Log status for debugging
+      if (status !== window.google.maps.places.PlacesServiceStatus.OK) {
+        console.warn('Google Places API error:', status);
+      }
 
       if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
         setSuggestions(predictions.map(p => ({

@@ -51,6 +51,7 @@ const loadGooglePlaces = () => {
 
     // Create callback
     window.__GOOGLE_PLACES_CALLBACK__ = () => {
+      console.log('Google Places API loaded successfully');
       isScriptLoaded = true;
       isScriptLoading = false;
       callbacks.forEach(cb => cb.resolve());
