@@ -70,6 +70,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             "https://www.perenniaai.com",
             "https://app.perenniaai.com",
             "https://api.perenniaai.com",
+            # Railway production domains
+            "https://mortgage-crm-production-7a9a.up.railway.app",
         }
 
         if origin in static_allowed:
@@ -77,6 +79,10 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
 
         # Allow perenniaai.com subdomains
         if origin.endswith("perenniaai.com"):
+            return True
+
+        # Allow railway.app subdomains (production hosting)
+        if origin.endswith(".railway.app"):
             return True
 
         return False
@@ -94,8 +100,19 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
                 # Still return 204 but without CORS headers
                 return Response(status_code=204)
 
-        # Handle regular requests
-        response = await call_next(request)
+        # Handle regular requests - wrap in try/except to ensure CORS headers
+        # are added even when exceptions occur (otherwise browser blocks error responses)
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            # Log the error
+            logger.error(f"Error in request to {request.url.path}: {str(e)}")
+            # Create error response with CORS headers
+            from starlette.responses import JSONResponse
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error"}
+            )
 
         if origin and self.is_allowed_origin(origin):
             self._add_cors_headers(response, origin)
