@@ -2285,6 +2285,26 @@ export default function RefinanceApplication() {
               placeholder="Start typing company name..."
               className="fun-input-wrapper"
             />
+            <div className="form-group">
+              <label>Employer Address</label>
+              <input
+                type="text"
+                value={incomeData.employerAddress || ''}
+                onChange={(e) => setIncomeData(prev => ({ ...prev, employerAddress: e.target.value }))}
+                className="fun-input"
+                placeholder="Auto-filled from employer selection"
+              />
+            </div>
+            <div className="form-group">
+              <label>Employer Phone</label>
+              <input
+                type="tel"
+                value={incomeData.employerPhone || ''}
+                onChange={(e) => setIncomeData(prev => ({ ...prev, employerPhone: e.target.value }))}
+                className="fun-input"
+                placeholder="Auto-filled from employer selection"
+              />
+            </div>
             <div className="form-row">
               <div className="form-group">
                 <label>Job Title</label>
