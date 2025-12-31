@@ -12,7 +12,7 @@ REST API endpoints for the intelligent document collection system:
 import logging
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -490,17 +490,79 @@ async def waive_request(
 # Document Upload & Processing
 # =============================================================================
 
+def _process_document_background(
+    document_id: int,
+    file_content: bytes,
+    mime_type: str,
+    filename: str,
+    doc_type_value: Optional[str],
+    request_id: Optional[int],
+):
+    """
+    Background task to process document through the review pipeline.
+    This runs asynchronously after the upload response is returned.
+    """
+    from database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        logger.info(f"Starting background processing for document {document_id}")
+
+        # Parse doc_type
+        parsed_doc_type = None
+        if doc_type_value:
+            try:
+                parsed_doc_type = DocType(doc_type_value)
+            except ValueError:
+                logger.warning(f"Invalid doc_type in background task: {doc_type_value}")
+
+        # Process the document
+        pipeline = DocumentReviewPipeline(db)
+        result = pipeline.process_document(
+            document_id=document_id,
+            file_content=file_content,
+            mime_type=mime_type,
+            filename=filename,
+            doc_type=parsed_doc_type,
+            request_id=request_id,
+        )
+
+        logger.info(
+            f"Background processing complete for document {document_id}: "
+            f"status={result.status.value}, decision={result.decision.value if result.decision else 'none'}"
+        )
+
+    except Exception as e:
+        logger.exception(f"Background document processing failed for {document_id}: {e}")
+        # Update document status to error
+        try:
+            document = db.query(SmartDocument).filter(SmartDocument.id == document_id).first()
+            if document:
+                document.status = "ERROR"
+                document.rejection_reason = f"Processing error: {str(e)}"
+                db.commit()
+        except Exception as update_error:
+            logger.error(f"Failed to update document error status: {update_error}")
+    finally:
+        db.close()
+
+
 @router.post("/upload")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     loan_id: int = Form(...),
     borrower_id: int = Form(...),
     request_id: Optional[int] = Form(None),
     doc_type: Optional[str] = Form(None),
+    async_processing: bool = Form(True),  # Enable async by default
     db: Session = Depends(get_db),
 ):
     """
     Upload and process a document.
+
+    By default, processing runs asynchronously in the background for better
+    performance. Use async_processing=false to process synchronously.
 
     Runs the full processing pipeline including:
     - Screenshot detection
@@ -574,18 +636,42 @@ async def upload_document(
         logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
         # Continue processing even if S3 fails (for development/testing without S3)
 
-    # Process the document
-    pipeline = DocumentReviewPipeline(db)
-    result = pipeline.process_document(
-        document_id=document.id,
-        file_content=file_content,
-        mime_type=mime_type,
-        filename=file.filename,
-        doc_type=parsed_doc_type,
-        request_id=request_id,
-    )
+    # Process document - async (default) or sync
+    if async_processing:
+        # Queue for background processing - returns immediately
+        document.status = "PROCESSING"
+        db.commit()
 
-    return pipeline.result_to_dict(result)
+        background_tasks.add_task(
+            _process_document_background,
+            document_id=document.id,
+            file_content=file_content,
+            mime_type=mime_type,
+            filename=file.filename,
+            doc_type_value=doc_type,
+            request_id=request_id,
+        )
+
+        return {
+            "document_id": document.id,
+            "status": "PROCESSING",
+            "async": True,
+            "message": "Document uploaded successfully. Processing in background.",
+            "poll_url": f"/api/v1/smart-docs/document/{document.id}",
+        }
+    else:
+        # Synchronous processing (legacy behavior)
+        pipeline = DocumentReviewPipeline(db)
+        result = pipeline.process_document(
+            document_id=document.id,
+            file_content=file_content,
+            mime_type=mime_type,
+            filename=file.filename,
+            doc_type=parsed_doc_type,
+            request_id=request_id,
+        )
+
+        return pipeline.result_to_dict(result)
 
 
 @router.get("/document/{document_id}")

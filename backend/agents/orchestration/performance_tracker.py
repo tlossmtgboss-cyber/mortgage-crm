@@ -31,12 +31,34 @@ class PerformanceTracker:
     - A/B test evaluation
     """
 
-    # Token costs (approximate, update as needed)
+    # Token costs per 1K tokens (updated December 2025)
+    # Source: https://www.anthropic.com/pricing and https://openai.com/api/pricing
     TOKEN_COSTS = {
-        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},  # per 1K tokens
+        # Claude 4 models (latest)
+        "claude-opus-4-5-20251101": {"input": 0.015, "output": 0.075},
+        "claude-sonnet-4-5-20251101": {"input": 0.003, "output": 0.015},
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
         "claude-opus-4-20250514": {"input": 0.015, "output": 0.075},
+
+        # Claude 3.5 models
+        "claude-3-5-sonnet-20241022": {"input": 0.003, "output": 0.015},
+        "claude-3-5-sonnet-20240620": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.0008, "output": 0.004},
+
+        # Claude 3 models
+        "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
+        "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},
+        "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
+
+        # OpenAI models
+        "gpt-4o": {"input": 0.0025, "output": 0.01},
+        "gpt-4o-mini": {"input": 0.00015, "output": 0.0006},
         "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+        "gpt-4": {"input": 0.03, "output": 0.06},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+
+        # Default fallback
+        "default": {"input": 0.003, "output": 0.015},
     }
 
     def __init__(self, db_session: Optional[AsyncSession] = None):
@@ -436,17 +458,26 @@ class PerformanceTracker:
         }
 
     def _calculate_cost(self, executions: List[Dict]) -> float:
-        """Calculate estimated cost for executions"""
+        """
+        Calculate estimated cost for executions based on token usage.
+
+        Uses per-model pricing from TOKEN_COSTS dictionary.
+        Falls back to default pricing if model is unknown.
+        """
         total_cost = 0.0
         for e in executions:
             model = e.get("model_used", "claude-sonnet-4-20250514")
-            costs = self.TOKEN_COSTS.get(model, self.TOKEN_COSTS["claude-sonnet-4-20250514"])
+            costs = self.TOKEN_COSTS.get(model, self.TOKEN_COSTS.get("default"))
+
+            if not costs:
+                # Ultimate fallback if default somehow missing
+                costs = {"input": 0.003, "output": 0.015}
 
             input_cost = (e.get("prompt_tokens", 0) / 1000) * costs["input"]
             output_cost = (e.get("completion_tokens", 0) / 1000) * costs["output"]
             total_cost += input_cost + output_cost
 
-        return total_cost
+        return round(total_cost, 4)
 
     def _empty_metrics(self, agent_id: str, days: int) -> Dict[str, Any]:
         """Return empty metrics structure"""

@@ -39051,36 +39051,100 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # REFERRAL PARTNER STATS
     # ============================================================================
 
-    # OPTIMIZED: Get partners and their lead counts in separate queries, then join in memory
-    # NOTE: ReferralPartners are shared resources without ownership
+    # Get top referral partners with their stored metrics
+    # Prefer user-owned partners, but include active partners with high engagement
     partners = db.query(ReferralPartner).filter(
         ReferralPartner.status == "active"
-    ).limit(5).all()
+    ).order_by(
+        # Prioritize partners with activity
+        ReferralPartner.referrals_in.desc(),
+        ReferralPartner.closed_loans.desc()
+    ).limit(10).all()
 
-    # Get all lead counts by source in one query
-    partner_names = [p.name for p in partners]
-    if partner_names:
-        lead_counts_by_source = db.query(
-            Lead.source,
-            func.count(Lead.id).label('count')
+    # Get lead counts by referral_partner_id (more accurate than source matching)
+    partner_ids = [p.id for p in partners]
+    lead_counts_by_partner = {}
+    if partner_ids:
+        lead_stats = db.query(
+            Lead.referral_partner_id,
+            func.count(Lead.id).label('lead_count'),
+            func.count(Lead.id).filter(Lead.stage.in_(['APPLICATION', 'PROCESSING', 'UNDERWRITING', 'APPROVED', 'FUNDED'])).label('converted_count')
         ).filter(
             Lead.owner_id == current_user.id,
-            Lead.source.in_(partner_names)
-        ).group_by(Lead.source).all()
+            Lead.referral_partner_id.in_(partner_ids)
+        ).group_by(Lead.referral_partner_id).all()
 
-        # Create a lookup dict
-        source_counts = {row.source: row.count for row in lead_counts_by_source}
-    else:
-        source_counts = {}
+        for stat in lead_stats:
+            lead_counts_by_partner[stat.referral_partner_id] = {
+                'leads': stat.lead_count,
+                'converted': stat.converted_count
+            }
+
+    # Build top partners list with full metrics
+    top_partners = []
+    for p in partners[:5]:  # Top 5 partners
+        partner_leads = lead_counts_by_partner.get(p.id, {'leads': 0, 'converted': 0})
+        # Use stored values OR calculated from leads
+        received = p.referrals_in or partner_leads['leads']
+        sent = p.referrals_out or 0
+        balance = received - sent
+
+        top_partners.append({
+            "id": p.id,
+            "name": p.name,
+            "company": p.company or p.business_name,
+            "type": p.type or p.category,
+            "received": received,
+            "sent": sent,
+            "balance": balance,
+            "closed_loans": p.closed_loans or partner_leads['converted'],
+            "volume": float(p.volume or 0),
+            "reciprocity_score": round(float(p.reciprocity_score or 0), 1),
+            "loyalty_tier": p.loyalty_tier or "bronze",
+            "last_interaction": p.last_interaction.isoformat() if p.last_interaction else None,
+            "conversion_rate": round((partner_leads['converted'] / partner_leads['leads'] * 100) if partner_leads['leads'] > 0 else 0, 1)
+        })
+
+    # Calculate engagement metrics
+    total_inbound = sum(p.referrals_in or 0 for p in partners)
+    total_outbound = sum(p.referrals_out or 0 for p in partners)
+    avg_reciprocity = sum(p.reciprocity_score or 0 for p in partners) / len(partners) if partners else 0
+
+    # Identify partners needing attention (low reciprocity or no recent activity)
+    ninety_days_ago = today - timedelta(days=90)
+    engagement_alerts = []
+    for p in partners:
+        if p.reciprocity_score and p.reciprocity_score < 0.5 and p.referrals_in and p.referrals_in > 3:
+            engagement_alerts.append({
+                "partner_id": p.id,
+                "partner_name": p.name,
+                "alert_type": "low_reciprocity",
+                "message": f"{p.name} has sent you {p.referrals_in} referrals but you've only sent {p.referrals_out or 0} back"
+            })
+        if p.last_interaction and p.last_interaction < datetime.combine(ninety_days_ago, datetime.min.time()).replace(tzinfo=timezone.utc):
+            engagement_alerts.append({
+                "partner_id": p.id,
+                "partner_name": p.name,
+                "alert_type": "inactive",
+                "message": f"No interaction with {p.name} in over 90 days"
+            })
 
     referral_stats = {
-        "top_partners": [{
-            "name": p.name,
-            "received": source_counts.get(p.name, 0),
-            "sent": 0,  # TODO: Track sent referrals
-            "balance": 0
-        } for p in partners],
-        "engagement": []
+        "top_partners": top_partners,
+        "summary": {
+            "total_partners": len(partners),
+            "total_inbound_referrals": total_inbound,
+            "total_outbound_referrals": total_outbound,
+            "net_referral_balance": total_inbound - total_outbound,
+            "avg_reciprocity_score": round(avg_reciprocity, 1),
+        },
+        "engagement": engagement_alerts,
+        "tier_breakdown": {
+            "platinum": len([p for p in partners if p.loyalty_tier == "platinum"]),
+            "gold": len([p for p in partners if p.loyalty_tier == "gold"]),
+            "silver": len([p for p in partners if p.loyalty_tier == "silver"]),
+            "bronze": len([p for p in partners if p.loyalty_tier == "bronze" or not p.loyalty_tier]),
+        }
     }
 
     # ============================================================================

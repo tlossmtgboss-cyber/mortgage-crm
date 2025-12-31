@@ -3,13 +3,15 @@ Adaptive Rate Limiting & DDoS Protection
 
 This middleware provides:
 - Tiered rate limiting by route category
+- Per-user rate limiting for authenticated requests (JWT)
 - Suspicious activity detection
 - Automatic stricter limits for bad actors
-- Client identification via visitor_id, IP, or fingerprint
+- Client identification via user_id, visitor_id, IP, or fingerprint
 """
 
 import logging
 import hashlib
+import os
 from datetime import datetime, timezone
 from typing import Optional, Tuple, Dict, Any
 from fastapi import Request, HTTPException
@@ -17,7 +19,17 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 import redis
 
+# JWT imports for user extraction
+try:
+    from jose import jwt, JWTError
+    JWT_AVAILABLE = True
+except ImportError:
+    JWT_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+# JWT configuration (same as main.py)
+ALGORITHM = "HS256"
 
 
 class AdaptiveRateLimiter(BaseHTTPMiddleware):
@@ -32,7 +44,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         super().__init__(app)
         self.redis = redis_client
 
-        # Rate limit tiers by route category
+        # Rate limit tiers by route category (for anonymous/IP-based)
         self.LIMITS = {
             'chat_message': {'requests': 60, 'window': 60},      # 60 msg/min
             'session_create': {'requests': 10, 'window': 3600},  # 10 sessions/hour
@@ -40,6 +52,19 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             'analytics': {'requests': 100, 'window': 60},        # 100 req/min
             'default': {'requests': 120, 'window': 60},          # 120 req/min default
         }
+
+        # Higher limits for authenticated users (per-user rate limiting)
+        self.AUTHENTICATED_LIMITS = {
+            'chat_message': {'requests': 120, 'window': 60},     # 2x for auth users
+            'session_create': {'requests': 30, 'window': 3600},  # 3x for auth users
+            'call_initiate': {'requests': 10, 'window': 3600},   # 3x for auth users
+            'analytics': {'requests': 300, 'window': 60},        # 3x for auth users
+            'default': {'requests': 300, 'window': 60},          # 2.5x for auth users
+            'api_heavy': {'requests': 1000, 'window': 60},       # For bulk operations
+        }
+
+        # Get SECRET_KEY for JWT decoding
+        self._secret_key = os.getenv("SECRET_KEY", "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
 
         # Suspicious activity thresholds
         self.SUSPICIOUS_PATTERNS = {
@@ -56,8 +81,12 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         if request.url.path in ['/health', '/api/health', '/metrics']:
             return await call_next(request)
 
-        # Identify client
-        client_id = self._get_client_identifier(request)
+        # Identify client (now returns tuple with auth status)
+        client_id, is_authenticated = self._get_client_identifier(request)
+
+        # Store auth status on request for potential use by routes
+        request.state.rate_limit_authenticated = is_authenticated
+        request.state.rate_limit_client_id = client_id
 
         # Check if blocked
         if await self._is_blocked(client_id):
@@ -70,20 +99,22 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         route_category = self._categorize_route(request.url.path, request.method)
 
         if route_category:
-            # Check rate limit
+            # Check rate limit with appropriate tier based on auth status
             is_allowed, retry_after = await self._check_rate_limit(
                 client_id,
-                route_category
+                route_category,
+                is_authenticated
             )
 
             if not is_allowed:
-                logger.warning(f"Rate limit exceeded for {client_id} on {route_category}")
+                logger.warning(f"Rate limit exceeded for {client_id} (auth={is_authenticated}) on {route_category}")
                 return JSONResponse(
                     status_code=429,
                     content={
                         "error": "Rate limit exceeded",
                         "retry_after": retry_after,
-                        "category": route_category
+                        "category": route_category,
+                        "authenticated": is_authenticated
                     },
                     headers={"Retry-After": str(retry_after)}
                 )
@@ -93,34 +124,99 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
                 await self._track_activity(client_id, request)
 
         response = await call_next(request)
+
+        # Add rate limit info headers for transparency
+        if route_category:
+            limits = self.AUTHENTICATED_LIMITS if is_authenticated else self.LIMITS
+            limit_config = limits.get(route_category, limits['default'])
+            response.headers["X-RateLimit-Limit"] = str(limit_config['requests'])
+            response.headers["X-RateLimit-Window"] = str(limit_config['window'])
+
         return response
 
-    def _get_client_identifier(self, request: Request) -> str:
-        """Get unique client identifier with multiple fallback strategies"""
-        # Priority 1: Visitor ID from header (set by frontend)
+    def _get_client_identifier(self, request: Request) -> Tuple[str, bool]:
+        """
+        Get unique client identifier with multiple fallback strategies.
+        Returns tuple of (client_id, is_authenticated).
+
+        Priority:
+        1. Authenticated user (JWT token) - gets higher rate limits
+        2. Visitor ID from header
+        3. Session ID from path
+        4. IP address (fallback)
+        """
+        # Priority 1: Authenticated user from JWT token
+        user_email = self._extract_user_from_jwt(request)
+        if user_email:
+            # Hash email to create a stable identifier
+            user_hash = hashlib.sha256(user_email.encode()).hexdigest()[:16]
+            return f"user:{user_hash}", True
+
+        # Priority 2: Visitor ID from header (set by frontend)
         visitor_id = request.headers.get("X-Visitor-ID")
         if visitor_id:
-            return f"visitor:{visitor_id}"
+            return f"visitor:{visitor_id}", False
 
-        # Priority 2: Session ID from path (for message endpoints)
+        # Priority 3: Session ID from path (for message endpoints)
         path_parts = request.url.path.split('/')
         if 'sessions' in path_parts:
             try:
                 session_idx = path_parts.index('sessions') + 1
                 if session_idx < len(path_parts):
                     session_id = path_parts[session_idx]
-                    return f"session:{session_id}"
+                    return f"session:{session_id}", False
             except (ValueError, IndexError):
                 pass
 
-        # Priority 3: IP address (with X-Forwarded-For support)
+        # Priority 4: IP address (with X-Forwarded-For support)
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             ip = forwarded.split(",")[0].strip()
         else:
             ip = request.client.host if request.client else "unknown"
 
-        return f"ip:{ip}"
+        return f"ip:{ip}", False
+
+    def _extract_user_from_jwt(self, request: Request) -> Optional[str]:
+        """
+        Extract user email from JWT token if present and valid.
+        This is a lightweight check - full validation happens in route handlers.
+        """
+        if not JWT_AVAILABLE:
+            return None
+
+        # Check Authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            return None
+
+        # Extract token from "Bearer <token>" format
+        parts = auth_header.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            return None
+
+        token = parts[1]
+
+        # Skip if it looks like an API key (usually starts with specific prefix)
+        if token.startswith("pk_") or token.startswith("sk_") or len(token) < 50:
+            return None
+
+        try:
+            # Decode JWT to extract user email
+            # We only verify signature, don't check expiration here (for rate limiting purposes)
+            payload = jwt.decode(
+                token,
+                self._secret_key,
+                algorithms=[ALGORITHM],
+                options={"verify_exp": False}  # Don't fail on expired tokens for rate limiting
+            )
+            return payload.get("sub")  # sub contains the email
+        except JWTError:
+            # Invalid token, fall back to other identifiers
+            return None
+        except Exception as e:
+            logger.debug(f"Error extracting user from JWT: {e}")
+            return None
 
     def _categorize_route(self, path: str, method: str) -> str:
         """Categorize route for rate limiting"""
@@ -140,10 +236,20 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
     async def _check_rate_limit(
         self,
         client_id: str,
-        category: str
+        category: str,
+        is_authenticated: bool = False
     ) -> Tuple[bool, int]:
-        """Check if request is within rate limit"""
-        limit_config = self.LIMITS.get(category, self.LIMITS['default'])
+        """
+        Check if request is within rate limit.
+        Uses higher limits for authenticated users.
+        """
+        # Select appropriate limit tier based on authentication status
+        if is_authenticated:
+            limits = self.AUTHENTICATED_LIMITS
+        else:
+            limits = self.LIMITS
+
+        limit_config = limits.get(category, limits['default'])
         key = f"ratelimit:{category}:{client_id}"
 
         try:
@@ -243,9 +349,10 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         except redis.RedisError:
             return False
 
-    def get_rate_limit_status(self, client_id: str, category: str) -> Dict[str, Any]:
+    def get_rate_limit_status(self, client_id: str, category: str, is_authenticated: bool = False) -> Dict[str, Any]:
         """Get current rate limit status for a client"""
-        limit_config = self.LIMITS.get(category, self.LIMITS['default'])
+        limits = self.AUTHENTICATED_LIMITS if is_authenticated else self.LIMITS
+        limit_config = limits.get(category, limits['default'])
         key = f"ratelimit:{category}:{client_id}"
 
         try:
@@ -256,7 +363,9 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
                 'limit': limit_config['requests'],
                 'remaining': max(0, limit_config['requests'] - current),
                 'reset_in': max(0, ttl),
-                'window': limit_config['window']
+                'window': limit_config['window'],
+                'authenticated': is_authenticated,
+                'client_type': client_id.split(':')[0] if ':' in client_id else 'unknown'
             }
 
         except redis.RedisError:
@@ -264,7 +373,9 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
                 'limit': limit_config['requests'],
                 'remaining': limit_config['requests'],
                 'reset_in': limit_config['window'],
-                'window': limit_config['window']
+                'window': limit_config['window'],
+                'authenticated': is_authenticated,
+                'client_type': client_id.split(':')[0] if ':' in client_id else 'unknown'
             }
 
 
