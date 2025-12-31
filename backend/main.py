@@ -39065,10 +39065,16 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     partner_ids = [p.id for p in partners]
     lead_counts_by_partner = {}
     if partner_ids:
+        # Use LeadStage enum values for converted leads (APPLICATION and beyond)
+        converted_stages = [
+            LeadStage.APPLICATION, LeadStage.DOCUMENT_FULFILLMENT,
+            LeadStage.PRE_QUALIFIED, LeadStage.PRE_APPROVED,
+            LeadStage.UNDER_CONTRACT, LeadStage.CLOSED, LeadStage.DISCLOSED
+        ]
         lead_stats = db.query(
             Lead.referral_partner_id,
             func.count(Lead.id).label('lead_count'),
-            func.count(Lead.id).filter(Lead.stage.in_(['APPLICATION', 'PROCESSING', 'UNDERWRITING', 'APPROVED', 'FUNDED'])).label('converted_count')
+            func.count(Lead.id).filter(Lead.stage.in_(converted_stages)).label('converted_count')
         ).filter(
             Lead.owner_id == current_user.id,
             Lead.referral_partner_id.in_(partner_ids)
