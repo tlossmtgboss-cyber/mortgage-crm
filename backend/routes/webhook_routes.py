@@ -233,28 +233,32 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                 })
                 updated += 1
             else:
-                # Build talent profile
-                talent_profile = {
-                    "nmls_id": record.get("nmls_id"),
-                    "annual_volume": record.get("annual_volume"),
-                    "annual_units": record.get("annual_units"),
-                    "license_states": record.get("license_states"),
-                    "interest_level": record.get("interest_level"),
-                }
+                # Build talent profile - filter out None values
+                talent_profile = {}
+                if record.get("nmls_id"):
+                    talent_profile["nmls_id"] = record.get("nmls_id")
+                if record.get("annual_volume"):
+                    talent_profile["annual_volume"] = record.get("annual_volume")
+                if record.get("annual_units"):
+                    talent_profile["annual_units"] = record.get("annual_units")
+                if record.get("license_states"):
+                    talent_profile["license_states"] = record.get("license_states")
+                if record.get("interest_level"):
+                    talent_profile["interest_level"] = record.get("interest_level")
 
-                # Insert new record
+                # Insert new record - without talent_profile for now if causing issues
                 db.execute(text("""
                     INSERT INTO mm_candidates (
                         first_name, last_name, email, phone,
                         source, target_role_name,
                         years_experience, years_mortgage_experience, has_mortgage_experience,
-                        previous_companies, linkedin_url, talent_profile,
+                        previous_companies, linkedin_url,
                         status, applied_at, is_active
                     ) VALUES (
                         :first_name, :last_name, :email, :phone,
                         'retr', 'Loan Officer',
                         :years_exp, :years_exp, true,
-                        :company, :linkedin, :profile,
+                        :company, :linkedin,
                         'new', CURRENT_TIMESTAMP, true
                     )
                 """), {
@@ -265,7 +269,6 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                     "years_exp": record.get("years_experience") or 0,
                     "company": record.get("current_company") or record.get("company") or "",
                     "linkedin": record.get("linkedin_url"),
-                    "profile": json.dumps(talent_profile),
                 })
                 imported += 1
 
