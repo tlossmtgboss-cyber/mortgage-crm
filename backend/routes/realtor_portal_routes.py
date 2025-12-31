@@ -1227,6 +1227,67 @@ async def get_messages(
 
 
 # =============================================================================
+# PORTAL STATUS ENDPOINT
+# =============================================================================
+
+@router.get("/clients/{lead_id}/status")
+async def get_client_portal_status(
+    lead_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Check if a buyer's agent portal exists for a lead/loan.
+    Used by the Portal Selector Modal to show Open/Build buttons.
+
+    Returns:
+        - has_portal: bool - whether a partner has access to this lead
+        - portal_url: str - URL to access the portal (if exists)
+        - partner_id: int - ID of the partner with access (if exists)
+    """
+    try:
+        # Check if this lead has a referral partner assigned
+        partner_access = db.execute(text("""
+            SELECT
+                rp.id as partner_id,
+                rp.name,
+                rp.email
+            FROM referral_partners rp
+            JOIN leads l ON l.referral_partner_id = rp.id
+            WHERE l.id = :lead_id
+            LIMIT 1
+        """), {"lead_id": lead_id}).fetchone()
+
+        if partner_access:
+            return {
+                "data": {
+                    "has_portal": True,
+                    "portal_url": f"/realtor-portal?lead_id={lead_id}",
+                    "partner_id": partner_access[0],
+                    "partner_name": partner_access[1] or "",
+                    "partner_email": partner_access[2]
+                }
+            }
+        else:
+            return {
+                "data": {
+                    "has_portal": False,
+                    "portal_url": None,
+                    "partner_id": None
+                }
+            }
+    except Exception as e:
+        logger.error(f"Error checking portal status for lead {lead_id}: {e}")
+        return {
+            "data": {
+                "has_portal": False,
+                "portal_url": None,
+                "partner_id": None,
+                "error": str(e)
+            }
+        }
+
+
+# =============================================================================
 # PARTNER NOTES ENDPOINT
 # =============================================================================
 

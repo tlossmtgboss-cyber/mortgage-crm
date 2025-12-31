@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useGooglePlaces } from '../hooks/useGooglePlaces';
 import './AddressAutocomplete.css';
 
 /**
@@ -31,6 +32,9 @@ const AddressAutocomplete = ({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
+  // Use the hook to trigger loading of Google Places script
+  const { isLoaded: isGoogleScriptLoaded } = useGooglePlaces();
+
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
   const autocompleteService = useRef(null);
@@ -38,40 +42,20 @@ const AddressAutocomplete = ({
   const sessionToken = useRef(null);
   const debounceTimer = useRef(null);
 
-  // Initialize Google Places
+  // Initialize Google Places services when script is loaded
   useEffect(() => {
-    const initGooglePlaces = () => {
-      if (window.google && window.google.maps && window.google.maps.places) {
-        autocompleteService.current = new window.google.maps.places.AutocompleteService();
+    if (isGoogleScriptLoaded && window.google && window.google.maps && window.google.maps.places) {
+      autocompleteService.current = new window.google.maps.places.AutocompleteService();
 
-        // Create a dummy div for PlacesService (required but not displayed)
-        const dummyDiv = document.createElement('div');
-        placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
+      // Create a dummy div for PlacesService (required but not displayed)
+      const dummyDiv = document.createElement('div');
+      placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
 
-        // Create session token for billing optimization
-        sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
-        setIsGoogleLoaded(true);
-      }
-    };
-
-    // Check if already loaded
-    if (window.google && window.google.maps) {
-      initGooglePlaces();
-    } else {
-      // Wait for script to load
-      const checkInterval = setInterval(() => {
-        if (window.google && window.google.maps) {
-          initGooglePlaces();
-          clearInterval(checkInterval);
-        }
-      }, 100);
-
-      // Cleanup after 10 seconds
-      setTimeout(() => clearInterval(checkInterval), 10000);
-
-      return () => clearInterval(checkInterval);
+      // Create session token for billing optimization
+      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
+      setIsGoogleLoaded(true);
     }
-  }, []);
+  }, [isGoogleScriptLoaded]);
 
   // Sync external value changes
   useEffect(() => {

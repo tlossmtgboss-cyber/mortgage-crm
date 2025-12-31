@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useGooglePlaces } from '../hooks/useGooglePlaces';
 import './EmployerAutocomplete.css';
 
 /**
@@ -30,6 +31,9 @@ const EmployerAutocomplete = ({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
+  // Use the hook to trigger loading of Google Places script
+  const { isLoaded: isGoogleScriptLoaded } = useGooglePlaces();
+
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
   const autocompleteService = useRef(null);
@@ -37,33 +41,17 @@ const EmployerAutocomplete = ({
   const sessionToken = useRef(null);
   const debounceTimer = useRef(null);
 
-  // Initialize Google Places
+  // Initialize Google Places services when script is loaded
   useEffect(() => {
-    const initGooglePlaces = () => {
-      if (window.google && window.google.maps && window.google.maps.places) {
-        autocompleteService.current = new window.google.maps.places.AutocompleteService();
+    if (isGoogleScriptLoaded && window.google && window.google.maps && window.google.maps.places) {
+      autocompleteService.current = new window.google.maps.places.AutocompleteService();
 
-        const dummyDiv = document.createElement('div');
-        placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
-        sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
-        setIsGoogleLoaded(true);
-      }
-    };
-
-    if (window.google && window.google.maps) {
-      initGooglePlaces();
-    } else {
-      const checkInterval = setInterval(() => {
-        if (window.google && window.google.maps) {
-          initGooglePlaces();
-          clearInterval(checkInterval);
-        }
-      }, 100);
-
-      setTimeout(() => clearInterval(checkInterval), 10000);
-      return () => clearInterval(checkInterval);
+      const dummyDiv = document.createElement('div');
+      placesService.current = new window.google.maps.places.PlacesService(dummyDiv);
+      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
+      setIsGoogleLoaded(true);
     }
-  }, []);
+  }, [isGoogleScriptLoaded]);
 
   // Sync external value
   useEffect(() => {
