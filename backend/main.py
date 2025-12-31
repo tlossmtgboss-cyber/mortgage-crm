@@ -21467,6 +21467,18 @@ except Exception as e:
     automated_outreach_error = traceback.format_exc()
     logger.warning(f"⚠️ Automated Outreach routes not loaded: {e}")
 
+# Intake Engine routes (conversational loan intake)
+intake_engine_error = None
+try:
+    from intake_engine.api.routes import router as intake_engine_router
+    app.include_router(intake_engine_router, tags=["Intake Engine"])
+    logger.info("✅ Intake Engine routes loaded")
+except Exception as e:
+    intake_engine_error = str(e)
+    import traceback
+    intake_engine_error = traceback.format_exc()
+    logger.warning(f"⚠️ Intake Engine routes not loaded: {e}")
+
 @app.get("/api/v1/debug/portal-services-status")
 async def debug_portal_services_status():
     """Debug endpoint to check all portal-related routes loading status"""
