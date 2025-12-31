@@ -328,6 +328,19 @@ class AutoRenewalScheduler:
             next_month = reference_date.replace(day=1) + timedelta(days=32)
             return datetime.combine(next_month.replace(day=10), datetime.min.time())
 
+        elif doc_type in [DocType.W2, DocType.TAX_RETURN, DocType.BUSINESS_TAX_RETURN]:
+            # W-2s and Tax Returns are annual documents
+            # They become available after January 31 of the following year
+            # On Feb 1, we can request the previous year's W-2
+            required_years = self.freshness_validator.get_current_required_tax_years(
+                num_years=2, reference_date=reference_date
+            )
+            # Next year's document becomes available Feb 1
+            newest_needed = required_years[0]
+            # W-2 for year X becomes available Feb 1 of year X+1
+            available_date = date(newest_needed + 1, 2, 1)
+            return datetime.combine(available_date, datetime.min.time())
+
         return None
 
     def _send_renewal_reminder(
