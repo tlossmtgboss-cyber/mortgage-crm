@@ -212,13 +212,16 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                 ).fetchone()
 
             if existing:
-                # Update existing record
+                # Update existing record - handle JSONB for previous_companies
+                company = record.get("current_company") or record.get("company")
+                companies_json = json.dumps([company]) if company else None
+
                 db.execute(text("""
                     UPDATE mm_candidates SET
                         first_name = :first_name,
                         last_name = :last_name,
                         phone = COALESCE(:phone, phone),
-                        previous_companies = COALESCE(:company, previous_companies),
+                        previous_companies = COALESCE(CAST(:companies AS jsonb), previous_companies),
                         years_experience = COALESCE(:years_exp, years_experience),
                         linkedin_url = COALESCE(:linkedin, linkedin_url)
                     WHERE id = :id
@@ -227,7 +230,7 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                     "first_name": first_name,
                     "last_name": last_name,
                     "phone": record.get("phone"),
-                    "company": record.get("current_company") or record.get("company"),
+                    "companies": companies_json,
                     "years_exp": record.get("years_experience"),
                     "linkedin": record.get("linkedin_url"),
                 })
