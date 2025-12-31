@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getRecruitingDashboardStats,
   getRecruitingPipelineMetrics,
@@ -40,6 +41,8 @@ const PARTNER_STATUSES = [
 ];
 
 const RecruitingDashboard = () => {
+  const navigate = useNavigate();
+
   // Main tab: 'employee' or 'partner'
   const [mainTab, setMainTab] = useState('employee');
   const [activeTab, setActiveTab] = useState('overview');
@@ -615,12 +618,20 @@ const RecruitingDashboard = () => {
                           ))}
                         </select>
                       </td>
-                      <td>
+                      <td className="mm-actions-cell">
+                        <button
+                          className="mm-btn mm-btn-small mm-btn-primary"
+                          onClick={() => navigate(`/master-manager/recruiting/${candidate.id}`)}
+                          title="View full profile"
+                        >
+                          View
+                        </button>
                         <button
                           className="mm-btn mm-btn-small mm-btn-secondary"
                           onClick={() => setSelectedCandidate(candidate)}
+                          title="Quick view"
                         >
-                          View
+                          ...
                         </button>
                       </td>
                     </tr>

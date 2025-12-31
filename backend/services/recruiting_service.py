@@ -943,28 +943,39 @@ class RecruitingService:
         is_automated: bool = False
     ):
         """Log candidate activity."""
-        self.db.execute(text("""
-            INSERT INTO mm_candidate_activities (
-                organization_id, candidate_id,
-                activity_type, description,
-                interview_id, offer_id,
-                performed_by, is_automated
-            ) VALUES (
-                :org_id, :candidate_id,
-                :type, :description,
-                :interview_id, :offer_id,
-                :performed_by, :is_automated
-            )
-        """), {
-            "org_id": organization_id,
-            "candidate_id": candidate_id,
-            "type": activity_type,
-            "description": description,
-            "interview_id": interview_id,
-            "offer_id": offer_id,
-            "performed_by": performed_by,
-            "is_automated": is_automated
-        })
+        try:
+            # Validate performed_by exists if provided
+            if performed_by:
+                user_exists = self.db.execute(text(
+                    "SELECT 1 FROM users WHERE id = :id"
+                ), {"id": performed_by}).fetchone()
+                if not user_exists:
+                    performed_by = None  # Clear invalid FK reference
+
+            self.db.execute(text("""
+                INSERT INTO mm_candidate_activities (
+                    organization_id, candidate_id,
+                    activity_type, description,
+                    interview_id, offer_id,
+                    performed_by, is_automated
+                ) VALUES (
+                    :org_id, :candidate_id,
+                    :type, :description,
+                    :interview_id, :offer_id,
+                    :performed_by, :is_automated
+                )
+            """), {
+                "org_id": organization_id,
+                "candidate_id": candidate_id,
+                "type": activity_type,
+                "description": description,
+                "interview_id": interview_id,
+                "offer_id": offer_id,
+                "performed_by": performed_by,
+                "is_automated": is_automated
+            })
+        except Exception as e:
+            logger.warning(f"Failed to log activity for candidate {candidate_id}: {e}")
 
         # Update last activity
         self.db.execute(text("""

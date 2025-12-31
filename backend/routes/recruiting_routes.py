@@ -1212,3 +1212,312 @@ async def run_recruiting_migration(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@router.post("/admin/add-social-production-fields")
+async def add_social_production_fields(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Add social media and production fields to mm_candidates table."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Production fields from RETR
+        production_columns = [
+            ("annual_volume", "NUMERIC(15,2)"),
+            ("annual_units", "INTEGER"),
+            ("avg_loan_size", "NUMERIC(12,2)"),
+            ("nmls_id", "VARCHAR(20)"),
+            ("license_states", "JSONB"),
+            ("production_history", "JSONB"),
+            ("current_company", "VARCHAR(255)"),
+            ("current_title", "VARCHAR(100)"),
+        ]
+
+        # Social media fields
+        social_columns = [
+            ("facebook_url", "VARCHAR(500)"),
+            ("instagram_url", "VARCHAR(500)"),
+            ("twitter_url", "VARCHAR(500)"),
+            ("social_profiles", "JSONB"),
+            ("social_posts", "JSONB"),
+            ("social_last_synced", "TIMESTAMP"),
+        ]
+
+        # Profile enhancement fields
+        profile_columns = [
+            ("headshot_url", "VARCHAR(500)"),
+            ("bio", "TEXT"),
+            ("specialties", "JSONB"),
+            ("market_areas", "JSONB"),
+            ("education", "JSONB"),
+            ("certifications", "JSONB"),
+            ("awards", "JSONB"),
+            ("testimonials", "JSONB"),
+        ]
+
+        all_columns = production_columns + social_columns + profile_columns
+        added = []
+        skipped = []
+
+        for col_name, col_type in all_columns:
+            try:
+                db.execute(text(f"""
+                    ALTER TABLE mm_candidates
+                    ADD COLUMN IF NOT EXISTS {col_name} {col_type}
+                """))
+                added.append(col_name)
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    skipped.append(col_name)
+                else:
+                    skipped.append(f"{col_name}: {str(e)}")
+
+        db.commit()
+        return {"success": True, "added": added, "skipped": skipped}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@router.get("/candidates/{candidate_id}/full-profile")
+async def get_candidate_full_profile(
+    candidate_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get complete candidate profile including production data and social media."""
+    result = db.execute(text("""
+        SELECT
+            c.id, c.first_name, c.last_name, c.email, c.phone,
+            c.source, c.target_role_name, c.status, c.applied_at,
+            c.years_experience, c.years_mortgage_experience, c.has_mortgage_experience,
+            c.linkedin_url, c.resume_url, c.cover_letter,
+            c.overall_score, c.vetting_score, c.behavioral_score, c.technical_score,
+            c.culture_fit_score, c.placement_recommendation, c.talent_profile,
+            c.previous_companies, c.licenses,
+            -- Production fields
+            c.annual_volume, c.annual_units, c.avg_loan_size, c.nmls_id,
+            c.license_states, c.production_history, c.current_company, c.current_title,
+            -- Social media fields
+            c.facebook_url, c.instagram_url, c.twitter_url, c.social_profiles,
+            c.social_posts, c.social_last_synced,
+            -- Profile fields
+            c.headshot_url, c.bio, c.specialties, c.market_areas,
+            c.education, c.certifications, c.awards, c.testimonials,
+            c.created_at, c.updated_at
+        FROM mm_candidates c
+        WHERE c.id = :id AND c.is_active = true
+    """), {"id": candidate_id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Get interview history
+    interviews = db.execute(text("""
+        SELECT id, interview_type, interview_round, scheduled_at, status, overall_score
+        FROM mm_interviews WHERE candidate_id = :id ORDER BY scheduled_at DESC
+    """), {"id": candidate_id}).fetchall()
+
+    # Get notes
+    notes = db.execute(text("""
+        SELECT id, content, note_type, created_at
+        FROM mm_candidate_notes WHERE candidate_id = :id ORDER BY created_at DESC LIMIT 10
+    """), {"id": candidate_id}).fetchall()
+
+    # Get activity timeline
+    activities = db.execute(text("""
+        SELECT id, activity_type, description, created_at
+        FROM mm_candidate_activities WHERE candidate_id = :id ORDER BY created_at DESC LIMIT 20
+    """), {"id": candidate_id}).fetchall()
+
+    return {
+        "id": result.id,
+        "name": f"{result.first_name} {result.last_name}",
+        "first_name": result.first_name,
+        "last_name": result.last_name,
+        "email": result.email,
+        "phone": result.phone,
+        "status": result.status,
+        "source": result.source,
+        "target_role": result.target_role_name,
+        "applied_at": result.applied_at.isoformat() if result.applied_at else None,
+
+        # Experience
+        "experience": {
+            "years_total": result.years_experience,
+            "years_mortgage": result.years_mortgage_experience,
+            "has_mortgage_experience": result.has_mortgage_experience,
+            "previous_companies": result.previous_companies or [],
+            "licenses": result.licenses or [],
+        },
+
+        # Production Data (RETR)
+        "production": {
+            "annual_volume": float(result.annual_volume) if result.annual_volume else None,
+            "annual_units": result.annual_units,
+            "avg_loan_size": float(result.avg_loan_size) if result.avg_loan_size else None,
+            "nmls_id": result.nmls_id,
+            "license_states": result.license_states or [],
+            "production_history": result.production_history or [],
+            "current_company": result.current_company,
+            "current_title": result.current_title,
+        },
+
+        # Social Media
+        "social_media": {
+            "linkedin": result.linkedin_url,
+            "facebook": result.facebook_url,
+            "instagram": result.instagram_url,
+            "twitter": result.twitter_url,
+            "all_profiles": result.social_profiles or {},
+            "recent_posts": result.social_posts or [],
+            "last_synced": result.social_last_synced.isoformat() if result.social_last_synced else None,
+        },
+
+        # Profile
+        "profile": {
+            "headshot_url": result.headshot_url,
+            "bio": result.bio,
+            "specialties": result.specialties or [],
+            "market_areas": result.market_areas or [],
+            "education": result.education or [],
+            "certifications": result.certifications or [],
+            "awards": result.awards or [],
+            "testimonials": result.testimonials or [],
+        },
+
+        # Scores
+        "scores": {
+            "overall": result.overall_score,
+            "vetting": result.vetting_score,
+            "behavioral": result.behavioral_score,
+            "technical": result.technical_score,
+            "culture_fit": result.culture_fit_score,
+            "placement_recommendation": result.placement_recommendation,
+        },
+
+        # Resume & Application
+        "documents": {
+            "resume_url": result.resume_url,
+            "cover_letter": result.cover_letter,
+        },
+
+        # Talent Profile (intelligence)
+        "talent_profile": result.talent_profile or {},
+
+        # Interview History
+        "interviews": [
+            {
+                "id": i.id,
+                "type": i.interview_type,
+                "round": i.interview_round,
+                "scheduled_at": i.scheduled_at.isoformat() if i.scheduled_at else None,
+                "status": i.status,
+                "score": i.overall_score,
+            }
+            for i in interviews
+        ],
+
+        # Notes
+        "notes": [
+            {
+                "id": n.id,
+                "content": n.content,
+                "type": n.note_type,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in notes
+        ],
+
+        # Activity Timeline
+        "activities": [
+            {
+                "id": a.id,
+                "type": a.activity_type,
+                "description": a.description,
+                "timestamp": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in activities
+        ],
+
+        "created_at": result.created_at.isoformat() if result.created_at else None,
+        "updated_at": result.updated_at.isoformat() if result.updated_at else None,
+    }
+
+
+@router.put("/candidates/{candidate_id}/social-media")
+async def update_candidate_social_media(
+    candidate_id: int,
+    facebook_url: Optional[str] = None,
+    instagram_url: Optional[str] = None,
+    twitter_url: Optional[str] = None,
+    linkedin_url: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Update candidate social media URLs."""
+    result = db.execute(text("""
+        UPDATE mm_candidates
+        SET facebook_url = COALESCE(:facebook, facebook_url),
+            instagram_url = COALESCE(:instagram, instagram_url),
+            twitter_url = COALESCE(:twitter, twitter_url),
+            linkedin_url = COALESCE(:linkedin, linkedin_url),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :id
+        RETURNING id
+    """), {
+        "id": candidate_id,
+        "facebook": facebook_url,
+        "instagram": instagram_url,
+        "twitter": twitter_url,
+        "linkedin": linkedin_url,
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    db.commit()
+    return {"id": candidate_id, "status": "updated"}
+
+
+@router.put("/candidates/{candidate_id}/production")
+async def update_candidate_production(
+    candidate_id: int,
+    annual_volume: Optional[float] = None,
+    annual_units: Optional[int] = None,
+    nmls_id: Optional[str] = None,
+    current_company: Optional[str] = None,
+    current_title: Optional[str] = None,
+    license_states: Optional[List[str]] = None,
+    db: Session = Depends(get_db)
+):
+    """Update candidate production data."""
+    import json
+
+    result = db.execute(text("""
+        UPDATE mm_candidates
+        SET annual_volume = COALESCE(:volume, annual_volume),
+            annual_units = COALESCE(:units, annual_units),
+            nmls_id = COALESCE(:nmls, nmls_id),
+            current_company = COALESCE(:company, current_company),
+            current_title = COALESCE(:title, current_title),
+            license_states = COALESCE(CAST(:states AS JSONB), license_states),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :id
+        RETURNING id
+    """), {
+        "id": candidate_id,
+        "volume": annual_volume,
+        "units": annual_units,
+        "nmls": nmls_id,
+        "company": current_company,
+        "title": current_title,
+        "states": json.dumps(license_states) if license_states else None,
+    }).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    db.commit()
+    return {"id": candidate_id, "status": "updated"}

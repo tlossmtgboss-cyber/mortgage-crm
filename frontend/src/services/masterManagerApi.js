@@ -431,6 +431,58 @@ export const getPartnerRecruitStats = async () => {
   return response.json();
 };
 
+// =============================================================================
+// CANDIDATE DETAIL ENDPOINTS (Full Profile with Social/Production)
+// =============================================================================
+
+export const getCandidateFullProfile = async (candidateId) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/full-profile`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch candidate profile');
+  return response.json();
+};
+
+export const updateCandidateSocialMedia = async (candidateId, socialData) => {
+  const params = new URLSearchParams();
+  if (socialData.facebook_url) params.append('facebook_url', socialData.facebook_url);
+  if (socialData.instagram_url) params.append('instagram_url', socialData.instagram_url);
+  if (socialData.twitter_url) params.append('twitter_url', socialData.twitter_url);
+  if (socialData.linkedin_url) params.append('linkedin_url', socialData.linkedin_url);
+
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/social-media?${params}`, {
+    method: 'PUT',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to update social media');
+  return response.json();
+};
+
+export const updateCandidateProduction = async (candidateId, productionData) => {
+  const params = new URLSearchParams();
+  if (productionData.annual_volume) params.append('annual_volume', productionData.annual_volume);
+  if (productionData.annual_units) params.append('annual_units', productionData.annual_units);
+  if (productionData.nmls_id) params.append('nmls_id', productionData.nmls_id);
+  if (productionData.current_company) params.append('current_company', productionData.current_company);
+  if (productionData.current_title) params.append('current_title', productionData.current_title);
+
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/production?${params}`, {
+    method: 'PUT',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to update production data');
+  return response.json();
+};
+
+export const runSocialProductionMigration = async () => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/admin/add-social-production-fields?admin_key=perennia-admin-2024`, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to run migration');
+  return response.json();
+};
+
 export default {
   getCapacityOverview,
   getCapacityByRole,
@@ -473,5 +525,10 @@ export default {
   getPartnerRecruits,
   getPartnerRecruitDetail,
   updatePartnerRecruitStatus,
-  getPartnerRecruitStats
+  getPartnerRecruitStats,
+  // Candidate Full Profile
+  getCandidateFullProfile,
+  updateCandidateSocialMedia,
+  updateCandidateProduction,
+  runSocialProductionMigration
 };
