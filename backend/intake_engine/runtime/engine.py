@@ -143,15 +143,19 @@ class IntakeEngine:
         """Load i18n files for locale"""
         i18n = {}
 
-        # Load prompts
+        # Load prompts - extract just the prompts dict from the file
         prompts_file = path / f"prompts.{locale}.json"
         if prompts_file.exists():
-            i18n["prompts"] = self._load_json(prompts_file)
+            prompts_data = self._load_json(prompts_file)
+            # File structure: {"locale": "...", "prompts": {...}}
+            i18n["prompts"] = prompts_data.get("prompts", prompts_data)
 
-        # Load micro whys
+        # Load micro whys - extract just the micro_whys dict from the file
         whys_file = path / f"micro_whys.{locale}.json"
         if whys_file.exists():
-            i18n["micro_whys"] = self._load_json(whys_file)
+            whys_data = self._load_json(whys_file)
+            # File structure: {"locale": "...", "micro_whys": {...}}
+            i18n["micro_whys"] = whys_data.get("micro_whys", whys_data)
 
         # Load language pack
         pack_file = path / "language_pack.yaml"
@@ -372,7 +376,12 @@ class IntakeEngine:
         """Build NextQuestion response"""
         # Get localized prompt
         prompt_key = q_def.get("prompt_key", question_id)
-        prompt = self.i18n.get("prompts", {}).get(prompt_key, {}).get("text", q_def.get("prompt", ""))
+        prompt_value = self.i18n.get("prompts", {}).get(prompt_key, "")
+        # Handle both string and dict formats in i18n files
+        if isinstance(prompt_value, dict):
+            prompt = prompt_value.get("text", q_def.get("prompt", ""))
+        else:
+            prompt = prompt_value or q_def.get("prompt", "")
 
         # Build options if applicable
         options = None
