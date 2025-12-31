@@ -157,6 +157,9 @@ const EmployerAutocomplete = ({
     };
 
     placesService.current.getDetails(request, (place, status) => {
+      console.log('[EmployerAutocomplete] getDetails status:', status);
+      console.log('[EmployerAutocomplete] place data:', place);
+
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
         const employerData = {
           name: place.name || suggestion.mainText,
@@ -165,6 +168,8 @@ const EmployerAutocomplete = ({
           website: place.website || '',
           types: place.types || [],
         };
+
+        console.log('[EmployerAutocomplete] Built employerData:', employerData);
 
         // Parse address components for city/state/zip
         if (place.address_components) {
@@ -204,9 +209,11 @@ const EmployerAutocomplete = ({
         // Only call onEmployerSelect (which includes name), skip separate onChange
         // This prevents race conditions from two sequential state updates
         if (onEmployerSelect) {
+          console.log('[EmployerAutocomplete] Calling onEmployerSelect with:', employerData);
           onEmployerSelect(employerData);
         } else if (onChange) {
           // Fallback to onChange if onEmployerSelect not provided
+          console.log('[EmployerAutocomplete] Falling back to onChange with:', place.name || suggestion.mainText);
           onChange(place.name || suggestion.mainText);
         }
       } else {
