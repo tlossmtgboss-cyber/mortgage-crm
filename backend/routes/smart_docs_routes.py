@@ -501,10 +501,19 @@ def _process_document_background(
     """
     Background task to process document through the review pipeline.
     This runs asynchronously after the upload response is returned.
-    """
-    from database import SessionLocal
 
-    db = SessionLocal()
+    Uses its own database session to avoid session conflicts with the main request.
+    """
+    db = None
+    try:
+        # Import SessionLocal inside function to avoid circular imports
+        # and ensure fresh session for background task
+        from database import SessionLocal
+        db = SessionLocal()
+    except Exception as e:
+        logger.error(f"Failed to create database session for background processing: {e}")
+        return
+
     try:
         logger.info(f"Starting background processing for document {document_id}")
 
@@ -527,6 +536,9 @@ def _process_document_background(
             request_id=request_id,
         )
 
+        # Ensure changes are committed
+        db.commit()
+
         logger.info(
             f"Background processing complete for document {document_id}: "
             f"status={result.status.value}, decision={result.decision.value if result.decision else 'none'}"
@@ -534,17 +546,25 @@ def _process_document_background(
 
     except Exception as e:
         logger.exception(f"Background document processing failed for {document_id}: {e}")
-        # Update document status to error
+        # Rollback any pending changes
+        if db:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        # Update document status to error in a new transaction
         try:
             document = db.query(SmartDocument).filter(SmartDocument.id == document_id).first()
             if document:
                 document.status = "ERROR"
-                document.rejection_reason = f"Processing error: {str(e)}"
+                document.rejection_reason = f"Processing error: {str(e)[:500]}"  # Limit error message length
                 db.commit()
         except Exception as update_error:
             logger.error(f"Failed to update document error status: {update_error}")
     finally:
-        db.close()
+        if db:
+            db.close()
 
 
 @router.post("/upload")

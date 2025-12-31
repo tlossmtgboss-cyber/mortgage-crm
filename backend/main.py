@@ -21834,6 +21834,101 @@ def calculate_lead_score(lead: Lead) -> int:
 
     return min(max(score, 0), 100)
 
+
+def update_referral_partner_stats(
+    db: Session,
+    partner_id: int,
+    is_new_referral: bool = False,
+    is_closed: bool = False,
+    loan_amount: float = 0.0
+) -> None:
+    """
+    Update referral partner statistics when leads are created or converted.
+
+    Args:
+        db: Database session
+        partner_id: ID of the referral partner
+        is_new_referral: True if this is a new incoming referral
+        is_closed: True if the lead just converted/closed
+        loan_amount: Loan amount for closed deals (to update volume)
+    """
+    if not partner_id:
+        return
+
+    try:
+        partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+        if not partner:
+            logger.warning(f"Referral partner {partner_id} not found for stats update")
+            return
+
+        # Update referrals_in counter for new referrals
+        if is_new_referral:
+            partner.referrals_in = (partner.referrals_in or 0) + 1
+            partner.last_interaction = datetime.now(timezone.utc)
+            logger.info(f"Updated referrals_in for partner {partner.name}: {partner.referrals_in}")
+
+        # Update closed_loans and volume for conversions
+        if is_closed:
+            partner.closed_loans = (partner.closed_loans or 0) + 1
+            partner.volume = (partner.volume or 0.0) + loan_amount
+            partner.last_interaction = datetime.now(timezone.utc)
+            logger.info(f"Updated closed_loans for partner {partner.name}: {partner.closed_loans}")
+
+        # Recalculate reciprocity score
+        # Score = outbound / inbound ratio (capped at 1.0)
+        # A score of 1.0 means perfect reciprocity
+        inbound = partner.referrals_in or 0
+        outbound = partner.referrals_out or 0
+        if inbound > 0:
+            partner.reciprocity_score = min(outbound / inbound, 1.0)
+        else:
+            partner.reciprocity_score = 1.0 if outbound == 0 else 0.5
+
+        # Update loyalty tier based on performance
+        total_referrals = inbound + outbound
+        if total_referrals >= 50 or (partner.closed_loans or 0) >= 20:
+            partner.loyalty_tier = "platinum"
+        elif total_referrals >= 25 or (partner.closed_loans or 0) >= 10:
+            partner.loyalty_tier = "gold"
+        elif total_referrals >= 10 or (partner.closed_loans or 0) >= 5:
+            partner.loyalty_tier = "silver"
+        else:
+            partner.loyalty_tier = "bronze"
+
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"Failed to update referral partner stats: {e}")
+        db.rollback()
+
+
+def track_outbound_referral(db: Session, partner_id: int) -> None:
+    """
+    Track when user sends a referral to a partner.
+    Call this when the user refers business to a partner.
+    """
+    if not partner_id:
+        return
+
+    try:
+        partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+        if partner:
+            partner.referrals_out = (partner.referrals_out or 0) + 1
+            partner.last_interaction = datetime.now(timezone.utc)
+
+            # Recalculate reciprocity score
+            inbound = partner.referrals_in or 0
+            outbound = partner.referrals_out or 0
+            if inbound > 0:
+                partner.reciprocity_score = min(outbound / inbound, 1.0)
+
+            db.commit()
+            logger.info(f"Tracked outbound referral to partner {partner.name}")
+    except Exception as e:
+        logger.error(f"Failed to track outbound referral: {e}")
+        db.rollback()
+
+
 # ============================================================================
 # DATA RECONCILIATION ENGINE (DRE) - AI EXTRACTION
 # ============================================================================
@@ -39704,6 +39799,17 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     db.commit()
     db.refresh(db_lead)
 
+    # Update referral partner stats if this lead came from a partner
+    if db_lead.referral_partner_id:
+        try:
+            update_referral_partner_stats(
+                db=db,
+                partner_id=db_lead.referral_partner_id,
+                is_new_referral=True
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update referral partner stats: {e}")
+
     # Capture lead info before SLA tracking (in case SLA tracking fails and corrupts session)
     lead_id = db_lead.id
     lead_name = db_lead.name
@@ -40952,6 +41058,20 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
         db.commit()
         db.refresh(lead)
         logger.info(f"Stage changed for lead {lead.id}: {old_status} → {new_status}, stage_changed_at updated, history recorded")
+
+        # Update referral partner stats if lead converted to closed
+        if new_status in ["Closed", "CLOSED"] and lead.referral_partner_id:
+            try:
+                loan_amount = float(lead.loan_amount or lead.preapproval_amount or 0)
+                update_referral_partner_stats(
+                    db=db,
+                    partner_id=lead.referral_partner_id,
+                    is_closed=True,
+                    loan_amount=loan_amount
+                )
+                logger.info(f"Updated referral partner stats for closed lead {lead.id}")
+            except Exception as e:
+                logger.warning(f"Failed to update referral partner stats for closed lead: {e}")
 
         try:
             # Create status change event

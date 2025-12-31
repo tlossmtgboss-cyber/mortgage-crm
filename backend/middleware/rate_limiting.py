@@ -380,6 +380,32 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
 
 
 def create_rate_limiter(redis_url: str):
-    """Factory function to create rate limiter with Redis connection"""
-    redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
-    return lambda app: AdaptiveRateLimiter(app, redis_client)
+    """
+    Factory function to create rate limiter with Redis connection.
+
+    If Redis is unavailable, creates a rate limiter that fails open
+    (allows all requests) to prevent service disruption.
+    """
+    try:
+        redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
+        # Test connection
+        redis_client.ping()
+        logger.info("Rate limiter connected to Redis successfully")
+        return lambda app: AdaptiveRateLimiter(app, redis_client)
+    except redis.RedisError as e:
+        logger.warning(f"Redis unavailable for rate limiting: {e}. Rate limiting disabled.")
+        # Return a no-op middleware that allows all requests
+        return lambda app: NoOpRateLimiter(app)
+
+
+class NoOpRateLimiter(BaseHTTPMiddleware):
+    """
+    No-op rate limiter used when Redis is unavailable.
+    Allows all requests to pass through without rate limiting.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Set default state values for compatibility
+        request.state.rate_limit_authenticated = False
+        request.state.rate_limit_client_id = "noop"
+        return await call_next(request)
