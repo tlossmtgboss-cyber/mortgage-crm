@@ -22,7 +22,7 @@ const CANDIDATE_STATUSES = [
 ];
 
 const RecruitDetail = () => {
-  const { id } = useParams();
+  const { candidateId } = useParams();
   const navigate = useNavigate();
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ const RecruitDetail = () => {
   const loadCandidate = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getCandidateFullProfile(id);
+      const data = await getCandidateFullProfile(candidateId);
       setCandidate(data);
 
       // Initialize form states
@@ -74,7 +74,7 @@ const RecruitDetail = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [candidateId]);
 
   useEffect(() => {
     loadCandidate();
@@ -82,7 +82,7 @@ const RecruitDetail = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await updateCandidateStatus(id, newStatus);
+      await updateCandidateStatus(candidateId, newStatus);
       setCandidate({ ...candidate, status: newStatus });
     } catch (err) {
       setError(err.message);
@@ -91,7 +91,7 @@ const RecruitDetail = () => {
 
   const handleSaveSocial = async () => {
     try {
-      await updateCandidateSocialMedia(id, socialForm);
+      await updateCandidateSocialMedia(candidateId, socialForm);
       await loadCandidate();
       setShowEditSocial(false);
     } catch (err) {
@@ -101,7 +101,7 @@ const RecruitDetail = () => {
 
   const handleSaveProduction = async () => {
     try {
-      await updateCandidateProduction(id, productionForm);
+      await updateCandidateProduction(candidateId, productionForm);
       await loadCandidate();
       setShowEditProduction(false);
     } catch (err) {
@@ -112,7 +112,7 @@ const RecruitDetail = () => {
   const handleAddNote = async () => {
     if (!newNote.trim()) return;
     try {
-      await addCandidateNote(id, { content: newNote, note_type: 'general' });
+      await addCandidateNote(candidateId, { content: newNote, note_type: 'general' });
       setNewNote('');
       await loadCandidate();
     } catch (err) {

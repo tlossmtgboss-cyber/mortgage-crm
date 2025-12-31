@@ -383,29 +383,49 @@ const RecruitingDashboard = () => {
           {/* Stats Cards */}
           {stats && (
             <div className="mm-overview-grid">
-              <div className="mm-card mm-stat-card">
+              <div
+                className="mm-card mm-stat-card mm-clickable"
+                onClick={() => { setStatusFilter(''); setActiveTab('candidates'); }}
+                title="View all active candidates"
+              >
                 <div className="mm-stat-value">{stats.candidates?.total_active || 0}</div>
                 <div className="mm-stat-label">Active Candidates</div>
               </div>
-              <div className="mm-card mm-stat-card">
+              <div
+                className="mm-card mm-stat-card mm-clickable"
+                onClick={() => { setStatusFilter('new'); setActiveTab('candidates'); }}
+                title="View new candidates"
+              >
                 <div className="mm-stat-value" style={{ color: '#3b82f6' }}>
                   {stats.candidates?.new || 0}
                 </div>
                 <div className="mm-stat-label">New This Week</div>
               </div>
-              <div className="mm-card mm-stat-card">
+              <div
+                className="mm-card mm-stat-card mm-clickable"
+                onClick={() => { setStatusFilter('interview'); setActiveTab('candidates'); }}
+                title="View candidates in interview stage"
+              >
                 <div className="mm-stat-value" style={{ color: '#f59e0b' }}>
                   {stats.candidates?.interviewing || 0}
                 </div>
                 <div className="mm-stat-label">Interviewing</div>
               </div>
-              <div className="mm-card mm-stat-card">
+              <div
+                className="mm-card mm-stat-card mm-clickable"
+                onClick={() => { setStatusFilter('offer'); setActiveTab('candidates'); }}
+                title="View candidates in offer stage"
+              >
                 <div className="mm-stat-value" style={{ color: '#22c55e' }}>
                   {stats.candidates?.offer_stage || 0}
                 </div>
                 <div className="mm-stat-label">Offer Stage</div>
               </div>
-              <div className="mm-card mm-stat-card">
+              <div
+                className="mm-card mm-stat-card mm-clickable"
+                onClick={() => setActiveTab('jobs')}
+                title="View open job postings"
+              >
                 <div className="mm-stat-value">{stats.positions?.open || 0}</div>
                 <div className="mm-stat-label">Open Positions</div>
               </div>
@@ -482,7 +502,12 @@ const RecruitingDashboard = () => {
               <h2>Pipeline by Stage</h2>
               <div className="mm-pipeline-stages">
                 {CANDIDATE_STATUSES.slice(0, 7).map((status) => (
-                  <div key={status.value} className="mm-pipeline-stage">
+                  <div
+                    key={status.value}
+                    className="mm-pipeline-stage mm-clickable"
+                    onClick={() => { setStatusFilter(status.value); setActiveTab('candidates'); }}
+                    title={`View ${status.label} candidates`}
+                  >
                     <div
                       className="mm-stage-count"
                       style={{ backgroundColor: status.color }}

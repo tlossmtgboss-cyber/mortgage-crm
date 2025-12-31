@@ -181,6 +181,34 @@
   margin-top: 4px;
 }
 
+/* Clickable Elements */
+.mm-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.mm-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mm-clickable:active {
+  transform: translateY(0);
+}
+
+.mm-stat-card.mm-clickable:hover {
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-color: #3b82f6;
+}
+
+.mm-pipeline-stage.mm-clickable:hover .mm-stage-count {
+  transform: scale(1.1);
+}
+
+.mm-pipeline-stage.mm-clickable .mm-stage-count {
+  transition: transform 0.15s ease;
+}
+
 /* Alert Banners */
 .mm-alert-banner {
   display: flex;

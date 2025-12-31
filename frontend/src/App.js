@@ -148,6 +148,7 @@ const IntakeEngine = lazy(() => import('./components/intake/IntakeEngine'));
 const ListingPortalTransactions = lazy(() => import('./pages/ListingPortalTransactions'));
 const ListingPortalTransactionDetail = lazy(() => import('./pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazy(() => import('./pages/ListingAgentPortal'));
+const RecruitPortal = lazy(() => import('./pages/RecruitPortal'));
 
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
@@ -295,6 +296,10 @@ function App() {
 
           {/* Listing Agent Portal (public - magic link auth) */}
           <Route path="/listing-agent-portal" element={<LazyPage><ListingAgentPortal /></LazyPage>} />
+
+          {/* Recruit Portal (public - candidate application portal) */}
+          <Route path="/recruit-portal/:token" element={<LazyPage><RecruitPortal /></LazyPage>} />
+          <Route path="/recruit-portal" element={<LazyPage><RecruitPortal /></LazyPage>} />
 
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />
