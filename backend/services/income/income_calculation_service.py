@@ -80,8 +80,14 @@ class IncomeCalculationService:
         """
         Calculate qualifying W-2 income.
 
+        IMPORTANT: For paystubs, gross_pay is the PAY PERIOD amount, not annual!
+        We must annualize using: gross_pay × pay_frequency_multiplier
+
+        YTD annualization is unreliable for new employees or early in the year
+        because YTD may only represent a few pay periods.
+
         Uses the lower of:
-        - YTD annualized from most recent paystub
+        - Period-annualized income (most accurate for current pay rate)
         - 2-year average from W-2s (if available)
 
         This protects against declining income situations.
@@ -108,7 +114,26 @@ class IncomeCalculationService:
         )
         latest_stub = sorted_stubs[0]
 
-        # Calculate YTD annualized income
+        # PRIMARY METHOD: Period annualization (most accurate for paystubs)
+        # gross_pay × frequency multiplier gives the true annualized rate
+        gross_pay = self._to_decimal(latest_stub.get("gross_pay"))
+        pay_frequency = latest_stub.get("pay_frequency", "").upper()
+        period_annualized = None
+
+        if gross_pay:
+            multiplier = self._get_pay_frequency_multiplier(pay_frequency)
+            period_annualized = gross_pay * Decimal(multiplier)
+            steps.append({
+                "step": "Period Annualized",
+                "gross_pay": float(gross_pay),
+                "pay_frequency": pay_frequency,
+                "multiplier": multiplier,
+                "annualized": float(period_annualized.quantize(Decimal("0.01"))),
+                "formula": f"{gross_pay} * {multiplier}"
+            })
+
+        # SECONDARY: YTD annualized (for validation/comparison only)
+        # This can be misleading for new employees or early in year
         ytd_gross = self._to_decimal(latest_stub.get("ytd_gross"))
         pay_date = latest_stub.get("pay_date")
         ytd_annualized = None
@@ -117,36 +142,25 @@ class IncomeCalculationService:
             try:
                 pay_dt = datetime.strptime(pay_date, "%Y-%m-%d")
                 days_elapsed = (pay_dt - datetime(pay_dt.year, 1, 1)).days + 1
-                ytd_annualized = (ytd_gross / Decimal(days_elapsed)) * Decimal(365)
-                steps.append({
-                    "step": "YTD Annualized",
-                    "ytd_gross": float(ytd_gross),
-                    "days_elapsed": days_elapsed,
-                    "annualized": float(ytd_annualized.quantize(Decimal("0.01"))),
-                    "formula": f"({ytd_gross} / {days_elapsed}) * 365"
-                })
+
+                # Only use YTD annualization if we have substantial YTD data
+                # (employee has worked at least 60 days this year)
+                if days_elapsed >= 60:
+                    ytd_annualized = (ytd_gross / Decimal(days_elapsed)) * Decimal(365)
+                    steps.append({
+                        "step": "YTD Annualized (validation)",
+                        "ytd_gross": float(ytd_gross),
+                        "days_elapsed": days_elapsed,
+                        "annualized": float(ytd_annualized.quantize(Decimal("0.01"))),
+                        "formula": f"({ytd_gross} / {days_elapsed}) * 365"
+                    })
+                else:
+                    notes.append(f"YTD only covers {days_elapsed} days - using period annualization")
             except (ValueError, ZeroDivisionError) as e:
                 notes.append(f"YTD annualization error: {e}")
 
-        # Calculate from period pay if YTD not available
-        period_annualized = None
-        if not ytd_annualized:
-            gross_pay = self._to_decimal(latest_stub.get("gross_pay"))
-            pay_frequency = latest_stub.get("pay_frequency", "").upper()
-
-            if gross_pay:
-                multiplier = self._get_pay_frequency_multiplier(pay_frequency)
-                period_annualized = gross_pay * Decimal(multiplier)
-                steps.append({
-                    "step": "Period Annualized",
-                    "gross_pay": float(gross_pay),
-                    "pay_frequency": pay_frequency,
-                    "multiplier": multiplier,
-                    "annualized": float(period_annualized.quantize(Decimal("0.01"))),
-                    "formula": f"{gross_pay} * {multiplier}"
-                })
-
-        current_annual = ytd_annualized or period_annualized
+        # Use period annualization as primary (it's based on current pay rate)
+        current_annual = period_annualized or ytd_annualized
 
         if not current_annual:
             return IncomeCalculationResult(

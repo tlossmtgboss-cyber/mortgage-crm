@@ -560,27 +560,78 @@ Respond with ONLY the JSON object, no additional text."""
             )
 
     def _calculate_annual_income(self, fields: Dict) -> Optional[float]:
-        """Calculate annual income from extracted paystub fields."""
-        # Try YTD gross first
-        ytd_gross = fields.get("ytd_gross")
-        if ytd_gross:
-            # Estimate full year from YTD
-            # This is a rough calculation - would need pay date to be accurate
-            return float(ytd_gross)
+        """
+        Calculate annual income from extracted paystub fields.
 
-        # Try to extrapolate from period pay
+        IMPORTANT: For paystubs, gross_pay is the PAY PERIOD amount, not annual.
+        We MUST annualize based on pay frequency:
+        - Weekly: gross_pay × 52
+        - Biweekly: gross_pay × 26
+        - Semimonthly: gross_pay × 24
+        - Monthly: gross_pay × 12
+
+        YTD is only useful for validation or when we have multiple pay periods.
+        """
         gross_pay = fields.get("gross_pay")
         pay_frequency = fields.get("pay_frequency", "").lower()
+        ytd_gross = fields.get("ytd_gross")
 
+        # Pay frequency multipliers for annualization
+        multipliers = {
+            "weekly": 52,
+            "biweekly": 26,
+            "semimonthly": 24,
+            "monthly": 12,
+        }
+
+        # PRIMARY METHOD: Use gross_pay × frequency multiplier
+        # This is the most accurate for paystubs
         if gross_pay:
-            multipliers = {
-                "weekly": 52,
-                "biweekly": 26,
-                "semimonthly": 24,
-                "monthly": 12,
-            }
-            multiplier = multipliers.get(pay_frequency, 12)  # Default to monthly
-            return float(gross_pay) * multiplier
+            multiplier = multipliers.get(pay_frequency, 12)  # Default to monthly if unknown
+            annualized = float(gross_pay) * multiplier
+
+            # If we have YTD and it's significantly different, log a warning
+            # but still use the period-based calculation
+            if ytd_gross:
+                ytd_float = float(ytd_gross)
+                # If YTD is much larger than current period, the employee has been
+                # working longer - but we still annualize the current period rate
+                logger.debug(
+                    f"Paystub annualization: gross_pay={gross_pay}, "
+                    f"frequency={pay_frequency}, multiplier={multiplier}, "
+                    f"annualized={annualized}, ytd_gross={ytd_gross}"
+                )
+
+            return annualized
+
+        # FALLBACK: If no gross_pay but we have YTD, try to estimate
+        # This is less accurate but better than nothing
+        if ytd_gross:
+            # Try to estimate how many pay periods have passed
+            # based on pay_period_end date
+            pay_period_end = fields.get("pay_period_end")
+            if pay_period_end:
+                try:
+                    from datetime import datetime
+                    period_end = datetime.strptime(pay_period_end, "%Y-%m-%d")
+                    year_start = datetime(period_end.year, 1, 1)
+                    days_elapsed = (period_end - year_start).days + 1
+
+                    if days_elapsed > 0:
+                        # Annualize YTD based on days elapsed
+                        annualized = (float(ytd_gross) / days_elapsed) * 365
+                        logger.debug(
+                            f"YTD annualization fallback: ytd_gross={ytd_gross}, "
+                            f"days_elapsed={days_elapsed}, annualized={annualized}"
+                        )
+                        return annualized
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to parse pay_period_end for YTD annualization: {e}")
+
+            # Last resort: assume YTD represents roughly this many months
+            # This is very rough and not recommended
+            logger.warning("Using raw YTD as annual income - not recommended")
+            return float(ytd_gross)
 
         return None
 
