@@ -246,19 +246,23 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                 if record.get("interest_level"):
                     talent_profile["interest_level"] = record.get("interest_level")
 
-                # Insert new record - without talent_profile for now if causing issues
+                # Build companies as JSON array
+                company = record.get("current_company") or record.get("company")
+                companies_json = json.dumps([company]) if company else "[]"
+
+                # Insert new record
                 db.execute(text("""
                     INSERT INTO mm_candidates (
                         first_name, last_name, email, phone,
                         source, target_role_name,
                         years_experience, years_mortgage_experience, has_mortgage_experience,
-                        previous_companies, linkedin_url,
+                        previous_companies, linkedin_url, talent_profile,
                         status, applied_at, is_active
                     ) VALUES (
                         :first_name, :last_name, :email, :phone,
                         'retr', 'Loan Officer',
                         :years_exp, :years_exp, true,
-                        :company, :linkedin,
+                        :companies::jsonb, :linkedin, :profile::jsonb,
                         'new', CURRENT_TIMESTAMP, true
                     )
                 """), {
@@ -267,8 +271,9 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                     "email": email,
                     "phone": record.get("phone"),
                     "years_exp": record.get("years_experience") or 0,
-                    "company": record.get("current_company") or record.get("company") or "",
+                    "companies": companies_json,
                     "linkedin": record.get("linkedin_url"),
+                    "profile": json.dumps(talent_profile),
                 })
                 imported += 1
 
