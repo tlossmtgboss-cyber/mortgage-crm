@@ -53,17 +53,15 @@ async def list_partner_recruits(
 
     where_sql = " AND ".join(filters)
 
+    # Use a simpler query that only selects columns that definitely exist
     results = db.execute(text(f"""
         SELECT
             id, name, contact_name, business_name, company,
             email, phone, license_number, notes,
-            category, type, status, source,
-            total_referrals, referrals_this_year, last_referral_date,
-            loyalty_tier, reciprocity_score, engagement_status,
-            created_at
+            category, type, status, created_at
         FROM referral_partners
         WHERE {where_sql}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC NULLS LAST
         LIMIT :limit OFFSET :offset
     """), params).fetchall()
 
@@ -77,19 +75,15 @@ async def list_partner_recruits(
         partners.append({
             "id": r.id,
             "name": r.name or r.contact_name,
+            "contact_name": r.contact_name,
             "company": r.company or r.business_name,
+            "business_name": r.business_name,
             "email": r.email,
             "phone": r.phone,
             "license_number": r.license_number,
             "notes": r.notes,
             "status": r.status or "active",
-            "source": r.source or "unknown",
-            "total_referrals": r.total_referrals or 0,
-            "referrals_this_year": r.referrals_this_year or 0,
-            "last_referral": r.last_referral_date.isoformat() if r.last_referral_date else None,
-            "loyalty_tier": r.loyalty_tier,
-            "reciprocity_score": r.reciprocity_score,
-            "engagement_status": r.engagement_status,
+            "source": "retr" if r.category == "realtor" else "direct",  # Infer source from category
             "created_at": r.created_at.isoformat() if r.created_at else None
         })
 
@@ -110,11 +104,8 @@ async def get_partner_recruit(
         SELECT
             id, name, contact_name, business_name, company,
             email, phone, license_number, notes,
-            category, type, status, source,
-            total_referrals, referrals_this_year, last_referral_date,
-            loyalty_tier, reciprocity_score, engagement_status,
-            address, city, state, zip_code,
-            created_at, updated_at
+            category, type, status,
+            created_at
         FROM referral_partners
         WHERE id = :id
     """), {"id": partner_id}).fetchone()
@@ -125,25 +116,15 @@ async def get_partner_recruit(
     return {
         "id": result.id,
         "name": result.name or result.contact_name,
+        "contact_name": result.contact_name,
         "company": result.company or result.business_name,
+        "business_name": result.business_name,
         "email": result.email,
         "phone": result.phone,
         "license_number": result.license_number,
         "notes": result.notes,
         "status": result.status or "active",
-        "source": result.source or "unknown",
-        "total_referrals": result.total_referrals or 0,
-        "referrals_this_year": result.referrals_this_year or 0,
-        "last_referral": result.last_referral_date.isoformat() if result.last_referral_date else None,
-        "loyalty_tier": result.loyalty_tier,
-        "reciprocity_score": result.reciprocity_score,
-        "engagement_status": result.engagement_status,
-        "location": {
-            "address": result.address,
-            "city": result.city,
-            "state": result.state,
-            "zip_code": result.zip_code
-        },
+        "source": "retr" if result.category == "realtor" else "direct",
         "created_at": result.created_at.isoformat() if result.created_at else None
     }
 
@@ -182,25 +163,25 @@ async def get_partner_recruit_stats(
         SELECT
             COUNT(*) as total,
             COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
-            COUNT(CASE WHEN status = 'prospect' THEN 1 END) as prospects,
-            COUNT(CASE WHEN status = 'converted' THEN 1 END) as converted,
-            COUNT(CASE WHEN source = 'retr' THEN 1 END) as from_retr,
+            COUNT(CASE WHEN status = 'new' OR status IS NULL THEN 1 END) as new,
+            COUNT(CASE WHEN status = 'contacted' THEN 1 END) as contacted,
+            COUNT(CASE WHEN status = 'onboarded' THEN 1 END) as onboarded,
+            COUNT(CASE WHEN category = 'realtor' THEN 1 END) as from_retr,
             COUNT(CASE WHEN created_at >= CURRENT_DATE - 7 THEN 1 END) as new_this_week,
-            COUNT(CASE WHEN created_at >= CURRENT_DATE - 30 THEN 1 END) as new_this_month,
-            SUM(COALESCE(total_referrals, 0)) as total_referrals
+            COUNT(CASE WHEN created_at >= CURRENT_DATE - 30 THEN 1 END) as new_this_month
         FROM referral_partners
         WHERE category = 'realtor' OR type = 'Realtor'
     """)).fetchone()
 
     return {
-        "total_partners": stats.total or 0,
+        "total": stats.total or 0,
         "active": stats.active or 0,
-        "prospects": stats.prospects or 0,
-        "converted": stats.converted or 0,
+        "new": stats.new or 0,
+        "contacted": stats.contacted or 0,
+        "onboarded": stats.onboarded or 0,
         "from_retr": stats.from_retr or 0,
         "new_this_week": stats.new_this_week or 0,
-        "new_this_month": stats.new_this_month or 0,
-        "total_referrals_received": stats.total_referrals or 0
+        "new_this_month": stats.new_this_month or 0
     }
 
 
