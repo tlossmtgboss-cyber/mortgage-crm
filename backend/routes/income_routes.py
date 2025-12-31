@@ -316,18 +316,64 @@ async def calculate_income(
     db: Session = Depends(get_db),
 ):
     """Trigger income calculation for a source."""
+    from models.smart_docs_models import SmartDocument
+    from decimal import Decimal
+
     source = db.query(IncomeSource).filter(IncomeSource.id == source_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Income source not found")
 
     calc_service = get_income_calculation_service()
 
-    # Get related paystub extractions
+    # Strategy 1: Get paystub extractions linked to this source
     paystubs = db.query(PaystubExtraction).filter(
         PaystubExtraction.income_source_id == source_id
     ).order_by(PaystubExtraction.pay_date.desc()).all()
 
+    # Strategy 2: If no linked paystubs, find unlinked ones for same borrower/loan
+    if not paystubs and source.borrower_id and source.loan_id:
+        paystubs = db.query(PaystubExtraction).filter(
+            PaystubExtraction.borrower_id == source.borrower_id,
+            PaystubExtraction.loan_id == source.loan_id,
+            PaystubExtraction.income_source_id.is_(None)
+        ).order_by(PaystubExtraction.pay_date.desc()).all()
+
+        # Link found paystubs to this source
+        for ps in paystubs:
+            ps.income_source_id = source_id
+        if paystubs:
+            db.flush()
+
     paystub_data = [_paystub_to_dict(p) for p in paystubs]
+
+    # Strategy 3: If still no paystubs, try to extract from SmartDocument data
+    if not paystub_data and source.loan_id:
+        # Find paystub documents with extracted data
+        docs = db.query(SmartDocument).filter(
+            SmartDocument.loan_id == source.loan_id
+        ).all()
+
+        for doc in docs:
+            doc_type_str = str(doc.doc_type.value if hasattr(doc.doc_type, 'value') else doc.doc_type).lower() if doc.doc_type else ''
+
+            # Check if it's a paystub with extracted amount
+            if 'paystub' in doc_type_str and doc.extracted_amount:
+                # Build paystub-like data from SmartDocument
+                paystub_data.append({
+                    "pay_date": None,  # May not have exact date
+                    "pay_frequency": "BIWEEKLY",  # Default assumption
+                    "gross_pay": float(doc.extracted_amount),
+                    "net_pay": None,
+                    "ytd_gross": None,
+                    "ytd_net": None,
+                    "hourly_rate": None,
+                    "regular_hours": None,
+                    "overtime_hours": None,
+                })
+
+                # Also update source name if we have employer
+                if doc.extracted_employer and not source.source_name:
+                    source.source_name = doc.extracted_employer
 
     # Calculate based on income type
     if source.income_type == IncomeType.W2_EMPLOYMENT:
