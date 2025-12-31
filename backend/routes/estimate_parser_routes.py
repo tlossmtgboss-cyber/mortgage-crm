@@ -23,6 +23,15 @@ from services.estimate_parser_service import (
     ALLOWED_MIME_TYPES,
     MAX_FILE_SIZE,
 )
+from services.comparison_enhancements_service import (
+    ComparisonEnhancementsService,
+    PrepaymentScenario,
+    PrepaymentResult,
+    TaxImpactRequest,
+    TaxImpactResult,
+    BatchComparisonResult,
+    ComparisonHistoryItem,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/estimate-parser", tags=["estimate-parser"])
@@ -900,3 +909,393 @@ async def get_parse_failures(
     except Exception as e:
         logger.error(f"Failures endpoint error: {e}")
         raise HTTPException(status_code=500, detail='Internal server error')
+
+
+# ============================================================================
+# ENHANCED COMPARISON ENDPOINTS
+# ============================================================================
+
+class PrepaymentRequest(BaseModel):
+    loan_amount: float
+    interest_rate: float
+    loan_term_months: int = 360
+    scenarios: List[dict]  # List of {extra_monthly, extra_yearly, one_time}
+
+
+class PrepaymentResponse(BaseModel):
+    success: bool
+    results: Optional[List[dict]] = None
+    error: Optional[str] = None
+
+
+@router.post("/prepayment-analysis", response_model=PrepaymentResponse)
+async def analyze_prepayment(
+    data: PrepaymentRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Analyze prepayment scenarios for a loan.
+
+    Calculate how extra payments affect:
+    - Loan payoff date
+    - Total interest paid
+    - Months/years saved
+
+    **Example scenarios:**
+    - Extra $200/month
+    - Extra $1000/year (annual bonus)
+    - One-time $5000 payment
+    """
+    try:
+        service = ComparisonEnhancementsService(db)
+
+        scenarios = [
+            PrepaymentScenario(
+                extra_monthly=s.get("extra_monthly", 0),
+                extra_yearly=s.get("extra_yearly", 0),
+                one_time=s.get("one_time", 0),
+            )
+            for s in data.scenarios
+        ]
+
+        results = service.calculate_prepayment_analysis(
+            loan_amount=data.loan_amount,
+            interest_rate=data.interest_rate,
+            loan_term_months=data.loan_term_months,
+            scenarios=scenarios,
+        )
+
+        return PrepaymentResponse(
+            success=True,
+            results=[r.dict() for r in results],
+        )
+
+    except Exception as e:
+        logger.exception(f"Prepayment analysis error: {e}")
+        return PrepaymentResponse(success=False, error=str(e))
+
+
+class TaxImpactRequestBody(BaseModel):
+    loan_amount: float
+    interest_rate: float
+    loan_term_months: int = 360
+    filing_status: str = "single"
+    annual_income: float
+    state_tax_rate: float = 0
+    property_tax_annual: float = 0
+    other_itemized_deductions: float = 0
+
+
+class TaxImpactResponse(BaseModel):
+    success: bool
+    result: Optional[dict] = None
+    error: Optional[str] = None
+
+
+@router.post("/tax-impact", response_model=TaxImpactResponse)
+async def analyze_tax_impact(
+    data: TaxImpactRequestBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Analyze tax impact of mortgage interest deduction.
+
+    Calculates:
+    - Whether itemizing is beneficial
+    - Federal and state tax savings
+    - Effective monthly payment reduction
+    - Lifetime tax savings estimate
+    """
+    try:
+        service = ComparisonEnhancementsService(db)
+
+        tax_request = TaxImpactRequest(
+            filing_status=data.filing_status,
+            annual_income=data.annual_income,
+            state_tax_rate=data.state_tax_rate,
+            property_tax_annual=data.property_tax_annual,
+            other_itemized_deductions=data.other_itemized_deductions,
+        )
+
+        result = service.calculate_tax_impact(
+            loan_amount=data.loan_amount,
+            interest_rate=data.interest_rate,
+            loan_term_months=data.loan_term_months,
+            tax_request=tax_request,
+        )
+
+        return TaxImpactResponse(
+            success=True,
+            result=result.dict(),
+        )
+
+    except Exception as e:
+        logger.exception(f"Tax impact analysis error: {e}")
+        return TaxImpactResponse(success=False, error=str(e))
+
+
+class BatchCompareRequest(BaseModel):
+    estimates: List[dict]
+    labels: Optional[List[str]] = None
+    session_id: Optional[str] = None
+
+
+class BatchCompareResponse(BaseModel):
+    success: bool
+    rankings: Optional[List[dict]] = None
+    winner_label: Optional[str] = None
+    winner_index: Optional[int] = None
+    summary: Optional[str] = None
+    savings_vs_worst: Optional[float] = None
+    batch_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post("/compare-batch", response_model=BatchCompareResponse)
+async def compare_batch_estimates(
+    data: BatchCompareRequest,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+):
+    """
+    Compare 3 or more loan estimates.
+
+    Ranks all estimates and identifies the best option.
+    Calculates potential savings compared to worst option.
+    """
+    try:
+        if len(data.estimates) < 2:
+            raise HTTPException(status_code=400, detail="At least 2 estimates required")
+
+        service = ComparisonEnhancementsService(db)
+
+        result = service.compare_batch_estimates(
+            estimates=data.estimates,
+            labels=data.labels,
+        )
+
+        return BatchCompareResponse(
+            success=True,
+            rankings=result.rankings,
+            winner_label=result.winner_label,
+            winner_index=result.winner_index,
+            summary=result.summary,
+            savings_vs_worst=result.savings_vs_worst,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Batch compare error: {e}")
+        return BatchCompareResponse(success=False, error=str(e))
+
+
+# ============================================================================
+# COMPARISON HISTORY ENDPOINTS
+# ============================================================================
+
+@router.get("/history")
+async def get_comparison_history(
+    limit: int = Query(20, ge=1, le=100),
+    saved_only: bool = Query(False),
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+):
+    """
+    Get user's comparison history.
+
+    Returns list of past comparisons with summaries.
+    Filter by saved_only=true to see only favorites.
+    """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        service = ComparisonEnhancementsService(db)
+        history = service.get_comparison_history(
+            user_id=user_id,
+            limit=limit,
+            saved_only=saved_only,
+        )
+
+        return {
+            "success": True,
+            "history": [h.dict() for h in history],
+            "count": len(history),
+        }
+
+    except Exception as e:
+        logger.exception(f"History endpoint error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+class SaveComparisonRequest(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.post("/compare/{comparison_id}/save")
+async def save_comparison(
+    comparison_id: str,
+    data: SaveComparisonRequest,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+):
+    """
+    Save/favorite a comparison for quick access.
+    """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        service = ComparisonEnhancementsService(db)
+        success = service.save_comparison(
+            comparison_id=comparison_id,
+            user_id=user_id,
+            title=data.title,
+            notes=data.notes,
+        )
+
+        if success:
+            return {"success": True, "message": "Comparison saved"}
+        else:
+            raise HTTPException(status_code=404, detail="Comparison not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Save comparison error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/compare/{comparison_id}/save")
+async def unsave_comparison(
+    comparison_id: str,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+):
+    """
+    Remove comparison from saved/favorites.
+    """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        service = ComparisonEnhancementsService(db)
+        success = service.unsave_comparison(
+            comparison_id=comparison_id,
+            user_id=user_id,
+        )
+
+        if success:
+            return {"success": True, "message": "Comparison unsaved"}
+        else:
+            raise HTTPException(status_code=404, detail="Comparison not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Unsave comparison error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================================
+# SHAREABLE LINKS ENDPOINTS
+# ============================================================================
+
+@router.post("/compare/{comparison_id}/share")
+async def create_share_link(
+    comparison_id: str,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+):
+    """
+    Create a shareable link for a comparison.
+
+    Returns a share token that can be used to view the comparison
+    without authentication.
+    """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        service = ComparisonEnhancementsService(db)
+        token = service.create_share_link(
+            comparison_id=comparison_id,
+            user_id=user_id,
+        )
+
+        if token:
+            return {
+                "success": True,
+                "share_token": token,
+                "share_url": f"/shared/{token}",
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Comparison not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Create share link error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/shared/{share_token}")
+async def get_shared_comparison(
+    share_token: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Get a shared comparison by token (public access).
+
+    No authentication required.
+    """
+    try:
+        service = ComparisonEnhancementsService(db)
+        comparison = service.get_shared_comparison(share_token)
+
+        if comparison:
+            return {
+                "success": True,
+                "comparison": comparison,
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Shared comparison not found or has been revoked")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Get shared comparison error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/compare/{comparison_id}/share")
+async def revoke_share_link(
+    comparison_id: str,
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = None,
+):
+    """
+    Revoke a share link, making the comparison private again.
+    """
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        service = ComparisonEnhancementsService(db)
+        success = service.revoke_share_link(
+            comparison_id=comparison_id,
+            user_id=user_id,
+        )
+
+        if success:
+            return {"success": True, "message": "Share link revoked"}
+        else:
+            raise HTTPException(status_code=404, detail="Comparison not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Revoke share link error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
