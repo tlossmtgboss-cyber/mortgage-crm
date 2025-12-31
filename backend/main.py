@@ -21513,6 +21513,28 @@ async def debug_portal_services_status():
         }
     }
 
+@app.get("/api/v1/debug/intake-engine-status")
+async def debug_intake_engine_status():
+    """Debug endpoint to check intake engine loading status"""
+    status = {
+        "loaded": intake_engine_error is None,
+        "error": intake_engine_error
+    }
+
+    # Try to get engine stats if loaded
+    if intake_engine_error is None:
+        try:
+            from intake_engine.api.routes import get_engine
+            engine = get_engine()
+            status["engine_stats"] = {
+                "questions_loaded": len(engine.questions),
+                "sections": list(engine.section_order),
+            }
+        except Exception as e:
+            status["engine_init_error"] = str(e)
+
+    return status
+
 # Debug endpoint for tools registry loading
 @app.get("/api/v1/debug/tools-registry-status")
 async def debug_tools_registry_status():
