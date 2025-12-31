@@ -1,0 +1,226 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlagsDefinition",
+  "description": "Catalog of all intake engine flags",
+  "type": "object",
+  "properties": {
+    "flags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/FlagDefinition"
+      }
+    }
+  },
+  "definitions": {
+    "FlagDefinition": {
+      "type": "object",
+      "required": ["code", "category", "severity", "description"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^FLAG_[A-Z_]+$"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["truth", "readiness", "product", "compliance", "flow", "sla"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "high", "critical"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "impacts_truth_score": {
+          "type": "boolean",
+          "default": false
+        },
+        "impacts_readiness_score": {
+          "type": "boolean",
+          "default": false
+        },
+        "creates_sla_task": {
+          "type": "boolean",
+          "default": false
+        },
+        "triggers_overlay": {
+          "type": "string",
+          "description": "Coaching overlay to trigger"
+        }
+      }
+    }
+  },
+  "flags_catalog": [
+    {
+      "code": "FLAG_VA_FLOW",
+      "category": "product",
+      "severity": "info",
+      "description": "Borrower indicated veteran status - VA loan eligible",
+      "impacts_truth_score": false,
+      "impacts_readiness_score": false
+    },
+    {
+      "code": "FLAG_PURCHASE",
+      "category": "flow",
+      "severity": "info",
+      "description": "Loan purpose is purchase"
+    },
+    {
+      "code": "FLAG_REFI",
+      "category": "flow",
+      "severity": "info",
+      "description": "Loan purpose is refinance"
+    },
+    {
+      "code": "FLAG_OCC_PRIMARY",
+      "category": "product",
+      "severity": "info",
+      "description": "Primary residence occupancy"
+    },
+    {
+      "code": "FLAG_OCC_SECOND",
+      "category": "product",
+      "severity": "info",
+      "description": "Second home occupancy"
+    },
+    {
+      "code": "FLAG_OCC_INVESTMENT",
+      "category": "product",
+      "severity": "warn",
+      "description": "Investment property - requires rental income verification",
+      "impacts_readiness_score": true
+    },
+    {
+      "code": "FLAG_SELF_EMPLOYED",
+      "category": "product",
+      "severity": "warn",
+      "description": "Self-employed borrower - additional documentation required",
+      "impacts_readiness_score": true
+    },
+    {
+      "code": "FLAG_INCOME_W2",
+      "category": "product",
+      "severity": "info",
+      "description": "W2 income - standard documentation"
+    },
+    {
+      "code": "FLAG_ASSET_GIFT",
+      "category": "product",
+      "severity": "warn",
+      "description": "Gift funds for down payment - gift letter required",
+      "impacts_readiness_score": true
+    },
+    {
+      "code": "FLAG_DECLARATIONS_YES",
+      "category": "compliance",
+      "severity": "warn",
+      "description": "Borrower answered yes to one or more declarations"
+    },
+    {
+      "code": "FLAG_DECLARATIONS_YES_NO_DETAIL",
+      "category": "truth",
+      "severity": "high",
+      "description": "Borrower answered yes to declaration without providing details",
+      "impacts_truth_score": true,
+      "creates_sla_task": true,
+      "triggers_overlay": "COACH_DECLARATIONS_DETAILS"
+    },
+    {
+      "code": "FLAG_BANKRUPTCY",
+      "category": "compliance",
+      "severity": "warn",
+      "description": "Borrower declared bankruptcy in past 7 years"
+    },
+    {
+      "code": "FLAG_FORECLOSURE",
+      "category": "compliance",
+      "severity": "warn",
+      "description": "Borrower had property foreclosed"
+    },
+    {
+      "code": "FLAG_BLOCK_CREDIT_PULL",
+      "category": "readiness",
+      "severity": "critical",
+      "description": "Credit authorization declined - cannot proceed with credit pull",
+      "impacts_readiness_score": true,
+      "creates_sla_task": true
+    },
+    {
+      "code": "FLAG_MISSING_CORE_ID",
+      "category": "readiness",
+      "severity": "critical",
+      "description": "Missing core identity information (DOB, SSN, address)",
+      "impacts_readiness_score": true,
+      "creates_sla_task": true
+    },
+    {
+      "code": "FLAG_NEEDS_GENTLE_VERIFICATION",
+      "category": "truth",
+      "severity": "warn",
+      "description": "Moderate hesitation detected - gentle verification recommended",
+      "impacts_truth_score": true,
+      "triggers_overlay": "COACH_VERIFY_NEXT"
+    },
+    {
+      "code": "FLAG_TRUTH_RISK_HIGH",
+      "category": "truth",
+      "severity": "high",
+      "description": "High hesitation or inconsistency detected - truth recovery needed",
+      "impacts_truth_score": true,
+      "creates_sla_task": true,
+      "triggers_overlay": "COACH_TRUTH_RECOVERY"
+    },
+    {
+      "code": "FLAG_INCOME_INCONSISTENCY",
+      "category": "truth",
+      "severity": "high",
+      "description": "Income answers inconsistent with employment or assets",
+      "impacts_truth_score": true
+    },
+    {
+      "code": "FLAG_DTI_CONCERN",
+      "category": "product",
+      "severity": "warn",
+      "description": "Estimated DTI may be high based on inputs",
+      "impacts_readiness_score": true
+    },
+    {
+      "code": "FLAG_ASSETS_LOW_FOR_PRICE",
+      "category": "truth",
+      "severity": "warn",
+      "description": "Assets appear low relative to purchase price",
+      "impacts_truth_score": true
+    },
+    {
+      "code": "FLAG_ADDRESS_MISMATCH",
+      "category": "truth",
+      "severity": "warn",
+      "description": "Current address doesn't match employment location pattern",
+      "impacts_truth_score": true
+    },
+    {
+      "code": "FLAG_MULTI_BORROWER",
+      "category": "flow",
+      "severity": "info",
+      "description": "Multiple borrowers on application"
+    },
+    {
+      "code": "FLAG_NBS_PRESENT",
+      "category": "flow",
+      "severity": "info",
+      "description": "Non-borrowing spouse present (community property state)"
+    },
+    {
+      "code": "FLAG_ECONSENT_DECLINED",
+      "category": "compliance",
+      "severity": "warn",
+      "description": "eConsent declined - paper documents required"
+    },
+    {
+      "code": "FLAG_TCPA_DECLINED",
+      "category": "compliance",
+      "severity": "info",
+      "description": "TCPA consent declined - limited communication methods"
+    }
+  ]
+}

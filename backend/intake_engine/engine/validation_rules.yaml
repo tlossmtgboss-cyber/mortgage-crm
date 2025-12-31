@@ -1,0 +1,210 @@
+validation_rules:
+  version: "1.0.0"
+
+  # Field-specific validations
+  field_validations:
+    - id: "V_SSN_LAST4"
+      when:
+        question_id: "Q_ID_0202"
+      rule:
+        type: "regex"
+        pattern: "^[0-9]{4}$"
+      severity: "high"
+      message_key: "validation.ssn_last4_format"
+
+    - id: "V_SSN_FULL"
+      when:
+        question_id: "Q_ID_0202_FULL"
+      rule:
+        type: "regex"
+        pattern: "^[0-9]{3}-?[0-9]{2}-?[0-9]{4}$"
+      severity: "high"
+      message_key: "validation.ssn_format"
+
+    - id: "V_EMAIL"
+      when:
+        answer_type: "email"
+      rule:
+        type: "regex"
+        pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      severity: "high"
+      message_key: "validation.invalid_email"
+
+    - id: "V_PHONE"
+      when:
+        answer_type: "phone"
+      rule:
+        type: "regex"
+        pattern: "^\\+?1?[-.]?\\(?[0-9]{3}\\)?[-.]?[0-9]{3}[-.]?[0-9]{4}$"
+      severity: "high"
+      message_key: "validation.invalid_phone"
+
+    - id: "V_DOB_PAST"
+      when:
+        question_id: "Q_ID_0201"
+      rule:
+        type: "date_before"
+        reference: "today"
+      severity: "high"
+      message_key: "validation.date_future"
+
+    - id: "V_DOB_ADULT"
+      when:
+        question_id: "Q_ID_0201"
+      rule:
+        type: "date_before"
+        reference: "today_minus_18_years"
+      severity: "high"
+      message_key: "validation.must_be_adult"
+
+    - id: "V_PURCHASE_PRICE_MIN"
+      when:
+        question_id: "Q_PURP_0011"
+      rule:
+        type: "range"
+        min: 50000
+      severity: "high"
+      message_key: "validation.min_value"
+
+    - id: "V_PURCHASE_PRICE_MAX"
+      when:
+        question_id: "Q_PURP_0011"
+      rule:
+        type: "range"
+        max: 100000000
+      severity: "warn"
+      message_key: "validation.unusual_value"
+
+    - id: "V_INCOME_POSITIVE"
+      when:
+        question_id: "Q_INC_0303"
+      rule:
+        type: "range"
+        min: 0
+      severity: "high"
+      message_key: "validation.positive_value"
+
+    - id: "V_INCOME_REASONABLE"
+      when:
+        question_id: "Q_INC_0303"
+      rule:
+        type: "range"
+        max: 1000000
+      severity: "warn"
+      message_key: "validation.unusual_value"
+
+  # Cross-field consistency validations
+  cross_field_validations:
+    - id: "CF_DTI_PRELIMINARY"
+      description: "Check if debt-to-income ratio is within reasonable bounds"
+      inputs:
+        - "answers.Q_INC_0303"  # monthly income
+        - "answers.Q_LIA_0501"  # mortgage payment
+        - "answers.Q_LIA_0503"  # auto payment
+        - "answers.Q_LIA_0505"  # student payment
+        - "answers.Q_LIA_0506"  # credit card payment
+      rule:
+        type: "expression"
+        expression: "(LIA_0501 + LIA_0503 + LIA_0505 + LIA_0506) / INC_0303 < 0.60"
+      on_fail:
+        severity: "warn"
+        add_flags: ["FLAG_DTI_CONCERN"]
+        message: "Estimated DTI appears high"
+
+    - id: "CF_ASSETS_VS_PRICE"
+      description: "Check if assets are sufficient for purchase price"
+      inputs:
+        - "answers.Q_PURP_0011"  # purchase price
+        - "answers.Q_AST_0401"   # checking
+        - "answers.Q_AST_0402"   # savings
+        - "answers.Q_AST_0403"   # retirement
+        - "answers.Q_AST_0410"   # gift amount
+      rule:
+        type: "expression"
+        expression: "(AST_0401 + AST_0402 + AST_0403 + AST_0410) >= (PURP_0011 * 0.03)"
+      on_fail:
+        severity: "warn"
+        add_flags: ["FLAG_ASSETS_LOW_FOR_PRICE"]
+        message: "Total assets appear low relative to purchase price"
+
+    - id: "CF_OCCUPANCY_ADDRESS"
+      description: "Check occupancy type vs current address proximity"
+      inputs:
+        - "answers.Q_PROP_0110"   # occupancy type
+        - "answers.Q_PROP_0100"   # property address
+        - "answers.Q_ADDR_0210"   # current address
+      rule:
+        type: "custom"
+        validator: "validate_occupancy_address_consistency"
+      on_fail:
+        severity: "info"
+        add_flags: ["FLAG_ADDRESS_MISMATCH"]
+        message: "Current address may not align with stated occupancy"
+
+    - id: "CF_INCOME_EMPLOYMENT"
+      description: "Check income matches employment type"
+      inputs:
+        - "answers.Q_INC_0300"   # employment status
+        - "answers.Q_INC_0303"   # base income
+        - "answers.Q_INC_0313"   # self-employed income
+      rule:
+        type: "expression"
+        expression: "(INC_0300 == 'W2' AND INC_0303 > 0) OR (INC_0300 == 'SelfEmployed' AND INC_0313 > 0)"
+      on_fail:
+        severity: "high"
+        add_flags: ["FLAG_INCOME_INCONSISTENCY"]
+        message: "Income source doesn't match employment type"
+
+    - id: "CF_DECLARATIONS_DETAILS"
+      description: "Check that yes answers on declarations have details"
+      inputs:
+        - "answers.Q_DEC_0601"   # bankruptcy
+        - "answers.Q_DEC_0602"   # bankruptcy chapter
+        - "answers.Q_DEC_0603"   # bankruptcy date
+      rule:
+        type: "expression"
+        expression: "(DEC_0601 == false) OR (DEC_0602 != null AND DEC_0603 != null)"
+      on_fail:
+        severity: "critical"
+        add_flags: ["FLAG_DECLARATIONS_YES_NO_DETAIL"]
+        message: "Bankruptcy declared without required details"
+
+  # Address completeness validation
+  address_validations:
+    - id: "V_ADDRESS_COMPLETE"
+      when:
+        answer_type: "address"
+      required_fields:
+        - "street_line1"
+        - "city"
+        - "state"
+        - "zip"
+      severity: "high"
+      message_key: "validation.address_incomplete"
+
+  # Document evidence alignment
+  evidence_validations:
+    - id: "EV_INCOME_NEEDS_DOCS"
+      description: "Flag when income claims need document evidence"
+      when:
+        question_id: "Q_INC_0303"
+        answer_greater_than: 15000
+      expected_evidence:
+        - "paystub"
+        - "w2"
+        - "tax_return"
+      on_missing:
+        add_flags: ["FLAG_HIGH_INCOME_NEEDS_DOCS"]
+        severity: "info"
+
+    - id: "EV_SELF_EMPLOYED_DOCS"
+      description: "Self-employed needs additional documentation"
+      when:
+        flag_present: "FLAG_SELF_EMPLOYED"
+      expected_evidence:
+        - "tax_return"
+        - "profit_loss"
+        - "bank_statement"
+      on_missing:
+        add_flags: ["FLAG_SE_DOCS_NEEDED"]
+        severity: "info"

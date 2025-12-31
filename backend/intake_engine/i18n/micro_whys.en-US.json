@@ -1,0 +1,81 @@
+{
+  "locale": "en-US",
+  "version": "1.0.0",
+  "micro_whys": {
+    "id.ssn_last4": {
+      "text": "We use your SSN to verify your identity and pull your credit report. This is required by law to prevent fraud.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "id.ssn_full": {
+      "text": "Your full SSN is needed to run your credit report and verify your identity with the IRS. We use bank-level encryption to protect it.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "id.dob": {
+      "text": "Your date of birth helps us verify your identity and is required on the loan application.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "income.base_monthly_income": {
+      "text": "We need your income to calculate how much home you can afford and what loan programs you qualify for.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "income.employer_name": {
+      "text": "Your employer helps us verify your income and employment stability—both are key factors in loan approval.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "assets.total_down_payment": {
+      "text": "Your down payment affects your loan options and monthly payment. A larger down payment often means better rates.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "assets.gift_source": {
+      "text": "Lenders need to verify gift funds to ensure they're truly gifts, not hidden loans that would affect your qualification.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "liabilities.credit_card_payment": {
+      "text": "We need your monthly debt payments to calculate your debt-to-income ratio—one of the most important factors in loan approval.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "declarations.bankruptcy_last_7_years": {
+      "text": "Bankruptcy history affects which loan programs you can qualify for and how long you need to wait. Being honest helps us find the right options.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "declarations.foreclosure_last_7_years": {
+      "text": "Like bankruptcy, foreclosure history affects loan eligibility. Different programs have different waiting periods.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "property.occupancy_type": {
+      "text": "How you'll use the property affects your interest rate and loan options. Primary residences typically get the best rates.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "property.expected_rent": {
+      "text": "For investment properties, rental income can help you qualify by offsetting the new mortgage payment.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "consent.credit_authorization": {
+      "text": "We need your permission to pull your credit report. This lets us see your credit score and history to match you with the best loan options.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "consent.econsent": {
+      "text": "E-consent lets us send you documents electronically—it's faster and more secure than paper. You can still request paper copies anytime.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "va.veteran_or_surviving_spouse": {
+      "text": "VA loans offer special benefits like no down payment and no PMI. We ask early to make sure we don't miss this option for you.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "income.self_employed_years": {
+      "text": "Most lenders require 2 years of self-employment history for full income documentation. Less time may still work with some programs.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "address.years_at_address": {
+      "text": "Lenders like to see stable housing history. If you've moved recently, no worries—we'll just document your previous addresses.",
+      "show_on": ["friction", "explicit_ask"]
+    }
+  },
+  "generic_micro_whys": {
+    "required_by_law": "This information is required by federal lending regulations.",
+    "helps_qualification": "This helps us determine which loan programs you qualify for.",
+    "protects_you": "This protects both you and the lender from fraud.",
+    "finds_best_options": "This helps us find the best loan options for your situation.",
+    "standard_question": "This is a standard question on all mortgage applications."
+  }
+}

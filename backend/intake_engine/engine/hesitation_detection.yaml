@@ -1,0 +1,182 @@
+hesitation_detection:
+  version: "1.0.0"
+  description: "Behavioral signals for detecting borrower uncertainty"
+
+  # Network latency normalization
+  latency_normalization:
+    enabled: true
+    formula: "effective_response_ms = response_time_ms - (2 * device_rtt_ms)"
+    clamp_min: 0
+
+  # Individual hesitation signals
+  signals:
+    - id: "SIG_LATENCY_LONG"
+      type: "timing"
+      rule:
+        response_time_ms_gte: 18000
+        device_rtt_normalized: true
+      weight: 0.15
+      note: "Long pauses correlate with uncertainty or lookup"
+
+    - id: "SIG_LATENCY_VERY_LONG"
+      type: "timing"
+      rule:
+        response_time_ms_gte: 45000
+        device_rtt_normalized: true
+      weight: 0.25
+      note: "Very long pause indicates significant uncertainty"
+
+    - id: "SIG_REVISION_SINGLE"
+      type: "behavior"
+      rule:
+        edits_count_gte: 1
+        within_seconds: 30
+      weight: 0.08
+      note: "Single revision is normal, minor signal"
+
+    - id: "SIG_REVISION_MULTIPLE"
+      type: "behavior"
+      rule:
+        edits_count_gte: 2
+        within_seconds: 30
+      weight: 0.20
+      note: "Multiple edits often mean guesswork"
+
+    - id: "SIG_REVISION_EXCESSIVE"
+      type: "behavior"
+      rule:
+        edits_count_gte: 4
+        within_seconds: 60
+      weight: 0.35
+      note: "Excessive editing indicates significant uncertainty"
+
+    - id: "SIG_HEDGE_LANGUAGE"
+      type: "nlp"
+      rule:
+        contains_any:
+          - "not sure"
+          - "i think"
+          - "maybe"
+          - "around"
+          - "approximately"
+          - "guess"
+          - "about"
+          - "roughly"
+          - "probably"
+          - "might be"
+          - "could be"
+          - "somewhere around"
+      weight: 0.25
+      note: "Hedge words indicate expressed uncertainty"
+
+    - id: "SIG_UNCERTAINTY_EXPRESSED"
+      type: "nlp"
+      rule:
+        contains_any:
+          - "i don't know"
+          - "no idea"
+          - "not certain"
+          - "hard to say"
+          - "let me think"
+          - "i need to check"
+          - "i'll have to look"
+      weight: 0.35
+      note: "Direct expressions of uncertainty"
+
+    - id: "SIG_RANGE_SELECTION"
+      type: "behavior"
+      rule:
+        selected_range: true
+        instead_of_exact: true
+      weight: 0.10
+      note: "Choosing range over exact value indicates uncertainty"
+
+    - id: "SIG_BACK_NAVIGATION"
+      type: "behavior"
+      rule:
+        back_navigation_count_gte: 2
+        within_section: true
+      weight: 0.15
+      note: "Repeated back navigation may indicate second-guessing"
+
+    - id: "SIG_SKIP_ATTEMPT"
+      type: "behavior"
+      rule:
+        skip_attempted: true
+        on_required: true
+      weight: 0.20
+      note: "Attempting to skip required questions indicates avoidance"
+
+  # Aggregate hesitation score output
+  outputs:
+    hesitation_score:
+      range: [0.0, 1.0]
+      calculation: "weighted_sum_capped"
+      cap: 1.0
+      thresholds:
+        none: 0.0
+        mild: 0.35
+        moderate: 0.55
+        high: 0.75
+
+  # Actions triggered by hesitation level
+  actions:
+    when_mild:
+      - note: "Minor hesitation - continue normally"
+      - add_meta: { hesitation_band: "mild" }
+
+    when_moderate:
+      - add_flag: "FLAG_NEEDS_GENTLE_VERIFICATION"
+      - coaching_overlay: "COACH_VERIFY_NEXT"
+      - add_meta: { hesitation_band: "moderate" }
+      - lower_confidence: 0.2
+
+    when_high:
+      - add_flag: "FLAG_TRUTH_RISK_HIGH"
+      - require_followups: true
+      - coaching_overlay: "COACH_TRUTH_RECOVERY"
+      - add_meta: { hesitation_band: "high" }
+      - lower_confidence: 0.4
+      - create_audit_event: "HESITATION_HIGH_DETECTED"
+
+  # Question-specific sensitivity adjustments
+  question_sensitivity:
+    high_sensitivity:
+      # Financial questions - expected to have some uncertainty
+      - "Q_INC_0303"   # income
+      - "Q_AST_0401"   # checking
+      - "Q_AST_0402"   # savings
+      threshold_adjustment: 0.1  # Allow slightly more hesitation
+
+    low_sensitivity:
+      # Identity questions - should be answered quickly
+      - "Q_ID_0200"    # name
+      - "Q_ID_0201"    # DOB
+      - "Q_ID_0204"    # email
+      threshold_adjustment: -0.15  # Less tolerance for hesitation
+
+  # False positive reduction
+  false_positive_filters:
+    - name: "first_question_grace"
+      description: "First question in session may have setup latency"
+      rule:
+        question_index: 0
+        ignore_signals: ["SIG_LATENCY_LONG"]
+
+    - name: "address_autofill_delay"
+      description: "Address autofill may cause timing delays"
+      rule:
+        answer_type: "address"
+        ignore_signals: ["SIG_LATENCY_LONG", "SIG_LATENCY_VERY_LONG"]
+
+    - name: "employer_lookup_delay"
+      description: "Employer lookup may cause timing delays"
+      rule:
+        answer_type: "employer"
+        ignore_signals: ["SIG_LATENCY_LONG"]
+
+    - name: "mobile_slower"
+      description: "Mobile devices may have slower input"
+      rule:
+        device_type: "mobile"
+        threshold_adjustment: 0.1

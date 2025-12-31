@@ -1,0 +1,178 @@
+truth_score_model:
+  version: "1.0.0"
+  score_name: "underwriting_truth_score"
+  description: "Measures trustworthiness and consistency of intake data"
+  range: [0, 100]
+
+  # Component weights (must sum to 1.0)
+  components:
+    completeness:
+      weight: 0.35
+      description: "How complete is the required information"
+      inputs:
+        - metric: "required_fields_completion_pct"
+          weight: 0.6
+        - metric: "required_docs_intent_collected_pct"
+          weight: 0.4
+
+    internal_consistency:
+      weight: 0.30
+      description: "Do answers align logically with each other"
+      inputs:
+        - metric: "cross_field_consistency_pct"
+          weight: 0.5
+        - metric: "contradiction_count"
+          weight: 0.3
+          scoring: "inverse"  # More contradictions = lower score
+        - metric: "timeline_consistency"
+          weight: 0.2
+
+    evidence_alignment:
+      weight: 0.25
+      description: "Is there evidence backing the claims"
+      inputs:
+        - metric: "bank_linked_or_statements_uploaded"
+          weight: 0.25
+          binary: true
+          value_if_true: 1.0
+          value_if_false: 0.5
+        - metric: "paystub_or_w2_intent_confirmed"
+          weight: 0.25
+          binary: true
+          value_if_true: 1.0
+          value_if_false: 0.5
+        - metric: "address_autofill_used"
+          weight: 0.2
+          binary: true
+          value_if_true: 1.0
+          value_if_false: 0.7
+        - metric: "employer_autofill_used"
+          weight: 0.2
+          binary: true
+          value_if_true: 1.0
+          value_if_false: 0.7
+        - metric: "confidence_score_avg"
+          weight: 0.1
+
+    behavioral_confidence:
+      weight: 0.10
+      description: "Behavioral signals during intake"
+      inputs:
+        - metric: "inverse_hesitation_score"
+          formula: "1.0 - hesitation_score"
+          weight: 0.7
+        - metric: "edit_rate_normalized"
+          weight: 0.3
+          scoring: "inverse"
+
+  # Penalties for specific risk patterns
+  penalties:
+    - id: "PEN_INCOME_LARGE_EMPLOYMENT_UNKNOWN"
+      description: "Large income claim with vague employment"
+      when:
+        conditions:
+          - "answers.Q_INC_0303 > 20000"
+          - "answers.Q_INC_0301 is null or empty"
+      deduct: 12
+      severity: "high"
+      add_flags: ["FLAG_INCOME_INCONSISTENCY"]
+
+    - id: "PEN_PURCHASE_HIGH_ASSETS_LOW"
+      description: "High purchase price but low stated assets"
+      when:
+        conditions:
+          - "answers.Q_PURP_0011 > 500000"
+          - "(answers.Q_AST_0401 + answers.Q_AST_0402 + answers.Q_AST_0403) < 25000"
+      deduct: 12
+      severity: "high"
+      add_flags: ["FLAG_ASSETS_LOW_FOR_PRICE"]
+
+    - id: "PEN_DECLARATION_RISK_UNCLEAR"
+      description: "Declaration yes without required details"
+      when:
+        flag_present: "FLAG_DECLARATIONS_YES_NO_DETAIL"
+      deduct: 15
+      severity: "critical"
+
+    - id: "PEN_INVESTMENT_NO_RENT"
+      description: "Investment property with no expected rent"
+      when:
+        conditions:
+          - "answers.Q_PROP_0110 == 'Investment'"
+          - "answers.Q_RENT_0118 is null or 0"
+      deduct: 8
+      severity: "warn"
+
+    - id: "PEN_SELF_EMPLOYED_SHORT_HISTORY"
+      description: "Self-employed less than 2 years"
+      when:
+        conditions:
+          - "answers.Q_INC_0300 == 'SelfEmployed'"
+          - "answers.Q_INC_0312 < 2"
+      deduct: 5
+      severity: "info"
+
+    - id: "PEN_HIGH_HESITATION"
+      description: "High hesitation throughout intake"
+      when:
+        condition: "session.scores.hesitation_score >= 0.75"
+      deduct: 10
+      severity: "high"
+
+    - id: "PEN_MULTIPLE_EDITS"
+      description: "Excessive editing of answers"
+      when:
+        condition: "session.signals.edits_count >= 10"
+      deduct: 5
+      severity: "warn"
+
+  # Bonuses for positive signals
+  bonuses:
+    - id: "BON_PLAID_LINKED"
+      description: "Bank accounts linked via Plaid"
+      when:
+        condition: "session.evidence.plaid_linked == true"
+      add: 5
+      max_score: 100
+
+    - id: "BON_EMPLOYER_VERIFIED"
+      description: "Employer selected from verified database"
+      when:
+        condition: "session.answer_meta.Q_INC_0301.evidence_source == 'autofill'"
+      add: 3
+      max_score: 100
+
+    - id: "BON_NO_HESITATION"
+      description: "Consistent, confident answers throughout"
+      when:
+        condition: "session.scores.hesitation_score < 0.20"
+      add: 5
+      max_score: 100
+
+  # Score band mapping (drives SLA track color)
+  severity_mapping:
+    "90_100":
+      label: "High Truth"
+      band: "GREEN"
+      sla_track: "GREEN"
+      description: "Highly consistent and complete application"
+    "75_89":
+      label: "Good Truth"
+      band: "LIGHT_GREEN"
+      sla_track: "LIGHT_GREEN"
+      description: "Good quality with minor gaps"
+    "55_74":
+      label: "Medium Truth"
+      band: "YELLOW"
+      sla_track: "YELLOW"
+      description: "Some inconsistencies or gaps need attention"
+    "35_54":
+      label: "Low Truth"
+      band: "ORANGE"
+      sla_track: "ORANGE"
+      description: "Significant concerns, verification needed"
+    "0_34":
+      label: "Very Low Truth"
+      band: "RED"
+      sla_track: "RED"
+      description: "Major issues, requires immediate review"

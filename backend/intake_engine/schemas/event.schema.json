@@ -1,0 +1,193 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AuditEvent",
+  "description": "Immutable audit event for intake engine",
+  "type": "object",
+  "required": ["event_id", "session_id", "event_type", "created_at", "payload", "hash_self"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session this event belongs to"
+    },
+    "party_id": {
+      "type": "string",
+      "description": "Party ID if event is party-specific"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "SESSION_STARTED",
+        "SESSION_RESUMED",
+        "SESSION_COMPLETED",
+        "SESSION_ABANDONED",
+        "SESSION_EXPIRED",
+        "QUESTION_SHOWN",
+        "ANSWER_SUBMITTED",
+        "ANSWER_EDITED",
+        "VALIDATION_ERROR",
+        "VALIDATION_PASSED",
+        "FLAG_ADDED",
+        "FLAG_REMOVED",
+        "SCORE_UPDATED",
+        "CONSENT_CAPTURED",
+        "CONSENT_DECLINED",
+        "SLA_TASK_CREATED",
+        "OVERLAY_TRIGGERED",
+        "SECTION_CHANGED",
+        "PARTY_ADDED",
+        "URLA_GENERATED"
+      ],
+      "description": "Type of event"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific payload data",
+      "additionalProperties": true
+    },
+    "hash_prev": {
+      "type": "string",
+      "description": "Hash of previous event in chain (null for first event)"
+    },
+    "hash_self": {
+      "type": "string",
+      "description": "SHA-256 hash of this event (hash_prev + event_type + payload + created_at)"
+    },
+    "pii_redacted": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether PII was redacted from payload"
+    }
+  },
+  "event_payloads": {
+    "SESSION_STARTED": {
+      "type": "object",
+      "properties": {
+        "locale": { "type": "string" },
+        "mode": { "type": "string" },
+        "app_version": { "type": "string" },
+        "user_agent": { "type": "string" },
+        "ip_address": { "type": "string" }
+      }
+    },
+    "QUESTION_SHOWN": {
+      "type": "object",
+      "properties": {
+        "question_id": { "type": "string" },
+        "section": { "type": "string" },
+        "party_id": { "type": "string" }
+      }
+    },
+    "ANSWER_SUBMITTED": {
+      "type": "object",
+      "properties": {
+        "question_id": { "type": "string" },
+        "answer_hash": {
+          "type": "string",
+          "description": "Hash of answer value for PII protection"
+        },
+        "answer_summary": {
+          "type": "string",
+          "description": "Non-PII summary of answer type"
+        },
+        "response_time_ms": { "type": "integer" },
+        "edits_count": { "type": "integer" },
+        "confidence": { "type": "number" },
+        "evidence_source": { "type": "string" },
+        "party_id": { "type": "string" }
+      }
+    },
+    "ANSWER_EDITED": {
+      "type": "object",
+      "properties": {
+        "question_id": { "type": "string" },
+        "edit_number": { "type": "integer" },
+        "old_answer_hash": { "type": "string" },
+        "new_answer_hash": { "type": "string" }
+      }
+    },
+    "VALIDATION_ERROR": {
+      "type": "object",
+      "properties": {
+        "question_id": { "type": "string" },
+        "validation_type": { "type": "string" },
+        "severity": { "type": "string" },
+        "message_key": { "type": "string" }
+      }
+    },
+    "FLAG_ADDED": {
+      "type": "object",
+      "properties": {
+        "flag_code": { "type": "string" },
+        "category": { "type": "string" },
+        "severity": { "type": "string" },
+        "triggered_by": { "type": "string" }
+      }
+    },
+    "SCORE_UPDATED": {
+      "type": "object",
+      "properties": {
+        "score_type": {
+          "type": "string",
+          "enum": ["hesitation", "truth", "readiness"]
+        },
+        "previous_score": { "type": "number" },
+        "new_score": { "type": "number" },
+        "previous_band": { "type": "string" },
+        "new_band": { "type": "string" }
+      }
+    },
+    "CONSENT_CAPTURED": {
+      "type": "object",
+      "properties": {
+        "consent_key": { "type": "string" },
+        "accepted": { "type": "boolean" },
+        "version_hash": { "type": "string" },
+        "ip_address": { "type": "string" }
+      }
+    },
+    "SLA_TASK_CREATED": {
+      "type": "object",
+      "properties": {
+        "task_code": { "type": "string" },
+        "priority": { "type": "string" },
+        "triggered_by": { "type": "string" },
+        "task_id": { "type": "string" }
+      }
+    },
+    "OVERLAY_TRIGGERED": {
+      "type": "object",
+      "properties": {
+        "overlay_code": { "type": "string" },
+        "triggered_by": { "type": "string" },
+        "next_question_id": { "type": "string" }
+      }
+    },
+    "PARTY_ADDED": {
+      "type": "object",
+      "properties": {
+        "party_id": { "type": "string" },
+        "party_type": { "type": "string" }
+      }
+    },
+    "SESSION_COMPLETED": {
+      "type": "object",
+      "properties": {
+        "final_truth_score": { "type": "number" },
+        "final_readiness_score": { "type": "number" },
+        "total_questions": { "type": "integer" },
+        "duration_ms": { "type": "integer" },
+        "flags_count": { "type": "integer" }
+      }
+    }
+  }
+}

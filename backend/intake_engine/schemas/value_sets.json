@@ -1,0 +1,254 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ValueSets",
+  "description": "Central enumeration value sets to prevent drift",
+  "version": "1.0.0",
+  "locale": "en-US",
+  "enums": {
+    "locale": {
+      "values": ["en-US", "es-US"],
+      "default": "en-US"
+    },
+    "loan_purpose": {
+      "values": ["Purchase", "Refinance"],
+      "labels": {
+        "Purchase": "Buying a home",
+        "Refinance": "Refinancing a home I own"
+      }
+    },
+    "refinance_reason": {
+      "values": [
+        "LowerRate",
+        "LowerPayment",
+        "CashOut",
+        "ShortenTerm",
+        "ConsolidateDebt",
+        "RemovePMI",
+        "Other"
+      ],
+      "labels": {
+        "LowerRate": "Lower my interest rate",
+        "LowerPayment": "Lower my monthly payment",
+        "CashOut": "Take cash out",
+        "ShortenTerm": "Shorten my loan term",
+        "ConsolidateDebt": "Consolidate debt",
+        "RemovePMI": "Remove PMI/MIP",
+        "Other": "Other reason"
+      }
+    },
+    "occupancy_type": {
+      "values": ["PrimaryResidence", "SecondHome", "Investment"],
+      "labels": {
+        "PrimaryResidence": "Primary residence (where I'll live)",
+        "SecondHome": "Second/vacation home",
+        "Investment": "Investment/rental property"
+      }
+    },
+    "property_type": {
+      "values": [
+        "SingleFamily",
+        "Condo",
+        "Townhouse",
+        "MultiFamily2",
+        "MultiFamily3",
+        "MultiFamily4",
+        "Manufactured",
+        "Cooperative"
+      ],
+      "labels": {
+        "SingleFamily": "Single-family home",
+        "Condo": "Condominium",
+        "Townhouse": "Townhouse",
+        "MultiFamily2": "2-unit property",
+        "MultiFamily3": "3-unit property",
+        "MultiFamily4": "4-unit property",
+        "Manufactured": "Manufactured/mobile home",
+        "Cooperative": "Co-op"
+      }
+    },
+    "employment_status": {
+      "values": ["W2", "SelfEmployed", "Retired", "Military", "Other"],
+      "labels": {
+        "W2": "W-2 employee",
+        "SelfEmployed": "Self-employed",
+        "Retired": "Retired",
+        "Military": "Active military",
+        "Other": "Other income source"
+      }
+    },
+    "business_type": {
+      "values": [
+        "SoleProprietor",
+        "Partnership",
+        "SCorp",
+        "CCorp",
+        "LLC",
+        "Other"
+      ],
+      "labels": {
+        "SoleProprietor": "Sole proprietor",
+        "Partnership": "Partnership",
+        "SCorp": "S-Corporation",
+        "CCorp": "C-Corporation",
+        "LLC": "LLC",
+        "Other": "Other"
+      }
+    },
+    "down_payment_source": {
+      "values": [
+        "Savings",
+        "Checking",
+        "Gift",
+        "Retirement401k",
+        "SaleOfHome",
+        "Grant",
+        "SellerCredit",
+        "Stocks",
+        "Other"
+      ],
+      "labels": {
+        "Savings": "Savings account",
+        "Checking": "Checking account",
+        "Gift": "Gift from family/friend",
+        "Retirement401k": "401(k) or retirement account",
+        "SaleOfHome": "Sale of current home",
+        "Grant": "Down payment assistance/grant",
+        "SellerCredit": "Seller credit",
+        "Stocks": "Stocks/investments",
+        "Other": "Other source"
+      }
+    },
+    "asset_type": {
+      "values": [
+        "Checking",
+        "Savings",
+        "MoneyMarket",
+        "CD",
+        "StocksBonds",
+        "Retirement",
+        "Trust",
+        "Gift",
+        "Grant",
+        "Other"
+      ]
+    },
+    "liability_type": {
+      "values": [
+        "Mortgage",
+        "HELOC",
+        "AutoLoan",
+        "StudentLoan",
+        "CreditCard",
+        "Installment",
+        "ChildSupport",
+        "Alimony",
+        "Other"
+      ]
+    },
+    "citizenship_status": {
+      "values": ["USCitizen", "PermanentResident", "NonPermanentResident"],
+      "labels": {
+        "USCitizen": "U.S. Citizen",
+        "PermanentResident": "Permanent Resident Alien",
+        "NonPermanentResident": "Non-Permanent Resident Alien"
+      }
+    },
+    "marital_status": {
+      "values": ["Married", "Separated", "Unmarried"],
+      "labels": {
+        "Married": "Married",
+        "Separated": "Separated",
+        "Unmarried": "Unmarried (single, divorced, widowed)"
+      }
+    },
+    "housing_type": {
+      "values": ["Own", "Rent", "NoRent"],
+      "labels": {
+        "Own": "Own",
+        "Rent": "Rent",
+        "NoRent": "No primary housing expense"
+      }
+    },
+    "bankruptcy_chapter": {
+      "values": ["Chapter7", "Chapter11", "Chapter12", "Chapter13"],
+      "labels": {
+        "Chapter7": "Chapter 7",
+        "Chapter11": "Chapter 11",
+        "Chapter12": "Chapter 12",
+        "Chapter13": "Chapter 13"
+      }
+    },
+    "yes_no": {
+      "values": [true, false],
+      "labels": {
+        "true": "Yes",
+        "false": "No"
+      }
+    },
+    "party_type": {
+      "values": ["PRIMARY", "CO_BORROWER", "NON_BORROWING_SPOUSE"],
+      "labels": {
+        "PRIMARY": "Primary Borrower",
+        "CO_BORROWER": "Co-Borrower",
+        "NON_BORROWING_SPOUSE": "Non-Borrowing Spouse"
+      }
+    },
+    "loan_type": {
+      "values": ["Conventional", "FHA", "VA", "USDA", "Jumbo", "NonQM"],
+      "labels": {
+        "Conventional": "Conventional",
+        "FHA": "FHA",
+        "VA": "VA",
+        "USDA": "USDA/Rural Housing",
+        "Jumbo": "Jumbo",
+        "NonQM": "Non-QM/Alternative"
+      }
+    },
+    "hmda_ethnicity": {
+      "values": [
+        "HispanicOrLatino",
+        "NotHispanicOrLatino",
+        "PreferNotToSay"
+      ]
+    },
+    "hmda_race": {
+      "values": [
+        "AmericanIndianOrAlaskaNative",
+        "Asian",
+        "BlackOrAfricanAmerican",
+        "NativeHawaiianOrPacificIslander",
+        "White",
+        "PreferNotToSay"
+      ]
+    },
+    "hmda_sex": {
+      "values": ["Male", "Female", "PreferNotToSay"]
+    }
+  },
+  "range_options": {
+    "income_ranges": [
+      { "min": 0, "max": 3000, "label": "Under $3,000/month" },
+      { "min": 3000, "max": 5000, "label": "$3,000 - $5,000/month" },
+      { "min": 5000, "max": 8000, "label": "$5,000 - $8,000/month" },
+      { "min": 8000, "max": 12000, "label": "$8,000 - $12,000/month" },
+      { "min": 12000, "max": 20000, "label": "$12,000 - $20,000/month" },
+      { "min": 20000, "max": null, "label": "Over $20,000/month" }
+    ],
+    "asset_ranges": [
+      { "min": 0, "max": 10000, "label": "Under $10,000" },
+      { "min": 10000, "max": 25000, "label": "$10,000 - $25,000" },
+      { "min": 25000, "max": 50000, "label": "$25,000 - $50,000" },
+      { "min": 50000, "max": 100000, "label": "$50,000 - $100,000" },
+      { "min": 100000, "max": 250000, "label": "$100,000 - $250,000" },
+      { "min": 250000, "max": null, "label": "Over $250,000" }
+    ],
+    "purchase_price_ranges": [
+      { "min": 0, "max": 200000, "label": "Under $200,000" },
+      { "min": 200000, "max": 350000, "label": "$200,000 - $350,000" },
+      { "min": 350000, "max": 500000, "label": "$350,000 - $500,000" },
+      { "min": 500000, "max": 750000, "label": "$500,000 - $750,000" },
+      { "min": 750000, "max": 1000000, "label": "$750,000 - $1,000,000" },
+      { "min": 1000000, "max": null, "label": "Over $1,000,000" }
+    ]
+  }
+}

@@ -1,0 +1,288 @@
+engine:
+  name: "urla_intake_sequencer"
+  version: "1.0.0"
+  description: "Dynamic intake engine for URLA-mapped pre-qualification"
+
+global_order:
+  - "LANGUAGE"
+  - "ELIGIBILITY_VA"
+  - "PURPOSE_AND_GOALS"
+  - "IDENTITY"
+  - "PROPERTY"
+  - "EMPLOYMENT_INCOME"
+  - "ASSETS"
+  - "LIABILITIES"
+  - "DECLARATIONS"
+  - "CONSENTS"
+  - "DEMOGRAPHICS"
+  - "SCHEDULE_AND_HANDOFF"
+
+sections:
+  LANGUAGE:
+    entry_question_id: "Q_LANG_0001"
+    questions:
+      - "Q_LANG_0001"
+    required_for_completion: true
+    next:
+      - when: { always: true }
+        then: { goto: "ELIGIBILITY_VA" }
+
+  ELIGIBILITY_VA:
+    entry_question_id: "Q_VA_0002"
+    questions:
+      - "Q_VA_0002"
+    next:
+      - when: { answers: { Q_VA_0002: true } }
+        then:
+          add_flags: ["FLAG_VA_FLOW"]
+          goto: "PURPOSE_AND_GOALS"
+      - when: { answers: { Q_VA_0002: false } }
+        then: { goto: "PURPOSE_AND_GOALS" }
+
+  PURPOSE_AND_GOALS:
+    entry_question_id: "Q_PURP_0010"
+    questions:
+      - "Q_PURP_0010"
+      - "Q_PURP_0011"
+      - "Q_PURP_0012"
+      - "Q_PURP_0013"
+      - "Q_PURP_0014"
+    dynamic_next:
+      - when: { answers: { Q_PURP_0010: "Purchase" } }
+        then:
+          add_flags: ["FLAG_PURCHASE"]
+          require_questions: ["Q_PURP_0011"]
+          skip_questions: ["Q_PURP_0012", "Q_PURP_0013", "Q_PURP_0014"]
+      - when: { answers: { Q_PURP_0010: "Refinance" } }
+        then:
+          add_flags: ["FLAG_REFI"]
+          require_questions: ["Q_PURP_0012", "Q_PURP_0013"]
+          skip_questions: ["Q_PURP_0011"]
+    goto_on_exit: "IDENTITY"
+
+  IDENTITY:
+    entry_question_id: "Q_ID_0200"
+    party_aware: true
+    questions:
+      - "Q_ID_0200"
+      - "Q_ID_0201"
+      - "Q_ID_0202"
+      - "Q_ID_0203"
+      - "Q_ID_0204"
+      - "Q_ID_0205"
+      - "Q_ID_0206"
+      - "Q_ID_0207"
+      - "Q_ADDR_0210"
+      - "Q_ADDR_0211"
+      - "Q_ADDR_0212"
+      - "Q_ADDR_0213"
+    exit_when_minimum_complete:
+      required_fields:
+        - "borrower.first_name"
+        - "borrower.last_name"
+        - "borrower.dob"
+        - "borrower.ssn_last4"
+        - "borrower.phone"
+        - "borrower.email"
+        - "borrower.current_address"
+    goto_on_exit: "PROPERTY"
+
+  PROPERTY:
+    entry_question_id: "Q_PROP_0100"
+    questions:
+      - "Q_PROP_0100"
+      - "Q_PROP_0101"
+      - "Q_PROP_0110"
+      - "Q_RENT_0118"
+      - "Q_PROP_0120"
+      - "Q_PROP_0121"
+    branching:
+      - when: { answers: { Q_PROP_0110: "PrimaryResidence" } }
+        then: { add_flags: ["FLAG_OCC_PRIMARY"] }
+      - when: { answers: { Q_PROP_0110: "SecondHome" } }
+        then: { add_flags: ["FLAG_OCC_SECOND"] }
+      - when: { answers: { Q_PROP_0110: "Investment" } }
+        then:
+          add_flags: ["FLAG_OCC_INVESTMENT"]
+          require_questions: ["Q_RENT_0118"]
+    goto_on_exit: "EMPLOYMENT_INCOME"
+
+  EMPLOYMENT_INCOME:
+    entry_question_id: "Q_INC_0300"
+    party_aware: true
+    questions:
+      - "Q_INC_0300"
+      - "Q_INC_0301"
+      - "Q_INC_0302"
+      - "Q_INC_0303"
+      - "Q_INC_0304"
+      - "Q_INC_0305"
+      - "Q_INC_0310"
+      - "Q_INC_0311"
+      - "Q_INC_0312"
+      - "Q_INC_0313"
+      - "Q_INC_0320"
+      - "Q_INC_0321"
+      - "Q_INC_0330"
+      - "Q_INC_0331"
+    branching:
+      - when: { answers: { Q_INC_0300: "W2" } }
+        then:
+          add_flags: ["FLAG_INCOME_W2"]
+          require_questions: ["Q_INC_0301", "Q_INC_0303"]
+          skip_questions: ["Q_INC_0310", "Q_INC_0311", "Q_INC_0312", "Q_INC_0313", "Q_INC_0320", "Q_INC_0321"]
+      - when: { answers: { Q_INC_0300: "SelfEmployed" } }
+        then:
+          add_flags: ["FLAG_SELF_EMPLOYED"]
+          require_questions: ["Q_INC_0310", "Q_INC_0311", "Q_INC_0312", "Q_INC_0313"]
+          skip_questions: ["Q_INC_0301", "Q_INC_0302", "Q_INC_0320", "Q_INC_0321"]
+      - when: { answers: { Q_INC_0300: "Retired" } }
+        then:
+          add_flags: ["FLAG_RETIRED"]
+          require_questions: ["Q_INC_0320", "Q_INC_0321"]
+          skip_questions: ["Q_INC_0301", "Q_INC_0302", "Q_INC_0310", "Q_INC_0311", "Q_INC_0312", "Q_INC_0313"]
+    goto_on_exit: "ASSETS"
+
+  ASSETS:
+    entry_question_id: "Q_AST_0400"
+    party_aware: true
+    questions:
+      - "Q_AST_0400"
+      - "Q_AST_0401"
+      - "Q_AST_0402"
+      - "Q_AST_0403"
+      - "Q_AST_0404"
+      - "Q_AST_0410"
+      - "Q_AST_0411"
+      - "Q_AST_0412"
+    branching:
+      - when: { answers: { Q_AST_0400: { contains: "Gift" } } }
+        then:
+          add_flags: ["FLAG_ASSET_GIFT"]
+          require_questions: ["Q_AST_0410", "Q_AST_0411", "Q_AST_0412"]
+    goto_on_exit: "LIABILITIES"
+
+  LIABILITIES:
+    entry_question_id: "Q_LIA_0500"
+    party_aware: true
+    questions:
+      - "Q_LIA_0500"
+      - "Q_LIA_0501"
+      - "Q_LIA_0502"
+      - "Q_LIA_0503"
+      - "Q_LIA_0504"
+      - "Q_LIA_0505"
+      - "Q_LIA_0506"
+      - "Q_LIA_0507"
+    goto_on_exit: "DECLARATIONS"
+
+  DECLARATIONS:
+    entry_question_id: "Q_DEC_0601"
+    party_aware: true
+    questions:
+      - "Q_DEC_0601"
+      - "Q_DEC_0602"
+      - "Q_DEC_0603"
+      - "Q_DEC_0610"
+      - "Q_DEC_0611"
+      - "Q_DEC_0620"
+      - "Q_DEC_0621"
+      - "Q_DEC_0630"
+      - "Q_DEC_0640"
+      - "Q_DEC_0650"
+      - "Q_DEC_0660"
+      - "Q_DEC_0670"
+    branching:
+      - when: { answers: { Q_DEC_0601: true } }
+        then:
+          add_flags: ["FLAG_BANKRUPTCY", "FLAG_DECLARATIONS_YES"]
+          require_questions: ["Q_DEC_0602", "Q_DEC_0603"]
+      - when: { answers: { Q_DEC_0610: true } }
+        then:
+          add_flags: ["FLAG_FORECLOSURE", "FLAG_DECLARATIONS_YES"]
+          require_questions: ["Q_DEC_0611"]
+      - when: { answers: { Q_DEC_0620: true } }
+        then:
+          add_flags: ["FLAG_DECLARATIONS_YES"]
+          require_questions: ["Q_DEC_0621"]
+    goto_on_exit: "CONSENTS"
+
+  CONSENTS:
+    entry_question_id: "Q_CONS_0700"
+    questions:
+      - "Q_CONS_0700"
+      - "Q_CONS_0701"
+      - "Q_CONS_0702"
+      - "Q_CONS_0703"
+    required_for_completion: true
+    branching:
+      - when: { answers: { Q_CONS_0700: false } }
+        then:
+          add_flags: ["FLAG_ECONSENT_DECLINED"]
+      - when: { answers: { Q_CONS_0701: false } }
+        then:
+          add_flags: ["FLAG_BLOCK_CREDIT_PULL"]
+      - when: { answers: { Q_CONS_0702: false } }
+        then:
+          add_flags: ["FLAG_TCPA_DECLINED"]
+    goto_on_exit: "DEMOGRAPHICS"
+
+  DEMOGRAPHICS:
+    entry_question_id: "Q_DEMO_0800"
+    party_aware: true
+    optional: true
+    hmda_segregated: true
+    questions:
+      - "Q_DEMO_0800"
+      - "Q_DEMO_0801"
+      - "Q_DEMO_0802"
+      - "Q_DEMO_0803"
+    goto_on_exit: "SCHEDULE_AND_HANDOFF"
+
+  SCHEDULE_AND_HANDOFF:
+    entry_question_id: "Q_SCH_0900"
+    questions:
+      - "Q_SCH_0900"
+      - "Q_SCH_0901"
+    actions_on_exit:
+      - compute: ["hesitation_score", "truth_score", "readiness_score"]
+      - create_sla_tasks: true
+      - generate_urla_payload: true
+      - redirect: { url: "/portal/next-steps" }
+
+prioritization:
+  scoring_weights:
+    missing_required: 6
+    low_confidence: 5
+    high_severity_flag: 8
+    inconsistency: 7
+    hesitation_detected: 4
+    overlay_next_best: 9
+
+  category_order:
+    - "identity"
+    - "income"
+    - "assets"
+    - "property"
+    - "declarations"
+
+multi_borrower:
+  enabled: true
+  max_borrowers: 4
+  party_types:
+    - "PRIMARY"
+    - "CO_BORROWER"
+    - "NON_BORROWING_SPOUSE"
+  ask_co_borrower_after: "IDENTITY"
+  co_borrower_prompt: "Q_COBOR_0001"
+  nbs_prompt: "Q_NBS_0001"
+  community_property_states:
+    - "AZ"
+    - "CA"
+    - "ID"
+    - "LA"
+    - "NV"
+    - "NM"
+    - "TX"
+    - "WA"
+    - "WI"

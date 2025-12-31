@@ -1,0 +1,107 @@
+language_pack:
+  default_locale: "en-US"
+  supported_locales:
+    - "en-US"
+    - "es-US"
+  fallback_locale: "en-US"
+
+translation_strategy:
+  provider: "llm_translation_with_glossary"
+  require_human_review: true
+  glossary:
+    - term: "interest rate"
+      es: "tasa de interés"
+      keep_consistent: true
+    - term: "down payment"
+      es: "pago inicial"
+      keep_consistent: true
+    - term: "bankruptcy"
+      es: "bancarrota"
+      keep_consistent: true
+    - term: "foreclosure"
+      es: "ejecución hipotecaria"
+      keep_consistent: true
+    - term: "refinance"
+      es: "refinanciamiento"
+      keep_consistent: true
+    - term: "loan officer"
+      es: "oficial de préstamos"
+      keep_consistent: true
+    - term: "pre-qualification"
+      es: "pre-calificación"
+      keep_consistent: true
+    - term: "credit report"
+      es: "reporte de crédito"
+      keep_consistent: true
+    - term: "Social Security number"
+      es: "número de Seguro Social"
+      keep_consistent: true
+    - term: "primary residence"
+      es: "residencia principal"
+      keep_consistent: true
+    - term: "investment property"
+      es: "propiedad de inversión"
+      keep_consistent: true
+    - term: "self-employed"
+      es: "trabajador independiente"
+      keep_consistent: true
+
+safety:
+  preserve_numbers_and_currency: true
+  preserve_yes_no_semantics: true
+  never_translate_field_keys: true
+  preserve_date_formats: true
+  preserve_phone_formats: true
+
+tone_rules:
+  principles:
+    - "Fast, warm, confident"
+    - "One question at a time"
+    - "Explain why we ask (micro-why) only when friction appears"
+    - "Avoid blame; normalize uncertainty"
+    - "Use plain language; avoid underwriting jargon"
+    - "Be respectful of cultural differences"
+
+  non_interrogative_patterns:
+    en-US:
+      - "Help me understand…"
+      - "Just to make sure I've got it right…"
+      - "What's the closest option?"
+      - "If you're not 100% sure, that's normal—pick your best estimate."
+      - "No worries if you need to look this up."
+      - "A rough estimate is fine for now."
+    es-US:
+      - "Ayúdeme a entender…"
+      - "Solo para asegurarme de que tengo la información correcta…"
+      - "¿Cuál es la opción más cercana?"
+      - "Si no está 100% seguro, es normal—elija su mejor estimación."
+      - "No hay problema si necesita buscar esto."
+      - "Una estimación aproximada está bien por ahora."
+
+uncertainty_handlers:
+  triggers:
+    - "i don't know"
+    - "not sure"
+    - "approximately"
+    - "maybe"
+    - "around"
+    - "i think"
+    - "probably"
+    - "no sé"
+    - "no estoy seguro"
+    - "aproximadamente"
+    - "tal vez"
+    - "creo que"
+
+  response_style:
+    - "Offer 3-button choices (estimate ranges)"
+    - "Ask for best guess + follow-up verification path"
+    - "Mark confidence lower but let the user continue"
+    - "Never make user feel bad for uncertainty"
+
+cultural_considerations:
+  es-US:
+    - "Use formal 'usted' form"
+    - "Be aware of different date formats"
+    - "Some users may be more comfortable with paper"
+    - "Family financial structures may differ"

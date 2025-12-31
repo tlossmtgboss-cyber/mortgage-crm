@@ -1,0 +1,59 @@
+product_overlays:
+  FANNIE:
+    focus:
+      - "occupancy clarity"
+      - "assets sourcing"
+      - "declared liabilities completeness"
+    followup_bias:
+      income_verification: 1.0
+      assets_large_deposits: 1.2
+      declarations_details: 1.1
+
+  FREDDIE:
+    focus:
+      - "employment stability narrative"
+      - "rental/investment logic"
+    followup_bias:
+      income_stability: 1.2
+      property_rent: 1.2
+
+  FHA:
+    focus:
+      - "gift sourcing and documentation intent"
+      - "credit event timeline clarity"
+    followup_bias:
+      assets_gift: 1.3
+      credit_event_dates: 1.3
+
+  VA:
+    focus:
+      - "veteran eligibility details"
+      - "residual-income proxy household picture"
+    followup_bias:
+      household_size: 1.2
+      obligations: 1.1
+
+  USDA:
+    focus:
+      - "property eligibility location"
+      - "household income limit compliance"
+    followup_bias:
+      property_location: 1.3
+      household_income: 1.2
+
+  NON_QM:
+    focus:
+      - "cash-flow truth"
+      - "bank statement / alt doc path"
+    followup_bias:
+      income_cashflow: 1.4
+      deposits_pattern: 1.4
+      bank_statements: 1.5
+
+  JUMBO:
+    focus:
+      - "asset documentation depth"
+      - "reserves verification"
+    followup_bias:
+      assets_reserves: 1.3
+      income_documentation: 1.2

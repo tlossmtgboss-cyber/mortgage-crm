@@ -1,0 +1,185 @@
+readiness_score_model:
+  version: "1.0.0"
+  score_name: "lo_readiness_score"
+  description: "Measures how ready the file is for LO review and accurate pre-qual"
+  range: [0, 100]
+
+  # Section weights (must sum to 100)
+  section_weights:
+    identity_contact:
+      weight: 10
+      required_questions:
+        - "Q_ID_0200"   # name
+        - "Q_ID_0201"   # dob
+        - "Q_ID_0202"   # ssn last 4
+        - "Q_ID_0203"   # phone
+        - "Q_ID_0204"   # email
+        - "Q_ADDR_0210" # current address
+
+    purpose_property:
+      weight: 15
+      required_questions:
+        - "Q_PURP_0010"  # purpose
+        - "Q_PURP_0011"  # purchase price (if purchase)
+        - "Q_PROP_0100"  # property address
+        - "Q_PROP_0110"  # occupancy
+
+    income_employment:
+      weight: 25
+      required_questions:
+        - "Q_INC_0300"   # employment status
+        - "Q_INC_0303"   # base income (if W2)
+        - "Q_INC_0313"   # self-employed income (if SE)
+      conditional_questions:
+        - question: "Q_INC_0301"
+          when: { answers: { Q_INC_0300: "W2" } }
+        - question: "Q_INC_0310"
+          when: { answers: { Q_INC_0300: "SelfEmployed" } }
+
+    assets_down_payment:
+      weight: 20
+      required_questions:
+        - "Q_AST_0400"   # down payment sources
+        - "Q_AST_0401"   # checking balance
+      conditional_questions:
+        - question: "Q_AST_0410"
+          when: { flag: "FLAG_ASSET_GIFT" }
+
+    liabilities_dti_inputs:
+      weight: 10
+      required_questions:
+        - "Q_LIA_0500"   # has mortgages
+        - "Q_LIA_0502"   # has auto loans
+        - "Q_LIA_0504"   # has student loans
+        - "Q_LIA_0505"   # has credit cards
+
+    declarations:
+      weight: 10
+      required_questions:
+        - "Q_DEC_0601"   # bankruptcy
+        - "Q_DEC_0610"   # foreclosure
+        - "Q_DEC_0660"   # citizenship
+      conditional_questions:
+        - question: "Q_DEC_0602"
+          when: { answers: { Q_DEC_0601: true } }
+
+    consents:
+      weight: 10
+      required_questions:
+        - "Q_CONS_0700"  # econsent
+        - "Q_CONS_0701"  # credit auth
+        - "Q_CONS_0703"  # privacy
+
+  # Gating rules (caps that limit max score)
+  gating_rules:
+    - id: "GATE_NO_CREDIT_CONSENT"
+      description: "Cannot proceed without credit authorization"
+      if:
+        answers:
+          Q_CONS_0701: false
+      then:
+        readiness_cap: 40
+        add_flags: ["FLAG_BLOCK_CREDIT_PULL"]
+        message: "Credit authorization required for pre-qualification"
+
+    - id: "GATE_MISSING_CORE_ID"
+      description: "Core identity must be complete"
+      if:
+        missing_any:
+          - "borrower.dob"
+          - "borrower.ssn_last4"
+          - "borrower.current_address"
+      then:
+        readiness_cap: 50
+        add_flags: ["FLAG_MISSING_CORE_ID"]
+        message: "Core identity information required"
+
+    - id: "GATE_NO_INCOME"
+      description: "Must have income information"
+      if:
+        all_missing:
+          - "Q_INC_0303"
+          - "Q_INC_0313"
+          - "Q_INC_0321"
+      then:
+        readiness_cap: 55
+        add_flags: ["FLAG_MISSING_INCOME"]
+        message: "Income information required for pre-qualification"
+
+    - id: "GATE_NO_PROPERTY"
+      description: "Must have property information"
+      if:
+        missing_any:
+          - "Q_PROP_0100"
+          - "Q_PROP_0110"
+      then:
+        readiness_cap: 60
+        add_flags: ["FLAG_MISSING_PROPERTY"]
+        message: "Property information required"
+
+    - id: "GATE_DECLARATIONS_INCOMPLETE"
+      description: "Declarations with yes but no details"
+      if:
+        flag_present: "FLAG_DECLARATIONS_YES_NO_DETAIL"
+      then:
+        readiness_cap: 65
+        message: "Declaration details required"
+
+  # Quality adjustments
+  quality_adjustments:
+    - id: "ADJ_HIGH_TRUTH"
+      description: "Bonus for high truth score"
+      if:
+        truth_score_gte: 85
+      then:
+        readiness_bonus: 5
+        max: 100
+
+    - id: "ADJ_LOW_TRUTH"
+      description: "Penalty for low truth score"
+      if:
+        truth_score_lte: 50
+      then:
+        readiness_penalty: 10
+
+    - id: "ADJ_HIGH_HESITATION"
+      description: "Penalty for high hesitation"
+      if:
+        hesitation_score_gte: 0.70
+      then:
+        readiness_penalty: 8
+
+    - id: "ADJ_COMPLETE_SECTIONS"
+      description: "Bonus for fully complete sections"
+      if:
+        sections_100_complete_gte: 6
+      then:
+        readiness_bonus: 5
+        max: 100
+
+  # Readiness tiers
+  readiness_tiers:
+    - range: [90, 100]
+      label: "Fully Ready"
+      description: "Application complete and ready for immediate LO review"
+      action: "fast_track"
+
+    - range: [75, 89]
+      label: "Mostly Ready"
+      description: "Minor items needed before LO review"
+      action: "standard_review"
+
+    - range: [50, 74]
+      label: "Needs Work"
+      description: "Several items missing or need verification"
+      action: "follow_up_required"
+
+    - range: [25, 49]
+      label: "Incomplete"
+      description: "Significant gaps in application"
+      action: "complete_intake"
+
+    - range: [0, 24]
+      label: "Not Ready"
+      description: "Major components missing"
+      action: "restart_intake"

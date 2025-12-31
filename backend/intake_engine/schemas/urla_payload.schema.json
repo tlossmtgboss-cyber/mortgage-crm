@@ -1,0 +1,369 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "URLA_Payload",
+  "description": "URLA-mapped payload output from intake engine",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string" },
+        "app_version": { "type": "string" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "truth_score": { "type": "number" },
+        "readiness_score": { "type": "number" }
+      }
+    },
+    "borrowers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Borrower"
+      },
+      "description": "Section 1-4: Borrower information (one per party)"
+    },
+    "loan": {
+      "$ref": "#/definitions/LoanInfo"
+    },
+    "property": {
+      "$ref": "#/definitions/PropertyInfo"
+    },
+    "declarations": {
+      "type": "object",
+      "description": "Section 5: Declarations",
+      "properties": {
+        "occupancy_primary_residence": { "type": "boolean" },
+        "ownership_interest_property": { "type": "boolean" },
+        "borrowed_down_payment": { "type": "boolean" },
+        "co_maker_or_endorser": { "type": "boolean" },
+        "outstanding_judgments": { "type": "boolean" },
+        "delinquent_federal_debt": { "type": "boolean" },
+        "party_to_lawsuit": { "type": "boolean" },
+        "conveyed_title_lieu_foreclosure": { "type": "boolean" },
+        "short_sale_preforeclosure": { "type": "boolean" },
+        "property_foreclosed": { "type": "boolean" },
+        "declared_bankruptcy": { "type": "boolean" },
+        "bankruptcy_chapter": { "type": "string" },
+        "bankruptcy_details": { "type": "string" },
+        "us_citizen": { "type": "boolean" },
+        "permanent_resident": { "type": "boolean" }
+      }
+    },
+    "demographics": {
+      "type": "object",
+      "description": "Section 8: Demographics (optional HMDA data)",
+      "properties": {
+        "ethnicity": { "type": "string" },
+        "race": { "type": "array", "items": { "type": "string" } },
+        "sex": { "type": "string" },
+        "declined_to_provide": { "type": "boolean" }
+      }
+    },
+    "consents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "accepted": { "type": "boolean" },
+          "captured_at": { "type": "string", "format": "date-time" },
+          "version_hash": { "type": "string" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Borrower": {
+      "type": "object",
+      "properties": {
+        "party_id": { "type": "string" },
+        "party_type": {
+          "type": "string",
+          "enum": ["PRIMARY", "CO_BORROWER", "NON_BORROWING_SPOUSE"]
+        },
+        "personal_info": {
+          "type": "object",
+          "description": "Section 1a: Personal Information",
+          "properties": {
+            "first_name": { "type": "string" },
+            "middle_name": { "type": "string" },
+            "last_name": { "type": "string" },
+            "suffix": { "type": "string" },
+            "alternate_names": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "date_of_birth": {
+              "type": "string",
+              "format": "date"
+            },
+            "ssn": {
+              "type": "string",
+              "description": "Full SSN if collected, or last 4"
+            },
+            "ssn_last4": { "type": "string" },
+            "citizenship_status": {
+              "type": "string",
+              "enum": ["US_CITIZEN", "PERMANENT_RESIDENT", "NON_PERMANENT_RESIDENT"]
+            },
+            "marital_status": {
+              "type": "string",
+              "enum": ["MARRIED", "SEPARATED", "UNMARRIED"]
+            },
+            "dependents_count": { "type": "integer" },
+            "dependents_ages": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          }
+        },
+        "contact_info": {
+          "type": "object",
+          "description": "Section 1b: Contact Information",
+          "properties": {
+            "email": { "type": "string", "format": "email" },
+            "phone_home": { "type": "string" },
+            "phone_cell": { "type": "string" },
+            "phone_work": { "type": "string" },
+            "phone_work_ext": { "type": "string" },
+            "preferred_contact_method": {
+              "type": "string",
+              "enum": ["EMAIL", "PHONE_CELL", "PHONE_HOME", "PHONE_WORK"]
+            }
+          }
+        },
+        "current_address": {
+          "$ref": "#/definitions/Address",
+          "description": "Section 1c: Current Address"
+        },
+        "mailing_address": {
+          "$ref": "#/definitions/Address"
+        },
+        "previous_addresses": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Address" }
+        },
+        "employment": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Employment" },
+          "description": "Section 1d: Employment"
+        },
+        "income": {
+          "$ref": "#/definitions/Income",
+          "description": "Section 1e: Income"
+        },
+        "assets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Asset" },
+          "description": "Section 2a: Assets"
+        },
+        "liabilities": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Liability" },
+          "description": "Section 2b: Liabilities"
+        },
+        "real_estate_owned": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/RealEstateOwned" },
+          "description": "Section 2c: Real Estate Owned"
+        },
+        "military_service": {
+          "type": "object",
+          "properties": {
+            "is_veteran": { "type": "boolean" },
+            "is_active_duty": { "type": "boolean" },
+            "is_surviving_spouse": { "type": "boolean" },
+            "service_branch": { "type": "string" },
+            "discharge_date": { "type": "string", "format": "date" }
+          }
+        }
+      }
+    },
+    "Address": {
+      "type": "object",
+      "properties": {
+        "street_line1": { "type": "string" },
+        "street_line2": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "zip": { "type": "string" },
+        "county": { "type": "string" },
+        "country": { "type": "string", "default": "US" },
+        "housing_type": {
+          "type": "string",
+          "enum": ["OWN", "RENT", "NO_RENT"]
+        },
+        "monthly_rent_expense": { "type": "number" },
+        "years_at_address": { "type": "number" },
+        "months_at_address": { "type": "integer" }
+      }
+    },
+    "Employment": {
+      "type": "object",
+      "properties": {
+        "employment_type": {
+          "type": "string",
+          "enum": ["W2", "SELF_EMPLOYED", "1099", "RETIRED", "MILITARY", "OTHER"]
+        },
+        "employer_name": { "type": "string" },
+        "employer_address": { "$ref": "#/definitions/Address" },
+        "employer_phone": { "type": "string" },
+        "position_title": { "type": "string" },
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "is_current": { "type": "boolean" },
+        "years_in_profession": { "type": "number" },
+        "ownership_share": {
+          "type": "number",
+          "description": "For self-employed, percentage ownership"
+        },
+        "business_type": { "type": "string" }
+      }
+    },
+    "Income": {
+      "type": "object",
+      "properties": {
+        "base_monthly": { "type": "number" },
+        "overtime_monthly": { "type": "number" },
+        "bonus_monthly": { "type": "number" },
+        "commission_monthly": { "type": "number" },
+        "dividends_monthly": { "type": "number" },
+        "interest_monthly": { "type": "number" },
+        "rental_income_monthly": { "type": "number" },
+        "retirement_monthly": { "type": "number" },
+        "social_security_monthly": { "type": "number" },
+        "other_monthly": { "type": "number" },
+        "other_description": { "type": "string" },
+        "total_monthly": { "type": "number" }
+      }
+    },
+    "Asset": {
+      "type": "object",
+      "properties": {
+        "asset_type": {
+          "type": "string",
+          "enum": [
+            "CHECKING",
+            "SAVINGS",
+            "MONEY_MARKET",
+            "CD",
+            "STOCKS_BONDS",
+            "RETIREMENT",
+            "TRUST",
+            "BRIDGE_LOAN",
+            "GIFT",
+            "GRANT",
+            "OTHER"
+          ]
+        },
+        "institution_name": { "type": "string" },
+        "account_number_last4": { "type": "string" },
+        "current_balance": { "type": "number" },
+        "gift_source": { "type": "string" },
+        "gift_deposited": { "type": "boolean" }
+      }
+    },
+    "Liability": {
+      "type": "object",
+      "properties": {
+        "liability_type": {
+          "type": "string",
+          "enum": [
+            "MORTGAGE",
+            "HELOC",
+            "AUTO_LOAN",
+            "STUDENT_LOAN",
+            "CREDIT_CARD",
+            "INSTALLMENT",
+            "CHILD_SUPPORT",
+            "ALIMONY",
+            "OTHER"
+          ]
+        },
+        "creditor_name": { "type": "string" },
+        "account_number_last4": { "type": "string" },
+        "unpaid_balance": { "type": "number" },
+        "monthly_payment": { "type": "number" },
+        "months_remaining": { "type": "integer" },
+        "will_be_paid_off": { "type": "boolean" }
+      }
+    },
+    "RealEstateOwned": {
+      "type": "object",
+      "properties": {
+        "property_address": { "$ref": "#/definitions/Address" },
+        "property_type": {
+          "type": "string",
+          "enum": ["SINGLE_FAMILY", "CONDO", "TOWNHOUSE", "MULTI_FAMILY", "MANUFACTURED", "COMMERCIAL"]
+        },
+        "property_value": { "type": "number" },
+        "property_status": {
+          "type": "string",
+          "enum": ["SOLD", "PENDING_SALE", "RETAINED"]
+        },
+        "occupancy_type": {
+          "type": "string",
+          "enum": ["PRIMARY", "SECOND_HOME", "INVESTMENT"]
+        },
+        "monthly_insurance": { "type": "number" },
+        "monthly_taxes": { "type": "number" },
+        "monthly_hoa": { "type": "number" },
+        "monthly_rental_income": { "type": "number" },
+        "mortgage_balance": { "type": "number" },
+        "mortgage_payment": { "type": "number" }
+      }
+    },
+    "LoanInfo": {
+      "type": "object",
+      "description": "Section 3: Loan Information",
+      "properties": {
+        "loan_purpose": {
+          "type": "string",
+          "enum": ["PURCHASE", "REFINANCE_RATE_TERM", "REFINANCE_CASH_OUT", "CONSTRUCTION", "HOME_EQUITY"]
+        },
+        "loan_amount_requested": { "type": "number" },
+        "loan_term_months": { "type": "integer" },
+        "loan_type_preference": {
+          "type": "string",
+          "enum": ["CONVENTIONAL", "FHA", "VA", "USDA", "NON_QM", "JUMBO", "UNKNOWN"]
+        },
+        "refinance_purpose": {
+          "type": "string",
+          "enum": ["LOWER_RATE", "LOWER_PAYMENT", "CASH_OUT", "SHORTEN_TERM", "CONSOLIDATE_DEBT", "OTHER"]
+        },
+        "cash_out_amount": { "type": "number" },
+        "down_payment_amount": { "type": "number" },
+        "down_payment_source": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["SAVINGS", "GIFT", "401K", "SALE_OF_HOME", "GRANT", "SELLER_CREDIT", "OTHER"]
+          }
+        }
+      }
+    },
+    "PropertyInfo": {
+      "type": "object",
+      "description": "Section 4: Property Information",
+      "properties": {
+        "property_address": { "$ref": "#/definitions/Address" },
+        "property_type": {
+          "type": "string",
+          "enum": ["SINGLE_FAMILY", "CONDO", "TOWNHOUSE", "2_UNIT", "3_UNIT", "4_UNIT", "MANUFACTURED", "COOPERATIVE"]
+        },
+        "occupancy_type": {
+          "type": "string",
+          "enum": ["PRIMARY_RESIDENCE", "SECOND_HOME", "INVESTMENT"]
+        },
+        "purchase_price": { "type": "number" },
+        "estimated_value": { "type": "number" },
+        "year_built": { "type": "integer" },
+        "number_of_units": { "type": "integer" },
+        "is_mixed_use": { "type": "boolean" },
+        "is_fha_secondary_residence": { "type": "boolean" },
+        "expected_rental_income": { "type": "number" },
+        "hoa_monthly": { "type": "number" },
+        "property_taxes_annual": { "type": "number" },
+        "insurance_annual": { "type": "number" }
+      }
+    }
+  }
+}

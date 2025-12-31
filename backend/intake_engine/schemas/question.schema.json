@@ -1,0 +1,267 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Question",
+  "description": "Schema for intake engine questions",
+  "type": "object",
+  "required": ["question_id", "prompt_key", "urla_section", "answer_types", "required"],
+  "properties": {
+    "question_id": {
+      "type": "string",
+      "pattern": "^Q_[A-Z]{2,5}_\\d{4}$",
+      "description": "Unique identifier for the question (e.g., Q_LANG_0001)"
+    },
+    "prompt_key": {
+      "type": "string",
+      "description": "Key for i18n prompt lookup"
+    },
+    "urla_section": {
+      "type": "string",
+      "description": "URLA section this question maps to"
+    },
+    "urla_payload_path": {
+      "type": "string",
+      "description": "JSONPath for mapping answer to URLA payload"
+    },
+    "required": {
+      "type": "boolean",
+      "description": "Whether this question is required"
+    },
+    "party_aware": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this question should be asked per-party (borrower/co-borrower)"
+    },
+    "answer_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "text",
+          "number",
+          "currency",
+          "boolean",
+          "date",
+          "single_select",
+          "multi_select",
+          "address",
+          "employer",
+          "ssn_last4",
+          "ssn_full",
+          "phone",
+          "email",
+          "percent",
+          "range",
+          "file_upload",
+          "signature"
+        ]
+      },
+      "description": "Allowed answer types for this question"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "value": { "type": ["string", "boolean", "number"] },
+          "label_key": { "type": "string" },
+          "label": { "type": "string" }
+        }
+      },
+      "description": "Options for single_select or multi_select questions"
+    },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "widget": {
+          "type": "string",
+          "enum": [
+            "text_input",
+            "number_input",
+            "currency_input",
+            "date_picker",
+            "radio_group",
+            "checkbox_group",
+            "dropdown",
+            "address_autocomplete",
+            "employer_autocomplete",
+            "masked_input",
+            "phone_input",
+            "email_input",
+            "slider",
+            "range_selector",
+            "file_dropzone",
+            "signature_pad",
+            "language_picker",
+            "smart_scheduler",
+            "yes_no_buttons"
+          ]
+        },
+        "google_places_autofill": { "type": "boolean" },
+        "employer_autofill": { "type": "boolean" },
+        "masking": { "type": "string" },
+        "placeholder": { "type": "string" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "step": { "type": "number" },
+        "currency_format": { "type": "boolean" },
+        "allow_uncertainty": { "type": "boolean" },
+        "range_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "min": { "type": "number" },
+              "max": { "type": "number" },
+              "label": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "UI rendering hints"
+    },
+    "data_class": {
+      "type": "string",
+      "enum": ["PUBLIC", "SENSITIVE", "RESTRICTED"],
+      "default": "SENSITIVE",
+      "description": "PII classification for audit/redaction"
+    },
+    "evidence_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "memory",
+          "bank_statement",
+          "paystub",
+          "w2",
+          "tax_return",
+          "offer_letter",
+          "user_upload",
+          "autofill",
+          "unknown"
+        ]
+      },
+      "description": "Expected evidence sources for this answer"
+    },
+    "validations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "required",
+              "required_if",
+              "range",
+              "regex",
+              "date_before",
+              "date_after",
+              "date_range",
+              "cross_field",
+              "consistency",
+              "email_format",
+              "phone_format",
+              "ssn_format",
+              "address_complete"
+            ]
+          },
+          "args": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "severity": {
+            "enum": ["info", "warn", "high", "critical"],
+            "default": "high"
+          },
+          "message_key": {
+            "type": "string",
+            "description": "i18n key for validation error message"
+          }
+        }
+      },
+      "description": "Validation rules to apply to answers"
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["when", "then"],
+        "properties": {
+          "when": {
+            "type": "object",
+            "description": "Condition to evaluate",
+            "properties": {
+              "equals": { "type": "object" },
+              "in": { "type": "object" },
+              "not_equals": { "type": "object" },
+              "greater_than": { "type": "object" },
+              "less_than": { "type": "object" },
+              "contains": { "type": "object" },
+              "is_empty": { "type": "object" },
+              "is_not_empty": { "type": "object" }
+            }
+          },
+          "then": {
+            "type": "object",
+            "description": "Actions to take when condition is met",
+            "properties": {
+              "add_flags": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "remove_flags": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "set_required": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "set_not_required": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "require_questions": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "skip_questions": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "goto_section": { "type": "string" },
+              "update_session": { "type": "object" }
+            }
+          }
+        }
+      },
+      "description": "Triggers to fire based on answer values"
+    },
+    "micro_why_key": {
+      "type": "string",
+      "description": "i18n key for micro-why explanation shown on friction"
+    },
+    "help_text_key": {
+      "type": "string",
+      "description": "i18n key for help/tooltip text"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "language",
+        "eligibility",
+        "purpose",
+        "identity",
+        "property",
+        "income",
+        "assets",
+        "liabilities",
+        "declarations",
+        "consents",
+        "schedule",
+        "demographics"
+      ],
+      "description": "Category for grouping and overlay biasing"
+    }
+  }
+}

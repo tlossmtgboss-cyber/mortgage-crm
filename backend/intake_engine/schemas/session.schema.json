@@ -1,0 +1,335 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Session",
+  "description": "Schema for intake session state",
+  "type": "object",
+  "required": ["session_id", "locale", "created_at", "status", "parties", "answers", "flags", "signals", "scores"],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "pattern": "^S_[A-Za-z0-9]{10,}$",
+      "description": "Unique session identifier"
+    },
+    "loan_id": {
+      "type": "string",
+      "description": "Associated loan ID if linked to existing loan"
+    },
+    "borrower_id": {
+      "type": "string",
+      "description": "Associated borrower ID if linked to existing borrower"
+    },
+    "app_version": {
+      "type": "string",
+      "description": "Version of the intake engine"
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2}-[A-Z]{2}$",
+      "description": "Locale code (e.g., en-US, es-US)"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["intake_prequal", "intake_full", "update", "refinance"],
+      "default": "intake_prequal"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "PAUSED", "COMPLETE", "ABANDONED", "EXPIRED"],
+      "description": "Session status"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "current_section": {
+      "type": "string",
+      "description": "Current section in the intake flow"
+    },
+    "last_question_id": {
+      "type": "string",
+      "description": "Last question shown to borrower"
+    },
+    "parties": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Party"
+      },
+      "minItems": 1,
+      "description": "List of parties (borrower, co-borrower, NBS)"
+    },
+    "answers": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Map of question_id -> answer value (for global questions)"
+    },
+    "party_answers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Map of party_id -> { question_id -> answer value }"
+    },
+    "answer_meta": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/AnswerMeta"
+      },
+      "description": "Metadata for each answer"
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Flag"
+      },
+      "description": "Active flags on the session"
+    },
+    "signals": {
+      "$ref": "#/definitions/Signals"
+    },
+    "scores": {
+      "$ref": "#/definitions/Scores"
+    },
+    "active_overlay": {
+      "type": "string",
+      "description": "Currently active coaching overlay"
+    },
+    "required_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Dynamically required questions based on triggers"
+    },
+    "skipped_questions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Questions to skip based on triggers"
+    },
+    "edits_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question_id": { "type": "string" },
+          "old_value": {},
+          "new_value": {},
+          "edited_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "description": "History of answer edits"
+    },
+    "consents": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/ConsentRecord"
+      },
+      "description": "Captured consent records"
+    }
+  },
+  "definitions": {
+    "Party": {
+      "type": "object",
+      "required": ["party_id", "party_type"],
+      "properties": {
+        "party_id": {
+          "type": "string",
+          "description": "Unique identifier for this party"
+        },
+        "party_type": {
+          "type": "string",
+          "enum": ["PRIMARY", "CO_BORROWER", "NON_BORROWING_SPOUSE"],
+          "description": "Type of party"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Display name for the party"
+        },
+        "is_complete": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "AnswerMeta": {
+      "type": "object",
+      "properties": {
+        "party_id": {
+          "type": "string",
+          "description": "Party ID if party-specific answer"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence score 0-1"
+        },
+        "evidence_source": {
+          "type": "string",
+          "enum": ["memory", "bank_statement", "paystub", "w2", "tax_return", "offer_letter", "user_upload", "autofill", "unknown"],
+          "description": "Source of evidence for this answer"
+        },
+        "answered_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "response_time_ms": {
+          "type": "integer",
+          "description": "Time taken to answer in milliseconds"
+        },
+        "edits_count": {
+          "type": "integer",
+          "default": 0
+        },
+        "hedges_detected": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "uncertainty_expressed": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "Flag": {
+      "type": "object",
+      "required": ["code", "category", "severity"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Unique flag code"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["truth", "readiness", "product", "compliance", "flow", "sla"],
+          "description": "Flag category"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "high", "critical"],
+          "description": "Flag severity"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable message"
+        },
+        "triggered_by": {
+          "type": "string",
+          "description": "Question or rule that triggered this flag"
+        },
+        "triggered_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "party_id": {
+          "type": "string",
+          "description": "Party ID if party-specific flag"
+        }
+      }
+    },
+    "Signals": {
+      "type": "object",
+      "properties": {
+        "response_time_ms": {
+          "type": "integer",
+          "description": "Last response time"
+        },
+        "avg_response_time_ms": {
+          "type": "number"
+        },
+        "edits_count": {
+          "type": "integer",
+          "description": "Total edits across all answers"
+        },
+        "hedges": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Detected hedge phrases"
+        },
+        "uncertainty_count": {
+          "type": "integer",
+          "description": "Number of times uncertainty was expressed"
+        },
+        "device_rtt_ms": {
+          "type": "integer",
+          "description": "Device round-trip time for latency normalization"
+        },
+        "session_duration_ms": {
+          "type": "integer"
+        },
+        "questions_answered": {
+          "type": "integer"
+        },
+        "questions_skipped": {
+          "type": "integer"
+        },
+        "back_navigation_count": {
+          "type": "integer"
+        }
+      }
+    },
+    "Scores": {
+      "type": "object",
+      "properties": {
+        "hesitation_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "hesitation_band": {
+          "type": "string",
+          "enum": ["none", "mild", "moderate", "high"]
+        },
+        "underwriting_truth_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "truth_band": {
+          "type": "string",
+          "enum": ["RED", "ORANGE", "YELLOW", "LIGHT_GREEN", "GREEN"]
+        },
+        "lo_readiness_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "readiness_cap": {
+          "type": "number",
+          "description": "Score cap applied due to gating rules"
+        },
+        "score_breakdown": {
+          "type": "object",
+          "properties": {
+            "completeness": { "type": "number" },
+            "internal_consistency": { "type": "number" },
+            "evidence_alignment": { "type": "number" },
+            "behavioral_confidence": { "type": "number" }
+          }
+        }
+      }
+    },
+    "ConsentRecord": {
+      "type": "object",
+      "required": ["consent_key", "accepted", "version_hash", "captured_at"],
+      "properties": {
+        "consent_key": { "type": "string" },
+        "accepted": { "type": "boolean" },
+        "version_hash": { "type": "string" },
+        "captured_at": { "type": "string", "format": "date-time" },
+        "ip_address": { "type": "string" },
+        "user_agent": { "type": "string" }
+      }
+    }
+  }
+}
