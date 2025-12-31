@@ -6,6 +6,7 @@ import os
 import hmac
 import hashlib
 import logging
+import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
@@ -36,59 +37,6 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     ).hexdigest()
 
     return hmac.compare_digest(signature, expected_signature)
-
-
-# Pydantic models for import payloads
-class RealtorImport(BaseModel):
-    """Schema for importing agents/realtors into referral_partners"""
-    name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    company: Optional[str] = None
-    license_number: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-    notes: Optional[str] = None
-    source: Optional[str] = "retr_import"
-    # Optional fields for matching/deduplication
-    external_id: Optional[str] = None
-
-
-class LoanOfficerImport(BaseModel):
-    """Schema for importing loan officers into mm_candidates (Master Manager recruiting)"""
-    name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    current_company: Optional[str] = None
-    nmls_id: Optional[str] = None
-    years_experience: Optional[int] = None
-    annual_volume: Optional[float] = None
-    annual_units: Optional[int] = None
-    license_states: Optional[str] = None  # Comma-separated
-    linkedin_url: Optional[str] = None
-    notes: Optional[str] = None
-    source: Optional[str] = "retr_import"
-    # Recruiting fields
-    interest_level: Optional[str] = None  # hot, warm, cold
-    last_contact_date: Optional[str] = None
-    external_id: Optional[str] = None
-
-
-class ImportPayload(BaseModel):
-    """Wrapper for import requests"""
-    import_type: str  # "realtor" or "loan_officer"
-    records: List[Dict[str, Any]]
-
-
-class ImportResult(BaseModel):
-    """Result of import operation"""
-    success: bool
-    imported: int
-    updated: int
-    failed: int
-    errors: List[str]
 
 
 @router.post("/retr/import")
@@ -128,9 +76,9 @@ async def import_from_retr(
 
     logger.info(f"Processing RETR import: type={import_type}, records={len(records)}")
 
-    if import_type == "realtor" or import_type == "agents/realtors":
+    if import_type in ["realtor", "agents/realtors", "agent", "realtors"]:
         return await import_realtors(records, db)
-    elif import_type == "loan_officer" or import_type == "loan officers":
+    elif import_type in ["loan_officer", "loan officers", "lo", "loan_officers"]:
         return await import_loan_officers(records, db)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown import type: {import_type}")
@@ -145,7 +93,12 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
 
     for i, record in enumerate(records):
         try:
-            name = record.get("name", "").strip()
+            # Get name - support various field names
+            name = (
+                record.get("name") or
+                record.get("contact_name") or
+                f"{record.get('first_name', '')} {record.get('last_name', '')}".strip()
+            )
             email = record.get("email", "").strip().lower() if record.get("email") else None
 
             if not name:
@@ -153,20 +106,12 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
                 failed += 1
                 continue
 
-            # Check for existing record by email or external_id
+            # Check for existing record by email
             existing = None
-            external_id = record.get("external_id")
-
             if email:
                 existing = db.execute(
                     text("SELECT id FROM referral_partners WHERE LOWER(email) = :email"),
                     {"email": email}
-                ).fetchone()
-
-            if not existing and external_id:
-                existing = db.execute(
-                    text("SELECT id FROM referral_partners WHERE external_id = :ext_id"),
-                    {"ext_id": external_id}
                 ).fetchone()
 
             if existing:
@@ -174,62 +119,49 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
                 db.execute(text("""
                     UPDATE referral_partners SET
                         name = :name,
-                        phone = COALESCE(:phone, phone),
+                        contact_name = :contact_name,
+                        business_name = COALESCE(:company, business_name),
                         company = COALESCE(:company, company),
+                        phone = COALESCE(:phone, phone),
                         license_number = COALESCE(:license, license_number),
-                        address = COALESCE(:address, address),
-                        city = COALESCE(:city, city),
-                        state = COALESCE(:state, state),
-                        zip_code = COALESCE(:zip, zip_code),
-                        notes = COALESCE(:notes, notes),
-                        updated_at = :now
+                        notes = COALESCE(:notes, notes)
                     WHERE id = :id
                 """), {
                     "id": existing[0],
                     "name": name,
+                    "contact_name": name,
+                    "company": record.get("company") or record.get("business_name"),
                     "phone": record.get("phone"),
-                    "company": record.get("company"),
                     "license": record.get("license_number"),
-                    "address": record.get("address"),
-                    "city": record.get("city"),
-                    "state": record.get("state"),
-                    "zip": record.get("zip_code"),
                     "notes": record.get("notes"),
-                    "now": datetime.utcnow(),
                 })
                 updated += 1
             else:
                 # Insert new record
                 db.execute(text("""
                     INSERT INTO referral_partners (
-                        name, email, phone, company, license_number,
-                        address, city, state, zip_code, notes,
-                        source, external_id, partner_type, created_at, updated_at
+                        name, contact_name, business_name, company,
+                        email, phone, license_number, notes,
+                        category, type, status
                     ) VALUES (
-                        :name, :email, :phone, :company, :license,
-                        :address, :city, :state, :zip, :notes,
-                        :source, :ext_id, 'realtor', :now, :now
+                        :name, :contact_name, :company, :company,
+                        :email, :phone, :license, :notes,
+                        'realtor', 'Realtor', 'active'
                     )
                 """), {
                     "name": name,
+                    "contact_name": name,
+                    "company": record.get("company") or record.get("business_name") or "",
                     "email": email,
                     "phone": record.get("phone"),
-                    "company": record.get("company"),
                     "license": record.get("license_number"),
-                    "address": record.get("address"),
-                    "city": record.get("city"),
-                    "state": record.get("state"),
-                    "zip": record.get("zip_code"),
                     "notes": record.get("notes"),
-                    "source": record.get("source", "retr_import"),
-                    "ext_id": external_id,
-                    "now": datetime.utcnow(),
                 })
                 imported += 1
 
         except Exception as e:
             logger.error(f"Error importing realtor record {i+1}: {e}")
-            errors.append(f"Row {i+1}: {str(e)}")
+            errors.append(f"Row {i+1}: {str(e)[:100]}")
             failed += 1
 
     db.commit()
@@ -239,7 +171,7 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
         "imported": imported,
         "updated": updated,
         "failed": failed,
-        "errors": errors,
+        "errors": errors[:10],  # Limit errors returned
         "message": f"Imported {imported}, updated {updated}, failed {failed} realtor records"
     }
 
@@ -253,108 +185,93 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
 
     for i, record in enumerate(records):
         try:
+            # Parse name
             name = record.get("name", "").strip()
+            first_name = record.get("first_name", "").strip()
+            last_name = record.get("last_name", "").strip()
+
+            if name and not first_name:
+                # Split name into first/last
+                parts = name.split(" ", 1)
+                first_name = parts[0]
+                last_name = parts[1] if len(parts) > 1 else ""
+
             email = record.get("email", "").strip().lower() if record.get("email") else None
 
-            if not name:
+            if not first_name:
                 errors.append(f"Row {i+1}: Name is required")
                 failed += 1
                 continue
 
-            # Check for existing record by email, NMLS, or external_id
+            # Check for existing record by email
             existing = None
-            external_id = record.get("external_id")
-            nmls_id = record.get("nmls_id")
-
             if email:
                 existing = db.execute(
                     text("SELECT id FROM mm_candidates WHERE LOWER(email) = :email"),
                     {"email": email}
                 ).fetchone()
 
-            if not existing and nmls_id:
-                existing = db.execute(
-                    text("SELECT id FROM mm_candidates WHERE nmls_id = :nmls"),
-                    {"nmls": nmls_id}
-                ).fetchone()
-
-            if not existing and external_id:
-                existing = db.execute(
-                    text("SELECT id FROM mm_candidates WHERE external_id = :ext_id"),
-                    {"ext_id": external_id}
-                ).fetchone()
-
             if existing:
                 # Update existing record
                 db.execute(text("""
                     UPDATE mm_candidates SET
-                        name = :name,
+                        first_name = :first_name,
+                        last_name = :last_name,
                         phone = COALESCE(:phone, phone),
-                        current_company = COALESCE(:company, current_company),
-                        nmls_id = COALESCE(:nmls, nmls_id),
-                        years_experience = COALESCE(:years, years_experience),
-                        annual_volume = COALESCE(:volume, annual_volume),
-                        annual_units = COALESCE(:units, annual_units),
-                        license_states = COALESCE(:states, license_states),
-                        linkedin_url = COALESCE(:linkedin, linkedin_url),
-                        notes = COALESCE(:notes, notes),
-                        interest_level = COALESCE(:interest, interest_level),
-                        updated_at = :now
+                        previous_companies = COALESCE(:company, previous_companies),
+                        years_experience = COALESCE(:years_exp, years_experience),
+                        linkedin_url = COALESCE(:linkedin, linkedin_url)
                     WHERE id = :id
                 """), {
                     "id": existing[0],
-                    "name": name,
+                    "first_name": first_name,
+                    "last_name": last_name,
                     "phone": record.get("phone"),
-                    "company": record.get("current_company"),
-                    "nmls": nmls_id,
-                    "years": record.get("years_experience"),
-                    "volume": record.get("annual_volume"),
-                    "units": record.get("annual_units"),
-                    "states": record.get("license_states"),
+                    "company": record.get("current_company") or record.get("company"),
+                    "years_exp": record.get("years_experience"),
                     "linkedin": record.get("linkedin_url"),
-                    "notes": record.get("notes"),
-                    "interest": record.get("interest_level"),
-                    "now": datetime.utcnow(),
                 })
                 updated += 1
             else:
+                # Build talent profile
+                talent_profile = {
+                    "nmls_id": record.get("nmls_id"),
+                    "annual_volume": record.get("annual_volume"),
+                    "annual_units": record.get("annual_units"),
+                    "license_states": record.get("license_states"),
+                    "interest_level": record.get("interest_level"),
+                }
+
                 # Insert new record
                 db.execute(text("""
                     INSERT INTO mm_candidates (
-                        name, email, phone, current_company, nmls_id,
-                        years_experience, annual_volume, annual_units,
-                        license_states, linkedin_url, notes,
-                        source, external_id, interest_level, status,
-                        created_at, updated_at
+                        first_name, last_name, email, phone,
+                        source, target_role_name,
+                        years_experience, years_mortgage_experience, has_mortgage_experience,
+                        previous_companies, linkedin_url, talent_profile,
+                        status, applied_at, is_active
                     ) VALUES (
-                        :name, :email, :phone, :company, :nmls,
-                        :years, :volume, :units,
-                        :states, :linkedin, :notes,
-                        :source, :ext_id, :interest, 'new',
-                        :now, :now
+                        :first_name, :last_name, :email, :phone,
+                        'retr', 'Loan Officer',
+                        :years_exp, :years_exp, true,
+                        :company, :linkedin, :profile,
+                        'new', CURRENT_TIMESTAMP, true
                     )
                 """), {
-                    "name": name,
+                    "first_name": first_name,
+                    "last_name": last_name or "",
                     "email": email,
                     "phone": record.get("phone"),
-                    "company": record.get("current_company"),
-                    "nmls": nmls_id,
-                    "years": record.get("years_experience"),
-                    "volume": record.get("annual_volume"),
-                    "units": record.get("annual_units"),
-                    "states": record.get("license_states"),
+                    "years_exp": record.get("years_experience") or 0,
+                    "company": record.get("current_company") or record.get("company") or "",
                     "linkedin": record.get("linkedin_url"),
-                    "notes": record.get("notes"),
-                    "source": record.get("source", "retr_import"),
-                    "ext_id": external_id,
-                    "interest": record.get("interest_level", "warm"),
-                    "now": datetime.utcnow(),
+                    "profile": json.dumps(talent_profile),
                 })
                 imported += 1
 
         except Exception as e:
             logger.error(f"Error importing loan officer record {i+1}: {e}")
-            errors.append(f"Row {i+1}: {str(e)}")
+            errors.append(f"Row {i+1}: {str(e)[:100]}")
             failed += 1
 
     db.commit()
@@ -364,7 +281,7 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
         "imported": imported,
         "updated": updated,
         "failed": failed,
-        "errors": errors,
+        "errors": errors[:10],
         "message": f"Imported {imported}, updated {updated}, failed {failed} loan officer records"
     }
 
