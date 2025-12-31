@@ -1527,3 +1527,632 @@ async def handle_data_sync(
     except Exception as e:
         logger.error(f"Data sync cache clear failed: {e}")
         raise HTTPException(500, str(e))
+
+
+# =============================================================================
+# RETR RECRUITING WEBHOOK - Import Loan Officers and Realtors
+# =============================================================================
+# RETR (retr.app) is a recruiting platform for mortgage professionals.
+# This webhook receives loan officer recruits and realtor/agent contacts
+# from RETR and imports them into Perennia AI's recruiting engine.
+#
+# Setup in RETR:
+# 1. Go to RETR Settings > Integrations
+# 2. Add webhook URL: https://your-domain.com/webhooks/retr/import
+# 3. Configure the RETR_WEBHOOK_SECRET environment variable for security
+# =============================================================================
+
+
+class RETRAgentData(BaseModel):
+    """
+    RETR Agent (Realtor) payload structure.
+    Agents are imported as ReferralPartners in Perennia AI.
+    """
+    # Basic Info
+    Owner: Optional[str] = None  # The RETR user who exported this record
+    FirstName: Optional[str] = None
+    LastName: Optional[str] = None
+    FullName: Optional[str] = None
+    Company: Optional[str] = None
+    Email: Optional[str] = None
+    Phone: Optional[str] = None
+
+    # RETR Profile
+    RetrProfileURL: Optional[str] = None
+    RETRAgentId: Optional[str] = None
+
+    # Production Metrics (Last 12 Months)
+    BuyerCt_12Mo: Optional[int] = None  # Buyer transaction count
+    BuyerVol_12Mo: Optional[float] = None  # Buyer volume
+    LoanOfficerCt_12Mo: Optional[int] = None  # LO connections
+    SellerCt_12Mo: Optional[int] = None  # Seller transaction count
+    SellerVol_12Mo: Optional[float] = None  # Seller volume
+    TotalCt_12Mo: Optional[int] = None  # Total transactions
+    TotalVol_12Mo: Optional[float] = None  # Total volume
+
+    # Loan Type Breakdown
+    Conventional: Optional[int] = None
+    VA: Optional[int] = None
+    FHA: Optional[int] = None
+    LMI: Optional[int] = None  # Low-to-Moderate Income
+    MMCT: Optional[int] = None  # Minority/Majority Census Tract
+
+    # Tags and Lists
+    Tags: Optional[str] = None
+    ListName: Optional[str] = None
+
+    # Export metadata
+    ExportDate: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow additional fields from RETR
+
+
+class RETRLoanOfficerData(BaseModel):
+    """
+    RETR Loan Officer recruit payload structure.
+    LO recruits are imported as candidates in the Recruiting Engine.
+    """
+    # Basic Info
+    Owner: Optional[str] = None
+    FirstName: Optional[str] = None
+    LastName: Optional[str] = None
+    FullName: Optional[str] = None
+    Company: Optional[str] = None
+    Email: Optional[str] = None
+    Phone: Optional[str] = None
+
+    # RETR Profile
+    RetrProfileURL: Optional[str] = None
+    RETRLoanOfficerId: Optional[str] = None
+    NMLSID: Optional[str] = None
+
+    # Production Metrics
+    UnitsLast12Mo: Optional[int] = None
+    VolumeLast12Mo: Optional[float] = None
+    AvgLoanSize: Optional[float] = None
+
+    # Loan Type Mix
+    ConventionalPct: Optional[float] = None
+    FHAPct: Optional[float] = None
+    VAPct: Optional[float] = None
+    JumboPct: Optional[float] = None
+
+    # Social Media (LO Recruit add-on)
+    LinkedInURL: Optional[str] = None
+    FacebookURL: Optional[str] = None
+
+    # Tags and Lists
+    Tags: Optional[str] = None
+    ListName: Optional[str] = None
+
+    # Export metadata
+    ExportDate: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class RETRWebhookPayload(BaseModel):
+    """
+    Combined RETR webhook payload that can contain agents and/or loan officers.
+    RETR sends either a single record or an array of records.
+    """
+    # For batch imports
+    agents: Optional[List[RETRAgentData]] = None
+    loan_officers: Optional[List[RETRLoanOfficerData]] = None
+
+    # For single record imports (RETR may send directly)
+    # These fields allow direct agent/LO data at root level
+    Owner: Optional[str] = None
+    FirstName: Optional[str] = None
+    LastName: Optional[str] = None
+    FullName: Optional[str] = None
+    Email: Optional[str] = None
+    Phone: Optional[str] = None
+    Company: Optional[str] = None
+    RETRAgentId: Optional[str] = None
+    RETRLoanOfficerId: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class RETRImportResult(BaseModel):
+    """Result of RETR import operation."""
+    import_id: str
+    status: str
+    agents_queued: int = 0
+    loan_officers_queued: int = 0
+    created_at: str
+
+
+@router.post("/retr/import", response_class=PlainTextResponse)
+async def handle_retr_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_webhook_secret: str = Header(None, alias="X-Webhook-Secret"),
+    x_retr_signature: str = Header(None, alias="X-RETR-Signature"),
+):
+    """
+    RETR webhook endpoint for importing loan officers and realtors.
+
+    This endpoint receives data exports from RETR and imports them into:
+    - Loan Officers → mm_candidates (Recruiting Engine)
+    - Agents/Realtors → referral_partners (Referral Partner CRM)
+
+    Headers:
+        X-Webhook-Secret: Shared secret for authentication
+        X-RETR-Signature: Optional RETR signature validation
+
+    Returns:
+        202 Accepted with import_id for tracking
+    """
+    import uuid
+    import json
+
+    # Generate import ID for tracking
+    import_id = str(uuid.uuid4())[:8].upper()
+
+    # Validate webhook secret
+    expected_secret = os.getenv("RETR_WEBHOOK_SECRET", os.getenv("WEBHOOK_SECRET"))
+    if expected_secret:
+        if x_webhook_secret != expected_secret and x_retr_signature != expected_secret:
+            logger.warning(f"[RETR WEBHOOK] Invalid secret for import {import_id}")
+            # Still return 202 to prevent RETR from retrying with bad credentials
+            # but don't process the data
+            return PlainTextResponse(
+                content=json.dumps({
+                    "import_id": import_id,
+                    "status": "rejected",
+                    "error": "Invalid webhook secret"
+                }),
+                status_code=202,
+                media_type="application/json"
+            )
+
+    try:
+        # Parse the request body
+        body = await request.json()
+        logger.info(f"[RETR WEBHOOK] Received import request {import_id}")
+
+        agents_count = 0
+        los_count = 0
+
+        # Handle different payload structures
+        # RETR may send: single object, array, or structured payload
+
+        if isinstance(body, list):
+            # Array of records - determine type by presence of specific fields
+            for record in body:
+                if record.get("RETRAgentId") or record.get("BuyerCt_12Mo") is not None:
+                    # This is an agent/realtor
+                    background_tasks.add_task(
+                        process_retr_agent_import,
+                        import_id,
+                        record
+                    )
+                    agents_count += 1
+                elif record.get("RETRLoanOfficerId") or record.get("NMLSID") or record.get("UnitsLast12Mo") is not None:
+                    # This is a loan officer
+                    background_tasks.add_task(
+                        process_retr_loan_officer_import,
+                        import_id,
+                        record
+                    )
+                    los_count += 1
+                else:
+                    # Default to agent if has basic contact info
+                    if record.get("Email") or record.get("FirstName"):
+                        background_tasks.add_task(
+                            process_retr_agent_import,
+                            import_id,
+                            record
+                        )
+                        agents_count += 1
+
+        elif isinstance(body, dict):
+            # Single object or structured payload
+            if "agents" in body and body["agents"]:
+                for agent in body["agents"]:
+                    background_tasks.add_task(
+                        process_retr_agent_import,
+                        import_id,
+                        agent
+                    )
+                    agents_count += 1
+
+            if "loan_officers" in body and body["loan_officers"]:
+                for lo in body["loan_officers"]:
+                    background_tasks.add_task(
+                        process_retr_loan_officer_import,
+                        import_id,
+                        lo
+                    )
+                    los_count += 1
+
+            # Check if it's a single record at root level
+            if not body.get("agents") and not body.get("loan_officers"):
+                if body.get("RETRAgentId") or body.get("BuyerCt_12Mo") is not None:
+                    background_tasks.add_task(
+                        process_retr_agent_import,
+                        import_id,
+                        body
+                    )
+                    agents_count += 1
+                elif body.get("RETRLoanOfficerId") or body.get("NMLSID") or body.get("UnitsLast12Mo") is not None:
+                    background_tasks.add_task(
+                        process_retr_loan_officer_import,
+                        import_id,
+                        body
+                    )
+                    los_count += 1
+                elif body.get("Email") or body.get("FirstName"):
+                    # Default to agent for unknown records with contact info
+                    background_tasks.add_task(
+                        process_retr_agent_import,
+                        import_id,
+                        body
+                    )
+                    agents_count += 1
+
+        logger.info(f"[RETR WEBHOOK] Import {import_id}: {agents_count} agents, {los_count} LOs queued")
+
+        return PlainTextResponse(
+            content=json.dumps({
+                "import_id": import_id,
+                "status": "processing",
+                "agents_queued": agents_count,
+                "loan_officers_queued": los_count,
+                "created_at": datetime.utcnow().isoformat()
+            }),
+            status_code=202,
+            media_type="application/json"
+        )
+
+    except Exception as e:
+        logger.error(f"[RETR WEBHOOK] Error processing import {import_id}: {e}", exc_info=True)
+        return PlainTextResponse(
+            content=json.dumps({
+                "import_id": import_id,
+                "status": "error",
+                "error": str(e)
+            }),
+            status_code=202,
+            media_type="application/json"
+        )
+
+
+def process_retr_agent_import(import_id: str, agent_data: Dict[str, Any]):
+    """
+    Process a single RETR agent (realtor) import in the background.
+    Creates or updates a ReferralPartner record.
+    """
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+
+        logger.info(f"[RETR IMPORT {import_id}] Processing agent: {agent_data.get('Email', 'unknown')}")
+
+        # Extract and normalize data
+        first_name = agent_data.get("FirstName", "")
+        last_name = agent_data.get("LastName", "")
+        full_name = agent_data.get("FullName") or f"{first_name} {last_name}".strip()
+        email = agent_data.get("Email", "").strip().lower() if agent_data.get("Email") else None
+        phone = agent_data.get("Phone", "").strip() if agent_data.get("Phone") else None
+        company = agent_data.get("Company", "").strip() if agent_data.get("Company") else None
+
+        if not full_name and not email:
+            logger.warning(f"[RETR IMPORT {import_id}] Skipping agent with no name or email")
+            return
+
+        # Calculate total volume and transaction count
+        total_volume = float(agent_data.get("TotalVol_12Mo") or 0)
+        if total_volume == 0:
+            total_volume = float(agent_data.get("BuyerVol_12Mo") or 0) + float(agent_data.get("SellerVol_12Mo") or 0)
+
+        total_transactions = int(agent_data.get("TotalCt_12Mo") or 0)
+        if total_transactions == 0:
+            total_transactions = int(agent_data.get("BuyerCt_12Mo") or 0) + int(agent_data.get("SellerCt_12Mo") or 0)
+
+        # Build notes with RETR data
+        notes_parts = []
+        if agent_data.get("RetrProfileURL"):
+            notes_parts.append(f"RETR Profile: {agent_data['RetrProfileURL']}")
+        if agent_data.get("RETRAgentId"):
+            notes_parts.append(f"RETR ID: {agent_data['RETRAgentId']}")
+        if agent_data.get("Tags"):
+            notes_parts.append(f"Tags: {agent_data['Tags']}")
+        if agent_data.get("ListName"):
+            notes_parts.append(f"List: {agent_data['ListName']}")
+        if agent_data.get("Owner"):
+            notes_parts.append(f"Exported by: {agent_data['Owner']}")
+
+        # Add production summary
+        if total_transactions > 0:
+            notes_parts.append(f"\n12-Month Production: {total_transactions} transactions, ${total_volume:,.0f} volume")
+            if agent_data.get("Conventional"):
+                notes_parts.append(f"  - Conventional: {agent_data['Conventional']}")
+            if agent_data.get("FHA"):
+                notes_parts.append(f"  - FHA: {agent_data['FHA']}")
+            if agent_data.get("VA"):
+                notes_parts.append(f"  - VA: {agent_data['VA']}")
+
+        notes = "\n".join(notes_parts) if notes_parts else None
+
+        # Determine loyalty tier based on volume
+        if total_volume >= 10000000:  # $10M+
+            loyalty_tier = "gold"
+        elif total_volume >= 5000000:  # $5M+
+            loyalty_tier = "silver"
+        else:
+            loyalty_tier = "bronze"
+
+        db = SessionLocal()
+        try:
+            # Check for existing partner by email
+            existing = None
+            if email:
+                result = db.execute(text("""
+                    SELECT id, name, notes FROM referral_partners
+                    WHERE LOWER(email) = LOWER(:email)
+                    LIMIT 1
+                """), {"email": email})
+                existing = result.fetchone()
+
+            if existing:
+                # Update existing partner
+                db.execute(text("""
+                    UPDATE referral_partners
+                    SET name = COALESCE(:name, name),
+                        company = COALESCE(:company, company),
+                        phone = COALESCE(:phone, phone),
+                        volume = GREATEST(volume, :volume),
+                        closed_loans = GREATEST(closed_loans, :transactions),
+                        loyalty_tier = :loyalty_tier,
+                        notes = CASE
+                            WHEN notes IS NULL OR notes = '' THEN :notes
+                            ELSE notes || E'\n\n--- RETR Update ' || TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD') || ' ---\n' || COALESCE(:notes, '')
+                        END,
+                        last_interaction = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                """), {
+                    "id": existing.id,
+                    "name": full_name,
+                    "company": company,
+                    "phone": phone,
+                    "volume": total_volume,
+                    "transactions": total_transactions,
+                    "loyalty_tier": loyalty_tier,
+                    "notes": notes,
+                })
+                db.commit()
+                logger.info(f"[RETR IMPORT {import_id}] Updated agent: {email} (ID: {existing.id})")
+
+            else:
+                # Create new partner
+                result = db.execute(text("""
+                    INSERT INTO referral_partners (
+                        name, business_name, contact_name, category, company, type,
+                        email, phone, volume, closed_loans, loyalty_tier, status, notes
+                    ) VALUES (
+                        :name, :business_name, :contact_name, 'realtor', :company, 'Realtor',
+                        :email, :phone, :volume, :transactions, :loyalty_tier, 'active', :notes
+                    )
+                    RETURNING id
+                """), {
+                    "name": full_name,
+                    "business_name": company or "",
+                    "contact_name": full_name,
+                    "company": company,
+                    "email": email,
+                    "phone": phone,
+                    "volume": total_volume,
+                    "transactions": total_transactions,
+                    "loyalty_tier": loyalty_tier,
+                    "notes": notes,
+                })
+                new_id = result.fetchone()
+                db.commit()
+                logger.info(f"[RETR IMPORT {import_id}] Created agent: {email or full_name} (ID: {new_id.id if new_id else 'unknown'})")
+
+        except Exception as e:
+            logger.error(f"[RETR IMPORT {import_id}] Database error for agent {email}: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"[RETR IMPORT {import_id}] Error processing agent: {e}", exc_info=True)
+
+
+def process_retr_loan_officer_import(import_id: str, lo_data: Dict[str, Any]):
+    """
+    Process a single RETR loan officer import in the background.
+    Creates or updates a candidate in the Recruiting Engine.
+    """
+    try:
+        from database import SessionLocal
+        from sqlalchemy import text
+        import json
+
+        logger.info(f"[RETR IMPORT {import_id}] Processing LO: {lo_data.get('Email', 'unknown')}")
+
+        # Extract and normalize data
+        first_name = lo_data.get("FirstName", "")
+        last_name = lo_data.get("LastName", "")
+        full_name = lo_data.get("FullName") or f"{first_name} {last_name}".strip()
+        email = lo_data.get("Email", "").strip().lower() if lo_data.get("Email") else None
+        phone = lo_data.get("Phone", "").strip() if lo_data.get("Phone") else None
+        company = lo_data.get("Company", "").strip() if lo_data.get("Company") else None
+        nmls_id = lo_data.get("NMLSID", "").strip() if lo_data.get("NMLSID") else None
+        linkedin_url = lo_data.get("LinkedInURL", "").strip() if lo_data.get("LinkedInURL") else None
+
+        if not email and not full_name:
+            logger.warning(f"[RETR IMPORT {import_id}] Skipping LO with no name or email")
+            return
+
+        # Production metrics
+        units_12mo = int(lo_data.get("UnitsLast12Mo") or 0)
+        volume_12mo = float(lo_data.get("VolumeLast12Mo") or 0)
+        avg_loan_size = float(lo_data.get("AvgLoanSize") or 0)
+
+        # Estimate years of experience based on production (rough estimate)
+        if units_12mo >= 50:
+            years_experience = 5
+        elif units_12mo >= 24:
+            years_experience = 3
+        elif units_12mo >= 12:
+            years_experience = 2
+        else:
+            years_experience = 1
+
+        # Build talent profile JSON with RETR data
+        talent_profile = {
+            "source": "retr",
+            "retr_id": lo_data.get("RETRLoanOfficerId"),
+            "retr_profile_url": lo_data.get("RetrProfileURL"),
+            "nmls_id": nmls_id,
+            "current_company": company,
+            "production_12mo": {
+                "units": units_12mo,
+                "volume": volume_12mo,
+                "avg_loan_size": avg_loan_size
+            },
+            "loan_mix": {
+                "conventional_pct": lo_data.get("ConventionalPct"),
+                "fha_pct": lo_data.get("FHAPct"),
+                "va_pct": lo_data.get("VAPct"),
+                "jumbo_pct": lo_data.get("JumboPct")
+            },
+            "social_media": {
+                "linkedin": linkedin_url,
+                "facebook": lo_data.get("FacebookURL")
+            },
+            "tags": lo_data.get("Tags"),
+            "list_name": lo_data.get("ListName"),
+            "exported_by": lo_data.get("Owner"),
+            "export_date": lo_data.get("ExportDate"),
+            "import_date": datetime.utcnow().isoformat()
+        }
+
+        db = SessionLocal()
+        try:
+            # Check for existing candidate by email
+            existing = None
+            if email:
+                result = db.execute(text("""
+                    SELECT id, first_name, last_name, talent_profile FROM mm_candidates
+                    WHERE LOWER(email) = LOWER(:email)
+                    LIMIT 1
+                """), {"email": email})
+                existing = result.fetchone()
+
+            if existing:
+                # Update existing candidate
+                # Merge talent profiles
+                existing_profile = existing.talent_profile or {}
+                if isinstance(existing_profile, str):
+                    existing_profile = json.loads(existing_profile)
+                merged_profile = {**existing_profile, **talent_profile}
+
+                db.execute(text("""
+                    UPDATE mm_candidates
+                    SET first_name = COALESCE(:first_name, first_name),
+                        last_name = COALESCE(:last_name, last_name),
+                        phone = COALESCE(:phone, phone),
+                        previous_companies = COALESCE(:company, previous_companies),
+                        linkedin_url = COALESCE(:linkedin, linkedin_url),
+                        talent_profile = :profile,
+                        years_mortgage_experience = GREATEST(COALESCE(years_mortgage_experience, 0), :years_exp),
+                        has_mortgage_experience = true,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                """), {
+                    "id": existing.id,
+                    "first_name": first_name or None,
+                    "last_name": last_name or None,
+                    "phone": phone,
+                    "company": company,
+                    "linkedin": linkedin_url,
+                    "profile": json.dumps(merged_profile),
+                    "years_exp": years_experience,
+                })
+
+                # Log activity
+                db.execute(text("""
+                    INSERT INTO mm_candidate_activities (
+                        candidate_id, activity_type, description, is_automated
+                    ) VALUES (
+                        :candidate_id, 'profile_updated', 'Profile updated from RETR import', true
+                    )
+                """), {"candidate_id": existing.id})
+
+                db.commit()
+                logger.info(f"[RETR IMPORT {import_id}] Updated LO candidate: {email} (ID: {existing.id})")
+
+            else:
+                # Create new candidate
+                result = db.execute(text("""
+                    INSERT INTO mm_candidates (
+                        first_name, last_name, email, phone,
+                        source, target_role_name,
+                        years_experience, years_mortgage_experience, has_mortgage_experience,
+                        previous_companies, linkedin_url, talent_profile,
+                        status, applied_at, is_active
+                    ) VALUES (
+                        :first_name, :last_name, :email, :phone,
+                        'retr', 'Loan Officer',
+                        :years_exp, :years_exp, true,
+                        :company, :linkedin, :profile,
+                        'new', CURRENT_TIMESTAMP, true
+                    )
+                    RETURNING id
+                """), {
+                    "first_name": first_name or "Unknown",
+                    "last_name": last_name or "",
+                    "email": email,
+                    "phone": phone,
+                    "years_exp": years_experience,
+                    "company": company,
+                    "linkedin": linkedin_url,
+                    "profile": json.dumps(talent_profile),
+                })
+                new_id = result.fetchone()
+                candidate_id = new_id.id if new_id else None
+
+                if candidate_id:
+                    # Log activity
+                    db.execute(text("""
+                        INSERT INTO mm_candidate_activities (
+                            candidate_id, activity_type, description, is_automated
+                        ) VALUES (
+                            :candidate_id, 'imported', 'Candidate imported from RETR', true
+                        )
+                    """), {"candidate_id": candidate_id})
+
+                db.commit()
+                logger.info(f"[RETR IMPORT {import_id}] Created LO candidate: {email or full_name} (ID: {candidate_id})")
+
+        except Exception as e:
+            logger.error(f"[RETR IMPORT {import_id}] Database error for LO {email}: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"[RETR IMPORT {import_id}] Error processing LO: {e}", exc_info=True)
+
+
+@router.get("/retr/status")
+async def get_retr_webhook_status():
+    """
+    Get the status of the RETR webhook configuration.
+    """
+    return {
+        "status": "active",
+        "endpoint": "/webhooks/retr/import",
+        "secret_configured": bool(os.getenv("RETR_WEBHOOK_SECRET") or os.getenv("WEBHOOK_SECRET")),
+        "supported_types": ["agents", "loan_officers"],
+        "documentation": "https://kb.retr.app/how-do-i-set-up-an-integration"
+    }
