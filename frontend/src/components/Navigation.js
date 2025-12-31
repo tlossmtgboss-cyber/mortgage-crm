@@ -143,23 +143,19 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Profitability
           </Link>
 
-          {/* Master Manager - Capacity & Talent OS - Management/Admin only */}
-          {(userRole === 'management' || userRole === 'admin' || userRole === 'manager') && (
-            <>
-              <Link
-                to="/master-manager"
-                className={`nav-link ${isActive('/master-manager') && !isActive('/master-manager/recruiting') ? 'active' : ''}`}
-              >
-                Capacity
-              </Link>
-              <Link
-                to="/master-manager/recruiting"
-                className={`nav-link ${isActive('/master-manager/recruiting') ? 'active' : ''}`}
-              >
-                Recruiting
-              </Link>
-            </>
-          )}
+          {/* Master Manager - Capacity & Talent OS */}
+          <Link
+            to="/master-manager"
+            className={`nav-link ${isActive('/master-manager') && !isActive('/master-manager/recruiting') ? 'active' : ''}`}
+          >
+            Capacity
+          </Link>
+          <Link
+            to="/master-manager/recruiting"
+            className={`nav-link ${isActive('/master-manager/recruiting') ? 'active' : ''}`}
+          >
+            Recruiting
+          </Link>
         </div>
 
         <div className="nav-actions">

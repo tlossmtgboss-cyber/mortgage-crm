@@ -14,7 +14,15 @@ export const usePermissions = () => {
 
 export const PermissionProvider = ({ children }) => {
   const [permissions, setPermissions] = useState({});
-  const [userRole, setUserRole] = useState('sales'); // Default role
+  // Initialize userRole from localStorage to prevent flicker, fallback to 'sales'
+  const [userRole, setUserRole] = useState(() => {
+    try {
+      const savedRole = localStorage.getItem('userRole');
+      return savedRole || 'sales';
+    } catch {
+      return 'sales';
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const { isImpersonating, getImpersonatedUser } = useImpersonation();
@@ -80,7 +88,14 @@ export const PermissionProvider = ({ children }) => {
       const data = await response.json();
 
       setPermissions(data.permissions || {});
-      setUserRole(data.permission_role || 'sales');
+      const role = data.permission_role || 'sales';
+      setUserRole(role);
+      // Persist role to localStorage to prevent flicker on reload
+      try {
+        localStorage.setItem('userRole', role);
+      } catch (e) {
+        console.warn('Could not save userRole to localStorage:', e);
+      }
 
       console.log('Permissions loaded:', {
         userId,
@@ -94,6 +109,12 @@ export const PermissionProvider = ({ children }) => {
       // Set default permissions on error
       setPermissions({});
       setUserRole('sales');
+      // Clear cached role on error
+      try {
+        localStorage.removeItem('userRole');
+      } catch (e) {
+        // Ignore localStorage errors
+      }
     } finally {
       setLoading(false);
     }

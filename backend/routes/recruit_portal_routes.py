@@ -66,7 +66,7 @@ async def get_candidate_portal(
     db: Session = Depends(get_db)
 ):
     """Get candidate portal data using access token."""
-    # Look up candidate by token
+    # Look up candidate by token - use only base columns that always exist
     result = db.execute(text("""
         SELECT
             c.id, c.first_name, c.last_name, c.email, c.phone,
@@ -75,14 +75,6 @@ async def get_candidate_portal(
             c.linkedin_url, c.resume_url,
             c.overall_score, c.vetting_score, c.behavioral_score, c.technical_score,
             c.culture_fit_score, c.placement_recommendation, c.talent_profile,
-            -- Production fields
-            c.annual_volume, c.annual_units, c.avg_loan_size, c.nmls_id,
-            c.license_states, c.production_history, c.current_company, c.current_title,
-            -- Social media fields
-            c.facebook_url, c.instagram_url, c.twitter_url,
-            c.linkedin_url as linkedin,
-            -- Profile fields
-            c.headshot_url, c.bio,
             c.created_at, c.updated_at
         FROM mm_candidates c
         WHERE c.portal_token = :token AND c.is_active = true
@@ -90,6 +82,33 @@ async def get_candidate_portal(
 
     if not result:
         raise HTTPException(status_code=404, detail="Invalid or expired portal token")
+
+    # Try to get extended profile data (columns may not exist in all deployments)
+    extended_data = {"production": {}, "social": {}, "headshot_url": None}
+    try:
+        ext = db.execute(text("""
+            SELECT annual_volume, annual_units, avg_loan_size, nmls_id,
+                   current_company, current_title,
+                   facebook_url, instagram_url, twitter_url,
+                   headshot_url, bio
+            FROM mm_candidates WHERE id = :id
+        """), {"id": result.id}).fetchone()
+        if ext:
+            extended_data["production"] = {
+                "annual_volume": float(ext.annual_volume) if ext.annual_volume else None,
+                "annual_units": ext.annual_units,
+                "nmls_id": ext.nmls_id,
+                "current_company": ext.current_company,
+                "current_title": ext.current_title,
+            }
+            extended_data["social"] = {
+                "facebook": ext.facebook_url,
+                "instagram": ext.instagram_url,
+                "twitter": ext.twitter_url,
+            }
+            extended_data["headshot_url"] = ext.headshot_url
+    except Exception as e:
+        logger.warning(f"Extended profile columns not available: {e}")
 
     # Get interviews (handle missing columns gracefully)
     try:
@@ -105,14 +124,18 @@ async def get_candidate_portal(
         interviews = []
 
     # Get activities (public-safe ones only)
-    activities = db.execute(text("""
-        SELECT id, activity_type as type, description, created_at as timestamp
-        FROM mm_candidate_activities
-        WHERE candidate_id = :id
-          AND activity_type NOT IN ('internal_note', 'private_comment')
-        ORDER BY created_at DESC
-        LIMIT 20
-    """), {"id": result.id}).fetchall()
+    try:
+        activities = db.execute(text("""
+            SELECT id, activity_type as type, description, created_at as timestamp
+            FROM mm_candidate_activities
+            WHERE candidate_id = :id
+              AND activity_type NOT IN ('internal_note', 'private_comment')
+            ORDER BY created_at DESC
+            LIMIT 20
+        """), {"id": result.id}).fetchall()
+    except Exception as e:
+        logger.warning(f"Error fetching activities: {e}")
+        activities = []
 
     # Determine next steps based on status
     next_steps = get_next_steps(result.status)
@@ -129,22 +152,14 @@ async def get_candidate_portal(
         "target_role": result.target_role_name,
         "applied_at": result.applied_at.isoformat() if result.applied_at else None,
 
-        "production": {
-            "annual_volume": float(result.annual_volume) if result.annual_volume else None,
-            "annual_units": result.annual_units,
-            "nmls_id": result.nmls_id,
-            "current_company": result.current_company,
-            "current_title": result.current_title,
-        },
+        "production": extended_data["production"],
 
         "social_media": {
-            "linkedin": result.linkedin,
-            "facebook": result.facebook_url,
-            "instagram": result.instagram_url,
-            "twitter": result.twitter_url,
+            "linkedin": result.linkedin_url,
+            **extended_data["social"],
         },
 
-        "headshot_url": result.headshot_url,
+        "headshot_url": extended_data["headshot_url"],
 
         "interviews": [
             {
