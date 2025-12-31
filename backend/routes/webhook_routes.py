@@ -254,7 +254,7 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                         :first_name, :last_name, :email, :phone,
                         'retr', 'Loan Officer',
                         :years_exp, :years_exp, true,
-                        :company, :linkedin, :profile,
+                        :company, :linkedin, CAST(:profile AS jsonb),
                         'new', CURRENT_TIMESTAMP, true
                     )
                 """), {
