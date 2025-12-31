@@ -91,14 +91,18 @@ async def get_candidate_portal(
     if not result:
         raise HTTPException(status_code=404, detail="Invalid or expired portal token")
 
-    # Get interviews
-    interviews = db.execute(text("""
-        SELECT id, interview_type as type, interview_round, scheduled_at,
-               status, meeting_url, interviewer_names
-        FROM mm_interviews
-        WHERE candidate_id = :id
-        ORDER BY scheduled_at DESC
-    """), {"id": result.id}).fetchall()
+    # Get interviews (handle missing columns gracefully)
+    try:
+        interviews = db.execute(text("""
+            SELECT id, interview_type as type, interview_round, scheduled_at,
+                   status, notes as interviewer_names
+            FROM mm_interviews
+            WHERE candidate_id = :id
+            ORDER BY scheduled_at DESC
+        """), {"id": result.id}).fetchall()
+    except Exception as e:
+        logger.warning(f"Error fetching interviews: {e}")
+        interviews = []
 
     # Get activities (public-safe ones only)
     activities = db.execute(text("""
@@ -149,7 +153,7 @@ async def get_candidate_portal(
                 "round": i.interview_round,
                 "scheduled_at": i.scheduled_at.isoformat() if i.scheduled_at else None,
                 "status": i.status,
-                "meeting_url": i.meeting_url if i.status == 'scheduled' else None,
+                "meeting_url": None,  # Will be added when video integration is complete
             }
             for i in interviews
         ],
