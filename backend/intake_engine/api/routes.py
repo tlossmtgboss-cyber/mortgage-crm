@@ -378,22 +378,28 @@ async def submit_answer(
     engine: IntakeEngine = Depends(get_engine),
 ):
     """Submit an answer to a question"""
-    session = engine.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        session = engine.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.status != SessionStatus.ACTIVE:
-        raise HTTPException(status_code=400, detail=f"Session is {session.status}")
+        if session.status != SessionStatus.ACTIVE:
+            raise HTTPException(status_code=400, detail=f"Session is {session.status}")
 
-    result = engine.submit_answer(
-        session=session,
-        question_id=request.question_id,
-        value=request.value,
-        party_id=request.party_id,
-        response_time_ms=request.response_time_ms,
-        device_rtt_ms=request.device_rtt_ms,
-        edits_in_window=request.edits_in_window,
-    )
+        result = engine.submit_answer(
+            session=session,
+            question_id=request.question_id,
+            value=request.value,
+            party_id=request.party_id,
+            response_time_ms=request.response_time_ms,
+            device_rtt_ms=request.device_rtt_ms,
+            edits_in_window=request.edits_in_window,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Submit failed: {str(e)}\n{traceback.format_exc()}")
 
     next_response = None
     if result.next:
