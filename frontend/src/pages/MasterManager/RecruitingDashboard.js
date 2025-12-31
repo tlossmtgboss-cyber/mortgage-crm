@@ -9,7 +9,10 @@ import {
   updateCandidateStatus,
   createCandidate,
   createJobPosting,
-  publishJobPosting
+  publishJobPosting,
+  getPartnerRecruits,
+  updatePartnerRecruitStatus,
+  getPartnerRecruitStats
 } from '../../services/masterManagerApi';
 import './MasterManager.css';
 
@@ -25,7 +28,20 @@ const CANDIDATE_STATUSES = [
   { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
 ];
 
+const PARTNER_STATUSES = [
+  { value: 'new', label: 'New', color: '#3b82f6' },
+  { value: 'active', label: 'Active', color: '#22c55e' },
+  { value: 'contacted', label: 'Contacted', color: '#8b5cf6' },
+  { value: 'meeting_scheduled', label: 'Meeting Scheduled', color: '#f59e0b' },
+  { value: 'in_negotiation', label: 'In Negotiation', color: '#eab308' },
+  { value: 'onboarded', label: 'Onboarded', color: '#10b981' },
+  { value: 'inactive', label: 'Inactive', color: '#6b7280' },
+  { value: 'declined', label: 'Declined', color: '#ef4444' }
+];
+
 const RecruitingDashboard = () => {
+  // Main tab: 'employee' or 'partner'
+  const [mainTab, setMainTab] = useState('employee');
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState(null);
   const [metrics, setMetrics] = useState(null);
@@ -35,6 +51,13 @@ const RecruitingDashboard = () => {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Partner Recruit State
+  const [partnerRecruits, setPartnerRecruits] = useState([]);
+  const [partnerStats, setPartnerStats] = useState(null);
+  const [partnerStatusFilter, setPartnerStatusFilter] = useState('');
+  const [partnerSearchQuery, setPartnerSearchQuery] = useState('');
+  const [selectedPartner, setSelectedPartner] = useState(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('');
@@ -121,19 +144,46 @@ const RecruitingDashboard = () => {
     }
   }, []);
 
+  const loadPartnerRecruits = useCallback(async () => {
+    try {
+      const data = await getPartnerRecruits({
+        status: partnerStatusFilter,
+        search: partnerSearchQuery,
+        limit: 50
+      });
+      setPartnerRecruits(data.partners || []);
+    } catch (err) {
+      console.error('Failed to load partner recruits:', err);
+    }
+  }, [partnerStatusFilter, partnerSearchQuery]);
+
+  const loadPartnerStats = useCallback(async () => {
+    try {
+      const data = await getPartnerRecruitStats();
+      setPartnerStats(data);
+    } catch (err) {
+      console.error('Failed to load partner stats:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   useEffect(() => {
-    if (activeTab === 'candidates') {
-      loadCandidates();
-    } else if (activeTab === 'jobs') {
-      loadJobPostings();
-    } else if (activeTab === 'offers') {
-      loadOffers();
+    if (mainTab === 'employee') {
+      if (activeTab === 'candidates') {
+        loadCandidates();
+      } else if (activeTab === 'jobs') {
+        loadJobPostings();
+      } else if (activeTab === 'offers') {
+        loadOffers();
+      }
+    } else if (mainTab === 'partner') {
+      loadPartnerRecruits();
+      loadPartnerStats();
     }
-  }, [activeTab, loadCandidates, loadJobPostings, loadOffers]);
+  }, [mainTab, activeTab, loadCandidates, loadJobPostings, loadOffers, loadPartnerRecruits, loadPartnerStats]);
 
   const handleStatusChange = async (candidateId, newStatus) => {
     try {
@@ -143,6 +193,21 @@ const RecruitingDashboard = () => {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handlePartnerStatusChange = async (partnerId, newStatus) => {
+    try {
+      await updatePartnerRecruitStatus(partnerId, newStatus);
+      await loadPartnerRecruits();
+      await loadPartnerStats();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const getPartnerStatusColor = (status) => {
+    const statusObj = PARTNER_STATUSES.find(s => s.value === status);
+    return statusObj?.color || '#6b7280';
   };
 
   const handleAddCandidate = async (e) => {
@@ -222,21 +287,25 @@ const RecruitingDashboard = () => {
       <div className="mm-header">
         <div className="mm-header-left">
           <h1>Recruiting Engine</h1>
-          <p>Candidate pipeline management and hiring analytics</p>
+          <p>{mainTab === 'employee' ? 'Employee candidate pipeline management' : 'Partner (Realtor) recruiting from RETR'}</p>
         </div>
         <div className="mm-header-actions">
-          <button
-            className="mm-btn mm-btn-secondary"
-            onClick={() => setShowAddJob(true)}
-          >
-            + Job Posting
-          </button>
-          <button
-            className="mm-btn mm-btn-primary"
-            onClick={() => setShowAddCandidate(true)}
-          >
-            + Add Candidate
-          </button>
+          {mainTab === 'employee' && (
+            <>
+              <button
+                className="mm-btn mm-btn-secondary"
+                onClick={() => setShowAddJob(true)}
+              >
+                + Job Posting
+              </button>
+              <button
+                className="mm-btn mm-btn-primary"
+                onClick={() => setShowAddCandidate(true)}
+              >
+                + Add Candidate
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -247,36 +316,66 @@ const RecruitingDashboard = () => {
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div className="mm-tabs">
+      {/* Main Tabs: Employee Recruit / Partner Recruit */}
+      <div className="mm-main-tabs" style={{ marginBottom: '20px' }}>
         <button
-          className={`mm-tab ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
+          className={`mm-tab mm-main-tab ${mainTab === 'employee' ? 'active' : ''}`}
+          onClick={() => { setMainTab('employee'); setActiveTab('overview'); }}
+          style={{
+            fontSize: '16px',
+            padding: '12px 24px',
+            fontWeight: mainTab === 'employee' ? 'bold' : 'normal',
+            borderBottom: mainTab === 'employee' ? '3px solid #3b82f6' : '3px solid transparent'
+          }}
         >
-          Overview
+          Employee Recruit
         </button>
         <button
-          className={`mm-tab ${activeTab === 'candidates' ? 'active' : ''}`}
-          onClick={() => setActiveTab('candidates')}
+          className={`mm-tab mm-main-tab ${mainTab === 'partner' ? 'active' : ''}`}
+          onClick={() => setMainTab('partner')}
+          style={{
+            fontSize: '16px',
+            padding: '12px 24px',
+            fontWeight: mainTab === 'partner' ? 'bold' : 'normal',
+            borderBottom: mainTab === 'partner' ? '3px solid #22c55e' : '3px solid transparent'
+          }}
         >
-          Candidates
-        </button>
-        <button
-          className={`mm-tab ${activeTab === 'jobs' ? 'active' : ''}`}
-          onClick={() => setActiveTab('jobs')}
-        >
-          Job Postings
-        </button>
-        <button
-          className={`mm-tab ${activeTab === 'offers' ? 'active' : ''}`}
-          onClick={() => setActiveTab('offers')}
-        >
-          Offers
+          Partner Recruit
         </button>
       </div>
 
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
+      {/* Employee Recruit Sub-tabs */}
+      {mainTab === 'employee' && (
+        <div className="mm-tabs">
+          <button
+            className={`mm-tab ${activeTab === 'overview' ? 'active' : ''}`}
+            onClick={() => setActiveTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            className={`mm-tab ${activeTab === 'candidates' ? 'active' : ''}`}
+            onClick={() => setActiveTab('candidates')}
+          >
+            Candidates
+          </button>
+          <button
+            className={`mm-tab ${activeTab === 'jobs' ? 'active' : ''}`}
+            onClick={() => setActiveTab('jobs')}
+          >
+            Job Postings
+          </button>
+          <button
+            className={`mm-tab ${activeTab === 'offers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('offers')}
+          >
+            Offers
+          </button>
+        </div>
+      )}
+
+      {/* Employee Recruit Content */}
+      {mainTab === 'employee' && activeTab === 'overview' && (
         <>
           {/* Stats Cards */}
           {stats && (
@@ -436,7 +535,7 @@ const RecruitingDashboard = () => {
       )}
 
       {/* Candidates Tab */}
-      {activeTab === 'candidates' && (
+      {mainTab === 'employee' && activeTab === 'candidates' && (
         <div className="mm-section">
           <div className="mm-section-header">
             <h2>All Candidates</h2>
@@ -534,7 +633,7 @@ const RecruitingDashboard = () => {
       )}
 
       {/* Job Postings Tab */}
-      {activeTab === 'jobs' && (
+      {mainTab === 'employee' && activeTab === 'jobs' && (
         <div className="mm-section">
           <h2>Job Postings</h2>
           <div className="mm-jobs-grid">
@@ -589,7 +688,7 @@ const RecruitingDashboard = () => {
       )}
 
       {/* Offers Tab */}
-      {activeTab === 'offers' && (
+      {mainTab === 'employee' && activeTab === 'offers' && (
         <div className="mm-section">
           <h2>Offers</h2>
           <div className="mm-table-container">
@@ -631,6 +730,200 @@ const RecruitingDashboard = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Partner Recruit Content */}
+      {mainTab === 'partner' && (
+        <>
+          {/* Partner Stats */}
+          {partnerStats && (
+            <div className="mm-overview-grid">
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value">{partnerStats.total || 0}</div>
+                <div className="mm-stat-label">Total Partners</div>
+              </div>
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value" style={{ color: '#3b82f6' }}>
+                  {partnerStats.new || 0}
+                </div>
+                <div className="mm-stat-label">New</div>
+              </div>
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value" style={{ color: '#22c55e' }}>
+                  {partnerStats.active || 0}
+                </div>
+                <div className="mm-stat-label">Active</div>
+              </div>
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value" style={{ color: '#8b5cf6' }}>
+                  {partnerStats.contacted || 0}
+                </div>
+                <div className="mm-stat-label">Contacted</div>
+              </div>
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value" style={{ color: '#f59e0b' }}>
+                  {partnerStats.from_retr || 0}
+                </div>
+                <div className="mm-stat-label">From RETR</div>
+              </div>
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value" style={{ color: '#10b981' }}>
+                  {partnerStats.onboarded || 0}
+                </div>
+                <div className="mm-stat-label">Onboarded</div>
+              </div>
+            </div>
+          )}
+
+          {/* Partner Recruits Table */}
+          <div className="mm-section">
+            <div className="mm-section-header">
+              <h2>Partner Recruits (Realtors)</h2>
+              <div className="mm-filters">
+                <input
+                  type="text"
+                  placeholder="Search partners..."
+                  value={partnerSearchQuery}
+                  onChange={(e) => setPartnerSearchQuery(e.target.value)}
+                  className="mm-input"
+                />
+                <select
+                  value={partnerStatusFilter}
+                  onChange={(e) => setPartnerStatusFilter(e.target.value)}
+                  className="mm-select"
+                >
+                  <option value="">All Statuses</option>
+                  {PARTNER_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mm-table-container">
+              <table className="mm-table">
+                <thead>
+                  <tr>
+                    <th>Partner</th>
+                    <th>Company</th>
+                    <th>Source</th>
+                    <th>Phone</th>
+                    <th>Added</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {partnerRecruits.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="mm-table-empty">
+                        No partner recruits found. Import realtors from RETR to see them here.
+                      </td>
+                    </tr>
+                  ) : (
+                    partnerRecruits.map((partner) => (
+                      <tr key={partner.id}>
+                        <td>
+                          <div className="mm-user-cell">
+                            <div className="mm-user-avatar" style={{ backgroundColor: getPartnerStatusColor(partner.status) }}>
+                              {partner.name?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                              <div className="mm-user-name">{partner.name || partner.contact_name}</div>
+                              <div className="mm-user-email">{partner.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{partner.company || partner.business_name || '-'}</td>
+                        <td>
+                          {partner.source === 'retr' ? (
+                            <span className="mm-badge mm-badge-info">RETR</span>
+                          ) : (
+                            partner.source || 'Direct'
+                          )}
+                        </td>
+                        <td>{partner.phone || '-'}</td>
+                        <td>{partner.created_at ? new Date(partner.created_at).toLocaleDateString() : '-'}</td>
+                        <td>
+                          <select
+                            value={partner.status || 'new'}
+                            onChange={(e) => handlePartnerStatusChange(partner.id, e.target.value)}
+                            className="mm-select mm-select-inline"
+                            style={{ backgroundColor: getPartnerStatusColor(partner.status), color: 'white' }}
+                          >
+                            {PARTNER_STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            className="mm-btn mm-btn-small mm-btn-secondary"
+                            onClick={() => setSelectedPartner(partner)}
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Partner Detail Modal */}
+      {selectedPartner && (
+        <div className="mm-modal-overlay">
+          <div className="mm-modal mm-modal-large">
+            <div className="mm-modal-header">
+              <h3>{selectedPartner.name || selectedPartner.contact_name}</h3>
+              <button className="mm-modal-close" onClick={() => setSelectedPartner(null)}>&times;</button>
+            </div>
+            <div className="mm-candidate-detail">
+              <div className="mm-detail-section">
+                <h4>Contact Information</h4>
+                <p><strong>Email:</strong> {selectedPartner.email || 'Not provided'}</p>
+                <p><strong>Phone:</strong> {selectedPartner.phone || 'Not provided'}</p>
+              </div>
+              <div className="mm-detail-section">
+                <h4>Business Details</h4>
+                <p><strong>Company:</strong> {selectedPartner.company || selectedPartner.business_name || 'Not specified'}</p>
+                <p><strong>License #:</strong> {selectedPartner.license_number || 'Not provided'}</p>
+                <p><strong>Source:</strong> {selectedPartner.source || 'Direct'}</p>
+                <p><strong>Added:</strong> {selectedPartner.created_at ? new Date(selectedPartner.created_at).toLocaleDateString() : 'N/A'}</p>
+              </div>
+              {selectedPartner.notes && (
+                <div className="mm-detail-section">
+                  <h4>Notes</h4>
+                  <p>{selectedPartner.notes}</p>
+                </div>
+              )}
+              <div className="mm-detail-section">
+                <h4>Status</h4>
+                <select
+                  value={selectedPartner.status || 'new'}
+                  onChange={(e) => {
+                    handlePartnerStatusChange(selectedPartner.id, e.target.value);
+                    setSelectedPartner({ ...selectedPartner, status: e.target.value });
+                  }}
+                  className="mm-select"
+                >
+                  {PARTNER_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mm-modal-actions">
+              <button className="mm-btn mm-btn-secondary" onClick={() => setSelectedPartner(null)}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

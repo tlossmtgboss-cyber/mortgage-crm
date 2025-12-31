@@ -137,16 +137,16 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
                 })
                 updated += 1
             else:
-                # Insert new record
+                # Insert new record with source='retr' to indicate RETR import
                 db.execute(text("""
                     INSERT INTO referral_partners (
                         name, contact_name, business_name, company,
                         email, phone, license_number, notes,
-                        category, type, status
+                        category, type, status, source
                     ) VALUES (
                         :name, :contact_name, :company, :company,
                         :email, :phone, :license, :notes,
-                        'realtor', 'Realtor', 'active'
+                        'realtor', 'Realtor', 'active', 'retr'
                     )
                 """), {
                     "name": name,

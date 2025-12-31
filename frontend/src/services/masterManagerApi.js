@@ -387,6 +387,50 @@ export const addCandidateNote = async (candidateId, data) => {
   return response.json();
 };
 
+// =============================================================================
+// PARTNER RECRUITING ENDPOINTS (Realtors from RETR)
+// =============================================================================
+
+export const getPartnerRecruits = async (params = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.status) searchParams.append('status', params.status);
+  if (params.source) searchParams.append('source', params.source);
+  if (params.search) searchParams.append('search', params.search);
+  if (params.limit) searchParams.append('limit', params.limit);
+  if (params.offset) searchParams.append('offset', params.offset);
+
+  const response = await fetch(`${API_URL}/api/v1/recruiting/partners?${searchParams}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch partner recruits');
+  return response.json();
+};
+
+export const getPartnerRecruitDetail = async (partnerId) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/partners/${partnerId}`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch partner recruit');
+  return response.json();
+};
+
+export const updatePartnerRecruitStatus = async (partnerId, status) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/partners/${partnerId}/status?status=${status}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to update partner recruit status');
+  return response.json();
+};
+
+export const getPartnerRecruitStats = async () => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/partners/stats/overview`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch partner recruit stats');
+  return response.json();
+};
+
 export default {
   getCapacityOverview,
   getCapacityByRole,
@@ -424,5 +468,10 @@ export default {
   getOffers,
   createOffer,
   sendOffer,
-  addCandidateNote
+  addCandidateNote,
+  // Partner Recruiting
+  getPartnerRecruits,
+  getPartnerRecruitDetail,
+  updatePartnerRecruitStatus,
+  getPartnerRecruitStats
 };
