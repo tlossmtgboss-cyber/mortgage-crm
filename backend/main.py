@@ -20266,6 +20266,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Webhook routes not loaded: {e}")
 
+# RETR Import Webhook routes (for importing realtors and loan officers)
+try:
+    from routes.webhook_routes import router as retr_webhook_router
+    app.include_router(retr_webhook_router, tags=["RETR Webhooks"])
+    logger.info("✅ RETR webhook routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ RETR webhook routes not loaded: {e}")
+
 # Monitoring routes (cache health and performance metrics)
 try:
     from api.monitoring import router as monitoring_router
