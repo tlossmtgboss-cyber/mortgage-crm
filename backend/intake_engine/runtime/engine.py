@@ -100,8 +100,9 @@ class IntakeEngine:
         # Load value sets
         self.value_sets = self._load_json(base_path / "schemas" / "value_sets.json")
 
-        # Build section order
-        self.section_order = self.sequencing_config.get("sequencing_engine", {}).get("global_order", [])
+        # Build section order (check both root level and nested)
+        self.section_order = self.sequencing_config.get("global_order", []) or \
+                            self.sequencing_config.get("sequencing_engine", {}).get("global_order", [])
 
         # Build question sequence
         self.section_questions = self._build_section_questions()
@@ -128,7 +129,12 @@ class IntakeEngine:
         if path.exists():
             for file in path.glob("*.json"):
                 data = self._load_json(file)
-                if "questions" in data:
+                # Handle both formats: list at top level or dict with "questions" key
+                if isinstance(data, list):
+                    for q in data:
+                        if "question_id" in q:
+                            questions[q["question_id"]] = q
+                elif isinstance(data, dict) and "questions" in data:
                     for q in data["questions"]:
                         questions[q["question_id"]] = q
         return questions
@@ -155,13 +161,20 @@ class IntakeEngine:
         return i18n
 
     def _build_section_questions(self) -> Dict[str, List[str]]:
-        """Build mapping of sections to questions"""
+        """Build mapping of sections to questions from sequencing config"""
         sections = {}
-        for qid, q_def in self.questions.items():
-            section = q_def.get("urla_section", "OTHER")
-            if section not in sections:
-                sections[section] = []
-            sections[section].append(qid)
+        # Use sections from sequencing_engine.yaml
+        config_sections = self.sequencing_config.get("sections", {})
+        for section_id, section_config in config_sections.items():
+            sections[section_id] = section_config.get("questions", [])
+
+        # Fallback: build from urla_section if no sections defined
+        if not sections:
+            for qid, q_def in self.questions.items():
+                section = q_def.get("urla_section", "OTHER")
+                if section not in sections:
+                    sections[section] = []
+                sections[section].append(qid)
         return sections
 
     # =========================================================================

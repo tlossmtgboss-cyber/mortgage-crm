@@ -97,6 +97,32 @@
   color: #1e293b;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popout-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 18px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.popout-btn:hover {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 .modal-close-btn {
   width: 36px;
   height: 36px;

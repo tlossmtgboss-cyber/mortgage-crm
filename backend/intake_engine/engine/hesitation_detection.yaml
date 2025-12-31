@@ -143,16 +143,18 @@ hesitation_detection:
   question_sensitivity:
     high_sensitivity:
       # Financial questions - expected to have some uncertainty
-      - "Q_INC_0303"   # income
-      - "Q_AST_0401"   # checking
-      - "Q_AST_0402"   # savings
+      questions:
+        - "Q_INC_0303"   # income
+        - "Q_AST_0401"   # checking
+        - "Q_AST_0402"   # savings
       threshold_adjustment: 0.1  # Allow slightly more hesitation
 
     low_sensitivity:
       # Identity questions - should be answered quickly
-      - "Q_ID_0200"    # name
-      - "Q_ID_0201"    # DOB
-      - "Q_ID_0204"    # email
+      questions:
+        - "Q_ID_0200"    # name
+        - "Q_ID_0201"    # DOB
+        - "Q_ID_0204"    # email
       threshold_adjustment: -0.15  # Less tolerance for hesitation
 
   # False positive reduction

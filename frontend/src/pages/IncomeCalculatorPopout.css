@@ -1,0 +1,134 @@
+/* Income Calculator Popout Page Styles */
+
+.income-popout-container {
+  min-height: 100vh;
+  background: #f1f5f9;
+  display: flex;
+  flex-direction: column;
+}
+
+.income-popout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.income-popout-header .header-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.income-popout-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.income-popout-header .borrower-name {
+  font-size: 16px;
+  color: #64748b;
+  padding-left: 16px;
+  border-left: 2px solid #e2e8f0;
+}
+
+.close-window-btn {
+  padding: 10px 20px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.close-window-btn:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.income-popout-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.income-popout-body .income-tabs-nav {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.income-popout-body .income-tab-content {
+  flex: 1;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  max-height: none;
+  overflow: visible;
+}
+
+.income-popout-body .income-tab-content.popout-content {
+  min-height: 400px;
+}
+
+.income-popout-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+  color: #64748b;
+}
+
+.income-popout-error h2 {
+  margin: 0 0 8px;
+  color: #ef4444;
+}
+
+/* Override modal styles for popout page */
+.income-popout-container .income-total-banner {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  border-radius: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .income-popout-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .income-popout-header .header-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .income-popout-header .borrower-name {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  .income-popout-body {
+    padding: 16px;
+  }
+}
