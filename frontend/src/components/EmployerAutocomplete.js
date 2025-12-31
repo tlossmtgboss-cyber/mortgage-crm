@@ -159,16 +159,25 @@ const EmployerAutocomplete = ({
     placesService.current.getDetails(request, (place, status) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
         const employerData = {
-          name: place.name,
-          address: place.formatted_address,
-          phone: place.formatted_phone_number,
-          website: place.website,
-          types: place.types,
+          name: place.name || suggestion.mainText,
+          address: place.formatted_address || '',
+          phone: place.formatted_phone_number || '',
+          website: place.website || '',
+          types: place.types || [],
         };
 
-        // Parse address components
+        // Parse address components for city/state/zip
         if (place.address_components) {
+          let streetNumber = '';
+          let streetName = '';
+
           place.address_components.forEach(component => {
+            if (component.types.includes('street_number')) {
+              streetNumber = component.long_name;
+            }
+            if (component.types.includes('route')) {
+              streetName = component.long_name;
+            }
             if (component.types.includes('locality')) {
               employerData.city = component.long_name;
             }
@@ -179,15 +188,43 @@ const EmployerAutocomplete = ({
               employerData.zip = component.long_name;
             }
           });
+
+          // Build street address if formatted_address is missing
+          if (!employerData.address && (streetNumber || streetName)) {
+            employerData.address = `${streetNumber} ${streetName}`.trim();
+          }
         }
 
-        setInputValue(place.name);
+        // Update internal state
+        setInputValue(place.name || suggestion.mainText);
         setShowDropdown(false);
         setSuggestions([]);
         sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
 
-        if (onChange) onChange(place.name);
-        if (onEmployerSelect) onEmployerSelect(employerData);
+        // Only call onEmployerSelect (which includes name), skip separate onChange
+        // This prevents race conditions from two sequential state updates
+        if (onEmployerSelect) {
+          onEmployerSelect(employerData);
+        } else if (onChange) {
+          // Fallback to onChange if onEmployerSelect not provided
+          onChange(place.name || suggestion.mainText);
+        }
+      } else {
+        // Handle case where getDetails fails - still update with what we have
+        console.warn('Google Places getDetails failed:', status);
+        setInputValue(suggestion.mainText);
+        setShowDropdown(false);
+        setSuggestions([]);
+
+        if (onEmployerSelect) {
+          onEmployerSelect({
+            name: suggestion.mainText,
+            address: suggestion.secondaryText || '',
+            phone: '',
+          });
+        } else if (onChange) {
+          onChange(suggestion.mainText);
+        }
       }
     });
   };
