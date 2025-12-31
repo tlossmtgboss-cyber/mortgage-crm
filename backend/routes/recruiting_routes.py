@@ -165,7 +165,11 @@ async def get_partner_recruit_stats(
             COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
             COUNT(CASE WHEN status = 'new' OR status IS NULL THEN 1 END) as new,
             COUNT(CASE WHEN status = 'contacted' THEN 1 END) as contacted,
+            COUNT(CASE WHEN status = 'meeting_scheduled' THEN 1 END) as meeting_scheduled,
+            COUNT(CASE WHEN status = 'in_negotiation' THEN 1 END) as in_negotiation,
             COUNT(CASE WHEN status = 'onboarded' THEN 1 END) as onboarded,
+            COUNT(CASE WHEN status = 'inactive' THEN 1 END) as inactive,
+            COUNT(CASE WHEN status = 'declined' THEN 1 END) as declined,
             COUNT(CASE WHEN category = 'realtor' THEN 1 END) as from_retr,
             COUNT(CASE WHEN created_at >= CURRENT_DATE - 7 THEN 1 END) as new_this_week,
             COUNT(CASE WHEN created_at >= CURRENT_DATE - 30 THEN 1 END) as new_this_month
@@ -173,15 +177,43 @@ async def get_partner_recruit_stats(
         WHERE category = 'realtor' OR type = 'Realtor'
     """)).fetchone()
 
+    # Calculate conversion rates
+    total = stats.total or 0
+    contacted = stats.contacted or 0
+    onboarded = stats.onboarded or 0
+
+    contact_rate = round((contacted / total) * 100, 1) if total > 0 else 0
+    onboard_rate = round((onboarded / contacted) * 100, 1) if contacted > 0 else 0
+    overall_rate = round((onboarded / total) * 100, 1) if total > 0 else 0
+
     return {
-        "total": stats.total or 0,
+        "total": total,
         "active": stats.active or 0,
         "new": stats.new or 0,
-        "contacted": stats.contacted or 0,
-        "onboarded": stats.onboarded or 0,
+        "contacted": contacted,
+        "meeting_scheduled": stats.meeting_scheduled or 0,
+        "in_negotiation": stats.in_negotiation or 0,
+        "onboarded": onboarded,
+        "inactive": stats.inactive or 0,
+        "declined": stats.declined or 0,
         "from_retr": stats.from_retr or 0,
         "new_this_week": stats.new_this_week or 0,
-        "new_this_month": stats.new_this_month or 0
+        "new_this_month": stats.new_this_month or 0,
+        "conversion_rates": {
+            "new_to_contacted": contact_rate,
+            "contacted_to_onboarded": onboard_rate,
+            "overall": overall_rate
+        },
+        "by_status": {
+            "new": stats.new or 0,
+            "active": stats.active or 0,
+            "contacted": contacted,
+            "meeting_scheduled": stats.meeting_scheduled or 0,
+            "in_negotiation": stats.in_negotiation or 0,
+            "onboarded": onboarded,
+            "inactive": stats.inactive or 0,
+            "declined": stats.declined or 0
+        }
     }
 
 

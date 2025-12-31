@@ -737,7 +737,7 @@ const RecruitingDashboard = () => {
       {/* Partner Recruit Content */}
       {mainTab === 'partner' && (
         <>
-          {/* Partner Stats */}
+          {/* Partner Stats Cards */}
           {partnerStats && (
             <div className="mm-overview-grid">
               <div className="mm-card mm-stat-card">
@@ -746,15 +746,9 @@ const RecruitingDashboard = () => {
               </div>
               <div className="mm-card mm-stat-card">
                 <div className="mm-stat-value" style={{ color: '#3b82f6' }}>
-                  {partnerStats.new || 0}
+                  {partnerStats.new_this_week || 0}
                 </div>
-                <div className="mm-stat-label">New</div>
-              </div>
-              <div className="mm-card mm-stat-card">
-                <div className="mm-stat-value" style={{ color: '#22c55e' }}>
-                  {partnerStats.active || 0}
-                </div>
-                <div className="mm-stat-label">Active</div>
+                <div className="mm-stat-label">New This Week</div>
               </div>
               <div className="mm-card mm-stat-card">
                 <div className="mm-stat-value" style={{ color: '#8b5cf6' }}>
@@ -764,15 +758,95 @@ const RecruitingDashboard = () => {
               </div>
               <div className="mm-card mm-stat-card">
                 <div className="mm-stat-value" style={{ color: '#f59e0b' }}>
-                  {partnerStats.from_retr || 0}
+                  {partnerStats.meeting_scheduled || 0}
                 </div>
-                <div className="mm-stat-label">From RETR</div>
+                <div className="mm-stat-label">Meeting Scheduled</div>
               </div>
               <div className="mm-card mm-stat-card">
                 <div className="mm-stat-value" style={{ color: '#10b981' }}>
                   {partnerStats.onboarded || 0}
                 </div>
                 <div className="mm-stat-label">Onboarded</div>
+              </div>
+              <div className="mm-card mm-stat-card">
+                <div className="mm-stat-value" style={{ color: '#22c55e' }}>
+                  {partnerStats.from_retr || 0}
+                </div>
+                <div className="mm-stat-label">From RETR</div>
+              </div>
+            </div>
+          )}
+
+          {/* Partner Pipeline Metrics */}
+          {partnerStats && partnerStats.conversion_rates && (
+            <div className="mm-section">
+              <h2>Pipeline Performance</h2>
+              <div className="mm-metrics-grid">
+                <div className="mm-card mm-metric-card">
+                  <div className="mm-metric-header">
+                    <span className="mm-metric-label">New to Contacted Rate</span>
+                    <span className="mm-metric-value">{partnerStats.conversion_rates?.new_to_contacted || 0}%</span>
+                  </div>
+                  <div className="mm-capacity-bar-container">
+                    <div
+                      className="mm-capacity-bar"
+                      style={{
+                        width: `${partnerStats.conversion_rates?.new_to_contacted || 0}%`,
+                        backgroundColor: '#8b5cf6'
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="mm-card mm-metric-card">
+                  <div className="mm-metric-header">
+                    <span className="mm-metric-label">Contacted to Onboarded</span>
+                    <span className="mm-metric-value">{partnerStats.conversion_rates?.contacted_to_onboarded || 0}%</span>
+                  </div>
+                  <div className="mm-capacity-bar-container">
+                    <div
+                      className="mm-capacity-bar"
+                      style={{
+                        width: `${partnerStats.conversion_rates?.contacted_to_onboarded || 0}%`,
+                        backgroundColor: '#22c55e'
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="mm-card mm-metric-card">
+                  <div className="mm-metric-header">
+                    <span className="mm-metric-label">Overall Conversion</span>
+                    <span className="mm-metric-value">{partnerStats.conversion_rates?.overall || 0}%</span>
+                  </div>
+                  <div className="mm-capacity-bar-container">
+                    <div
+                      className="mm-capacity-bar"
+                      style={{
+                        width: `${partnerStats.conversion_rates?.overall || 0}%`,
+                        backgroundColor: '#10b981'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Partner Pipeline by Status */}
+          {partnerStats && partnerStats.by_status && (
+            <div className="mm-section">
+              <h2>Pipeline by Stage</h2>
+              <div className="mm-pipeline-stages">
+                {PARTNER_STATUSES.slice(0, 6).map((status) => (
+                  <div key={status.value} className="mm-pipeline-stage">
+                    <div
+                      className="mm-stage-count"
+                      style={{ backgroundColor: status.color }}
+                    >
+                      {partnerStats.by_status[status.value] || 0}
+                    </div>
+                    <div className="mm-stage-label">{status.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
