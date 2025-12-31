@@ -70,13 +70,21 @@ export const getNextQuestion = async (sessionId) => {
 /**
  * Submit an answer to the current question
  * @param {string} sessionId - The session ID
- * @param {Object} data - Answer data (question_id, answer, metadata)
+ * @param {Object} data - Answer data (question_id, value, metadata)
  */
 export const submitAnswer = async (sessionId, data) => {
+  // Map 'answer' to 'value' for API compatibility
+  const payload = {
+    question_id: data.question_id,
+    value: data.answer !== undefined ? data.answer : data.value,
+    party_id: data.party_id,
+    metadata: data.metadata
+  };
+
   const response = await fetch(`${API_BASE}/api/v1/intake/sessions/${sessionId}/answer`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify(data)
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
