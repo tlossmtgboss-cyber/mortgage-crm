@@ -104,6 +104,11 @@ class UpdatePayrollFrequencyBody(BaseModel):
     frequency: str  # WEEKLY, BIWEEKLY, SEMIMONTHLY, MONTHLY
 
 
+class UpdateDocumentTypeBody(BaseModel):
+    """Request to update a document's type."""
+    doc_type: str  # PAYSTUB, W2, DRIVERS_LICENSE, BANK_STATEMENT, etc.
+
+
 class MergeDocumentsRequest(BaseModel):
     """Request to merge multiple documents into a single PDF."""
     loan_id: int
@@ -993,6 +998,51 @@ async def delete_document(
         "deleted_by": reviewer,
         "deleted_at": datetime.utcnow().isoformat(),
         "message": "Document deleted successfully"
+    }
+
+
+@router.patch("/document/{document_id}/type")
+async def update_document_type(
+    document_id: int,
+    body: UpdateDocumentTypeBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Update a document's type.
+
+    Allows correcting the document type when AI misclassified or user uploaded
+    to wrong category (e.g., W2 uploaded as Driver's License).
+    """
+    document = db.query(SmartDocument).filter(
+        SmartDocument.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Validate and parse the new doc_type
+    try:
+        new_doc_type = DocType(body.doc_type)
+    except ValueError:
+        valid_types = [dt.value for dt in DocType]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid document type. Valid types: {', '.join(valid_types)}"
+        )
+
+    old_doc_type = document.doc_type
+    document.doc_type = new_doc_type
+    document.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    logger.info(f"Document {document_id} type changed from {old_doc_type} to {new_doc_type}")
+
+    return {
+        "document_id": document_id,
+        "doc_type": new_doc_type.value,
+        "previous_type": old_doc_type.value if old_doc_type else None,
+        "message": "Document type updated successfully"
     }
 
 

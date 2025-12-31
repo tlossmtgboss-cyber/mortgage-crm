@@ -32,6 +32,33 @@ function SmartDocsClientDetail() {
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [editingDocType, setEditingDocType] = useState(false);
+  const [editDocTypeValue, setEditDocTypeValue] = useState('');
+
+  // Available document types for dropdown (must match backend DocType enum)
+  const DOCUMENT_TYPES = [
+    { value: 'PAYSTUB', label: 'Pay Stubs' },
+    { value: 'BANK_STATEMENT', label: 'Bank Statements' },
+    { value: 'TAX_RETURN', label: 'Tax Returns' },
+    { value: 'BUSINESS_TAX_RETURN', label: 'Business Tax Returns' },
+    { value: 'W2', label: 'W-2 Forms' },
+    { value: 'DRIVERS_LICENSE', label: "Driver's License" },
+    { value: 'PURCHASE_CONTRACT', label: 'Purchase Contract' },
+    { value: 'GIFT_LETTER', label: 'Gift Letter' },
+    { value: 'PROFIT_LOSS', label: 'Profit & Loss Statement' },
+    { value: 'BALANCE_SHEET', label: 'Balance Sheet' },
+    { value: 'INVESTMENT_STATEMENT', label: 'Investment Statement' },
+    { value: 'LOE', label: 'Letter of Explanation' },
+    { value: 'LEASE_AGREEMENT', label: 'Lease Agreement' },
+    { value: 'FHA_CERT', label: 'FHA Certificate' },
+    { value: 'VA_COE', label: 'VA Certificate of Eligibility' },
+    { value: 'DD214', label: 'DD-214' },
+    { value: 'BANKRUPTCY_DISCHARGE', label: 'Bankruptcy Discharge' },
+    { value: 'APPRAISAL', label: 'Appraisal' },
+    { value: 'TITLE_REPORT', label: 'Title Report' },
+    { value: 'HOMEOWNERS_INSURANCE', label: 'Homeowners Insurance' },
+    { value: 'OTHER', label: 'Other' }
+  ];
 
   // Fetch client documents
   const fetchClientData = useCallback(async () => {
@@ -414,6 +441,67 @@ function SmartDocsClientDetail() {
     }
   };
 
+  // Update document type
+  const handleUpdateDocType = async () => {
+    if (!selectedDoc || !editDocTypeValue) return;
+
+    // Need the document_id, not the request id
+    const documentId = selectedDoc.document_id;
+    if (!documentId) {
+      alert('Cannot change type: document has not been uploaded yet');
+      setEditingDocType(false);
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/type`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ doc_type: editDocTypeValue })
+        }
+      );
+
+      if (response.ok) {
+        // Update local state
+        setDocuments(prev => prev.map(doc =>
+          doc.id === selectedDoc.id
+            ? { ...doc, doc_type: editDocTypeValue }
+            : doc
+        ));
+        setSelectedDoc(prev => ({ ...prev, doc_type: editDocTypeValue }));
+        setEditingDocType(false);
+        alert('Document type updated successfully!');
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to update document type'}`);
+      }
+    } catch (err) {
+      console.error('Error updating document type:', err);
+      alert('Error updating document type');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Start editing document type
+  const startEditDocType = () => {
+    setEditDocTypeValue(selectedDoc?.doc_type || '');
+    setEditingDocType(true);
+  };
+
+  // Cancel editing document type
+  const cancelEditDocType = () => {
+    setEditingDocType(false);
+    setEditDocTypeValue('');
+  };
+
   // Check if document has an uploaded file
   const hasUploadedDocument = (doc) => {
     return doc.document_id || doc.file_url || doc.s3_url || doc.filename || doc.status === 'PENDING_REVIEW';
@@ -444,20 +532,46 @@ function SmartDocsClientDetail() {
     return 'open';
   };
 
-  // Get document type display name
+  // Get document type display name (handles both uppercase and lowercase formats)
   const getDocTypeName = (docType) => {
+    if (!docType) return 'Document';
+
+    // Normalize to uppercase for lookup
+    const normalizedType = docType.toUpperCase();
+
     const names = {
-      'paystubs': 'Pay Stubs',
-      'bank_statements': 'Bank Statements',
-      'tax_returns': 'Tax Returns',
-      'w2': 'W-2 Forms',
+      // Uppercase format (new/backend standard)
+      'PAYSTUB': 'Pay Stubs',
+      'BANK_STATEMENT': 'Bank Statements',
+      'TAX_RETURN': 'Tax Returns',
+      'BUSINESS_TAX_RETURN': 'Business Tax Returns',
+      'W2': 'W-2 Forms',
+      'DRIVERS_LICENSE': "Driver's License",
+      'PURCHASE_CONTRACT': 'Purchase Contract',
+      'GIFT_LETTER': 'Gift Letter',
+      'PROFIT_LOSS': 'Profit & Loss Statement',
+      'BALANCE_SHEET': 'Balance Sheet',
+      'INVESTMENT_STATEMENT': 'Investment Statement',
+      'LOE': 'Letter of Explanation',
+      'LEASE_AGREEMENT': 'Lease Agreement',
+      'FHA_CERT': 'FHA Certificate',
+      'VA_COE': 'VA Certificate of Eligibility',
+      'DD214': 'DD-214',
+      'BANKRUPTCY_DISCHARGE': 'Bankruptcy Discharge',
+      'APPRAISAL': 'Appraisal',
+      'TITLE_REPORT': 'Title Report',
+      'HOMEOWNERS_INSURANCE': 'Homeowners Insurance',
+      'HOA': 'HOA Documents',
+      'OTHER': 'Other',
+      // Legacy lowercase formats
+      'PAYSTUBS': 'Pay Stubs',
+      'BANK_STATEMENTS': 'Bank Statements',
+      'TAX_RETURNS': 'Tax Returns',
       '1099': '1099 Forms',
-      'drivers_license': "Driver's License",
-      'purchase_contract': 'Purchase Contract',
-      'hoa_docs': 'HOA Documents',
-      'gift_letter': 'Gift Letter'
+      'HOA_DOCS': 'HOA Documents'
     };
-    return names[docType] || docType?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Document';
+
+    return names[normalizedType] || docType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
   if (loading) {
@@ -579,9 +693,52 @@ function SmartDocsClientDetail() {
             <>
               {/* Parsed Info Container */}
               <div className="document-info-bar">
-                <div className="info-group">
+                <div className="info-group doc-type-group">
                   <label>Document Type</label>
-                  <span>{getDocTypeName(selectedDoc.doc_type)}</span>
+                  {editingDocType ? (
+                    <div className="doc-type-edit">
+                      <select
+                        value={editDocTypeValue}
+                        onChange={(e) => setEditDocTypeValue(e.target.value)}
+                        className="doc-type-select"
+                      >
+                        {DOCUMENT_TYPES.map(type => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="edit-btn save-btn"
+                        onClick={handleUpdateDocType}
+                        disabled={actionLoading}
+                        title="Save"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        className="edit-btn cancel-btn"
+                        onClick={cancelEditDocType}
+                        disabled={actionLoading}
+                        title="Cancel"
+                      >
+                        ✗
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="doc-type-display">
+                      <span>{getDocTypeName(selectedDoc.doc_type)}</span>
+                      {hasUploadedDocument(selectedDoc) && (
+                        <button
+                          className="edit-type-btn"
+                          onClick={startEditDocType}
+                          title="Change document type"
+                        >
+                          ✏️
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="info-group">
                   <label>Document Date</label>

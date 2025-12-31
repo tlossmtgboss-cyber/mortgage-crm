@@ -377,6 +377,89 @@
 .info-group .status-value.expired { color: #dc2626; }
 .info-group .status-value.open { color: #6b7280; }
 
+/* Document Type Edit */
+.doc-type-group {
+  min-width: 180px;
+}
+
+.doc-type-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-type-btn {
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 0.85rem;
+  transition: opacity 0.2s;
+}
+
+.edit-type-btn:hover {
+  opacity: 1;
+}
+
+.doc-type-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.doc-type-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.doc-type-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.edit-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.edit-btn.save-btn {
+  background: #10b981;
+  color: white;
+}
+
+.edit-btn.save-btn:hover {
+  background: #059669;
+}
+
+.edit-btn.cancel-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.edit-btn.cancel-btn:hover {
+  background: #dc2626;
+}
+
+.edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .doc-actions {
   margin-left: auto;
   display: flex;
