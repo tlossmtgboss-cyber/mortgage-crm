@@ -97,7 +97,7 @@ class IncomeCalculationService:
         if not paystubs:
             return IncomeCalculationResult(
                 success=False,
-                error="No paystubs provided for W-2 income calculation"
+                error="No paystub data found. Please upload a paystub document and click 'Extract from Docs' first."
             )
 
         # Sort paystubs by pay date, most recent first
