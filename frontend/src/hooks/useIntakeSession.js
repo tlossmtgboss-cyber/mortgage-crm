@@ -47,18 +47,20 @@ export function useIntakeSession(options = {}) {
 
   // Track mount status to prevent state updates on unmounted component
   const mountedRef = useRef(true);
+  const initializedRef = useRef(false);
 
   /**
    * Refresh all scores from API
    */
-  const refreshScores = useCallback(async (sid = sessionId) => {
-    if (!sid) return;
+  const refreshScores = useCallback(async (sid) => {
+    const targetSid = sid || sessionId;
+    if (!targetSid) return;
 
     try {
       const [scoresData, coachingData, flagsData] = await Promise.all([
-        intakeApi.getScores(sid),
-        intakeApi.getCoaching(sid),
-        intakeApi.getFlags(sid)
+        intakeApi.getScores(targetSid),
+        intakeApi.getCoaching(targetSid),
+        intakeApi.getFlags(targetSid)
       ]);
 
       if (mountedRef.current) {
@@ -72,9 +74,34 @@ export function useIntakeSession(options = {}) {
   }, [sessionId]);
 
   /**
+   * Fetch scores for a session (internal helper)
+   */
+  const fetchScores = async (sid) => {
+    try {
+      const [scoresData, coachingData, flagsData] = await Promise.all([
+        intakeApi.getScores(sid),
+        intakeApi.getCoaching(sid),
+        intakeApi.getFlags(sid)
+      ]);
+
+      if (mountedRef.current) {
+        setScores(scoresData);
+        setCoaching(coachingData);
+        setFlags(flagsData);
+      }
+    } catch (err) {
+      console.error('Error fetching scores:', err);
+    }
+  };
+
+  /**
    * Initialize or resume a session
    */
   const initialize = useCallback(async () => {
+    // Prevent double initialization
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     try {
       setLoading(true);
       setError(null);
@@ -98,18 +125,19 @@ export function useIntakeSession(options = {}) {
 
       if (!mountedRef.current) return;
 
-      setSessionId(session.session_id || session.id);
+      const sid = session.session_id || session.id;
+      setSessionId(sid);
       setSessionStatus(session);
 
       // Check if already completed
       if (session.status === 'completed') {
         setIsCompleted(true);
-        await refreshScores(session.session_id || session.id);
+        await fetchScores(sid);
         return;
       }
 
       // Fetch next question
-      const questionData = await intakeApi.getNextQuestion(session.session_id || session.id);
+      const questionData = await intakeApi.getNextQuestion(sid);
 
       if (mountedRef.current) {
         if (questionData.completed) {
@@ -122,7 +150,7 @@ export function useIntakeSession(options = {}) {
 
       // Fetch initial scores
       if (autoRefreshScores) {
-        await refreshScores(session.session_id || session.id);
+        await fetchScores(sid);
       }
     } catch (err) {
       if (mountedRef.current) {
@@ -133,7 +161,7 @@ export function useIntakeSession(options = {}) {
         setLoading(false);
       }
     }
-  }, [leadId, loanId, existingSessionId, autoRefreshScores, refreshScores]);
+  }, [leadId, loanId, existingSessionId, autoRefreshScores]);
 
   /**
    * Submit answer and advance to next question
@@ -211,15 +239,17 @@ export function useIntakeSession(options = {}) {
     console.warn('Go back not yet implemented');
   }, []);
 
-  // Initialize on mount
+  // Initialize on mount only
   useEffect(() => {
     mountedRef.current = true;
     initialize();
 
     return () => {
       mountedRef.current = false;
+      initializedRef.current = false;
     };
-  }, [initialize]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Calculate progress
   const progress = sessionStatus ? {
