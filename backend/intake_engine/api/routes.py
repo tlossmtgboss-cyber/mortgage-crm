@@ -127,19 +127,23 @@ async def create_session(
     engine: IntakeEngine = Depends(get_engine),
 ):
     """Create a new intake session"""
-    session = engine.create_session(
-        loan_id=request.loan_id,
-        borrower_id=request.borrower_id,
-        mode=request.mode,
-        locale=request.locale,
-    )
+    try:
+        session = engine.create_session(
+            loan_id=request.loan_id,
+            borrower_id=request.borrower_id,
+            mode=request.mode,
+            locale=request.locale,
+        )
 
-    return CreateSessionResponse(
-        session_id=session.session_id,
-        status=session.status,
-        current_section=session.current_section,
-        created_at=session.created_at.isoformat(),
-    )
+        return CreateSessionResponse(
+            session_id=session.session_id,
+            status=session.status.value if hasattr(session.status, 'value') else str(session.status),
+            current_section=session.current_section,
+            created_at=session.created_at.isoformat(),
+        )
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Session creation failed: {str(e)}\n{traceback.format_exc()}")
 
 
 @router.get("/sessions/{session_id}", response_model=SessionStatusResponse)
