@@ -46,19 +46,22 @@ function IntakeEngine({ leadId: propLeadId, loanId: propLoanId, onComplete }) {
   });
 
   // Handle answer submission
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, directAnswer = null) => {
     e?.preventDefault();
     setAnswerError(null);
 
     if (!currentQuestion) return;
 
+    // Use direct answer if provided (for auto-advance), otherwise use state
+    const answerToSubmit = directAnswer !== null ? directAnswer : currentAnswer;
+
     // Validate required questions
-    if (currentQuestion.required && !currentAnswer && currentAnswer !== 0) {
+    if (currentQuestion.required && !answerToSubmit && answerToSubmit !== 0 && answerToSubmit !== false) {
       setAnswerError('This question requires an answer');
       return;
     }
 
-    const result = await submitAnswer(currentQuestion.question_id, currentAnswer);
+    const result = await submitAnswer(currentQuestion.question_id, answerToSubmit);
 
     if (result.success) {
       setCurrentAnswer(''); // Reset for next question
@@ -69,6 +72,12 @@ function IntakeEngine({ leadId: propLeadId, loanId: propLoanId, onComplete }) {
     } else {
       setAnswerError(result.error || 'Failed to submit answer');
     }
+  };
+
+  // Handle auto-advance for single-select questions
+  const handleAutoAdvance = async (answer) => {
+    // Submit immediately with the selected answer
+    await handleSubmit(null, answer);
   };
 
   // Handle skip
@@ -188,6 +197,7 @@ function IntakeEngine({ leadId: propLeadId, loanId: propLoanId, onComplete }) {
                 question={currentQuestion}
                 value={currentAnswer}
                 onChange={setCurrentAnswer}
+                onAutoAdvance={handleAutoAdvance}
                 error={answerError}
                 disabled={submitting}
               />

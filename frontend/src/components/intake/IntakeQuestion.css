@@ -83,6 +83,62 @@
   padding-left: 32px;
 }
 
+/* Visual option buttons (with icons) */
+.intake-visual-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  max-width: 500px;
+}
+
+.intake-visual-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  min-height: 120px;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  background: white;
+  border: 2px solid var(--color-border, #e2e8f0);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.intake-visual-option:hover:not(:disabled) {
+  border-color: var(--color-primary, #217F8D);
+  background: rgba(33, 127, 141, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.intake-visual-option.selected {
+  border-color: var(--color-primary, #217F8D);
+  background: var(--color-primary, #217F8D);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 127, 141, 0.3);
+}
+
+.intake-visual-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.option-icon {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.option-label {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
 /* Option buttons (select) */
 .intake-options {
   display: flex;
