@@ -179,12 +179,14 @@ class PostgresStore:
             """), {"session_id": session_id})
             events = []
             for row in result.fetchall():
+                # JSONB columns return dict, TEXT returns string
+                payload = row[4] if isinstance(row[4], dict) else (json.loads(row[4]) if row[4] else {})
                 events.append(AuditEvent(
                     event_id=row[0],
                     session_id=row[1],
                     party_id=row[2],
                     event_type=row[3],
-                    payload=json.loads(row[4]) if row[4] else {},
+                    payload=payload,
                     hash_prev=row[5],
                     hash_self=row[6],
                     pii_redacted=row[7],
