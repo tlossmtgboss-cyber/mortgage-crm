@@ -1,0 +1,81 @@
+{
+  "locale": "es-US",
+  "version": "1.0.0",
+  "micro_whys": {
+    "id.ssn_last4": {
+      "text": "Usamos su SSN para verificar su identidad y obtener su reporte de crédito. Esto es requerido por ley para prevenir fraude.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "id.ssn_full": {
+      "text": "Su SSN completo es necesario para obtener su reporte de crédito y verificar su identidad con el IRS. Usamos encriptación de nivel bancario para protegerlo.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "id.dob": {
+      "text": "Su fecha de nacimiento nos ayuda a verificar su identidad y es requerida en la solicitud de préstamo.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "income.base_monthly_income": {
+      "text": "Necesitamos sus ingresos para calcular cuánta casa puede pagar y para qué programas de préstamo califica.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "income.employer_name": {
+      "text": "Su empleador nos ayuda a verificar sus ingresos y estabilidad laboral—ambos son factores clave en la aprobación del préstamo.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "assets.total_down_payment": {
+      "text": "Su pago inicial afecta sus opciones de préstamo y pago mensual. Un pago inicial mayor a menudo significa mejores tasas.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "assets.gift_source": {
+      "text": "Los prestamistas necesitan verificar los fondos de regalo para asegurar que son verdaderamente regalos, no préstamos ocultos que afectarían su calificación.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "liabilities.credit_card_payment": {
+      "text": "Necesitamos sus pagos mensuales de deuda para calcular su relación deuda-ingreso—uno de los factores más importantes en la aprobación del préstamo.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "declarations.bankruptcy_last_7_years": {
+      "text": "El historial de bancarrota afecta para qué programas de préstamo puede calificar y cuánto tiempo debe esperar. Ser honesto nos ayuda a encontrar las opciones correctas.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "declarations.foreclosure_last_7_years": {
+      "text": "Como la bancarrota, el historial de ejecución hipotecaria afecta la elegibilidad del préstamo. Diferentes programas tienen diferentes períodos de espera.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "property.occupancy_type": {
+      "text": "Cómo usará la propiedad afecta su tasa de interés y opciones de préstamo. Las residencias principales típicamente obtienen las mejores tasas.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "property.expected_rent": {
+      "text": "Para propiedades de inversión, los ingresos por alquiler pueden ayudarle a calificar al compensar el nuevo pago hipotecario.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "consent.credit_authorization": {
+      "text": "Necesitamos su permiso para obtener su reporte de crédito. Esto nos permite ver su puntaje crediticio e historial para conectarlo con las mejores opciones de préstamo.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "consent.econsent": {
+      "text": "El consentimiento electrónico nos permite enviarle documentos electrónicamente—es más rápido y seguro que el papel. Aún puede solicitar copias en papel en cualquier momento.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "va.veteran_or_surviving_spouse": {
+      "text": "Los préstamos VA ofrecen beneficios especiales como sin pago inicial y sin PMI. Preguntamos temprano para asegurarnos de no perder esta opción para usted.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "income.self_employed_years": {
+      "text": "La mayoría de los prestamistas requieren 2 años de historial de trabajo independiente para documentación completa de ingresos. Menos tiempo aún puede funcionar con algunos programas.",
+      "show_on": ["friction", "explicit_ask"]
+    },
+    "address.years_at_address": {
+      "text": "A los prestamistas les gusta ver un historial de vivienda estable. Si se mudó recientemente, no hay problema—solo documentaremos sus direcciones anteriores.",
+      "show_on": ["friction", "explicit_ask"]
+    }
+  },
+  "generic_micro_whys": {
+    "required_by_law": "Esta información es requerida por las regulaciones federales de préstamos.",
+    "helps_qualification": "Esto nos ayuda a determinar para qué programas de préstamo califica.",
+    "protects_you": "Esto lo protege tanto a usted como al prestamista del fraude.",
+    "finds_best_options": "Esto nos ayuda a encontrar las mejores opciones de préstamo para su situación.",
+    "standard_question": "Esta es una pregunta estándar en todas las solicitudes hipotecarias."
+  }
+}

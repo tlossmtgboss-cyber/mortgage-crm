@@ -1,0 +1,182 @@
+# Consent texts - English (US)
+# Version: 1.0.0
+# Last reviewed: 2024-12-01
+# Legal review: APPROVED
+
+locale: "en-US"
+version: "1.0.0"
+version_hash: "sha256:a1b2c3d4e5f6..."
+
+consents:
+  econsent:
+    id: "CONSENT_ECONSENT_V1"
+    title: "Electronic Consent Agreement"
+    short_description: "Consent to receive documents and sign electronically"
+    full_text: |
+      ELECTRONIC RECORD AND SIGNATURE DISCLOSURE
+
+      By selecting "I Agree" below, you are consenting to receive disclosures, notices,
+      and other documents electronically ("E-Disclosures") from us and our affiliates
+      in connection with your mortgage loan application and any resulting loan.
+
+      You understand and agree that:
+
+      1. SCOPE OF CONSENT: This consent applies to all disclosures, notices, and documents
+         related to your loan application and any resulting mortgage loan that we are
+         required or choose to provide to you.
+
+      2. HARDWARE AND SOFTWARE REQUIREMENTS: To receive electronic documents, you need:
+         - A device with internet access
+         - A current web browser (Chrome, Firefox, Safari, or Edge)
+         - A valid email address
+         - Ability to download and save PDF files
+
+      3. RIGHT TO PAPER COPIES: You have the right to receive paper copies of any
+         document we provide electronically. To request paper copies, contact us at
+         the phone number or email address provided in your loan application.
+
+      4. WITHDRAWAL OF CONSENT: You may withdraw this consent at any time by contacting
+         us. Withdrawal will not affect the legal validity of any electronic documents
+         provided before withdrawal.
+
+      5. UPDATING YOUR CONTACT INFORMATION: You agree to keep your email address current
+         and notify us of any changes.
+    required: true
+    checkbox_label: "I have read and agree to receive documents electronically"
+    decline_warning: "You may continue without e-consent, but you will receive paper documents which may delay your application."
+
+  credit_authorization:
+    id: "CONSENT_CREDIT_AUTH_V1"
+    title: "Credit Report Authorization"
+    short_description: "Permission to pull your credit report"
+    full_text: |
+      AUTHORIZATION TO OBTAIN CREDIT REPORT
+
+      By selecting "I Authorize" below, you authorize the lender, its agents, successors,
+      and assigns, to obtain and verify information about you from any source, including
+      but not limited to:
+
+      1. Consumer credit reporting agencies
+      2. Your employers (current and former)
+      3. Your banks and financial institutions
+      4. Government agencies
+
+      This authorization is for the purpose of:
+      - Evaluating your creditworthiness for a mortgage loan
+      - Verifying the information you have provided in your application
+      - Making credit decisions related to your loan application
+
+      You understand that:
+      - A credit inquiry will appear on your credit report
+      - This authorization remains in effect until your application is withdrawn,
+        denied, or the loan is funded
+      - You have the right to receive a copy of your credit report upon request
+
+      IMPORTANT: By authorizing this credit pull, you are NOT obligating yourself to
+      accept any loan offer or proceed with the application.
+    required: true
+    checkbox_label: "I authorize the lender to pull my credit report"
+    decline_warning: "A credit report is required to provide accurate loan options. Without authorization, we cannot proceed with pre-qualification."
+
+  tcpa:
+    id: "CONSENT_TCPA_V1"
+    title: "Communication Consent"
+    short_description: "Consent to receive calls, texts, and emails"
+    full_text: |
+      TELEPHONE CONSUMER PROTECTION ACT CONSENT
+
+      By selecting "I Consent" below, you provide express written consent for us, our
+      affiliates, agents, and service providers to contact you regarding your loan
+      application at any telephone number you provide, including:
+
+      - Calls and text messages using automated technology or prerecorded messages
+      - Calls and text messages to your cell phone
+      - Emails to any email address you provide
+
+      Purpose of communications:
+      - Providing updates on your loan application
+      - Requesting additional information or documents
+      - Marketing related mortgage products and services (you may opt out)
+      - Servicing your loan if funded
+
+      You understand that:
+      - Consent is not required to obtain a loan
+      - Standard message and data rates may apply to text messages
+      - You may revoke this consent at any time by contacting us
+      - Message frequency varies based on your application status
+
+      To opt out of marketing messages at any time, reply STOP to any text message
+      or click unsubscribe in any email.
+    required: false
+    checkbox_label: "I consent to receive calls, texts, and emails about my loan"
+    decline_warning: "Without communication consent, we may not be able to reach you as quickly about your application status."
+
+  privacy:
+    id: "CONSENT_PRIVACY_V1"
+    title: "Privacy Policy Acknowledgment"
+    short_description: "Acknowledgment of how we handle your information"
+    full_text: |
+      PRIVACY POLICY ACKNOWLEDGMENT
+
+      By selecting "I Acknowledge" below, you confirm that you have been given the
+      opportunity to review our Privacy Policy, which describes:
+
+      1. INFORMATION WE COLLECT:
+         - Personal information you provide (name, SSN, income, etc.)
+         - Information from third parties (credit bureaus, employers, etc.)
+         - Information collected automatically (device info, browsing activity)
+
+      2. HOW WE USE YOUR INFORMATION:
+         - Processing your loan application
+         - Communicating with you about your loan
+         - Complying with legal requirements
+         - Improving our products and services
+
+      3. HOW WE SHARE YOUR INFORMATION:
+         - With service providers who assist in processing your loan
+         - With credit bureaus and verification services
+         - As required by law or regulatory requirements
+         - With your consent for other purposes
+
+      4. YOUR RIGHTS:
+         - Access your personal information
+         - Request corrections to inaccurate information
+         - Opt out of marketing communications
+         - Request deletion (subject to legal retention requirements)
+
+      5. SECURITY MEASURES:
+         - We use industry-standard encryption and security measures
+         - Access to your information is limited to authorized personnel
+         - We regularly review and update our security practices
+
+      The full Privacy Policy is available at [COMPANY_PRIVACY_URL].
+    required: true
+    checkbox_label: "I acknowledge that I have had the opportunity to review the Privacy Policy"
+    decline_warning: "Acknowledgment of the Privacy Policy is required to proceed with your application."
+
+  hmda_demographic:
+    id: "CONSENT_HMDA_V1"
+    title: "Government Monitoring Information (Optional)"
+    short_description: "Voluntary demographic information for government monitoring"
+    full_text: |
+      INFORMATION FOR GOVERNMENT MONITORING PURPOSES
+
+      The following information is requested by the federal government in order to
+      monitor compliance with federal statutes that prohibit discrimination in housing.
+
+      You are NOT required to furnish this information, but are encouraged to do so.
+      The law provides that a lender may not discriminate on the basis of this
+      information, or on whether you choose to furnish it.
+
+      If you do not furnish the information and you have made this application in
+      person, the lender is required to note the information on the basis of visual
+      observation or surname.
+
+      If you do not wish to furnish the information, please select "I do not wish
+      to furnish this information."
+
+      IMPORTANT: This information is collected for fair lending monitoring purposes
+      only. It will NOT be used in any credit decision.
+    required: false
+    checkbox_label: "I choose to provide demographic information"
+    decline_option: "I do not wish to furnish this information"

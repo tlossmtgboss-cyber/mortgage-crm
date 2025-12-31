@@ -1,0 +1,114 @@
+sla_hooks:
+  # Tasks created based on score bands
+  on_score_band:
+    RED:
+      description: "Very low truth/readiness - requires immediate intervention"
+      create_tasks:
+        - code: "TASK_FIX_MISSINGNESS"
+          priority: "P0"
+          title: "Critical: Fix missing required information"
+          description: "Application has critical missing data preventing pre-qualification"
+          assignee_role: "loan_officer"
+          due_hours: 4
+        - code: "TASK_TRUTH_RECOVERY_CALL"
+          priority: "P0"
+          title: "Urgent: Truth recovery call needed"
+          description: "Borrower responses indicate uncertainty - verification call required"
+          assignee_role: "loan_officer"
+          due_hours: 2
+
+    ORANGE:
+      description: "Low truth - needs verification"
+      create_tasks:
+        - code: "TASK_VERIFY_DISCREPANCIES"
+          priority: "P1"
+          title: "Verify application discrepancies"
+          description: "Application has internal inconsistencies requiring verification"
+          assignee_role: "loan_officer"
+          due_hours: 24
+
+    YELLOW:
+      description: "Medium truth - needs review"
+      create_tasks:
+        - code: "TASK_VERIFY_INCOME_ASSETS"
+          priority: "P1"
+          title: "Verify income and assets"
+          description: "Income and/or asset information needs verification"
+          assignee_role: "loan_processor"
+          due_hours: 48
+
+    LIGHT_GREEN:
+      description: "Good truth - standard processing"
+      create_tasks:
+        - code: "TASK_STANDARD_REVIEW"
+          priority: "P2"
+          title: "Standard application review"
+          description: "Application ready for standard LO review"
+          assignee_role: "loan_officer"
+          due_hours: 72
+
+    GREEN:
+      description: "High truth - fast track"
+      create_tasks:
+        - code: "TASK_FAST_TRACK_REVIEW"
+          priority: "P2"
+          title: "Fast-track application review"
+          description: "High-quality application ready for expedited review"
+          assignee_role: "loan_officer"
+          due_hours: 48
+
+  # Tasks created based on specific flags
+  on_flags:
+    FLAG_BLOCK_CREDIT_PULL:
+      create_tasks:
+        - code: "TASK_OBTAIN_CREDIT_CONSENT"
+          priority: "P0"
+          title: "Obtain credit authorization"
+          description: "Borrower declined credit pull - cannot proceed without authorization"
+          assignee_role: "loan_officer"
+          due_hours: 24
+
+    FLAG_MISSING_CORE_ID:
+      create_tasks:
+        - code: "TASK_COLLECT_IDENTITY"
+          priority: "P0"
+          title: "Collect identity information"
+          description: "Missing core identity data (DOB, SSN, address)"
+          assignee_role: "loan_officer"
+          due_hours: 12
+
+    FLAG_DECLARATIONS_YES_NO_DETAIL:
+      create_tasks:
+        - code: "TASK_DECLARATIONS_FOLLOWUP"
+          priority: "P1"
+          title: "Follow up on declarations"
+          description: "Borrower answered yes to declaration without providing details"
+          assignee_role: "loan_officer"
+          due_hours: 24
+
+    FLAG_VA_FLOW:
+      create_tasks:
+        - code: "TASK_VA_ELIGIBILITY"
+          priority: "P2"
+          title: "Verify VA eligibility"
+          description: "Borrower indicated veteran status - verify eligibility"
+          assignee_role: "loan_processor"
+          due_hours: 72
+
+    FLAG_OCC_INVESTMENT:
+      create_tasks:
+        - code: "TASK_VERIFY_INVESTMENT_PROPERTY"
+          priority: "P1"
+          title: "Verify investment property details"
+          description: "Investment property requires additional income/rental verification"
+          assignee_role: "loan_processor"
+          due_hours: 48
+
+    FLAG_TRUTH_RISK_HIGH:
+      create_tasks:
+        - code: "TASK_TRUTH_VERIFICATION"
+          priority: "P0"
+          title: "High-priority truth verification"
+          description: "Multiple hesitation signals detected - direct borrower contact required"
+          assignee_role: "loan_officer"
+          due_hours: 8

@@ -1,0 +1,186 @@
+# Consent texts - Spanish (US)
+# Version: 1.0.0
+# Last reviewed: 2024-12-01
+# Legal review: APPROVED
+# Translation review: CERTIFIED
+
+locale: "es-US"
+version: "1.0.0"
+version_hash: "sha256:b2c3d4e5f6g7..."
+
+consents:
+  econsent:
+    id: "CONSENT_ECONSENT_V1"
+    title: "Acuerdo de Consentimiento Electrónico"
+    short_description: "Consentimiento para recibir documentos y firmar electrónicamente"
+    full_text: |
+      DIVULGACIÓN DE REGISTROS Y FIRMAS ELECTRÓNICAS
+
+      Al seleccionar "Acepto" a continuación, usted consiente recibir divulgaciones,
+      avisos y otros documentos electrónicamente ("E-Divulgaciones") de nosotros y
+      nuestros afiliados en conexión con su solicitud de préstamo hipotecario y
+      cualquier préstamo resultante.
+
+      Usted entiende y acepta que:
+
+      1. ALCANCE DEL CONSENTIMIENTO: Este consentimiento aplica a todas las divulgaciones,
+         avisos y documentos relacionados con su solicitud de préstamo y cualquier
+         préstamo hipotecario resultante que estemos obligados o elijamos proporcionarle.
+
+      2. REQUISITOS DE HARDWARE Y SOFTWARE: Para recibir documentos electrónicos, necesita:
+         - Un dispositivo con acceso a internet
+         - Un navegador web actual (Chrome, Firefox, Safari o Edge)
+         - Una dirección de correo electrónico válida
+         - Capacidad para descargar y guardar archivos PDF
+
+      3. DERECHO A COPIAS EN PAPEL: Usted tiene derecho a recibir copias en papel de
+         cualquier documento que proporcionemos electrónicamente. Para solicitar copias
+         en papel, contáctenos al número de teléfono o dirección de correo electrónico
+         proporcionado en su solicitud de préstamo.
+
+      4. RETIRO DEL CONSENTIMIENTO: Puede retirar este consentimiento en cualquier
+         momento contactándonos. El retiro no afectará la validez legal de ningún
+         documento electrónico proporcionado antes del retiro.
+
+      5. ACTUALIZACIÓN DE SU INFORMACIÓN DE CONTACTO: Usted acepta mantener su dirección
+         de correo electrónico actualizada y notificarnos de cualquier cambio.
+    required: true
+    checkbox_label: "He leído y acepto recibir documentos electrónicamente"
+    decline_warning: "Puede continuar sin consentimiento electrónico, pero recibirá documentos en papel lo que puede retrasar su solicitud."
+
+  credit_authorization:
+    id: "CONSENT_CREDIT_AUTH_V1"
+    title: "Autorización de Reporte de Crédito"
+    short_description: "Permiso para obtener su reporte de crédito"
+    full_text: |
+      AUTORIZACIÓN PARA OBTENER REPORTE DE CRÉDITO
+
+      Al seleccionar "Autorizo" a continuación, usted autoriza al prestamista, sus
+      agentes, sucesores y cesionarios, a obtener y verificar información sobre usted
+      de cualquier fuente, incluyendo pero no limitado a:
+
+      1. Agencias de informes de crédito al consumidor
+      2. Sus empleadores (actuales y anteriores)
+      3. Sus bancos e instituciones financieras
+      4. Agencias gubernamentales
+
+      Esta autorización es con el propósito de:
+      - Evaluar su solvencia crediticia para un préstamo hipotecario
+      - Verificar la información que ha proporcionado en su solicitud
+      - Tomar decisiones de crédito relacionadas con su solicitud de préstamo
+
+      Usted entiende que:
+      - Una consulta de crédito aparecerá en su reporte de crédito
+      - Esta autorización permanece vigente hasta que su solicitud sea retirada,
+        denegada, o el préstamo sea financiado
+      - Tiene derecho a recibir una copia de su reporte de crédito si lo solicita
+
+      IMPORTANTE: Al autorizar esta consulta de crédito, NO se está obligando a
+      aceptar ninguna oferta de préstamo o proceder con la solicitud.
+    required: true
+    checkbox_label: "Autorizo al prestamista a obtener mi reporte de crédito"
+    decline_warning: "Se requiere un reporte de crédito para proporcionar opciones de préstamo precisas. Sin autorización, no podemos proceder con la pre-calificación."
+
+  tcpa:
+    id: "CONSENT_TCPA_V1"
+    title: "Consentimiento de Comunicación"
+    short_description: "Consentimiento para recibir llamadas, mensajes de texto y correos electrónicos"
+    full_text: |
+      CONSENTIMIENTO DE LA LEY DE PROTECCIÓN AL CONSUMIDOR TELEFÓNICO (TCPA)
+
+      Al seleccionar "Consiento" a continuación, usted proporciona consentimiento
+      expreso por escrito para que nosotros, nuestros afiliados, agentes y proveedores
+      de servicios lo contactemos sobre su solicitud de préstamo en cualquier número
+      de teléfono que proporcione, incluyendo:
+
+      - Llamadas y mensajes de texto usando tecnología automatizada o mensajes pregrabados
+      - Llamadas y mensajes de texto a su teléfono celular
+      - Correos electrónicos a cualquier dirección de correo electrónico que proporcione
+
+      Propósito de las comunicaciones:
+      - Proporcionar actualizaciones sobre su solicitud de préstamo
+      - Solicitar información o documentos adicionales
+      - Marketing de productos y servicios hipotecarios relacionados (puede optar por no recibir)
+      - Servicio de su préstamo si es financiado
+
+      Usted entiende que:
+      - El consentimiento no es requerido para obtener un préstamo
+      - Pueden aplicar tarifas estándar de mensajes y datos a los mensajes de texto
+      - Puede revocar este consentimiento en cualquier momento contactándonos
+      - La frecuencia de mensajes varía según el estado de su solicitud
+
+      Para dejar de recibir mensajes de marketing en cualquier momento, responda STOP
+      a cualquier mensaje de texto o haga clic en cancelar suscripción en cualquier correo electrónico.
+    required: false
+    checkbox_label: "Consiento recibir llamadas, mensajes de texto y correos electrónicos sobre mi préstamo"
+    decline_warning: "Sin consentimiento de comunicación, es posible que no podamos contactarlo tan rápidamente sobre el estado de su solicitud."
+
+  privacy:
+    id: "CONSENT_PRIVACY_V1"
+    title: "Reconocimiento de Política de Privacidad"
+    short_description: "Reconocimiento de cómo manejamos su información"
+    full_text: |
+      RECONOCIMIENTO DE POLÍTICA DE PRIVACIDAD
+
+      Al seleccionar "Reconozco" a continuación, usted confirma que se le ha dado la
+      oportunidad de revisar nuestra Política de Privacidad, que describe:
+
+      1. INFORMACIÓN QUE RECOPILAMOS:
+         - Información personal que proporciona (nombre, SSN, ingresos, etc.)
+         - Información de terceros (burós de crédito, empleadores, etc.)
+         - Información recopilada automáticamente (info del dispositivo, actividad de navegación)
+
+      2. CÓMO USAMOS SU INFORMACIÓN:
+         - Procesamiento de su solicitud de préstamo
+         - Comunicación con usted sobre su préstamo
+         - Cumplimiento con requisitos legales
+         - Mejora de nuestros productos y servicios
+
+      3. CÓMO COMPARTIMOS SU INFORMACIÓN:
+         - Con proveedores de servicios que asisten en el procesamiento de su préstamo
+         - Con burós de crédito y servicios de verificación
+         - Según lo requiera la ley o requisitos regulatorios
+         - Con su consentimiento para otros propósitos
+
+      4. SUS DERECHOS:
+         - Acceder a su información personal
+         - Solicitar correcciones a información inexacta
+         - Optar por no recibir comunicaciones de marketing
+         - Solicitar eliminación (sujeto a requisitos legales de retención)
+
+      5. MEDIDAS DE SEGURIDAD:
+         - Usamos encriptación y medidas de seguridad estándar de la industria
+         - El acceso a su información está limitado a personal autorizado
+         - Revisamos y actualizamos regularmente nuestras prácticas de seguridad
+
+      La Política de Privacidad completa está disponible en [COMPANY_PRIVACY_URL].
+    required: true
+    checkbox_label: "Reconozco que he tenido la oportunidad de revisar la Política de Privacidad"
+    decline_warning: "Se requiere el reconocimiento de la Política de Privacidad para proceder con su solicitud."
+
+  hmda_demographic:
+    id: "CONSENT_HMDA_V1"
+    title: "Información de Monitoreo Gubernamental (Opcional)"
+    short_description: "Información demográfica voluntaria para monitoreo gubernamental"
+    full_text: |
+      INFORMACIÓN PARA PROPÓSITOS DE MONITOREO GUBERNAMENTAL
+
+      La siguiente información es solicitada por el gobierno federal para monitorear
+      el cumplimiento con los estatutos federales que prohíben la discriminación en vivienda.
+
+      Usted NO está obligado a proporcionar esta información, pero se le anima a hacerlo.
+      La ley establece que un prestamista no puede discriminar basándose en esta
+      información, o en si usted elige proporcionarla o no.
+
+      Si no proporciona la información y ha hecho esta solicitud en persona, el
+      prestamista está obligado a anotar la información basándose en observación
+      visual o apellido.
+
+      Si no desea proporcionar la información, seleccione "No deseo proporcionar
+      esta información."
+
+      IMPORTANTE: Esta información se recopila únicamente para propósitos de monitoreo
+      de préstamos justos. NO se utilizará en ninguna decisión de crédito.
+    required: false
+    checkbox_label: "Elijo proporcionar información demográfica"
+    decline_option: "No deseo proporcionar esta información"

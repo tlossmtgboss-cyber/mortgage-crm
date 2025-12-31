@@ -1,0 +1,32 @@
+app:
+  name: "Perennia AI Application Guide"
+  version: "1.0.0"
+  mode: "intake_prequal"   # not AUS
+  latency_budget_ms:
+    max_roundtrip_ms: 450
+    max_model_ms: 250
+    max_tool_ms: 250
+  required_first_questions:
+    - Q_LANG_0001
+    - Q_VA_0002
+
+storage:
+  # Use Redis for session caching, Postgres for persistence
+  session_store: "redis"  # redis | postgres | memory
+  redis:
+    url: "${REDIS_URL}"
+    session_ttl_seconds: 3600
+    prefix: "intake:"
+  postgres:
+    # Uses same DATABASE_URL as main app
+    table_prefix: "intake_"
+
+audit:
+  enabled: true
+  hash_chain: true
+  pii_redaction: true
+  event_retention_days: 2555  # 7 years for compliance
+
+sla:
+  enabled: true
+  auto_create_tasks: true

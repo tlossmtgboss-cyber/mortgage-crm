@@ -1,0 +1,1126 @@
+[
+  {
+    "question_id": "Q_LANG_0001",
+    "prompt_key": "lang.select_language",
+    "urla_section": "Global",
+    "urla_payload_path": "$.metadata.locale",
+    "answer_types": ["single_select"],
+    "required": true,
+    "category": "language",
+    "options": [
+      { "value": "en-US", "label": "English" },
+      { "value": "es-US", "label": "Español" }
+    ],
+    "ui": { "widget": "language_picker" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_VA_0002",
+    "prompt_key": "va.veteran_or_surviving_spouse",
+    "urla_section": "Global",
+    "urla_payload_path": "$.borrowers[0].military_service.is_veteran",
+    "answer_types": ["boolean"],
+    "required": true,
+    "category": "eligibility",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "add_flags": ["FLAG_VA_FLOW"] } }
+    ],
+    "micro_why_key": "va.veteran_or_surviving_spouse",
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_PURP_0010",
+    "prompt_key": "purpose.loan_purpose",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.loan.loan_purpose",
+    "answer_types": ["single_select"],
+    "required": true,
+    "category": "purpose",
+    "options": [
+      { "value": "Purchase", "label_key": "loan_purpose.Purchase" },
+      { "value": "Refinance", "label_key": "loan_purpose.Refinance" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "triggers": [
+      { "when": { "equals": { "answer": "Purchase" } }, "then": { "add_flags": ["FLAG_PURCHASE"] } },
+      { "when": { "equals": { "answer": "Refinance" } }, "then": { "add_flags": ["FLAG_REFI"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_PURP_0011",
+    "prompt_key": "purpose.purchase_price",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.purchase_price",
+    "answer_types": ["currency"],
+    "required": false,
+    "category": "purpose",
+    "ui": { "widget": "currency_input", "currency_format": true, "allow_uncertainty": true },
+    "validations": [
+      { "type": "range", "args": { "min": 50000 }, "severity": "high" }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_PURP_0012",
+    "prompt_key": "purpose.refi_reason",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.loan.refinance_purpose",
+    "answer_types": ["single_select"],
+    "required": false,
+    "category": "purpose",
+    "options": [
+      { "value": "LowerRate", "label_key": "refinance_reason.LowerRate" },
+      { "value": "LowerPayment", "label_key": "refinance_reason.LowerPayment" },
+      { "value": "CashOut", "label_key": "refinance_reason.CashOut" },
+      { "value": "ShortenTerm", "label_key": "refinance_reason.ShortenTerm" },
+      { "value": "ConsolidateDebt", "label_key": "refinance_reason.ConsolidateDebt" },
+      { "value": "Other", "label_key": "refinance_reason.Other" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_PURP_0013",
+    "prompt_key": "purpose.current_loan_balance",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.loan.current_mortgage_balance",
+    "answer_types": ["currency"],
+    "required": false,
+    "category": "purpose",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_PURP_0014",
+    "prompt_key": "purpose.cash_out_amount",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.loan.cash_out_amount",
+    "answer_types": ["currency"],
+    "required": false,
+    "category": "purpose",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ID_0200",
+    "prompt_key": "id.full_name",
+    "urla_section": "2a. Personal Information",
+    "urla_payload_path": "$.borrowers[*].personal_info",
+    "answer_types": ["text"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "text_input", "placeholder": "First Middle Last" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ID_0201",
+    "prompt_key": "id.dob",
+    "urla_section": "2a. Personal Information",
+    "urla_payload_path": "$.borrowers[*].personal_info.date_of_birth",
+    "answer_types": ["date"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "date_picker" },
+    "validations": [
+      { "type": "date_before", "args": { "reference": "today" }, "severity": "high" },
+      { "type": "date_before", "args": { "reference": "today_minus_18_years" }, "severity": "high", "message_key": "validation.must_be_adult" }
+    ],
+    "micro_why_key": "id.dob",
+    "data_class": "RESTRICTED"
+  },
+  {
+    "question_id": "Q_ID_0202",
+    "prompt_key": "id.ssn_last4",
+    "urla_section": "2a. Personal Information",
+    "urla_payload_path": "$.borrowers[*].personal_info.ssn_last4",
+    "answer_types": ["ssn_last4"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "masked_input", "masking": "****" },
+    "validations": [
+      { "type": "regex", "args": { "pattern": "^[0-9]{4}$" }, "severity": "high", "message_key": "validation.ssn_last4_format" }
+    ],
+    "micro_why_key": "id.ssn_last4",
+    "data_class": "RESTRICTED"
+  },
+  {
+    "question_id": "Q_ID_0203",
+    "prompt_key": "id.contact_phone",
+    "urla_section": "1b. Contact Information",
+    "urla_payload_path": "$.borrowers[*].contact_info.phone_cell",
+    "answer_types": ["phone"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "phone_input" },
+    "validations": [
+      { "type": "phone_format", "severity": "high" }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ID_0204",
+    "prompt_key": "id.contact_email",
+    "urla_section": "1b. Contact Information",
+    "urla_payload_path": "$.borrowers[*].contact_info.email",
+    "answer_types": ["email"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "email_input" },
+    "validations": [
+      { "type": "email_format", "severity": "high" }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ID_0205",
+    "prompt_key": "id.citizenship",
+    "urla_section": "2a. Personal Information",
+    "urla_payload_path": "$.borrowers[*].personal_info.citizenship_status",
+    "answer_types": ["single_select"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "options": [
+      { "value": "USCitizen", "label_key": "citizenship_status.USCitizen" },
+      { "value": "PermanentResident", "label_key": "citizenship_status.PermanentResident" },
+      { "value": "NonPermanentResident", "label_key": "citizenship_status.NonPermanentResident" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ID_0206",
+    "prompt_key": "id.marital_status",
+    "urla_section": "2a. Personal Information",
+    "urla_payload_path": "$.borrowers[*].personal_info.marital_status",
+    "answer_types": ["single_select"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "options": [
+      { "value": "Married", "label_key": "marital_status.Married" },
+      { "value": "Separated", "label_key": "marital_status.Separated" },
+      { "value": "Unmarried", "label_key": "marital_status.Unmarried" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ID_0207",
+    "prompt_key": "id.dependents",
+    "urla_section": "2a. Personal Information",
+    "urla_payload_path": "$.borrowers[*].personal_info.dependents_count",
+    "answer_types": ["number"],
+    "required": false,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "number_input", "min": 0, "max": 20 },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_ADDR_0210",
+    "prompt_key": "address.current",
+    "urla_section": "1c. Current Address",
+    "urla_payload_path": "$.borrowers[*].current_address",
+    "answer_types": ["address"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "address_autocomplete", "google_places_autofill": true },
+    "validations": [
+      { "type": "address_complete", "severity": "high" }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ADDR_0211",
+    "prompt_key": "address.housing_type",
+    "urla_section": "1c. Current Address",
+    "urla_payload_path": "$.borrowers[*].current_address.housing_type",
+    "answer_types": ["single_select"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "options": [
+      { "value": "Own", "label_key": "housing_type.Own" },
+      { "value": "Rent", "label_key": "housing_type.Rent" },
+      { "value": "NoRent", "label_key": "housing_type.NoRent" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "triggers": [
+      { "when": { "equals": { "answer": "Rent" } }, "then": { "require_questions": ["Q_ADDR_0212"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_ADDR_0212",
+    "prompt_key": "address.monthly_rent",
+    "urla_section": "1c. Current Address",
+    "urla_payload_path": "$.borrowers[*].current_address.monthly_rent_expense",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_ADDR_0213",
+    "prompt_key": "address.years_at_address",
+    "urla_section": "1c. Current Address",
+    "urla_payload_path": "$.borrowers[*].current_address.years_at_address",
+    "answer_types": ["number"],
+    "required": true,
+    "party_aware": true,
+    "category": "identity",
+    "ui": { "widget": "number_input", "min": 0, "max": 99, "step": 0.5 },
+    "micro_why_key": "address.years_at_address",
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_PROP_0100",
+    "prompt_key": "property.subject_address",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.property_address",
+    "answer_types": ["address"],
+    "required": true,
+    "category": "property",
+    "ui": { "widget": "address_autocomplete", "google_places_autofill": true },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_PROP_0101",
+    "prompt_key": "property.property_type",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.property_type",
+    "answer_types": ["single_select"],
+    "required": true,
+    "category": "property",
+    "options": [
+      { "value": "SingleFamily", "label_key": "property_type.SingleFamily" },
+      { "value": "Condo", "label_key": "property_type.Condo" },
+      { "value": "Townhouse", "label_key": "property_type.Townhouse" },
+      { "value": "MultiFamily2", "label_key": "property_type.MultiFamily2" },
+      { "value": "MultiFamily3", "label_key": "property_type.MultiFamily3" },
+      { "value": "MultiFamily4", "label_key": "property_type.MultiFamily4" },
+      { "value": "Manufactured", "label_key": "property_type.Manufactured" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_PROP_0110",
+    "prompt_key": "property.occupancy_type",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.occupancy_type",
+    "answer_types": ["single_select"],
+    "required": true,
+    "category": "property",
+    "options": [
+      { "value": "PrimaryResidence", "label_key": "occupancy_type.PrimaryResidence" },
+      { "value": "SecondHome", "label_key": "occupancy_type.SecondHome" },
+      { "value": "Investment", "label_key": "occupancy_type.Investment" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "micro_why_key": "property.occupancy_type",
+    "triggers": [
+      { "when": { "equals": { "answer": "PrimaryResidence" } }, "then": { "add_flags": ["FLAG_OCC_PRIMARY"] } },
+      { "when": { "equals": { "answer": "SecondHome" } }, "then": { "add_flags": ["FLAG_OCC_SECOND"] } },
+      { "when": { "equals": { "answer": "Investment" } }, "then": { "add_flags": ["FLAG_OCC_INVESTMENT"], "require_questions": ["Q_RENT_0118"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_RENT_0118",
+    "prompt_key": "property.expected_rent",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.expected_rental_income",
+    "answer_types": ["currency"],
+    "required": false,
+    "category": "property",
+    "ui": { "widget": "currency_input" },
+    "micro_why_key": "property.expected_rent",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_PROP_0120",
+    "prompt_key": "property.year_built",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.year_built",
+    "answer_types": ["number"],
+    "required": false,
+    "category": "property",
+    "ui": { "widget": "number_input", "min": 1800, "max": 2030 },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_PROP_0121",
+    "prompt_key": "property.hoa_monthly",
+    "urla_section": "1a. Loan and Property Information",
+    "urla_payload_path": "$.property.hoa_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "category": "property",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0300",
+    "prompt_key": "income.current_employment_status",
+    "urla_section": "1d. Employment",
+    "urla_payload_path": "$.borrowers[*].employment[0].employment_type",
+    "answer_types": ["single_select"],
+    "required": true,
+    "party_aware": true,
+    "category": "income",
+    "options": [
+      { "value": "W2", "label_key": "employment_status.W2" },
+      { "value": "SelfEmployed", "label_key": "employment_status.SelfEmployed" },
+      { "value": "Retired", "label_key": "employment_status.Retired" },
+      { "value": "Military", "label_key": "employment_status.Military" },
+      { "value": "Other", "label_key": "employment_status.Other" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "triggers": [
+      { "when": { "equals": { "answer": "W2" } }, "then": { "add_flags": ["FLAG_INCOME_W2"] } },
+      { "when": { "equals": { "answer": "SelfEmployed" } }, "then": { "add_flags": ["FLAG_SELF_EMPLOYED"] } },
+      { "when": { "equals": { "answer": "Retired" } }, "then": { "add_flags": ["FLAG_RETIRED"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_INC_0301",
+    "prompt_key": "income.employer_name",
+    "urla_section": "1d. Employment",
+    "urla_payload_path": "$.borrowers[*].employment[0].employer_name",
+    "answer_types": ["employer"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "employer_autocomplete", "employer_autofill": true },
+    "evidence_types": ["autofill", "memory"],
+    "micro_why_key": "income.employer_name",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0302",
+    "prompt_key": "income.job_title",
+    "urla_section": "1d. Employment",
+    "urla_payload_path": "$.borrowers[*].employment[0].position_title",
+    "answer_types": ["text"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "text_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0303",
+    "prompt_key": "income.base_monthly_income",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.base_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "evidence_types": ["paystub", "w2", "memory"],
+    "micro_why_key": "income.base_monthly_income",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0304",
+    "prompt_key": "income.overtime_monthly",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.overtime_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0305",
+    "prompt_key": "income.bonus_monthly",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.bonus_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0310",
+    "prompt_key": "income.self_employed_business_name",
+    "urla_section": "1d. Employment",
+    "urla_payload_path": "$.borrowers[*].employment[0].employer_name",
+    "answer_types": ["text"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "text_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0311",
+    "prompt_key": "income.self_employed_business_type",
+    "urla_section": "1d. Employment",
+    "urla_payload_path": "$.borrowers[*].employment[0].business_type",
+    "answer_types": ["single_select"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "options": [
+      { "value": "SoleProprietor", "label_key": "business_type.SoleProprietor" },
+      { "value": "Partnership", "label_key": "business_type.Partnership" },
+      { "value": "SCorp", "label_key": "business_type.SCorp" },
+      { "value": "CCorp", "label_key": "business_type.CCorp" },
+      { "value": "LLC", "label_key": "business_type.LLC" }
+    ],
+    "ui": { "widget": "dropdown" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_INC_0312",
+    "prompt_key": "income.self_employed_years",
+    "urla_section": "1d. Employment",
+    "urla_payload_path": "$.borrowers[*].employment[0].years_in_profession",
+    "answer_types": ["number"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "number_input", "min": 0, "max": 50 },
+    "micro_why_key": "income.self_employed_years",
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_INC_0313",
+    "prompt_key": "income.self_employed_monthly_income",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.self_employed_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "evidence_types": ["tax_return", "profit_loss", "bank_statement"],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0320",
+    "prompt_key": "income.retired_source",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.retirement_source",
+    "answer_types": ["text"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "text_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0321",
+    "prompt_key": "income.retired_monthly",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.retirement_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_INC_0330",
+    "prompt_key": "income.other_income",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.has_other_income",
+    "answer_types": ["boolean"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "require_questions": ["Q_INC_0331"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_INC_0331",
+    "prompt_key": "income.other_income_amount",
+    "urla_section": "1e. Income",
+    "urla_payload_path": "$.borrowers[*].income.other_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "income",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0400",
+    "prompt_key": "assets.down_payment_source",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.loan.down_payment_source",
+    "answer_types": ["multi_select"],
+    "required": true,
+    "category": "assets",
+    "options": [
+      { "value": "Savings", "label_key": "down_payment_source.Savings" },
+      { "value": "Checking", "label_key": "down_payment_source.Checking" },
+      { "value": "Gift", "label_key": "down_payment_source.Gift" },
+      { "value": "Retirement401k", "label_key": "down_payment_source.Retirement401k" },
+      { "value": "SaleOfHome", "label_key": "down_payment_source.SaleOfHome" },
+      { "value": "Grant", "label_key": "down_payment_source.Grant" },
+      { "value": "Stocks", "label_key": "down_payment_source.Stocks" },
+      { "value": "Other", "label_key": "down_payment_source.Other" }
+    ],
+    "ui": { "widget": "checkbox_group" },
+    "triggers": [
+      { "when": { "contains": { "answer": "Gift" } }, "then": { "add_flags": ["FLAG_ASSET_GIFT"], "require_questions": ["Q_AST_0410", "Q_AST_0411"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_AST_0401",
+    "prompt_key": "assets.checking_balance",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='CHECKING')].current_balance",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "assets",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "evidence_types": ["bank_statement", "memory"],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0402",
+    "prompt_key": "assets.savings_balance",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='SAVINGS')].current_balance",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "assets",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "evidence_types": ["bank_statement", "memory"],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0403",
+    "prompt_key": "assets.retirement_balance",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='RETIREMENT')].current_balance",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "assets",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0404",
+    "prompt_key": "assets.investment_balance",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='STOCKS_BONDS')].current_balance",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "assets",
+    "ui": { "widget": "currency_input", "allow_uncertainty": true },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0410",
+    "prompt_key": "assets.gift_amount",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='GIFT')].current_balance",
+    "answer_types": ["currency"],
+    "required": false,
+    "category": "assets",
+    "ui": { "widget": "currency_input" },
+    "micro_why_key": "assets.gift_source",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0411",
+    "prompt_key": "assets.gift_source",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='GIFT')].gift_source",
+    "answer_types": ["text"],
+    "required": false,
+    "category": "assets",
+    "ui": { "widget": "text_input", "placeholder": "e.g., Parents, Grandparents" },
+    "micro_why_key": "assets.gift_source",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_AST_0412",
+    "prompt_key": "assets.gift_deposited",
+    "urla_section": "2a. Assets",
+    "urla_payload_path": "$.borrowers[*].assets[?(@.asset_type=='GIFT')].gift_deposited",
+    "answer_types": ["boolean"],
+    "required": false,
+    "category": "assets",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_LIA_0500",
+    "prompt_key": "liabilities.has_mortgages",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities.has_mortgages",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "require_questions": ["Q_LIA_0501"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_LIA_0501",
+    "prompt_key": "liabilities.mortgage_payment",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities[?(@.liability_type=='MORTGAGE')].monthly_payment",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_LIA_0502",
+    "prompt_key": "liabilities.has_auto_loans",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities.has_auto_loans",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "require_questions": ["Q_LIA_0503"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_LIA_0503",
+    "prompt_key": "liabilities.auto_payment",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities[?(@.liability_type=='AUTO_LOAN')].monthly_payment",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_LIA_0504",
+    "prompt_key": "liabilities.has_student_loans",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities.has_student_loans",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "require_questions": ["Q_LIA_0505"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_LIA_0505",
+    "prompt_key": "liabilities.student_payment",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities[?(@.liability_type=='STUDENT_LOAN')].monthly_payment",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "currency_input" },
+    "micro_why_key": "liabilities.credit_card_payment",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_LIA_0506",
+    "prompt_key": "liabilities.credit_card_payment",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities[?(@.liability_type=='CREDIT_CARD')].monthly_payment",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "currency_input" },
+    "micro_why_key": "liabilities.credit_card_payment",
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_LIA_0507",
+    "prompt_key": "liabilities.other_monthly_obligations",
+    "urla_section": "2b. Liabilities",
+    "urla_payload_path": "$.borrowers[*].liabilities.other_monthly",
+    "answer_types": ["currency"],
+    "required": false,
+    "party_aware": true,
+    "category": "liabilities",
+    "ui": { "widget": "currency_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0601",
+    "prompt_key": "declarations.bankruptcy_last_7_years",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.declared_bankruptcy",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "micro_why_key": "declarations.bankruptcy_last_7_years",
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "add_flags": ["FLAG_BANKRUPTCY", "FLAG_DECLARATIONS_YES"], "require_questions": ["Q_DEC_0602", "Q_DEC_0603"] } }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0602",
+    "prompt_key": "declarations.bankruptcy_chapter",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.bankruptcy_chapter",
+    "answer_types": ["single_select"],
+    "required": false,
+    "party_aware": true,
+    "category": "declarations",
+    "options": [
+      { "value": "Chapter7", "label_key": "bankruptcy_chapter.Chapter7" },
+      { "value": "Chapter11", "label_key": "bankruptcy_chapter.Chapter11" },
+      { "value": "Chapter12", "label_key": "bankruptcy_chapter.Chapter12" },
+      { "value": "Chapter13", "label_key": "bankruptcy_chapter.Chapter13" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0603",
+    "prompt_key": "declarations.bankruptcy_discharge_date",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.bankruptcy_discharge_date",
+    "answer_types": ["date"],
+    "required": false,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "date_picker" },
+    "validations": [
+      { "type": "date_before", "args": { "reference": "today" }, "severity": "high" }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0610",
+    "prompt_key": "declarations.foreclosure_last_7_years",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.property_foreclosed",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "micro_why_key": "declarations.foreclosure_last_7_years",
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "add_flags": ["FLAG_FORECLOSURE", "FLAG_DECLARATIONS_YES"], "require_questions": ["Q_DEC_0611"] } }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0611",
+    "prompt_key": "declarations.foreclosure_date",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.foreclosure_date",
+    "answer_types": ["date"],
+    "required": false,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "date_picker" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0620",
+    "prompt_key": "declarations.lawsuit_pending",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.party_to_lawsuit",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "add_flags": ["FLAG_DECLARATIONS_YES"], "require_questions": ["Q_DEC_0621"] } }
+    ],
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0621",
+    "prompt_key": "declarations.lawsuit_details",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.lawsuit_details",
+    "answer_types": ["text"],
+    "required": false,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "text_input" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0630",
+    "prompt_key": "declarations.delinquent_federal_debt",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.delinquent_federal_debt",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0640",
+    "prompt_key": "declarations.outstanding_judgments",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.outstanding_judgments",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0650",
+    "prompt_key": "declarations.down_payment_borrowed",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.borrowed_down_payment",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0660",
+    "prompt_key": "declarations.us_citizen",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.us_citizen",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEC_0670",
+    "prompt_key": "declarations.ownership_other_property",
+    "urla_section": "5b. Declarations",
+    "urla_payload_path": "$.declarations.ownership_interest_property",
+    "answer_types": ["boolean"],
+    "required": true,
+    "party_aware": true,
+    "category": "declarations",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_CONS_0700",
+    "prompt_key": "consent.econsent",
+    "urla_section": "Consents",
+    "urla_payload_path": "$.consents.econsent.accepted",
+    "answer_types": ["boolean"],
+    "required": true,
+    "category": "consents",
+    "ui": { "widget": "yes_no_buttons" },
+    "micro_why_key": "consent.econsent",
+    "triggers": [
+      { "when": { "equals": { "answer": false } }, "then": { "add_flags": ["FLAG_ECONSENT_DECLINED"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_CONS_0701",
+    "prompt_key": "consent.credit_authorization",
+    "urla_section": "Consents",
+    "urla_payload_path": "$.consents.credit_authorization.accepted",
+    "answer_types": ["boolean"],
+    "required": true,
+    "category": "consents",
+    "ui": { "widget": "yes_no_buttons" },
+    "micro_why_key": "consent.credit_authorization",
+    "triggers": [
+      { "when": { "equals": { "answer": false } }, "then": { "add_flags": ["FLAG_BLOCK_CREDIT_PULL"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_CONS_0702",
+    "prompt_key": "consent.tcpa",
+    "urla_section": "Consents",
+    "urla_payload_path": "$.consents.tcpa.accepted",
+    "answer_types": ["boolean"],
+    "required": false,
+    "category": "consents",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": false } }, "then": { "add_flags": ["FLAG_TCPA_DECLINED"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_CONS_0703",
+    "prompt_key": "consent.privacy",
+    "urla_section": "Consents",
+    "urla_payload_path": "$.consents.privacy.accepted",
+    "answer_types": ["boolean"],
+    "required": true,
+    "category": "consents",
+    "ui": { "widget": "yes_no_buttons" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_DEMO_0800",
+    "prompt_key": "demographics.intro",
+    "urla_section": "8. Demographics",
+    "answer_types": ["boolean"],
+    "required": false,
+    "party_aware": true,
+    "category": "demographics",
+    "ui": { "widget": "yes_no_buttons" },
+    "hmda_segregated": true,
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEMO_0801",
+    "prompt_key": "demographics.ethnicity",
+    "urla_section": "8. Demographics",
+    "urla_payload_path": "$.demographics.ethnicity",
+    "answer_types": ["single_select"],
+    "required": false,
+    "party_aware": true,
+    "category": "demographics",
+    "options": [
+      { "value": "HispanicOrLatino", "label": "Hispanic or Latino" },
+      { "value": "NotHispanicOrLatino", "label": "Not Hispanic or Latino" },
+      { "value": "PreferNotToSay", "label": "I prefer not to provide" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "hmda_segregated": true,
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEMO_0802",
+    "prompt_key": "demographics.race",
+    "urla_section": "8. Demographics",
+    "urla_payload_path": "$.demographics.race",
+    "answer_types": ["multi_select"],
+    "required": false,
+    "party_aware": true,
+    "category": "demographics",
+    "options": [
+      { "value": "AmericanIndianOrAlaskaNative", "label": "American Indian or Alaska Native" },
+      { "value": "Asian", "label": "Asian" },
+      { "value": "BlackOrAfricanAmerican", "label": "Black or African American" },
+      { "value": "NativeHawaiianOrPacificIslander", "label": "Native Hawaiian or Other Pacific Islander" },
+      { "value": "White", "label": "White" },
+      { "value": "PreferNotToSay", "label": "I prefer not to provide" }
+    ],
+    "ui": { "widget": "checkbox_group" },
+    "hmda_segregated": true,
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_DEMO_0803",
+    "prompt_key": "demographics.sex",
+    "urla_section": "8. Demographics",
+    "urla_payload_path": "$.demographics.sex",
+    "answer_types": ["single_select"],
+    "required": false,
+    "party_aware": true,
+    "category": "demographics",
+    "options": [
+      { "value": "Male", "label": "Male" },
+      { "value": "Female", "label": "Female" },
+      { "value": "PreferNotToSay", "label": "I prefer not to provide" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "hmda_segregated": true,
+    "data_class": "SENSITIVE"
+  },
+  {
+    "question_id": "Q_SCH_0900",
+    "prompt_key": "schedule.book_application_review_call",
+    "urla_section": "Handoff",
+    "answer_types": ["single_select"],
+    "required": true,
+    "category": "schedule",
+    "ui": { "widget": "smart_scheduler" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_SCH_0901",
+    "prompt_key": "schedule.preferred_contact_time",
+    "urla_section": "Handoff",
+    "urla_payload_path": "$.borrowers[0].contact_info.preferred_contact_time",
+    "answer_types": ["single_select"],
+    "required": false,
+    "category": "schedule",
+    "options": [
+      { "value": "morning", "label": "Morning (9am - 12pm)" },
+      { "value": "afternoon", "label": "Afternoon (12pm - 5pm)" },
+      { "value": "evening", "label": "Evening (5pm - 8pm)" }
+    ],
+    "ui": { "widget": "radio_group" },
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_COBOR_0001",
+    "prompt_key": "coborrower.add_coborrower",
+    "urla_section": "Party Management",
+    "answer_types": ["boolean"],
+    "required": false,
+    "category": "identity",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "add_flags": ["FLAG_MULTI_BORROWER"] } }
+    ],
+    "data_class": "PUBLIC"
+  },
+  {
+    "question_id": "Q_NBS_0001",
+    "prompt_key": "nbs.add_nbs",
+    "urla_section": "Party Management",
+    "answer_types": ["boolean"],
+    "required": false,
+    "category": "identity",
+    "ui": { "widget": "yes_no_buttons" },
+    "triggers": [
+      { "when": { "equals": { "answer": true } }, "then": { "add_flags": ["FLAG_NBS_PRESENT"] } }
+    ],
+    "data_class": "PUBLIC"
+  }
+]
