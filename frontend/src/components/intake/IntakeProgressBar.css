@@ -1,0 +1,72 @@
+/* IntakeProgressBar Styles */
+
+.intake-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  max-width: 600px;
+}
+
+.progress-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.progress-section {
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+  font-size: 14px;
+}
+
+.progress-count {
+  font-size: 12px;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.progress-bar-container {
+  flex: 1;
+  height: 8px;
+  background: var(--color-border, #e2e8f0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--color-primary, #217F8D);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-percentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary, #217F8D);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .intake-progress {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .progress-info {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .progress-bar-container {
+    order: 3;
+    flex: 100%;
+  }
+
+  .progress-percentage {
+    order: 2;
+  }
+}

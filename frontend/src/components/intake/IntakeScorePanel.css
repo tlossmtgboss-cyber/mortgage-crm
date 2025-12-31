@@ -1,0 +1,326 @@
+/* IntakeScorePanel Styles */
+
+.intake-score-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Section */
+.score-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.section-header:hover {
+  background: var(--color-background, #f8f9fa);
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-icon {
+  font-size: 10px;
+  color: var(--color-text-secondary, #64748b);
+  transition: transform 0.2s;
+}
+
+.toggle-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.section-content {
+  padding: 0 16px 16px;
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--color-primary, #217F8D);
+  color: white;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge.warning {
+  background: var(--color-warning, #f59e0b);
+}
+
+/* Score Cards */
+.score-card {
+  padding: 16px;
+  background: var(--color-background, #f8f9fa);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.score-card.primary {
+  background: linear-gradient(135deg, #f0f9fa 0%, #e0f2f4 100%);
+}
+
+.score-card.small {
+  padding: 12px;
+  margin-bottom: 0;
+}
+
+.score-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.score-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.score-band {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.score-band.band-green {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+}
+
+.score-band.band-yellow {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.score-band.band-red {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.score-band.band-neutral {
+  background: var(--color-border, #e2e8f0);
+  color: var(--color-text-secondary, #64748b);
+}
+
+.score-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.score-card.small .score-value {
+  font-size: 24px;
+  margin-bottom: 0;
+}
+
+.score-value.score-green {
+  color: #059669;
+}
+
+.score-value.score-yellow {
+  color: #d97706;
+}
+
+.score-value.score-red {
+  color: #dc2626;
+}
+
+/* Score Bar */
+.score-bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.score-bar-fill.score-green {
+  background: #10b981;
+}
+
+.score-bar-fill.score-yellow {
+  background: #f59e0b;
+}
+
+.score-bar-fill.score-red {
+  background: #ef4444;
+}
+
+/* Score Row */
+.score-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Score Breakdown */
+.score-breakdown {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.score-breakdown h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #64748b);
+  text-transform: uppercase;
+}
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.breakdown-label {
+  color: var(--color-text-secondary, #64748b);
+  text-transform: capitalize;
+}
+
+.breakdown-value {
+  font-weight: 600;
+  color: var(--color-text, #1e293b);
+}
+
+/* Coaching List */
+.coaching-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.coaching-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(33, 127, 141, 0.05);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.coaching-icon {
+  flex-shrink: 0;
+}
+
+.coaching-text {
+  color: var(--color-text, #1e293b);
+}
+
+/* Flags List */
+.flags-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flag-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.flag-item.severity-low {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.flag-item.severity-medium {
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.flag-item.severity-high {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.flag-icon {
+  flex-shrink: 0;
+}
+
+.flag-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flag-type {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.flag-message {
+  color: var(--color-text, #1e293b);
+  line-height: 1.4;
+}
+
+/* Empty State */
+.empty-message {
+  color: var(--color-text-secondary, #64748b);
+  font-size: 13px;
+  font-style: italic;
+  margin: 0;
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .score-row {
+    grid-template-columns: 1fr;
+  }
+}

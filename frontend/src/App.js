@@ -143,6 +143,7 @@ const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
 const AdminDocumentReviewQueue = lazy(() => import('./pages/AdminDocumentReviewQueue'));
 const IncomeCalculatorPopout = lazy(() => import('./pages/IncomeCalculatorPopout'));
+const IntakeEngine = lazy(() => import('./components/intake/IntakeEngine'));
 const ListingPortalTransactions = lazy(() => import('./pages/ListingPortalTransactions'));
 const ListingPortalTransactionDetail = lazy(() => import('./pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazy(() => import('./pages/ListingAgentPortal'));
@@ -879,6 +880,27 @@ function App() {
             }
           />
           <Route
+            path="/leads/:leadId/intake"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><IntakeEngine /></LazyPage>
+                  </main>
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/loans"
             element={
               <PrivateRoute>
@@ -918,6 +940,27 @@ function App() {
                     <LazyPage><LoanDetail /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/loans/:loanId/intake"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><IntakeEngine /></LazyPage>
+                  </main>
                 </div>
               </PrivateRoute>
             }

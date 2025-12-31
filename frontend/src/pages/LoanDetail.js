@@ -996,6 +996,25 @@ function LoanDetail() {
         </div>
 
         <div className="header-actions">
+          <button
+            className="btn-intake"
+            onClick={() => navigate(`/loans/${id}/intake`)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              backgroundColor: '#217F8D',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              marginRight: '8px'
+            }}
+          >
+            📋 Start Intake
+          </button>
           {editing ? (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>
