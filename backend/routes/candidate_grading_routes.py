@@ -829,6 +829,15 @@ async def run_grading_migration(
 
                 CREATE INDEX idx_mm_assessments_candidate ON mm_candidate_assessments(candidate_id);
                 CREATE INDEX idx_mm_assessments_org ON mm_candidate_assessments(organization_id);
+                CREATE UNIQUE INDEX idx_mm_assessments_candidate_unique ON mm_candidate_assessments(candidate_id);
+            END IF;
+
+            -- Add unique constraint if it doesn't exist (for existing tables)
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_indexes
+                WHERE indexname = 'idx_mm_assessments_candidate_unique'
+            ) THEN
+                CREATE UNIQUE INDEX idx_mm_assessments_candidate_unique ON mm_candidate_assessments(candidate_id);
             END IF;
 
             -- Create mm_assessment_history if not exists
