@@ -452,6 +452,49 @@ async def mark_video_viewed(
 # Public Portal Routes (no auth required)
 # =============================================================================
 
+@router.post("/admin/run-migration")
+async def run_video_migration(
+    admin_key: str = Query(...),
+    db=Depends(get_db)
+):
+    """Run migration to create video messages table."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS recruit_video_messages (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL,
+                recruiter_id INTEGER,
+                video_key VARCHAR(500),
+                video_url TEXT,
+                message TEXT,
+                duration_seconds INTEGER,
+                created_at TIMESTAMP DEFAULT NOW(),
+                viewed_at TIMESTAMP
+            )
+        """))
+        logger.info("Created recruit_video_messages table")
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_recruit_video_messages_candidate
+            ON recruit_video_messages(candidate_id)
+        """))
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_recruit_video_messages_recruiter
+            ON recruit_video_messages(recruiter_id)
+        """))
+
+        db.commit()
+        return {"status": "success", "message": "Video messages table created"}
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/portal/{slug}/videos")
 async def get_portal_videos(
     slug: str,

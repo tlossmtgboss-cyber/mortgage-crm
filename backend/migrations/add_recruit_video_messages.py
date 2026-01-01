@@ -1,70 +1,86 @@
 """
-Migration: Add Recruit Video Messages Table
+Migration: Add recruit_video_messages table
 
-Creates table for storing video messages from recruiters to candidates.
+Creates table for storing video messages sent by recruiters to candidates.
+
+Run with:
+    DATABASE_URL="your_database_url" python -m migrations.add_recruit_video_messages
 """
 
 import os
 import sys
+
+# Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import text
-from database import engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import ProgrammingError
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 
 def run_migration():
-    """Run the migration to add recruit video messages table."""
+    """Run the migration to create recruit_video_messages table."""
+    print("Running recruit_video_messages migration...")
 
-    migration_sql = """
-    -- Video messages from recruiters to candidates
-    CREATE TABLE IF NOT EXISTS recruit_video_messages (
-        id SERIAL PRIMARY KEY,
-        candidate_id INTEGER NOT NULL,
-        recruiter_id INTEGER,
-        video_key VARCHAR(500) NOT NULL,
-        video_url TEXT,
-        message TEXT,
-        duration_seconds INTEGER,
-        viewed_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT NOW(),
-        CONSTRAINT fk_video_candidate FOREIGN KEY (candidate_id)
-            REFERENCES mm_candidates(id) ON DELETE CASCADE
-    );
+    engine = create_engine(DATABASE_URL)
 
-    -- Create indexes for video messages
-    CREATE INDEX IF NOT EXISTS idx_video_messages_candidate
-        ON recruit_video_messages(candidate_id);
-    CREATE INDEX IF NOT EXISTS idx_video_messages_recruiter
-        ON recruit_video_messages(recruiter_id);
-    CREATE INDEX IF NOT EXISTS idx_video_messages_created
-        ON recruit_video_messages(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_video_messages_unviewed
-        ON recruit_video_messages(candidate_id, viewed_at) WHERE viewed_at IS NULL;
-
-    -- Add metadata column to company updates if not exists
-    DO $$
-    BEGIN
-        IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'recruit_company_updates' AND column_name = 'metadata'
-        ) THEN
-            ALTER TABLE recruit_company_updates ADD COLUMN metadata JSONB DEFAULT '{}';
-        END IF;
-    END $$;
-    """
+    # Detect database type
+    is_postgres = DATABASE_URL.startswith("postgresql")
+    is_sqlite = DATABASE_URL.startswith("sqlite")
 
     with engine.connect() as conn:
-        for statement in migration_sql.split(';'):
-            statement = statement.strip()
-            if statement:
-                try:
-                    conn.execute(text(statement))
-                except Exception as e:
-                    print(f"Warning: {e}")
+        # Create recruit_video_messages table
+        if is_postgres:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recruit_video_messages (
+                    id SERIAL PRIMARY KEY,
+                    candidate_id INTEGER NOT NULL,
+                    recruiter_id INTEGER,
+                    video_key VARCHAR(500),
+                    video_url TEXT,
+                    message TEXT,
+                    duration_seconds INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    viewed_at TIMESTAMP WITH TIME ZONE
+                )
+            """))
+            print("Created recruit_video_messages table")
+
+            # Create indexes
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_recruit_video_messages_candidate
+                ON recruit_video_messages(candidate_id)
+            """))
+            print("Created candidate index")
+
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_recruit_video_messages_recruiter
+                ON recruit_video_messages(recruiter_id)
+            """))
+            print("Created recruiter index")
+
+        else:
+            # SQLite
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recruit_video_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    candidate_id INTEGER NOT NULL,
+                    recruiter_id INTEGER,
+                    video_key VARCHAR(500),
+                    video_url TEXT,
+                    message TEXT,
+                    duration_seconds INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    viewed_at TIMESTAMP
+                )
+            """))
+            print("Created recruit_video_messages table (SQLite)")
 
         conn.commit()
-
-    print("Migration completed: Recruit video messages table created")
+        print("Migration completed successfully!")
 
 
 if __name__ == "__main__":

@@ -211,10 +211,7 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
     <div className="video-recorder-overlay" onClick={onClose}>
       <div className="video-recorder-modal" onClick={e => e.stopPropagation()}>
         <div className="video-recorder-header">
-          <h3>
-            <span className="video-icon">🎬</span>
-            Record a Message for {candidateName}
-          </h3>
+          <h3>Record a Message for {candidateName}</h3>
           <button className="video-close-btn" onClick={onClose}>×</button>
         </div>
 
@@ -320,7 +317,7 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
           {/* Error Display */}
           {error && (
             <div className="video-error">
-              <span>⚠️ {error}</span>
+              <span>{error}</span>
             </div>
           )}
 

@@ -1263,7 +1263,7 @@ const RecruitDetail = () => {
             setEditingCategory(null);
           }}
           category={editingCategory}
-          currentScore={assessment?.scores?.[editingCategory.key]}
+          currentScore={assessment?.[editingCategory.key]?.score ? Math.round(assessment[editingCategory.key].score / 20) : undefined}
           onSave={async (score, notes) => {
             try {
               // Map category key to API field name
