@@ -105,8 +105,8 @@ class RecruitPortalService:
             "portal_url": f"/recruit-portal/{slug}"
         }
 
-    def get_portal_by_slug(self, slug: str) -> Optional[PortalData]:
-        """Get portal data by slug."""
+    def get_portal_by_slug(self, slug: str, token: Optional[str] = None) -> Optional[PortalData]:
+        """Get portal data by slug, optionally validating token."""
         with SessionLocal() as conn:
             result = conn.execute(
                 text("""
