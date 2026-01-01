@@ -328,16 +328,6 @@ export const publishJobPosting = async (postingId) => {
   return response.json();
 };
 
-export const scheduleInterview = async (candidateId, data) => {
-  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/interviews`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(data)
-  });
-  if (!response.ok) throw new Error('Failed to schedule interview');
-  return response.json();
-};
-
 export const submitInterviewFeedback = async (interviewId, feedback) => {
   const response = await fetch(`${API_URL}/api/v1/recruiting/interviews/${interviewId}/feedback`, {
     method: 'POST',
