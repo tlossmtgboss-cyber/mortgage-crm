@@ -88,6 +88,10 @@ const RecruitDetail = () => {
   // Video recorder modal state
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
 
+  // Social feed state
+  const [socialPosts, setSocialPosts] = useState([]);
+  const [socialPostsLoading, setSocialPostsLoading] = useState(false);
+
   // Edit form states
   const [socialForm, setSocialForm] = useState({
     linkedin_url: '',
@@ -158,6 +162,26 @@ const RecruitDetail = () => {
       loadAssessment();
     }
   }, [activeTab, assessment, assessmentLoading, loadAssessment]);
+
+  // Load social posts
+  useEffect(() => {
+    const fetchSocialPosts = async () => {
+      setSocialPostsLoading(true);
+      try {
+        const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+        const response = await fetch(`${API_URL}/api/v1/recruit-social/public/feed?limit=6`);
+        if (response.ok) {
+          const data = await response.json();
+          setSocialPosts(data.posts || []);
+        }
+      } catch (err) {
+        console.error('Error fetching social posts:', err);
+      } finally {
+        setSocialPostsLoading(false);
+      }
+    };
+    fetchSocialPosts();
+  }, []);
 
   const handleStatusChange = async (newStatus) => {
     // Check if quiz is required for this disposition change
@@ -804,28 +828,48 @@ const RecruitDetail = () => {
             </a>
           </div>
 
-          {/* Recent Social Posts */}
-          {candidate.social_media?.recent_posts?.length > 0 && (
-            <div className="recruit-recent-posts">
-              <h4>Recent Activity</h4>
-              {candidate.social_media.recent_posts.slice(0, 3).map((post, idx) => (
-                <div key={idx} className="recruit-post-item">
-                  <div className="recruit-post-header">
-                    <span className="mm-badge">{post.platform}</span>
-                    <span className="recruit-post-date">{new Date(post.posted_at).toLocaleDateString()}</span>
-                  </div>
-                  <p className="recruit-post-content">{post.content}</p>
-                  {post.engagement && (
-                    <div className="recruit-post-engagement">
-                      <span>👍 {post.engagement.likes || 0}</span>
-                      <span>💬 {post.engagement.comments || 0}</span>
-                      <span>🔄 {post.engagement.shares || 0}</span>
+          {/* Company Social Feed */}
+          <div className="recruit-social-feed">
+            <h4>Company Social Feed</h4>
+            {socialPostsLoading ? (
+              <div className="recruit-social-loading">Loading posts...</div>
+            ) : socialPosts.length > 0 ? (
+              <div className="recruit-posts-list">
+                {socialPosts.slice(0, 4).map((post) => (
+                  <div key={post.id} className="recruit-post-item">
+                    <div className="recruit-post-header">
+                      <div className="recruit-post-platforms">
+                        {post.platforms?.map((platform, idx) => (
+                          <span key={idx} className={`platform-tag ${platform.trim()}`}>
+                            {platform.trim() === 'linkedin' && '🔗'}
+                            {platform.trim() === 'facebook' && '📘'}
+                            {platform.trim() === 'instagram' && '📷'}
+                            {platform.trim() === 'twitter' && '🐦'}
+                          </span>
+                        ))}
+                      </div>
+                      <span className="recruit-post-date">
+                        {post.posted_at ? new Date(post.posted_at).toLocaleDateString() : ''}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    <p className="recruit-post-content">{post.content}</p>
+                    {post.image_url && (
+                      <img src={post.image_url} alt="Post" className="recruit-post-image" />
+                    )}
+                    {post.engagement && (
+                      <div className="recruit-post-engagement">
+                        <span>👍 {post.engagement.likes || 0}</span>
+                        <span>💬 {post.engagement.comments || 0}</span>
+                        <span>↗️ {post.engagement.shares || 0}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="recruit-social-empty">No posts yet</div>
+            )}
+          </div>
         </div>
 
         {/* Right Column - Quick Actions + Notes */}
