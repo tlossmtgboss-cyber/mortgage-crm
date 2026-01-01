@@ -22,6 +22,7 @@ import PaymentCalculator from '../../components/PaymentCalculator';
 import ApplicantTasks from '../../components/portal/ApplicantTasks';
 import PortalDocumentRequirements from '../../components/portal/PortalDocumentRequirements';
 import TotalCostAnalysis from '../../components/portal/TotalCostAnalysis';
+import PortalVideoMessages from '../../components/portal/PortalVideoMessages';
 import '../PURLPortal.css';
 
 // Tab components - Arrow/chevron style with notification dots or count badges
@@ -1435,6 +1436,13 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
               <div className="portal-main-content">
                 {/* Contact Your Loan Officer - Now at the top */}
                 <ContactLOCard onSchedule={() => setShowScheduleModal(true)} />
+
+                {/* Video Messages from Loan Officer */}
+                <PortalVideoMessages
+                  portalType="client"
+                  identifier={slug}
+                  title="Messages from Your Loan Officer"
+                />
 
                 {/* Applicant Tasks Section - Your Action Items */}
                 <ApplicantTasks

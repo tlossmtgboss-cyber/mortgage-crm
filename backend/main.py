@@ -20087,6 +20087,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Recruiting Video routes: {e}")
 
+# Include Portal Video routes (video recording for client/realtor portals)
+try:
+    from routes.portal_video_routes import router as portal_video_router
+    app.include_router(portal_video_router, tags=["Portal Video"])
+    logger.info("✅ Portal Video routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Portal Video routes: {e}")
+
 # Include Acquisition Engine routes (lead scoring, speed-to-lead)
 try:
     from routes.acquisition_engine_routes import router as acquisition_router

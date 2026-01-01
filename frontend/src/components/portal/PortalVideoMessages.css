@@ -1,0 +1,298 @@
+/* =============================================================================
+   PORTAL VIDEO MESSAGES - Shared Component Styles
+   ============================================================================= */
+
+.portal-video-messages {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.video-messages-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.video-messages-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.header-icon {
+  font-size: 1.25rem;
+}
+
+.new-badge {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+/* Loading & Error States */
+.video-messages-loading,
+.video-messages-error {
+  text-align: center;
+  padding: 24px;
+  color: #64748b;
+}
+
+.video-messages-loading .loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Video Grid */
+.video-messages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* Video Card */
+.video-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.video-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.video-card.new {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.video-card.playing {
+  border-color: #10b981;
+}
+
+.video-new-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #ef4444;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  z-index: 10;
+  letter-spacing: 0.5px;
+}
+
+/* Video Wrapper */
+.video-wrapper {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #1e293b;
+}
+
+.video-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Video Info */
+.video-info {
+  padding: 12px;
+}
+
+.video-sender {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sender-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sender-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sender-avatar span {
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.sender-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sender-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #1e293b;
+}
+
+.video-date {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.video-message {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #475569;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-duration {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Show More Button */
+.show-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #3b82f6;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.show-more-btn:hover {
+  background: #f1f5f9;
+  border-color: #3b82f6;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .portal-video-messages {
+    padding: 16px;
+  }
+
+  .video-messages-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .video-messages-header h3 {
+    font-size: 1rem;
+  }
+}
+
+/* Dark Mode Support (for RecruitPortal) */
+.recruit-portal .portal-video-messages {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.recruit-portal .video-messages-header h3 {
+  color: #fff;
+}
+
+.recruit-portal .video-messages-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.recruit-portal .video-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.recruit-portal .video-card.new {
+  border-color: #3b82f6;
+}
+
+.recruit-portal .sender-name {
+  color: #fff;
+}
+
+.recruit-portal .video-date {
+  color: #94a3b8;
+}
+
+.recruit-portal .video-message {
+  color: #cbd5e1;
+}
+
+.recruit-portal .video-duration {
+  background: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+}
+
+.recruit-portal .show-more-btn {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.recruit-portal .show-more-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.recruit-portal .video-messages-loading,
+.recruit-portal .video-messages-error {
+  color: #94a3b8;
+}
+
+.recruit-portal .video-messages-loading .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+}

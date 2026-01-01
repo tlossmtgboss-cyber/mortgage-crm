@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import PortalVideoMessages from '../components/portal/PortalVideoMessages';
 import './RealtorPortal.css';
 
 // API Configuration
@@ -354,6 +355,12 @@ const RealtorPortal = () => {
           My Clients ({loans.length})
         </button>
         <button
+          className={`nav-tab ${activeTab === 'videos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('videos')}
+        >
+          Messages
+        </button>
+        <button
           className={`nav-tab ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
@@ -403,6 +410,21 @@ const RealtorPortal = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'videos' && profile && (
+          <div className="videos-section">
+            <PortalVideoMessages
+              portalType="realtor"
+              identifier={profile.id}
+              token={token}
+              title="Messages from Your Loan Officers"
+            />
+            {/* Fallback if no videos */}
+            <div className="video-empty-state" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+              <p>Video messages from your loan officer partners will appear here.</p>
+            </div>
           </div>
         )}
 

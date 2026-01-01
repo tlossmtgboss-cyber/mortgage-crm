@@ -1,0 +1,485 @@
+"""
+Portal Video Routes
+
+Handles video recording and sharing with borrowers and realtors:
+- Presigned URL generation for video uploads
+- Video storage and metadata management
+- Video retrieval for client and realtor portals
+
+Supports:
+- Client Portal (PURL workspaces)
+- Realtor Portal (token-based auth)
+"""
+
+import os
+import uuid
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from database import get_db
+from services.perennia_s3_service import get_s3_service
+
+logger = logging.getLogger(__name__)
+
+security = HTTPBearer(auto_error=False)
+
+
+# Auth dependency
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Get current user from JWT token."""
+    from jose import jwt
+
+    if not credentials:
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": "admin@perenniaai.com"}
+        )
+        user_row = result.fetchone()
+        if user_row:
+            return {"user_id": user_row[0], "email": user_row[1], "name": user_row[2]}
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        token = credentials.credentials
+        secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        user_row = result.fetchone()
+
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return {"user_id": user_row[0], "email": user_row[1], "name": user_row[2]}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+router = APIRouter(prefix="/api/v1/portal-video", tags=["Portal Video"])
+
+
+# =============================================================================
+# Pydantic Models
+# =============================================================================
+
+class UploadUrlRequest(BaseModel):
+    portal_type: str  # 'client' or 'realtor'
+    recipient_id: int  # workspace_id for client, partner_id for realtor
+    content_type: str = "video/webm"
+    filename: Optional[str] = None
+
+
+class UploadUrlResponse(BaseModel):
+    upload_url: str
+    video_key: str
+    expires_in: int
+
+
+class CompleteUploadRequest(BaseModel):
+    portal_type: str
+    recipient_id: int
+    video_key: str
+    message: Optional[str] = None
+    send_notification: bool = True
+    duration_seconds: Optional[int] = None
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def generate_video_key(portal_type: str, recipient_id: int, filename: str = None) -> str:
+    """Generate a unique S3 key for the video."""
+    ext = "webm"
+    if filename and "." in filename:
+        ext = filename.rsplit(".", 1)[-1].lower()
+
+    unique_id = uuid.uuid4().hex
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+    return f"portal-videos/{portal_type}/{recipient_id}/{timestamp}_{unique_id}.{ext}"
+
+
+# =============================================================================
+# Routes - Upload Management
+# =============================================================================
+
+@router.post("/upload-url", response_model=UploadUrlResponse)
+async def get_upload_url(
+    request: UploadUrlRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a presigned URL for uploading a video."""
+    s3_service = get_s3_service()
+
+    video_key = generate_video_key(request.portal_type, request.recipient_id, request.filename)
+
+    allowed_video_types = ["video/webm", "video/mp4", "video/quicktime", "video/x-msvideo"]
+
+    if request.content_type not in allowed_video_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Content type '{request.content_type}' not allowed for videos"
+        )
+
+    try:
+        presigned_url = s3_service.s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': s3_service.bucket_name,
+                'Key': video_key,
+                'ContentType': request.content_type
+            },
+            ExpiresIn=3600
+        )
+
+        return UploadUrlResponse(
+            upload_url=presigned_url,
+            video_key=video_key,
+            expires_in=3600
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to generate upload URL: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate upload URL")
+
+
+@router.post("/complete")
+async def complete_upload(
+    request: CompleteUploadRequest,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Complete a video upload and optionally notify the recipient."""
+    s3_service = get_s3_service()
+    user_id = current_user.get("user_id") or current_user.get("id") or 1
+
+    # Verify the video exists in S3
+    verify_result = s3_service.verify_upload(request.video_key)
+    if not verify_result.get("success") or not verify_result.get("exists"):
+        raise HTTPException(status_code=400, detail="Video not found in storage")
+
+    # Get video URL (try public first, fall back to presigned)
+    public_result = s3_service.make_public_and_get_url(request.video_key)
+    if not public_result.get("success"):
+        download_result = s3_service.get_presigned_download_url(request.video_key, expires_in=86400 * 7)
+        if not download_result.get("success"):
+            raise HTTPException(status_code=500, detail="Failed to generate video URL")
+        video_url = download_result["presigned_url"]
+    else:
+        video_url = public_result.get("public_url") or public_result.get("presigned_url")
+
+    try:
+        # Get sender info
+        sender_result = db.execute(text("""
+            SELECT full_name FROM users WHERE id = :user_id
+        """), {"user_id": user_id})
+        sender = sender_result.fetchone()
+
+        # Save video metadata
+        result = db.execute(text("""
+            INSERT INTO portal_video_messages (
+                portal_type,
+                recipient_id,
+                sender_id,
+                video_key,
+                video_url,
+                message,
+                duration_seconds,
+                created_at
+            ) VALUES (
+                :portal_type,
+                :recipient_id,
+                :sender_id,
+                :video_key,
+                :video_url,
+                :message,
+                :duration_seconds,
+                NOW()
+            )
+            RETURNING id
+        """), {
+            "portal_type": request.portal_type,
+            "recipient_id": request.recipient_id,
+            "sender_id": user_id,
+            "video_key": request.video_key,
+            "video_url": video_url,
+            "message": request.message,
+            "duration_seconds": request.duration_seconds
+        })
+
+        video_id = result.fetchone().id
+        db.commit()
+
+        return {
+            "success": True,
+            "video_id": video_id,
+            "message": "Video uploaded successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to complete video upload: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Routes - Client Portal (PURL Workspace)
+# =============================================================================
+
+@router.get("/client/{slug}/videos")
+async def get_client_portal_videos(
+    slug: str,
+    token: Optional[str] = Query(default=None),
+    db=Depends(get_db)
+):
+    """Get videos for a client portal workspace."""
+    try:
+        # Get workspace
+        result = db.execute(text("""
+            SELECT w.id, w.lead_id, l.first_name, l.last_name
+            FROM purl_workspaces w
+            JOIN leads l ON l.id = w.lead_id
+            WHERE w.slug = :slug AND w.is_active = true
+        """), {"slug": slug})
+
+        workspace = result.fetchone()
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Portal not found")
+
+        # Get videos for this workspace
+        videos_result = db.execute(text("""
+            SELECT
+                v.id,
+                v.video_key,
+                v.video_url,
+                v.message,
+                v.duration_seconds,
+                v.created_at,
+                v.viewed_at,
+                u.full_name as sender_name
+            FROM portal_video_messages v
+            LEFT JOIN users u ON u.id = v.sender_id
+            WHERE v.portal_type = 'client' AND v.recipient_id = :workspace_id
+            ORDER BY v.created_at DESC
+            LIMIT 20
+        """), {"workspace_id": workspace.id})
+
+        videos = []
+        s3_service = get_s3_service()
+
+        for row in videos_result.fetchall():
+            video_url = row.video_url
+            if row.video_key:
+                download_result = s3_service.get_presigned_download_url(row.video_key, expires_in=86400)
+                if download_result.get("success"):
+                    video_url = download_result["presigned_url"]
+
+            videos.append({
+                "id": row.id,
+                "video_url": video_url,
+                "message": row.message,
+                "duration_seconds": row.duration_seconds,
+                "sender_name": row.sender_name or "Your Loan Officer",
+                "sender_photo": None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "is_new": row.viewed_at is None
+            })
+
+        return {
+            "borrower_name": f"{workspace.first_name} {workspace.last_name}",
+            "videos": videos,
+            "count": len(videos)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get client portal videos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/client/mark-viewed/{video_id}")
+async def mark_client_video_viewed(
+    video_id: int,
+    db=Depends(get_db)
+):
+    """Mark a client portal video as viewed."""
+    try:
+        db.execute(text("""
+            UPDATE portal_video_messages
+            SET viewed_at = NOW()
+            WHERE id = :video_id AND viewed_at IS NULL
+        """), {"video_id": video_id})
+        db.commit()
+
+        return {"success": True}
+
+    except Exception as e:
+        logger.error(f"Failed to mark video viewed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Routes - Realtor Portal
+# =============================================================================
+
+@router.get("/realtor/{partner_id}/videos")
+async def get_realtor_portal_videos(
+    partner_id: int,
+    token: Optional[str] = Query(default=None),
+    db=Depends(get_db)
+):
+    """Get videos for a realtor portal."""
+    try:
+        # Verify partner exists
+        partner_result = db.execute(text("""
+            SELECT id, first_name, last_name
+            FROM referral_partners
+            WHERE id = :partner_id
+        """), {"partner_id": partner_id})
+
+        partner = partner_result.fetchone()
+        if not partner:
+            raise HTTPException(status_code=404, detail="Partner not found")
+
+        # Get videos for this realtor
+        videos_result = db.execute(text("""
+            SELECT
+                v.id,
+                v.video_key,
+                v.video_url,
+                v.message,
+                v.duration_seconds,
+                v.created_at,
+                v.viewed_at,
+                u.full_name as sender_name
+            FROM portal_video_messages v
+            LEFT JOIN users u ON u.id = v.sender_id
+            WHERE v.portal_type = 'realtor' AND v.recipient_id = :partner_id
+            ORDER BY v.created_at DESC
+            LIMIT 20
+        """), {"partner_id": partner_id})
+
+        videos = []
+        s3_service = get_s3_service()
+
+        for row in videos_result.fetchall():
+            video_url = row.video_url
+            if row.video_key:
+                download_result = s3_service.get_presigned_download_url(row.video_key, expires_in=86400)
+                if download_result.get("success"):
+                    video_url = download_result["presigned_url"]
+
+            videos.append({
+                "id": row.id,
+                "video_url": video_url,
+                "message": row.message,
+                "duration_seconds": row.duration_seconds,
+                "sender_name": row.sender_name or "Your Loan Officer",
+                "sender_photo": None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "is_new": row.viewed_at is None
+            })
+
+        return {
+            "partner_name": f"{partner.first_name} {partner.last_name}",
+            "videos": videos,
+            "count": len(videos)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get realtor portal videos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/realtor/mark-viewed/{video_id}")
+async def mark_realtor_video_viewed(
+    video_id: int,
+    db=Depends(get_db)
+):
+    """Mark a realtor portal video as viewed."""
+    try:
+        db.execute(text("""
+            UPDATE portal_video_messages
+            SET viewed_at = NOW()
+            WHERE id = :video_id AND viewed_at IS NULL
+        """), {"video_id": video_id})
+        db.commit()
+
+        return {"success": True}
+
+    except Exception as e:
+        logger.error(f"Failed to mark video viewed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Admin Routes
+# =============================================================================
+
+@router.post("/admin/run-migration")
+async def run_portal_video_migration(
+    admin_key: str = Query(...),
+    db=Depends(get_db)
+):
+    """Run migration to create portal_video_messages table."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS portal_video_messages (
+                id SERIAL PRIMARY KEY,
+                portal_type VARCHAR(50) NOT NULL,
+                recipient_id INTEGER NOT NULL,
+                sender_id INTEGER,
+                video_key VARCHAR(500),
+                video_url TEXT,
+                message TEXT,
+                duration_seconds INTEGER,
+                created_at TIMESTAMP DEFAULT NOW(),
+                viewed_at TIMESTAMP
+            )
+        """))
+        logger.info("Created portal_video_messages table")
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_portal_video_messages_type_recipient
+            ON portal_video_messages(portal_type, recipient_id)
+        """))
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_portal_video_messages_sender
+            ON portal_video_messages(sender_id)
+        """))
+
+        db.commit()
+        return {"status": "success", "message": "Portal video messages table created"}
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
