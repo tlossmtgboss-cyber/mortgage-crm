@@ -74,12 +74,18 @@ const ScheduleInterviewModal = ({ isOpen, onClose, candidate, onSuccess }) => {
   useEffect(() => {
     const fetchInterviewers = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/v1/team/members`, {
+        const response = await fetch(`${API_BASE}/api/v1/admin/users`, {
           headers: getAuthHeaders()
         });
         if (response.ok) {
           const data = await response.json();
-          setInterviewers(data.members || data || []);
+          // Handle both array and {users: []} response formats
+          const users = data.users || data || [];
+          setInterviewers(users.map(u => ({
+            id: u.id,
+            name: u.full_name || u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim(),
+            email: u.email
+          })));
         }
       } catch (err) {
         console.error('Failed to fetch interviewers:', err);
