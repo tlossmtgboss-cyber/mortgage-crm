@@ -1180,6 +1180,32 @@ async def get_funnel_metrics(
     )
 
 
+def _calculate_cost_per_meeting(campaign: CampaignInstance) -> Optional[float]:
+    """
+    Calculate cost per meeting for a campaign.
+
+    Returns total_spend / meetings_booked, or None if no meetings.
+    """
+    if not campaign.total_spend or float(campaign.total_spend) == 0:
+        return None
+    if not campaign.meetings_booked or campaign.meetings_booked == 0:
+        return None
+    return round(float(campaign.total_spend) / campaign.meetings_booked, 2)
+
+
+def _calculate_cost_per_application(campaign: CampaignInstance) -> Optional[float]:
+    """
+    Calculate cost per application for a campaign.
+
+    Returns total_spend / applications_started, or None if no applications.
+    """
+    if not campaign.total_spend or float(campaign.total_spend) == 0:
+        return None
+    if not campaign.applications_started or campaign.applications_started == 0:
+        return None
+    return round(float(campaign.total_spend) / campaign.applications_started, 2)
+
+
 @router.get("/funnel/{campaign_id}")
 async def get_campaign_funnel(
     campaign_id: str,
@@ -1214,8 +1240,8 @@ async def get_campaign_funnel(
         "cost_metrics": {
             "total_spend": float(campaign.total_spend or 0),
             "cost_per_lead": float(campaign.cost_per_lead) if campaign.cost_per_lead else None,
-            "cost_per_meeting": None,  # TODO: Calculate
-            "cost_per_application": None,  # TODO: Calculate
+            "cost_per_meeting": float(campaign.cost_per_meeting) if campaign.cost_per_meeting else _calculate_cost_per_meeting(campaign),
+            "cost_per_application": float(campaign.cost_per_application) if campaign.cost_per_application else _calculate_cost_per_application(campaign),
             "cost_per_funded": float(campaign.cost_per_funded_loan) if campaign.cost_per_funded_loan else None,
         },
         "revenue_metrics": {
