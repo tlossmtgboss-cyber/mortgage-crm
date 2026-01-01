@@ -238,7 +238,7 @@ const RecruitDetail = () => {
     const token = localStorage.getItem('token');
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
     try {
-      const response = await fetch(`${API_URL}/api/v1/users`, {
+      const response = await fetch(`${API_URL}/api/v1/admin/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -532,30 +532,10 @@ const RecruitDetail = () => {
               <span className="recruit-contact-icon">📧</span>
               <a href={`mailto:${candidate.email}`}>{candidate.email || '-'}</a>
             </div>
-            <div className="recruit-contact-item recruit-contact-phone">
+            <div className="recruit-contact-item">
               <span className="recruit-contact-icon">📱</span>
               <a href={`tel:${candidate.phone}`}>{candidate.phone || '-'}</a>
-              {candidate.phone && (
-                <button
-                  className="recruit-call-btn"
-                  onClick={handleClickToCall}
-                  disabled={isCallInProgress}
-                  title="Click to call"
-                >
-                  {isCallInProgress ? '📞 Calling...' : '📞 Call'}
-                </button>
-              )}
             </div>
-            <div className="recruit-contact-item">
-              <span className="recruit-contact-icon">📅</span>
-              <span>Applied {candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : '-'}</span>
-            </div>
-            {candidate.source && (
-              <div className="recruit-contact-item">
-                <span className="recruit-contact-icon">📍</span>
-                <span>Source: {candidate.source === 'retr' ? <span className="mm-badge mm-badge-info">RETR</span> : candidate.source}</span>
-              </div>
-            )}
           </div>
         </div>
 
