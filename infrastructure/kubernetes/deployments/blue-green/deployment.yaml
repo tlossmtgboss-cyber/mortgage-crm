@@ -1,0 +1,396 @@
+# Blue-Green Deployment Configuration for Mortgage CRM
+# Supports zero-downtime deployments with instant rollback capability
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mortgage-crm-bluegreen
+  labels:
+    app.kubernetes.io/name: mortgage-crm
+    app.kubernetes.io/component: blue-green
+---
+# ConfigMap for deployment state tracking
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deployment-state
+  namespace: mortgage-crm-bluegreen
+data:
+  active-color: "blue"
+  blue-version: "1.0.0"
+  green-version: ""
+  last-switch: ""
+---
+# Blue Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mortgage-crm-api-blue
+  namespace: mortgage-crm-bluegreen
+  labels:
+    app.kubernetes.io/name: mortgage-crm-api
+    app.kubernetes.io/component: api
+    deployment-color: blue
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mortgage-crm-api
+      deployment-color: blue
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mortgage-crm-api
+        app.kubernetes.io/component: api
+        deployment-color: blue
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: mortgage-crm-api
+      terminationGracePeriodSeconds: 60
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: mortgage-crm-api
+                    deployment-color: blue
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: api
+          image: mortgage-crm/api:blue
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+
+          env:
+            - name: DEPLOYMENT_COLOR
+              value: "blue"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          envFrom:
+            - configMapRef:
+                name: mortgage-crm-config
+            - secretRef:
+                name: mortgage-crm-secrets
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/enterprise/health/live
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/enterprise/health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+---
+# Green Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mortgage-crm-api-green
+  namespace: mortgage-crm-bluegreen
+  labels:
+    app.kubernetes.io/name: mortgage-crm-api
+    app.kubernetes.io/component: api
+    deployment-color: green
+spec:
+  replicas: 0  # Starts with 0, scaled up during deployment
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mortgage-crm-api
+      deployment-color: green
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mortgage-crm-api
+        app.kubernetes.io/component: api
+        deployment-color: green
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: mortgage-crm-api
+      terminationGracePeriodSeconds: 60
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: mortgage-crm-api
+                    deployment-color: green
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: api
+          image: mortgage-crm/api:green
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+
+          env:
+            - name: DEPLOYMENT_COLOR
+              value: "green"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          envFrom:
+            - configMapRef:
+                name: mortgage-crm-config
+            - secretRef:
+                name: mortgage-crm-secrets
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/enterprise/health/live
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/enterprise/health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+---
+# Service pointing to active color (switched during deployment)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mortgage-crm-api
+  namespace: mortgage-crm-bluegreen
+  labels:
+    app.kubernetes.io/name: mortgage-crm-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: mortgage-crm-api
+    deployment-color: blue  # Switched between blue/green
+---
+# Blue service for direct access/testing
+apiVersion: v1
+kind: Service
+metadata:
+  name: mortgage-crm-api-blue
+  namespace: mortgage-crm-bluegreen
+  labels:
+    app.kubernetes.io/name: mortgage-crm-api
+    deployment-color: blue
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: mortgage-crm-api
+    deployment-color: blue
+---
+# Green service for direct access/testing
+apiVersion: v1
+kind: Service
+metadata:
+  name: mortgage-crm-api-green
+  namespace: mortgage-crm-bluegreen
+  labels:
+    app.kubernetes.io/name: mortgage-crm-api
+    deployment-color: green
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: mortgage-crm-api
+    deployment-color: green
+---
+# Preview Ingress for testing green before switch
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mortgage-crm-preview
+  namespace: mortgage-crm-bluegreen
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - preview-api.mortgagecrm.com
+      secretName: mortgage-crm-tls
+  rules:
+    - host: preview-api.mortgagecrm.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mortgage-crm-api-green
+                port:
+                  number: 80
+---
+# HPA for Blue
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mortgage-crm-api-blue-hpa
+  namespace: mortgage-crm-bluegreen
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mortgage-crm-api-blue
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+# HPA for Green
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mortgage-crm-api-green-hpa
+  namespace: mortgage-crm-bluegreen
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mortgage-crm-api-green
+  minReplicas: 0
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+# PodDisruptionBudget for Blue
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mortgage-crm-api-blue-pdb
+  namespace: mortgage-crm-bluegreen
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mortgage-crm-api
+      deployment-color: blue
+---
+# PodDisruptionBudget for Green
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mortgage-crm-api-green-pdb
+  namespace: mortgage-crm-bluegreen
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mortgage-crm-api
+      deployment-color: green
