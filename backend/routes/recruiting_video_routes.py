@@ -329,36 +329,37 @@ async def complete_upload(
             )
 
         # Also create a company update for the portal
-        db.execute(text("""
-            INSERT INTO recruit_company_updates (
-                title,
-                content,
-                media_url,
-                category,
-                is_featured,
-                is_active,
-                published_at,
-                created_by,
-                metadata
-            ) VALUES (
-                :title,
-                :content,
-                :media_url,
-                'video_message',
-                true,
-                true,
-                NOW(),
-                :created_by,
-                :metadata
-            )
-        """), {
-            "title": f"Personal Message from {recruiter.full_name if recruiter else 'Your Recruiter'}",
-            "content": request.message or "Your recruiter recorded a personalized message just for you!",
-            "media_url": video_url,
-            "created_by": user_id,
-            "metadata": f'{{"candidate_id": {request.candidate_id}, "video_id": {video_id}, "type": "personalized_video"}}'
-        })
-        db.commit()
+        try:
+            db.execute(text("""
+                INSERT INTO recruit_company_updates (
+                    title,
+                    content,
+                    media_url,
+                    category,
+                    is_featured,
+                    is_active,
+                    published_at,
+                    created_by
+                ) VALUES (
+                    :title,
+                    :content,
+                    :media_url,
+                    'video_message',
+                    true,
+                    true,
+                    NOW(),
+                    :created_by
+                )
+            """), {
+                "title": f"Personal Message from {recruiter.full_name if recruiter else 'Your Recruiter'}",
+                "content": request.message or "Your recruiter recorded a personalized message just for you!",
+                "media_url": video_url,
+                "created_by": user_id
+            })
+            db.commit()
+        except Exception as company_update_error:
+            logger.warning(f"Could not create company update: {company_update_error}")
+            # Continue anyway - the video was already saved
 
         return {
             "success": True,
