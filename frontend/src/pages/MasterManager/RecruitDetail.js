@@ -17,8 +17,12 @@ import CandidateGradeCircle, { getGrade, GradeBadge } from '../../components/rec
 import DISCProfileChart from '../../components/recruiting/DISCProfileChart';
 import { AssessmentScoreGrid, AssessmentScoreSummary } from '../../components/recruiting/AssessmentScoreCard';
 import AIAnalysisPanel from '../../components/recruiting/AIAnalysisPanel';
+import AssessmentQuizModal from '../../components/recruiting/AssessmentQuizModal';
 import './MasterManager.css';
 import './RecruitDetail.css';
+
+// Dispositions that require quiz completion
+const QUIZ_REQUIRED_DISPOSITIONS = ['screening', 'phone_screen', 'interview', 'assessment', 'offer'];
 
 const CANDIDATE_STATUSES = [
   { value: 'new', label: 'New', color: '#3b82f6', icon: '📥' },
@@ -50,6 +54,17 @@ const RecruitDetail = () => {
   const [assessment, setAssessment] = useState(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessmentError, setAssessmentError] = useState(null);
+
+  // Quiz modal state
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const [quizScores, setQuizScores] = useState(null);
+
+  // Call/dialer state
+  const [isCallInProgress, setIsCallInProgress] = useState(false);
+  const [callHistory, setCallHistory] = useState([]);
+  const [showCallNotesModal, setShowCallNotesModal] = useState(false);
+  const [activeCallId, setActiveCallId] = useState(null);
 
   // Edit form states
   const [socialForm, setSocialForm] = useState({
@@ -123,11 +138,162 @@ const RecruitDetail = () => {
   }, [activeTab, assessment, assessmentLoading, loadAssessment]);
 
   const handleStatusChange = async (newStatus) => {
+    // Check if quiz is required for this disposition change
+    if (QUIZ_REQUIRED_DISPOSITIONS.includes(newStatus)) {
+      // Store the pending status change and show quiz
+      setPendingStatusChange(newStatus);
+      setShowQuizModal(true);
+      return; // Don't change status until quiz is completed
+    }
+
+    // For non-quiz dispositions, proceed directly
     try {
       await updateCandidateStatus(candidateId, newStatus);
       setCandidate({ ...candidate, status: newStatus });
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleQuizComplete = async (scores) => {
+    // Update the quiz scores
+    setQuizScores(scores);
+
+    // Now complete the status change
+    if (pendingStatusChange) {
+      try {
+        await updateCandidateStatus(candidateId, pendingStatusChange);
+        setCandidate(prev => ({
+          ...prev,
+          status: pendingStatusChange,
+          scores: {
+            overall: scores.overall_score,
+            production: scores.production_score,
+            disc: scores.disc_score,
+            character: scores.character_score,
+            skills: scores.skills_score,
+            culture_fit: scores.culture_fit_score
+          }
+        }));
+
+        // Create workflow tasks for the new disposition
+        const token = localStorage.getItem('token');
+        const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+        const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+        try {
+          await fetch(`${API_URL}/api/v1/recruiting/workflow/candidates/${candidateId}/create-tasks`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              disposition: pendingStatusChange,
+              assigned_to: userId,
+              organization_id: 1
+            })
+          });
+        } catch (taskErr) {
+          console.warn('Failed to create workflow tasks:', taskErr);
+          // Don't fail the overall operation if task creation fails
+        }
+
+        setPendingStatusChange(null);
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+  };
+
+  const handleQuizClose = () => {
+    setShowQuizModal(false);
+    setPendingStatusChange(null);
+  };
+
+  // Click-to-call handler
+  const handleClickToCall = async () => {
+    if (!candidate?.phone) {
+      setError('No phone number available for this candidate');
+      return;
+    }
+
+    setIsCallInProgress(true);
+    const token = localStorage.getItem('token');
+    const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+    const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/recruiting/dialer/candidates/${candidateId}/call`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ caller_id: userId })
+      });
+
+      const data = await response.json();
+      if (data.call_id) {
+        setActiveCallId(data.call_id);
+        // In a real implementation, this would trigger the actual Twilio call
+        // For now, we'll show a modal to add call notes
+        setTimeout(() => {
+          setIsCallInProgress(false);
+          setShowCallNotesModal(true);
+        }, 2000);
+      }
+    } catch (err) {
+      setError('Failed to initiate call: ' + err.message);
+      setIsCallInProgress(false);
+    }
+  };
+
+  // Load call history
+  const loadCallHistory = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/recruiting/dialer/candidates/${candidateId}/call-history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      setCallHistory(data.history || []);
+    } catch (err) {
+      console.warn('Failed to load call history:', err);
+    }
+  }, [candidateId]);
+
+  // Save call notes
+  const handleSaveCallNotes = async (note, outcome, callbackRequested, callbackDate) => {
+    if (!activeCallId) return;
+
+    const token = localStorage.getItem('token');
+    const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+    const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+    try {
+      await fetch(`${API_URL}/api/v1/recruiting/dialer/calls/${activeCallId}/notes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          note,
+          outcome,
+          callback_requested: callbackRequested,
+          callback_date: callbackDate,
+          user_id: userId
+        })
+      });
+
+      setShowCallNotesModal(false);
+      setActiveCallId(null);
+      loadCallHistory();
+    } catch (err) {
+      setError('Failed to save call notes: ' + err.message);
     }
   };
 
@@ -290,9 +456,19 @@ const RecruitDetail = () => {
               <span className="recruit-contact-icon">📧</span>
               <a href={`mailto:${candidate.email}`}>{candidate.email || '-'}</a>
             </div>
-            <div className="recruit-contact-item">
+            <div className="recruit-contact-item recruit-contact-phone">
               <span className="recruit-contact-icon">📱</span>
               <a href={`tel:${candidate.phone}`}>{candidate.phone || '-'}</a>
+              {candidate.phone && (
+                <button
+                  className="recruit-call-btn"
+                  onClick={handleClickToCall}
+                  disabled={isCallInProgress}
+                  title="Click to call"
+                >
+                  {isCallInProgress ? '📞 Calling...' : '📞 Call'}
+                </button>
+              )}
             </div>
             <div className="recruit-contact-item">
               <span className="recruit-contact-icon">📅</span>
@@ -596,8 +772,67 @@ const RecruitDetail = () => {
           )}
         </div>
 
-        {/* Right Column - Notes */}
+        {/* Right Column - Quick Actions + Notes */}
         <div className="recruit-body-section recruit-notes-section">
+          {/* Quick Actions */}
+          <div className="recruit-quick-actions">
+            <div className="recruit-section-header">
+              <h3>Quick Actions</h3>
+            </div>
+            <div className="recruit-quick-actions-grid">
+              <button
+                className="recruit-quick-action-btn"
+                onClick={handleClickToCall}
+                disabled={!candidate.phone || isCallInProgress}
+              >
+                <span className="recruit-quick-action-icon">📞</span>
+                <span>{isCallInProgress ? 'Calling...' : 'Call'}</span>
+              </button>
+              <button
+                className="recruit-quick-action-btn"
+                onClick={() => window.open(`mailto:${candidate.email}`, '_blank')}
+                disabled={!candidate.email}
+              >
+                <span className="recruit-quick-action-icon">✉️</span>
+                <span>Email</span>
+              </button>
+              <button
+                className="recruit-quick-action-btn"
+                onClick={() => {
+                  // TODO: Open schedule interview modal
+                  alert('Schedule Interview feature coming soon');
+                }}
+              >
+                <span className="recruit-quick-action-icon">📅</span>
+                <span>Schedule Interview</span>
+              </button>
+              <button
+                className="recruit-quick-action-btn"
+                onClick={() => handleStatusChange('offer')}
+                disabled={candidate.status === 'offer' || candidate.status === 'hired'}
+              >
+                <span className="recruit-quick-action-icon">📝</span>
+                <span>Make Offer</span>
+              </button>
+              <button
+                className="recruit-quick-action-btn recruit-quick-action-danger"
+                onClick={() => handleStatusChange('rejected')}
+                disabled={candidate.status === 'rejected' || candidate.status === 'hired'}
+              >
+                <span className="recruit-quick-action-icon">❌</span>
+                <span>Reject</span>
+              </button>
+              <button
+                className="recruit-quick-action-btn"
+                onClick={() => handleStatusChange('hired')}
+                disabled={candidate.status === 'hired'}
+              >
+                <span className="recruit-quick-action-icon">✅</span>
+                <span>Mark Hired</span>
+              </button>
+            </div>
+          </div>
+
           <div className="recruit-section-header">
             <h3>Notes & Activity</h3>
           </div>
@@ -954,6 +1189,109 @@ const RecruitDetail = () => {
           </div>
         </div>
       )}
+
+      {/* Assessment Quiz Modal */}
+      <AssessmentQuizModal
+        isOpen={showQuizModal}
+        onClose={handleQuizClose}
+        candidateId={parseInt(candidateId)}
+        candidateName={`${candidate?.first_name || ''} ${candidate?.last_name || ''}`}
+        disposition={pendingStatusChange}
+        onQuizComplete={handleQuizComplete}
+      />
+
+      {/* Call Notes Modal */}
+      {showCallNotesModal && (
+        <CallNotesModal
+          candidateName={`${candidate?.first_name || ''} ${candidate?.last_name || ''}`}
+          onSave={handleSaveCallNotes}
+          onClose={() => {
+            setShowCallNotesModal(false);
+            setActiveCallId(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Call Notes Modal Component
+const CallNotesModal = ({ candidateName, onSave, onClose }) => {
+  const [note, setNote] = useState('');
+  const [outcome, setOutcome] = useState('answered');
+  const [callbackRequested, setCallbackRequested] = useState(false);
+  const [callbackDate, setCallbackDate] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(note, outcome, callbackRequested, callbackDate);
+  };
+
+  return (
+    <div className="call-notes-modal" onClick={onClose}>
+      <div className="call-notes-content" onClick={e => e.stopPropagation()}>
+        <h3>Call with {candidateName}</h3>
+        <form className="call-notes-form" onSubmit={handleSubmit}>
+          <div>
+            <label>Call Outcome</label>
+            <select value={outcome} onChange={e => setOutcome(e.target.value)}>
+              <option value="answered">Answered - Spoke with candidate</option>
+              <option value="voicemail">Left Voicemail</option>
+              <option value="no_answer">No Answer</option>
+              <option value="busy">Busy</option>
+              <option value="callback">Callback Requested</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Notes</label>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Enter call notes..."
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="checkbox"
+              id="callbackRequested"
+              checked={callbackRequested}
+              onChange={e => setCallbackRequested(e.target.checked)}
+            />
+            <label htmlFor="callbackRequested" style={{ margin: 0, cursor: 'pointer' }}>
+              Schedule callback
+            </label>
+          </div>
+
+          {callbackRequested && (
+            <div>
+              <label>Callback Date & Time</label>
+              <input
+                type="datetime-local"
+                value={callbackDate}
+                onChange={e => setCallbackDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          )}
+
+          <div className="call-notes-actions">
+            <button type="button" className="mm-btn mm-btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="mm-btn mm-btn-primary">
+              Save Notes
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

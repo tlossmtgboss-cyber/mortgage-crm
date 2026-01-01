@@ -1,21 +1,34 @@
 """
 Recruit Portal Routes
 Public-facing API endpoints for candidates to view their application status.
+Includes:
+- Portal access and token management
+- AI chat interaction
+- Production impact calculator
+- Company updates/propaganda
+- Appointment scheduling
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
 from database import get_db
 import secrets
 import logging
 
+from services.recruit_portal_service import RecruitPortalService
+from models.recruit_portal_models import (
+    ChatRequest, ChatResponse, AppointmentCreate, Appointment,
+    CalculatorInput, CalculatorResult, PortalData, CompanyUpdate
+)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/recruit-portal", tags=["recruit-portal"])
+portal_service = RecruitPortalService()
 
 
 # =============================================================================
@@ -352,3 +365,335 @@ async def add_portal_columns(
         "added": added,
         "skipped": skipped
     }
+
+
+# =============================================================================
+# ENHANCED PORTAL FEATURES - PURL Portal v2
+# =============================================================================
+
+@router.get("/purl/{slug}")
+async def get_purl_portal_data(
+    slug: str,
+    token: Optional[str] = Query(None, description="Portal access token"),
+    db: Session = Depends(get_db)
+):
+    """Get PURL portal data for candidate including calculator config and company info."""
+    try:
+        portal_data = portal_service.get_portal_by_slug(slug, token)
+        if not portal_data:
+            raise HTTPException(status_code=404, detail="Portal not found")
+        return portal_data
+    except Exception as e:
+        logger.error(f"Error getting portal data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/purl/{slug}/updates")
+async def get_purl_company_updates(
+    slug: str,
+    category: Optional[str] = None,
+    limit: int = Query(10, le=50),
+    db: Session = Depends(get_db)
+):
+    """Get company updates/propaganda for the PURL portal."""
+    try:
+        updates = portal_service.get_company_updates(category=category, limit=limit)
+        return {"updates": updates}
+    except Exception as e:
+        logger.error(f"Error getting company updates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/purl/{slug}/chat", response_model=ChatResponse)
+async def purl_chat_with_assistant(
+    slug: str,
+    request: ChatRequest,
+    db: Session = Depends(get_db)
+):
+    """AI chat interaction for candidate questions on PURL portal."""
+    try:
+        portal_data = portal_service.get_portal_by_slug(slug)
+        if not portal_data:
+            raise HTTPException(status_code=404, detail="Portal not found")
+
+        response = await portal_service.chat_with_assistant(
+            workspace_id=portal_data.workspace_id,
+            message=request.message,
+            context=request.context
+        )
+        return ChatResponse(response=response, metadata={"timestamp": datetime.now().isoformat()})
+    except Exception as e:
+        logger.error(f"Error in chat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/purl/{slug}/availability")
+async def get_purl_availability(
+    slug: str,
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    duration_minutes: int = Query(30, description="Meeting duration"),
+    db: Session = Depends(get_db)
+):
+    """Get available time slots for scheduling on PURL portal."""
+    try:
+        portal_data = portal_service.get_portal_by_slug(slug)
+        if not portal_data:
+            raise HTTPException(status_code=404, detail="Portal not found")
+
+        slots = portal_service.get_availability(
+            workspace_id=portal_data.workspace_id,
+            date=date,
+            duration_minutes=duration_minutes
+        )
+        return {"date": date, "duration_minutes": duration_minutes, "slots": slots}
+    except Exception as e:
+        logger.error(f"Error getting availability: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/purl/{slug}/schedule", response_model=Appointment)
+async def schedule_purl_appointment(
+    slug: str,
+    appointment: AppointmentCreate,
+    db: Session = Depends(get_db)
+):
+    """Book an appointment through the PURL portal."""
+    try:
+        portal_data = portal_service.get_portal_by_slug(slug)
+        if not portal_data:
+            raise HTTPException(status_code=404, detail="Portal not found")
+
+        created = portal_service.schedule_appointment(
+            workspace_id=portal_data.workspace_id,
+            appointment_data=appointment
+        )
+        return created
+    except Exception as e:
+        logger.error(f"Error scheduling appointment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/purl/{slug}/calculator", response_model=CalculatorResult)
+async def calculate_purl_production_impact(
+    slug: str,
+    input_data: CalculatorInput,
+    db: Session = Depends(get_db)
+):
+    """Calculate production impact if candidate joins the company."""
+    try:
+        result = portal_service.calculate_production_impact(input_data)
+        return result
+    except Exception as e:
+        logger.error(f"Error calculating production impact: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/purl/{slug}/chat-history")
+async def get_purl_chat_history(
+    slug: str,
+    limit: int = Query(50, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get chat message history for the PURL portal."""
+    try:
+        portal_data = portal_service.get_portal_by_slug(slug)
+        if not portal_data:
+            raise HTTPException(status_code=404, detail="Portal not found")
+
+        messages = portal_service.get_chat_history(
+            workspace_id=portal_data.workspace_id,
+            limit=limit
+        )
+        return {"messages": messages}
+    except Exception as e:
+        logger.error(f"Error getting chat history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# ADMIN PORTAL MANAGEMENT
+# =============================================================================
+
+@router.post("/admin/workspaces")
+async def create_purl_portal_workspace(
+    candidate_id: int,
+    slug: Optional[str] = None,
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Create a PURL portal workspace for a candidate (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        workspace = portal_service.create_portal_workspace(
+            candidate_id=candidate_id,
+            slug=slug
+        )
+        return workspace
+    except Exception as e:
+        logger.error(f"Error creating workspace: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/workspaces")
+async def list_purl_portal_workspaces(
+    admin_key: str = Query(...),
+    limit: int = Query(50, le=100),
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """List all PURL portal workspaces (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        workspaces = portal_service.list_workspaces(limit=limit, offset=offset)
+        return {"workspaces": workspaces, "limit": limit, "offset": offset}
+    except Exception as e:
+        logger.error(f"Error listing workspaces: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/workspaces/{workspace_id}/tokens")
+async def create_purl_portal_token(
+    workspace_id: int,
+    scope: str = "full",
+    expires_days: Optional[int] = None,
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Create an access token for a PURL portal workspace."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        token = portal_service.create_portal_token(
+            workspace_id=workspace_id,
+            scope=scope,
+            expires_days=expires_days
+        )
+        return token
+    except Exception as e:
+        logger.error(f"Error creating token: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CompanyUpdateCreate(BaseModel):
+    title: str
+    content: str
+    media_url: Optional[str] = None
+    category: str = "news"
+    is_featured: bool = False
+
+
+@router.post("/admin/updates")
+async def create_purl_company_update(
+    update: CompanyUpdateCreate,
+    admin_key: str = Query(...),
+    created_by: int = 1,
+    db: Session = Depends(get_db)
+):
+    """Create a company update/propaganda post (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        created = portal_service.create_company_update(
+            title=update.title,
+            content=update.content,
+            media_url=update.media_url,
+            category=update.category,
+            is_featured=update.is_featured,
+            created_by=created_by
+        )
+        return created
+    except Exception as e:
+        logger.error(f"Error creating update: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/updates")
+async def list_purl_company_updates(
+    admin_key: str = Query(...),
+    category: Optional[str] = None,
+    limit: int = Query(50, le=100),
+    db: Session = Depends(get_db)
+):
+    """List company updates (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        updates = portal_service.get_company_updates(category=category, limit=limit)
+        return {"updates": updates}
+    except Exception as e:
+        logger.error(f"Error listing updates: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/admin/updates/{update_id}")
+async def delete_purl_company_update(
+    update_id: int,
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Delete a company update (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        portal_service.delete_company_update(update_id)
+        return {"status": "deleted", "id": update_id}
+    except Exception as e:
+        logger.error(f"Error deleting update: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CalculatorConfigUpdate(BaseModel):
+    lead_conversion_lift: Optional[float] = None
+    avg_deal_size_lift: Optional[float] = None
+    closing_speed_factor: Optional[float] = None
+    tech_efficiency_gain: Optional[float] = None
+    marketing_lead_boost: Optional[float] = None
+    comp_percentage: Optional[float] = None
+
+
+@router.put("/admin/calculator-config")
+async def update_purl_calculator_config(
+    config: CalculatorConfigUpdate,
+    admin_key: str = Query(...),
+    organization_id: int = 1,
+    db: Session = Depends(get_db)
+):
+    """Update production calculator configuration (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        updated = portal_service.update_calculator_config(
+            organization_id=organization_id,
+            **config.dict(exclude_unset=True)
+        )
+        return updated
+    except Exception as e:
+        logger.error(f"Error updating calculator config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/calculator-config")
+async def get_purl_calculator_config(
+    admin_key: str = Query(...),
+    organization_id: int = 1,
+    db: Session = Depends(get_db)
+):
+    """Get production calculator configuration."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        config = portal_service.get_calculator_config(organization_id)
+        return config
+    except Exception as e:
+        logger.error(f"Error getting calculator config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
