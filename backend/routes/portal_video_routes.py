@@ -256,12 +256,13 @@ async def get_client_portal_videos(
 ):
     """Get videos for a client portal workspace."""
     try:
-        # Get workspace
+        # Get workspace with primary borrower contact
         result = db.execute(text("""
-            SELECT w.id, w.lead_id, l.first_name, l.last_name
+            SELECT w.id, w.display_name,
+                   c.first_name, c.last_name
             FROM purl_workspaces w
-            JOIN leads l ON l.id = w.lead_id
-            WHERE w.slug = :slug AND w.is_active = true
+            LEFT JOIN purl_contacts c ON c.workspace_id = w.id AND c.contact_type = 'borrower'
+            WHERE w.slug = :slug
         """), {"slug": slug})
 
         workspace = result.fetchone()
@@ -307,8 +308,14 @@ async def get_client_portal_videos(
                 "is_new": row.viewed_at is None
             })
 
+        # Build borrower name from contact or fallback to display_name
+        if workspace.first_name and workspace.last_name:
+            borrower_name = f"{workspace.first_name} {workspace.last_name}"
+        else:
+            borrower_name = workspace.display_name or "Client"
+
         return {
-            "borrower_name": f"{workspace.first_name} {workspace.last_name}",
+            "borrower_name": borrower_name,
             "videos": videos,
             "count": len(videos)
         }
