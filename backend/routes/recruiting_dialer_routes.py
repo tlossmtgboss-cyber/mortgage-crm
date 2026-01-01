@@ -361,7 +361,6 @@ async def get_recruiting_dialer_queue(
                        rt.description as task_description, rt.due_date, rt.priority,
                        rc.first_name, rc.last_name, rc.phone, rc.email,
                        rc.status as candidate_status, rc.current_company,
-                       rc.overall_grade as overall_score,
                        (SELECT COUNT(*) FROM recruiting_call_history
                         WHERE candidate_id = rc.id) as total_calls,
                        (SELECT called_at FROM recruiting_call_history
@@ -394,7 +393,6 @@ async def get_recruiting_dialer_queue(
             "email": row.email,
             "candidate_status": row.candidate_status,
             "current_company": row.current_company,
-            "overall_score": float(row.overall_score) if row.overall_score else None,
             "task_title": row.task_title,
             "task_description": row.task_description,
             "due_date": row.due_date.isoformat() if row.due_date else None,
