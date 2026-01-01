@@ -161,7 +161,7 @@ async def list_transactions(
         for row in result.fetchall()
     ]
 
-    return success_response({"transactions": transactions})
+    return success_response("Transactions retrieved successfully", {"transactions": transactions})
 
 
 @router.get("/transactions/{transaction_id}")
