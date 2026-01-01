@@ -864,10 +864,10 @@ const RecruitDetail = () => {
               </button>
               <button
                 className="recruit-quick-action-btn"
-                onClick={() => handleStatusChange('offer')}
-                disabled={candidate.status === 'offer' || candidate.status === 'hired'}
+                onClick={() => window.open(`sms:${candidate.phone}`, '_blank')}
+                disabled={!candidate.phone}
               >
-                📝 Offer
+                💬 SMS
               </button>
               <button
                 className="recruit-quick-action-btn"
@@ -878,16 +878,15 @@ const RecruitDetail = () => {
               </button>
               <button
                 className="recruit-quick-action-btn"
-                onClick={() => handleStatusChange('hired')}
-                disabled={candidate.status === 'hired'}
-              >
-                ✅ Hired
-              </button>
-              <button
-                className="recruit-quick-action-btn"
                 onClick={() => setShowEscalateModal(true)}
               >
                 ⚠️ Escalate
+              </button>
+              <button
+                className="recruit-quick-action-btn recruit-portal-btn"
+                onClick={() => window.open(`/recruit/${candidate.purl_slug || `candidate-${candidate.id}`}`, '_blank')}
+              >
+                👁️ View Portal
               </button>
             </div>
           </div>

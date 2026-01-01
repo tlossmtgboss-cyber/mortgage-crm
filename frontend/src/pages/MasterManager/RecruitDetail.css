@@ -1150,6 +1150,16 @@
   cursor: not-allowed;
 }
 
+.recruit-quick-action-btn.recruit-portal-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border-color: #8b5cf6;
+}
+
+.recruit-quick-action-btn.recruit-portal-btn:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  border-color: #7c3aed;
+}
+
 /* Escalate Modal */
 .modal-overlay {
   position: fixed;
