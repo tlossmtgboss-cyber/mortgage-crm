@@ -367,6 +367,102 @@ async def add_portal_columns(
     }
 
 
+@router.post("/admin/create-portal-tables")
+async def create_portal_tables(
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Create PURL portal tables."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS recruit_portal_workspaces (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL UNIQUE,
+                slug VARCHAR(100) UNIQUE NOT NULL,
+                is_active BOOLEAN DEFAULT true,
+                theme_config JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_portal_workspaces_slug
+                ON recruit_portal_workspaces(slug) WHERE is_active = true;
+
+            CREATE TABLE IF NOT EXISTS recruit_portal_tokens (
+                id SERIAL PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                token VARCHAR(100) UNIQUE NOT NULL,
+                scope VARCHAR(20) DEFAULT 'full',
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_portal_tokens_token
+                ON recruit_portal_tokens(token);
+
+            CREATE TABLE IF NOT EXISTS recruit_company_updates (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(200) NOT NULL,
+                content TEXT NOT NULL,
+                media_url TEXT,
+                category VARCHAR(50) DEFAULT 'news',
+                is_featured BOOLEAN DEFAULT false,
+                is_active BOOLEAN DEFAULT true,
+                published_at TIMESTAMP DEFAULT NOW(),
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_company_updates_category
+                ON recruit_company_updates(category, is_active) WHERE is_active = true;
+
+            CREATE TABLE IF NOT EXISTS recruit_portal_messages (
+                id SERIAL PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                role VARCHAR(20) NOT NULL,
+                content TEXT NOT NULL,
+                metadata JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_portal_messages_workspace
+                ON recruit_portal_messages(workspace_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS recruit_portal_appointments (
+                id SERIAL PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                appointment_type VARCHAR(50) NOT NULL,
+                scheduled_at TIMESTAMP NOT NULL,
+                duration_minutes INTEGER DEFAULT 30,
+                notes TEXT,
+                status VARCHAR(20) DEFAULT 'scheduled',
+                recruiter_id INTEGER,
+                calendar_event_id VARCHAR(100),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_portal_appointments_workspace
+                ON recruit_portal_appointments(workspace_id);
+
+            -- Seed sample company updates
+            INSERT INTO recruit_company_updates (title, content, category, is_featured)
+            SELECT 'Welcome to Perennia!',
+                   'We are excited you are considering joining our team. At Perennia, we provide loan officers with cutting-edge technology, superior leads, and unmatched support to help you close more loans.',
+                   'welcome', true
+            WHERE NOT EXISTS (SELECT 1 FROM recruit_company_updates WHERE category = 'welcome' LIMIT 1);
+        """))
+        db.commit()
+
+        return {"status": "success", "message": "Portal tables created successfully"}
+    except Exception as e:
+        logger.error(f"Error creating portal tables: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # ENHANCED PORTAL FEATURES - PURL Portal v2
 # =============================================================================
