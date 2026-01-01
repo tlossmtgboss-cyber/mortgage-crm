@@ -685,14 +685,24 @@ async def schedule_interview(
     current_user: User = Depends(get_current_user)
 ):
     """Schedule an interview for a candidate."""
-    service = RecruitingService(db)
-    result = await service.schedule_interview(
-        candidate_id=candidate_id,
-        data=data.model_dump(),
-        created_by=current_user.id,
-        organization_id=organization_id or current_user.organization_id
-    )
-    return result
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        logger.info(f"Scheduling interview for candidate {candidate_id} by user {current_user.id}")
+        logger.info(f"Interview data: {data.model_dump()}")
+
+        service = RecruitingService(db)
+        result = await service.schedule_interview(
+            candidate_id=candidate_id,
+            data=data.model_dump(),
+            created_by=current_user.id,
+            organization_id=organization_id or current_user.organization_id
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to schedule interview: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to schedule interview: {str(e)}")
 
 
 @router.post("/interviews/{interview_id}/feedback")
