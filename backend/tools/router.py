@@ -25,6 +25,69 @@ from .registry import get_registry, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+
+async def get_user_from_request(request: Request) -> Optional[Dict[str, Any]]:
+    """
+    Extract user information from request Authorization header.
+
+    Returns dict with user info or None if not authenticated.
+    """
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+
+        from jose import jwt
+        import os
+
+        secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+
+        # Extract user info from token
+        user_email = payload.get("sub")
+        user_id = payload.get("user_id")
+
+        # If we have user_id, try to look up user from database
+        if user_id or user_email:
+            try:
+                from main import SessionLocal, User
+                db = SessionLocal()
+                try:
+                    if user_id:
+                        user = db.query(User).filter(User.id == int(user_id)).first()
+                    elif user_email:
+                        user = db.query(User).filter(User.email == user_email).first()
+                    else:
+                        user = None
+
+                    if user:
+                        return {
+                            "id": user.id,
+                            "email": user.email,
+                            "name": getattr(user, 'full_name', None) or getattr(user, 'name', user.email),
+                            "role": getattr(user, 'role', None),
+                            "organization_id": getattr(user, 'organization_id', None)
+                        }
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"Failed to lookup user from DB: {e}")
+
+        # Fallback to just token info
+        return {
+            "id": user_id,
+            "email": user_email,
+            "name": user_email,
+            "role": payload.get("role"),
+            "organization_id": payload.get("organization_id")
+        }
+
+    except Exception as e:
+        logger.debug(f"Failed to extract user from request: {e}")
+        return None
+
 router = APIRouter(prefix="/api/tools", tags=["AI Tools"])
 
 
@@ -355,17 +418,54 @@ async def handle_create_task(args: Dict[str, Any], request: Request) -> Dict[str
     if not title:
         return {"success": False, "error": "Title is required"}
 
-    # TODO: Get user from request auth
-    # For now, return success with placeholder
-    return {
-        "success": True,
-        "data": {
-            "task_id": None,  # Will be set when integrated with DB
-            "title": title,
-            "status": "pending",
-            "message": "Task creation delegated to main handler"
+    # Get user from request auth
+    user = await get_user_from_request(request)
+    if not user:
+        return {"success": False, "error": "Authentication required"}
+
+    try:
+        from main import SessionLocal, Task
+        from datetime import datetime
+
+        db = SessionLocal()
+        try:
+            # Create the task
+            task = Task(
+                title=title,
+                description=description,
+                priority=priority,
+                status='pending',
+                created_by_id=user.get('id'),
+                assigned_to_id=user.get('id'),  # Default assign to creator
+                lead_id=int(lead_id) if lead_id else None,
+                loan_id=int(loan_id) if loan_id else None,
+                due_date=datetime.fromisoformat(due_date) if due_date else None,
+                created_at=datetime.utcnow()
+            )
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+
+            return {
+                "success": True,
+                "data": {
+                    "task_id": task.id,
+                    "title": task.title,
+                    "status": task.status,
+                    "priority": task.priority,
+                    "created_by": user.get('email'),
+                    "message": "Task created successfully"
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Failed to create task: {e}")
+        return {
+            "success": False,
+            "error": f"Failed to create task: {str(e)}"
         }
-    }
 
 
 @register_tool_handler("get_pipeline")
