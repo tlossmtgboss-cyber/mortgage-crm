@@ -721,17 +721,42 @@ Be thorough but objective. Base scores only on available evidence. If data is li
         Apply AI-suggested scores to the candidate's assessment.
 
         Optionally select which categories to apply.
+        Also calculates grades and overall score.
         """
         from sqlalchemy import text
+        from services.candidate_grading_service import (
+            CandidateGradingService,
+            WEIGHT_PRODUCTION, WEIGHT_DISC, WEIGHT_CHARACTER, WEIGHT_SKILLS, WEIGHT_CULTURE_FIT
+        )
 
         updates = []
         params = {"candidate_id": candidate_id}
 
+        # Track scores for overall calculation
+        scores = {
+            "production": None,
+            "disc": None,
+            "character": None,
+            "skills": None,
+            "culture_fit": None
+        }
+
         if apply_production and analysis.production_suggestion:
-            updates.append("production_score = :prod_score")
-            params["prod_score"] = analysis.production_suggestion.suggested_score
+            score = analysis.production_suggestion.suggested_score
+            grade = CandidateGradingService.get_grade_from_score(score)
+            updates.extend([
+                "production_score = :prod_score",
+                "production_grade = :prod_grade"
+            ])
+            params["prod_score"] = score
+            params["prod_grade"] = grade
+            scores["production"] = score
 
         if apply_disc and analysis.disc_inference:
+            disc = analysis.disc_inference
+            # Calculate composite using LO weights: I=40%, D=30%, S=15%, C=15%
+            composite = (disc.i_score * 0.40) + (disc.d_score * 0.30) + (disc.s_score * 0.15) + (disc.c_score * 0.15)
+            grade = CandidateGradingService.get_grade_from_score(composite)
             updates.extend([
                 "disc_d_score = :d_score",
                 "disc_i_score = :i_score",
@@ -740,11 +765,9 @@ Be thorough but objective. Base scores only on available evidence. If data is li
                 "disc_primary_style = :primary_style",
                 "disc_secondary_style = :secondary_style",
                 "disc_composite_score = :disc_composite",
+                "disc_grade = :disc_grade",
                 "disc_assessment_source = 'ai_inferred'"
             ])
-            disc = analysis.disc_inference
-            # Calculate composite using LO weights: I=40%, D=30%, S=15%, C=15%
-            composite = (disc.i_score * 0.40) + (disc.d_score * 0.30) + (disc.s_score * 0.15) + (disc.c_score * 0.15)
             params.update({
                 "d_score": disc.d_score,
                 "i_score": disc.i_score,
@@ -752,25 +775,69 @@ Be thorough but objective. Base scores only on available evidence. If data is li
                 "c_score": disc.c_score,
                 "primary_style": disc.primary_style,
                 "secondary_style": disc.secondary_style,
-                "disc_composite": composite
+                "disc_composite": composite,
+                "disc_grade": grade
             })
+            scores["disc"] = composite
 
         if apply_character and analysis.character_suggestion:
-            updates.append("character_score = :char_score")
-            params["char_score"] = analysis.character_suggestion.suggested_score
+            score = analysis.character_suggestion.suggested_score
+            grade = CandidateGradingService.get_grade_from_score(score)
+            updates.extend([
+                "character_score = :char_score",
+                "character_grade = :char_grade"
+            ])
+            params["char_score"] = score
+            params["char_grade"] = grade
+            scores["character"] = score
 
         if apply_skills and analysis.skills_suggestion:
-            updates.append("skills_score = :skills_score")
-            params["skills_score"] = analysis.skills_suggestion.suggested_score
+            score = analysis.skills_suggestion.suggested_score
+            grade = CandidateGradingService.get_grade_from_score(score)
+            updates.extend([
+                "skills_score = :skills_score",
+                "skills_grade = :skills_grade"
+            ])
+            params["skills_score"] = score
+            params["skills_grade"] = grade
+            scores["skills"] = score
 
         if apply_culture and analysis.culture_fit_suggestion:
-            updates.append("culture_fit_score = :culture_score")
-            params["culture_score"] = analysis.culture_fit_suggestion.suggested_score
+            score = analysis.culture_fit_suggestion.suggested_score
+            grade = CandidateGradingService.get_grade_from_score(score)
+            updates.extend([
+                "culture_fit_score = :culture_score",
+                "culture_fit_grade = :culture_grade"
+            ])
+            params["culture_score"] = score
+            params["culture_grade"] = grade
+            scores["culture_fit"] = score
 
         if not updates:
             return {"applied": False, "message": "No suggestions to apply"}
 
-        updates.append("updated_at = CURRENT_TIMESTAMP")
+        # Calculate overall score using category weights
+        overall_score = (
+            (scores["production"] or 0) * WEIGHT_PRODUCTION +
+            (scores["disc"] or 0) * WEIGHT_DISC +
+            (scores["character"] or 0) * WEIGHT_CHARACTER +
+            (scores["skills"] or 0) * WEIGHT_SKILLS +
+            (scores["culture_fit"] or 0) * WEIGHT_CULTURE_FIT
+        )
+        overall_grade = CandidateGradingService.get_grade_from_score(overall_score)
+
+        updates.extend([
+            "overall_score = :overall_score",
+            "overall_grade = :overall_grade",
+            "assessed_at = COALESCE(assessed_at, CURRENT_TIMESTAMP)",
+            "updated_at = CURRENT_TIMESTAMP"
+        ])
+        params["overall_score"] = round(overall_score, 1)
+        params["overall_grade"] = overall_grade
+
+        if applied_by:
+            updates.append("assessed_by = :assessed_by")
+            params["assessed_by"] = applied_by
 
         self.db.execute(text(f"""
             UPDATE mm_candidate_assessments
@@ -790,5 +857,7 @@ Be thorough but objective. Base scores only on available evidence. If data is li
                     ("skills", apply_skills),
                     ("culture_fit", apply_culture)
                 ] if apply
-            ]
+            ],
+            "overall_score": round(overall_score, 1),
+            "overall_grade": overall_grade
         }

@@ -1072,7 +1072,9 @@ async def apply_ai_suggestions(
         return {
             "success": result["applied"],
             "message": "AI suggestions applied successfully" if result["applied"] else result.get("message"),
-            "categories_updated": result.get("categories_updated", [])
+            "categories_updated": result.get("categories_updated", []),
+            "overall_score": result.get("overall_score"),
+            "overall_grade": result.get("overall_grade")
         }
 
     except HTTPException:
