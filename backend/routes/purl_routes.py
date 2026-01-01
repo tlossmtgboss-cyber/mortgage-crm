@@ -1403,6 +1403,17 @@ async def get_workspace_by_lead(
         )
     ).first()
 
+    # If not found by metadata, try finding via purl_loans.main_loan_id
+    if not workspace:
+        purl_loan = db.query(PURLLoan).filter(
+            PURLLoan.organization_id == org_id,
+            PURLLoan.main_loan_id == int(lead_id) if lead_id.isdigit() else None
+        ).first()
+        if purl_loan:
+            workspace = db.query(PURLWorkspace).filter(
+                PURLWorkspace.id == purl_loan.workspace_id
+            ).first()
+
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found for this lead")
 

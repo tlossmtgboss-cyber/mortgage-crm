@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { loansAPI, activitiesAPI, schedulerAPI } from '../services/api';
+import { toast } from '../utils/toast';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -49,7 +50,7 @@ function ClientProfile() {
   const [editing, setEditing] = useState(true); // Always in edit mode
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
-  const [activeTab, setActiveTab] = useState('personal');
+  const [activeTab, setActiveTab] = useState('loan-details');
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [borrowers, setBorrowers] = useState([]);
@@ -598,17 +599,20 @@ function ClientProfile() {
       case 'calendar':
         setShowScheduleModal(true);
         break;
-      case 'teams':
+      case 'video':
         setShowTeamsModal(true);
-        break;
-      case 'record':
-        setShowRecordingModal(true);
         break;
       case 'voicemail':
         setShowVoicemailDrop(true);
         break;
-      case 'voice':
-        handleVoiceCommand();
+      case 'send_application':
+        toast.info('Application link feature - coming soon');
+        break;
+      case 'client_portal':
+        toast.info('Portal access feature - coming soon');
+        break;
+      case 'escalation':
+        toast.info('Escalation feature - coming soon');
         break;
       default:
         break;
@@ -843,34 +847,28 @@ function ClientProfile() {
       {/* Tab Navigation */}
       <div className="profile-tabs">
         <button
+          className={`tab-btn ${activeTab === 'loan-details' ? 'active' : ''}`}
+          onClick={() => setActiveTab('loan-details')}
+        >
+          Loan Details
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
           onClick={() => setActiveTab('personal')}
         >
           Personal
         </button>
         <button
-          className={`tab-btn ${activeTab === 'employment' ? 'active' : ''}`}
-          onClick={() => setActiveTab('employment')}
-        >
-          Employment
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
-          onClick={() => setActiveTab('income')}
-        >
-          Income
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
-          Loan
+          Property
         </button>
         <button
-          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
-          onClick={() => setActiveTab('team')}
+          className={`tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tasks')}
         >
-          Team Members
+          Tasks
         </button>
         <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
@@ -885,28 +883,147 @@ function ClientProfile() {
           Circle
         </button>
         <button
+          className={`tab-btn ${activeTab === 'smart-docs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('smart-docs')}
+        >
+          Smart Docs
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'income' ? 'active' : ''}`}
+          onClick={() => setActiveTab('income')}
+        >
+          Income
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
           onClick={() => setActiveTab('documents')}
         >
-          Documents
+          Conditions
         </button>
         <button
           className={`tab-btn ${activeTab === 'important-dates' ? 'active' : ''}`}
           onClick={() => setActiveTab('important-dates')}
         >
-          Important Dates
+          SLA Dates
         </button>
         <button
-          className={`tab-btn ${activeTab === 'milestones' ? 'active' : ''}`}
-          onClick={() => setActiveTab('milestones')}
+          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+          onClick={() => setActiveTab('team')}
         >
-          Milestones
+          Team Members
         </button>
       </div>
 
       <div className="detail-content">
         {/* Left Column - Lead Information */}
         <div className="left-column">
+          {/* Loan Details Tab */}
+          {activeTab === 'loan-details' && (
+          <div className="info-section">
+            <h2>Loan Details</h2>
+            <div className="info-grid">
+              <div className="info-field">
+                <label>Loan Number</label>
+                <input
+                  type="text"
+                  value={formData.loan_number || client?.loan_number || ''}
+                  onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+                  placeholder="Enter loan number"
+                />
+              </div>
+              <div className="info-field">
+                <label>Loan Amount</label>
+                <input
+                  type="number"
+                  value={formData.loan_amount || formData.amount || ''}
+                  onChange={(e) => handleFieldChange('loan_amount', e.target.value)}
+                  placeholder="$"
+                />
+              </div>
+              <div className="info-field">
+                <label>Loan Type</label>
+                <select
+                  value={formData.loan_type || ''}
+                  onChange={(e) => handleFieldChange('loan_type', e.target.value)}
+                >
+                  <option value="">Select Type</option>
+                  <option value="Conventional">Conventional</option>
+                  <option value="FHA">FHA</option>
+                  <option value="VA">VA</option>
+                  <option value="USDA">USDA</option>
+                  <option value="Jumbo">Jumbo</option>
+                </select>
+              </div>
+              <div className="info-field">
+                <label>Loan Purpose</label>
+                <select
+                  value={formData.loan_purpose || ''}
+                  onChange={(e) => handleFieldChange('loan_purpose', e.target.value)}
+                >
+                  <option value="">Select Purpose</option>
+                  <option value="Purchase">Purchase</option>
+                  <option value="Refinance">Refinance</option>
+                  <option value="Cash Out">Cash Out Refinance</option>
+                </select>
+              </div>
+              <div className="info-field">
+                <label>Interest Rate</label>
+                <input
+                  type="text"
+                  value={formData.interest_rate || ''}
+                  onChange={(e) => handleFieldChange('interest_rate', e.target.value)}
+                  placeholder="%"
+                />
+              </div>
+              <div className="info-field">
+                <label>Loan Term</label>
+                <select
+                  value={formData.loan_term || ''}
+                  onChange={(e) => handleFieldChange('loan_term', e.target.value)}
+                >
+                  <option value="">Select Term</option>
+                  <option value="30">30 Years</option>
+                  <option value="20">20 Years</option>
+                  <option value="15">15 Years</option>
+                  <option value="10">10 Years</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Tasks Tab */}
+          {activeTab === 'tasks' && (
+          <div className="info-section">
+            <h2>Tasks</h2>
+            <p style={{ color: '#6b7280', marginBottom: '1rem' }}>View and manage tasks for this client.</p>
+            <button
+              onClick={() => navigate('/tasks')}
+              style={{
+                background: '#218D8D',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '10px 20px',
+                cursor: 'pointer'
+              }}
+            >
+              Open Task Manager
+            </button>
+          </div>
+          )}
+
+          {/* Smart Docs Tab */}
+          {activeTab === 'smart-docs' && (
+          <div className="info-section">
+            <h2>Smart Documents</h2>
+            <NeedsListView
+              borrowerId={client?.id}
+              loanId={client?.loan_id || client?.id}
+            />
+          </div>
+          )}
+
           {/* Personal Information Tab */}
           {activeTab === 'personal' && (
           <div className="info-section">
@@ -1801,80 +1918,37 @@ function ClientProfile() {
 
           {/* Action Buttons */}
           <div className="actions-card">
-            <h3>Quick Actions</h3>
+            <h3>QUICK ACTIONS</h3>
             <div className="action-buttons">
-              <button
-                className="action-btn call"
-                onClick={() => handleAction('call')}
-                disabled={!(client.borrower_phone || client.phone)}
-                title="Click to call using your phone"
-              >
-                <span className="icon">📞</span>
+              <button className="action-btn call" onClick={() => handleAction('call')} disabled={!(client.borrower_phone || client.phone)} title="Click to call">
                 <span>Call</span>
               </button>
-              <button
-                className="action-btn sms"
-                onClick={() => handleAction('sms')}
-                disabled={!(client.borrower_phone || client.phone)}
-                title="Send SMS using your phone"
-              >
-                <span className="icon">💬</span>
+              <button className="action-btn sms" onClick={() => handleAction('sms')} disabled={!(client.borrower_phone || client.phone)} title="Send SMS">
                 <span>SMS Text</span>
               </button>
-              <button
-                className="action-btn email"
-                onClick={() => handleAction('email')}
-                disabled={!(client.borrower_email || client.email)}
-              >
-                <span className="icon">✉️</span>
+              <button className="action-btn email" onClick={() => handleAction('email')} disabled={!(client.borrower_email || client.email)} title="Send email">
                 <span>Send Email</span>
               </button>
-              <button
-                className="action-btn task"
-                onClick={() => handleAction('task')}
-              >
-                <span className="icon">✓</span>
+              <button className="action-btn task" onClick={() => handleAction('task')} title="Create task">
                 <span>Create Task</span>
               </button>
-              <button
-                className="action-btn calendar"
-                onClick={() => handleAction('calendar')}
-              >
-                <span className="icon">📅</span>
+              <button className="action-btn calendar" onClick={() => handleAction('calendar')} title="Set appointment">
                 <span>Set Appointment</span>
               </button>
-              <button
-                className="action-btn teams"
-                onClick={() => handleAction('teams')}
-                title="Create Microsoft Teams meeting"
-              >
-                <span className="icon">👥</span>
-                <span>Teams Meeting</span>
+              <button className="action-btn video" onClick={() => handleAction('video')} title="Start video call">
+                <span>Video Call</span>
               </button>
-              <button
-                className="action-btn record"
-                onClick={() => handleAction('record')}
-                title="Record meeting with Recall.ai bot"
-              >
-                <span className="icon">🎥</span>
-                <span>Record Meeting</span>
-              </button>
-              <button
-                className="action-btn voicemail"
-                onClick={() => handleAction('voicemail')}
-                disabled={!(client.borrower_phone || client.phone)}
-                title="Drop voicemail message"
-              >
-                <span className="icon">📞</span>
+              <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} disabled={!(client.borrower_phone || client.phone)} title="Drop voicemail">
                 <span>Voicemail Drop</span>
               </button>
-              <button
-                className={`action-btn voice ${isListening ? 'listening' : ''}`}
-                onClick={() => handleAction('voice')}
-                title="Give voice command to AI assistant"
-              >
-                <span className="icon">🎤</span>
-                <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
+              <button className="action-btn application" onClick={() => handleAction('send_application')} title="Send application link">
+                <span>Send Application</span>
+              </button>
+              <button className="action-btn portal" onClick={() => handleAction('client_portal')} title="Access portals">
+                <span>Portals</span>
+              </button>
+              <button className="action-btn escalation" onClick={() => handleAction('escalation')} title="Escalate issue">
+                <span>Escalation</span>
               </button>
             </div>
           </div>

@@ -3859,81 +3859,34 @@ function LoanDetail() {
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
         <div className="action-buttons">
-          <button
-            className="action-btn call"
-            onClick={() => handleAction('call')}
-            title="Click to call using your phone"
-          >
-            <span className="icon">📞</span>
+          <button className="action-btn call" onClick={() => handleAction('call')} title="Click to call">
             <span>Call</span>
           </button>
-          <button
-            className="action-btn sms"
-            onClick={() => handleAction('sms')}
-            title="Send SMS using your phone"
-          >
-            <span className="icon">💬</span>
+          <button className="action-btn sms" onClick={() => handleAction('sms')} title="Send SMS">
             <span>SMS Text</span>
           </button>
-          <button
-            className="action-btn email"
-            onClick={() => handleAction('email')}
-          >
-            <span className="icon">✉️</span>
+          <button className="action-btn email" onClick={() => handleAction('email')} title="Send email">
             <span>Send Email</span>
           </button>
-          <button
-            className="action-btn task"
-            onClick={() => handleAction('task')}
-          >
-            <span className="icon">✓</span>
+          <button className="action-btn task" onClick={() => handleAction('task')} title="Create task">
             <span>Create Task</span>
           </button>
-          <button
-            className="action-btn calendar"
-            onClick={() => handleAction('calendar')}
-          >
-            <span className="icon">📅</span>
+          <button className="action-btn calendar" onClick={() => handleAction('calendar')} title="Set appointment">
             <span>Set Appointment</span>
           </button>
-          <button
-            className="action-btn video"
-            onClick={() => handleAction('video')}
-            title="Start UVIP video call"
-          >
-            <span className="icon">🎥</span>
-            <span>UVIP Video Call</span>
+          <button className="action-btn video" onClick={() => handleAction('video')} title="Start video call">
+            <span>Video Call</span>
           </button>
-          <button
-            className="action-btn voicemail"
-            onClick={() => handleAction('voicemail')}
-            title="Drop voicemail message"
-          >
-            <span className="icon">📞</span>
+          <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} title="Drop voicemail">
             <span>Voicemail Drop</span>
           </button>
-          <button
-            className="action-btn application"
-            onClick={() => handleAction('send_application')}
-            title="Send borrower application link"
-          >
-            <span className="icon">📝</span>
+          <button className="action-btn application" onClick={() => handleAction('send_application')} title="Send application link">
             <span>Send Application</span>
           </button>
-          <button
-            className="action-btn portal"
-            onClick={() => handleAction('client_portal')}
-            title="Access Client, Buyer's Agent, or Listing Agent portals"
-          >
-            <span className="icon">🌐</span>
+          <button className="action-btn portal" onClick={() => handleAction('client_portal')} title="Access portals">
             <span>Portals</span>
           </button>
-          <button
-            className="action-btn escalation"
-            onClick={() => handleAction('escalation')}
-            title="Escalate issue to team member"
-          >
-            <span className="icon">🚨</span>
+          <button className="action-btn escalation" onClick={() => handleAction('escalation')} title="Escalate issue">
             <span>Escalation</span>
           </button>
           {salesforceStatus?.is_linked && (
@@ -3943,7 +3896,6 @@ function LoanDetail() {
               title={`Sync from Salesforce (${salesforceStatus.salesforce_id})`}
               disabled={salesforcePulling}
             >
-              <span className="icon">{salesforcePulling ? '⏳' : '☁️'}</span>
               <span>{salesforcePulling ? 'Syncing...' : 'Sync from SF'}</span>
             </button>
           )}

@@ -33,16 +33,65 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
   const checkPortalStatus = async () => {
     if (!loan) return;
 
-    // Check client portal (PURL workspace)
-    const clientExists = !!loan.workspace_slug;
-    setPortalStatus(prev => ({
-      ...prev,
-      client: {
-        exists: clientExists,
-        loading: false,
-        url: clientExists ? `/portal/${loan.workspace_slug}` : null,
-      },
-    }));
+    // Check client portal (PURL workspace) via API
+    // Try by loan_id first, then by lead_id if available
+    const checkClientPortal = async () => {
+      // Try looking up by loan ID
+      let response = await fetch(
+        `${API_BASE_URL}/api/v1/purl-admin/workspaces/by-loan/${loan.id}`,
+        { headers: getAuthHeaders() }
+      );
+
+      // If not found and lead_id exists, try by lead_id
+      if (!response.ok && loan.lead_id && loan.lead_id !== loan.id) {
+        response = await fetch(
+          `${API_BASE_URL}/api/v1/purl-admin/workspaces/by-lead/${loan.lead_id}`,
+          { headers: getAuthHeaders() }
+        );
+      }
+
+      return response;
+    };
+
+    try {
+      const response = await checkClientPortal();
+      if (response.ok) {
+        const data = await response.json();
+        const workspace = data.workspace;
+        setPortalStatus(prev => ({
+          ...prev,
+          client: {
+            exists: true,
+            loading: false,
+            url: workspace?.slug ? `/portal/${workspace.slug}` : null,
+            workspaceId: workspace?.workspace_id,
+          },
+        }));
+      } else {
+        // No workspace found - check if loan has workspace_slug as fallback
+        const clientExists = !!loan.workspace_slug;
+        setPortalStatus(prev => ({
+          ...prev,
+          client: {
+            exists: clientExists,
+            loading: false,
+            url: clientExists ? `/portal/${loan.workspace_slug}` : null,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to check client portal:', err);
+      // Fallback to loan.workspace_slug
+      const clientExists = !!loan.workspace_slug;
+      setPortalStatus(prev => ({
+        ...prev,
+        client: {
+          exists: clientExists,
+          loading: false,
+          url: clientExists ? `/portal/${loan.workspace_slug}` : null,
+        },
+      }));
+    }
 
     // Check buyer's agent portal (realtor portal)
     try {
@@ -83,7 +132,8 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       );
       if (response.ok) {
         const data = await response.json();
-        const transaction = data.data?.transactions?.find(t => t.loan_id === loan.id);
+        // Use loose equality to handle string/number type differences
+        const transaction = data.data?.transactions?.find(t => String(t.loan_id) === String(loan.id));
         setPortalStatus(prev => ({
           ...prev,
           listingAgent: {
