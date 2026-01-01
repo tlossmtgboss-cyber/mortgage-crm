@@ -264,14 +264,20 @@ async def complete_upload(
     if not verify_result.get("success") or not verify_result.get("exists"):
         raise HTTPException(status_code=400, detail="Video not found in storage")
 
-    # Generate download URL for the video
-    download_result = s3_service.get_presigned_download_url(
-        request.video_key,
-        expires_in=86400 * 7  # 7 days
-    )
+    # Make video public and get permanent URL
+    public_result = s3_service.make_public_and_get_url(request.video_key)
 
-    if not download_result.get("success"):
-        raise HTTPException(status_code=500, detail="Failed to generate video URL")
+    if not public_result.get("success"):
+        # Fall back to presigned URL if public fails
+        download_result = s3_service.get_presigned_download_url(
+            request.video_key,
+            expires_in=86400 * 7  # 7 days
+        )
+        if not download_result.get("success"):
+            raise HTTPException(status_code=500, detail="Failed to generate video URL")
+        video_url = download_result["presigned_url"]
+    else:
+        video_url = public_result.get("public_url") or public_result.get("presigned_url")
 
     try:
         # Get recruiter info
@@ -304,7 +310,7 @@ async def complete_upload(
             "candidate_id": request.candidate_id,
             "recruiter_id": user_id,
             "video_key": request.video_key,
-            "video_url": download_result["presigned_url"],
+            "video_url": video_url,
             "message": request.message,
             "duration_seconds": request.duration_seconds
         })
@@ -348,7 +354,7 @@ async def complete_upload(
         """), {
             "title": f"Personal Message from {recruiter.full_name if recruiter else 'Your Recruiter'}",
             "content": request.message or "Your recruiter recorded a personalized message just for you!",
-            "media_url": download_result["presigned_url"],
+            "media_url": video_url,
             "created_by": user_id,
             "metadata": f'{{"candidate_id": {request.candidate_id}, "video_id": {video_id}, "type": "personalized_video"}}'
         })
@@ -491,6 +497,57 @@ async def run_video_migration(
 
     except Exception as e:
         logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/fix-video-urls")
+async def fix_video_urls(
+    admin_key: str = Query(...),
+    db=Depends(get_db)
+):
+    """Fix existing video URLs by making them public."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    s3_service = get_s3_service()
+    fixed_count = 0
+    errors = []
+
+    try:
+        # Get all videos with video_key
+        result = db.execute(text("""
+            SELECT id, video_key, video_url
+            FROM recruit_video_messages
+            WHERE video_key IS NOT NULL
+        """))
+
+        for row in result.fetchall():
+            try:
+                # Make video public
+                public_result = s3_service.make_public_and_get_url(row.video_key)
+                if public_result.get("success"):
+                    new_url = public_result.get("public_url") or public_result.get("presigned_url")
+                    db.execute(text("""
+                        UPDATE recruit_video_messages
+                        SET video_url = :url
+                        WHERE id = :id
+                    """), {"url": new_url, "id": row.id})
+                    fixed_count += 1
+                else:
+                    errors.append(f"Video {row.id}: {public_result.get('error')}")
+            except Exception as e:
+                errors.append(f"Video {row.id}: {str(e)}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "fixed_count": fixed_count,
+            "errors": errors[:10] if errors else []
+        }
+
+    except Exception as e:
+        logger.error(f"Fix videos error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

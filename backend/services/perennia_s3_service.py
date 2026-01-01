@@ -333,6 +333,47 @@ class PerenniaS3Service:
                 "error": str(e)
             }
 
+    def make_public_and_get_url(self, storage_key: str) -> Dict[str, Any]:
+        """
+        Make an S3 object public and return its public URL.
+
+        Use this for videos that should be publicly accessible.
+
+        Args:
+            storage_key: S3 object key
+
+        Returns:
+            Dict with public URL or error
+        """
+        try:
+            # Make the object public-read
+            self.s3_client.put_object_acl(
+                Bucket=self.bucket_name,
+                Key=storage_key,
+                ACL='public-read'
+            )
+
+            # Return public URL
+            public_url = f"https://{self.bucket_name}.s3.amazonaws.com/{storage_key}"
+
+            return {
+                "success": True,
+                "public_url": public_url,
+                "storage_key": storage_key
+            }
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            logger.error(f"Error making object public: {e}")
+
+            # If ACL fails (bucket might block public access), fall back to presigned
+            if error_code == 'AccessControlListNotSupported':
+                return self.get_presigned_download_url(storage_key, expires_in=86400 * 365)
+
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
     def delete_document(self, storage_key: str) -> Dict[str, Any]:
         """
         Delete a document from S3.
