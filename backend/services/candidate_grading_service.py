@@ -920,35 +920,31 @@ class CandidateGradingService:
         scores: Dict[str, Any],
         notes: str = None
     ):
-        """Create a history entry for assessment changes."""
-        self.db.execute(text("""
-            INSERT INTO mm_assessment_history (
-                organization_id, candidate_id, assessment_id,
-                production_score, disc_composite_score, character_score,
-                skills_score, culture_fit_score, overall_score, overall_grade,
-                change_type, changed_by, change_notes, full_snapshot
-            ) VALUES (
-                :org_id, :candidate_id, :assessment_id,
-                :production, :disc, :character,
-                :skills, :culture, :overall, :grade,
-                :change_type, :changed_by, :notes, :snapshot
-            )
-        """), {
-            "org_id": organization_id,
-            "candidate_id": candidate_id,
-            "assessment_id": assessment_id,
-            "production": scores.get('production'),
-            "disc": scores.get('disc'),
-            "character": scores.get('character'),
-            "skills": scores.get('skills'),
-            "culture": scores.get('culture'),
-            "overall": scores.get('overall'),
-            "grade": scores.get('overall_grade'),
-            "change_type": change_type,
-            "changed_by": changed_by,
-            "notes": notes,
-            "snapshot": json.dumps(scores)
-        })
+        """Create a history entry for assessment changes.
+
+        Note: This is wrapped in try-catch so history recording failures
+        don't block the main assessment operation.
+        """
+        try:
+            self.db.execute(text("""
+                INSERT INTO mm_assessment_history (
+                    assessment_id, change_type, changed_by, changed_at,
+                    previous_scores, new_scores, change_reason
+                ) VALUES (
+                    :assessment_id, :change_type, :changed_by, CURRENT_TIMESTAMP,
+                    :previous_scores, :new_scores, :change_reason
+                )
+            """), {
+                "assessment_id": assessment_id,
+                "change_type": change_type,
+                "changed_by": changed_by,
+                "previous_scores": "{}",
+                "new_scores": json.dumps(scores),
+                "change_reason": notes
+            })
+        except Exception as e:
+            # Log but don't fail - history is nice to have but not critical
+            logger.warning(f"Failed to record assessment history: {e}")
 
     # =========================================================================
     # OVERRIDE MANAGEMENT
