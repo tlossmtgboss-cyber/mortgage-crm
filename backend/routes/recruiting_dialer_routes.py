@@ -12,14 +12,19 @@ from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy import text
-from database import get_db
+from database import SessionLocal
+from contextlib import contextmanager
 import os
 import uuid
 
-# Create alias for compatibility
+@contextmanager
 def get_db_connection():
-    """Alias for get_db() for compatibility."""
-    return get_db()
+    """Context manager for database connections."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 router = APIRouter(prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"])
 
