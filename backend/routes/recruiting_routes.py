@@ -891,6 +891,48 @@ async def list_candidate_interviews(
     }
 
 
+@router.post("/debug/test-interview/{candidate_id}")
+async def debug_schedule_interview(
+    candidate_id: int,
+    db: Session = Depends(get_db)
+):
+    """DEBUG: Test interview creation without auth."""
+    import logging
+    import traceback
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Use a test user ID (57 = admin)
+        test_user_id = 57
+
+        test_data = {
+            "interview_type": "panel",
+            "scheduled_at": "2026-01-10T14:00:00",
+            "duration_minutes": 60,
+            "interviewer_user_ids": [57],
+            "primary_interviewer_id": 57,
+            "timezone": "America/New_York",
+            "location": "Test Location",
+            "title": "Test Panel Interview"
+        }
+
+        logger.info(f"DEBUG: Testing interview for candidate {candidate_id}")
+        logger.info(f"DEBUG: Interview data: {test_data}")
+
+        service = RecruitingService(db)
+        result = await service.schedule_interview(
+            candidate_id=candidate_id,
+            data=test_data,
+            created_by=test_user_id,
+            organization_id=None
+        )
+        return {"success": True, "result": result}
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"DEBUG: Failed to schedule interview: {str(e)}\n{tb}")
+        return {"success": False, "error": str(e), "traceback": tb}
+
+
 @router.post("/candidates/{candidate_id}/interviews")
 async def schedule_interview(
     candidate_id: int,
@@ -901,6 +943,7 @@ async def schedule_interview(
 ):
     """Schedule an interview for a candidate."""
     import logging
+    import traceback
     logger = logging.getLogger(__name__)
 
     try:
@@ -916,7 +959,8 @@ async def schedule_interview(
         )
         return result
     except Exception as e:
-        logger.error(f"Failed to schedule interview: {str(e)}", exc_info=True)
+        tb = traceback.format_exc()
+        logger.error(f"Failed to schedule interview: {str(e)}\n{tb}")
         raise HTTPException(status_code=500, detail=f"Failed to schedule interview: {str(e)}")
 
 
