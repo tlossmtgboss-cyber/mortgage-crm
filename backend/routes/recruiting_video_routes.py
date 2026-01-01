@@ -500,6 +500,32 @@ async def run_video_migration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/admin/debug-s3")
+async def debug_s3(
+    admin_key: str = Query(...),
+    video_key: str = Query(default="recruit-videos/20/20260101_171523_5b8d5321376944509318c338e80ec64d.webm")
+):
+    """Debug S3 access for video."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    s3_service = get_s3_service()
+
+    # Check if video exists
+    verify = s3_service.verify_upload(video_key)
+
+    # Generate presigned URL
+    presigned = s3_service.get_presigned_download_url(video_key, expires_in=3600)
+
+    return {
+        "bucket": s3_service.bucket_name,
+        "region": s3_service.region,
+        "video_key": video_key,
+        "verify_result": verify,
+        "presigned_result": presigned
+    }
+
+
 @router.post("/admin/fix-video-urls")
 async def fix_video_urls(
     admin_key: str = Query(...),
