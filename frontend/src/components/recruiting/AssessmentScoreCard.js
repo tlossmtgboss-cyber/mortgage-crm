@@ -176,7 +176,8 @@ function AssessmentScoreCard({
               className="score-card-edit-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                onEdit && onEdit(category);
+                // Pass full category object with key and config
+                onEdit && onEdit({ key: category, ...config });
               }}
             >
               Edit Scores
