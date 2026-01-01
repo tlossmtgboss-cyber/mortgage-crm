@@ -49,7 +49,7 @@ class RecruitPortalService:
         with SessionLocal() as conn:
             # Get candidate info for auto-slug generation
             result = conn.execute(
-                text("SELECT first_name, last_name FROM recruiting_candidates WHERE id = :id"),
+                text("SELECT first_name, last_name FROM mm_candidates WHERE id = :id"),
                 {"id": candidate_id}
             )
             candidate = result.fetchone()
@@ -115,7 +115,7 @@ class RecruitPortalService:
                            u.name as recruiter_name, u.photo_url as recruiter_photo,
                            u.phone as recruiter_phone, u.email as recruiter_email
                     FROM recruit_portal_workspaces w
-                    JOIN recruiting_candidates c ON c.id = w.candidate_id
+                    JOIN mm_candidates c ON c.id = w.candidate_id
                     LEFT JOIN users u ON u.id = c.assigned_to
                     WHERE w.slug = :slug AND w.is_active = true
                 """),
@@ -249,7 +249,7 @@ class RecruitPortalService:
                     SELECT w.id, c.first_name, c.last_name, c.status,
                            c.current_company, c.current_title
                     FROM recruit_portal_workspaces w
-                    JOIN recruiting_candidates c ON c.id = w.candidate_id
+                    JOIN mm_candidates c ON c.id = w.candidate_id
                     WHERE w.id = :workspace_id
                 """),
                 {"workspace_id": workspace_id}

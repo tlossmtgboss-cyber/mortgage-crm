@@ -56,7 +56,7 @@ def run_migration():
         responded_by INTEGER,
         responded_at TIMESTAMP DEFAULT NOW(),
         CONSTRAINT fk_candidate FOREIGN KEY (candidate_id)
-            REFERENCES recruiting_candidates(id) ON DELETE CASCADE
+            REFERENCES mm_candidates(id) ON DELETE CASCADE
     );
 
     -- Create indexes for quiz responses
@@ -79,7 +79,7 @@ def run_migration():
         quiz_count INTEGER DEFAULT 0,
         last_updated TIMESTAMP DEFAULT NOW(),
         CONSTRAINT fk_candidate_scores FOREIGN KEY (candidate_id)
-            REFERENCES recruiting_candidates(id) ON DELETE CASCADE
+            REFERENCES mm_candidates(id) ON DELETE CASCADE
     );
 
     -- Production calculator configuration
@@ -117,7 +117,7 @@ def run_migration():
         completed_by INTEGER,
         created_at TIMESTAMP DEFAULT NOW(),
         CONSTRAINT fk_candidate_tasks FOREIGN KEY (candidate_id)
-            REFERENCES recruiting_candidates(id) ON DELETE CASCADE
+            REFERENCES mm_candidates(id) ON DELETE CASCADE
     );
 
     -- Create indexes for recruiting tasks
@@ -147,7 +147,7 @@ def run_migration():
         called_at TIMESTAMP DEFAULT NOW(),
         completed_at TIMESTAMP,
         CONSTRAINT fk_call_candidate FOREIGN KEY (candidate_id)
-            REFERENCES recruiting_candidates(id) ON DELETE CASCADE
+            REFERENCES mm_candidates(id) ON DELETE CASCADE
     );
 
     -- Create indexes for call history
@@ -172,7 +172,7 @@ def run_migration():
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         CONSTRAINT fk_portal_candidate FOREIGN KEY (candidate_id)
-            REFERENCES recruiting_candidates(id) ON DELETE CASCADE
+            REFERENCES mm_candidates(id) ON DELETE CASCADE
     );
 
     CREATE INDEX IF NOT EXISTS idx_portal_workspaces_slug
