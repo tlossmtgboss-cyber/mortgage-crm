@@ -39182,8 +39182,8 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "top_partners": [{
             "name": p.name,
             "received": source_counts.get(p.name, 0),
-            "sent": 0,  # TODO: Track sent referrals
-            "balance": 0
+            "sent": p.referrals_out or 0,
+            "balance": (source_counts.get(p.name, 0)) - (p.referrals_out or 0)
         } for p in partners],
         "engagement": []
     }
