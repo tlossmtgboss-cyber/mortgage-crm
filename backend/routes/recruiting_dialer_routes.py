@@ -12,7 +12,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy import text
-from database import get_db_connection
+from database import get_db
 import os
 import uuid
 
