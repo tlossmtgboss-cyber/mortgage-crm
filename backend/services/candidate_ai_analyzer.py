@@ -647,17 +647,36 @@ Be thorough but objective. Base scores only on available evidence. If data is li
         """Store analysis results in the database."""
         from sqlalchemy import text
 
-        # Update the assessment with AI analysis data
+        # Use upsert pattern - insert if not exists, update if exists
         self.db.execute(text("""
-            UPDATE mm_candidate_assessments
-            SET
+            INSERT INTO mm_candidate_assessments (
+                candidate_id,
+                ai_analysis_run_at,
+                ai_confidence_score,
+                ai_raw_analysis,
+                strengths,
+                weaknesses,
+                assessment_status,
+                created_at,
+                updated_at
+            ) VALUES (
+                :candidate_id,
+                :analyzed_at,
+                :confidence,
+                :raw_analysis,
+                :strengths,
+                :weaknesses,
+                'ai_analyzed',
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (candidate_id) DO UPDATE SET
                 ai_analysis_run_at = :analyzed_at,
                 ai_confidence_score = :confidence,
                 ai_raw_analysis = :raw_analysis,
                 strengths = :strengths,
                 weaknesses = :weaknesses,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE candidate_id = :candidate_id
         """), {
             "candidate_id": candidate_id,
             "analyzed_at": analysis.analyzed_at,
