@@ -233,6 +233,60 @@ const RecruitDetail = () => {
     setPendingStatusChange(null);
   };
 
+  // Load users for escalation
+  const loadEscalateUsers = async () => {
+    const token = localStorage.getItem('token');
+    const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+    try {
+      const response = await fetch(`${API_URL}/api/v1/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setEscalateUsers(data.users || data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load users for escalation:', err);
+    }
+  };
+
+  // Handle escalation
+  const handleEscalate = async () => {
+    if (!selectedEscalateUser) {
+      setError('Please select a user to escalate to');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/escalate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          assigned_to: parseInt(selectedEscalateUser),
+          note: escalateNote
+        })
+      });
+
+      if (response.ok) {
+        setShowEscalateModal(false);
+        setSelectedEscalateUser('');
+        setEscalateNote('');
+        loadCandidate(); // Refresh candidate data
+      } else {
+        const err = await response.json();
+        setError(err.detail || 'Failed to escalate candidate');
+      }
+    } catch (err) {
+      setError('Failed to escalate candidate');
+    }
+  };
+
   // Click-to-call handler
   const handleClickToCall = async () => {
     if (!candidate?.phone) {
@@ -1314,6 +1368,62 @@ const RecruitDetail = () => {
           }}
           onClose={() => setShowVideoRecorder(false)}
         />
+      )}
+
+      {/* Escalate Modal */}
+      {showEscalateModal && (
+        <div className="modal-overlay" onClick={() => setShowEscalateModal(false)}>
+          <div className="modal-content escalate-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Escalate Candidate</h3>
+              <button className="modal-close" onClick={() => setShowEscalateModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p>Assign this candidate to another team member:</p>
+              <div className="form-group">
+                <label>Assign To</label>
+                <select
+                  value={selectedEscalateUser}
+                  onChange={(e) => setSelectedEscalateUser(e.target.value)}
+                  onFocus={() => escalateUsers.length === 0 && loadEscalateUsers()}
+                  className="mm-select"
+                >
+                  <option value="">Select a team member...</option>
+                  {escalateUsers.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name || user.name || user.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Note (optional)</label>
+                <textarea
+                  value={escalateNote}
+                  onChange={(e) => setEscalateNote(e.target.value)}
+                  placeholder="Add a note for the recipient..."
+                  className="mm-textarea"
+                  rows="3"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="mm-btn mm-btn-secondary"
+                onClick={() => setShowEscalateModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="mm-btn mm-btn-primary"
+                onClick={handleEscalate}
+                disabled={!selectedEscalateUser}
+              >
+                Escalate
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

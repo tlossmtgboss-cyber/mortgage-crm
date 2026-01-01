@@ -450,6 +450,59 @@ async def update_candidate_status(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+class EscalateRequest(BaseModel):
+    assigned_to: int
+    note: Optional[str] = None
+
+
+@router.post("/candidates/{candidate_id}/escalate")
+async def escalate_candidate(
+    candidate_id: int,
+    data: EscalateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Escalate/reassign a candidate to another team member."""
+    # Update the candidate's assigned_to
+    result = db.execute(
+        text("""
+            UPDATE mm_candidates
+            SET assigned_to = :assigned_to,
+                updated_at = NOW()
+            WHERE id = :candidate_id
+            RETURNING id, first_name, last_name, assigned_to
+        """),
+        {"candidate_id": candidate_id, "assigned_to": data.assigned_to}
+    )
+    row = result.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Add an activity log entry
+    db.execute(
+        text("""
+            INSERT INTO mm_candidate_activities
+            (candidate_id, type, description, performed_by, created_at)
+            VALUES (:candidate_id, 'escalated', :description, :performed_by, NOW())
+        """),
+        {
+            "candidate_id": candidate_id,
+            "description": f"Candidate escalated to user {data.assigned_to}" + (f": {data.note}" if data.note else ""),
+            "performed_by": current_user.id
+        }
+    )
+
+    db.commit()
+
+    return {
+        "success": True,
+        "candidate_id": candidate_id,
+        "assigned_to": data.assigned_to,
+        "message": f"Candidate {row.first_name} {row.last_name} has been escalated"
+    }
+
+
 # =============================================================================
 # JOB POSTINGS
 # =============================================================================
