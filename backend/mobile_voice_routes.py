@@ -18,6 +18,7 @@ import uuid
 
 # Database and auth imports
 from database import get_db
+from utils.websocket_auth import authenticate_websocket, get_user_id_from_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -533,29 +534,15 @@ async def mobile_voice_websocket(
         await websocket.accept()
         logger.info("[MobileVoice] WebSocket accepted")
 
-        # Get user from auth token in query params or headers
-        # For now, use a default user - in production, validate the token
-        user_id = "admin@perenniaai.com"  # TODO: Extract from auth token
+        # Authenticate user from token (query param, header, or protocol)
+        auth_user, auth_error = authenticate_websocket(websocket, db, require_auth=False)
 
-        # Check for token in query params
-        token = websocket.query_params.get("token")
-        if token:
-            try:
-                # Validate token and extract user using jose JWT
-                from jose import jwt, JWTError
-                import os
-                SECRET_KEY = os.getenv("SECRET_KEY")
-                if not SECRET_KEY:
-                    logger.error("[MobileVoice] SECRET_KEY not configured")
-                    raise ValueError("SECRET_KEY not set")
-                ALGORITHM = "HS256"
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-                user_id = payload.get("sub", user_id)
-                logger.info(f"[MobileVoice] Authenticated user: {user_id}")
-            except JWTError as e:
-                logger.warning(f"[MobileVoice] JWT validation failed: {e}")
-            except Exception as e:
-                logger.warning(f"[MobileVoice] Token validation failed: {e}")
+        if auth_user:
+            user_id = auth_user.email
+            logger.info(f"[MobileVoice] Authenticated user: {user_id} (ID: {auth_user.id})")
+        else:
+            user_id = "admin@perenniaai.com"  # Fallback for backwards compatibility
+            logger.warning(f"[MobileVoice] Auth failed ({auth_error}), using fallback user")
 
         # Create voice session
         session = MobileVoiceSession(websocket, user_id, db)

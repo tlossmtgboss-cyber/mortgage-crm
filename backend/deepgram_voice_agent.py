@@ -17,6 +17,7 @@ import uuid
 
 # Database imports
 from database import get_db
+from utils.websocket_auth import authenticate_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -304,22 +305,15 @@ async def voice_agent_websocket(
         await websocket.accept()
         logger.info("[VoiceAgent] WebSocket accepted")
 
-        # Get user from auth token
-        user_id = "admin@perenniaai.com"
-        token = websocket.query_params.get("token")
+        # Authenticate user from token (query param, header, or protocol)
+        auth_user, auth_error = authenticate_websocket(websocket, db, require_auth=False)
 
-        if token:
-            try:
-                from jose import jwt, JWTError
-                SECRET_KEY = os.getenv("SECRET_KEY")
-                if not SECRET_KEY:
-                    logger.error("[VoiceAgent] SECRET_KEY not configured")
-                    raise ValueError("SECRET_KEY not set")
-                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-                user_id = payload.get("sub", user_id)
-                logger.info(f"[VoiceAgent] Authenticated user: {user_id}")
-            except Exception as e:
-                logger.warning(f"[VoiceAgent] Token validation failed: {e}")
+        if auth_user:
+            user_id = auth_user.email
+            logger.info(f"[VoiceAgent] Authenticated user: {user_id} (ID: {auth_user.id})")
+        else:
+            user_id = "admin@perenniaai.com"  # Fallback for backwards compatibility
+            logger.warning(f"[VoiceAgent] Auth failed ({auth_error}), using fallback user")
 
         # Create and start session
         session = DeepgramVoiceAgentSession(websocket, user_id, db)
