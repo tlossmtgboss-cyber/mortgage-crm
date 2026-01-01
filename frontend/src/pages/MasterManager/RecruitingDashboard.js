@@ -294,6 +294,13 @@ const RecruitingDashboard = () => {
           <p>{mainTab === 'employee' ? 'Employee candidate pipeline management' : 'Partner (Realtor) recruiting from RETR'}</p>
         </div>
         <div className="mm-header-actions">
+          <button
+            className="mm-btn mm-btn-secondary"
+            onClick={() => navigate('/master-manager/recruiting-workflow')}
+            title="Multi-year relationship development workflows"
+          >
+            Workflow CRM
+          </button>
           {mainTab === 'employee' && (
             <>
               <button
