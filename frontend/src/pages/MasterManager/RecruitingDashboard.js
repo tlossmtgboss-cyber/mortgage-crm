@@ -70,6 +70,7 @@ const RecruitingDashboard = () => {
   const [showAddCandidate, setShowAddCandidate] = useState(false);
   const [showAddJob, setShowAddJob] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [selectedJob, setSelectedJob] = useState(null);
 
   // Form states
   const [newCandidate, setNewCandidate] = useState({
@@ -684,7 +685,12 @@ const RecruitingDashboard = () => {
               </div>
             ) : (
               jobPostings.map((job) => (
-                <div key={job.id} className="mm-card mm-job-card">
+                <div
+                  key={job.id}
+                  className="mm-card mm-job-card mm-clickable"
+                  onClick={() => setSelectedJob(job)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="mm-job-header">
                     <div className="mm-job-title">{job.title}</div>
                     <span className={`mm-status-badge ${job.is_published ? 'mm-status-published' : 'mm-status-draft'}`}>
@@ -716,7 +722,7 @@ const RecruitingDashboard = () => {
                   {!job.is_published && (
                     <button
                       className="mm-btn mm-btn-primary mm-btn-full"
-                      onClick={() => handlePublishJob(job.id)}
+                      onClick={(e) => { e.stopPropagation(); handlePublishJob(job.id); }}
                     >
                       Publish
                     </button>
@@ -1320,6 +1326,73 @@ const RecruitingDashboard = () => {
             </div>
             <div className="mm-modal-actions">
               <button className="mm-btn mm-btn-secondary" onClick={() => setSelectedCandidate(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job Detail Modal */}
+      {selectedJob && (
+        <div className="mm-modal-overlay">
+          <div className="mm-modal mm-modal-large">
+            <div className="mm-modal-header">
+              <h3>{selectedJob.title}</h3>
+              <button className="mm-modal-close" onClick={() => setSelectedJob(null)}>&times;</button>
+            </div>
+            <div className="mm-candidate-detail">
+              <div className="mm-detail-section">
+                <h4>Job Details</h4>
+                <p><strong>Status:</strong> {selectedJob.is_published ? 'Published' : 'Draft'}</p>
+                <p><strong>Employment Type:</strong> {selectedJob.employment_type?.replace('_', ' ') || 'Not specified'}</p>
+                <p><strong>Location:</strong> {selectedJob.location || 'Not specified'}</p>
+                <p><strong>Remote:</strong> {selectedJob.is_remote ? 'Yes' : 'No'}</p>
+              </div>
+              {(selectedJob.salary_min || selectedJob.salary_max || selectedJob.salary_range) && (
+                <div className="mm-detail-section">
+                  <h4>Compensation</h4>
+                  <p><strong>Salary Range:</strong> {selectedJob.salary_range || `$${selectedJob.salary_min?.toLocaleString() || '0'} - $${selectedJob.salary_max?.toLocaleString() || '0'}`}</p>
+                </div>
+              )}
+              {selectedJob.summary && (
+                <div className="mm-detail-section">
+                  <h4>Summary</h4>
+                  <p>{selectedJob.summary}</p>
+                </div>
+              )}
+              {selectedJob.description && (
+                <div className="mm-detail-section">
+                  <h4>Description</h4>
+                  <p style={{ whiteSpace: 'pre-wrap' }}>{selectedJob.description}</p>
+                </div>
+              )}
+              <div className="mm-detail-section">
+                <h4>Statistics</h4>
+                <p><strong>Views:</strong> {selectedJob.views || 0}</p>
+                <p><strong>Applications:</strong> {selectedJob.applications || 0}</p>
+                <p><strong>Active Candidates:</strong> {selectedJob.active_candidates || 0}</p>
+              </div>
+              {selectedJob.created_at && (
+                <div className="mm-detail-section">
+                  <h4>Dates</h4>
+                  <p><strong>Created:</strong> {new Date(selectedJob.created_at).toLocaleDateString()}</p>
+                  {selectedJob.published_at && (
+                    <p><strong>Published:</strong> {new Date(selectedJob.published_at).toLocaleDateString()}</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="mm-modal-actions">
+              {!selectedJob.is_published && (
+                <button
+                  className="mm-btn mm-btn-primary"
+                  onClick={() => { handlePublishJob(selectedJob.id); setSelectedJob({ ...selectedJob, is_published: true }); }}
+                >
+                  Publish
+                </button>
+              )}
+              <button className="mm-btn mm-btn-secondary" onClick={() => setSelectedJob(null)}>
                 Close
               </button>
             </div>
