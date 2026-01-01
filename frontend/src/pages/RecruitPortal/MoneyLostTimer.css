@@ -1,0 +1,114 @@
+/* =============================================================================
+   MONEY LOST TIMER - Recruit Portal
+   Professional, attention-grabbing timer showing potential lost earnings
+============================================================================= */
+
+.money-lost-timer {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border-radius: 16px;
+  padding: 24px;
+  color: white;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(220, 38, 38, 0.3);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 10px 25px rgba(220, 38, 38, 0.3);
+  }
+  50% {
+    box-shadow: 0 10px 35px rgba(220, 38, 38, 0.5);
+  }
+}
+
+.timer-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.timer-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.9;
+}
+
+.timer-value {
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.timer-money {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.money-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.9;
+}
+
+.money-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: count-up 0.5s ease-out;
+}
+
+@keyframes count-up {
+  from {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.timer-message {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.timer-message p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.timer-message p:first-child {
+  opacity: 0.9;
+}
+
+.timer-cta {
+  margin-top: 8px !important;
+  font-weight: 600;
+  font-size: 1rem !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .money-lost-timer {
+    padding: 20px 16px;
+  }
+
+  .timer-value {
+    font-size: 1.5rem;
+  }
+
+  .money-value {
+    font-size: 2rem;
+  }
+}

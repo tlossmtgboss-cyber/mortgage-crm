@@ -4,6 +4,7 @@ import './RecruitPortal.css';
 import ProductionCalculator from './ProductionCalculator';
 import PortalChat from './PortalChat';
 import PortalScheduler from './PortalScheduler';
+import MoneyLostTimer from './MoneyLostTimer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -134,33 +135,39 @@ const RecruitPortal = () => {
               'We believe in empowering loan officers with the best technology, leads, and support. See how joining our team can transform your business.'}
           </p>
         </div>
-        {portalData?.recruiter_name && (
-          <div className="recruiter-card">
-            <div className="recruiter-photo">
-              {portalData.recruiter_photo ? (
-                <img src={portalData.recruiter_photo} alt={portalData.recruiter_name} />
-              ) : (
-                <div className="photo-placeholder">
-                  {portalData.recruiter_name.split(' ').map(n => n[0]).join('')}
-                </div>
-              )}
+        <div className="hero-cards">
+          {portalData?.recruiter_name && (
+            <div className="recruiter-card">
+              <div className="recruiter-photo">
+                {portalData.recruiter_photo ? (
+                  <img src={portalData.recruiter_photo} alt={portalData.recruiter_name} />
+                ) : (
+                  <div className="photo-placeholder">
+                    {portalData.recruiter_name.split(' ').map(n => n[0]).join('')}
+                  </div>
+                )}
+              </div>
+              <div className="recruiter-info">
+                <h4>Your Recruiter</h4>
+                <p className="recruiter-name">{portalData.recruiter_name}</p>
+                {portalData.recruiter_phone && (
+                  <a href={`tel:${portalData.recruiter_phone}`} className="recruiter-contact">
+                    {portalData.recruiter_phone}
+                  </a>
+                )}
+                {portalData.recruiter_email && (
+                  <a href={`mailto:${portalData.recruiter_email}`} className="recruiter-contact">
+                    {portalData.recruiter_email}
+                  </a>
+                )}
+              </div>
             </div>
-            <div className="recruiter-info">
-              <h4>Your Recruiter</h4>
-              <p className="recruiter-name">{portalData.recruiter_name}</p>
-              {portalData.recruiter_phone && (
-                <a href={`tel:${portalData.recruiter_phone}`} className="recruiter-contact">
-                  {portalData.recruiter_phone}
-                </a>
-              )}
-              {portalData.recruiter_email && (
-                <a href={`mailto:${portalData.recruiter_email}`} className="recruiter-contact">
-                  {portalData.recruiter_email}
-                </a>
-              )}
-            </div>
-          </div>
-        )}
+          )}
+          <MoneyLostTimer
+            slug={slug}
+            estimatedAnnualProduction={portalData?.estimated_production || 5000000}
+          />
+        </div>
       </section>
 
       {/* Tab Navigation */}
