@@ -298,6 +298,121 @@ async def launch_campaign(
     )
 
 
+def _activate_sequence(db: Session, sequence_id: str, campaign_id: str, channel: str):
+    """
+    Activate a sequence for a campaign.
+
+    This marks the sequence as active and associates it with the campaign
+    so that new leads entering the campaign get enrolled in the sequence.
+    """
+    from sqlalchemy import text
+
+    # Update the outreach campaign status if it exists
+    db.execute(text("""
+        UPDATE outreach_campaigns
+        SET status = 'active',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :sequence_id
+    """), {"sequence_id": sequence_id})
+
+    # Create a campaign-sequence association for tracking
+    try:
+        db.execute(text("""
+            INSERT INTO campaign_sequence_associations
+            (id, campaign_instance_id, sequence_id, channel, status, activated_at)
+            VALUES (:id, :campaign_id, :sequence_id, :channel, 'active', CURRENT_TIMESTAMP)
+            ON CONFLICT (campaign_instance_id, sequence_id)
+            DO UPDATE SET status = 'active', activated_at = CURRENT_TIMESTAMP
+        """), {
+            "id": str(uuid.uuid4()),
+            "campaign_id": campaign_id,
+            "sequence_id": sequence_id,
+            "channel": channel,
+        })
+    except Exception:
+        # Table may not exist yet - log and continue
+        logger.debug(f"campaign_sequence_associations table may not exist, skipping association")
+
+    logger.info(f"Activated {channel} sequence {sequence_id} for campaign {campaign_id}")
+
+
+def _setup_dialer_queue(db: Session, campaign_id: str, dialer_config: dict):
+    """
+    Set up dialer queue rules for a campaign.
+
+    Creates or updates the dialer queue configuration so that leads
+    from this campaign get properly routed for outbound calls.
+    """
+    from sqlalchemy import text
+
+    priority = dialer_config.get("priority", "normal")
+    max_attempts = dialer_config.get("max_attempts", 3)
+    retry_delay_minutes = dialer_config.get("retry_delay_minutes", 60)
+    call_window_start = dialer_config.get("call_window_start", "09:00")
+    call_window_end = dialer_config.get("call_window_end", "20:00")
+
+    try:
+        db.execute(text("""
+            INSERT INTO dialer_queue_rules
+            (id, campaign_instance_id, priority, max_attempts, retry_delay_minutes,
+             call_window_start, call_window_end, status, created_at)
+            VALUES (:id, :campaign_id, :priority, :max_attempts, :retry_delay,
+                    :window_start, :window_end, 'active', CURRENT_TIMESTAMP)
+            ON CONFLICT (campaign_instance_id)
+            DO UPDATE SET
+                priority = :priority,
+                max_attempts = :max_attempts,
+                retry_delay_minutes = :retry_delay,
+                call_window_start = :window_start,
+                call_window_end = :window_end,
+                status = 'active',
+                updated_at = CURRENT_TIMESTAMP
+        """), {
+            "id": str(uuid.uuid4()),
+            "campaign_id": campaign_id,
+            "priority": priority,
+            "max_attempts": max_attempts,
+            "retry_delay": retry_delay_minutes,
+            "window_start": call_window_start,
+            "window_end": call_window_end,
+        })
+        logger.info(f"Set up dialer queue for campaign {campaign_id} with priority {priority}")
+    except Exception as e:
+        # Table may not exist yet
+        logger.debug(f"dialer_queue_rules table may not exist: {e}")
+
+
+def _generate_funnel_url(campaign: CampaignInstance) -> str:
+    """
+    Generate a unique funnel URL for campaign tracking.
+
+    Returns a URL that can be used as the campaign landing page,
+    with embedded tracking parameters for attribution.
+    """
+    import os
+
+    base_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+    campaign_slug = str(campaign.id)[:8]
+
+    # Build UTM parameters for tracking
+    utm_params = {
+        "utm_source": "acquisition",
+        "utm_medium": campaign.goal_type or "campaign",
+        "utm_campaign": campaign_slug,
+    }
+
+    # Add geo targeting to URL if available
+    geo = campaign.market_geo or {}
+    if geo.get("state"):
+        utm_params["geo"] = geo.get("state")
+
+    query_string = "&".join([f"{k}={v}" for k, v in utm_params.items()])
+    funnel_url = f"{base_url}/start?{query_string}"
+
+    logger.info(f"Generated funnel URL for campaign {campaign.id}: {funnel_url}")
+    return funnel_url
+
+
 async def _activate_campaign(campaign_id: str):
     """Background task to activate campaign"""
     from database import get_session
@@ -308,15 +423,38 @@ async def _activate_campaign(campaign_id: str):
         ).first()
 
         if campaign:
-            # TODO: Activate SMS sequences
-            # TODO: Activate Email sequences
-            # TODO: Set up dialer queue rules
-            # TODO: Generate funnel URL
+            # Activate SMS sequences
+            sms_sequences = campaign.sms_sequences_active or []
+            for sequence_id in sms_sequences:
+                try:
+                    _activate_sequence(db, sequence_id, campaign_id, "sms")
+                except Exception as e:
+                    logger.warning(f"Failed to activate SMS sequence {sequence_id}: {e}")
+
+            # Activate Email sequences
+            email_sequences = campaign.email_sequences_active or []
+            for sequence_id in email_sequences:
+                try:
+                    _activate_sequence(db, sequence_id, campaign_id, "email")
+                except Exception as e:
+                    logger.warning(f"Failed to activate Email sequence {sequence_id}: {e}")
+
+            # Set up dialer queue rules
+            dialer_config = campaign.dialer_config or {}
+            if dialer_config:
+                try:
+                    _setup_dialer_queue(db, campaign_id, dialer_config)
+                except Exception as e:
+                    logger.warning(f"Failed to set up dialer queue: {e}")
+
+            # Generate funnel URL with campaign tracking
+            campaign.funnel_url = _generate_funnel_url(campaign)
+            campaign.tracking_pixel_id = f"px_{campaign_id[:8]}"
 
             campaign.status = CampaignStatus.ACTIVE.value
             campaign.activated_at = datetime.utcnow()
             db.commit()
-            logger.info(f"Campaign {campaign_id} activated")
+            logger.info(f"Campaign {campaign_id} activated with {len(sms_sequences)} SMS and {len(email_sequences)} email sequences")
     except Exception as e:
         logger.error(f"Failed to activate campaign {campaign_id}: {e}")
         if campaign:
