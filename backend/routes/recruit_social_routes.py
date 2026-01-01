@@ -536,6 +536,75 @@ async def run_social_migration(
 # PUBLIC PORTAL ENDPOINTS (no auth required)
 # ============================================================================
 
+@router.post("/admin/seed-posts")
+async def seed_sample_posts(
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Seed sample social posts for demo purposes."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        sample_posts = [
+            {
+                "content": "🎉 Welcome to our newest team members! We're thrilled to have you join the Perennia family. Here's to building something amazing together! #TeamPerennia #MortgageLife #NewBeginnings",
+                "platforms": "linkedin,facebook",
+                "image_url": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800",
+            },
+            {
+                "content": "💡 Industry insight: The mortgage market is evolving rapidly. At Perennia, we're staying ahead with cutting-edge AI tools that help our LOs close more deals. Want to learn more? Let's connect! #MortgageIndustry #AIinMortgage",
+                "platforms": "linkedin",
+                "image_url": None,
+            },
+            {
+                "content": "🏆 Congratulations to our top producers this month! Your dedication and hard work inspire us all. #TopProducers #MortgageSuccess #PerenniaProud",
+                "platforms": "linkedin,facebook,instagram",
+                "image_url": "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800",
+            },
+            {
+                "content": "📈 Q4 is here! Are you ready to finish the year strong? Our team has the tools, leads, and support to help you hit your goals. DM us to learn about opportunities! #Recruiting #MortgageCareers",
+                "platforms": "linkedin,facebook",
+                "image_url": None,
+            },
+            {
+                "content": "🎯 What sets us apart? Technology that works FOR you, not against you. See how our AI-powered CRM is helping loan officers save 10+ hours per week. #MortgageTech #Efficiency",
+                "platforms": "linkedin,instagram",
+                "image_url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800",
+            },
+            {
+                "content": "🤝 Culture matters. At Perennia, we believe in supporting each other's growth. Our mentorship program pairs new LOs with experienced pros. Ready to grow? #CompanyCulture #Mentorship",
+                "platforms": "facebook,instagram",
+                "image_url": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800",
+            },
+        ]
+
+        from datetime import timedelta
+        import random
+
+        for i, post in enumerate(sample_posts):
+            # Stagger posted_at times over the past week
+            posted_at = datetime.now() - timedelta(days=i, hours=random.randint(1, 12))
+
+            db.execute(text("""
+                INSERT INTO recruit_social_posts
+                (content, platforms, image_url, status, posted_at, engagement_data, created_at)
+                VALUES (:content, :platforms, :image_url, 'posted', :posted_at, :engagement, NOW())
+            """), {
+                "content": post["content"],
+                "platforms": post["platforms"],
+                "image_url": post["image_url"],
+                "posted_at": posted_at,
+                "engagement": f'{{"likes": {random.randint(15, 150)}, "comments": {random.randint(2, 25)}, "shares": {random.randint(1, 20)}}}'
+            })
+
+        db.commit()
+        return {"status": "success", "message": f"Seeded {len(sample_posts)} sample posts"}
+    except Exception as e:
+        logger.error(f"Error seeding posts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/public/feed")
 async def get_public_social_feed(
     limit: int = Query(10, le=50),
