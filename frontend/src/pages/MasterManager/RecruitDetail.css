@@ -1154,6 +1154,20 @@
   color: #dc2626;
 }
 
+.recruit-quick-action-btn.recruit-quick-action-video {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border-color: #8b5cf6;
+  color: white;
+}
+
+.recruit-quick-action-btn.recruit-quick-action-video:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  border-color: #7c3aed;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
 .recruit-quick-action-icon {
   font-size: 16px;
 }

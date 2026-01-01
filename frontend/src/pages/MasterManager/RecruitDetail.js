@@ -21,6 +21,7 @@ import AIAnalysisPanel from '../../components/recruiting/AIAnalysisPanel';
 import AssessmentQuizModal from '../../components/recruiting/AssessmentQuizModal';
 import ScheduleInterviewModal from '../../components/recruiting/ScheduleInterviewModal';
 import EditScoreCategoryModal from '../../components/recruiting/EditScoreCategoryModal';
+import VideoRecorder from '../../components/recruiting/VideoRecorder';
 import { usePermissions } from '../../contexts/PermissionContext';
 import './MasterManager.css';
 import './RecruitDetail.css';
@@ -77,6 +78,9 @@ const RecruitDetail = () => {
   // Edit category modal state
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+
+  // Video recorder modal state
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
 
   // Edit form states
   const [socialForm, setSocialForm] = useState({
@@ -816,6 +820,13 @@ const RecruitDetail = () => {
                 <span>Schedule Interview</span>
               </button>
               <button
+                className="recruit-quick-action-btn recruit-quick-action-video"
+                onClick={() => setShowVideoRecorder(true)}
+              >
+                <span className="recruit-quick-action-icon">🎬</span>
+                <span>Record Video</span>
+              </button>
+              <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('offer')}
                 disabled={candidate.status === 'offer' || candidate.status === 'hired'}
@@ -1263,6 +1274,19 @@ const RecruitDetail = () => {
               setAssessmentError(err.message);
             }
           }}
+        />
+      )}
+
+      {/* Video Recorder Modal */}
+      {showVideoRecorder && (
+        <VideoRecorder
+          candidateId={parseInt(candidateId)}
+          candidateName={`${candidate?.first_name || ''} ${candidate?.last_name || ''}`.trim() || candidate?.name}
+          onVideoSent={(result) => {
+            console.log('Video sent successfully:', result);
+            // Could add a toast notification here
+          }}
+          onClose={() => setShowVideoRecorder(false)}
         />
       )}
     </div>

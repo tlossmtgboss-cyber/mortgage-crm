@@ -20079,6 +20079,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Recruit Social Media routes: {e}")
 
+# Include Recruiting Video routes (video recording for candidates)
+try:
+    from routes.recruiting_video_routes import router as recruiting_video_router
+    app.include_router(recruiting_video_router, tags=["Recruiting Video"])
+    logger.info("✅ Recruiting Video routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruiting Video routes: {e}")
+
 # Include Acquisition Engine routes (lead scoring, speed-to-lead)
 try:
     from routes.acquisition_engine_routes import router as acquisition_router
