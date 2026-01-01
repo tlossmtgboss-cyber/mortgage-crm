@@ -94,8 +94,15 @@
 
 .schedule-interview-types {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.interview-type-description {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-style: italic;
 }
 
 .schedule-interview-type-btn {
@@ -173,6 +180,38 @@
   min-height: 80px;
 }
 
+.schedule-interview-field input.readonly-field {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.loading-slots {
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.validation-hint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
+.required-indicator {
+  color: #dc2626;
+  margin-left: 4px;
+}
+
 .schedule-interview-interviewers {
   display: flex;
   flex-wrap: wrap;
@@ -217,6 +256,12 @@
 .interviewer-name {
   font-size: 0.85rem;
   color: #374151;
+}
+
+.selected-check {
+  color: #10b981;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 .schedule-interview-options {
