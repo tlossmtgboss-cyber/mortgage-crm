@@ -4985,8 +4985,8 @@ from middleware.impersonation_middleware import ImpersonationEnforcementMiddlewa
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 app.add_middleware(IPBlockingMiddleware)
-# Rate limiting - high limits for production use
-# TODO: Implement per-user rate limiting instead of per-IP
+# Rate limiting - per-user for authenticated, per-IP for anonymous
+# Supports role-based tiers (admin/power_user/standard/anonymous) and endpoint-specific limits
 app.add_middleware(RateLimitMiddleware, requests_per_minute=5000, requests_per_hour=100000)
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
@@ -20038,6 +20038,30 @@ try:
     logger.info("✅ Candidate Grading routes loaded")
 except Exception as e:
     logger.warning(f"Could not load Candidate Grading routes: {e}")
+
+# Include Recruit Assessment routes (Quiz System + Calculator)
+try:
+    from routes.recruit_assessment_routes import router as recruit_assessment_router
+    app.include_router(recruit_assessment_router, tags=["Recruit Assessment"])
+    logger.info("✅ Recruit Assessment routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruit Assessment routes: {e}")
+
+# Include Recruiting Workflow routes (Automated Tasks)
+try:
+    from routes.recruiting_workflow_routes import router as recruiting_workflow_router
+    app.include_router(recruiting_workflow_router, tags=["Recruiting Workflow"])
+    logger.info("✅ Recruiting Workflow routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruiting Workflow routes: {e}")
+
+# Include Recruiting Dialer routes (Click-to-Call)
+try:
+    from routes.recruiting_dialer_routes import router as recruiting_dialer_router
+    app.include_router(recruiting_dialer_router, tags=["Recruiting Dialer"])
+    logger.info("✅ Recruiting Dialer routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruiting Dialer routes: {e}")
 
 # Include Recruit Portal routes (public candidate portal)
 try:

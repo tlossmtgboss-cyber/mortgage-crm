@@ -254,66 +254,130 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
 
 
 # ============================================================================
-# RATE LIMITING MIDDLEWARE
+# RATE LIMITING MIDDLEWARE - Per-User and Per-IP Rate Limiting
 # ============================================================================
+
+# Rate limit tiers based on user roles
+RATE_LIMIT_TIERS = {
+    # Admin users get highest limits
+    "admin": {"requests_per_minute": 500, "requests_per_hour": 20000},
+    # Power users (managers, senior LOs) get elevated limits
+    "power_user": {"requests_per_minute": 300, "requests_per_hour": 15000},
+    # Standard authenticated users
+    "standard": {"requests_per_minute": 120, "requests_per_hour": 5000},
+    # Unauthenticated/IP-based (most restrictive)
+    "anonymous": {"requests_per_minute": 60, "requests_per_hour": 1000},
+}
+
+# Endpoint categories with specific rate limits (multipliers applied to base limits)
+ENDPOINT_RATE_LIMITS = {
+    # AI endpoints are expensive - lower limits
+    "/api/v1/ai/": {"multiplier": 0.2, "burst_allowed": 5},
+    "/api/v1/chat/": {"multiplier": 0.3, "burst_allowed": 10},
+    "/api/v1/blog/generate": {"multiplier": 0.1, "burst_allowed": 2},
+    # File uploads - moderate limits
+    "/api/v1/documents/upload": {"multiplier": 0.5, "burst_allowed": 20},
+    "/api/v1/smart-docs/upload": {"multiplier": 0.5, "burst_allowed": 20},
+    # Standard API calls - normal limits
+    "/api/v1/": {"multiplier": 1.0, "burst_allowed": 100},
+}
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Rate limiting to prevent brute force attacks and DDoS
-    Tracks requests per IP address
+    Enhanced rate limiting with per-user and per-IP tracking.
+
+    Features:
+    - Per-user rate limiting for authenticated requests (via JWT)
+    - Per-IP rate limiting for unauthenticated requests
+    - Role-based rate limit tiers (admin, power_user, standard, anonymous)
+    - Endpoint-specific rate limits (AI endpoints get lower limits)
+    - Mobile app detection with adjusted limits
+    - Burst protection for expensive endpoints
     """
 
     def __init__(self, app, requests_per_minute: int = 60, requests_per_hour: int = 1000):
         super().__init__(app)
-        self.requests_per_minute = requests_per_minute
-        self.requests_per_hour = requests_per_hour
-        # Store: {ip: [(timestamp, path), ...]}
+        self.base_requests_per_minute = requests_per_minute
+        self.base_requests_per_hour = requests_per_hour
+        # Store: {rate_limit_key: [(timestamp, path), ...]}
         self.request_history: Dict[str, list] = defaultdict(list)
+        # Cache user roles to avoid repeated JWT decoding: {user_id: (role, expiry_time)}
+        self.user_role_cache: Dict[int, Tuple[str, float]] = {}
+        self.role_cache_ttl = 300  # Cache roles for 5 minutes
+        # Track burst windows for expensive endpoints: {key: [(timestamp, endpoint_category), ...]}
+        self.burst_history: Dict[str, list] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
         path = str(request.url.path)
 
         # Skip rate limiting for WebSocket connections
         if is_websocket_request(request):
-            logger.info(f"Bypassing rate limit for WebSocket: {path}")
+            logger.debug(f"Bypassing rate limit for WebSocket: {path}")
             return await call_next(request)
 
-        # Skip rate limiting for public paths (health, docs, webhooks, public API)
+        # Skip rate limiting for exempt paths
         rate_limit_exempt_paths = [
             "/health",
             "/docs",
             "/redoc",
             "/openapi.json",
-            "/api/v1/public/",  # All public endpoints
-            "/api/v1/webhook/",  # Webhooks
-            "/api/v1/borrower/",  # Borrower portal
-            "/lo/",  # Loan officer microsites
+            "/api/v1/public/",
+            "/api/v1/webhook/",
+            "/api/v1/borrower/",
+            "/lo/",
+            "/portal/",
+            "/api/portal/",
         ]
         if any(path.startswith(p) for p in rate_limit_exempt_paths):
             return await call_next(request)
 
-        # Mobile apps get higher rate limits (they share IPs via carrier NAT)
-        is_mobile = is_mobile_app_request(request)
-        per_minute_limit = self.requests_per_minute * 3 if is_mobile else self.requests_per_minute
-        per_hour_limit = self.requests_per_hour * 3 if is_mobile else self.requests_per_hour
+        # Extract user info from JWT if present
+        user_id, user_role = self._extract_user_from_token(request)
 
-        client_ip = self._get_client_ip(request)
+        # Determine rate limit key (user-based or IP-based)
+        if user_id:
+            rate_limit_key = f"user:{user_id}"
+            tier = self._get_user_tier(user_id, user_role)
+        else:
+            client_ip = self._get_client_ip(request)
+            rate_limit_key = f"ip:{client_ip}"
+            tier = "anonymous"
+
+        # Get tier limits
+        tier_config = RATE_LIMIT_TIERS.get(tier, RATE_LIMIT_TIERS["anonymous"])
+        per_minute_limit = tier_config["requests_per_minute"]
+        per_hour_limit = tier_config["requests_per_hour"]
+
+        # Apply endpoint-specific multipliers
+        endpoint_config = self._get_endpoint_config(path)
+        if endpoint_config:
+            per_minute_limit = int(per_minute_limit * endpoint_config["multiplier"])
+            per_hour_limit = int(per_hour_limit * endpoint_config["multiplier"])
+
+        # Mobile apps get higher limits (carrier NAT shares IPs)
+        is_mobile = is_mobile_app_request(request)
+        if is_mobile:
+            per_minute_limit = int(per_minute_limit * 2)
+            per_hour_limit = int(per_hour_limit * 2)
+
         current_time = time.time()
 
-        # Clean old entries for this IP
-        self.request_history[client_ip] = [
-            (ts, path) for ts, path in self.request_history[client_ip]
-            if current_time - ts < 3600  # Keep last hour
+        # Clean old entries
+        self.request_history[rate_limit_key] = [
+            (ts, p) for ts, p in self.request_history[rate_limit_key]
+            if current_time - ts < 3600
         ]
 
-        # Check rate limits
-        recent_requests = self.request_history[client_ip]
-
-        # Check per-minute limit
+        # Get request counts
+        recent_requests = self.request_history[rate_limit_key]
         minute_ago = current_time - 60
-        requests_last_minute = sum(1 for ts, _ in recent_requests if ts > minute_ago)
+        hour_ago = current_time - 3600
 
-        # Get origin for CORS headers on 429 responses
+        requests_last_minute = sum(1 for ts, _ in recent_requests if ts > minute_ago)
+        requests_last_hour = len(recent_requests)
+
+        # CORS headers for 429 responses
         origin = request.headers.get("origin", "*")
         cors_headers = {
             "Access-Control-Allow-Origin": origin,
@@ -322,41 +386,144 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Requested-With",
         }
 
+        # Check burst limit for expensive endpoints
+        if endpoint_config and endpoint_config.get("burst_allowed"):
+            burst_key = f"{rate_limit_key}:{path.split('/')[3] if len(path.split('/')) > 3 else 'api'}"
+            self.burst_history[burst_key] = [
+                ts for ts in self.burst_history[burst_key]
+                if current_time - ts < 10  # 10-second burst window
+            ]
+            if len(self.burst_history[burst_key]) >= endpoint_config["burst_allowed"]:
+                logger.warning(f"Burst limit exceeded for {rate_limit_key} on {path}")
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": "Too many requests to this endpoint. Please slow down.",
+                        "retry_after": 10,
+                        "limit_type": "burst"
+                    },
+                    headers=cors_headers
+                )
+            self.burst_history[burst_key].append(current_time)
+
+        # Check per-minute limit
         if requests_last_minute >= per_minute_limit:
-            logger.warning(f"Rate limit exceeded for IP {client_ip}: {requests_last_minute} requests/min")
+            log_identifier = f"user {user_id}" if user_id else f"IP {self._get_client_ip(request)}"
+            logger.warning(f"Rate limit exceeded for {log_identifier}: {requests_last_minute}/{per_minute_limit} requests/min")
             return JSONResponse(
                 status_code=429,
                 content={
                     "detail": "Too many requests. Please try again later.",
-                    "retry_after": 60
+                    "retry_after": 60,
+                    "limit_type": "per_minute",
+                    "current": requests_last_minute,
+                    "limit": per_minute_limit
                 },
                 headers=cors_headers
             )
 
         # Check per-hour limit
-        hour_ago = current_time - 3600
-        requests_last_hour = sum(1 for ts, _ in recent_requests if ts > hour_ago)
-
         if requests_last_hour >= per_hour_limit:
-            logger.warning(f"Hourly rate limit exceeded for IP {client_ip}: {requests_last_hour} requests/hour")
+            log_identifier = f"user {user_id}" if user_id else f"IP {self._get_client_ip(request)}"
+            logger.warning(f"Hourly rate limit exceeded for {log_identifier}: {requests_last_hour}/{per_hour_limit} requests/hour")
             return JSONResponse(
                 status_code=429,
                 content={
                     "detail": "Hourly rate limit exceeded. Please try again later.",
-                    "retry_after": 3600
+                    "retry_after": 3600,
+                    "limit_type": "per_hour",
+                    "current": requests_last_hour,
+                    "limit": per_hour_limit
                 },
                 headers=cors_headers
             )
 
-        # Add this request to history
-        self.request_history[client_ip].append((current_time, str(request.url.path)))
+        # Record this request
+        self.request_history[rate_limit_key].append((current_time, path))
 
+        # Add rate limit headers to response
         response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(per_minute_limit)
+        response.headers["X-RateLimit-Remaining"] = str(max(0, per_minute_limit - requests_last_minute - 1))
+        response.headers["X-RateLimit-Reset"] = str(int(current_time + 60))
+        if user_id:
+            response.headers["X-RateLimit-Tier"] = tier
+
         return response
 
+    def _extract_user_from_token(self, request: Request) -> Tuple[Optional[int], Optional[str]]:
+        """Extract user ID and role from JWT token if present."""
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return None, None
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+
+        try:
+            # Import here to avoid circular imports
+            from jose import jwt
+            import os
+
+            secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+            payload = jwt.decode(token, secret, algorithms=["HS256"])
+
+            # Extract user info from token
+            user_id = payload.get("user_id") or payload.get("sub")
+            if isinstance(user_id, str) and "@" in user_id:
+                # Email in sub, need to look up user_id from claims or return None
+                user_id = payload.get("user_id")
+
+            user_role = payload.get("role", "Loan Officer")
+
+            if user_id:
+                try:
+                    user_id = int(user_id)
+                except (ValueError, TypeError):
+                    return None, None
+
+            return user_id, user_role
+
+        except Exception as e:
+            # Invalid token - treat as anonymous
+            logger.debug(f"Failed to decode JWT for rate limiting: {e}")
+            return None, None
+
+    def _get_user_tier(self, user_id: int, role: Optional[str]) -> str:
+        """Determine rate limit tier based on user role."""
+        current_time = time.time()
+
+        # Check cache first
+        if user_id in self.user_role_cache:
+            cached_tier, expiry = self.user_role_cache[user_id]
+            if current_time < expiry:
+                return cached_tier
+
+        # Determine tier based on role
+        if role:
+            role_lower = role.lower()
+            if role_lower in ("admin", "superadmin", "super_admin", "system_admin"):
+                tier = "admin"
+            elif role_lower in ("manager", "branch_manager", "regional_manager", "senior_loan_officer"):
+                tier = "power_user"
+            else:
+                tier = "standard"
+        else:
+            tier = "standard"
+
+        # Cache the result
+        self.user_role_cache[user_id] = (tier, current_time + self.role_cache_ttl)
+
+        return tier
+
+    def _get_endpoint_config(self, path: str) -> Optional[Dict]:
+        """Get rate limit config for specific endpoint."""
+        for endpoint_prefix, config in ENDPOINT_RATE_LIMITS.items():
+            if path.startswith(endpoint_prefix):
+                return config
+        return None
+
     def _get_client_ip(self, request: Request) -> str:
-        """Get real client IP, accounting for proxies"""
-        # Check for forwarded IP (from proxies/load balancers)
+        """Get real client IP, accounting for proxies."""
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             return forwarded.split(",")[0].strip()
@@ -366,6 +533,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return real_ip
 
         return request.client.host if request.client else "unknown"
+
+    def get_rate_limit_stats(self, rate_limit_key: str) -> Dict:
+        """Get current rate limit stats for a key (for debugging/monitoring)."""
+        current_time = time.time()
+        history = self.request_history.get(rate_limit_key, [])
+
+        minute_ago = current_time - 60
+        hour_ago = current_time - 3600
+
+        return {
+            "key": rate_limit_key,
+            "requests_last_minute": sum(1 for ts, _ in history if ts > minute_ago),
+            "requests_last_hour": sum(1 for ts, _ in history if ts > hour_ago),
+            "total_tracked": len(history),
+        }
+
+    def clear_rate_limit(self, rate_limit_key: str) -> bool:
+        """Clear rate limit for a specific key (admin function)."""
+        if rate_limit_key in self.request_history:
+            del self.request_history[rate_limit_key]
+            return True
+        return False
 
 
 # ============================================================================
