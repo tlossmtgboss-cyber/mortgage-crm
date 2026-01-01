@@ -20,6 +20,7 @@ import LoanSmartDocsTab from '../components/smart-docs/LoanSmartDocsTab';
 import IncomeCalculator from '../components/IncomeCalculator';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import PortalSelectorModal from '../components/PortalSelectorModal';
+import SendVideoModal from '../components/video/SendVideoModal';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -81,6 +82,8 @@ function LoanDetail() {
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [showPortalSelector, setShowPortalSelector] = useState(false);
+  const [showSendVideoModal, setShowSendVideoModal] = useState(false);
+  const [clientPortalWorkspaceId, setClientPortalWorkspaceId] = useState(null);
   const [, setIsListening] = useState(false);
   const [emailHistory, setEmailHistory] = useState([]);
   const [, setSelectedEmail] = useState(null);
@@ -191,8 +194,34 @@ function LoanDetail() {
     loadLoanData();
     loadEmailHistory();
     loadLoansList();
+    loadClientPortalWorkspaceId();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Load client portal workspace ID for video messaging
+  const loadClientPortalWorkspaceId = async () => {
+    if (!id) return;
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+      const token = localStorage.getItem('token');
+      // Try looking up by loan ID first
+      let response = await fetch(`${apiUrl}/api/v1/purl-admin/workspaces/by-loan/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.workspace?.id) {
+          setClientPortalWorkspaceId(data.workspace.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading client portal workspace:', error);
+    }
+  };
 
   // Load list of loans for navigation
   const loadLoansList = async () => {
@@ -3851,6 +3880,20 @@ function LoanDetail() {
           closing_date: loan?.closing_date
         }}
       />
+
+      {/* Send Video Message Modal */}
+      {loan && clientPortalWorkspaceId && (
+        <SendVideoModal
+          isOpen={showSendVideoModal}
+          onClose={() => setShowSendVideoModal(false)}
+          recipientType="client"
+          recipientId={clientPortalWorkspaceId}
+          recipientName={loan?.borrower_name || loan?.borrower || 'Client'}
+          onSuccess={() => {
+            console.log('Video sent successfully');
+          }}
+        />
+      )}
       </div>
 
       {/* Fixed Sidebar */}
@@ -3879,6 +3922,9 @@ function LoanDetail() {
           </button>
           <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} title="Drop voicemail">
             <span>Voicemail Drop</span>
+          </button>
+          <button className="action-btn record-video" onClick={() => setShowSendVideoModal(true)} disabled={!clientPortalWorkspaceId} title={clientPortalWorkspaceId ? "Record and send a video message" : "No client portal available"}>
+            <span>Record Video</span>
           </button>
           <button className="action-btn application" onClick={() => handleAction('send_application')} title="Send application link">
             <span>Send Application</span>

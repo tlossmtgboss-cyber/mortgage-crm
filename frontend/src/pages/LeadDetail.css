@@ -1056,6 +1056,28 @@ button.borrower-btn.add-borrower-btn:hover {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
+/* Record Video button - red/recording theme */
+.action-btn.record-video {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border-color: #dc2626;
+  color: white;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.action-btn.record-video:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  border-color: #b91c1c;
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.4);
+}
+
+.action-btn.record-video:disabled {
+  background: #374151;
+  border-color: #374151;
+  color: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 /* Client Portal button - teal/cyan theme */
 .action-btn.portal {
   background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);

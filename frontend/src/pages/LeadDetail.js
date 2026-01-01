@@ -22,6 +22,7 @@ import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import NeedsListView from '../components/smart-docs/NeedsListView';
+import SendVideoModal from '../components/video/SendVideoModal';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -89,6 +90,9 @@ function LeadDetail() {
   const [showClientPortalModal, setShowClientPortalModal] = useState(false);
   const [clientPortalData, setClientPortalData] = useState(null);
   const [clientPortalLoading, setClientPortalLoading] = useState(false);
+
+  // Video message modal state
+  const [showSendVideoModal, setShowSendVideoModal] = useState(false);
 
   // Email drafts state
   const [emailDrafts, setEmailDrafts] = useState([]);
@@ -4438,6 +4442,20 @@ function LeadDetail() {
         }}
       />
 
+      {/* Send Video Message Modal */}
+      {lead && clientPortalData?.workspace_id && (
+        <SendVideoModal
+          isOpen={showSendVideoModal}
+          onClose={() => setShowSendVideoModal(false)}
+          recipientType="client"
+          recipientId={clientPortalData.workspace_id}
+          recipientName={`${lead.first_name || ''} ${lead.last_name || lead.name || 'Client'}`.trim()}
+          onSuccess={() => {
+            console.log('Video sent successfully');
+          }}
+        />
+      )}
+
       {/* Email Composer Modal */}
       <EmailComposerModal
         isOpen={showEmailComposer}
@@ -4745,6 +4763,9 @@ function LeadDetail() {
           </button>
           <button className="action-btn voicemail" onClick={() => handleAction('voicemail')} disabled={!lead.phone} title="Drop voicemail">
             <span>Voicemail Drop</span>
+          </button>
+          <button className="action-btn record-video" onClick={() => setShowSendVideoModal(true)} disabled={!clientPortalData?.workspace_id} title="Record and send a video message">
+            <span>Record Video</span>
           </button>
           <button className="action-btn application" onClick={() => handleAction('send_application')} disabled={applicationLoading} title="Send application link">
             <span>{applicationLoading ? 'Creating...' : 'Send Application'}</span>
