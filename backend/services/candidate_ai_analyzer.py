@@ -131,6 +131,12 @@ class CandidateAIAnalyzer:
         # Run analysis
         analysis = await self._run_analysis(candidate_id, candidate_data)
 
+        # Reset transaction state before storing (in case earlier queries had issues)
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
+
         # Store results in database
         await self._store_analysis(candidate_id, analysis)
 
@@ -149,65 +155,74 @@ class CandidateAIAnalyzer:
 
         data = {"candidate_id": candidate_id}
 
-        # Get basic candidate info (using only columns that exist in mm_candidates table)
-        candidate = self.db.execute(text("""
-            SELECT
-                c.id, c.first_name, c.last_name, c.email, c.phone,
-                c.source, c.status, c.target_role_name, c.applied_at,
-                c.resume_url, c.linkedin_url,
-                c.years_mortgage_experience, c.years_experience,
-                c.talent_profile, c.previous_companies,
-                c.interview_notes, c.recruiter_notes, c.hiring_manager_notes,
-                c.overall_score, c.vetting_score, c.behavioral_score,
-                c.technical_score, c.culture_fit_score,
-                rd.role_name as target_role_full
-            FROM mm_candidates c
-            LEFT JOIN mm_role_definitions rd ON rd.id = c.target_role_id
-            WHERE c.id = :candidate_id
-        """), {"candidate_id": candidate_id}).fetchone()
+        # Get basic candidate info - use simple query without JOINs to avoid table existence issues
+        try:
+            candidate = self.db.execute(text("""
+                SELECT
+                    c.id, c.first_name, c.last_name, c.email, c.phone,
+                    c.source, c.status, c.target_role_name, c.applied_at,
+                    c.resume_url, c.linkedin_url,
+                    c.years_mortgage_experience, c.years_experience,
+                    c.talent_profile, c.previous_companies,
+                    c.interview_notes, c.recruiter_notes, c.hiring_manager_notes,
+                    c.overall_score, c.vetting_score, c.behavioral_score,
+                    c.technical_score, c.culture_fit_score
+                FROM mm_candidates c
+                WHERE c.id = :candidate_id
+            """), {"candidate_id": candidate_id}).fetchone()
+        except Exception as e:
+            # If query fails, try to rollback and re-query with minimal columns
+            self.db.rollback()
+            candidate = self.db.execute(text("""
+                SELECT id, first_name, last_name, email, phone, status
+                FROM mm_candidates
+                WHERE id = :candidate_id
+            """), {"candidate_id": candidate_id}).fetchone()
 
         if not candidate:
             raise ValueError(f"Candidate {candidate_id} not found")
 
+        # Use getattr with defaults for optional columns
         data["basic_info"] = {
             "name": f"{candidate.first_name} {candidate.last_name}",
             "email": candidate.email,
             "phone": candidate.phone,
-            "source": candidate.source,
+            "source": getattr(candidate, 'source', None),
             "status": candidate.status,
-            "target_role": candidate.target_role_name or candidate.target_role_full,
-            "applied_at": str(candidate.applied_at) if candidate.applied_at else None
+            "target_role": getattr(candidate, 'target_role_name', None),
+            "applied_at": str(getattr(candidate, 'applied_at', None)) if getattr(candidate, 'applied_at', None) else None
         }
 
         # Extract production data from talent_profile JSONB if available
-        talent_profile = candidate.talent_profile or {}
+        talent_profile = getattr(candidate, 'talent_profile', None) or {}
         data["production"] = {
-            "annual_volume": talent_profile.get("annual_volume"),
-            "annual_units": talent_profile.get("annual_units"),
-            "nmls_id": talent_profile.get("nmls_id"),
-            "current_company": talent_profile.get("current_company"),
-            "current_title": talent_profile.get("current_title"),
-            "years_mortgage": candidate.years_mortgage_experience,
-            "years_total": candidate.years_experience,
-            "previous_companies": candidate.previous_companies
+            "annual_volume": talent_profile.get("annual_volume") if isinstance(talent_profile, dict) else None,
+            "annual_units": talent_profile.get("annual_units") if isinstance(talent_profile, dict) else None,
+            "nmls_id": talent_profile.get("nmls_id") if isinstance(talent_profile, dict) else None,
+            "current_company": talent_profile.get("current_company") if isinstance(talent_profile, dict) else None,
+            "current_title": talent_profile.get("current_title") if isinstance(talent_profile, dict) else None,
+            "years_mortgage": getattr(candidate, 'years_mortgage_experience', None),
+            "years_total": getattr(candidate, 'years_experience', None),
+            "previous_companies": getattr(candidate, 'previous_companies', None)
         }
 
         # Current scores for reference
         data["current_scores"] = {
-            "overall": candidate.overall_score,
-            "vetting": candidate.vetting_score,
-            "behavioral": candidate.behavioral_score,
-            "technical": candidate.technical_score,
-            "culture_fit": candidate.culture_fit_score
+            "overall": getattr(candidate, 'overall_score', None),
+            "vetting": getattr(candidate, 'vetting_score', None),
+            "behavioral": getattr(candidate, 'behavioral_score', None),
+            "technical": getattr(candidate, 'technical_score', None),
+            "culture_fit": getattr(candidate, 'culture_fit_score', None)
         }
 
-        if include_resume and candidate.resume_url:
-            data["resume_url"] = candidate.resume_url
+        resume_url = getattr(candidate, 'resume_url', None)
+        if include_resume and resume_url:
+            data["resume_url"] = resume_url
             # Note: We don't have resume text stored, only URL
 
         if include_social:
             data["social_media"] = {
-                "linkedin_url": candidate.linkedin_url
+                "linkedin_url": getattr(candidate, 'linkedin_url', None)
             }
 
             # Try to get social media activity if the table exists
@@ -264,21 +279,24 @@ class CandidateAIAnalyzer:
                 pass
 
             # Also include interview notes from candidate record
-            if candidate.interview_notes:
-                data["interview_notes_from_candidate"] = candidate.interview_notes
+            interview_notes = getattr(candidate, 'interview_notes', None)
+            if interview_notes:
+                data["interview_notes_from_candidate"] = interview_notes
 
         if include_notes:
             # Include notes from candidate record itself
             notes_list = []
-            if candidate.recruiter_notes:
+            recruiter_notes = getattr(candidate, 'recruiter_notes', None)
+            if recruiter_notes:
                 notes_list.append({
-                    "content": candidate.recruiter_notes,
+                    "content": recruiter_notes,
                     "type": "recruiter",
                     "source": "candidate_record"
                 })
-            if candidate.hiring_manager_notes:
+            hiring_manager_notes = getattr(candidate, 'hiring_manager_notes', None)
+            if hiring_manager_notes:
                 notes_list.append({
-                    "content": candidate.hiring_manager_notes,
+                    "content": hiring_manager_notes,
                     "type": "hiring_manager",
                     "source": "candidate_record"
                 })
