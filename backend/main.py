@@ -38310,8 +38310,8 @@ async def get_all_users(
     current_user: User = Depends(get_current_user)
 ):
     """Get all registered users (admin only)"""
-    # For now, allow all authenticated users to see this
-    # TODO: Add admin role check
+    from utils.auth import require_admin
+    require_admin(current_user)
 
     users = db.query(User).order_by(User.created_at.desc()).all()
 
@@ -38335,8 +38335,8 @@ async def update_user(
     current_user: User = Depends(get_current_user)
 ):
     """Update user (admin only)"""
-    # For now, allow all authenticated users
-    # TODO: Add admin role check
+    from utils.auth import require_admin
+    require_admin(current_user)
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
