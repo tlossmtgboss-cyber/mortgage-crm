@@ -159,10 +159,10 @@ async def send_candidate_notification(
 
         # Get recruiter info
         recruiter_result = db.execute(text("""
-            SELECT name FROM users WHERE id = :user_id
+            SELECT full_name FROM users WHERE id = :user_id
         """), {"user_id": recruiter_id})
         recruiter = recruiter_result.fetchone()
-        recruiter_name = recruiter.name if recruiter else "Your recruiter"
+        recruiter_name = recruiter.full_name if recruiter else "Your recruiter"
 
         # Create AI message in portal chat
         ai_message = f"""🎬 **New Video Message!**
@@ -276,7 +276,7 @@ async def complete_upload(
     try:
         # Get recruiter info
         recruiter_result = db.execute(text("""
-            SELECT name, profile_photo_url FROM users WHERE id = :user_id
+            SELECT full_name, profile_photo_url FROM users WHERE id = :user_id
         """), {"user_id": user_id})
         recruiter = recruiter_result.fetchone()
 
@@ -346,7 +346,7 @@ async def complete_upload(
                 :metadata
             )
         """), {
-            "title": f"Personal Message from {recruiter.name if recruiter else 'Your Recruiter'}",
+            "title": f"Personal Message from {recruiter.full_name if recruiter else 'Your Recruiter'}",
             "content": request.message or "Your recruiter recorded a personalized message just for you!",
             "media_url": download_result["presigned_url"],
             "created_by": user_id,
@@ -385,7 +385,7 @@ async def get_candidate_videos(
                 v.duration_seconds,
                 v.created_at,
                 v.viewed_at,
-                u.name as recruiter_name,
+                u.full_name as recruiter_name,
                 u.profile_photo_url as recruiter_photo
             FROM recruit_video_messages v
             LEFT JOIN users u ON u.id = v.recruiter_id
@@ -529,7 +529,7 @@ async def get_portal_videos(
                 v.duration_seconds,
                 v.created_at,
                 v.viewed_at,
-                u.name as recruiter_name,
+                u.full_name as recruiter_name,
                 u.profile_photo_url as recruiter_photo
             FROM recruit_video_messages v
             LEFT JOIN users u ON u.id = v.recruiter_id
