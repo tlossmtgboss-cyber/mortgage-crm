@@ -95,12 +95,38 @@
 .status-badge.status-offer { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
 .status-badge.status-hired { background: rgba(34, 197, 94, 0.3); color: #22c55e; }
 
+/* Welcome Section */
+.portal-welcome {
+  text-align: center;
+  padding: 3rem 2rem 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.portal-welcome h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  line-height: 1.2;
+  background: linear-gradient(135deg, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.portal-welcome p {
+  font-size: 1.25rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* Hero Section */
 .portal-hero {
-  padding: 3rem 2rem;
+  padding: 2rem;
   display: flex;
   gap: 2rem;
   align-items: center;
+  justify-content: center;
   max-width: 1200px;
   margin: 0 auto;
 }
