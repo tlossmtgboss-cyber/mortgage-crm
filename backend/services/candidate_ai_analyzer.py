@@ -153,12 +153,12 @@ class CandidateAIAnalyzer:
         candidate = self.db.execute(text("""
             SELECT
                 c.id, c.first_name, c.last_name, c.email, c.phone,
-                c.source, c.status, c.target_role, c.applied_at,
+                c.source, c.status, c.target_role_name, c.applied_at,
                 c.resume_url, c.resume_text,
                 c.linkedin_url, c.facebook_url, c.instagram_url, c.twitter_url,
                 c.annual_volume, c.annual_units, c.nmls_id,
                 c.current_company, c.current_title,
-                c.years_mortgage, c.years_sales, c.years_total
+                c.years_mortgage_experience, c.years_experience
             FROM mm_candidates c
             WHERE c.id = :candidate_id
         """), {"candidate_id": candidate_id}).fetchone()
@@ -172,7 +172,7 @@ class CandidateAIAnalyzer:
             "phone": candidate.phone,
             "source": candidate.source,
             "status": candidate.status,
-            "target_role": candidate.target_role,
+            "target_role": candidate.target_role_name,
             "applied_at": str(candidate.applied_at) if candidate.applied_at else None
         }
 
@@ -182,9 +182,8 @@ class CandidateAIAnalyzer:
             "nmls_id": candidate.nmls_id,
             "current_company": candidate.current_company,
             "current_title": candidate.current_title,
-            "years_mortgage": candidate.years_mortgage,
-            "years_sales": candidate.years_sales,
-            "years_total": candidate.years_total
+            "years_mortgage": candidate.years_mortgage_experience,
+            "years_total": candidate.years_experience
         }
 
         if include_resume and candidate.resume_text:
