@@ -16,6 +16,11 @@ from database import get_db
 import os
 import uuid
 
+# Create alias for compatibility
+def get_db_connection():
+    """Alias for get_db() for compatibility."""
+    return get_db()
+
 router = APIRouter(prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"])
 
 
