@@ -148,7 +148,7 @@ const IntakeEngine = lazy(() => import('./components/intake/IntakeEngine'));
 const ListingPortalTransactions = lazy(() => import('./pages/ListingPortalTransactions'));
 const ListingPortalTransactionDetail = lazy(() => import('./pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazy(() => import('./pages/ListingAgentPortal'));
-const RecruitPortal = lazy(() => import('./pages/RecruitPortal'));
+const RecruitPortal = lazy(() => import('./pages/RecruitPortal/RecruitPortal'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 
