@@ -849,6 +849,92 @@ async def get_dashboard(
     )
 
 
+def _get_response_times_for_percentiles(
+    db: Session,
+    campaign_id: Optional[str],
+    days: int
+) -> List[int]:
+    """
+    Get response times from speed-to-lead events for percentile calculation.
+
+    Queries the AcquisitionEvent table for SPEED_TO_LEAD_RESPONSE events
+    and extracts the response_time_seconds from each event's payload.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timedelta
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    try:
+        if campaign_id:
+            result = db.execute(text("""
+                SELECT event_payload
+                FROM acquisition_events
+                WHERE event_type = 'SPEED_TO_LEAD_RESPONSE'
+                  AND campaign_instance_id = :campaign_id
+                  AND event_timestamp >= :cutoff
+                  AND event_payload IS NOT NULL
+            """), {"campaign_id": campaign_id, "cutoff": cutoff})
+        else:
+            result = db.execute(text("""
+                SELECT event_payload
+                FROM acquisition_events
+                WHERE event_type = 'SPEED_TO_LEAD_RESPONSE'
+                  AND event_timestamp >= :cutoff
+                  AND event_payload IS NOT NULL
+            """), {"cutoff": cutoff})
+
+        response_times = []
+        for row in result.fetchall():
+            payload = row[0]
+            if isinstance(payload, dict) and payload.get("response_time_seconds"):
+                response_times.append(int(payload["response_time_seconds"]))
+
+        return response_times
+
+    except Exception as e:
+        logger.warning(f"Failed to get response times for percentiles: {e}")
+        return []
+
+
+def _calculate_percentile(values: List[int], percentile: int) -> int:
+    """
+    Calculate the specified percentile from a list of values.
+
+    Args:
+        values: List of numeric values
+        percentile: The percentile to calculate (0-100)
+
+    Returns:
+        The value at the specified percentile
+    """
+    if not values:
+        return 0
+
+    sorted_values = sorted(values)
+    n = len(sorted_values)
+
+    # Calculate the index for the percentile
+    index = (percentile / 100) * (n - 1)
+
+    # If the index is a whole number, return that value
+    if index == int(index):
+        return sorted_values[int(index)]
+
+    # Otherwise, interpolate between the two surrounding values
+    lower_index = int(index)
+    upper_index = lower_index + 1
+
+    if upper_index >= n:
+        return sorted_values[-1]
+
+    lower_value = sorted_values[lower_index]
+    upper_value = sorted_values[upper_index]
+    fraction = index - lower_index
+
+    return int(lower_value + fraction * (upper_value - lower_value))
+
+
 @router.get("/speed-to-lead", response_model=SpeedToLeadMetrics)
 async def get_speed_to_lead_metrics(
     campaign_id: Optional[str] = Query(None),
@@ -868,9 +954,20 @@ async def get_speed_to_lead_metrics(
     missed_sla = sum(c.hot_leads_missed_sla or 0 for c in campaigns)
     compliance = (within_sla / total_hot * 100) if total_hot > 0 else 100
 
-    # Average response time
-    avg_times = [c.avg_speed_to_first_contact_seconds for c in campaigns if c.avg_speed_to_first_contact_seconds]
-    avg_response = int(sum(avg_times) / len(avg_times)) if avg_times else 0
+    # Get actual response times from speed-to-lead events for percentile calculation
+    response_times = _get_response_times_for_percentiles(db, campaign_id, days)
+
+    # Calculate metrics
+    if response_times:
+        avg_response = int(sum(response_times) / len(response_times))
+        p50_response = _calculate_percentile(response_times, 50)
+        p90_response = _calculate_percentile(response_times, 90)
+    else:
+        # Fallback to campaign averages if no event data
+        avg_times = [c.avg_speed_to_first_contact_seconds for c in campaigns if c.avg_speed_to_first_contact_seconds]
+        avg_response = int(sum(avg_times) / len(avg_times)) if avg_times else 0
+        p50_response = avg_response
+        p90_response = avg_response
 
     return SpeedToLeadMetrics(
         total_hot_leads=total_hot,
@@ -878,8 +975,8 @@ async def get_speed_to_lead_metrics(
         missed_sla=missed_sla,
         compliance_rate=round(compliance, 2),
         avg_response_time_seconds=avg_response,
-        p50_response_time_seconds=avg_response,  # TODO: Calculate actual percentiles
-        p90_response_time_seconds=avg_response * 2,  # TODO: Calculate actual percentiles
+        p50_response_time_seconds=p50_response,
+        p90_response_time_seconds=p90_response,
     )
 
 
