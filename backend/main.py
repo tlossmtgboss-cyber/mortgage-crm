@@ -53337,6 +53337,27 @@ async def get_impersonation_history(
             if manager:
                 manager_counts[manager.full_name] = manager_counts.get(manager.full_name, 0) + 1
 
+            # Get actions taken during this impersonation session
+            session_end = session.ended_at if session.ended_at else datetime.now(timezone.utc)
+            actions_query = db.query(AuditLog).filter(
+                AuditLog.changed_by_id == session.manager_id,
+                AuditLog.user_id == session.impersonated_user_id,
+                AuditLog.timestamp >= session.started_at,
+                AuditLog.timestamp <= session_end
+            ).order_by(AuditLog.timestamp.asc()).all()
+
+            actions = [
+                {
+                    "id": action.id,
+                    "action_type": action.change_type,
+                    "entity_type": action.entity_type,
+                    "entity_id": action.entity_id,
+                    "timestamp": action.timestamp.isoformat(),
+                    "reason": action.reason
+                }
+                for action in actions_query
+            ]
+
             session_list.append({
                 "id": session.id,
                 "started_at": session.started_at.isoformat(),
@@ -53350,7 +53371,7 @@ async def get_impersonation_history(
                 "reason": session.reason,
                 "reason_notes": session.reason if session.reason else None,
                 "employee_notified": session.notify_employee,
-                "actions": []  # TODO: Implement action tracking
+                "actions": actions
             })
 
         # Calculate summary
