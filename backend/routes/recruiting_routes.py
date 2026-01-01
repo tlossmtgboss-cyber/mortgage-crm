@@ -20,7 +20,26 @@ router = APIRouter(prefix="/api/v1/recruiting", tags=["recruiting"])
 # QUIZ TEMPLATES ENDPOINTS
 # =============================================================================
 
-@router.get("/quiz-templates/{disposition}")
+def get_options_for_question_type(question_type: str):
+    """Generate options based on question type."""
+    if question_type == "likert":
+        return [
+            {"value": "1", "label": "Poor", "score": 1},
+            {"value": "2", "label": "Below Average", "score": 2},
+            {"value": "3", "label": "Average", "score": 3},
+            {"value": "4", "label": "Good", "score": 4},
+            {"value": "5", "label": "Excellent", "score": 5}
+        ]
+    elif question_type == "yes_no":
+        return [
+            {"value": "yes", "label": "Yes", "score": 5},
+            {"value": "no", "label": "No", "score": 1}
+        ]
+    else:
+        return []
+
+
+@router.get("/quiz/{disposition}")
 async def get_quiz_by_disposition(
     disposition: str,
     db: Session = Depends(get_db)
@@ -37,24 +56,34 @@ async def get_quiz_by_disposition(
         ORDER BY display_order ASC
     """), {"disposition": disposition})
 
-    questions = [
-        {
+    questions = []
+    for row in result.fetchall():
+        question_type = row[3]
+        questions.append({
             "id": row[0],
             "disposition": row[1],
             "question_text": row[2],
-            "question_type": row[3],
+            "question_type": question_type,
             "category": row[4],
             "weight": float(row[5]) if row[5] else 1.0,
-            "display_order": row[6]
-        }
-        for row in result.fetchall()
-    ]
+            "display_order": row[6],
+            "options": get_options_for_question_type(question_type)
+        })
 
     if not questions:
         raise HTTPException(status_code=404, detail=f"No quiz found for disposition: {disposition}")
 
+    disposition_labels = {
+        "screening": "Screening",
+        "phone_screen": "Phone Screen",
+        "interview": "Interview",
+        "assessment": "Assessment",
+        "offer": "Offer"
+    }
+
     return {
         "disposition": disposition,
+        "disposition_label": disposition_labels.get(disposition, disposition.title()),
         "questions": questions,
         "total": len(questions)
     }
