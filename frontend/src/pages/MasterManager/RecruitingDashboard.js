@@ -754,7 +754,12 @@ const RecruitingDashboard = () => {
                   </tr>
                 ) : (
                   offers.map((offer) => (
-                    <tr key={offer.id}>
+                    <tr
+                      key={offer.id}
+                      onClick={() => offer.candidate_id && navigate(`/master-manager/recruiting/${offer.candidate_id}`)}
+                      style={{ cursor: offer.candidate_id ? 'pointer' : 'default' }}
+                      className={offer.candidate_id ? 'mm-clickable-row' : ''}
+                    >
                       <td><strong>{offer.offer_number}</strong></td>
                       <td>{offer.candidate_name}</td>
                       <td>{offer.role_title}</td>
