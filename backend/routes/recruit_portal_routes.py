@@ -530,12 +530,12 @@ async def purl_chat_with_assistant(
         if not portal_data:
             raise HTTPException(status_code=404, detail="Portal not found")
 
-        response = await portal_service.chat_with_assistant(
+        result = portal_service.chat_with_assistant(
             workspace_id=portal_data.workspace_id,
             message=request.message,
             context=request.context
         )
-        return ChatResponse(response=response, metadata={"timestamp": datetime.now().isoformat()})
+        return ChatResponse(response=result.get("response", ""), metadata={"timestamp": datetime.now().isoformat()})
     except Exception as e:
         logger.error(f"Error in chat: {e}")
         raise HTTPException(status_code=500, detail=str(e))
