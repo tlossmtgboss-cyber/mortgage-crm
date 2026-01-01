@@ -68,6 +68,23 @@ export const getNextQuestion = async (sessionId) => {
 };
 
 /**
+ * Get the previous question (for going back in the flow)
+ * @param {string} sessionId - The session ID
+ */
+export const getPreviousQuestion = async (sessionId) => {
+  const response = await fetch(`${API_BASE}/api/v1/intake/sessions/${sessionId}/previous`, {
+    headers: getAuthHeaders()
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'Failed to get previous question');
+  }
+
+  return response.json();
+};
+
+/**
  * Submit an answer to the current question
  * @param {string} sessionId - The session ID
  * @param {Object} data - Answer data (question_id, value, metadata)
@@ -167,6 +184,7 @@ export const intakeApi = {
   createSession,
   getSession,
   getNextQuestion,
+  getPreviousQuestion,
   submitAnswer,
   getScores,
   getCoaching,

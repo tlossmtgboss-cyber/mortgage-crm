@@ -232,12 +232,40 @@ export function useIntakeSession(options = {}) {
   }, [currentQuestion, submitAnswer]);
 
   /**
-   * Go back to previous question (if supported)
+   * Go back to previous question
    */
   const goBack = useCallback(async () => {
-    // TODO: Implement if backend supports going back
-    console.warn('Go back not yet implemented');
-  }, []);
+    if (!sessionId) {
+      return { success: false, error: 'No active session' };
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      // Get the previous question from the backend
+      const previousQuestion = await intakeApi.getPreviousQuestion(sessionId);
+
+      if (!previousQuestion) {
+        return { success: false, error: 'No previous question available' };
+      }
+
+      if (mountedRef.current) {
+        setCurrentQuestion(previousQuestion);
+      }
+
+      return { success: true, question: previousQuestion };
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err.message);
+      }
+      return { success: false, error: err.message };
+    } finally {
+      if (mountedRef.current) {
+        setSubmitting(false);
+      }
+    }
+  }, [sessionId]);
 
   // Initialize on mount only
   useEffect(() => {

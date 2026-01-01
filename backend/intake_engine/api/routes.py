@@ -371,6 +371,57 @@ async def get_next_question(
     )
 
 
+@router.get("/sessions/{session_id}/previous", response_model=Optional[NextQuestionResponse])
+async def get_previous_question(
+    session_id: str,
+    engine: IntakeEngine = Depends(get_engine),
+):
+    """Get the previous question (for going back in the flow)"""
+    session = engine.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status != SessionStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail=f"Session is {session.status}")
+
+    # Build ordered list of answered questions from answer_meta timestamps
+    answered_questions = []
+    for question_id, meta in session.answer_meta.items():
+        answered_at = meta.answered_at if hasattr(meta, 'answered_at') else meta.get('answered_at')
+        if answered_at:
+            answered_questions.append((question_id, answered_at))
+
+    # Sort by timestamp (oldest first)
+    answered_questions.sort(key=lambda x: x[1])
+
+    if len(answered_questions) < 1:
+        return None  # No previous question exists
+
+    # Get the last answered question (this is what we'll return to)
+    previous_question_id = answered_questions[-1][0]
+
+    # Get the question definition from engine
+    prev_q = engine.questions.get(previous_question_id)
+    if not prev_q:
+        return None
+
+    # Get the previous answer value for context
+    previous_answer = session.answers.get(previous_question_id)
+
+    return NextQuestionResponse(
+        question_id=prev_q.question_id,
+        prompt=prev_q.prompt,
+        answer_types=prev_q.answer_types,
+        ui=prev_q.ui,
+        options=prev_q.options,
+        context={
+            **prev_q.context,
+            "previous_answer": previous_answer,
+            "is_going_back": True,
+        },
+    )
+
+
 @router.post("/sessions/{session_id}/answer", response_model=SubmitAnswerResponse)
 async def submit_answer(
     session_id: str,
