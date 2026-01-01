@@ -841,53 +841,53 @@ const RecruitDetail = () => {
                 onClick={handleClickToCall}
                 disabled={!candidate.phone || isCallInProgress}
               >
-                {isCallInProgress ? 'Calling...' : 'Call'}
+                📞 {isCallInProgress ? 'Calling...' : 'Call'}
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => window.open(`mailto:${candidate.email}`, '_blank')}
                 disabled={!candidate.email}
               >
-                Email
+                ✉️ Email
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowScheduleInterviewModal(true)}
               >
-                Schedule Interview
+                📅 Interview
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowVideoRecorder(true)}
               >
-                Record Video
+                🎥 Video
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('offer')}
                 disabled={candidate.status === 'offer' || candidate.status === 'hired'}
               >
-                Make Offer
+                📝 Offer
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('rejected')}
                 disabled={candidate.status === 'rejected' || candidate.status === 'hired'}
               >
-                Reject
+                ❌ Reject
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('hired')}
                 disabled={candidate.status === 'hired'}
               >
-                Mark Hired
+                ✅ Hired
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowEscalateModal(true)}
               >
-                Escalate
+                ⚠️ Escalate
               </button>
             </div>
           </div>
