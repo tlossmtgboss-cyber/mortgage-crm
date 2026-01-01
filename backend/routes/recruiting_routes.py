@@ -947,7 +947,7 @@ async def schedule_interview(
     logger = logging.getLogger(__name__)
 
     try:
-        logger.info(f"Scheduling interview for candidate {candidate_id} by user {current_user.id}")
+        logger.info(f"Scheduling interview for candidate {candidate_id} by user {current_user.id} (org: {current_user.organization_id})")
         logger.info(f"Interview data: {data.model_dump()}")
 
         service = RecruitingService(db)
@@ -960,8 +960,16 @@ async def schedule_interview(
         return result
     except Exception as e:
         tb = traceback.format_exc()
-        logger.error(f"Failed to schedule interview: {str(e)}\n{tb}")
-        raise HTTPException(status_code=500, detail=f"Failed to schedule interview: {str(e)}")
+        error_msg = f"Failed to schedule interview: {str(e)}"
+        logger.error(f"{error_msg}\n{tb}")
+        # Return error as JSON instead of raising HTTPException so frontend can see details
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "user_id": current_user.id if current_user else None,
+            "candidate_id": candidate_id
+        }
 
 
 @router.post("/interviews/{interview_id}/feedback")
