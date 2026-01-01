@@ -60,10 +60,6 @@ const RecruitPortal = () => {
       if (response.ok) {
         const data = await response.json();
         setVideos(data.videos || []);
-        // If there are new unwatched videos, switch to videos tab
-        if (data.videos?.some(v => v.is_new)) {
-          setActiveTab('videos');
-        }
       }
     } catch (err) {
       console.error('Error fetching videos:', err);
@@ -155,18 +151,45 @@ const RecruitPortal = () => {
         </div>
       </section>
 
+      {/* Personal Video Message - Inline above tabs */}
+      {videos.length > 0 && (
+        <section className="personal-video-section">
+          <div className="personal-video-container">
+            <div className="personal-video-header">
+              <span className="video-emoji">🎬</span>
+              <div>
+                <h3>A Personal Message for You</h3>
+                <p>Your recruiter recorded this just for you</p>
+              </div>
+            </div>
+            <div className="personal-video-player">
+              <video
+                controls
+                poster={videos[0].recruiter_photo || undefined}
+                onPlay={() => {
+                  setPlayingVideoId(videos[0].id);
+                  if (videos[0].is_new) {
+                    markVideoViewed(videos[0].id);
+                  }
+                }}
+                onEnded={() => setPlayingVideoId(null)}
+              >
+                <source src={videos[0].video_url} type="video/webm" />
+                Your browser does not support video playback.
+              </video>
+            </div>
+            {videos[0].message && (
+              <div className="personal-video-message">
+                <p>"{videos[0].message}"</p>
+                <span className="video-from">— {videos[0].recruiter_name}</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Tab Navigation */}
       <nav className="portal-tabs">
-        {videos.length > 0 && (
-          <button
-            className={`tab-button ${activeTab === 'videos' ? 'active' : ''}`}
-            onClick={() => setActiveTab('videos')}
-          >
-            <span className="tab-icon">🎬</span>
-            Videos
-            {videos.some(v => v.is_new) && <span className="tab-badge">NEW</span>}
-          </button>
-        )}
         <button
           className={`tab-button ${activeTab === 'calculator' ? 'active' : ''}`}
           onClick={() => setActiveTab('calculator')}
@@ -195,63 +218,6 @@ const RecruitPortal = () => {
 
       {/* Tab Content */}
       <main className="portal-content">
-        {activeTab === 'videos' && (
-          <div className="videos-section">
-            <h3>Messages from Your Recruiter</h3>
-            <div className="videos-grid">
-              {videos.map((video) => (
-                <div
-                  key={video.id}
-                  className={`video-card ${video.is_new ? 'new' : ''} ${playingVideoId === video.id ? 'playing' : ''}`}
-                >
-                  {video.is_new && <span className="video-new-badge">NEW</span>}
-                  <div className="video-wrapper">
-                    <video
-                      controls
-                      poster={video.recruiter_photo || undefined}
-                      onPlay={() => {
-                        setPlayingVideoId(video.id);
-                        if (video.is_new) {
-                          markVideoViewed(video.id);
-                        }
-                      }}
-                      onEnded={() => setPlayingVideoId(null)}
-                    >
-                      <source src={video.video_url} type="video/webm" />
-                      Your browser does not support video playback.
-                    </video>
-                  </div>
-                  <div className="video-info">
-                    <div className="video-recruiter">
-                      <div className="recruiter-avatar-small">
-                        {video.recruiter_photo ? (
-                          <img src={video.recruiter_photo} alt={video.recruiter_name} />
-                        ) : (
-                          <span>{video.recruiter_name?.charAt(0) || 'R'}</span>
-                        )}
-                      </div>
-                      <div>
-                        <span className="recruiter-name-small">{video.recruiter_name}</span>
-                        <span className="video-date">
-                          {new Date(video.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    {video.message && (
-                      <p className="video-message">{video.message}</p>
-                    )}
-                    {video.duration_seconds && (
-                      <span className="video-duration">
-                        {Math.floor(video.duration_seconds / 60)}:{(video.duration_seconds % 60).toString().padStart(2, '0')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {activeTab === 'calculator' && (
           <ProductionCalculator
             slug={slug}

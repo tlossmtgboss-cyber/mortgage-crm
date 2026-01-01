@@ -286,6 +286,13 @@ async def complete_upload(
         """), {"user_id": user_id})
         recruiter = recruiter_result.fetchone()
 
+        # Delete any existing videos for this candidate (one video per candidate policy)
+        db.execute(text("""
+            DELETE FROM recruit_video_messages
+            WHERE candidate_id = :candidate_id
+        """), {"candidate_id": request.candidate_id})
+        logger.info(f"Cleared previous videos for candidate {request.candidate_id}")
+
         # Save video metadata
         result = db.execute(text("""
             INSERT INTO recruit_video_messages (

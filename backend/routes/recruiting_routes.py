@@ -121,6 +121,116 @@ async def list_all_quiz_templates(
     }
 
 
+class QuizResponseItem(BaseModel):
+    template_id: int
+    response_value: str
+    numeric_score: float
+
+
+class QuizSubmission(BaseModel):
+    disposition: str
+    responses: List[QuizResponseItem]
+
+
+@router.post("/candidates/{candidate_id}/quiz")
+async def submit_quiz(
+    candidate_id: int,
+    submission: QuizSubmission,
+    responded_by: int = Query(..., description="User ID who submitted the quiz"),
+    db: Session = Depends(get_db)
+):
+    """
+    Submit quiz responses for a candidate and compute assessment scores.
+    """
+    try:
+        # Delete existing responses for this disposition
+        db.execute(text("""
+            DELETE FROM recruit_quiz_responses
+            WHERE candidate_id = :candidate_id AND disposition = :disposition
+        """), {"candidate_id": candidate_id, "disposition": submission.disposition})
+
+        # Insert new responses
+        for resp in submission.responses:
+            db.execute(text("""
+                INSERT INTO recruit_quiz_responses
+                (candidate_id, template_id, disposition, response_value, numeric_score, responded_by)
+                VALUES (:candidate_id, :template_id, :disposition, :response_value, :numeric_score, :responded_by)
+            """), {
+                "candidate_id": candidate_id,
+                "template_id": resp.template_id,
+                "disposition": submission.disposition,
+                "response_value": resp.response_value,
+                "numeric_score": resp.numeric_score,
+                "responded_by": responded_by
+            })
+
+        # Compute scores by category
+        scores_result = db.execute(text("""
+            SELECT
+                qr.category,
+                AVG(qr.numeric_score) as avg_score,
+                SUM(qr.numeric_score * qt.weight) / NULLIF(SUM(qt.weight), 0) as weighted_score
+            FROM recruit_quiz_responses qr
+            JOIN recruit_quiz_templates qt ON qt.id = qr.template_id
+            WHERE qr.candidate_id = :candidate_id
+            GROUP BY qr.category
+        """), {"candidate_id": candidate_id})
+
+        category_scores = {}
+        for row in scores_result.fetchall():
+            category_scores[row[0]] = round(float(row[2] or row[1] or 0), 1)
+
+        # Calculate overall score
+        overall_score = round(sum(category_scores.values()) / len(category_scores), 1) if category_scores else 0
+
+        # Upsert assessment scores
+        db.execute(text("""
+            INSERT INTO recruit_assessment_scores
+            (candidate_id, production_score, disc_score, character_score, skills_score, culture_fit_score, overall_score, last_quiz_disposition, quiz_count, last_updated)
+            VALUES (:candidate_id, :production, :disc, :character, :skills, :culture_fit, :overall, :disposition, 1, NOW())
+            ON CONFLICT (candidate_id) DO UPDATE SET
+                production_score = COALESCE(:production, recruit_assessment_scores.production_score),
+                disc_score = COALESCE(:disc, recruit_assessment_scores.disc_score),
+                character_score = COALESCE(:character, recruit_assessment_scores.character_score),
+                skills_score = COALESCE(:skills, recruit_assessment_scores.skills_score),
+                culture_fit_score = COALESCE(:culture_fit, recruit_assessment_scores.culture_fit_score),
+                overall_score = :overall,
+                last_quiz_disposition = :disposition,
+                quiz_count = recruit_assessment_scores.quiz_count + 1,
+                last_updated = NOW()
+        """), {
+            "candidate_id": candidate_id,
+            "production": category_scores.get("production"),
+            "disc": category_scores.get("disc"),
+            "character": category_scores.get("character"),
+            "skills": category_scores.get("skills"),
+            "culture_fit": category_scores.get("culture_fit"),
+            "overall": overall_score,
+            "disposition": submission.disposition
+        })
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "candidate_id": candidate_id,
+            "disposition": submission.disposition,
+            "responses_saved": len(submission.responses),
+            "scores": {
+                "production": category_scores.get("production"),
+                "disc": category_scores.get("disc"),
+                "character": category_scores.get("character"),
+                "skills": category_scores.get("skills"),
+                "culture_fit": category_scores.get("culture_fit"),
+                "overall": overall_score
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to submit quiz: {str(e)}")
+
+
 # =============================================================================
 # PARTNER RECRUIT ENDPOINTS (Realtors from RETR)
 # =============================================================================

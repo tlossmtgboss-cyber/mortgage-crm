@@ -211,7 +211,8 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
     <div className="video-recorder-overlay" onClick={onClose}>
       <div className="video-recorder-modal" onClick={e => e.stopPropagation()}>
         <div className="video-recorder-header">
-          <h3>Record a Message for {candidateName}</h3>
+          <h3>Personal Message for {candidateName}</h3>
+          <span className="subtitle">Make them feel special with a personal touch ✨</span>
           <button className="video-close-btn" onClick={onClose}>×</button>
         </div>
 
@@ -268,7 +269,7 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
                     onClick={stopRecording}
                   >
                     <span className="stop-icon"></span>
-                    Stop Recording
+                    Done Recording
                   </button>
                 )}
               </>
@@ -279,14 +280,14 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
                   onClick={discardRecording}
                   disabled={isSending}
                 >
-                  Re-record
+                  Try Again
                 </button>
                 <button
                   className="video-send-btn"
                   onClick={sendVideo}
                   disabled={isSending}
                 >
-                  {isSending ? 'Sending...' : 'Send to Candidate'}
+                  {isSending ? 'Sending...' : `Send to ${candidateName.split(' ')[0]} 🚀`}
                 </button>
               </div>
             )}
@@ -295,12 +296,12 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
           {/* Message Input */}
           {isPreviewing && (
             <div className="video-message-section">
-              <label htmlFor="videoMessage">Add a message (optional):</label>
+              <label htmlFor="videoMessage">Add a personal note</label>
               <textarea
                 id="videoMessage"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Hi! I wanted to share some exciting updates about your application..."
+                placeholder={`Hey ${candidateName.split(' ')[0]}! I'm excited to connect with you...`}
                 rows={3}
               />
               <label className="video-notify-checkbox">
@@ -309,7 +310,7 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
                   checked={sendNotification}
                   onChange={(e) => setSendNotification(e.target.checked)}
                 />
-                <span>Send AI notification to candidate's portal</span>
+                <span>Notify {candidateName.split(' ')[0]} in their portal</span>
               </label>
             </div>
           )}
@@ -324,12 +325,12 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
           {/* Tips */}
           {!isPreviewing && !isRecording && (
             <div className="video-tips">
-              <h4>Tips for a great video:</h4>
+              <h4>Make it memorable</h4>
               <ul>
-                <li>Ensure good lighting on your face</li>
-                <li>Keep it short and engaging (30-60 seconds)</li>
-                <li>Mention specific things about the candidate</li>
-                <li>Share what makes your company unique</li>
+                <li>Smile! Your energy is contagious</li>
+                <li>Keep it brief - 30-60 seconds is perfect</li>
+                <li>Use {candidateName.split(' ')[0]}'s name</li>
+                <li>Share why you're excited about them</li>
               </ul>
             </div>
           )}
