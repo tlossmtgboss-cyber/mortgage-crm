@@ -83,10 +83,10 @@ async def initiate_candidate_call(
                        rc.status, rc.current_company, rc.current_title,
                        rc.annual_volume, rc.annual_units,
                        ras.overall_score, ras.production_score, ras.character_score,
-                       (SELECT content FROM recruiting_notes
+                       (SELECT content FROM mm_candidate_notes
                         WHERE candidate_id = rc.id
                         ORDER BY created_at DESC LIMIT 1) as last_note
-                FROM recruiting_candidates rc
+                FROM mm_candidates rc
                 LEFT JOIN recruit_assessment_scores ras ON ras.candidate_id = rc.id
                 WHERE rc.id = :candidate_id
             """),
@@ -171,7 +171,7 @@ async def connect_call_via_twilio(call_id: str):
             text("""
                 SELECT ch.*, rc.phone, u.phone as caller_phone
                 FROM recruiting_call_history ch
-                JOIN recruiting_candidates rc ON rc.id = ch.candidate_id
+                JOIN mm_candidates rc ON rc.id = ch.candidate_id
                 JOIN users u ON u.id = ch.caller_user_id
                 WHERE ch.id = :call_id
             """),
@@ -318,7 +318,7 @@ async def get_call_status(call_id: str):
             text("""
                 SELECT ch.*, rc.first_name, rc.last_name
                 FROM recruiting_call_history ch
-                JOIN recruiting_candidates rc ON rc.id = ch.candidate_id
+                JOIN mm_candidates rc ON rc.id = ch.candidate_id
                 WHERE ch.id = :call_id
             """),
             {"call_id": call_id}
@@ -373,7 +373,7 @@ async def get_recruiting_dialer_queue(
                         WHERE candidate_id = rc.id
                         ORDER BY called_at DESC LIMIT 1) as last_call
                 FROM recruiting_tasks rt
-                JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                JOIN mm_candidates rc ON rc.id = rt.candidate_id
                 LEFT JOIN recruit_assessment_scores ras ON ras.candidate_id = rc.id
                 WHERE rt.organization_id = :org_id
                     AND rt.status = 'pending'
@@ -444,7 +444,7 @@ async def run_dialer_migration(admin_key: str = Query(...)):
         called_at TIMESTAMP DEFAULT NOW(),
         completed_at TIMESTAMP,
         CONSTRAINT fk_call_candidate FOREIGN KEY (candidate_id)
-            REFERENCES recruiting_candidates(id) ON DELETE CASCADE
+            REFERENCES mm_candidates(id) ON DELETE CASCADE
     );
 
     CREATE INDEX IF NOT EXISTS idx_call_history_candidate
