@@ -269,6 +269,8 @@ async def update_milestone(
 ):
     """Update a milestone status"""
     from services.listing_portal_service import listing_portal_service
+    from services.notification_service import NotificationService
+    from sqlalchemy import text
 
     milestone = listing_portal_service.update_milestone(
         db=db,
@@ -281,7 +283,47 @@ async def update_milestone(
     if not milestone:
         raise HTTPException(status_code=400, detail="Failed to update milestone")
 
-    # TODO: Send milestone notification to subscribed parties
+    # Send milestone notification to subscribed parties
+    try:
+        # Get parties subscribed to milestone changes
+        result = db.execute(text("""
+            SELECT p.id, p.email, p.first_name, p.last_name, p.role,
+                   t.property_address
+            FROM transaction_parties p
+            JOIN listing_transactions t ON t.id = p.transaction_id
+            WHERE p.transaction_id = :txn_id
+              AND p.notify_milestone_changes = true
+              AND p.is_active = true
+              AND p.email IS NOT NULL
+        """), {"txn_id": transaction_id})
+        parties = result.fetchall()
+
+        if parties:
+            notification_service = NotificationService()
+            status_text = "completed" if request.status == "completed" else f"updated to {request.status}"
+
+            for party in parties:
+                try:
+                    notification_service.send_email(
+                        to_email=party.email,
+                        subject=f"Milestone Update: {milestone['milestone_name']}",
+                        html_content=f"""
+                        <p>Hi {party.first_name or 'there'},</p>
+                        <p>A milestone has been {status_text} for the transaction at <strong>{party.property_address}</strong>.</p>
+                        <p><strong>Milestone:</strong> {milestone['milestone_name']}</p>
+                        <p><strong>Status:</strong> {milestone['status']}</p>
+                        {f"<p><strong>Target Date:</strong> {milestone['target_date']}</p>" if milestone.get('target_date') else ""}
+                        <p>Log in to your portal to view more details.</p>
+                        <p>Best regards,<br>Your Loan Team</p>
+                        """
+                    )
+                    logger.info(f"Milestone notification sent to {party.email} for milestone {milestone_id}")
+                except Exception as email_err:
+                    logger.warning(f"Failed to send milestone notification to {party.email}: {email_err}")
+
+    except Exception as notify_err:
+        logger.warning(f"Failed to send milestone notifications: {notify_err}")
+        # Don't fail the request if notifications fail
 
     return success_response(milestone, "Milestone updated")
 

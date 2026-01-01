@@ -554,7 +554,7 @@ class CandidateGradingService:
                 skills_score, skills_grade, skills_breakdown,
                 culture_fit_score, culture_fit_grade, culture_fit_breakdown,
                 overall_score, overall_grade,
-                strengths, weaknesses, recruiter_notes, recruiter_recommendation
+                strengths, weaknesses
             ) VALUES (
                 :org_id, :candidate_id, :assessed_by, :status,
                 :production_score, :production_grade, :production_breakdown,
@@ -565,7 +565,7 @@ class CandidateGradingService:
                 :skills_score, :skills_grade, :skills_breakdown,
                 :culture_score, :culture_grade, :culture_breakdown,
                 :overall_score, :overall_grade,
-                :strengths, :weaknesses, :notes, :recommendation
+                :strengths, :weaknesses
             )
             RETURNING id, assessed_at
         """)
@@ -600,9 +600,7 @@ class CandidateGradingService:
             "overall_score": overall_result.score,
             "overall_grade": overall_result.grade,
             "strengths": data.get('strengths', []),
-            "weaknesses": data.get('weaknesses', []),
-            "notes": data.get('recruiter_notes'),
-            "recommendation": data.get('recruiter_recommendation')
+            "weaknesses": data.get('weaknesses', [])
         }).fetchone()
 
         assessment_id = result.id
@@ -719,8 +717,6 @@ class CandidateGradingService:
             },
             "strengths": result.strengths or [],
             "weaknesses": result.weaknesses or [],
-            "recruiter_notes": result.recruiter_notes,
-            "recruiter_recommendation": result.recruiter_recommendation,
             "ai_analysis": {
                 "run_at": result.ai_analysis_run_at.isoformat() if result.ai_analysis_run_at else None,
                 "confidence_score": result.ai_confidence_score,
@@ -728,8 +724,7 @@ class CandidateGradingService:
             },
             "override": {
                 "overridden": result.scores_overridden,
-                "reason": result.override_reason,
-                "original_scores": result.original_scores
+                "reason": result.override_reason
             }
         }
 
