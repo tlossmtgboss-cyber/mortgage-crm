@@ -44260,9 +44260,57 @@ async def delete_team_role(
 # PROCESS FLOW MANAGEMENT
 # ============================================================================
 
+def _parse_process_flow_async(document_id: int):
+    """Background task to parse a process flow document using AI."""
+    db = SessionLocal()
+    try:
+        # Get the document
+        document = db.query(ProcessFlowDocument).filter(ProcessFlowDocument.id == document_id).first()
+        if not document:
+            logger.error(f"Process flow document {document_id} not found for parsing")
+            return
+
+        # Update status to processing
+        document.ai_parsing_status = "processing"
+        db.commit()
+
+        try:
+            # Fetch document content from file_url
+            document_content = ""
+            if document.file_url:
+                try:
+                    response = requests.get(document.file_url, timeout=30)
+                    response.raise_for_status()
+                    document_content = response.text
+                except Exception as fetch_err:
+                    logger.warning(f"Could not fetch document from URL {document.file_url}: {fetch_err}")
+                    # Fall back to empty content - parse_document_basic will handle it
+
+            # Parse the document
+            parsed_content = parse_document_basic(document_content, document.document_name)
+
+            # Update with parsed content
+            document.ai_parsed_content = parsed_content
+            document.ai_parsing_status = "completed"
+            db.commit()
+
+            logger.info(f"Successfully parsed process flow document {document_id}: {document.document_name}")
+
+        except Exception as parse_err:
+            logger.error(f"Failed to parse process flow document {document_id}: {parse_err}")
+            document.ai_parsing_status = "failed"
+            document.ai_parsed_content = {"error": str(parse_err)}
+            db.commit()
+
+    except Exception as e:
+        logger.error(f"Background task error for document {document_id}: {e}")
+    finally:
+        db.close()
+
 @app.post("/api/v1/profile/process-flows/", response_model=ProcessFlowDocumentResponse, status_code=201)
 async def upload_process_flow(
     document_data: ProcessFlowDocumentCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -44281,8 +44329,9 @@ async def upload_process_flow(
     db.commit()
     db.refresh(db_document)
 
-    # TODO: Trigger AI parsing job asynchronously
-    logger.info(f"Process flow document uploaded: {db_document.document_name}")
+    # Trigger AI parsing job asynchronously
+    background_tasks.add_task(_parse_process_flow_async, db_document.id)
+    logger.info(f"Process flow document uploaded: {db_document.document_name}, parsing queued")
     return db_document
 
 @app.get("/api/v1/profile/process-flows/", response_model=List[ProcessFlowDocumentResponse])

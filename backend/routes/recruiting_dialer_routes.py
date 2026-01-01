@@ -82,7 +82,6 @@ async def initiate_candidate_call(
                 SELECT rc.id, rc.first_name, rc.last_name, rc.phone, rc.email,
                        rc.status, rc.current_company, rc.current_title,
                        rc.annual_volume, rc.annual_units,
-                       rc.overall_grade as overall_score,
                        (SELECT content FROM mm_candidate_notes
                         WHERE candidate_id = rc.id
                         ORDER BY created_at DESC LIMIT 1) as last_note
@@ -111,9 +110,6 @@ async def initiate_candidate_call(
     if row.annual_volume:
         volume_m = row.annual_volume / 1000000
         whisper_parts.append(f"Production: ${volume_m:.1f}M volume.")
-
-    if row.overall_score:
-        whisper_parts.append(f"Assessment score: {row.overall_score:.1f} out of 10.")
 
     if row.last_note:
         # Truncate note for whisper
