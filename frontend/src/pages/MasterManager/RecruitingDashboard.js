@@ -611,7 +611,12 @@ const RecruitingDashboard = () => {
                   </tr>
                 ) : (
                   candidates.map((candidate) => (
-                    <tr key={candidate.id}>
+                    <tr
+                      key={candidate.id}
+                      onClick={() => navigate(`/master-manager/recruiting/${candidate.id}`)}
+                      style={{ cursor: 'pointer' }}
+                      className="mm-clickable-row"
+                    >
                       <td>
                         <div className="mm-user-cell">
                           <div className="mm-user-avatar" style={{ backgroundColor: getStatusColor(candidate.status) }}>
@@ -631,7 +636,7 @@ const RecruitingDashboard = () => {
                       </td>
                       <td>{candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : '-'}</td>
                       <td>{candidate.interview_count || 0}</td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <select
                           value={candidate.status}
                           onChange={(e) => handleStatusChange(candidate.id, e.target.value)}
@@ -643,7 +648,7 @@ const RecruitingDashboard = () => {
                           ))}
                         </select>
                       </td>
-                      <td className="mm-actions-cell">
+                      <td className="mm-actions-cell" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="mm-btn mm-btn-small mm-btn-primary"
                           onClick={() => navigate(`/master-manager/recruiting/${candidate.id}`)}
@@ -934,7 +939,12 @@ const RecruitingDashboard = () => {
                     </tr>
                   ) : (
                     partnerRecruits.map((partner) => (
-                      <tr key={partner.id}>
+                      <tr
+                        key={partner.id}
+                        onClick={() => setSelectedPartner(partner)}
+                        style={{ cursor: 'pointer' }}
+                        className="mm-clickable-row"
+                      >
                         <td>
                           <div className="mm-user-cell">
                             <div className="mm-user-avatar" style={{ backgroundColor: getPartnerStatusColor(partner.status) }}>
@@ -956,7 +966,7 @@ const RecruitingDashboard = () => {
                         </td>
                         <td>{partner.phone || '-'}</td>
                         <td>{partner.created_at ? new Date(partner.created_at).toLocaleDateString() : '-'}</td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <select
                             value={partner.status || 'new'}
                             onChange={(e) => handlePartnerStatusChange(partner.id, e.target.value)}
@@ -968,7 +978,7 @@ const RecruitingDashboard = () => {
                             ))}
                           </select>
                         </td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <button
                             className="mm-btn mm-btn-small mm-btn-secondary"
                             onClick={() => setSelectedPartner(partner)}

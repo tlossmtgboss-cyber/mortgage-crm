@@ -396,6 +396,19 @@
   background: #f9fafb;
 }
 
+.mm-table tr.mm-clickable-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.mm-table tr.mm-clickable-row:hover {
+  background: #eff6ff;
+}
+
+.mm-table tr.mm-clickable-row:active {
+  background: #dbeafe;
+}
+
 .mm-table-empty {
   text-align: center;
   color: #9ca3af;
