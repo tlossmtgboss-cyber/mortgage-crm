@@ -884,3 +884,233 @@ async def run_grading_migration(
         logger.exception("Error running grading migration")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# AI ANALYSIS ENDPOINTS
+# =============================================================================
+
+class AIAnalysisRequest(BaseModel):
+    """Request for AI analysis."""
+    include_resume: bool = True
+    include_social: bool = True
+    include_interviews: bool = True
+    include_notes: bool = True
+
+
+class ApplySuggestionsRequest(BaseModel):
+    """Request to apply AI suggestions."""
+    apply_production: bool = True
+    apply_disc: bool = True
+    apply_character: bool = True
+    apply_skills: bool = True
+    apply_culture: bool = True
+
+
+@router.post("/{candidate_id}/assessment/ai-analyze")
+async def run_ai_analysis(
+    candidate_id: int,
+    request: Optional[AIAnalysisRequest] = None,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Run AI analysis on a candidate.
+
+    Uses Claude to analyze:
+    - Resume content
+    - Social media profiles and posts
+    - Interview notes and feedback
+    - Recruiter notes
+
+    Returns suggested scores, DISC inference, strengths/weaknesses,
+    and hire recommendation.
+    """
+    try:
+        from services.candidate_ai_analyzer import CandidateAIAnalyzer
+
+        analyzer = CandidateAIAnalyzer(db)
+
+        req = request or AIAnalysisRequest()
+
+        analysis = await analyzer.analyze_candidate(
+            candidate_id=candidate_id,
+            include_resume=req.include_resume,
+            include_social=req.include_social,
+            include_interviews=req.include_interviews,
+            include_notes=req.include_notes
+        )
+
+        return {
+            "success": True,
+            "candidate_id": candidate_id,
+            "analyzed_at": analysis.analyzed_at.isoformat(),
+            "confidence_score": analysis.confidence_score,
+
+            "suggestions": {
+                "production": {
+                    "score": analysis.production_suggestion.suggested_score if analysis.production_suggestion else None,
+                    "confidence": analysis.production_suggestion.confidence if analysis.production_suggestion else None,
+                    "reasoning": analysis.production_suggestion.reasoning if analysis.production_suggestion else None,
+                    "evidence": analysis.production_suggestion.evidence if analysis.production_suggestion else []
+                },
+                "disc": {
+                    "d_score": analysis.disc_inference.d_score if analysis.disc_inference else None,
+                    "i_score": analysis.disc_inference.i_score if analysis.disc_inference else None,
+                    "s_score": analysis.disc_inference.s_score if analysis.disc_inference else None,
+                    "c_score": analysis.disc_inference.c_score if analysis.disc_inference else None,
+                    "primary_style": analysis.disc_inference.primary_style if analysis.disc_inference else None,
+                    "secondary_style": analysis.disc_inference.secondary_style if analysis.disc_inference else None,
+                    "confidence": analysis.disc_inference.confidence if analysis.disc_inference else None,
+                    "reasoning": analysis.disc_inference.reasoning if analysis.disc_inference else None
+                },
+                "character": {
+                    "score": analysis.character_suggestion.suggested_score if analysis.character_suggestion else None,
+                    "confidence": analysis.character_suggestion.confidence if analysis.character_suggestion else None,
+                    "reasoning": analysis.character_suggestion.reasoning if analysis.character_suggestion else None
+                },
+                "skills": {
+                    "score": analysis.skills_suggestion.suggested_score if analysis.skills_suggestion else None,
+                    "confidence": analysis.skills_suggestion.confidence if analysis.skills_suggestion else None,
+                    "reasoning": analysis.skills_suggestion.reasoning if analysis.skills_suggestion else None
+                },
+                "culture_fit": {
+                    "score": analysis.culture_fit_suggestion.suggested_score if analysis.culture_fit_suggestion else None,
+                    "confidence": analysis.culture_fit_suggestion.confidence if analysis.culture_fit_suggestion else None,
+                    "reasoning": analysis.culture_fit_suggestion.reasoning if analysis.culture_fit_suggestion else None
+                }
+            },
+
+            "insights": {
+                "strengths": [
+                    {
+                        "trait": s.trait,
+                        "category": s.category,
+                        "evidence": s.evidence,
+                        "impact": s.impact_level
+                    }
+                    for s in analysis.strengths
+                ],
+                "weaknesses": [
+                    {
+                        "trait": w.trait,
+                        "category": w.category,
+                        "evidence": w.evidence,
+                        "impact": w.impact_level
+                    }
+                    for w in analysis.weaknesses
+                ],
+                "red_flags": analysis.red_flags,
+                "highlights": analysis.highlights
+            },
+
+            "recommendation": {
+                "decision": analysis.hire_recommendation,
+                "reasoning": analysis.recommendation_reasoning
+            }
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error running AI analysis for candidate {candidate_id}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{candidate_id}/assessment/ai-apply")
+async def apply_ai_suggestions(
+    candidate_id: int,
+    request: ApplySuggestionsRequest,
+    applied_by: int = Query(..., description="User ID applying suggestions"),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Apply AI-suggested scores to the candidate's assessment.
+
+    Allows selecting which categories to apply.
+    """
+    try:
+        from services.candidate_ai_analyzer import CandidateAIAnalyzer
+        from sqlalchemy import text
+
+        # Get the stored AI analysis
+        assessment = db.execute(text("""
+            SELECT ai_raw_analysis, ai_confidence_score
+            FROM mm_candidate_assessments
+            WHERE candidate_id = :candidate_id
+        """), {"candidate_id": candidate_id}).fetchone()
+
+        if not assessment or not assessment.ai_raw_analysis:
+            raise HTTPException(
+                status_code=400,
+                detail="No AI analysis found. Run AI analysis first."
+            )
+
+        # Re-run analysis to get fresh suggestions (or parse stored)
+        analyzer = CandidateAIAnalyzer(db)
+        analysis = await analyzer.analyze_candidate(candidate_id)
+
+        result = await analyzer.apply_suggestions(
+            candidate_id=candidate_id,
+            analysis=analysis,
+            apply_production=request.apply_production,
+            apply_disc=request.apply_disc,
+            apply_character=request.apply_character,
+            apply_skills=request.apply_skills,
+            apply_culture=request.apply_culture,
+            applied_by=applied_by
+        )
+
+        return {
+            "success": result["applied"],
+            "message": "AI suggestions applied successfully" if result["applied"] else result.get("message"),
+            "categories_updated": result.get("categories_updated", [])
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error applying AI suggestions for candidate {candidate_id}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{candidate_id}/assessment/ai-status")
+async def get_ai_analysis_status(
+    candidate_id: int,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Get the status of AI analysis for a candidate.
+
+    Returns when analysis was last run and confidence score.
+    """
+    try:
+        from sqlalchemy import text
+
+        result = db.execute(text("""
+            SELECT
+                ai_analysis_run_at,
+                ai_confidence_score,
+                ai_raw_analysis,
+                strengths,
+                weaknesses
+            FROM mm_candidate_assessments
+            WHERE candidate_id = :candidate_id
+        """), {"candidate_id": candidate_id}).fetchone()
+
+        if not result:
+            return {
+                "has_analysis": False,
+                "message": "No assessment found for this candidate"
+            }
+
+        return {
+            "has_analysis": result.ai_analysis_run_at is not None,
+            "last_run_at": result.ai_analysis_run_at.isoformat() if result.ai_analysis_run_at else None,
+            "confidence_score": result.ai_confidence_score,
+            "strengths_count": len(result.strengths) if result.strengths else 0,
+            "weaknesses_count": len(result.weaknesses) if result.weaknesses else 0
+        }
+
+    except Exception as e:
+        logger.exception(f"Error getting AI analysis status for candidate {candidate_id}")
+        raise HTTPException(status_code=500, detail=str(e))

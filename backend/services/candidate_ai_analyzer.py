@@ -1,0 +1,711 @@
+"""
+Candidate AI Analyzer Service
+Uses Claude AI to analyze candidate data and generate assessment scores.
+
+Features:
+- Resume analysis for production history and skills
+- Social media profile analysis
+- Interview notes analysis
+- DISC personality inference
+- Strengths/weaknesses identification
+- Score suggestions with confidence levels
+"""
+
+import os
+import json
+import logging
+from typing import Dict, List, Optional, Any, Tuple
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
+from anthropic import Anthropic
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DISCInference:
+    """DISC personality inference results."""
+    d_score: int  # 0-100
+    i_score: int
+    s_score: int
+    c_score: int
+    primary_style: str  # D, I, S, or C
+    secondary_style: str
+    confidence: float  # 0-1
+    reasoning: str
+
+
+@dataclass
+class ScoreSuggestion:
+    """AI-suggested score for a category."""
+    category: str
+    suggested_score: float
+    confidence: float  # 0-1
+    reasoning: str
+    evidence: List[str] = field(default_factory=list)
+
+
+@dataclass
+class StrengthWeakness:
+    """Identified strength or weakness."""
+    trait: str
+    category: str  # production, personality, character, skills, culture
+    is_strength: bool
+    evidence: str
+    impact_level: str  # high, medium, low
+
+
+@dataclass
+class AIAnalysisResult:
+    """Complete AI analysis result."""
+    candidate_id: int
+    analyzed_at: datetime
+    confidence_score: float  # Overall confidence 0-100
+
+    # Score suggestions
+    production_suggestion: Optional[ScoreSuggestion] = None
+    disc_inference: Optional[DISCInference] = None
+    character_suggestion: Optional[ScoreSuggestion] = None
+    skills_suggestion: Optional[ScoreSuggestion] = None
+    culture_fit_suggestion: Optional[ScoreSuggestion] = None
+
+    # Insights
+    strengths: List[StrengthWeakness] = field(default_factory=list)
+    weaknesses: List[StrengthWeakness] = field(default_factory=list)
+
+    # Recommendation
+    hire_recommendation: str = "maybe"  # strong_hire, hire, maybe, no_hire, strong_no_hire
+    recommendation_reasoning: str = ""
+
+    # Red flags and highlights
+    red_flags: List[str] = field(default_factory=list)
+    highlights: List[str] = field(default_factory=list)
+
+    # Raw data for debugging
+    raw_analysis: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = asdict(self)
+        result['analyzed_at'] = self.analyzed_at.isoformat()
+        return result
+
+
+class CandidateAIAnalyzer:
+    """
+    AI-powered candidate analysis service.
+
+    Uses Claude to analyze candidate data and generate:
+    - Score suggestions for each category
+    - DISC personality inference
+    - Strengths and weaknesses
+    - Hire recommendation
+    """
+
+    def __init__(self, db_session=None):
+        self.db = db_session
+        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.model = "claude-sonnet-4-20250514"
+
+    async def analyze_candidate(
+        self,
+        candidate_id: int,
+        include_resume: bool = True,
+        include_social: bool = True,
+        include_interviews: bool = True,
+        include_notes: bool = True
+    ) -> AIAnalysisResult:
+        """
+        Run comprehensive AI analysis on a candidate.
+
+        Gathers all available data and uses Claude to analyze and score.
+        """
+        # Gather candidate data
+        candidate_data = await self._gather_candidate_data(
+            candidate_id,
+            include_resume,
+            include_social,
+            include_interviews,
+            include_notes
+        )
+
+        # Run analysis
+        analysis = await self._run_analysis(candidate_id, candidate_data)
+
+        # Store results in database
+        await self._store_analysis(candidate_id, analysis)
+
+        return analysis
+
+    async def _gather_candidate_data(
+        self,
+        candidate_id: int,
+        include_resume: bool,
+        include_social: bool,
+        include_interviews: bool,
+        include_notes: bool
+    ) -> Dict[str, Any]:
+        """Gather all available candidate data for analysis."""
+        from sqlalchemy import text
+
+        data = {"candidate_id": candidate_id}
+
+        # Get basic candidate info
+        candidate = self.db.execute(text("""
+            SELECT
+                c.id, c.first_name, c.last_name, c.email, c.phone,
+                c.source, c.status, c.target_role, c.applied_at,
+                c.resume_url, c.resume_text,
+                c.linkedin_url, c.facebook_url, c.instagram_url, c.twitter_url,
+                c.annual_volume, c.annual_units, c.nmls_id,
+                c.current_company, c.current_title,
+                c.years_mortgage, c.years_sales, c.years_total
+            FROM mm_candidates c
+            WHERE c.id = :candidate_id
+        """), {"candidate_id": candidate_id}).fetchone()
+
+        if not candidate:
+            raise ValueError(f"Candidate {candidate_id} not found")
+
+        data["basic_info"] = {
+            "name": f"{candidate.first_name} {candidate.last_name}",
+            "email": candidate.email,
+            "phone": candidate.phone,
+            "source": candidate.source,
+            "status": candidate.status,
+            "target_role": candidate.target_role,
+            "applied_at": str(candidate.applied_at) if candidate.applied_at else None
+        }
+
+        data["production"] = {
+            "annual_volume": candidate.annual_volume,
+            "annual_units": candidate.annual_units,
+            "nmls_id": candidate.nmls_id,
+            "current_company": candidate.current_company,
+            "current_title": candidate.current_title,
+            "years_mortgage": candidate.years_mortgage,
+            "years_sales": candidate.years_sales,
+            "years_total": candidate.years_total
+        }
+
+        if include_resume and candidate.resume_text:
+            data["resume_text"] = candidate.resume_text
+
+        if include_social:
+            data["social_media"] = {
+                "linkedin_url": candidate.linkedin_url,
+                "facebook_url": candidate.facebook_url,
+                "instagram_url": candidate.instagram_url,
+                "twitter_url": candidate.twitter_url
+            }
+
+            # Get social media activity if available
+            social_activity = self.db.execute(text("""
+                SELECT platform, content, posted_at, engagement_data
+                FROM mm_candidate_social_posts
+                WHERE candidate_id = :candidate_id
+                ORDER BY posted_at DESC
+                LIMIT 20
+            """), {"candidate_id": candidate_id}).fetchall()
+
+            if social_activity:
+                data["social_posts"] = [
+                    {
+                        "platform": post.platform,
+                        "content": post.content,
+                        "posted_at": str(post.posted_at),
+                        "engagement": post.engagement_data
+                    }
+                    for post in social_activity
+                ]
+
+        if include_interviews:
+            interviews = self.db.execute(text("""
+                SELECT
+                    round, interview_type, status, scheduled_at,
+                    interviewer_notes, score, feedback
+                FROM mm_interviews
+                WHERE candidate_id = :candidate_id
+                ORDER BY round ASC
+            """), {"candidate_id": candidate_id}).fetchall()
+
+            if interviews:
+                data["interviews"] = [
+                    {
+                        "round": i.round,
+                        "type": i.interview_type,
+                        "status": i.status,
+                        "date": str(i.scheduled_at) if i.scheduled_at else None,
+                        "notes": i.interviewer_notes,
+                        "score": i.score,
+                        "feedback": i.feedback
+                    }
+                    for i in interviews
+                ]
+
+        if include_notes:
+            notes = self.db.execute(text("""
+                SELECT content, note_type, created_at, created_by
+                FROM mm_candidate_notes
+                WHERE candidate_id = :candidate_id
+                ORDER BY created_at DESC
+            """), {"candidate_id": candidate_id}).fetchall()
+
+            if notes:
+                data["notes"] = [
+                    {
+                        "content": n.content,
+                        "type": n.note_type,
+                        "date": str(n.created_at)
+                    }
+                    for n in notes
+                ]
+
+        return data
+
+    async def _run_analysis(
+        self,
+        candidate_id: int,
+        candidate_data: Dict[str, Any]
+    ) -> AIAnalysisResult:
+        """Run Claude analysis on the gathered candidate data."""
+
+        prompt = self._build_analysis_prompt(candidate_data)
+
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                system=self._get_system_prompt()
+            )
+
+            # Parse the response
+            response_text = response.content[0].text
+            analysis_data = self._parse_analysis_response(response_text)
+
+            # Build result object
+            result = self._build_analysis_result(candidate_id, analysis_data)
+            result.raw_analysis = {
+                "prompt_tokens": response.usage.input_tokens,
+                "response_tokens": response.usage.output_tokens,
+                "model": self.model,
+                "raw_response": response_text
+            }
+
+            return result
+
+        except Exception as e:
+            logger.exception(f"Error running AI analysis for candidate {candidate_id}")
+            raise
+
+    def _get_system_prompt(self) -> str:
+        """Get the system prompt for candidate analysis."""
+        return """You are an expert mortgage industry recruiter and HR analyst specializing in evaluating Loan Officer candidates. You have deep knowledge of:
+
+1. PRODUCTION METRICS for Loan Officers:
+   - Elite producers: $50M+ annual volume, 100+ units
+   - Strong producers: $25-50M volume, 50-100 units
+   - Average producers: $10-25M volume, 25-50 units
+   - Entry level: <$10M volume, <25 units
+
+2. DISC PERSONALITY ASSESSMENT for LO roles:
+   - High I (Influence) is most important - relationship building, communication
+   - High D (Dominance) is valuable - drive, closing ability
+   - Moderate S (Steadiness) helps with process and follow-through
+   - Moderate C (Conscientiousness) ensures compliance
+   - Ideal LO profile: High I, High D, Moderate S, Moderate C
+
+3. CHARACTER TRAITS to evaluate:
+   - Integrity: Honesty, ethics, trustworthiness
+   - Coachability: Willingness to learn, accept feedback
+   - Resilience: Handle rejection, bounce back from setbacks
+   - Work Ethic: Self-motivation, dedication, hustle
+
+4. SKILLS to assess:
+   - Technical: Loan products, guidelines, calculations
+   - Product Knowledge: Various loan programs, rates, terms
+   - Market Expertise: Local market conditions, trends
+   - Technology: CRM, LOS systems, digital tools
+
+5. CULTURE FIT considerations:
+   - Values alignment with company mission
+   - Team compatibility
+   - Communication style
+   - Growth mindset
+
+You must respond in valid JSON format only. Be analytical, objective, and evidence-based in your assessments."""
+
+    def _build_analysis_prompt(self, candidate_data: Dict[str, Any]) -> str:
+        """Build the analysis prompt from candidate data."""
+
+        prompt = f"""Analyze this Loan Officer candidate and provide a comprehensive assessment.
+
+## CANDIDATE DATA
+
+### Basic Information
+{json.dumps(candidate_data.get('basic_info', {}), indent=2)}
+
+### Production History
+{json.dumps(candidate_data.get('production', {}), indent=2)}
+"""
+
+        if candidate_data.get('resume_text'):
+            prompt += f"""
+### Resume Content
+{candidate_data['resume_text'][:5000]}  # Truncate for token limits
+"""
+
+        if candidate_data.get('social_media'):
+            prompt += f"""
+### Social Media Profiles
+{json.dumps(candidate_data.get('social_media', {}), indent=2)}
+"""
+
+        if candidate_data.get('social_posts'):
+            prompt += f"""
+### Recent Social Media Posts
+{json.dumps(candidate_data.get('social_posts', [])[:10], indent=2)}
+"""
+
+        if candidate_data.get('interviews'):
+            prompt += f"""
+### Interview History
+{json.dumps(candidate_data.get('interviews', []), indent=2)}
+"""
+
+        if candidate_data.get('notes'):
+            prompt += f"""
+### Recruiter Notes
+{json.dumps(candidate_data.get('notes', [])[:10], indent=2)}
+"""
+
+        prompt += """
+
+## REQUIRED ANALYSIS
+
+Provide your analysis in the following JSON format:
+
+```json
+{
+  "overall_confidence": <0-100>,
+
+  "production_assessment": {
+    "suggested_score": <0-100>,
+    "confidence": <0-1>,
+    "reasoning": "<explanation>",
+    "evidence": ["<point1>", "<point2>"]
+  },
+
+  "disc_inference": {
+    "d_score": <0-100>,
+    "i_score": <0-100>,
+    "s_score": <0-100>,
+    "c_score": <0-100>,
+    "primary_style": "<D|I|S|C>",
+    "secondary_style": "<D|I|S|C>",
+    "confidence": <0-1>,
+    "reasoning": "<explanation>"
+  },
+
+  "character_assessment": {
+    "suggested_score": <0-100>,
+    "confidence": <0-1>,
+    "reasoning": "<explanation>",
+    "breakdown": {
+      "integrity": <0-100>,
+      "coachability": <0-100>,
+      "resilience": <0-100>,
+      "work_ethic": <0-100>
+    }
+  },
+
+  "skills_assessment": {
+    "suggested_score": <0-100>,
+    "confidence": <0-1>,
+    "reasoning": "<explanation>",
+    "breakdown": {
+      "technical": <0-100>,
+      "product_knowledge": <0-100>,
+      "market_expertise": <0-100>,
+      "technology": <0-100>
+    }
+  },
+
+  "culture_fit_assessment": {
+    "suggested_score": <0-100>,
+    "confidence": <0-1>,
+    "reasoning": "<explanation>"
+  },
+
+  "strengths": [
+    {
+      "trait": "<strength name>",
+      "category": "<production|personality|character|skills|culture>",
+      "evidence": "<supporting evidence>",
+      "impact_level": "<high|medium|low>"
+    }
+  ],
+
+  "weaknesses": [
+    {
+      "trait": "<weakness name>",
+      "category": "<production|personality|character|skills|culture>",
+      "evidence": "<supporting evidence>",
+      "impact_level": "<high|medium|low>"
+    }
+  ],
+
+  "red_flags": ["<flag1>", "<flag2>"],
+  "highlights": ["<highlight1>", "<highlight2>"],
+
+  "hire_recommendation": "<strong_hire|hire|maybe|no_hire|strong_no_hire>",
+  "recommendation_reasoning": "<detailed explanation>"
+}
+```
+
+Be thorough but objective. Base scores only on available evidence. If data is limited, lower confidence accordingly."""
+
+        return prompt
+
+    def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse the JSON response from Claude."""
+        # Extract JSON from response (may be wrapped in markdown code blocks)
+        import re
+
+        # Try to find JSON in code block
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Assume entire response is JSON
+            json_str = response_text
+
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse AI response as JSON: {e}")
+            logger.debug(f"Response text: {response_text}")
+            # Return minimal valid structure
+            return {
+                "overall_confidence": 0,
+                "error": str(e),
+                "raw_response": response_text
+            }
+
+    def _build_analysis_result(
+        self,
+        candidate_id: int,
+        analysis_data: Dict[str, Any]
+    ) -> AIAnalysisResult:
+        """Build AIAnalysisResult from parsed analysis data."""
+
+        result = AIAnalysisResult(
+            candidate_id=candidate_id,
+            analyzed_at=datetime.utcnow(),
+            confidence_score=analysis_data.get("overall_confidence", 0)
+        )
+
+        # Production suggestion
+        if prod := analysis_data.get("production_assessment"):
+            result.production_suggestion = ScoreSuggestion(
+                category="production",
+                suggested_score=prod.get("suggested_score", 0),
+                confidence=prod.get("confidence", 0),
+                reasoning=prod.get("reasoning", ""),
+                evidence=prod.get("evidence", [])
+            )
+
+        # DISC inference
+        if disc := analysis_data.get("disc_inference"):
+            result.disc_inference = DISCInference(
+                d_score=disc.get("d_score", 50),
+                i_score=disc.get("i_score", 50),
+                s_score=disc.get("s_score", 50),
+                c_score=disc.get("c_score", 50),
+                primary_style=disc.get("primary_style", "I"),
+                secondary_style=disc.get("secondary_style", "D"),
+                confidence=disc.get("confidence", 0),
+                reasoning=disc.get("reasoning", "")
+            )
+
+        # Character suggestion
+        if char := analysis_data.get("character_assessment"):
+            result.character_suggestion = ScoreSuggestion(
+                category="character",
+                suggested_score=char.get("suggested_score", 0),
+                confidence=char.get("confidence", 0),
+                reasoning=char.get("reasoning", ""),
+                evidence=[]
+            )
+
+        # Skills suggestion
+        if skills := analysis_data.get("skills_assessment"):
+            result.skills_suggestion = ScoreSuggestion(
+                category="skills",
+                suggested_score=skills.get("suggested_score", 0),
+                confidence=skills.get("confidence", 0),
+                reasoning=skills.get("reasoning", ""),
+                evidence=[]
+            )
+
+        # Culture fit suggestion
+        if culture := analysis_data.get("culture_fit_assessment"):
+            result.culture_fit_suggestion = ScoreSuggestion(
+                category="culture_fit",
+                suggested_score=culture.get("suggested_score", 0),
+                confidence=culture.get("confidence", 0),
+                reasoning=culture.get("reasoning", ""),
+                evidence=[]
+            )
+
+        # Strengths
+        for s in analysis_data.get("strengths", []):
+            result.strengths.append(StrengthWeakness(
+                trait=s.get("trait", ""),
+                category=s.get("category", ""),
+                is_strength=True,
+                evidence=s.get("evidence", ""),
+                impact_level=s.get("impact_level", "medium")
+            ))
+
+        # Weaknesses
+        for w in analysis_data.get("weaknesses", []):
+            result.weaknesses.append(StrengthWeakness(
+                trait=w.get("trait", ""),
+                category=w.get("category", ""),
+                is_strength=False,
+                evidence=w.get("evidence", ""),
+                impact_level=w.get("impact_level", "medium")
+            ))
+
+        # Red flags and highlights
+        result.red_flags = analysis_data.get("red_flags", [])
+        result.highlights = analysis_data.get("highlights", [])
+
+        # Recommendation
+        result.hire_recommendation = analysis_data.get("hire_recommendation", "maybe")
+        result.recommendation_reasoning = analysis_data.get("recommendation_reasoning", "")
+
+        return result
+
+    async def _store_analysis(
+        self,
+        candidate_id: int,
+        analysis: AIAnalysisResult
+    ) -> None:
+        """Store analysis results in the database."""
+        from sqlalchemy import text
+
+        # Update the assessment with AI analysis data
+        self.db.execute(text("""
+            UPDATE mm_candidate_assessments
+            SET
+                ai_analysis_run_at = :analyzed_at,
+                ai_confidence_score = :confidence,
+                ai_raw_analysis = :raw_analysis,
+                strengths = :strengths,
+                weaknesses = :weaknesses,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE candidate_id = :candidate_id
+        """), {
+            "candidate_id": candidate_id,
+            "analyzed_at": analysis.analyzed_at,
+            "confidence": analysis.confidence_score,
+            "raw_analysis": json.dumps(analysis.raw_analysis),
+            "strengths": [s.trait for s in analysis.strengths],
+            "weaknesses": [w.trait for w in analysis.weaknesses]
+        })
+
+        self.db.commit()
+
+    async def apply_suggestions(
+        self,
+        candidate_id: int,
+        analysis: AIAnalysisResult,
+        apply_production: bool = True,
+        apply_disc: bool = True,
+        apply_character: bool = True,
+        apply_skills: bool = True,
+        apply_culture: bool = True,
+        applied_by: int = None
+    ) -> Dict[str, Any]:
+        """
+        Apply AI-suggested scores to the candidate's assessment.
+
+        Optionally select which categories to apply.
+        """
+        from sqlalchemy import text
+
+        updates = []
+        params = {"candidate_id": candidate_id}
+
+        if apply_production and analysis.production_suggestion:
+            updates.append("production_score = :prod_score")
+            params["prod_score"] = analysis.production_suggestion.suggested_score
+
+        if apply_disc and analysis.disc_inference:
+            updates.extend([
+                "disc_d_score = :d_score",
+                "disc_i_score = :i_score",
+                "disc_s_score = :s_score",
+                "disc_c_score = :c_score",
+                "disc_primary_style = :primary_style",
+                "disc_secondary_style = :secondary_style",
+                "disc_composite_score = :disc_composite",
+                "disc_assessment_source = 'ai_inferred'"
+            ])
+            disc = analysis.disc_inference
+            # Calculate composite using LO weights: I=40%, D=30%, S=15%, C=15%
+            composite = (disc.i_score * 0.40) + (disc.d_score * 0.30) + (disc.s_score * 0.15) + (disc.c_score * 0.15)
+            params.update({
+                "d_score": disc.d_score,
+                "i_score": disc.i_score,
+                "s_score": disc.s_score,
+                "c_score": disc.c_score,
+                "primary_style": disc.primary_style,
+                "secondary_style": disc.secondary_style,
+                "disc_composite": composite
+            })
+
+        if apply_character and analysis.character_suggestion:
+            updates.append("character_score = :char_score")
+            params["char_score"] = analysis.character_suggestion.suggested_score
+
+        if apply_skills and analysis.skills_suggestion:
+            updates.append("skills_score = :skills_score")
+            params["skills_score"] = analysis.skills_suggestion.suggested_score
+
+        if apply_culture and analysis.culture_fit_suggestion:
+            updates.append("culture_fit_score = :culture_score")
+            params["culture_score"] = analysis.culture_fit_suggestion.suggested_score
+
+        if not updates:
+            return {"applied": False, "message": "No suggestions to apply"}
+
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+
+        self.db.execute(text(f"""
+            UPDATE mm_candidate_assessments
+            SET {', '.join(updates)}
+            WHERE candidate_id = :candidate_id
+        """), params)
+
+        self.db.commit()
+
+        return {
+            "applied": True,
+            "categories_updated": [
+                cat for cat, apply in [
+                    ("production", apply_production),
+                    ("disc", apply_disc),
+                    ("character", apply_character),
+                    ("skills", apply_skills),
+                    ("culture_fit", apply_culture)
+                ] if apply
+            ]
+        }

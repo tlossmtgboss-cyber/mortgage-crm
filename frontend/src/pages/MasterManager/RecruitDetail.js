@@ -16,6 +16,7 @@ import {
 import CandidateGradeCircle, { getGrade, GradeBadge } from '../../components/recruiting/CandidateGradeCircle';
 import DISCProfileChart from '../../components/recruiting/DISCProfileChart';
 import { AssessmentScoreGrid, AssessmentScoreSummary } from '../../components/recruiting/AssessmentScoreCard';
+import AIAnalysisPanel from '../../components/recruiting/AIAnalysisPanel';
 import './MasterManager.css';
 import './RecruitDetail.css';
 
@@ -778,31 +779,23 @@ const RecruitDetail = () => {
                   </div>
                 </div>
 
-                {/* AI Analysis Panel Placeholder */}
+                {/* AI Analysis Panel */}
                 <div className="recruit-assessment-ai">
-                  <div className="recruit-section-header">
-                    <h3>AI Analysis</h3>
-                  </div>
-                  <div className="recruit-ai-panel">
-                    {assessment?.ai_analysis_run_at ? (
-                      <>
-                        <div className="recruit-ai-confidence">
-                          <span className="recruit-ai-label">Confidence Score</span>
-                          <span className="recruit-ai-value">{assessment.ai_confidence_score || 0}%</span>
-                        </div>
-                        <p className="recruit-ai-date">
-                          Last run: {new Date(assessment.ai_analysis_run_at).toLocaleDateString()}
-                        </p>
-                      </>
-                    ) : (
-                      <div className="recruit-ai-empty">
-                        <p>AI analysis has not been run yet</p>
-                        <button className="mm-btn mm-btn-primary">
-                          Run AI Analysis
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <AIAnalysisPanel
+                    candidateId={candidateId}
+                    candidateName={candidate?.name}
+                    currentAssessment={assessment}
+                    onApplyScores={async (scores) => {
+                      try {
+                        // Update assessment with AI-suggested scores
+                        await updateAssessment(candidateId, scores, 1); // TODO: Get real user ID
+                        await loadAssessment();
+                      } catch (err) {
+                        setAssessmentError(err.message);
+                      }
+                    }}
+                    onRefresh={loadAssessment}
+                  />
                 </div>
               </div>
 
