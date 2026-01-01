@@ -216,7 +216,7 @@ async def get_candidate_call_history(
         result = conn.execute(
             text("""
                 SELECT ch.id, ch.candidate_id, ch.caller_user_id,
-                       u.name as caller_name, ch.direction,
+                       u.full_name as caller_name, ch.direction,
                        ch.duration_seconds, ch.outcome, ch.notes,
                        ch.called_at, ch.status
                 FROM recruiting_call_history ch
