@@ -340,7 +340,7 @@ class QualificationAgent:
 
         # Handle escalation - always use template for this critical flow
         if should_escalate:
-            return self._generate_escalation_response(channel, analysis)
+            return self._generate_escalation_response(channel, analysis, conversation_id)
 
         # =========================================================================
         # TRY OPENAI FOR AI-POWERED RESPONSES
@@ -889,14 +889,15 @@ class QualificationAgent:
     def _generate_escalation_response(
         self,
         channel: Channel,
-        analysis: Dict
+        analysis: Dict,
+        conversation_id: str
     ) -> Dict[str, Any]:
         """Generate escalation handoff response."""
 
         template = ResponseTemplates.ESCALATION_HANDOFF.get(channel, ResponseTemplates.ESCALATION_HANDOFF[Channel.EMAIL])
 
-        # TODO: Get actual LO name from assignment system
-        lo_name = "a senior loan officer"
+        # Get actual LO name from assignment system
+        lo_name = self._get_assigned_lo_name(conversation_id)
 
         response_text = template.format(
             lo_name=lo_name,
@@ -911,6 +912,53 @@ class QualificationAgent:
             "should_send": True,
             "next_action": "assign_to_lo"
         }
+
+    def _get_assigned_lo_name(self, conversation_id: str) -> str:
+        """
+        Get the assigned loan officer's name for a conversation.
+
+        Looks up the conversation state to find the lead_id, then queries
+        the database to find the assigned LO's name.
+
+        Returns:
+            The LO's first name, or "a senior loan officer" as fallback
+        """
+        try:
+            if not self.db:
+                return "a senior loan officer"
+
+            # Get conversation state to find lead_id
+            state = self.conversation_service.get_or_create_conversation(
+                conversation_id, Channel.EMAIL  # Channel doesn't matter for lookup
+            )
+
+            lead_id = state.lead_id
+            if not lead_id:
+                return "a senior loan officer"
+
+            # Query the lead to get assigned_to user
+            from sqlalchemy import text
+            result = self.db.execute(
+                text("""
+                    SELECT u.first_name, u.last_name
+                    FROM leads l
+                    JOIN users u ON u.id = l.assigned_to
+                    WHERE l.id = :lead_id
+                """),
+                {"lead_id": lead_id}
+            ).fetchone()
+
+            if result and result[0]:
+                # Return first name, or full name if available
+                first_name = result[0]
+                last_name = result[1] if len(result) > 1 and result[1] else ""
+                return f"{first_name} {last_name}".strip() if last_name else first_name
+
+            return "a senior loan officer"
+
+        except Exception as e:
+            logger.warning(f"Could not get assigned LO name for conversation {conversation_id}: {e}")
+            return "a senior loan officer"
 
     def _generate_nurture_response(
         self,
