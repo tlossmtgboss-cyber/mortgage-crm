@@ -1498,14 +1498,15 @@ async def add_quiz_templates(
     admin_key: str = Query(..., description="Admin API key"),
     db: Session = Depends(get_db)
 ):
-    """Create quiz templates table and seed with initial data."""
+    """Create quiz tables (templates, responses, scores) and seed with initial data."""
     if admin_key != "perennia-admin-2024":
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
         from sqlalchemy import text
+        messages = []
 
-        # Create table
+        # Create quiz templates table
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS recruit_quiz_templates (
                 id SERIAL PRIMARY KEY,
@@ -1519,8 +1520,42 @@ async def add_quiz_templates(
                 created_at TIMESTAMP DEFAULT NOW()
             );
         """))
+        messages.append("recruit_quiz_templates table ready")
 
-        # Check if data exists
+        # Create quiz responses table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS recruit_quiz_responses (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL,
+                template_id INTEGER REFERENCES recruit_quiz_templates(id),
+                disposition VARCHAR(50) NOT NULL,
+                response_value TEXT,
+                numeric_score DECIMAL(3,1),
+                responded_by INTEGER,
+                responded_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+        messages.append("recruit_quiz_responses table ready")
+
+        # Create assessment scores table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS recruit_assessment_scores (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL UNIQUE,
+                production_score DECIMAL(3,1),
+                disc_score DECIMAL(3,1),
+                character_score DECIMAL(3,1),
+                skills_score DECIMAL(3,1),
+                culture_fit_score DECIMAL(3,1),
+                overall_score DECIMAL(3,1),
+                last_quiz_disposition VARCHAR(50),
+                quiz_count INTEGER DEFAULT 0,
+                last_updated TIMESTAMP DEFAULT NOW()
+            );
+        """))
+        messages.append("recruit_assessment_scores table ready")
+
+        # Check if template data exists
         result = db.execute(text("SELECT COUNT(*) FROM recruit_quiz_templates"))
         count = result.scalar()
 
@@ -1541,10 +1576,12 @@ async def add_quiz_templates(
                 ('offer', 'Values alignment', 'likert', 'culture_fit', 1.0, 1),
                 ('offer', 'Team compatibility', 'likert', 'culture_fit', 1.0, 2);
             """))
-            db.commit()
-            return {"status": "success", "message": "Table created and 12 quiz templates inserted"}
+            messages.append("12 quiz templates seeded")
         else:
-            return {"status": "success", "message": f"Table exists with {count} records, skipped insert"}
+            messages.append(f"Templates exist ({count} records)")
+
+        db.commit()
+        return {"status": "success", "messages": messages}
 
     except Exception as e:
         db.rollback()
