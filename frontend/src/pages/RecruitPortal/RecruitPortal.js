@@ -111,22 +111,6 @@ const RecruitPortal = () => {
 
   return (
     <div className="recruit-portal">
-      {/* Header */}
-      <header className="portal-header">
-        <div className="portal-logo">
-          <h1>Perennia</h1>
-          <span className="tagline">{portalData?.company_tagline || 'Join the team that helps you succeed'}</span>
-        </div>
-        <div className="portal-user">
-          <span className="user-name">Welcome, {portalData?.candidate_name || 'Candidate'}</span>
-          {portalData?.candidate_status && (
-            <span className={`status-badge status-${portalData.candidate_status}`}>
-              {portalData.candidate_status.replace('_', ' ')}
-            </span>
-          )}
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="portal-hero">
         <div className="hero-content">
