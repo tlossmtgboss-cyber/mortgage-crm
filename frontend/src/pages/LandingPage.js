@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../services/api';
 import './LandingPage.css';
@@ -278,8 +278,8 @@ function LandingPage() {
             <ul>
               <li>About</li>
               <li>Blog</li>
-              <li>Privacy Policy</li>
-              <li>Terms of Service</li>
+              <li><Link to="/privacy-policy">Privacy Policy</Link></li>
+              <li><Link to="/terms-of-service">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

@@ -575,6 +575,15 @@
   color: #18a0a6;
 }
 
+.footer-section ul li a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.footer-section ul li a:hover {
+  color: #18a0a6;
+}
+
 .footer-bottom {
   text-align: center;
   padding-top: 30px;

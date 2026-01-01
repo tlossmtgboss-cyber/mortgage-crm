@@ -150,6 +150,7 @@ const ListingPortalTransactionDetail = lazy(() => import('./pages/ListingPortalT
 const ListingAgentPortal = lazy(() => import('./pages/ListingAgentPortal'));
 const RecruitPortal = lazy(() => import('./pages/RecruitPortal'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 
 // Portal Components - Real-time borrower and partner portals
 const ActiveLoanPortalComplete = lazy(() => import('./components/portal/ActiveLoanPortalComplete'));
@@ -292,6 +293,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/application-submitted" element={<ApplicationSubmitted />} />
           <Route path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />
+          <Route path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />
 
           {/* Realtor Portal (public - token-based auth) */}
           <Route path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />
