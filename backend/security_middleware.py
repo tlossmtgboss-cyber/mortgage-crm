@@ -269,6 +269,8 @@ RATE_LIMIT_TIERS = {
     "standard": {"requests_per_minute": 120, "requests_per_hour": 5000},
     # Unauthenticated/IP-based (most restrictive)
     "anonymous": {"requests_per_minute": 60, "requests_per_hour": 1000},
+    # SECURITY: Public endpoints - strict limits to prevent brute-force/enumeration
+    "public": {"requests_per_minute": 30, "requests_per_hour": 300},
 }
 
 # Endpoint categories with specific rate limits (multipliers applied to base limits)
@@ -318,12 +320,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             logger.debug(f"Bypassing rate limit for WebSocket: {path}")
             return await call_next(request)
 
-        # Skip rate limiting for exempt paths
-        rate_limit_exempt_paths = [
+        # SECURITY: Only truly exempt health/docs endpoints - public APIs get rate limited
+        fully_exempt_paths = [
             "/health",
             "/docs",
             "/redoc",
             "/openapi.json",
+        ]
+        if any(path.startswith(p) for p in fully_exempt_paths):
+            return await call_next(request)
+
+        # Public endpoints get stricter rate limiting (not exemption)
+        public_endpoint_paths = [
             "/api/v1/public/",
             "/api/v1/webhook/",
             "/api/v1/borrower/",
@@ -331,8 +339,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/portal/",
             "/api/portal/",
         ]
-        if any(path.startswith(p) for p in rate_limit_exempt_paths):
-            return await call_next(request)
+        is_public_endpoint = any(path.startswith(p) for p in public_endpoint_paths)
 
         # Extract user info from JWT if present
         user_id, user_role = self._extract_user_from_token(request)
@@ -344,7 +351,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         else:
             client_ip = self._get_client_ip(request)
             rate_limit_key = f"ip:{client_ip}"
-            tier = "anonymous"
+            # SECURITY: Public endpoints get stricter rate limiting
+            tier = "public" if is_public_endpoint else "anonymous"
 
         # Get tier limits
         tier_config = RATE_LIMIT_TIERS.get(tier, RATE_LIMIT_TIERS["anonymous"])
@@ -577,16 +585,36 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        # Content Security Policy - Prevents XSS attacks
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' https://api.openai.com https://api.anthropic.com https://graph.microsoft.com; "
-            "frame-ancestors 'none';"
-        )
+        # SECURITY: Content Security Policy - Prevents XSS attacks
+        # Note: 'unsafe-inline' for styles kept for compatibility; 'unsafe-eval' REMOVED for security
+        # In strict mode, consider using nonces for inline scripts
+        environment = os.getenv("ENVIRONMENT", "development")
+        if environment == "production":
+            # Production: Strict CSP without unsafe-eval
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' https://cdn.jsdelivr.net https://unpkg.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' https://api.openai.com https://api.anthropic.com https://graph.microsoft.com wss:; "
+                "frame-ancestors 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self';"
+            )
+        else:
+            # Development: Allow inline scripts for debugging
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' https://api.openai.com https://api.anthropic.com https://graph.microsoft.com wss:; "
+                "frame-ancestors 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self';"
+            )
 
         # Prevent clickjacking attacks
         response.headers["X-Frame-Options"] = "DENY"

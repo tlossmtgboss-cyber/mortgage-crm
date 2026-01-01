@@ -4972,6 +4972,48 @@ app = FastAPI(
     redirect_slashes=False  # Prevent HTTP redirects that cause mixed content errors
 )
 
+
+# SECURITY: Global exception handler - prevents stack traces from leaking to clients
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Centralized error handling that logs full details but returns generic messages.
+    This prevents information disclosure through stack traces.
+    """
+    import uuid
+    error_id = str(uuid.uuid4())[:8]
+
+    # Log full details for debugging (server-side only)
+    logger.error(
+        f"Unhandled exception [error_id={error_id}] {request.method} {request.url.path}: {exc}",
+        exc_info=True
+    )
+
+    # Return generic error to client (no stack trace)
+    environment = os.getenv("ENVIRONMENT", "development")
+    if environment == "production":
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "An internal error occurred",
+                "error_id": error_id,
+                "message": "Please contact support if this persists"
+            }
+        )
+    else:
+        # In development, include error type for debugging (but not full trace)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+                "error_id": error_id,
+                "message": "Check server logs for full details"
+            }
+        )
+
 # CORS - Dynamic custom domain support
 # Custom domains are stored in the database and checked dynamically
 # No code changes needed to add new user domains
@@ -4997,12 +5039,16 @@ app.add_middleware(ImpersonationEnforcementMiddleware, db_session_factory=Sessio
 
 # Dynamic CORS middleware - checks database for allowed custom domains
 # Caches domains in memory for performance, refreshes every 60 seconds
+# SECURITY: Restrict CORS to specific methods and headers (enterprise requirement)
 app.add_middleware(
     DynamicCORSMiddleware,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With",
+        "X-Impersonation-Token", "X-Test-API-Key", "X-Request-ID", "Cache-Control"
+    ],
+    expose_headers=["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
     max_age=3600,
 )
 
@@ -5063,6 +5109,63 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
+
+def safe_error_response(error: Exception, context: str = "") -> dict:
+    """
+    SECURITY: Return safe error response without exposing stack traces.
+    Logs full details server-side, returns sanitized response to client.
+    """
+    import uuid
+    error_id = str(uuid.uuid4())[:8]
+
+    # Log full details (server-side only)
+    logger.error(f"Error [{error_id}] {context}: {error}", exc_info=True)
+
+    environment = os.getenv("ENVIRONMENT", "development")
+    if environment == "production":
+        return {
+            "success": False,
+            "error": "An error occurred",
+            "error_id": error_id
+        }
+    else:
+        return {
+            "success": False,
+            "error": str(error),
+            "error_type": type(error).__name__,
+            "error_id": error_id
+        }
+
+
+def validate_password_complexity(password: str) -> tuple[bool, str]:
+    """
+    SECURITY: Validate password meets enterprise complexity requirements.
+    Returns (is_valid, error_message)
+    """
+    import re
+
+    if len(password) < 12:
+        return False, "Password must be at least 12 characters long"
+
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one number"
+
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False, "Password must contain at least one special character"
+
+    # Check for common weak passwords
+    common_passwords = {'password', 'password123', '123456789012', 'qwertyuiop'}
+    if password.lower() in common_passwords:
+        return False, "Password is too common, please choose a stronger password"
+
+    return True, ""
+
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
@@ -8948,9 +9051,8 @@ The Team menu item appears for managers and management roles.
                 }
 
             except Exception as e:
-                logger.error(f"Error fetching SLA dashboard: {e}")
-                import traceback
-                return {"success": False, "message": f"Error loading SLA data: {str(e)}", "traceback": traceback.format_exc()}
+                logger.error(f"Error fetching SLA dashboard: {e}", exc_info=True)
+                return safe_error_response(e, "SLA dashboard")
 
         async def execute_get_efficiency_metrics(args):
             """Get deep pipeline efficiency metrics with root cause analysis"""
@@ -9179,9 +9281,8 @@ The Team menu item appears for managers and management roles.
                 return response
 
             except Exception as e:
-                logger.error(f"Error fetching efficiency metrics: {e}")
-                import traceback
-                return {"success": False, "message": f"Error: {str(e)}", "traceback": traceback.format_exc()}
+                logger.error(f"Error fetching efficiency metrics: {e}", exc_info=True)
+                return safe_error_response(e, "efficiency metrics")
 
         async def execute_get_analytics_report(args):
             """Generate comprehensive analytics report"""
@@ -37241,9 +37342,10 @@ async def change_current_user_password(
         if not pwd_context.verify(password_data.current_password, current_user.hashed_password):
             raise HTTPException(status_code=400, detail="Current password is incorrect")
 
-        # Validate new password
-        if len(password_data.new_password) < 6:
-            raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+        # SECURITY: Validate password complexity (enterprise requirement)
+        is_valid, error_msg = validate_password_complexity(password_data.new_password)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
 
         # Hash and save new password
         current_user.hashed_password = pwd_context.hash(password_data.new_password)

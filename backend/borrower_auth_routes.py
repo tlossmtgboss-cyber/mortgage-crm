@@ -869,12 +869,47 @@ async def apple_callback(
 
             tokens = token_response.json()
 
-        # Decode ID token to get user info
-        # Note: In production, verify the token signature
-        id_token_payload = jwt.decode(
-            tokens["id_token"],
-            options={"verify_signature": False}  # Should verify in production
-        )
+        # SECURITY: Verify Apple ID token signature using Apple's public keys
+        id_token = tokens["id_token"]
+        try:
+            # Fetch Apple's public keys for JWT verification
+            async with httpx.AsyncClient() as jwks_client:
+                jwks_response = await jwks_client.get(
+                    "https://appleid.apple.com/auth/keys",
+                    timeout=10.0
+                )
+                apple_keys = jwks_response.json()
+
+            # Get the key ID from the token header
+            unverified_header = jwt.get_unverified_header(id_token)
+            kid = unverified_header.get("kid")
+
+            # Find the matching key
+            public_key = None
+            for key in apple_keys.get("keys", []):
+                if key.get("kid") == kid:
+                    from jwt.algorithms import RSAAlgorithm
+                    public_key = RSAAlgorithm.from_jwk(key)
+                    break
+
+            if not public_key:
+                logger.error("Could not find matching Apple public key")
+                return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_verification_failed")
+
+            # Verify and decode the token
+            id_token_payload = jwt.decode(
+                id_token,
+                public_key,
+                algorithms=["RS256"],
+                audience=APPLE_CLIENT_ID,
+                issuer="https://appleid.apple.com"
+            )
+        except jwt.ExpiredSignatureError:
+            logger.error("Apple ID token has expired")
+            return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_expired")
+        except jwt.InvalidTokenError as e:
+            logger.error(f"Apple ID token verification failed: {e}")
+            return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=token_invalid")
 
         # Parse user data if provided (first sign-in only)
         first_name = None
