@@ -296,9 +296,49 @@ class ExperimentService:
             if (hash_value % 100) >= experiment.target_percentage:
                 return False
 
-        # TODO: Add user segment filtering if needed
-        # if experiment.target_user_segment and context:
-        #     Check if user matches segment
+        # User segment filtering
+        if experiment.target_user_segment and experiment.target_user_segment.lower() != 'all':
+            target_segment = experiment.target_user_segment.lower()
+            user_role = None
+
+            # First check context for role information
+            if context:
+                user_role = context.get('role') or context.get('user_role') or context.get('permission_role')
+
+            # If no role in context but we have user_id, query the database
+            if not user_role and user_id:
+                try:
+                    from main import User
+                    user = self.db.query(User).filter(User.id == user_id).first()
+                    if user:
+                        # Check permission_role first, then fall back to role
+                        user_role = getattr(user, 'permission_role', None) or getattr(user, 'role', None)
+                except Exception as e:
+                    logger.warning(f"Error querying user role for segment filtering: {e}")
+
+            # If we still don't have a role, exclude from segmented experiments
+            if not user_role:
+                return False
+
+            user_role_lower = user_role.lower()
+
+            # Define segment mappings (segment -> list of matching roles)
+            segment_mappings = {
+                'loan_officers': ['loan_officer', 'lo', 'senior_loan_officer'],
+                'admins': ['admin', 'administrator', 'leadership'],
+                'managers': ['manager', 'management', 'leadership', 'admin'],
+                'processors': ['processor', 'loan_processor'],
+                'sales': ['sales', 'loan_officer', 'senior_loan_officer'],
+            }
+
+            # Check if user role matches segment
+            if target_segment in segment_mappings:
+                if user_role_lower not in segment_mappings[target_segment]:
+                    return False
+            else:
+                # Direct role match for custom segments
+                if user_role_lower != target_segment:
+                    return False
 
         return True
 
