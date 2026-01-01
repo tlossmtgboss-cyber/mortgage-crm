@@ -239,7 +239,9 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
               },
             }));
           } else {
-            throw new Error('Failed to create listing agent portal');
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Listing portal creation error:', response.status, errorData);
+            throw new Error(errorData.detail || errorData.error || 'Failed to create listing agent portal');
           }
           break;
         }
@@ -249,7 +251,7 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       }
     } catch (err) {
       console.error(`Failed to create ${type} portal:`, err);
-      setError(`Failed to create portal. Please try again.`);
+      setError(err.message || `Failed to create portal. Please try again.`);
     } finally {
       setCreating(null);
     }
