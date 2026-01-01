@@ -87,10 +87,12 @@ def is_ip_whitelisted(ip: str) -> bool:
 
 def has_valid_test_api_key(request: Request) -> bool:
     """Check if request has valid test API key header"""
+    import hmac
     if not TEST_API_KEY:
         return False
     api_key = request.headers.get("X-Test-API-Key", "")
-    return api_key == TEST_API_KEY
+    # SECURITY: Use constant-time comparison to prevent timing attacks
+    return hmac.compare_digest(api_key, TEST_API_KEY)
 
 
 def is_websocket_request(request: Request) -> bool:

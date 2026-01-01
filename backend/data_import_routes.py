@@ -275,6 +275,18 @@ def detect_data_type(headers: list, sample_rows: list) -> str:
     return 'leads'
 
 
+# SECURITY: File upload constraints
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+ALLOWED_EXTENSIONS = {'.csv', '.xlsx', '.xls'}
+ALLOWED_CONTENT_TYPES = {
+    'text/csv',
+    'application/csv',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/octet-stream',  # Some browsers send this for CSV
+}
+
+
 @router.post("/analyze")
 async def analyze_file(
     file: UploadFile = File(...),
@@ -284,9 +296,30 @@ async def analyze_file(
     Analyze uploaded CSV/Excel file and return preview with AI questions
     """
     try:
-        # Read file content
-        content = await file.read()
+        # SECURITY: Validate filename and extension
         filename = file.filename or "upload.csv"
+        import os
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
+
+        # SECURITY: Check content type (with fallback for browsers that send octet-stream)
+        if file.content_type and file.content_type not in ALLOWED_CONTENT_TYPES:
+            logger.warning(f"Unexpected content type: {file.content_type} for file {filename}")
+
+        # SECURITY: Read with size limit
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
+            )
+
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
 
         # Parse file
         df = parse_excel_or_csv(content, filename)

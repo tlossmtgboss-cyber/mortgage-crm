@@ -280,12 +280,19 @@ async def get_partner(partner_id: int, db: Session = Depends(get_db)):
 @router.patch("/partners/{partner_id}")
 async def update_partner(partner_id: int, data: dict, db: Session = Depends(get_db)):
     """Update partner details"""
-    # Build dynamic update query
+    # SECURITY: Whitelist allowed column names to prevent SQL injection
+    ALLOWED_COLUMNS = {
+        'name', 'email', 'phone', 'company', 'status', 'partner_type',
+        'commission_rate', 'notes', 'address', 'city', 'state', 'zip',
+        'website', 'license_number', 'specialty', 'tier', 'active'
+    }
+
     updates = []
     params = {"partner_id": partner_id}
 
     for key, value in data.items():
-        if key not in ['id', 'created_at']:
+        # SECURITY: Only allow whitelisted column names
+        if key in ALLOWED_COLUMNS:
             updates.append(f"{key} = :{key}")
             params[key] = value
 

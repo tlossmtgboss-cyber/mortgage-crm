@@ -52,8 +52,20 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
         # Remove all HTML tags
         cleaned = bleach.clean(text, tags=[], strip=True)
     else:
-        # Fallback: basic HTML tag removal
-        cleaned = re.sub(r'<[^>]+>', '', text)
+        # SECURITY: Enhanced fallback for HTML tag removal when bleach unavailable
+        # Remove script tags and their content first
+        cleaned = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.IGNORECASE | re.DOTALL)
+        # Remove style tags and their content
+        cleaned = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.IGNORECASE | re.DOTALL)
+        # Remove HTML comments
+        cleaned = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+        # Remove all remaining HTML tags
+        cleaned = re.sub(r'<[^>]+>', '', cleaned)
+        # HTML entity decode common dangerous entities
+        cleaned = cleaned.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+        # Re-encode to prevent double-encoding attacks
+        cleaned = cleaned.replace('<', '&lt;').replace('>', '&gt;')
+        logger.warning("Using fallback XSS sanitization - install bleach for production use")
 
     # Remove javascript: and data: URLs
     cleaned = re.sub(r'javascript:', '', cleaned, flags=re.IGNORECASE)

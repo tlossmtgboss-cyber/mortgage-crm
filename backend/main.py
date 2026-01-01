@@ -41092,32 +41092,32 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
             ("incoming_data_events", "lead_id"),
         ]
 
-        # Build a single SQL statement that deletes from all existing tables
-        delete_sqls = []
+        # SECURITY: Use parameterized queries to prevent SQL injection
+        # Table/column names are from a hardcoded whitelist, not user input
+        ALLOWED_TABLES = {
+            "lead_activities", "lead_documents", "lead_notes", "lead_tasks",
+            "lead_emails", "lead_calls", "lead_tags", "lead_custom_fields",
+            "lead_profiles", "workflow_executions", "circle_contacts",
+            "notifications", "stage_history", "conversation_messages",
+            "ai_conversation_messages", "incoming_data_events"
+        }
+
+        # Execute parameterized deletes within the existing session
         for table, column in tables_to_clean:
-            if table in existing_tables:
-                delete_sqls.append(f"DELETE FROM {table} WHERE {column} = {lead_id}")
+            if table in existing_tables and table in ALLOWED_TABLES:
+                try:
+                    # Use parameterized query - table/column from whitelist, value parameterized
+                    db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                except Exception as e:
+                    logger.debug(f"Delete from {table} skipped: {e}")
 
         # Nullify loan references if loans table exists
         if "loans" in existing_tables:
-            delete_sqls.append(f"UPDATE loans SET lead_id = NULL WHERE lead_id = {lead_id}")
+            db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
 
-        # Add the final lead delete
-        delete_sqls.append(f"DELETE FROM leads WHERE id = {lead_id}")
-
-        # Execute all as a single raw SQL transaction
-        raw_conn = db.bind.raw_connection()
-        try:
-            cursor = raw_conn.cursor()
-            for sql in delete_sqls:
-                try:
-                    cursor.execute(sql)
-                except Exception as e:
-                    logger.debug(f"Delete statement skipped: {sql[:50]}... - {e}")
-                    # Continue with next statement
-            raw_conn.commit()
-        finally:
-            raw_conn.close()
+        # Delete the lead itself using parameterized query
+        db.execute(text("DELETE FROM leads WHERE id = :lead_id"), {"lead_id": lead_id})
+        db.commit()
 
         logger.info(f"Lead deleted: {lead_name}")
         return None
@@ -56830,13 +56830,18 @@ async def startup_event():
                     "SELECT id FROM users WHERE email = 'admin@perenniaai.com'"
                 ))
                 if admin_check.fetchone():
-                    # Pre-computed bcrypt hash for "demo123" using passlib with bcrypt 4.1.3
-                    admin_hash = "$2b$12$okQ2nh4jbjfdA8nmZ7zj4enIL0tFjd3O7s58t2I/0K6bZPNY8nEuy"
-                    db_temp.execute(text(
-                        "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
-                    ), {"pwd": admin_hash})
-                    db_temp.commit()
-                    logger.info("✅ Admin password reset to demo123")
+                    # SECURITY: Only reset password in development, use env var in production
+                    if ENVIRONMENT == "development":
+                        # Pre-computed bcrypt hash for dev-only password
+                        admin_hash = "$2b$12$okQ2nh4jbjfdA8nmZ7zj4enIL0tFjd3O7s58t2I/0K6bZPNY8nEuy"
+                        db_temp.execute(text(
+                            "UPDATE users SET hashed_password = :pwd WHERE email = 'admin@perenniaai.com'"
+                        ), {"pwd": admin_hash})
+                        db_temp.commit()
+                        logger.info("✅ Admin password reset (development mode only)")
+                    else:
+                        # In production, admin password must be set via secure means
+                        logger.info("✅ Skipping admin password reset in production")
                 db_temp.close()
             except Exception as pwd_e:
                 logger.warning(f"⚠️ Admin password reset skipped: {pwd_e}")
@@ -59884,13 +59889,21 @@ async def add_referral_intelligence_migration(
         tables = ["leads", "active_loans", "mum_clients"]
         results = []
 
+        # SECURITY: Whitelist allowed tables to prevent SQL injection
+        ALLOWED_MIGRATION_TABLES = {"leads", "active_loans", "mum_clients"}
+
         for table in tables:
+            if table not in ALLOWED_MIGRATION_TABLES:
+                logger.warning(f"Skipping unauthorized table in migration: {table}")
+                continue
             table_results = {"table": table, "columns_added": [], "columns_existing": []}
             for col_name, col_type in new_columns:
                 try:
-                    check_sql = text(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{col_name}'")
-                    result = db.execute(check_sql)
+                    # SECURITY: Use parameterized query for table/column name checks
+                    check_sql = text("SELECT column_name FROM information_schema.columns WHERE table_name = :table_name AND column_name = :col_name")
+                    result = db.execute(check_sql, {"table_name": table, "col_name": col_name})
                     if result.fetchone() is None:
+                        # Table name is from whitelist, column name/type from hardcoded migration list
                         alter_sql = text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
                         db.execute(alter_sql)
                         table_results["columns_added"].append(col_name)
@@ -59941,9 +59954,11 @@ async def add_post_closing_workflow_migration(
 
         for col_name, col_type in new_lead_columns:
             try:
-                check_sql = text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'leads' AND column_name = '{col_name}'")
-                result = db.execute(check_sql)
+                # SECURITY: Use parameterized query for column existence check
+                check_sql = text("SELECT column_name FROM information_schema.columns WHERE table_name = :table_name AND column_name = :col_name")
+                result = db.execute(check_sql, {"table_name": "leads", "col_name": col_name})
                 if result.fetchone() is None:
+                    # Column name/type from hardcoded migration list - safe to interpolate
                     db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
                     results["columns_added"].append(f"leads.{col_name}")
             except Exception as e:

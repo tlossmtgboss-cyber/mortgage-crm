@@ -62,30 +62,27 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         if self.domain_service:
             return self.domain_service.is_allowed_origin(origin)
 
-        # Fallback: allow static domains only
+        # SECURITY: Explicit whitelist only - no wildcard subdomain matching
+        # This prevents subdomain takeover attacks
         static_allowed = {
+            # Local development
             "http://localhost:3000",
             "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+            # Production domains - explicit list only
             "https://perenniaai.com",
             "https://www.perenniaai.com",
             "https://app.perenniaai.com",
             "https://api.perenniaai.com",
-            # Railway production domains
+            "https://admin.perenniaai.com",
+            # Railway production domain - specific deployment only
             "https://mortgage-crm-production-7a9a.up.railway.app",
         }
 
-        if origin in static_allowed:
-            return True
-
-        # Allow perenniaai.com subdomains
-        if origin.endswith("perenniaai.com"):
-            return True
-
-        # Allow railway.app subdomains (production hosting)
-        if origin.endswith(".railway.app"):
-            return True
-
-        return False
+        # SECURITY: Only allow exact matches, no wildcard subdomain matching
+        # Wildcard matching (endswith) is vulnerable to subdomain takeover
+        return origin in static_allowed
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         origin = request.headers.get("origin")
