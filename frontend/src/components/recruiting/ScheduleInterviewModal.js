@@ -307,12 +307,14 @@ const ScheduleInterviewModal = ({ isOpen, onClose, candidate, onSuccess }) => {
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to schedule interview');
-      }
-
       const result = await response.json();
+
+      // Check for error response (either HTTP error or success:false in body)
+      if (!response.ok || result.success === false) {
+        const errorMsg = result.error || result.detail || 'Failed to schedule interview';
+        console.error('Interview scheduling failed:', result);
+        throw new Error(errorMsg);
+      }
 
       // Send notifications
       await sendInterviewNotifications(interviewData, result);
