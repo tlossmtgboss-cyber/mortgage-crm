@@ -363,16 +363,12 @@ class PerenniaS3Service:
             }
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', '')
-            logger.error(f"Error making object public: {e}")
+            logger.warning(f"Cannot make object public ({error_code}): {e}")
 
-            # If ACL fails (bucket might block public access), fall back to presigned
-            if error_code == 'AccessControlListNotSupported':
-                return self.get_presigned_download_url(storage_key, expires_in=86400 * 365)
-
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            # Fall back to long-lived presigned URL if public access fails
+            # This handles AccessDenied, AccessControlListNotSupported, etc.
+            logger.info(f"Falling back to presigned URL for {storage_key}")
+            return self.get_presigned_download_url(storage_key, expires_in=86400 * 7)
 
     def delete_document(self, storage_key: str) -> Dict[str, Any]:
         """

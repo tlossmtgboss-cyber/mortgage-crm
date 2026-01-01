@@ -79,6 +79,12 @@ const RecruitDetail = () => {
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
 
+  // Escalate modal state
+  const [showEscalateModal, setShowEscalateModal] = useState(false);
+  const [escalateUsers, setEscalateUsers] = useState([]);
+  const [selectedEscalateUser, setSelectedEscalateUser] = useState('');
+  const [escalateNote, setEscalateNote] = useState('');
+
   // Video recorder modal state
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
 
@@ -801,54 +807,53 @@ const RecruitDetail = () => {
                 onClick={handleClickToCall}
                 disabled={!candidate.phone || isCallInProgress}
               >
-                <span className="recruit-quick-action-icon">📞</span>
-                <span>{isCallInProgress ? 'Calling...' : 'Call'}</span>
+                {isCallInProgress ? 'Calling...' : 'Call'}
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => window.open(`mailto:${candidate.email}`, '_blank')}
                 disabled={!candidate.email}
               >
-                <span className="recruit-quick-action-icon">✉️</span>
-                <span>Email</span>
+                Email
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowScheduleInterviewModal(true)}
               >
-                <span className="recruit-quick-action-icon">📅</span>
-                <span>Schedule Interview</span>
+                Schedule Interview
               </button>
               <button
-                className="recruit-quick-action-btn recruit-quick-action-video"
+                className="recruit-quick-action-btn"
                 onClick={() => setShowVideoRecorder(true)}
               >
-                <span className="recruit-quick-action-icon">🎬</span>
-                <span>Record Video</span>
+                Record Video
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('offer')}
                 disabled={candidate.status === 'offer' || candidate.status === 'hired'}
               >
-                <span className="recruit-quick-action-icon">📝</span>
-                <span>Make Offer</span>
+                Make Offer
               </button>
               <button
-                className="recruit-quick-action-btn recruit-quick-action-danger"
+                className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('rejected')}
                 disabled={candidate.status === 'rejected' || candidate.status === 'hired'}
               >
-                <span className="recruit-quick-action-icon">❌</span>
-                <span>Reject</span>
+                Reject
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('hired')}
                 disabled={candidate.status === 'hired'}
               >
-                <span className="recruit-quick-action-icon">✅</span>
-                <span>Mark Hired</span>
+                Mark Hired
+              </button>
+              <button
+                className="recruit-quick-action-btn"
+                onClick={() => setShowEscalateModal(true)}
+              >
+                Escalate
               </button>
             </div>
           </div>
