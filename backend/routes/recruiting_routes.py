@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime, date
 from database import get_db
 from services.recruiting_service import RecruitingService
+from main import get_current_user, User
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["recruiting"])
 
@@ -430,8 +431,8 @@ async def create_candidate(
 async def update_candidate_status(
     candidate_id: int,
     data: CandidateStatusUpdate,
-    user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update candidate status."""
@@ -440,7 +441,7 @@ async def update_candidate_status(
         result = await service.update_candidate_status(
             candidate_id=candidate_id,
             new_status=data.status,
-            updated_by=user_id or 1,
+            updated_by=current_user.id,
             reason=data.reason,
             organization_id=organization_id
         )
