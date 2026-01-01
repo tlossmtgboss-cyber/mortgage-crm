@@ -149,17 +149,20 @@ class CandidateAIAnalyzer:
 
         data = {"candidate_id": candidate_id}
 
-        # Get basic candidate info
+        # Get basic candidate info (using only columns that exist in mm_candidates table)
         candidate = self.db.execute(text("""
             SELECT
                 c.id, c.first_name, c.last_name, c.email, c.phone,
                 c.source, c.status, c.target_role_name, c.applied_at,
-                c.resume_url, c.resume_text,
-                c.linkedin_url, c.facebook_url, c.instagram_url, c.twitter_url,
-                c.annual_volume, c.annual_units, c.nmls_id,
-                c.current_company, c.current_title,
-                c.years_mortgage_experience, c.years_experience
+                c.resume_url, c.linkedin_url,
+                c.years_mortgage_experience, c.years_experience,
+                c.talent_profile, c.previous_companies,
+                c.interview_notes, c.recruiter_notes, c.hiring_manager_notes,
+                c.overall_score, c.vetting_score, c.behavioral_score,
+                c.technical_score, c.culture_fit_score,
+                rd.role_name as target_role_full
             FROM mm_candidates c
+            LEFT JOIN mm_role_definitions rd ON rd.id = c.target_role_id
             WHERE c.id = :candidate_id
         """), {"candidate_id": candidate_id}).fetchone()
 
@@ -172,92 +175,136 @@ class CandidateAIAnalyzer:
             "phone": candidate.phone,
             "source": candidate.source,
             "status": candidate.status,
-            "target_role": candidate.target_role_name,
+            "target_role": candidate.target_role_name or candidate.target_role_full,
             "applied_at": str(candidate.applied_at) if candidate.applied_at else None
         }
 
+        # Extract production data from talent_profile JSONB if available
+        talent_profile = candidate.talent_profile or {}
         data["production"] = {
-            "annual_volume": candidate.annual_volume,
-            "annual_units": candidate.annual_units,
-            "nmls_id": candidate.nmls_id,
-            "current_company": candidate.current_company,
-            "current_title": candidate.current_title,
+            "annual_volume": talent_profile.get("annual_volume"),
+            "annual_units": talent_profile.get("annual_units"),
+            "nmls_id": talent_profile.get("nmls_id"),
+            "current_company": talent_profile.get("current_company"),
+            "current_title": talent_profile.get("current_title"),
             "years_mortgage": candidate.years_mortgage_experience,
-            "years_total": candidate.years_experience
+            "years_total": candidate.years_experience,
+            "previous_companies": candidate.previous_companies
         }
 
-        if include_resume and candidate.resume_text:
-            data["resume_text"] = candidate.resume_text
+        # Current scores for reference
+        data["current_scores"] = {
+            "overall": candidate.overall_score,
+            "vetting": candidate.vetting_score,
+            "behavioral": candidate.behavioral_score,
+            "technical": candidate.technical_score,
+            "culture_fit": candidate.culture_fit_score
+        }
+
+        if include_resume and candidate.resume_url:
+            data["resume_url"] = candidate.resume_url
+            # Note: We don't have resume text stored, only URL
 
         if include_social:
             data["social_media"] = {
-                "linkedin_url": candidate.linkedin_url,
-                "facebook_url": candidate.facebook_url,
-                "instagram_url": candidate.instagram_url,
-                "twitter_url": candidate.twitter_url
+                "linkedin_url": candidate.linkedin_url
             }
 
-            # Get social media activity if available
-            social_activity = self.db.execute(text("""
-                SELECT platform, content, posted_at, engagement_data
-                FROM mm_candidate_social_posts
-                WHERE candidate_id = :candidate_id
-                ORDER BY posted_at DESC
-                LIMIT 20
-            """), {"candidate_id": candidate_id}).fetchall()
+            # Try to get social media activity if the table exists
+            try:
+                social_activity = self.db.execute(text("""
+                    SELECT platform, content, posted_at, engagement_data
+                    FROM mm_candidate_social_posts
+                    WHERE candidate_id = :candidate_id
+                    ORDER BY posted_at DESC
+                    LIMIT 20
+                """), {"candidate_id": candidate_id}).fetchall()
 
-            if social_activity:
-                data["social_posts"] = [
-                    {
-                        "platform": post.platform,
-                        "content": post.content,
-                        "posted_at": str(post.posted_at),
-                        "engagement": post.engagement_data
-                    }
-                    for post in social_activity
-                ]
+                if social_activity:
+                    data["social_posts"] = [
+                        {
+                            "platform": post.platform,
+                            "content": post.content,
+                            "posted_at": str(post.posted_at),
+                            "engagement": post.engagement_data
+                        }
+                        for post in social_activity
+                    ]
+            except Exception:
+                # Table may not exist, that's okay
+                pass
 
         if include_interviews:
-            interviews = self.db.execute(text("""
-                SELECT
-                    round, interview_type, status, scheduled_at,
-                    interviewer_notes, score, feedback
-                FROM mm_interviews
-                WHERE candidate_id = :candidate_id
-                ORDER BY round ASC
-            """), {"candidate_id": candidate_id}).fetchall()
+            # Try mm_interviews table first
+            try:
+                interviews = self.db.execute(text("""
+                    SELECT
+                        round, interview_type, status, scheduled_at,
+                        interviewer_notes, score, feedback
+                    FROM mm_interviews
+                    WHERE candidate_id = :candidate_id
+                    ORDER BY round ASC
+                """), {"candidate_id": candidate_id}).fetchall()
 
-            if interviews:
-                data["interviews"] = [
-                    {
-                        "round": i.round,
-                        "type": i.interview_type,
-                        "status": i.status,
-                        "date": str(i.scheduled_at) if i.scheduled_at else None,
-                        "notes": i.interviewer_notes,
-                        "score": i.score,
-                        "feedback": i.feedback
-                    }
-                    for i in interviews
-                ]
+                if interviews:
+                    data["interviews"] = [
+                        {
+                            "round": i.round,
+                            "type": i.interview_type,
+                            "status": i.status,
+                            "date": str(i.scheduled_at) if i.scheduled_at else None,
+                            "notes": i.interviewer_notes,
+                            "score": i.score,
+                            "feedback": i.feedback
+                        }
+                        for i in interviews
+                    ]
+            except Exception:
+                # Table may not exist, that's okay
+                pass
+
+            # Also include interview notes from candidate record
+            if candidate.interview_notes:
+                data["interview_notes_from_candidate"] = candidate.interview_notes
 
         if include_notes:
-            notes = self.db.execute(text("""
-                SELECT content, note_type, created_at, created_by
-                FROM mm_candidate_notes
-                WHERE candidate_id = :candidate_id
-                ORDER BY created_at DESC
-            """), {"candidate_id": candidate_id}).fetchall()
+            # Include notes from candidate record itself
+            notes_list = []
+            if candidate.recruiter_notes:
+                notes_list.append({
+                    "content": candidate.recruiter_notes,
+                    "type": "recruiter",
+                    "source": "candidate_record"
+                })
+            if candidate.hiring_manager_notes:
+                notes_list.append({
+                    "content": candidate.hiring_manager_notes,
+                    "type": "hiring_manager",
+                    "source": "candidate_record"
+                })
 
-            if notes:
-                data["notes"] = [
-                    {
-                        "content": n.content,
-                        "type": n.note_type,
-                        "date": str(n.created_at)
-                    }
-                    for n in notes
-                ]
+            # Try to get notes from separate table if it exists
+            try:
+                notes = self.db.execute(text("""
+                    SELECT content, note_type, created_at, created_by
+                    FROM mm_candidate_notes
+                    WHERE candidate_id = :candidate_id
+                    ORDER BY created_at DESC
+                """), {"candidate_id": candidate_id}).fetchall()
+
+                if notes:
+                    for n in notes:
+                        notes_list.append({
+                            "content": n.content,
+                            "type": n.note_type,
+                            "date": str(n.created_at)
+                        })
+            except Exception:
+                # Table may not exist, that's okay
+                pass
+
+            if notes_list:
+                data["notes"] = notes_list
 
         return data
 
