@@ -360,9 +360,9 @@ async def get_realtor_portal_videos(
 ):
     """Get videos for a realtor portal."""
     try:
-        # Verify partner exists
+        # Verify partner exists - referral_partners has name, company columns
         partner_result = db.execute(text("""
-            SELECT id, first_name, last_name
+            SELECT id, name, company
             FROM referral_partners
             WHERE id = :partner_id
         """), {"partner_id": partner_id})
@@ -411,7 +411,7 @@ async def get_realtor_portal_videos(
             })
 
         return {
-            "partner_name": f"{partner.first_name} {partner.last_name}",
+            "partner_name": partner.name or "Partner",
             "videos": videos,
             "count": len(videos)
         }
