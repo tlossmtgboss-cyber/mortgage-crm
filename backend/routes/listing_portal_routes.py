@@ -120,7 +120,7 @@ async def create_transaction(
     if not transaction:
         raise HTTPException(status_code=400, detail="Failed to create transaction")
 
-    return success_response(transaction, "Transaction created successfully")
+    return success_response("Transaction created successfully", transaction)
 
 
 @router.get("/transactions")
@@ -181,7 +181,7 @@ async def get_transaction(
     milestones = listing_portal_service.get_milestones(db, transaction_id)
     unread = listing_portal_service.get_unread_count(db, transaction_id, for_party=False)
 
-    return success_response({
+    return success_response("Transaction details retrieved", {
         "transaction": transaction,
         "parties": parties,
         "milestones": milestones,
@@ -217,7 +217,7 @@ async def add_party(
     if not party:
         raise HTTPException(status_code=400, detail="Failed to add party")
 
-    return success_response(party, "Party added successfully")
+    return success_response("Party added successfully", party)
 
 
 @router.post("/transactions/{transaction_id}/parties/{party_id}/invite")
@@ -256,7 +256,7 @@ async def send_portal_invite(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to send invite email")
 
-    return success_response(invite, "Portal invite sent successfully")
+    return success_response("Portal invite sent successfully", invite)
 
 
 @router.put("/transactions/{transaction_id}/milestones/{milestone_id}")
@@ -325,7 +325,7 @@ async def update_milestone(
         logger.warning(f"Failed to send milestone notifications: {notify_err}")
         # Don't fail the request if notifications fail
 
-    return success_response(milestone, "Milestone updated")
+    return success_response("Milestone updated", milestone)
 
 
 @router.post("/transactions/{transaction_id}/messages")
@@ -350,7 +350,7 @@ async def send_message_as_lo(
     if not message:
         raise HTTPException(status_code=400, detail="Failed to send message")
 
-    return success_response(message, "Message sent")
+    return success_response("Message sent", message)
 
 
 @router.get("/transactions/{transaction_id}/messages")
@@ -370,7 +370,7 @@ async def get_messages(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
     listing_portal_service.mark_messages_read(db, transaction_id, reader_user_id=user_id)
 
-    return success_response({"messages": messages})
+    return success_response("Messages retrieved", {"messages": messages})
 
 
 # =============================================================================
@@ -390,7 +390,7 @@ async def authenticate_magic_link(
     if error:
         raise HTTPException(status_code=401, detail=error)
 
-    return success_response(session_data, "Authentication successful")
+    return success_response("Authentication successful", session_data)
 
 
 @router.get("/auth/session")
@@ -414,7 +414,7 @@ async def validate_session(
     if not session_data:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-    return success_response(session_data)
+    return success_response("Session valid", session_data)
 
 
 # Helper to get party from session
@@ -457,7 +457,7 @@ async def portal_dashboard(
     # Get recent messages (preview)
     messages = listing_portal_service.get_messages(db, transaction["id"], limit=5)
 
-    return success_response({
+    return success_response("Portal dashboard loaded", {
         "party": {
             "id": party["id"],
             "name": f"{party['first_name']} {party['last_name']}",
@@ -498,7 +498,7 @@ async def portal_get_messages(
     # Mark LO messages as read
     listing_portal_service.mark_messages_read(db, transaction["id"], reader_party_id=party["id"])
 
-    return success_response({"messages": messages})
+    return success_response("Messages retrieved", {"messages": messages})
 
 
 @router.post("/portal/messages")
@@ -524,7 +524,7 @@ async def portal_send_message(
     if not message:
         raise HTTPException(status_code=400, detail="Failed to send message")
 
-    return success_response(message, "Message sent")
+    return success_response("Message sent", message)
 
 
 # =============================================================================
@@ -560,7 +560,7 @@ async def process_unsubscribe(
     success, message = listing_portal_service.process_unsubscribe(db, token)
 
     if success:
-        return success_response({"unsubscribed": True}, message)
+        return success_response(message, {"unsubscribed": True})
     else:
         raise HTTPException(status_code=400, detail=message)
 
@@ -583,7 +583,7 @@ async def run_migration(
     try:
         from migrations.add_listing_agent_portal import run_migration
         run_migration()
-        return success_response({"migrated": True}, "Migration completed successfully")
+        return success_response("Migration completed successfully", {"migrated": True})
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -610,7 +610,7 @@ async def trigger_weekly_updates(
             dry_run=dry_run
         )
 
-        return success_response(result, "Weekly updates job completed")
+        return success_response("Weekly updates job completed", result)
 
     except Exception as e:
         logger.error(f"Weekly updates trigger error: {e}")
@@ -635,7 +635,7 @@ async def get_scheduler_status(
         # Filter to just listing-related jobs
         listing_jobs = [j for j in jobs if "listing" in j["id"].lower()]
 
-        return success_response({
+        return success_response("Scheduler status retrieved", {
             "all_jobs": jobs,
             "listing_jobs": listing_jobs,
             "scheduler_running": scheduler_service.scheduler.running
