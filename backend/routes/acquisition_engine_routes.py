@@ -21,6 +21,7 @@ import uuid
 import logging
 
 from database import get_db
+from main import get_current_user, User
 
 from models.acquisition_engine.campaign_models import (
     CampaignBlueprint,
@@ -209,6 +210,7 @@ async def launch_campaign(
     request: CampaignLaunchRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Launch a new acquisition campaign.
@@ -248,8 +250,8 @@ async def launch_campaign(
     # Create campaign instance
     campaign = CampaignInstance(
         id=uuid.uuid4(),
-        organization_id=1,  # TODO: Get from auth context
-        user_id=1,  # TODO: Get from auth context
+        organization_id=getattr(current_user, 'organization_id', None) or 1,
+        user_id=current_user.id,
         blueprint_id=blueprint.id,
         name=campaign_name,
         goal_type=goal_type.value,
@@ -481,6 +483,7 @@ async def ingest_event(
     request: EventIngestRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Ingest a behavioral event.
@@ -501,7 +504,7 @@ async def ingest_event(
     }
 
     event = event_service.ingest_event(
-        organization_id=1,  # TODO: Get from auth context
+        organization_id=getattr(current_user, 'organization_id', None) or 1,
         event_type=request.event_type,
         event_payload=request.event_payload,
         lead_id=request.lead_id,
