@@ -39121,6 +39121,21 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
 
     conversion_rate = int((applications / total_leads * 100)) if total_leads > 0 else 0
 
+    # Calculate average contact time from lead data (time from creation to first contact attempt)
+    # Uses EXTRACT to get hours between lead creation and first contact attempt
+    avg_contact_time_result = db.query(
+        func.avg(
+            func.extract('epoch', Lead.first_contact_attempt_date - Lead.created_at) / 3600
+        ).label('avg_hours')
+    ).filter(
+        Lead.owner_id == current_user.id,
+        Lead.first_contact_attempt_date.isnot(None),
+        Lead.created_at.isnot(None)
+    ).scalar()
+
+    # Default to 1.2 hours if no data, otherwise round to 1 decimal
+    avg_contact_time = round(float(avg_contact_time_result), 1) if avg_contact_time_result else 1.2
+
     # Generate AI alerts
     alerts = []
     if uncontacted_alerts > 0:
@@ -39131,7 +39146,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
 
     lead_metrics = {
         "new_today": new_today,
-        "avg_contact_time": 1.2,  # TODO: Calculate from activity logs
+        "avg_contact_time": avg_contact_time,
         "conversion_rate": conversion_rate,
         "hot_leads": hot_leads,
         "alerts": alerts
