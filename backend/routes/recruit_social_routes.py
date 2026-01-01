@@ -530,3 +530,45 @@ async def run_social_migration(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# PUBLIC PORTAL ENDPOINTS (no auth required)
+# ============================================================================
+
+@router.get("/public/feed")
+async def get_public_social_feed(
+    limit: int = Query(10, le=50),
+    db: Session = Depends(get_db)
+):
+    """
+    Get recent social posts for public display on recruit portal.
+    No authentication required - only shows published posts.
+    """
+    try:
+        result = db.execute(text("""
+            SELECT id, content, platforms, image_url, posted_at,
+                   engagement_data, created_at
+            FROM recruit_social_posts
+            WHERE status = 'posted'
+              AND posted_at IS NOT NULL
+            ORDER BY posted_at DESC
+            LIMIT :limit
+        """), {"limit": limit})
+
+        posts = []
+        for row in result:
+            row_dict = dict(row._mapping)
+            posts.append({
+                "id": row_dict["id"],
+                "content": row_dict["content"],
+                "platforms": (row_dict["platforms"] or "").split(","),
+                "image_url": row_dict["image_url"],
+                "posted_at": row_dict["posted_at"].isoformat() if row_dict["posted_at"] else None,
+                "engagement": row_dict.get("engagement_data") or {}
+            })
+
+        return {"posts": posts, "count": len(posts)}
+    except Exception as e:
+        logger.error(f"Error getting public feed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

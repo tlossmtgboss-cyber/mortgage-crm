@@ -5,6 +5,7 @@ import ProductionCalculator from './ProductionCalculator';
 import PortalChat from './PortalChat';
 import PortalScheduler from './PortalScheduler';
 import MoneyLostTimer from './MoneyLostTimer';
+import SocialFeed from './SocialFeed';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -189,6 +190,12 @@ const RecruitPortal = () => {
           Production Calculator
         </button>
         <button
+          className={`tab-button ${activeTab === 'social' ? 'active' : ''}`}
+          onClick={() => setActiveTab('social')}
+        >
+          Social Feed
+        </button>
+        <button
           className={`tab-button ${activeTab === 'updates' ? 'active' : ''}`}
           onClick={() => setActiveTab('updates')}
         >
@@ -266,6 +273,10 @@ const RecruitPortal = () => {
             slug={slug}
             calculatorConfig={portalData?.calculator_config}
           />
+        )}
+
+        {activeTab === 'social' && (
+          <SocialFeed />
         )}
 
         {activeTab === 'updates' && (
