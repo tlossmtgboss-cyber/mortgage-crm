@@ -129,19 +129,20 @@ class LoanStatus(str, Enum):
     IMPORTANT: These values MUST match the LoanStage enum in main.py exactly.
     The database stores these as PostgreSQL enums with these exact values.
     """
+    APPLICATION = "Application"
     DISCLOSED = "Disclosed"
     PROCESSING = "Processing"
     SUBMITTED = "Submitted"
+    UNDERWRITING = "Underwriting"
     UW_RECEIVED = "UW Received"
+    CONDITIONAL_APPROVAL = "Conditional Approval"
     APPROVED = "Approved"
     SUSPENDED = "Suspended"
     CTC = "CTC"
+    CLEAR_TO_CLOSE = "Clear to Close"
+    CLOSING = "Closing"
     DOCS_OUT = "Docs Out"
     FUNDED = "Funded"
-
-    # Legacy aliases for backward compatibility with existing queries
-    # Note: These don't exist in the actual database - queries using them will fail
-    # TODO: Update all queries to use correct enum values above
 
 
 class LoanType(str, Enum):
@@ -174,15 +175,22 @@ class OccupancyType(str, Enum):
 
 
 # SLA targets in days for each stage
+# Keys match LoanStatus enum values (case-insensitive lookup supported)
 SLA_TARGETS = {
-    "application": 1,
-    "processing": 3,
-    "submitted": 2,
-    "underwriting": 3,
-    "conditional": 5,
-    "clear_to_close": 2,
-    "closing": 3,
-    "funded": 1,
+    "Application": 1,
+    "Disclosed": 3,
+    "Processing": 5,
+    "Submitted": 2,
+    "Underwriting": 3,
+    "UW Received": 3,
+    "Conditional Approval": 5,
+    "Approved": 2,
+    "Suspended": 7,
+    "CTC": 2,
+    "Clear to Close": 2,
+    "Closing": 3,
+    "Docs Out": 3,
+    "Funded": 0,
 }
 
 # Document categories
@@ -559,15 +567,20 @@ def get_sla_for_stage(stage: str) -> int:
     # Normalize stage name for lookup
     stage_lower = stage.lower().replace(" ", "_").replace("-", "_")
 
-    # Map to SLA targets
+    # Map to SLA targets (keys are normalized versions of LoanStatus enum values)
     stage_sla_map = {
+        "application": 1,
         "disclosed": 3,
         "processing": 5,
         "submitted": 2,
+        "underwriting": 3,
         "uw_received": 3,
+        "conditional_approval": 5,
         "approved": 2,
         "suspended": 7,
         "ctc": 2,
+        "clear_to_close": 2,
+        "closing": 3,
         "docs_out": 3,
         "funded": 0,
     }
