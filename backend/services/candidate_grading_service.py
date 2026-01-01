@@ -656,7 +656,7 @@ class CandidateGradingService:
         query = text("""
             SELECT
                 a.*,
-                u.name as assessor_name
+                u.full_name as assessor_name
             FROM mm_candidate_assessments a
             LEFT JOIN users u ON u.id = a.assessed_by
             WHERE a.candidate_id = :candidate_id
