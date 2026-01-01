@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from dataclasses import dataclass
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -640,6 +641,11 @@ class RecruitingService:
             RETURNING id
         """)
 
+        # Convert interviewer_user_ids to JSON string for JSONB column
+        interviewer_ids = data.get("interviewer_user_ids", [])
+        if not isinstance(interviewer_ids, str):
+            interviewer_ids = json.dumps(interviewer_ids)
+
         result = self.db.execute(query, {
             "org_id": organization_id,
             "candidate_id": candidate_id,
@@ -651,7 +657,7 @@ class RecruitingService:
             "timezone": data.get("timezone", "America/New_York"),
             "location": data.get("location"),
             "meeting_link": data.get("meeting_link"),
-            "interviewers": data.get("interviewer_user_ids", []),
+            "interviewers": interviewer_ids,
             "primary_interviewer": data.get("primary_interviewer_id"),
             "created_by": created_by
         }).fetchone()
@@ -714,7 +720,7 @@ class RecruitingService:
         no_hire_votes = len([r for r in recommendations if r in ("strong_no_hire", "no_hire")])
         recommendation = "hire" if hire_votes > no_hire_votes else "no_hire" if no_hire_votes > hire_votes else "undecided"
 
-        # Update interview
+        # Update interview - convert feedback dict to JSON string for JSONB column
         self.db.execute(text("""
             UPDATE mm_interviews
             SET feedback = :feedback,
@@ -726,7 +732,7 @@ class RecruitingService:
             WHERE id = :id
         """), {
             "id": interview_id,
-            "feedback": all_feedback,
+            "feedback": json.dumps(all_feedback),
             "score": overall_score,
             "recommendation": recommendation
         })
