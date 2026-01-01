@@ -164,7 +164,26 @@ const AssessmentQuizModal = ({
         ) : error && !quiz ? (
           <div className="quiz-error">
             <p>{error}</p>
-            <button onClick={fetchQuiz}>Retry</button>
+            <div className="quiz-error-actions">
+              <button onClick={fetchQuiz} className="quiz-retry-btn">Retry</button>
+              <button
+                onClick={() => {
+                  // Allow proceeding without quiz if quiz data is unavailable
+                  onQuizComplete({
+                    overall_score: 0,
+                    production_score: 0,
+                    disc_score: 0,
+                    character_score: 0,
+                    skills_score: 0,
+                    culture_fit_score: 0
+                  });
+                }}
+                className="quiz-skip-btn"
+              >
+                Skip Quiz & Proceed
+              </button>
+            </div>
+            <p className="quiz-error-hint">Quiz templates may not be configured. You can skip and proceed.</p>
           </div>
         ) : quiz && currentQuestion ? (
           <>

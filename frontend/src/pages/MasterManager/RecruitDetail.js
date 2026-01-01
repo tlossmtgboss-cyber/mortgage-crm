@@ -433,6 +433,13 @@ const RecruitDetail = () => {
           </div>
         </div>
         <div className="mm-header-actions">
+          <button
+            className="mm-btn mm-btn-secondary"
+            onClick={() => navigate('/master-manager/recruiting-workflow')}
+            title="Multi-year relationship development workflows"
+          >
+            Workflow CRM
+          </button>
           <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditProduction(true)}>
             Edit Production
           </button>
