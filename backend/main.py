@@ -20079,6 +20079,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Recruit Social Media routes: {e}")
 
+# Include Recruiting CRM routes (Multi-year relationship development for LOs/Realtors)
+try:
+    from routes.recruiting_crm_routes import router as recruiting_crm_router
+    app.include_router(recruiting_crm_router, tags=["Recruiting CRM"])
+    logger.info("✅ Recruiting CRM routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruiting CRM routes: {e}")
+
 # Include Acquisition Engine routes (lead scoring, speed-to-lead)
 try:
     from routes.acquisition_engine_routes import router as acquisition_router
