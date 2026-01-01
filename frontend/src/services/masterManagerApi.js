@@ -387,6 +387,19 @@ export const addCandidateNote = async (candidateId, data) => {
   return response.json();
 };
 
+export const scheduleInterview = async (candidateId, interviewData) => {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/candidates/${candidateId}/interviews`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(interviewData)
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || 'Failed to schedule interview');
+  }
+  return response.json();
+};
+
 // =============================================================================
 // PARTNER RECRUITING ENDPOINTS (Realtors from RETR)
 // =============================================================================

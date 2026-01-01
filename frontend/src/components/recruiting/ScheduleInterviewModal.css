@@ -1,0 +1,299 @@
+.schedule-interview-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.schedule-interview-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.schedule-interview-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  position: relative;
+}
+
+.schedule-interview-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.schedule-interview-subtitle {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.schedule-interview-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #9ca3af;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.schedule-interview-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.schedule-interview-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.schedule-interview-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.schedule-interview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-interview-label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.schedule-interview-types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.schedule-interview-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.schedule-interview-type-btn:hover {
+  border-color: #93c5fd;
+  background: #f0f9ff;
+}
+
+.schedule-interview-type-btn.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.schedule-interview-type-btn .type-icon {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.schedule-interview-type-btn .type-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+  text-align: center;
+}
+
+.schedule-interview-type-btn .type-duration {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.schedule-interview-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.schedule-interview-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schedule-interview-field input,
+.schedule-interview-field select,
+.schedule-interview-field textarea {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.schedule-interview-field input:focus,
+.schedule-interview-field select:focus,
+.schedule-interview-field textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.schedule-interview-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.schedule-interview-interviewers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.schedule-interviewer-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.schedule-interviewer-btn:hover {
+  border-color: #93c5fd;
+  background: #f0f9ff;
+}
+
+.schedule-interviewer-btn.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.interviewer-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.interviewer-name {
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.schedule-interview-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+}
+
+.schedule-interview-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.schedule-interview-checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.schedule-interview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.schedule-interview-btn-cancel,
+.schedule-interview-btn-submit {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.schedule-interview-btn-cancel {
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.schedule-interview-btn-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.schedule-interview-btn-submit {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: none;
+  color: white;
+}
+
+.schedule-interview-btn-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+.schedule-interview-btn-submit:disabled,
+.schedule-interview-btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .schedule-interview-types {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .schedule-interview-row {
+    grid-template-columns: 1fr;
+  }
+}

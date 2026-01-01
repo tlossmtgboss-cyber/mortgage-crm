@@ -1,0 +1,211 @@
+.edit-category-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.edit-category-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.edit-category-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  position: relative;
+}
+
+.edit-category-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  padding-right: 32px;
+}
+
+.edit-category-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #9ca3af;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.edit-category-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.edit-category-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.edit-category-description {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+.edit-category-scores {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.edit-category-score-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-category-score-btn:hover {
+  border-color: var(--score-color, #3b82f6);
+  background: color-mix(in srgb, var(--score-color, #3b82f6) 10%, white);
+}
+
+.edit-category-score-btn.selected {
+  border-color: var(--score-color, #3b82f6);
+  background: color-mix(in srgb, var(--score-color, #3b82f6) 15%, white);
+  transform: scale(1.05);
+}
+
+.edit-category-score-btn .score-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--score-color, #374151);
+}
+
+.edit-category-score-btn .score-label {
+  font-size: 0.65rem;
+  color: #6b7280;
+  margin-top: 2px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.edit-category-selected-info {
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 4px solid #3b82f6;
+}
+
+.edit-category-selected-info strong {
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.edit-category-selected-info p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.edit-category-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-category-field label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.edit-category-field textarea {
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+}
+
+.edit-category-field textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.edit-category-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.edit-category-btn-cancel,
+.edit-category-btn-save {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-category-btn-cancel {
+  background: white;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.edit-category-btn-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.edit-category-btn-save {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: none;
+  color: white;
+}
+
+.edit-category-btn-save:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+}
+
+.edit-category-btn-save:disabled,
+.edit-category-btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

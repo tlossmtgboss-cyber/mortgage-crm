@@ -5,7 +5,8 @@ import {
   updateCandidateStatus,
   updateCandidateSocialMedia,
   updateCandidateProduction,
-  addCandidateNote
+  addCandidateNote,
+  scheduleInterview
 } from '../../services/masterManagerApi';
 import {
   getCandidateAssessment,
@@ -18,6 +19,9 @@ import DISCProfileChart from '../../components/recruiting/DISCProfileChart';
 import { AssessmentScoreGrid, AssessmentScoreSummary } from '../../components/recruiting/AssessmentScoreCard';
 import AIAnalysisPanel from '../../components/recruiting/AIAnalysisPanel';
 import AssessmentQuizModal from '../../components/recruiting/AssessmentQuizModal';
+import ScheduleInterviewModal from '../../components/recruiting/ScheduleInterviewModal';
+import EditScoreCategoryModal from '../../components/recruiting/EditScoreCategoryModal';
+import { usePermissions } from '../../contexts/PermissionContext';
 import './MasterManager.css';
 import './RecruitDetail.css';
 
@@ -42,6 +46,7 @@ const PIPELINE_STAGES = ['new', 'screening', 'phone_screen', 'interview', 'asses
 const RecruitDetail = () => {
   const { candidateId } = useParams();
   const navigate = useNavigate();
+  const { currentUserId } = usePermissions();
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -65,6 +70,13 @@ const RecruitDetail = () => {
   const [callHistory, setCallHistory] = useState([]);
   const [showCallNotesModal, setShowCallNotesModal] = useState(false);
   const [activeCallId, setActiveCallId] = useState(null);
+
+  // Schedule interview modal state
+  const [showScheduleInterviewModal, setShowScheduleInterviewModal] = useState(false);
+
+  // Edit category modal state
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
 
   // Edit form states
   const [socialForm, setSocialForm] = useState({
@@ -798,10 +810,7 @@ const RecruitDetail = () => {
               </button>
               <button
                 className="recruit-quick-action-btn"
-                onClick={() => {
-                  // TODO: Open schedule interview modal
-                  alert('Schedule Interview feature coming soon');
-                }}
+                onClick={() => setShowScheduleInterviewModal(true)}
               >
                 <span className="recruit-quick-action-icon">📅</span>
                 <span>Schedule Interview</span>
@@ -967,8 +976,8 @@ const RecruitDetail = () => {
                     assessment={assessment}
                     isEditable={true}
                     onEditCategory={(category) => {
-                      console.log('Edit category:', category);
-                      // TODO: Open edit modal for category
+                      setEditingCategory(category);
+                      setShowEditCategoryModal(true);
                     }}
                   />
                 </div>
@@ -1023,7 +1032,7 @@ const RecruitDetail = () => {
                     onApplyScores={async (scores) => {
                       try {
                         // Update assessment with AI-suggested scores
-                        await updateAssessment(candidateId, scores, 1); // TODO: Get real user ID
+                        await updateAssessment(candidateId, scores, currentUserId || 1);
                         await loadAssessment();
                       } catch (err) {
                         setAssessmentError(err.message);
@@ -1045,7 +1054,7 @@ const RecruitDetail = () => {
                       className="mm-btn mm-btn-primary"
                       onClick={async () => {
                         try {
-                          await createAssessment(candidateId, {}, 1); // TODO: Get real user ID
+                          await createAssessment(candidateId, {}, currentUserId || 1);
                           loadAssessment();
                         } catch (err) {
                           setAssessmentError(err.message);
@@ -1208,6 +1217,51 @@ const RecruitDetail = () => {
           onClose={() => {
             setShowCallNotesModal(false);
             setActiveCallId(null);
+          }}
+        />
+      )}
+
+      {/* Schedule Interview Modal */}
+      {showScheduleInterviewModal && (
+        <ScheduleInterviewModal
+          isOpen={showScheduleInterviewModal}
+          onClose={() => setShowScheduleInterviewModal(false)}
+          candidate={candidate}
+          onSuccess={async (interviewData) => {
+            try {
+              await scheduleInterview(candidateId, interviewData);
+              setShowScheduleInterviewModal(false);
+              loadCandidate(); // Refresh to show updated interview info
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+        />
+      )}
+
+      {/* Edit Score Category Modal */}
+      {showEditCategoryModal && editingCategory && (
+        <EditScoreCategoryModal
+          isOpen={showEditCategoryModal}
+          onClose={() => {
+            setShowEditCategoryModal(false);
+            setEditingCategory(null);
+          }}
+          category={editingCategory}
+          currentScore={assessment?.scores?.[editingCategory.key]}
+          onSave={async (score, notes) => {
+            try {
+              const updatedScores = {
+                ...assessment?.scores,
+                [editingCategory.key]: score
+              };
+              await updateAssessment(candidateId, { scores: updatedScores }, currentUserId || 1);
+              await loadAssessment();
+              setShowEditCategoryModal(false);
+              setEditingCategory(null);
+            } catch (err) {
+              setAssessmentError(err.message);
+            }
           }}
         />
       )}
