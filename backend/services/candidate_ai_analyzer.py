@@ -657,6 +657,30 @@ Be thorough but objective. Base scores only on available evidence. If data is li
 
         return result
 
+    def rebuild_from_stored(
+        self,
+        candidate_id: int,
+        raw_analysis: Dict[str, Any],
+        confidence_score: float = 0
+    ) -> AIAnalysisResult:
+        """
+        Rebuild an AIAnalysisResult from stored raw_analysis data.
+
+        This avoids re-running the AI analysis when applying suggestions.
+        """
+        # The raw_analysis contains 'raw_response' which has the actual analysis JSON
+        raw_response = raw_analysis.get("raw_response", "")
+
+        # Parse the raw response
+        analysis_data = self._parse_analysis_response(raw_response)
+
+        # Build the result
+        result = self._build_analysis_result(candidate_id, analysis_data)
+        result.confidence_score = confidence_score or analysis_data.get("overall_confidence", 0)
+        result.raw_analysis = raw_analysis
+
+        return result
+
     async def _store_analysis(
         self,
         candidate_id: int,

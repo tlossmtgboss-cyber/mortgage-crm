@@ -1040,6 +1040,7 @@ async def apply_ai_suggestions(
     try:
         from services.candidate_ai_analyzer import CandidateAIAnalyzer
         from sqlalchemy import text
+        import json
 
         # Get the stored AI analysis
         assessment = db.execute(text("""
@@ -1054,9 +1055,17 @@ async def apply_ai_suggestions(
                 detail="No AI analysis found. Run AI analysis first."
             )
 
-        # Re-run analysis to get fresh suggestions (or parse stored)
+        # Parse the stored analysis (don't re-run AI which is slow)
+        raw_analysis = assessment.ai_raw_analysis
+        if isinstance(raw_analysis, str):
+            raw_analysis = json.loads(raw_analysis)
+
         analyzer = CandidateAIAnalyzer(db)
-        analysis = await analyzer.analyze_candidate(candidate_id)
+        analysis = analyzer.rebuild_from_stored(
+            candidate_id=candidate_id,
+            raw_analysis=raw_analysis,
+            confidence_score=assessment.ai_confidence_score or 0
+        )
 
         result = await analyzer.apply_suggestions(
             candidate_id=candidate_id,
