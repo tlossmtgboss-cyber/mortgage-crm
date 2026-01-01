@@ -108,15 +108,14 @@ class RecruitPortalService:
     def get_portal_by_slug(self, slug: str, token: Optional[str] = None) -> Optional[PortalData]:
         """Get portal data by slug, optionally validating token."""
         with SessionLocal() as conn:
+            # Get portal and candidate info
             result = conn.execute(
                 text("""
                     SELECT w.id as workspace_id, w.slug, w.theme_config,
                            c.first_name, c.last_name, c.status,
-                           u.name as recruiter_name, u.photo_url as recruiter_photo,
-                           u.phone as recruiter_phone, u.email as recruiter_email
+                           c.referrer_user_id
                     FROM recruit_portal_workspaces w
                     JOIN mm_candidates c ON c.id = w.candidate_id
-                    LEFT JOIN users u ON u.id = c.assigned_to
                     WHERE w.slug = :slug AND w.is_active = true
                 """),
                 {"slug": slug}
@@ -126,6 +125,28 @@ class RecruitPortalService:
         if not row:
             return None
 
+        # Get recruiter info if referrer exists
+        recruiter_name = None
+        recruiter_photo = None
+        recruiter_phone = None
+        recruiter_email = None
+
+        if row.referrer_user_id:
+            with SessionLocal() as conn:
+                recruiter_result = conn.execute(
+                    text("""
+                        SELECT name, photo_url, phone, email
+                        FROM users WHERE id = :user_id
+                    """),
+                    {"user_id": row.referrer_user_id}
+                )
+                recruiter = recruiter_result.fetchone()
+                if recruiter:
+                    recruiter_name = recruiter.name
+                    recruiter_photo = recruiter.photo_url
+                    recruiter_phone = recruiter.phone
+                    recruiter_email = recruiter.email
+
         # Get calculator config
         calc_config = self.get_calculator_config()
 
@@ -133,10 +154,10 @@ class RecruitPortalService:
             workspace_id=row.workspace_id,
             candidate_name=f"{row.first_name} {row.last_name}",
             candidate_status=row.status,
-            recruiter_name=row.recruiter_name,
-            recruiter_photo=row.recruiter_photo,
-            recruiter_phone=row.recruiter_phone,
-            recruiter_email=row.recruiter_email,
+            recruiter_name=recruiter_name,
+            recruiter_photo=recruiter_photo,
+            recruiter_phone=recruiter_phone,
+            recruiter_email=recruiter_email,
             next_steps=self._get_next_steps(row.status),
             calculator_config=calc_config,
             theme_config=row.theme_config
