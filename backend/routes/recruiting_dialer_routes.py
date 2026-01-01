@@ -82,12 +82,11 @@ async def initiate_candidate_call(
                 SELECT rc.id, rc.first_name, rc.last_name, rc.phone, rc.email,
                        rc.status, rc.current_company, rc.current_title,
                        rc.annual_volume, rc.annual_units,
-                       ras.overall_score, ras.production_score, ras.character_score,
+                       rc.overall_grade as overall_score,
                        (SELECT content FROM mm_candidate_notes
                         WHERE candidate_id = rc.id
                         ORDER BY created_at DESC LIMIT 1) as last_note
                 FROM mm_candidates rc
-                LEFT JOIN recruit_assessment_scores ras ON ras.candidate_id = rc.id
                 WHERE rc.id = :candidate_id
             """),
             {"candidate_id": candidate_id}
@@ -366,7 +365,7 @@ async def get_recruiting_dialer_queue(
                        rt.description as task_description, rt.due_date, rt.priority,
                        rc.first_name, rc.last_name, rc.phone, rc.email,
                        rc.status as candidate_status, rc.current_company,
-                       ras.overall_score,
+                       rc.overall_grade as overall_score,
                        (SELECT COUNT(*) FROM recruiting_call_history
                         WHERE candidate_id = rc.id) as total_calls,
                        (SELECT called_at FROM recruiting_call_history
@@ -374,7 +373,6 @@ async def get_recruiting_dialer_queue(
                         ORDER BY called_at DESC LIMIT 1) as last_call
                 FROM recruiting_tasks rt
                 JOIN mm_candidates rc ON rc.id = rt.candidate_id
-                LEFT JOIN recruit_assessment_scores ras ON ras.candidate_id = rc.id
                 WHERE rt.organization_id = :org_id
                     AND rt.status = 'pending'
                     AND rt.route_to = 'dialer_queue'
