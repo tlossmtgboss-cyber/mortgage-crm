@@ -763,6 +763,10 @@ class CandidateGradingService:
             data['disc_secondary_style'] = disc_result.secondary_style
             data['disc_grade'] = disc_result.grade
 
+        # Recalculate production if just score provided (no breakdown)
+        if 'production_score' in data and 'production_breakdown' not in data:
+            data['production_grade'] = self.get_grade_from_score(data['production_score'])
+
         # Recalculate character if breakdown provided
         if 'character_breakdown' in data:
             char_result = self.calculate_character_score(data['character_breakdown'])
