@@ -448,6 +448,24 @@ async def create_portal_tables(
             CREATE INDEX IF NOT EXISTS idx_portal_appointments_workspace
                 ON recruit_portal_appointments(workspace_id);
 
+            -- Production calculator configuration
+            CREATE TABLE IF NOT EXISTS recruit_calculator_config (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER,
+                lead_conversion_lift DECIMAL(4,2) DEFAULT 1.25,
+                avg_deal_size_lift DECIMAL(4,2) DEFAULT 1.15,
+                closing_speed_factor DECIMAL(4,2) DEFAULT 0.85,
+                tech_efficiency_gain DECIMAL(4,2) DEFAULT 1.20,
+                marketing_lead_boost DECIMAL(4,2) DEFAULT 1.30,
+                comp_percentage DECIMAL(5,4) DEFAULT 0.0125,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+
+            -- Insert default calculator config if not exists
+            INSERT INTO recruit_calculator_config (organization_id)
+            SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM recruit_calculator_config WHERE organization_id = 1);
+
             -- Seed sample company updates
             INSERT INTO recruit_company_updates (title, content, category, is_featured)
             SELECT 'Welcome to Perennia!',
