@@ -627,17 +627,17 @@ async def list_candidate_interviews(
 async def schedule_interview(
     candidate_id: int,
     data: InterviewSchedule,
-    user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Schedule an interview for a candidate."""
     service = RecruitingService(db)
     result = await service.schedule_interview(
         candidate_id=candidate_id,
         data=data.model_dump(),
-        created_by=user_id or 1,
-        organization_id=organization_id
+        created_by=current_user.id,
+        organization_id=organization_id or current_user.organization_id
     )
     return result
 
@@ -646,18 +646,18 @@ async def schedule_interview(
 async def submit_feedback(
     interview_id: int,
     data: InterviewFeedback,
-    user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Submit feedback for an interview."""
     service = RecruitingService(db)
     try:
         result = await service.submit_interview_feedback(
             interview_id=interview_id,
-            interviewer_id=user_id or 1,
+            interviewer_id=current_user.id,
             feedback=data.model_dump(),
-            organization_id=organization_id
+            organization_id=organization_id or current_user.organization_id
         )
         return result
     except ValueError as e:
