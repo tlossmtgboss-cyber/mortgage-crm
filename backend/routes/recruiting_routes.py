@@ -167,13 +167,13 @@ async def submit_quiz(
         # Compute scores by category
         scores_result = db.execute(text("""
             SELECT
-                qr.category,
+                qt.category,
                 AVG(qr.numeric_score) as avg_score,
                 SUM(qr.numeric_score * qt.weight) / NULLIF(SUM(qt.weight), 0) as weighted_score
             FROM recruit_quiz_responses qr
             JOIN recruit_quiz_templates qt ON qt.id = qr.template_id
             WHERE qr.candidate_id = :candidate_id
-            GROUP BY qr.category
+            GROUP BY qt.category
         """), {"candidate_id": candidate_id})
 
         category_scores = {}
