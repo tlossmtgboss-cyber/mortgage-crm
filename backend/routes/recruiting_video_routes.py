@@ -276,7 +276,7 @@ async def complete_upload(
     try:
         # Get recruiter info
         recruiter_result = db.execute(text("""
-            SELECT full_name, profile_photo_url FROM users WHERE id = :user_id
+            SELECT full_name FROM users WHERE id = :user_id
         """), {"user_id": user_id})
         recruiter = recruiter_result.fetchone()
 
@@ -385,8 +385,7 @@ async def get_candidate_videos(
                 v.duration_seconds,
                 v.created_at,
                 v.viewed_at,
-                u.full_name as recruiter_name,
-                u.profile_photo_url as recruiter_photo
+                u.full_name as recruiter_name
             FROM recruit_video_messages v
             LEFT JOIN users u ON u.id = v.recruiter_id
             WHERE v.candidate_id = :candidate_id
@@ -415,7 +414,7 @@ async def get_candidate_videos(
                 "message": row.message,
                 "duration_seconds": row.duration_seconds,
                 "recruiter_name": row.recruiter_name or "Recruiter",
-                "recruiter_photo": row.recruiter_photo,
+                "recruiter_photo": None,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "viewed_at": row.viewed_at.isoformat() if row.viewed_at else None
             })
@@ -529,8 +528,7 @@ async def get_portal_videos(
                 v.duration_seconds,
                 v.created_at,
                 v.viewed_at,
-                u.full_name as recruiter_name,
-                u.profile_photo_url as recruiter_photo
+                u.full_name as recruiter_name
             FROM recruit_video_messages v
             LEFT JOIN users u ON u.id = v.recruiter_id
             WHERE v.candidate_id = :candidate_id
@@ -558,7 +556,7 @@ async def get_portal_videos(
                 "message": row.message,
                 "duration_seconds": row.duration_seconds,
                 "recruiter_name": row.recruiter_name or "Your Recruiter",
-                "recruiter_photo": row.recruiter_photo,
+                "recruiter_photo": None,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "is_new": row.viewed_at is None
             })
