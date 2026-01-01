@@ -150,7 +150,7 @@ class CandidateGradingService:
     def get_grade_from_score(score: float) -> str:
         """Convert numeric score to letter grade."""
         if score is None:
-            return 'N/A'
+            return '--'  # Use 2 chars to fit VARCHAR(2) column
         for threshold, grade in GRADE_THRESHOLDS:
             if score >= threshold:
                 return grade
