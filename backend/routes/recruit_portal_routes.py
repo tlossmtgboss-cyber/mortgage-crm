@@ -556,8 +556,7 @@ async def get_purl_availability(
 
         slots = portal_service.get_availability(
             workspace_id=portal_data.workspace_id,
-            date=date,
-            duration_minutes=duration_minutes
+            date=date
         )
         return {"date": date, "duration_minutes": duration_minutes, "slots": slots}
     except Exception as e:
