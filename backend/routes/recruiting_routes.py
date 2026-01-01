@@ -1278,6 +1278,64 @@ async def run_recruiting_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@router.post("/admin/add-quiz-templates")
+async def add_quiz_templates(
+    admin_key: str = Query(..., description="Admin API key"),
+    db: Session = Depends(get_db)
+):
+    """Create quiz templates table and seed with initial data."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        from sqlalchemy import text
+
+        # Create table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS recruit_quiz_templates (
+                id SERIAL PRIMARY KEY,
+                disposition VARCHAR(50) NOT NULL,
+                question_text TEXT NOT NULL,
+                question_type VARCHAR(20) DEFAULT 'likert',
+                category VARCHAR(50) NOT NULL,
+                weight DECIMAL(3,2) DEFAULT 1.0,
+                display_order INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+
+        # Check if data exists
+        result = db.execute(text("SELECT COUNT(*) FROM recruit_quiz_templates"))
+        count = result.scalar()
+
+        if count == 0:
+            # Insert seed data
+            db.execute(text("""
+                INSERT INTO recruit_quiz_templates (disposition, question_text, question_type, category, weight, display_order) VALUES
+                ('screening', 'Rate production volume', 'likert', 'production', 1.0, 1),
+                ('screening', 'Has required licenses?', 'yes_no', 'skills', 1.0, 2),
+                ('phone_screen', 'Communication skills?', 'likert', 'skills', 1.0, 1),
+                ('phone_screen', 'Enthusiasm level?', 'likert', 'culture_fit', 0.9, 2),
+                ('interview', 'Dominance trait', 'likert', 'disc', 1.0, 1),
+                ('interview', 'Influence trait', 'likert', 'disc', 1.0, 2),
+                ('interview', 'Integrity rating', 'likert', 'character', 1.0, 3),
+                ('assessment', 'Technical performance?', 'likert', 'skills', 1.0, 1),
+                ('assessment', 'Product knowledge?', 'likert', 'skills', 1.0, 2),
+                ('assessment', 'Problem-solving?', 'likert', 'character', 0.9, 3),
+                ('offer', 'Values alignment', 'likert', 'culture_fit', 1.0, 1),
+                ('offer', 'Team compatibility', 'likert', 'culture_fit', 1.0, 2);
+            """))
+            db.commit()
+            return {"status": "success", "message": "Table created and 12 quiz templates inserted"}
+        else:
+            return {"status": "success", "message": f"Table exists with {count} records, skipped insert"}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @router.post("/admin/add-social-production-fields")
 async def add_social_production_fields(
     admin_key: str = Query(..., description="Admin API key"),
