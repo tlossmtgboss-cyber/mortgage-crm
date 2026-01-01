@@ -7,19 +7,32 @@ import {
   updateCandidateProduction,
   addCandidateNote
 } from '../../services/masterManagerApi';
+import {
+  getCandidateAssessment,
+  createAssessment,
+  updateAssessment,
+  getAssessmentHistory
+} from '../../services/candidateGradingApi';
+import CandidateGradeCircle, { getGrade, GradeBadge } from '../../components/recruiting/CandidateGradeCircle';
+import DISCProfileChart from '../../components/recruiting/DISCProfileChart';
+import { AssessmentScoreGrid, AssessmentScoreSummary } from '../../components/recruiting/AssessmentScoreCard';
 import './MasterManager.css';
+import './RecruitDetail.css';
 
 const CANDIDATE_STATUSES = [
-  { value: 'new', label: 'New', color: '#3b82f6' },
-  { value: 'screening', label: 'Screening', color: '#8b5cf6' },
-  { value: 'phone_screen', label: 'Phone Screen', color: '#a855f7' },
-  { value: 'interview', label: 'Interview', color: '#f59e0b' },
-  { value: 'assessment', label: 'Assessment', color: '#eab308' },
-  { value: 'offer', label: 'Offer', color: '#22c55e' },
-  { value: 'hired', label: 'Hired', color: '#10b981' },
-  { value: 'rejected', label: 'Rejected', color: '#ef4444' },
-  { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
+  { value: 'new', label: 'New', color: '#3b82f6', icon: '📥' },
+  { value: 'screening', label: 'Screening', color: '#8b5cf6', icon: '🔍' },
+  { value: 'phone_screen', label: 'Phone Screen', color: '#a855f7', icon: '📞' },
+  { value: 'interview', label: 'Interview', color: '#f59e0b', icon: '🎯' },
+  { value: 'assessment', label: 'Assessment', color: '#eab308', icon: '📋' },
+  { value: 'offer', label: 'Offer', color: '#22c55e', icon: '📝' },
+  { value: 'hired', label: 'Hired', color: '#10b981', icon: '✅' },
+  { value: 'rejected', label: 'Rejected', color: '#ef4444', icon: '❌' },
+  { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280', icon: '🚫' }
 ];
+
+// Pipeline stages in order (excluding terminal states)
+const PIPELINE_STAGES = ['new', 'screening', 'phone_screen', 'interview', 'assessment', 'offer', 'hired'];
 
 const RecruitDetail = () => {
   const { candidateId } = useParams();
@@ -27,10 +40,15 @@ const RecruitDetail = () => {
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
   const [showEditSocial, setShowEditSocial] = useState(false);
   const [showEditProduction, setShowEditProduction] = useState(false);
   const [newNote, setNewNote] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Assessment state
+  const [assessment, setAssessment] = useState(null);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
+  const [assessmentError, setAssessmentError] = useState(null);
 
   // Edit form states
   const [socialForm, setSocialForm] = useState({
@@ -76,9 +94,32 @@ const RecruitDetail = () => {
     }
   }, [candidateId]);
 
+  const loadAssessment = useCallback(async () => {
+    try {
+      setAssessmentLoading(true);
+      setAssessmentError(null);
+      const data = await getCandidateAssessment(candidateId);
+      setAssessment(data);
+    } catch (err) {
+      // 404 means no assessment exists yet - that's okay
+      if (!err.message?.includes('404') && !err.message?.includes('not found')) {
+        setAssessmentError(err.message);
+      }
+    } finally {
+      setAssessmentLoading(false);
+    }
+  }, [candidateId]);
+
   useEffect(() => {
     loadCandidate();
   }, [loadCandidate]);
+
+  // Load assessment when tab changes to assessment
+  useEffect(() => {
+    if (activeTab === 'assessment' && !assessment && !assessmentLoading) {
+      loadAssessment();
+    }
+  }, [activeTab, assessment, assessmentLoading, loadAssessment]);
 
   const handleStatusChange = async (newStatus) => {
     try {
@@ -166,25 +207,60 @@ const RecruitDetail = () => {
     );
   }
 
+  // Get current stage index for pipeline visualization
+  const getCurrentStageIndex = () => {
+    return PIPELINE_STAGES.indexOf(candidate?.status);
+  };
+
+  // Calculate overall score display
+  const getOverallScoreDisplay = () => {
+    if (candidate?.scores?.overall) {
+      return candidate.scores.overall.toFixed(1);
+    }
+    return '-';
+  };
+
+  const getScoreColor = (score) => {
+    if (!score) return '#6b7280';
+    if (score >= 8) return '#10b981';
+    if (score >= 6) return '#f59e0b';
+    if (score >= 4) return '#ef4444';
+    return '#6b7280';
+  };
+
   return (
-    <div className="mm-container">
-      {/* Header */}
-      <div className="mm-header">
+    <div className="mm-container recruit-detail">
+      {/* Compact Header */}
+      <div className="mm-header recruit-header">
         <div className="mm-header-left">
           <button className="mm-btn mm-btn-secondary" onClick={() => navigate(-1)}>
-            &larr; Back
+            ← Back
           </button>
-          <div style={{ marginLeft: '20px' }}>
-            <h1>{candidate.name}</h1>
-            <p>{candidate.target_role || 'Candidate'} {candidate.production?.current_company ? `at ${candidate.production.current_company}` : ''}</p>
+          <div className="recruit-header-info">
+            <div className="recruit-name-row">
+              <h1>{candidate.name}</h1>
+              <span
+                className="recruit-status-badge"
+                style={{ backgroundColor: getStatusColor(candidate.status) }}
+              >
+                {CANDIDATE_STATUSES.find(s => s.value === candidate.status)?.label || candidate.status}
+              </span>
+            </div>
+            <p className="recruit-subtitle">
+              {candidate.production?.current_title || candidate.target_role || 'Candidate'}
+              {candidate.production?.current_company ? ` at ${candidate.production.current_company}` : ''}
+              {candidate.production?.nmls_id && <span className="recruit-nmls"> • NMLS #{candidate.production.nmls_id}</span>}
+            </p>
           </div>
         </div>
         <div className="mm-header-actions">
+          <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditProduction(true)}>
+            Edit Production
+          </button>
           <select
             value={candidate.status}
             onChange={(e) => handleStatusChange(e.target.value)}
-            className="mm-select"
-            style={{ backgroundColor: getStatusColor(candidate.status), color: 'white', fontWeight: 'bold' }}
+            className="mm-select recruit-status-select"
           >
             {CANDIDATE_STATUSES.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
@@ -193,424 +269,340 @@ const RecruitDetail = () => {
         </div>
       </div>
 
-      {/* Profile Header Card */}
-      <div className="mm-card" style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
+      {/* Enhanced Header Card with Production & Scores */}
+      <div className="recruit-hero-card">
+        <div className="recruit-hero-left">
           {/* Avatar */}
           <div
-            className="mm-user-avatar"
+            className="recruit-avatar"
             style={{
-              width: '120px',
-              height: '120px',
-              fontSize: '48px',
               backgroundColor: getStatusColor(candidate.status),
               backgroundImage: candidate.profile?.headshot_url ? `url(${candidate.profile.headshot_url})` : 'none',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
             }}
           >
             {!candidate.profile?.headshot_url && candidate.first_name?.charAt(0)}
           </div>
 
-          {/* Basic Info */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-              <div>
-                <label className="mm-stat-label">Email</label>
-                <p style={{ margin: 0 }}>{candidate.email || '-'}</p>
+          {/* Contact Info */}
+          <div className="recruit-contact-info">
+            <div className="recruit-contact-item">
+              <span className="recruit-contact-icon">📧</span>
+              <a href={`mailto:${candidate.email}`}>{candidate.email || '-'}</a>
+            </div>
+            <div className="recruit-contact-item">
+              <span className="recruit-contact-icon">📱</span>
+              <a href={`tel:${candidate.phone}`}>{candidate.phone || '-'}</a>
+            </div>
+            <div className="recruit-contact-item">
+              <span className="recruit-contact-icon">📅</span>
+              <span>Applied {candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : '-'}</span>
+            </div>
+            {candidate.source && (
+              <div className="recruit-contact-item">
+                <span className="recruit-contact-icon">📍</span>
+                <span>Source: {candidate.source === 'retr' ? <span className="mm-badge mm-badge-info">RETR</span> : candidate.source}</span>
               </div>
-              <div>
-                <label className="mm-stat-label">Phone</label>
-                <p style={{ margin: 0 }}>{candidate.phone || '-'}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Production Stats */}
+        <div className="recruit-hero-stats">
+          <div className="recruit-stat-group">
+            <h4>Production</h4>
+            <div className="recruit-stats-row">
+              <div className="recruit-stat">
+                <span className="recruit-stat-value" style={{ color: '#22c55e' }}>
+                  {formatCurrency(candidate.production?.annual_volume)}
+                </span>
+                <span className="recruit-stat-label">Annual Volume</span>
               </div>
-              <div>
-                <label className="mm-stat-label">Source</label>
-                <p style={{ margin: 0 }}>
-                  {candidate.source === 'retr' ? (
-                    <span className="mm-badge mm-badge-info">RETR</span>
-                  ) : (
-                    candidate.source || 'Direct'
-                  )}
-                </p>
+              <div className="recruit-stat">
+                <span className="recruit-stat-value">
+                  {candidate.production?.annual_units || 0}
+                </span>
+                <span className="recruit-stat-label">Units</span>
               </div>
-              <div>
-                <label className="mm-stat-label">NMLS ID</label>
-                <p style={{ margin: 0 }}>{candidate.production?.nmls_id || '-'}</p>
+              <div className="recruit-stat">
+                <span className="recruit-stat-value">
+                  {formatCurrency(candidate.production?.avg_loan_size || (candidate.production?.annual_volume && candidate.production?.annual_units ? candidate.production.annual_volume / candidate.production.annual_units : 0))}
+                </span>
+                <span className="recruit-stat-label">Avg Loan</span>
               </div>
-              <div>
-                <label className="mm-stat-label">Experience</label>
-                <p style={{ margin: 0 }}>{candidate.experience?.years_total || 0} years</p>
+              <div className="recruit-stat">
+                <span className="recruit-stat-value">
+                  {candidate.experience?.years_mortgage || candidate.experience?.years_total || 0}
+                </span>
+                <span className="recruit-stat-label">Yrs Exp</span>
               </div>
-              <div>
-                <label className="mm-stat-label">Applied</label>
-                <p style={{ margin: 0 }}>{candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : '-'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Scores */}
+        <div className="recruit-hero-scores">
+          <h4>Assessment Scores</h4>
+          <div className="recruit-scores-grid">
+            <div className="recruit-score-main">
+              <div
+                className="recruit-score-circle"
+                style={{ borderColor: getScoreColor(candidate.scores?.overall) }}
+              >
+                <span className="recruit-score-value" style={{ color: getScoreColor(candidate.scores?.overall) }}>
+                  {getOverallScoreDisplay()}
+                </span>
+                <span className="recruit-score-label">Overall</span>
+              </div>
+            </div>
+            <div className="recruit-score-details">
+              <div className="recruit-score-item">
+                <span className="recruit-score-name">Culture Fit</span>
+                <span className="recruit-score-bar">
+                  <span
+                    className="recruit-score-fill"
+                    style={{
+                      width: `${(candidate.scores?.culture_fit || 0) * 10}%`,
+                      backgroundColor: getScoreColor(candidate.scores?.culture_fit)
+                    }}
+                  />
+                </span>
+                <span className="recruit-score-num">{candidate.scores?.culture_fit?.toFixed(1) || '-'}</span>
+              </div>
+              <div className="recruit-score-item">
+                <span className="recruit-score-name">Technical</span>
+                <span className="recruit-score-bar">
+                  <span
+                    className="recruit-score-fill"
+                    style={{
+                      width: `${(candidate.scores?.technical || 0) * 10}%`,
+                      backgroundColor: getScoreColor(candidate.scores?.technical)
+                    }}
+                  />
+                </span>
+                <span className="recruit-score-num">{candidate.scores?.technical?.toFixed(1) || '-'}</span>
+              </div>
+              <div className="recruit-score-item">
+                <span className="recruit-score-name">Behavioral</span>
+                <span className="recruit-score-bar">
+                  <span
+                    className="recruit-score-fill"
+                    style={{
+                      width: `${(candidate.scores?.behavioral || 0) * 10}%`,
+                      backgroundColor: getScoreColor(candidate.scores?.behavioral)
+                    }}
+                  />
+                </span>
+                <span className="recruit-score-num">{candidate.scores?.behavioral?.toFixed(1) || '-'}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="mm-tabs" style={{ marginBottom: '20px' }}>
+      {/* Tab Navigation */}
+      <div className="recruit-tabs">
         <button
-          className={`mm-tab ${activeTab === 'overview' ? 'active' : ''}`}
+          className={`recruit-tab ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
           Overview
         </button>
         <button
-          className={`mm-tab ${activeTab === 'production' ? 'active' : ''}`}
-          onClick={() => setActiveTab('production')}
+          className={`recruit-tab ${activeTab === 'assessment' ? 'active' : ''}`}
+          onClick={() => setActiveTab('assessment')}
         >
-          Production
-        </button>
-        <button
-          className={`mm-tab ${activeTab === 'social' ? 'active' : ''}`}
-          onClick={() => setActiveTab('social')}
-        >
-          Social Media
-        </button>
-        <button
-          className={`mm-tab ${activeTab === 'interviews' ? 'active' : ''}`}
-          onClick={() => setActiveTab('interviews')}
-        >
-          Interviews
-        </button>
-        <button
-          className={`mm-tab ${activeTab === 'notes' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notes')}
-        >
-          Notes & Activity
+          Assessment & Grading
         </button>
       </div>
 
-      {/* Overview Tab */}
+      {/* Main Body - 3 Column Layout (Overview Tab) */}
       {activeTab === 'overview' && (
-        <div className="mm-overview-grid">
-          {/* Production Summary Card */}
-          <div className="mm-card mm-stat-card">
-            <div className="mm-stat-value" style={{ color: '#22c55e' }}>
-              {formatCurrency(candidate.production?.annual_volume)}
-            </div>
-            <div className="mm-stat-label">Annual Volume</div>
-          </div>
-          <div className="mm-card mm-stat-card">
-            <div className="mm-stat-value">{candidate.production?.annual_units || 0}</div>
-            <div className="mm-stat-label">Annual Units</div>
-          </div>
-          <div className="mm-card mm-stat-card">
-            <div className="mm-stat-value">{candidate.experience?.years_mortgage || 0}</div>
-            <div className="mm-stat-label">Mortgage Experience (yrs)</div>
-          </div>
-          <div className="mm-card mm-stat-card">
-            <div className="mm-stat-value">{(candidate.production?.license_states || []).length}</div>
-            <div className="mm-stat-label">Licensed States</div>
+      <div className="recruit-body-grid">
+        {/* Left Column - Recruiting Pipeline */}
+        <div className="recruit-body-section recruit-pipeline-section">
+          <div className="recruit-section-header">
+            <h3>Recruiting Pipeline</h3>
           </div>
 
-          {/* Bio Section */}
-          {candidate.profile?.bio && (
-            <div className="mm-card" style={{ gridColumn: 'span 4' }}>
-              <h3 style={{ marginTop: 0 }}>About</h3>
-              <p>{candidate.profile.bio}</p>
-            </div>
-          )}
+          {/* Pipeline Tracker */}
+          <div className="recruit-pipeline-tracker">
+            {PIPELINE_STAGES.map((stage, index) => {
+              const stageInfo = CANDIDATE_STATUSES.find(s => s.value === stage);
+              const currentIndex = getCurrentStageIndex();
+              const isCompleted = currentIndex > index;
+              const isCurrent = currentIndex === index;
+              const isTerminal = ['rejected', 'withdrawn'].includes(candidate.status);
 
-          {/* Scores */}
-          {(candidate.scores?.overall || candidate.scores?.vetting) && (
-            <div className="mm-card" style={{ gridColumn: 'span 2' }}>
-              <h3 style={{ marginTop: 0 }}>Assessment Scores</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
-                <div>
-                  <label className="mm-stat-label">Overall</label>
-                  <div className="mm-stat-value" style={{ fontSize: '24px' }}>
-                    {candidate.scores?.overall?.toFixed(1) || '-'}
+              return (
+                <div
+                  key={stage}
+                  className={`recruit-pipeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''} ${isTerminal && isCurrent ? 'terminal' : ''}`}
+                  onClick={() => handleStatusChange(stage)}
+                >
+                  <div
+                    className="recruit-step-marker"
+                    style={{
+                      backgroundColor: isCompleted || isCurrent ? stageInfo?.color : '#e5e7eb',
+                      borderColor: isCurrent ? stageInfo?.color : 'transparent'
+                    }}
+                  >
+                    {isCompleted ? '✓' : stageInfo?.icon || (index + 1)}
                   </div>
+                  <span className="recruit-step-label">{stageInfo?.label}</span>
+                  {index < PIPELINE_STAGES.length - 1 && (
+                    <div className={`recruit-step-connector ${isCompleted ? 'completed' : ''}`} />
+                  )}
                 </div>
-                <div>
-                  <label className="mm-stat-label">Culture Fit</label>
-                  <div className="mm-stat-value" style={{ fontSize: '24px' }}>
-                    {candidate.scores?.culture_fit?.toFixed(1) || '-'}
-                  </div>
-                </div>
-                <div>
-                  <label className="mm-stat-label">Technical</label>
-                  <div className="mm-stat-value" style={{ fontSize: '24px' }}>
-                    {candidate.scores?.technical?.toFixed(1) || '-'}
-                  </div>
-                </div>
-                <div>
-                  <label className="mm-stat-label">Behavioral</label>
-                  <div className="mm-stat-value" style={{ fontSize: '24px' }}>
-                    {candidate.scores?.behavioral?.toFixed(1) || '-'}
-                  </div>
-                </div>
-              </div>
+              );
+            })}
+          </div>
+
+          {/* Terminal Status Warning */}
+          {['rejected', 'withdrawn'].includes(candidate.status) && (
+            <div className="recruit-terminal-status">
+              <span className="recruit-terminal-icon">
+                {candidate.status === 'rejected' ? '❌' : '🚫'}
+              </span>
+              <span>
+                Candidate was {candidate.status === 'rejected' ? 'rejected' : 'withdrawn'}
+              </span>
             </div>
           )}
 
-          {/* Licensed States */}
-          {candidate.production?.license_states?.length > 0 && (
-            <div className="mm-card" style={{ gridColumn: 'span 2' }}>
-              <h3 style={{ marginTop: 0 }}>Licensed States</h3>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {candidate.production.license_states.map((state, idx) => (
-                  <span key={idx} className="mm-badge mm-badge-info">{state}</span>
+          {/* Interview History */}
+          <div className="recruit-interviews-section">
+            <h4>Interview History</h4>
+            {!candidate.interviews?.length ? (
+              <p className="recruit-empty-text">No interviews scheduled yet</p>
+            ) : (
+              <div className="recruit-interviews-list">
+                {candidate.interviews.map((interview) => (
+                  <div key={interview.id} className="recruit-interview-item">
+                    <div className="recruit-interview-header">
+                      <span className="recruit-interview-round">Round {interview.round}</span>
+                      <span
+                        className="recruit-interview-status"
+                        style={{
+                          backgroundColor: interview.status === 'completed' ? '#dcfce7' :
+                                          interview.status === 'scheduled' ? '#dbeafe' : '#f3f4f6',
+                          color: interview.status === 'completed' ? '#16a34a' :
+                                interview.status === 'scheduled' ? '#1d4ed8' : '#6b7280'
+                        }}
+                      >
+                        {interview.status}
+                      </span>
+                    </div>
+                    <div className="recruit-interview-details">
+                      <span>{interview.type}</span>
+                      <span>{interview.scheduled_at ? new Date(interview.scheduled_at).toLocaleDateString() : '-'}</span>
+                      {interview.score && <span className="recruit-interview-score">Score: {interview.score.toFixed(1)}</span>}
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Production Tab */}
-      {activeTab === 'production' && (
-        <div className="mm-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2>Production Data (RETR)</h2>
-            <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditProduction(true)}>
-              Edit Production
+        {/* Middle Column - Social Media */}
+        <div className="recruit-body-section recruit-social-section">
+          <div className="recruit-section-header">
+            <h3>Social Media</h3>
+            <button className="mm-btn mm-btn-small mm-btn-secondary" onClick={() => setShowEditSocial(true)}>
+              Edit
             </button>
           </div>
 
-          <div className="mm-overview-grid">
-            <div className="mm-card mm-stat-card">
-              <div className="mm-stat-value" style={{ color: '#22c55e' }}>
-                {formatCurrency(candidate.production?.annual_volume)}
-              </div>
-              <div className="mm-stat-label">Annual Volume</div>
-            </div>
-            <div className="mm-card mm-stat-card">
-              <div className="mm-stat-value">{candidate.production?.annual_units || 0}</div>
-              <div className="mm-stat-label">Annual Units</div>
-            </div>
-            <div className="mm-card mm-stat-card">
-              <div className="mm-stat-value">
-                {formatCurrency(candidate.production?.avg_loan_size)}
-              </div>
-              <div className="mm-stat-label">Average Loan Size</div>
-            </div>
-            <div className="mm-card mm-stat-card">
-              <div className="mm-stat-value">{candidate.production?.nmls_id || '-'}</div>
-              <div className="mm-stat-label">NMLS ID</div>
-            </div>
-          </div>
-
-          <div className="mm-card" style={{ marginTop: '20px' }}>
-            <h3 style={{ marginTop: 0 }}>Current Position</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
-              <div>
-                <label className="mm-stat-label">Company</label>
-                <p style={{ margin: 0, fontSize: '18px' }}>{candidate.production?.current_company || '-'}</p>
-              </div>
-              <div>
-                <label className="mm-stat-label">Title</label>
-                <p style={{ margin: 0, fontSize: '18px' }}>{candidate.production?.current_title || '-'}</p>
-              </div>
-            </div>
-          </div>
-
-          {candidate.production?.production_history?.length > 0 && (
-            <div className="mm-card" style={{ marginTop: '20px' }}>
-              <h3 style={{ marginTop: 0 }}>Production History</h3>
-              <div className="mm-table-container">
-                <table className="mm-table">
-                  <thead>
-                    <tr>
-                      <th>Year</th>
-                      <th>Volume</th>
-                      <th>Units</th>
-                      <th>Company</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {candidate.production.production_history.map((row, idx) => (
-                      <tr key={idx}>
-                        <td>{row.year}</td>
-                        <td>{formatCurrency(row.volume)}</td>
-                        <td>{row.units}</td>
-                        <td>{row.company || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Social Media Tab */}
-      {activeTab === 'social' && (
-        <div className="mm-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2>Social Media Profiles</h2>
-            <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditSocial(true)}>
-              Edit Social Media
-            </button>
-          </div>
-
-          <div className="mm-overview-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="recruit-social-grid">
             {/* LinkedIn */}
-            <div className="mm-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '10px' }}>in</div>
-              <h4 style={{ margin: '0 0 10px 0' }}>LinkedIn</h4>
-              {candidate.social_media?.linkedin ? (
-                <a
-                  href={candidate.social_media.linkedin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mm-btn mm-btn-primary mm-btn-small"
-                >
-                  View Profile
-                </a>
-              ) : (
-                <span className="mm-stat-label">Not connected</span>
-              )}
-            </div>
+            <a
+              href={candidate.social_media?.linkedin || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`recruit-social-card ${candidate.social_media?.linkedin ? 'connected' : 'not-connected'}`}
+            >
+              <div className="recruit-social-icon linkedin">in</div>
+              <span className="recruit-social-name">LinkedIn</span>
+              <span className="recruit-social-status">
+                {candidate.social_media?.linkedin ? 'View Profile' : 'Not Connected'}
+              </span>
+            </a>
 
             {/* Facebook */}
-            <div className="mm-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '10px', color: '#1877f2' }}>f</div>
-              <h4 style={{ margin: '0 0 10px 0' }}>Facebook</h4>
-              {candidate.social_media?.facebook ? (
-                <a
-                  href={candidate.social_media.facebook}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mm-btn mm-btn-primary mm-btn-small"
-                >
-                  View Profile
-                </a>
-              ) : (
-                <span className="mm-stat-label">Not connected</span>
-              )}
-            </div>
+            <a
+              href={candidate.social_media?.facebook || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`recruit-social-card ${candidate.social_media?.facebook ? 'connected' : 'not-connected'}`}
+            >
+              <div className="recruit-social-icon facebook">f</div>
+              <span className="recruit-social-name">Facebook</span>
+              <span className="recruit-social-status">
+                {candidate.social_media?.facebook ? 'View Profile' : 'Not Connected'}
+              </span>
+            </a>
 
             {/* Instagram */}
-            <div className="mm-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '10px', color: '#e4405f' }}>ig</div>
-              <h4 style={{ margin: '0 0 10px 0' }}>Instagram</h4>
-              {candidate.social_media?.instagram ? (
-                <a
-                  href={candidate.social_media.instagram}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mm-btn mm-btn-primary mm-btn-small"
-                >
-                  View Profile
-                </a>
-              ) : (
-                <span className="mm-stat-label">Not connected</span>
-              )}
-            </div>
+            <a
+              href={candidate.social_media?.instagram || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`recruit-social-card ${candidate.social_media?.instagram ? 'connected' : 'not-connected'}`}
+            >
+              <div className="recruit-social-icon instagram">ig</div>
+              <span className="recruit-social-name">Instagram</span>
+              <span className="recruit-social-status">
+                {candidate.social_media?.instagram ? 'View Profile' : 'Not Connected'}
+              </span>
+            </a>
 
             {/* Twitter */}
-            <div className="mm-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '10px', color: '#1da1f2' }}>X</div>
-              <h4 style={{ margin: '0 0 10px 0' }}>Twitter/X</h4>
-              {candidate.social_media?.twitter ? (
-                <a
-                  href={candidate.social_media.twitter}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mm-btn mm-btn-primary mm-btn-small"
-                >
-                  View Profile
-                </a>
-              ) : (
-                <span className="mm-stat-label">Not connected</span>
-              )}
-            </div>
+            <a
+              href={candidate.social_media?.twitter || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`recruit-social-card ${candidate.social_media?.twitter ? 'connected' : 'not-connected'}`}
+            >
+              <div className="recruit-social-icon twitter">X</div>
+              <span className="recruit-social-name">Twitter/X</span>
+              <span className="recruit-social-status">
+                {candidate.social_media?.twitter ? 'View Profile' : 'Not Connected'}
+              </span>
+            </a>
           </div>
 
-          {/* Recent Posts */}
+          {/* Recent Social Posts */}
           {candidate.social_media?.recent_posts?.length > 0 && (
-            <div className="mm-card" style={{ marginTop: '20px' }}>
-              <h3 style={{ marginTop: 0 }}>Recent Posts</h3>
-              <div className="mm-social-posts">
-                {candidate.social_media.recent_posts.map((post, idx) => (
-                  <div key={idx} className="mm-social-post" style={{
-                    padding: '15px',
-                    borderBottom: '1px solid var(--border-color)',
-                    marginBottom: '10px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <span className="mm-badge">{post.platform}</span>
-                      <span className="mm-stat-label">{new Date(post.posted_at).toLocaleDateString()}</span>
-                    </div>
-                    <p style={{ margin: 0 }}>{post.content}</p>
-                    {post.engagement && (
-                      <div style={{ marginTop: '10px', display: 'flex', gap: '15px' }}>
-                        <span>Likes: {post.engagement.likes || 0}</span>
-                        <span>Comments: {post.engagement.comments || 0}</span>
-                        <span>Shares: {post.engagement.shares || 0}</span>
-                      </div>
-                    )}
+            <div className="recruit-recent-posts">
+              <h4>Recent Activity</h4>
+              {candidate.social_media.recent_posts.slice(0, 3).map((post, idx) => (
+                <div key={idx} className="recruit-post-item">
+                  <div className="recruit-post-header">
+                    <span className="mm-badge">{post.platform}</span>
+                    <span className="recruit-post-date">{new Date(post.posted_at).toLocaleDateString()}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {candidate.social_media?.last_synced && (
-            <p className="mm-stat-label" style={{ marginTop: '10px' }}>
-              Last synced: {new Date(candidate.social_media.last_synced).toLocaleString()}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Interviews Tab */}
-      {activeTab === 'interviews' && (
-        <div className="mm-section">
-          <h2>Interview History</h2>
-          {candidate.interviews?.length === 0 ? (
-            <div className="mm-card">
-              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                No interviews scheduled yet
-              </p>
-            </div>
-          ) : (
-            <div className="mm-table-container">
-              <table className="mm-table">
-                <thead>
-                  <tr>
-                    <th>Round</th>
-                    <th>Type</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {candidate.interviews?.map((interview) => (
-                    <tr key={interview.id}>
-                      <td>Round {interview.round}</td>
-                      <td>{interview.type}</td>
-                      <td>{interview.scheduled_at ? new Date(interview.scheduled_at).toLocaleString() : '-'}</td>
-                      <td>
-                        <span className={`mm-status-badge mm-status-${interview.status}`}>
-                          {interview.status}
-                        </span>
-                      </td>
-                      <td>{interview.score?.toFixed(1) || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  <p className="recruit-post-content">{post.content}</p>
+                  {post.engagement && (
+                    <div className="recruit-post-engagement">
+                      <span>👍 {post.engagement.likes || 0}</span>
+                      <span>💬 {post.engagement.comments || 0}</span>
+                      <span>🔄 {post.engagement.shares || 0}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
-      )}
 
-      {/* Notes & Activity Tab */}
-      {activeTab === 'notes' && (
-        <div className="mm-section">
-          <h2>Notes & Activity</h2>
+        {/* Right Column - Notes */}
+        <div className="recruit-body-section recruit-notes-section">
+          <div className="recruit-section-header">
+            <h3>Notes & Activity</h3>
+          </div>
 
           {/* Add Note */}
-          <div className="mm-card" style={{ marginBottom: '20px' }}>
-            <h4 style={{ marginTop: 0 }}>Add Note</h4>
+          <div className="recruit-add-note">
             <textarea
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
@@ -619,9 +611,8 @@ const RecruitDetail = () => {
               rows="3"
             />
             <button
-              className="mm-btn mm-btn-primary"
+              className="mm-btn mm-btn-primary mm-btn-small"
               onClick={handleAddNote}
-              style={{ marginTop: '10px' }}
               disabled={!newNote.trim()}
             >
               Add Note
@@ -629,45 +620,217 @@ const RecruitDetail = () => {
           </div>
 
           {/* Notes List */}
-          {candidate.notes?.length > 0 && (
-            <div className="mm-card" style={{ marginBottom: '20px' }}>
-              <h4 style={{ marginTop: 0 }}>Notes</h4>
-              {candidate.notes.map((note) => (
-                <div key={note.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
-                  <p style={{ margin: 0 }}>{note.content}</p>
-                  <span className="mm-stat-label">
-                    {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
-                  </span>
+          <div className="recruit-notes-list">
+            {candidate.notes?.map((note) => (
+              <div key={note.id} className="recruit-note-item">
+                <p className="recruit-note-content">{note.content}</p>
+                <span className="recruit-note-date">
+                  {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                </span>
+              </div>
+            ))}
+            {!candidate.notes?.length && (
+              <p className="recruit-empty-text">No notes yet</p>
+            )}
+          </div>
+
+          {/* Activity Timeline */}
+          {candidate.activities?.length > 0 && (
+            <div className="recruit-activity-timeline">
+              <h4>Activity</h4>
+              {candidate.activities.slice(0, 5).map((activity) => (
+                <div key={activity.id} className="recruit-activity-item">
+                  <div className="recruit-activity-marker" />
+                  <div className="recruit-activity-content">
+                    <span className="mm-badge">{activity.type}</span>
+                    <p>{activity.description}</p>
+                    <span className="recruit-activity-date">
+                      {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : ''}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      </div>
+      )}
 
-          {/* Activity Timeline */}
-          <div className="mm-card">
-            <h4 style={{ marginTop: 0 }}>Activity Timeline</h4>
-            {candidate.activities?.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)' }}>No activity yet</p>
-            ) : (
-              <div className="mm-timeline">
-                {candidate.activities?.map((activity) => (
-                  <div key={activity.id} className="mm-timeline-item" style={{
-                    padding: '10px 0 10px 20px',
-                    borderLeft: '2px solid var(--primary-color)',
-                    marginBottom: '10px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span className="mm-badge">{activity.type}</span>
-                      <span className="mm-stat-label">
-                        {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : ''}
-                      </span>
-                    </div>
-                    <p style={{ margin: '5px 0 0 0' }}>{activity.description}</p>
-                  </div>
-                ))}
+      {/* Assessment & Grading Tab */}
+      {activeTab === 'assessment' && (
+        <div className="recruit-assessment-tab">
+          {assessmentLoading ? (
+            <div className="mm-loading">
+              <div className="mm-spinner"></div>
+              <p>Loading Assessment...</p>
+            </div>
+          ) : assessmentError ? (
+            <div className="mm-error">
+              <span>{assessmentError}</span>
+              <button onClick={loadAssessment}>Retry</button>
+            </div>
+          ) : (
+            <div className="recruit-assessment-content">
+              {/* Top Row - Overall Grade + Category Scores */}
+              <div className="recruit-assessment-header">
+                {/* Overall Grade Circle */}
+                <div className="recruit-assessment-overall">
+                  <CandidateGradeCircle
+                    score={assessment?.overall_score}
+                    grade={assessment?.overall_grade}
+                    label="Overall Grade"
+                    size="xl"
+                  />
+                  {assessment?.assessed_at && (
+                    <p className="recruit-assessment-date">
+                      Last assessed: {new Date(assessment.assessed_at).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+
+                {/* Category Scores Summary */}
+                <div className="recruit-assessment-categories">
+                  <h4>Category Scores</h4>
+                  <AssessmentScoreSummary assessment={assessment} />
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Middle Row - DISC Profile + Detailed Scores */}
+              <div className="recruit-assessment-middle">
+                {/* DISC Profile Chart */}
+                <div className="recruit-assessment-disc">
+                  <div className="recruit-section-header">
+                    <h3>DISC Personality Profile</h3>
+                  </div>
+                  {assessment?.disc ? (
+                    <DISCProfileChart
+                      scores={{
+                        d: assessment.disc.d_score,
+                        i: assessment.disc.i_score,
+                        s: assessment.disc.s_score,
+                        c: assessment.disc.c_score,
+                      }}
+                      primaryStyle={assessment.disc.primary_style}
+                      secondaryStyle={assessment.disc.secondary_style}
+                      showIdealProfile={true}
+                    />
+                  ) : (
+                    <div className="recruit-empty-disc">
+                      <p>No DISC assessment data available</p>
+                      <p className="recruit-empty-hint">Run AI Analysis to assess personality profile</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Detailed Score Cards */}
+                <div className="recruit-assessment-details">
+                  <div className="recruit-section-header">
+                    <h3>Score Breakdown</h3>
+                  </div>
+                  <AssessmentScoreGrid
+                    assessment={assessment}
+                    isEditable={true}
+                    onEditCategory={(category) => {
+                      console.log('Edit category:', category);
+                      // TODO: Open edit modal for category
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Bottom Row - Strengths/Weaknesses + AI Analysis */}
+              <div className="recruit-assessment-bottom">
+                {/* Strengths */}
+                <div className="recruit-assessment-strengths">
+                  <div className="recruit-section-header">
+                    <h3>Strengths</h3>
+                  </div>
+                  <div className="recruit-traits-list">
+                    {assessment?.strengths?.length > 0 ? (
+                      assessment.strengths.map((strength, idx) => (
+                        <div key={idx} className="recruit-trait-item strength">
+                          <span className="recruit-trait-icon">+</span>
+                          <span>{strength}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="recruit-empty-text">No strengths identified yet</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Weaknesses */}
+                <div className="recruit-assessment-weaknesses">
+                  <div className="recruit-section-header">
+                    <h3>Areas for Development</h3>
+                  </div>
+                  <div className="recruit-traits-list">
+                    {assessment?.weaknesses?.length > 0 ? (
+                      assessment.weaknesses.map((weakness, idx) => (
+                        <div key={idx} className="recruit-trait-item weakness">
+                          <span className="recruit-trait-icon">-</span>
+                          <span>{weakness}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="recruit-empty-text">No development areas identified yet</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* AI Analysis Panel Placeholder */}
+                <div className="recruit-assessment-ai">
+                  <div className="recruit-section-header">
+                    <h3>AI Analysis</h3>
+                  </div>
+                  <div className="recruit-ai-panel">
+                    {assessment?.ai_analysis_run_at ? (
+                      <>
+                        <div className="recruit-ai-confidence">
+                          <span className="recruit-ai-label">Confidence Score</span>
+                          <span className="recruit-ai-value">{assessment.ai_confidence_score || 0}%</span>
+                        </div>
+                        <p className="recruit-ai-date">
+                          Last run: {new Date(assessment.ai_analysis_run_at).toLocaleDateString()}
+                        </p>
+                      </>
+                    ) : (
+                      <div className="recruit-ai-empty">
+                        <p>AI analysis has not been run yet</p>
+                        <button className="mm-btn mm-btn-primary">
+                          Run AI Analysis
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* No Assessment State */}
+              {!assessment && (
+                <div className="recruit-no-assessment">
+                  <div className="recruit-no-assessment-content">
+                    <span className="recruit-no-assessment-icon">📋</span>
+                    <h3>No Assessment Yet</h3>
+                    <p>This candidate hasn't been assessed. Create an assessment to start grading.</p>
+                    <button
+                      className="mm-btn mm-btn-primary"
+                      onClick={async () => {
+                        try {
+                          await createAssessment(candidateId, {}, 1); // TODO: Get real user ID
+                          loadAssessment();
+                        } catch (err) {
+                          setAssessmentError(err.message);
+                        }
+                      }}
+                    >
+                      Create Assessment
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

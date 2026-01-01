@@ -1,0 +1,433 @@
+/* DISC Profile Chart Component Styles */
+
+/* ===========================
+   Main Chart Container
+   =========================== */
+
+.disc-chart {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* Header with Primary/Secondary Styles */
+.disc-chart-header {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.disc-primary-style,
+.disc-secondary-style {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.disc-style-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.disc-style-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #111827;
+}
+
+.disc-style-type {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Style Badges */
+.disc-style-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
+.disc-style-badge.primary {
+  color: white;
+}
+
+.disc-style-badge.secondary {
+  background: white;
+  border: 2px solid;
+}
+
+.disc-style-badge.large {
+  width: 48px;
+  height: 48px;
+  font-size: 24px;
+}
+
+/* Composite Score */
+.disc-composite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.disc-composite-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.disc-composite-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+/* ===========================
+   Bar Chart Rows
+   =========================== */
+
+.disc-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.disc-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.disc-bar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.disc-bar-letter {
+  font-size: 18px;
+  font-weight: 700;
+  width: 24px;
+}
+
+.disc-bar-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+}
+
+.disc-bar-value-container {
+  min-width: 40px;
+  text-align: right;
+}
+
+.disc-bar-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.disc-bar-input {
+  width: 50px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.disc-bar-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Bar Track */
+.disc-bar-track {
+  position: relative;
+  height: 12px;
+  background: #e5e7eb;
+  border-radius: 6px;
+  overflow: visible;
+}
+
+.disc-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+/* Ideal Marker */
+.disc-bar-ideal {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 20px;
+  background: #3b82f6;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+.disc-bar-ideal::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #3b82f6;
+}
+
+.disc-bar-description {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 4px 0 0 32px;
+}
+
+/* ===========================
+   Legend
+   =========================== */
+
+.disc-legend {
+  display: flex;
+  gap: 24px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.disc-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.disc-legend-bar {
+  width: 24px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.disc-legend-bar.actual {
+  background: #10b981;
+}
+
+.disc-legend-marker {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+.disc-legend-marker.ideal {
+  background: #3b82f6;
+}
+
+/* Weights Info */
+.disc-weights-info {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  border-left: 3px solid #3b82f6;
+}
+
+.disc-weights-info h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e40af;
+  margin: 0 0 4px 0;
+}
+
+.disc-weights-info p {
+  font-size: 12px;
+  color: #3b82f6;
+  margin: 0;
+}
+
+/* ===========================
+   Compact View
+   =========================== */
+
+.disc-chart-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.disc-compact-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disc-compact-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.disc-compact-label {
+  font-size: 14px;
+  font-weight: 700;
+  width: 16px;
+}
+
+.disc-compact-track {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.disc-compact-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.disc-compact-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  width: 24px;
+  text-align: right;
+}
+
+.disc-compact-styles {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.disc-compact-styles .disc-style-badge {
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+}
+
+/* ===========================
+   Radar Chart
+   =========================== */
+
+.disc-radar-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.disc-radar-svg {
+  overflow: visible;
+}
+
+/* ===========================
+   Style Card
+   =========================== */
+
+.disc-style-card {
+  position: relative;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.disc-style-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.disc-style-card.primary {
+  border: 2px solid;
+}
+
+.disc-style-card.secondary {
+  border: 2px dashed;
+}
+
+.disc-style-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.disc-style-card-letter {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.disc-style-card-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.disc-style-card-body {
+  padding: 16px;
+}
+
+.disc-style-card-body h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.disc-style-card-body p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.disc-style-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.disc-trait-tag {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: #f3f4f6;
+  color: #4b5563;
+  border-radius: 4px;
+}
+
+.disc-style-relevance {
+  font-size: 12px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.disc-style-relevance strong {
+  color: #374151;
+}
+
+.disc-style-card-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+}

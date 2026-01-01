@@ -1,0 +1,288 @@
+/* Assessment Score Card Component Styles */
+
+/* ===========================
+   Score Card Container
+   =========================== */
+
+.assessment-score-card {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.assessment-score-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.assessment-score-card.expanded {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ===========================
+   Card Header
+   =========================== */
+
+.score-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.score-card-header:hover {
+  background-color: #f9fafb;
+}
+
+.score-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.score-card-icon {
+  font-size: 20px;
+}
+
+.score-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.score-card-label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+}
+
+.score-card-weight {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.score-card-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.score-card-scores {
+  width: 100px;
+}
+
+.score-card-expand-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s ease;
+}
+
+.score-card-expand-btn:hover {
+  color: #6b7280;
+}
+
+/* ===========================
+   Card Details (Expanded)
+   =========================== */
+
+.score-card-details {
+  padding: 0 16px 16px 16px;
+  border-top: 1px solid #e5e7eb;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.score-card-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 12px 0;
+}
+
+.score-card-contribution {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f0f9ff;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.score-card-contribution span {
+  color: #3b82f6;
+}
+
+.score-card-contribution strong {
+  color: #1e40af;
+}
+
+/* ===========================
+   Score Breakdown
+   =========================== */
+
+.score-card-breakdown h5 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.breakdown-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdown-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.breakdown-value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.breakdown-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.breakdown-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Notes Section */
+.score-card-notes {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.score-card-notes h5 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+.score-card-notes p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Edit Button */
+.score-card-edit-btn {
+  margin-top: 16px;
+  width: 100%;
+  padding: 10px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.score-card-edit-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* ===========================
+   Score Grid Layout
+   =========================== */
+
+.assessment-score-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ===========================
+   Score Summary (Compact)
+   =========================== */
+
+.assessment-score-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-label {
+  width: 80px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.summary-bar {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.summary-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.summary-score {
+  width: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}

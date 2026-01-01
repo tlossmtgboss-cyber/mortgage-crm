@@ -1,0 +1,227 @@
+/* Candidate Grade Circle Component Styles */
+
+/* Grade Circle Wrapper */
+.candidate-grade-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Base Circle Styles */
+.candidate-grade-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: white;
+  border-width: 4px;
+  border-style: solid;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.candidate-grade-wrapper:hover .candidate-grade-circle {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Size Variants */
+.grade-circle-sm {
+  width: 60px;
+  height: 60px;
+  border-width: 3px;
+}
+
+.grade-circle-sm .candidate-grade-letter {
+  font-size: 18px;
+}
+
+.grade-circle-sm .candidate-grade-score {
+  font-size: 10px;
+}
+
+.grade-circle-md {
+  width: 80px;
+  height: 80px;
+  border-width: 4px;
+}
+
+.grade-circle-md .candidate-grade-letter {
+  font-size: 24px;
+}
+
+.grade-circle-md .candidate-grade-score {
+  font-size: 12px;
+}
+
+.grade-circle-lg {
+  width: 100px;
+  height: 100px;
+  border-width: 4px;
+}
+
+.grade-circle-lg .candidate-grade-letter {
+  font-size: 32px;
+}
+
+.grade-circle-lg .candidate-grade-score {
+  font-size: 14px;
+}
+
+.grade-circle-xl {
+  width: 120px;
+  height: 120px;
+  border-width: 5px;
+}
+
+.grade-circle-xl .candidate-grade-letter {
+  font-size: 40px;
+}
+
+.grade-circle-xl .candidate-grade-score {
+  font-size: 16px;
+}
+
+/* Grade Letter */
+.candidate-grade-letter {
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Numeric Score */
+.candidate-grade-score {
+  color: #6b7280;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* Label Below Circle */
+.candidate-grade-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+/* ===========================
+   Grade Bar Component
+   =========================== */
+
+.grade-bar-wrapper {
+  width: 100%;
+}
+
+.grade-bar-track {
+  width: 100%;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.grade-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.grade-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.grade-bar-score {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.grade-bar-grade {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* ===========================
+   Grade Badge Component
+   =========================== */
+
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-radius: 4px;
+  border-width: 1px;
+  border-style: solid;
+}
+
+.grade-badge-sm {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.grade-badge-md {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.grade-badge-lg {
+  padding: 6px 14px;
+  font-size: 15px;
+}
+
+/* ===========================
+   Grade Legend Component
+   =========================== */
+
+.grade-legend {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.grade-legend-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px 0;
+}
+
+.grade-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 8px;
+}
+
+.grade-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grade-legend-grade {
+  font-weight: 700;
+  font-size: 14px;
+  min-width: 24px;
+}
+
+.grade-legend-range {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.grade-legend-compact {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.grade-legend-compact .grade-legend-item {
+  font-weight: 700;
+  font-size: 13px;
+}

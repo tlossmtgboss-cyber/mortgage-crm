@@ -20031,6 +20031,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Recruiting routes: {e}")
 
+# Include Candidate Grading routes (LO Assessment & Scoring)
+try:
+    from routes.candidate_grading_routes import router as grading_router
+    app.include_router(grading_router, tags=["Candidate Grading"])
+    logger.info("✅ Candidate Grading routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Candidate Grading routes: {e}")
+
 # Include Recruit Portal routes (public candidate portal)
 try:
     from routes.recruit_portal_routes import router as recruit_portal_router
