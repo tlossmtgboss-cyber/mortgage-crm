@@ -17,6 +17,7 @@ import {
   approveDocument,
   getDocumentDownloadUrl,
 } from '../../services/documentReviewApi';
+import { getAuthSync } from '../../utils/auth';
 import './DocumentReviewModal.css';
 
 const DocumentReviewModal = ({
@@ -117,8 +118,12 @@ const DocumentReviewModal = ({
     setError(null);
 
     try {
+      // Get current user from auth context
+      const { user } = getAuthSync();
+      const reviewerName = user?.name || user?.email?.split('@')[0] || 'user';
+
       const options = {
-        reviewer: 'user', // TODO: Get from auth context
+        reviewer: reviewerName,
         assignedOwner: selectedOwner,
       };
 
