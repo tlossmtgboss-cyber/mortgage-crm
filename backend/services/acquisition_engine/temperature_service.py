@@ -301,9 +301,44 @@ class TemperatureService:
 
         Based on lead profile completeness.
         """
-        # TODO: Query lead profile and check field completeness
-        # For now, return a default score
-        return 50
+        try:
+            # Import Lead model
+            from main import Lead
+
+            lead = self.db.query(Lead).filter(Lead.id == lead_id).first()
+            if not lead:
+                return 0
+
+            # Define fields to check with their weights
+            # Higher weight = more important for qualification
+            field_weights = {
+                # Contact info (20 points total)
+                'email': 10,
+                'phone': 10,
+                # Financial info (35 points total)
+                'credit_score': 15,
+                'annual_income': 10,
+                'employment_status': 10,
+                # Property info (20 points total)
+                'property_type': 10,
+                'property_value': 10,
+                # Loan info (25 points total)
+                'loan_type': 10,
+                'loan_amount': 10,
+                'preapproval_amount': 5,
+            }
+
+            score = 0
+            for field, weight in field_weights.items():
+                value = getattr(lead, field, None)
+                if value is not None and value != '' and value != 0:
+                    score += weight
+
+            return min(score, 100)
+
+        except Exception as e:
+            logger.warning(f"Error calculating profile score for lead {lead_id}: {e}")
+            return 50  # Default score on error
 
     def _determine_temperature(self, temp_record: LeadTemperature) -> str:
         """
