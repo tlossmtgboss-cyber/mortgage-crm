@@ -814,8 +814,6 @@ class CandidateGradingService:
             'culture_fit_breakdown': 'culture_fit_breakdown',
             'strengths': 'strengths',
             'weaknesses': 'weaknesses',
-            'recruiter_notes': 'recruiter_notes',
-            'recruiter_recommendation': 'recruiter_recommendation',
             'assessment_status': 'assessment_status'
         }
 
@@ -984,7 +982,6 @@ class CandidateGradingService:
         }
 
         # Update with new scores
-        new_scores['original_scores'] = original_scores
         result = await self.update_assessment(assessment_id, new_scores, override_by)
 
         # Mark as overridden
@@ -993,14 +990,12 @@ class CandidateGradingService:
             SET scores_overridden = true,
                 override_reason = :reason,
                 override_by = :by,
-                override_at = CURRENT_TIMESTAMP,
-                original_scores = :original
+                override_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """), {
             "id": assessment_id,
             "reason": override_reason,
-            "by": override_by,
-            "original": json.dumps(original_scores)
+            "by": override_by
         })
 
         self.db.commit()
