@@ -24,6 +24,9 @@ from ai_receptionist_dashboard_models import (
 )
 import uuid
 
+# Voice Sentiment Analysis
+from services.voice_sentiment_service import analyze_voice_sentiment
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -463,7 +466,7 @@ async def save_call_summary(call_context: dict, db: Session):
                 transcript_json=call_context['conversation_history'],
                 summary=call_context.get('intent', 'General inquiry'),
                 intent_detected=call_context.get('intent', 'unknown'),
-                sentiment='neutral',  # TODO: Add sentiment analysis
+                sentiment=analyze_voice_sentiment(call_context['conversation_history']),
                 outcome=call_context.get('outcome', 'completed'),
                 avg_confidence_score=call_context.get('avg_confidence', 0.85),
                 total_turns=len(call_context['conversation_history']),
