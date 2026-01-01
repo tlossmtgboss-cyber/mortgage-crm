@@ -13,8 +13,14 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import secrets
 import re
-from sqlalchemy import text
-from database import get_db_connection
+from sqlalchemy import text, create_engine
+from sqlalchemy.orm import sessionmaker
+import os
+
+# Create engine for service-level database access
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
 
 from models.recruit_portal_models import (
     PortalData,
@@ -40,7 +46,7 @@ class RecruitPortalService:
         slug: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create a portal workspace for a candidate."""
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             # Get candidate info for auto-slug generation
             result = conn.execute(
                 text("SELECT first_name, last_name FROM recruiting_candidates WHERE id = :id"),
@@ -101,7 +107,7 @@ class RecruitPortalService:
 
     def get_portal_by_slug(self, slug: str) -> Optional[PortalData]:
         """Get portal data by slug."""
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     SELECT w.id as workspace_id, w.slug, w.theme_config,
@@ -165,7 +171,7 @@ class RecruitPortalService:
             category_filter = "AND category = :category"
             params["category"] = category
 
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text(f"""
                     SELECT id, title, content, media_url, category,
@@ -203,7 +209,7 @@ class RecruitPortalService:
         created_by: int = 1
     ) -> Dict:
         """Create a new company update."""
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     INSERT INTO recruit_company_updates
@@ -237,7 +243,7 @@ class RecruitPortalService:
     ) -> Dict[str, Any]:
         """Handle chat interaction with the AI assistant."""
         # Get workspace and candidate context
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     SELECT w.id, c.first_name, c.last_name, c.status,
@@ -300,7 +306,7 @@ Candidate's current status: {candidate.status}
             ai_response = self._get_fallback_response(message, candidate.status)
 
         # Store the conversation
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             conn.execute(
                 text("""
                     INSERT INTO recruit_portal_messages (workspace_id, role, content, created_at)
@@ -344,7 +350,7 @@ Candidate's current status: {candidate.status}
 
     def get_chat_history(self, workspace_id: int, limit: int = 50) -> List[Dict]:
         """Get chat history for a workspace."""
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     SELECT role, content, created_at
@@ -406,7 +412,7 @@ Candidate's current status: {candidate.status}
         notes: Optional[str] = None
     ) -> Dict:
         """Schedule an appointment from the portal."""
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     INSERT INTO recruit_portal_appointments
@@ -437,7 +443,7 @@ Candidate's current status: {candidate.status}
 
     def get_calculator_config(self, organization_id: int = 1) -> Dict:
         """Get calculator configuration."""
-        with get_db_connection() as conn:
+        with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     SELECT lead_conversion_lift, avg_deal_size_lift,
