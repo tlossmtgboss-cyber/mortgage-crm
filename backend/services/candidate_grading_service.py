@@ -768,18 +768,27 @@ class CandidateGradingService:
             char_result = self.calculate_character_score(data['character_breakdown'])
             character_score = char_result.score
             data['character_grade'] = char_result.grade
+        elif 'character_score' in data:
+            # Just score provided - calculate grade
+            data['character_grade'] = self.get_grade_from_score(data['character_score'])
 
         # Recalculate skills if breakdown provided
         if 'skills_breakdown' in data:
             skills_result = self.calculate_skills_score(data['skills_breakdown'])
             skills_score = skills_result.score
             data['skills_grade'] = skills_result.grade
+        elif 'skills_score' in data:
+            # Just score provided - calculate grade
+            data['skills_grade'] = self.get_grade_from_score(data['skills_score'])
 
         # Recalculate culture if breakdown provided
         if 'culture_fit_breakdown' in data:
             culture_result = self.calculate_culture_fit_score(data['culture_fit_breakdown'])
             culture_score = culture_result.score
             data['culture_fit_grade'] = culture_result.grade
+        elif 'culture_fit_score' in data:
+            # Just score provided - calculate grade
+            data['culture_fit_grade'] = self.get_grade_from_score(data['culture_fit_score'])
 
         # Calculate new overall
         overall_result = self.calculate_overall_grade(
