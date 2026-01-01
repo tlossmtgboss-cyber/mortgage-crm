@@ -20071,6 +20071,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Recruit Portal routes: {e}")
 
+# Include Recruit Social Media routes (LinkedIn, Facebook, Instagram)
+try:
+    from routes.recruit_social_routes import router as recruit_social_router
+    app.include_router(recruit_social_router, tags=["Recruit Social"])
+    logger.info("✅ Recruit Social Media routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Recruit Social Media routes: {e}")
+
 # Include Acquisition Engine routes (lead scoring, speed-to-lead)
 try:
     from routes.acquisition_engine_routes import router as acquisition_router
