@@ -1042,8 +1042,12 @@ const RecruitDetail = () => {
                     currentAssessment={assessment}
                     onApplyScores={async (scores) => {
                       try {
-                        // Update assessment with AI-suggested scores
-                        await updateAssessment(candidateId, scores, currentUserId || 1);
+                        // Create or update assessment with AI-suggested scores
+                        if (!assessment || assessment.has_assessment === false) {
+                          await createAssessment(candidateId, scores, currentUserId || 1);
+                        } else {
+                          await updateAssessment(candidateId, scores, currentUserId || 1);
+                        }
                         await loadAssessment();
                       } catch (err) {
                         setAssessmentError(err.message);
@@ -1262,11 +1266,28 @@ const RecruitDetail = () => {
           currentScore={assessment?.scores?.[editingCategory.key]}
           onSave={async (score, notes) => {
             try {
-              const updatedScores = {
-                ...assessment?.scores,
-                [editingCategory.key]: score
+              // Map category key to API field name
+              const categoryToField = {
+                'production': 'production_score',
+                'character': 'character_score',
+                'skills': 'skills_score',
+                'culture_fit': 'culture_fit_score'
               };
-              await updateAssessment(candidateId, { scores: updatedScores }, currentUserId || 1);
+              const fieldName = categoryToField[editingCategory.key];
+              if (!fieldName) {
+                throw new Error(`Unknown category: ${editingCategory.key}`);
+              }
+
+              // Scale score from 1-5 to 0-100 (modal uses 1-5, API expects 0-100)
+              const scaledScore = score * 20;
+              const updateData = { [fieldName]: scaledScore };
+
+              // Check if assessment exists - if not, create it first
+              if (!assessment || assessment.has_assessment === false) {
+                await createAssessment(candidateId, updateData, currentUserId || 1);
+              } else {
+                await updateAssessment(candidateId, updateData, currentUserId || 1);
+              }
               await loadAssessment();
               setShowEditCategoryModal(false);
               setEditingCategory(null);
