@@ -20,8 +20,8 @@ RECALLAI_API_KEY = os.getenv("RECALLAI_API_KEY", "")
 RECALLAI_WEBHOOK_SECRET = os.getenv("RECALLAI_WEBHOOK_SECRET", "")
 RECALLAI_API_BASE = "https://us-west-2.recall.ai/api/v1"
 
-# Import get_db from main
-from main import get_db, RecallAIBot
+# Import get_db and auth from main
+from main import get_db, get_current_user, RecallAIBot, User
 
 
 # Pydantic Models
@@ -69,7 +69,7 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
 async def start_recording(
     request: StartRecordingRequest,
     db: Session = Depends(get_db),
-    current_user: Any = None  # TODO: Add current user dependency when integrated
+    current_user: User = Depends(get_current_user)
 ):
     """
     Start a Recall.ai bot to record a meeting
@@ -149,7 +149,10 @@ async def start_recording(
 
 
 @router.get("/bot/{bot_id}")
-async def get_bot_status(bot_id: str):
+async def get_bot_status(
+    bot_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Get status and transcript of a recording bot"""
     try:
         response = requests.get(
@@ -282,7 +285,10 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/bots")
-async def list_bots(limit: int = 10):
+async def list_bots(
+    limit: int = 10,
+    current_user: User = Depends(get_current_user)
+):
     """List all bots created by this account"""
     try:
         response = requests.get(
