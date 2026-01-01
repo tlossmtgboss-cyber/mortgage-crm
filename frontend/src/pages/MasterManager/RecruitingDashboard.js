@@ -528,7 +528,12 @@ const RecruitingDashboard = () => {
               <h2>Upcoming Interviews</h2>
               <div className="mm-interviews-list">
                 {upcomingInterviews.map((interview) => (
-                  <div key={interview.id} className="mm-card mm-interview-card">
+                  <div
+                    key={interview.id}
+                    className="mm-card mm-interview-card mm-clickable"
+                    onClick={() => interview.candidate_id && navigate(`/master-manager/recruiting/${interview.candidate_id}`)}
+                    style={{ cursor: interview.candidate_id ? 'pointer' : 'default' }}
+                  >
                     <div className="mm-interview-time">
                       {new Date(interview.scheduled_at).toLocaleString([], {
                         weekday: 'short',
@@ -551,6 +556,7 @@ const RecruitingDashboard = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mm-btn mm-btn-small mm-btn-primary"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         Join
                       </a>
