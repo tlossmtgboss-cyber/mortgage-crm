@@ -15,6 +15,8 @@ import {
 } from '../../services/candidateGradingApi';
 import CandidateGradeCircle, { getGrade, GradeBadge } from '../../components/recruiting/CandidateGradeCircle';
 import DISCProfileChart from '../../components/recruiting/DISCProfileChart';
+import { DISCResultsSummary, DISCGraphs, DISCWheel, MotivatorsBarchart } from '../../components/recruiting/disc';
+import * as discApi from '../../services/discApi';
 import { AssessmentScoreGrid, AssessmentScoreSummary } from '../../components/recruiting/AssessmentScoreCard';
 import AIAnalysisPanel from '../../components/recruiting/AIAnalysisPanel';
 import AssessmentQuizModal from '../../components/recruiting/AssessmentQuizModal';
@@ -58,6 +60,12 @@ const RecruitDetail = () => {
   const [assessment, setAssessment] = useState(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessmentError, setAssessmentError] = useState(null);
+
+  // DISC + Motivators state
+  const [discResults, setDiscResults] = useState(null);
+  const [motivatorResults, setMotivatorResults] = useState(null);
+  const [discLoading, setDiscLoading] = useState(false);
+  const [showDISCInviteModal, setShowDISCInviteModal] = useState(false);
 
   // Quiz modal state
   const [showQuizModal, setShowQuizModal] = useState(false);
@@ -132,14 +140,54 @@ const RecruitDetail = () => {
     }
   }, [candidateId]);
 
+  // Load DISC + Motivators results
+  const loadDISCResults = useCallback(async () => {
+    try {
+      setDiscLoading(true);
+      const results = await discApi.getDISCResults(candidateId);
+      if (results) {
+        setDiscResults(results.disc);
+        setMotivatorResults(results.motivators);
+      }
+    } catch (err) {
+      // 404 means no DISC assessment yet - that's okay
+      console.log('No DISC results yet:', err.message);
+    } finally {
+      setDiscLoading(false);
+    }
+  }, [candidateId]);
+
+  // Send DISC assessment invite
+  const handleSendDISCInvite = async () => {
+    try {
+      await discApi.sendAssessmentInvite(candidateId, { sendEmail: true });
+      setShowDISCInviteModal(false);
+      // Show success toast or message
+    } catch (err) {
+      console.error('Failed to send DISC invite:', err);
+    }
+  };
+
+  // Download DISC PDF report
+  const handleDownloadDISCPDF = async () => {
+    try {
+      await discApi.downloadDISCReport(candidateId);
+    } catch (err) {
+      console.error('Failed to download DISC report:', err);
+    }
+  };
+
   useEffect(() => {
     loadCandidate();
   }, [loadCandidate]);
 
-  // Load assessment on component mount (for sidebar display)
+  // Load assessment and DISC on component mount (for sidebar display)
   useEffect(() => {
     if (!assessment && !assessmentLoading) {
       loadAssessment();
+    }
+    if (!discResults && !discLoading) {
+      loadDISCResults();
     }
   }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1355,12 +1403,79 @@ const RecruitDetail = () => {
 
               {/* Middle Row - DISC Profile + Detailed Scores */}
               <div className="recruit-assessment-middle">
-                {/* DISC Profile Chart */}
+                {/* DISC + Motivators Section */}
                 <div className="recruit-assessment-disc">
                   <div className="recruit-section-header">
-                    <h3>DISC Personality Profile</h3>
+                    <h3>DISC + Motivators Assessment</h3>
+                    {!discResults && !discLoading && (
+                      <button
+                        className="recruit-btn recruit-btn-sm"
+                        onClick={() => setShowDISCInviteModal(true)}
+                      >
+                        Send Assessment Invite
+                      </button>
+                    )}
+                    {discResults && (
+                      <button
+                        className="recruit-btn recruit-btn-sm recruit-btn-secondary"
+                        onClick={handleDownloadDISCPDF}
+                      >
+                        Download PDF
+                      </button>
+                    )}
                   </div>
-                  {assessment?.disc ? (
+
+                  {discLoading ? (
+                    <div className="recruit-loading">Loading DISC results...</div>
+                  ) : discResults ? (
+                    <div className="recruit-disc-full">
+                      {/* DISC Graphs - Adapted & Natural */}
+                      <DISCGraphs
+                        adaptedScores={{
+                          D: discResults.adapted_d,
+                          I: discResults.adapted_i,
+                          S: discResults.adapted_s,
+                          C: discResults.adapted_c
+                        }}
+                        naturalScores={{
+                          D: discResults.natural_d,
+                          I: discResults.natural_i,
+                          S: discResults.natural_s,
+                          C: discResults.natural_c
+                        }}
+                        adaptedStyle={discResults.adapted_style}
+                        naturalStyle={discResults.natural_style}
+                      />
+
+                      {/* Behavioral Pattern Wheel */}
+                      <div className="recruit-disc-wheel-section">
+                        <DISCWheel
+                          zone={discResults.wheel_zone}
+                          position={discResults.wheel_position}
+                          zoneName={discResults.zone_name}
+                          size={240}
+                        />
+                      </div>
+
+                      {/* Motivators Chart */}
+                      {motivatorResults && (
+                        <MotivatorsBarchart
+                          scores={{
+                            aesthetic: motivatorResults.aesthetic,
+                            economic: motivatorResults.economic,
+                            individualistic: motivatorResults.individualistic,
+                            political: motivatorResults.political,
+                            altruistic: motivatorResults.altruistic,
+                            regulatory: motivatorResults.regulatory,
+                            theoretical: motivatorResults.theoretical
+                          }}
+                          ranking={motivatorResults.ranking}
+                          topMotivator={motivatorResults.top_motivator}
+                        />
+                      )}
+                    </div>
+                  ) : assessment?.disc ? (
+                    /* Fallback to AI-generated DISC if no formal assessment */
                     <DISCProfileChart
                       scores={{
                         D: assessment.disc.d_score || 0,
@@ -1375,7 +1490,14 @@ const RecruitDetail = () => {
                   ) : (
                     <div className="recruit-empty-disc">
                       <p>No DISC assessment data available</p>
-                      <p className="recruit-empty-hint">Run AI Analysis to assess personality profile</p>
+                      <p className="recruit-empty-hint">Send an assessment invite or run AI Analysis</p>
+                      <button
+                        className="recruit-btn recruit-btn-primary"
+                        onClick={() => setShowDISCInviteModal(true)}
+                        style={{ marginTop: '12px' }}
+                      >
+                        Send DISC Assessment Invite
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1721,6 +1843,55 @@ const RecruitDetail = () => {
                 disabled={!selectedEscalateUser}
               >
                 Escalate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DISC Assessment Invite Modal */}
+      {showDISCInviteModal && (
+        <div className="modal-overlay" onClick={() => setShowDISCInviteModal(false)}>
+          <div className="modal-content disc-invite-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Send DISC + Motivators Assessment</h3>
+              <button className="modal-close" onClick={() => setShowDISCInviteModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Send a DISC + Motivators assessment invite to <strong>{candidate?.first_name || candidate?.name}</strong>.
+              </p>
+              <p className="modal-hint">
+                The candidate will receive an email with a link to complete the assessment.
+                Results will be available here once completed.
+              </p>
+              <div className="disc-assessment-features">
+                <div className="disc-feature">
+                  <span className="disc-feature-icon">📊</span>
+                  <span>DISC Behavioral Profile</span>
+                </div>
+                <div className="disc-feature">
+                  <span className="disc-feature-icon">🎯</span>
+                  <span>7 Motivators Analysis</span>
+                </div>
+                <div className="disc-feature">
+                  <span className="disc-feature-icon">📄</span>
+                  <span>Downloadable PDF Report</span>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="mm-btn mm-btn-secondary"
+                onClick={() => setShowDISCInviteModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="mm-btn mm-btn-primary"
+                onClick={handleSendDISCInvite}
+              >
+                Send Assessment Invite
               </button>
             </div>
           </div>

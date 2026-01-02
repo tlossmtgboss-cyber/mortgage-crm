@@ -149,6 +149,7 @@ const ListingPortalTransactions = lazy(() => import('./pages/ListingPortalTransa
 const ListingPortalTransactionDetail = lazy(() => import('./pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazy(() => import('./pages/ListingAgentPortal'));
 const RecruitPortal = lazy(() => import('./pages/RecruitPortal/RecruitPortal'));
+const DISCAssessment = lazy(() => import('./pages/DISCAssessment'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 
@@ -304,6 +305,10 @@ function App() {
           {/* Recruit Portal (public - candidate PURL portal with calculator) */}
           <Route path="/recruit-portal/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />
           <Route path="/join/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />
+
+          {/* DISC Assessment (public - candidate takes assessment via token) */}
+          <Route path="/disc-assessment/:token" element={<LazyPage><DISCAssessment /></LazyPage>} />
+          <Route path="/assessment/disc" element={<LazyPage><DISCAssessment /></LazyPage>} />
 
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />

@@ -699,9 +699,9 @@ async def get_portal_videos(
         s3_service = get_s3_service()
 
         for row in videos_result.fetchall():
-            # Regenerate presigned URL
+            # Regenerate presigned URL only for real S3 videos
             video_url = row.video_url
-            if row.video_key:
+            if row.video_key and row.video_key.startswith("recruit-videos/"):
                 download_result = s3_service.get_presigned_download_url(
                     row.video_key,
                     expires_in=86400  # 24 hours

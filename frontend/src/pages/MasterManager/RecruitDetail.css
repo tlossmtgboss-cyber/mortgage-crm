@@ -1752,3 +1752,77 @@
 .recruit-ai-tips li::marker {
   color: #3b82f6;
 }
+
+/* DISC + Motivators Assessment Styles */
+.recruit-disc-full {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.recruit-disc-wheel-section {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.recruit-loading {
+  padding: 40px;
+  text-align: center;
+  color: #6b7280;
+}
+
+/* DISC Invite Modal */
+.disc-invite-modal {
+  max-width: 500px;
+}
+
+.disc-invite-modal .modal-hint {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 12px;
+}
+
+.disc-assessment-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.disc-feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.disc-feature-icon {
+  font-size: 20px;
+}
+
+/* Recruit section header with action */
+.recruit-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.recruit-btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.recruit-btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.recruit-btn-secondary:hover {
+  background: #e5e7eb;
+}
