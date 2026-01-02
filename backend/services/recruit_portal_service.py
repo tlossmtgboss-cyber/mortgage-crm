@@ -464,7 +464,7 @@ Candidate's current status: {candidate.status}
                         u.email as recruiter_email
                     FROM recruit_portal_workspaces w
                     LEFT JOIN mm_candidates c ON c.id = w.candidate_id
-                    LEFT JOIN users u ON u.id = c.assigned_to
+                    LEFT JOIN users u ON u.id = c.referrer_user_id
                     WHERE w.id = :workspace_id
                 """),
                 {"workspace_id": workspace_id}
