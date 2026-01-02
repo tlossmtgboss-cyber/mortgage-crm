@@ -2475,3 +2475,80 @@ async def run_realtor_portal_migration(
                 "traceback": stack_trace.split('\n')[-5:]
             }
         )
+
+
+# =============================================================================
+# ASSIGN PARTNER ENDPOINT
+# =============================================================================
+
+class AssignPartnerRequest(BaseModel):
+    """Request to assign a referral partner to a client/lead."""
+    partner_id: int = Field(..., description="The referral partner ID to assign")
+
+
+@router.post("/clients/{client_id}/assign-partner")
+async def assign_partner_to_client(
+    client_id: int,
+    request: AssignPartnerRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Assign a referral partner to a client/lead.
+    This creates the Buyer's Agent Portal access for the partner.
+
+    Args:
+        client_id: The lead/client ID to assign the partner to
+        request: Contains the partner_id to assign
+
+    Returns:
+        Success status with the assigned partner details
+    """
+    try:
+        # Verify the lead exists
+        lead = db.execute(text("""
+            SELECT id, name, email, referral_partner_id
+            FROM leads
+            WHERE id = :client_id
+        """), {"client_id": client_id}).fetchone()
+
+        if not lead:
+            raise HTTPException(status_code=404, detail=f"Lead/client {client_id} not found")
+
+        # Verify the partner exists
+        partner = db.execute(text("""
+            SELECT id, name, company, email
+            FROM referral_partners
+            WHERE id = :partner_id
+        """), {"partner_id": request.partner_id}).fetchone()
+
+        if not partner:
+            raise HTTPException(status_code=404, detail=f"Referral partner {request.partner_id} not found")
+
+        # Update the lead with the referral partner
+        db.execute(text("""
+            UPDATE leads
+            SET referral_partner_id = :partner_id,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :client_id
+        """), {"partner_id": request.partner_id, "client_id": client_id})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Partner {partner[1]} assigned to client",
+            "data": {
+                "client_id": client_id,
+                "partner_id": partner[0],
+                "partner_name": partner[1],
+                "partner_company": partner[2],
+                "portal_url": f"/partner-portal/{partner[0]}/client/{client_id}"
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error assigning partner to client {client_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

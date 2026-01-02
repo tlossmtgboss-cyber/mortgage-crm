@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './PortalSelectorModal.css';
 
@@ -10,39 +10,44 @@ import './PortalSelectorModal.css';
 const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
   const [portalStatus, setPortalStatus] = useState({
     client: { exists: false, loading: true, url: null },
-    buyersAgent: { exists: false, loading: true, url: null, partyId: null },
+    buyersAgent: { exists: false, loading: true, url: null, partnerId: null },
     listingAgent: { exists: false, loading: true, url: null, transactionId: null },
   });
   const [creating, setCreating] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (isOpen && loan) {
-      checkPortalStatus();
-    }
-  }, [isOpen, loan]);
+  // Referral partner selection state
+  const [showPartnerSelect, setShowPartnerSelect] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState('');
+  const [partnerResults, setPartnerResults] = useState([]);
+  const [searchingPartners, setSearchingPartners] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState(null);
 
-  const getAuthHeaders = () => {
+  const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
-  };
+  }, []);
 
-  const checkPortalStatus = async () => {
+  const checkPortalStatus = useCallback(async () => {
     if (!loan) return;
 
-    // Check client portal (PURL workspace) via API
-    // Try by loan_id first, then by lead_id if available
-    const checkClientPortal = async () => {
-      // Try looking up by loan ID
+    // Reset to loading state
+    setPortalStatus({
+      client: { exists: false, loading: true, url: null },
+      buyersAgent: { exists: false, loading: true, url: null, partnerId: null },
+      listingAgent: { exists: false, loading: true, url: null, transactionId: null },
+    });
+
+    // Check client portal (PURL workspace)
+    try {
       let response = await fetch(
         `${API_BASE_URL}/api/v1/purl-admin/workspaces/by-loan/${loan.id}`,
         { headers: getAuthHeaders() }
       );
 
-      // If not found and lead_id exists, try by lead_id
       if (!response.ok && loan.lead_id && loan.lead_id !== loan.id) {
         response = await fetch(
           `${API_BASE_URL}/api/v1/purl-admin/workspaces/by-lead/${loan.lead_id}`,
@@ -50,25 +55,19 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
         );
       }
 
-      return response;
-    };
-
-    try {
-      const response = await checkClientPortal();
       if (response.ok) {
         const data = await response.json();
-        const workspace = data.workspace;
+        const workspace = data.workspace || data.data?.workspace;
         setPortalStatus(prev => ({
           ...prev,
           client: {
             exists: true,
             loading: false,
             url: workspace?.slug ? `/portal/${workspace.slug}` : null,
-            workspaceId: workspace?.workspace_id,
+            workspaceId: workspace?.id || workspace?.workspace_id,
           },
         }));
       } else {
-        // No workspace found - check if loan has workspace_slug as fallback
         const clientExists = !!loan.workspace_slug;
         setPortalStatus(prev => ({
           ...prev,
@@ -81,7 +80,6 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       }
     } catch (err) {
       console.error('Failed to check client portal:', err);
-      // Fallback to loan.workspace_slug
       const clientExists = !!loan.workspace_slug;
       setPortalStatus(prev => ({
         ...prev,
@@ -101,63 +99,102 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       );
       if (response.ok) {
         const data = await response.json();
+        const hasPortal = data.data?.has_portal || data.has_portal || false;
+        const partnerId = data.data?.partner_id || data.partner_id || null;
         setPortalStatus(prev => ({
           ...prev,
           buyersAgent: {
-            exists: data.data?.has_portal || false,
+            exists: hasPortal,
             loading: false,
-            url: data.data?.portal_url || null,
-            partyId: data.data?.partner_id || null,
+            url: hasPortal && partnerId ? `/partner-portal/${partnerId}/client/${loan.lead_id || loan.id}` : null,
+            partnerId: partnerId,
           },
         }));
       } else {
         setPortalStatus(prev => ({
           ...prev,
-          buyersAgent: { exists: false, loading: false, url: null },
+          buyersAgent: { exists: false, loading: false, url: null, partnerId: null },
         }));
       }
     } catch (err) {
       console.error('Failed to check buyer agent portal:', err);
       setPortalStatus(prev => ({
         ...prev,
-        buyersAgent: { exists: false, loading: false, url: null },
+        buyersAgent: { exists: false, loading: false, url: null, partnerId: null },
       }));
     }
 
     // Check listing agent portal
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/listing-portal/transactions?loan_id=${loan.id}`,
+        `${API_BASE_URL}/api/v1/listing-portal/transactions`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
-        // Use loose equality to handle string/number type differences
-        const transaction = data.data?.transactions?.find(t => String(t.loan_id) === String(loan.id));
-        const portalUrl = transaction ? `/listing-portal/transactions/${transaction.id}` : null;
+        const transactions = data.data?.transactions || data.transactions || [];
+        const transaction = transactions.find(t => String(t.loan_id) === String(loan.id));
         setPortalStatus(prev => ({
           ...prev,
           listingAgent: {
             exists: !!transaction,
             loading: false,
-            url: portalUrl,
+            url: transaction ? `/listing-portal/transactions/${transaction.id}` : null,
             transactionId: transaction?.id || null,
           },
         }));
       } else {
         setPortalStatus(prev => ({
           ...prev,
-          listingAgent: { exists: false, loading: false, url: null },
+          listingAgent: { exists: false, loading: false, url: null, transactionId: null },
         }));
       }
     } catch (err) {
       console.error('Failed to check listing agent portal:', err);
       setPortalStatus(prev => ({
         ...prev,
-        listingAgent: { exists: false, loading: false, url: null },
+        listingAgent: { exists: false, loading: false, url: null, transactionId: null },
       }));
     }
-  };
+  }, [loan, getAuthHeaders]);
+
+  useEffect(() => {
+    if (isOpen && loan) {
+      checkPortalStatus();
+    }
+  }, [isOpen, loan, checkPortalStatus]);
+
+  // Search for referral partners
+  const searchPartners = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setPartnerResults([]);
+      return;
+    }
+
+    setSearchingPartners(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/referral-partners?search=${encodeURIComponent(query)}&limit=20`,
+        { headers: getAuthHeaders() }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // API returns array directly, not wrapped in data/partners
+        setPartnerResults(Array.isArray(data) ? data : (data.data?.partners || data.partners || []));
+      }
+    } catch (err) {
+      console.error('Failed to search partners:', err);
+    } finally {
+      setSearchingPartners(false);
+    }
+  }, [getAuthHeaders]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      searchPartners(partnerSearch);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [partnerSearch, searchPartners]);
 
   const handleOpenPortal = (type) => {
     const urls = {
@@ -169,10 +206,6 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
     const url = urls[type];
     if (url) {
       const fullUrl = `${window.location.origin}${url}`;
-      // Debug: temporarily show URL in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[PortalSelector] Opening:', type, url);
-      }
       window.open(fullUrl, '_blank');
     } else {
       setError(`No URL found for ${type} portal. Please try creating the portal first.`);
@@ -180,13 +213,22 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
   };
 
   const handleCreatePortal = async (type) => {
-    setCreating(type);
     setError(null);
+
+    if (type === 'buyersAgent') {
+      // Show partner selection modal instead of creating directly
+      setShowPartnerSelect(true);
+      setPartnerSearch('');
+      setPartnerResults([]);
+      setSelectedPartner(null);
+      return;
+    }
+
+    setCreating(type);
 
     try {
       switch (type) {
         case 'client': {
-          // Create PURL workspace for client portal
           const response = await fetch(`${API_BASE_URL}/api/v1/purl-admin/workspaces`, {
             method: 'POST',
             headers: getAuthHeaders(),
@@ -199,12 +241,13 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
 
           if (response.ok) {
             const data = await response.json();
+            const slug = data.data?.slug || data.slug;
             setPortalStatus(prev => ({
               ...prev,
               client: {
                 exists: true,
                 loading: false,
-                url: `/portal/${data.data?.slug || data.slug}`,
+                url: `/portal/${slug}`,
               },
             }));
           } else {
@@ -213,14 +256,7 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
           break;
         }
 
-        case 'buyersAgent': {
-          // Navigate to realtor portal setup for this loan
-          window.location.href = `/referral-partners?setup_portal=true&loan_id=${loan.id}`;
-          return;
-        }
-
         case 'listingAgent': {
-          // Create listing agent transaction
           const response = await fetch(`${API_BASE_URL}/api/v1/listing-portal/transactions`, {
             method: 'POST',
             headers: getAuthHeaders(),
@@ -237,7 +273,7 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
 
           if (response.ok) {
             const data = await response.json();
-            const transactionId = data.data?.id;
+            const transactionId = data.data?.id || data.id;
             setPortalStatus(prev => ({
               ...prev,
               listingAgent: {
@@ -249,7 +285,6 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
             }));
           } else {
             const errorData = await response.json().catch(() => ({}));
-            console.error('Listing portal creation error:', response.status, errorData);
             throw new Error(errorData.detail || errorData.error || 'Failed to create listing agent portal');
           }
           break;
@@ -261,6 +296,59 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
     } catch (err) {
       console.error(`Failed to create ${type} portal:`, err);
       setError(err.message || `Failed to create portal. Please try again.`);
+    } finally {
+      setCreating(null);
+    }
+  };
+
+  const handleCreateBuyersAgentPortal = async () => {
+    if (!selectedPartner) {
+      setError('Please select a referral partner');
+      return;
+    }
+
+    setCreating('buyersAgent');
+    setError(null);
+
+    try {
+      // Assign the partner to this client/loan
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/realtor-portal/clients/${loan.lead_id || loan.id}/assign-partner`,
+        {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            partner_id: selectedPartner.id,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const partnerId = selectedPartner.id;
+        const clientId = loan.lead_id || loan.id;
+
+        setPortalStatus(prev => ({
+          ...prev,
+          buyersAgent: {
+            exists: true,
+            loading: false,
+            url: `/partner-portal/${partnerId}/client/${clientId}`,
+            partnerId: partnerId,
+          },
+        }));
+
+        // Close the partner select and open the portal
+        setShowPartnerSelect(false);
+
+        // Navigate to the partner portal client page
+        window.open(`${window.location.origin}/partner-portal/${partnerId}/client/${clientId}`, '_blank');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.error || 'Failed to assign partner');
+      }
+    } catch (err) {
+      console.error('Failed to create buyer agent portal:', err);
+      setError(err.message || 'Failed to create buyer agent portal. Please try again.');
     } finally {
       setCreating(null);
     }
@@ -303,6 +391,101 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       color: '#8b5cf6',
     },
   ];
+
+  // Partner Selection Modal
+  if (showPartnerSelect) {
+    return (
+      <div className="portal-selector-overlay" onClick={() => setShowPartnerSelect(false)}>
+        <div className="portal-selector-modal partner-select-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="portal-selector-header">
+            <h2>Select Referral Partner</h2>
+            <p className="property-context">
+              Choose a buyer's agent for {loan.borrower_name || `Loan #${loan.id}`}
+            </p>
+            <button className="close-btn" onClick={() => setShowPartnerSelect(false)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {error && (
+            <div className="portal-error">
+              <span>{error}</span>
+              <button onClick={() => setError(null)}>&times;</button>
+            </div>
+          )}
+
+          <div className="partner-search-container">
+            <label>Search for Partner</label>
+            <input
+              type="text"
+              placeholder="Type partner name..."
+              value={partnerSearch}
+              onChange={(e) => setPartnerSearch(e.target.value)}
+              className="partner-search-input"
+              autoFocus
+            />
+
+            {searchingPartners && (
+              <div className="search-loading">Searching...</div>
+            )}
+
+            {partnerResults.length > 0 && (
+              <div className="partner-results">
+                {partnerResults.map((partner) => (
+                  <div
+                    key={partner.id}
+                    className={`partner-result-item ${selectedPartner?.id === partner.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedPartner(partner)}
+                  >
+                    <div className="partner-avatar">
+                      {partner.first_name?.[0]}{partner.last_name?.[0]}
+                    </div>
+                    <div className="partner-details">
+                      <div className="partner-name">
+                        {partner.first_name} {partner.last_name}
+                      </div>
+                      <div className="partner-company">
+                        {partner.company_name || partner.email}
+                      </div>
+                    </div>
+                    {selectedPartner?.id === partner.id && (
+                      <span className="check-mark">✓</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {partnerSearch.length >= 2 && !searchingPartners && partnerResults.length === 0 && (
+              <div className="no-results">No partners found matching "{partnerSearch}"</div>
+            )}
+          </div>
+
+          <div className="portal-selector-footer">
+            <button className="btn-close" onClick={() => setShowPartnerSelect(false)}>
+              Cancel
+            </button>
+            <button
+              className="btn-create-partner"
+              onClick={handleCreateBuyersAgentPortal}
+              disabled={!selectedPartner || creating === 'buyersAgent'}
+            >
+              {creating === 'buyersAgent' ? (
+                <>
+                  <div className="loading-spinner small white" />
+                  Creating...
+                </>
+              ) : (
+                'Create Portal'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="portal-selector-overlay" onClick={onClose}>
