@@ -1020,6 +1020,172 @@ async def update_interview_status(
     return {"id": interview_id, "status": status}
 
 
+class InterviewNotificationRequest(BaseModel):
+    send_calendar: bool = True
+    send_email: bool = True
+    send_sms: bool = False
+    recipients: List[str] = Field(default_factory=lambda: ["candidate", "interviewers"])
+
+
+@router.post("/interviews/{interview_id}/notify")
+async def send_interview_notifications(
+    interview_id: int,
+    data: InterviewNotificationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send notifications for a scheduled interview."""
+    import logging
+    from services.notification_service import NotificationService
+
+    logger = logging.getLogger(__name__)
+
+    # Get interview details
+    interview = db.execute(text("""
+        SELECT
+            i.id, i.interview_type, i.scheduled_at, i.duration_minutes,
+            i.location, i.meeting_link, i.timezone, i.title,
+            i.interviewer_user_ids, i.primary_interviewer_id,
+            c.id as candidate_id, c.first_name, c.last_name, c.email as candidate_email,
+            c.phone as candidate_phone
+        FROM mm_interviews i
+        JOIN mm_candidates c ON c.id = i.candidate_id
+        WHERE i.id = :interview_id
+    """), {"interview_id": interview_id}).fetchone()
+
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    notifications_sent = []
+    notification_service = NotificationService()
+
+    # Format interview time
+    scheduled_time = interview.scheduled_at
+    if isinstance(scheduled_time, str):
+        scheduled_time = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+
+    formatted_date = scheduled_time.strftime("%A, %B %d, %Y")
+    formatted_time = scheduled_time.strftime("%I:%M %p")
+
+    interview_title = interview.title or f"{interview.interview_type.replace('_', ' ').title()} Interview"
+
+    # Send to candidate
+    if "candidate" in data.recipients and interview.candidate_email:
+        if data.send_email:
+            subject = f"Interview Scheduled: {interview_title}"
+            html_content = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #3b82f6;">Your Interview is Scheduled!</h2>
+                <p>Hello {interview.first_name},</p>
+                <p>Your interview has been scheduled. Here are the details:</p>
+
+                <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <p><strong>Interview Type:</strong> {interview_title}</p>
+                    <p><strong>Date:</strong> {formatted_date}</p>
+                    <p><strong>Time:</strong> {formatted_time} ({interview.timezone})</p>
+                    <p><strong>Duration:</strong> {interview.duration_minutes} minutes</p>
+                    {f'<p><strong>Location:</strong> {interview.location}</p>' if interview.location else ''}
+                    {f'<p><strong>Meeting Link:</strong> <a href="{interview.meeting_link}">{interview.meeting_link}</a></p>' if interview.meeting_link else ''}
+                </div>
+
+                <p>Please make sure to:</p>
+                <ul>
+                    <li>Test your camera and microphone if this is a video interview</li>
+                    <li>Join 5 minutes early</li>
+                    <li>Have a quiet, professional environment</li>
+                </ul>
+
+                <p>We look forward to speaking with you!</p>
+
+                <p style="color: #64748b; font-size: 12px; margin-top: 30px;">
+                    If you need to reschedule, please reply to this email.
+                </p>
+            </div>
+            """
+
+            try:
+                result = notification_service.send_email(
+                    to_email=interview.candidate_email,
+                    subject=subject,
+                    html_content=html_content
+                )
+                if result.get("success"):
+                    notifications_sent.append({"type": "email", "recipient": "candidate", "email": interview.candidate_email})
+                    logger.info(f"Sent interview notification to candidate: {interview.candidate_email}")
+                else:
+                    logger.error(f"Failed to send email to candidate: {result.get('error')}")
+            except Exception as e:
+                logger.error(f"Error sending candidate email: {e}")
+
+        if data.send_sms and interview.candidate_phone:
+            try:
+                sms_message = f"Your interview is scheduled for {formatted_date} at {formatted_time}. Check your email for details."
+                result = notification_service.send_sms(
+                    to_number=interview.candidate_phone,
+                    message=sms_message
+                )
+                if result.get("success"):
+                    notifications_sent.append({"type": "sms", "recipient": "candidate", "phone": interview.candidate_phone})
+            except Exception as e:
+                logger.error(f"Error sending candidate SMS: {e}")
+
+    # Send to interviewers
+    if "interviewers" in data.recipients:
+        import json
+        interviewer_ids = interview.interviewer_user_ids
+        if isinstance(interviewer_ids, str):
+            interviewer_ids = json.loads(interviewer_ids)
+
+        if interviewer_ids:
+            interviewers = db.execute(text("""
+                SELECT id, email, full_name FROM users WHERE id = ANY(:ids)
+            """), {"ids": interviewer_ids}).fetchall()
+
+            for interviewer in interviewers:
+                if data.send_email and interviewer.email:
+                    subject = f"Interview Scheduled: {interview.first_name} {interview.last_name}"
+                    html_content = f"""
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #3b82f6;">Interview Scheduled</h2>
+                        <p>Hello {interviewer.full_name or 'Team Member'},</p>
+                        <p>You have an upcoming interview scheduled:</p>
+
+                        <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                            <p><strong>Candidate:</strong> {interview.first_name} {interview.last_name}</p>
+                            <p><strong>Interview Type:</strong> {interview_title}</p>
+                            <p><strong>Date:</strong> {formatted_date}</p>
+                            <p><strong>Time:</strong> {formatted_time} ({interview.timezone})</p>
+                            <p><strong>Duration:</strong> {interview.duration_minutes} minutes</p>
+                            {f'<p><strong>Location:</strong> {interview.location}</p>' if interview.location else ''}
+                            {f'<p><strong>Meeting Link:</strong> <a href="{interview.meeting_link}">{interview.meeting_link}</a></p>' if interview.meeting_link else ''}
+                        </div>
+
+                        <p style="color: #64748b; font-size: 12px; margin-top: 30px;">
+                            Please review the candidate's profile before the interview.
+                        </p>
+                    </div>
+                    """
+
+                    try:
+                        result = notification_service.send_email(
+                            to_email=interviewer.email,
+                            subject=subject,
+                            html_content=html_content
+                        )
+                        if result.get("success"):
+                            notifications_sent.append({"type": "email", "recipient": "interviewer", "email": interviewer.email})
+                            logger.info(f"Sent interview notification to interviewer: {interviewer.email}")
+                    except Exception as e:
+                        logger.error(f"Error sending interviewer email: {e}")
+
+    return {
+        "success": True,
+        "interview_id": interview_id,
+        "notifications_sent": notifications_sent,
+        "total_sent": len(notifications_sent)
+    }
+
+
 # =============================================================================
 # OFFERS
 # =============================================================================
