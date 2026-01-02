@@ -479,19 +479,25 @@ const RecruitDetail = () => {
     return PIPELINE_STAGES.indexOf(candidate?.status);
   };
 
-  // Calculate overall score display
+  // Calculate overall score display from assessment data
   const getOverallScoreDisplay = () => {
-    if (candidate?.scores?.overall) {
-      return candidate.scores.overall.toFixed(1);
+    if (assessment?.overall?.score) {
+      return assessment.overall.score.toFixed(1);
     }
     return '-';
   };
 
+  // Get overall grade letter
+  const getOverallGradeDisplay = () => {
+    return assessment?.overall?.grade || '-';
+  };
+
+  // Color based on 0-100 score scale
   const getScoreColor = (score) => {
-    if (!score) return '#6b7280';
-    if (score >= 8) return '#10b981';
-    if (score >= 6) return '#f59e0b';
-    if (score >= 4) return '#ef4444';
+    if (!score && score !== 0) return '#6b7280';
+    if (score >= 80) return '#10b981'; // Green - B+ and above
+    if (score >= 60) return '#f59e0b'; // Yellow - C to B
+    if (score >= 40) return '#ef4444'; // Red - D to C-
     return '#6b7280';
   };
 

@@ -13,9 +13,13 @@ const PortalChat = ({ slug, candidateName, inline = false }) => {
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const hasUserInteracted = useRef(false);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Only scroll after user has sent at least one message
+    if (hasUserInteracted.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -25,6 +29,7 @@ const PortalChat = ({ slug, candidateName, inline = false }) => {
   const sendMessage = async () => {
     if (!inputValue.trim() || loading) return;
 
+    hasUserInteracted.current = true;
     const userMessage = inputValue.trim();
     setInputValue('');
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);

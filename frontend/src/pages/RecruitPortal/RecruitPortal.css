@@ -5,8 +5,8 @@
 
 .recruit-portal {
   min-height: 100vh;
-  background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
-  color: #f4f4f5;
+  background: #ffffff;
+  color: #18181b;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
