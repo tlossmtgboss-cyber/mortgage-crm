@@ -2,12 +2,13 @@
 Recruiting Dialer API Routes
 
 Endpoints for:
-- Click-to-call for candidates
+- Click-to-call for candidates (Twilio-integrated)
 - Call history management
 - Call notes and outcomes
+- Twilio webhooks for call status
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Form, Response
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -16,6 +17,9 @@ from database import SessionLocal
 from contextlib import contextmanager
 import os
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 @contextmanager
 def get_db_connection():
@@ -68,12 +72,15 @@ async def initiate_candidate_call(
     request: InitiateCallRequest
 ):
     """
-    Initiate a click-to-call to a candidate.
+    Initiate a click-to-call to a candidate via Twilio.
 
     The system will:
     1. Look up the candidate's phone number
     2. Generate a whisper context with candidate info
-    3. Initiate the call through Twilio
+    3. Call the recruiter first
+    4. Play whisper context to recruiter
+    5. On recruiter confirmation, connect to candidate
+    6. Record the call
     """
     # Get candidate details for whisper context
     with get_db_connection() as conn:
@@ -116,6 +123,7 @@ async def initiate_candidate_call(
         note_preview = row.last_note[:100] + "..." if len(row.last_note) > 100 else row.last_note
         whisper_parts.append(f"Last note: {note_preview}")
 
+    whisper_parts.append("Press 1 to connect now.")
     whisper_context = " ".join(whisper_parts)
 
     # Create call record
@@ -126,48 +134,89 @@ async def initiate_candidate_call(
             text("""
                 INSERT INTO recruiting_call_history
                 (id, candidate_id, caller_user_id, direction, whisper_context,
-                 status, called_at)
+                 phone_to, status, called_at)
                 VALUES (:id, :candidate_id, :caller_id, 'outbound', :whisper,
-                        'initiated', NOW())
+                        :phone_to, 'initiated', NOW())
             """),
             {
                 "id": call_id,
                 "candidate_id": candidate_id,
                 "caller_id": request.caller_id,
-                "whisper": whisper_context
+                "whisper": whisper_context,
+                "phone_to": row.phone,
             }
         )
         conn.commit()
 
-    # In production, this would trigger the Twilio call
-    # For now, return the call info
-    return {
-        "call_id": call_id,
-        "candidate_id": candidate_id,
-        "candidate_name": f"{row.first_name} {row.last_name}",
-        "phone": row.phone,
-        "whisper_context": whisper_context,
-        "status": "initiated",
-        "message": "Call initiated. In production, Twilio will connect the call."
-    }
+    # Initiate call via Twilio
+    try:
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
+
+        with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            result = service.initiate_call(
+                call_id=call_id,
+                candidate_id=candidate_id,
+                caller_user_id=request.caller_id,
+                candidate_phone=row.phone,
+                candidate_name=f"{row.first_name} {row.last_name}",
+                whisper_context=whisper_context,
+            )
+
+        if result.success:
+            return {
+                "call_id": call_id,
+                "call_sid": result.call_sid,
+                "candidate_id": candidate_id,
+                "candidate_name": f"{row.first_name} {row.last_name}",
+                "phone": row.phone,
+                "whisper_context": whisper_context,
+                "status": result.status,
+                "message": result.message,
+            }
+        else:
+            # Return error but still have the call record for retry
+            return {
+                "call_id": call_id,
+                "candidate_id": candidate_id,
+                "candidate_name": f"{row.first_name} {row.last_name}",
+                "phone": row.phone,
+                "whisper_context": whisper_context,
+                "status": "failed",
+                "message": result.message,
+                "error": result.error,
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to initiate Twilio call: {e}")
+        # Fall back to returning call record without Twilio
+        return {
+            "call_id": call_id,
+            "candidate_id": candidate_id,
+            "candidate_name": f"{row.first_name} {row.last_name}",
+            "phone": row.phone,
+            "whisper_context": whisper_context,
+            "status": "initiated",
+            "message": f"Call record created. Twilio integration error: {str(e)}",
+            "twilio_error": str(e),
+        }
 
 
 @router.post("/calls/{call_id}/connect")
 async def connect_call_via_twilio(call_id: str):
     """
-    Actually connect the call via Twilio.
+    Retry/reconnect a call via Twilio.
 
-    This endpoint would be called by the frontend after the user
-    confirms they want to make the call.
+    Used when an initial call attempt fails and user wants to retry.
     """
     # Get call details
     with get_db_connection() as conn:
         result = conn.execute(
             text("""
-                SELECT ch.*, rc.phone, u.phone as caller_phone
+                SELECT ch.id, ch.candidate_id, ch.caller_user_id, ch.whisper_context,
+                       ch.phone_to, rc.first_name, rc.last_name, rc.phone
                 FROM recruiting_call_history ch
                 JOIN mm_candidates rc ON rc.id = ch.candidate_id
-                JOIN users u ON u.id = ch.caller_user_id
                 WHERE ch.id = :call_id
             """),
             {"call_id": call_id}
@@ -177,29 +226,210 @@ async def connect_call_via_twilio(call_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Call record not found")
 
-    # Here we would integrate with the Twilio click-to-call service
     try:
-        from services.twilio_click_to_call import click_to_call_service
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
 
-        # Update status to connecting
         with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            result = service.initiate_call(
+                call_id=call_id,
+                candidate_id=row.candidate_id,
+                caller_user_id=row.caller_user_id,
+                candidate_phone=row.phone or row.phone_to,
+                candidate_name=f"{row.first_name} {row.last_name}",
+                whisper_context=row.whisper_context or "Press 1 to connect.",
+            )
+
+        return {
+            "call_id": call_id,
+            "call_sid": result.call_sid,
+            "status": result.status,
+            "message": result.message,
+            "success": result.success,
+            "error": result.error,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to reconnect call: {e}")
+        return {
+            "call_id": call_id,
+            "status": "failed",
+            "message": f"Failed to connect: {str(e)}",
+            "success": False,
+            "error": str(e),
+        }
+
+
+# =============================================================================
+# Twilio Webhook Endpoints
+# =============================================================================
+
+@router.post("/twilio/recruiter-answered/{call_id}")
+async def twilio_recruiter_answered(call_id: str):
+    """
+    Twilio webhook: Recruiter answered the call.
+
+    Plays whisper context and prompts for confirmation.
+    """
+    try:
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
+
+        with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            twiml = service.generate_recruiter_twiml(call_id)
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in recruiter-answered webhook: {e}")
+        from twilio.twiml.voice_response import VoiceResponse
+        response = VoiceResponse()
+        response.say("Sorry, there was an error.", voice="Polly.Matthew")
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+
+
+@router.post("/twilio/recruiter-response/{call_id}")
+async def twilio_recruiter_response(
+    call_id: str,
+    Digits: str = Form("")
+):
+    """
+    Twilio webhook: Recruiter pressed a digit.
+
+    1 = Connect to candidate
+    Other = Cancel
+    """
+    try:
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
+
+        with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            twiml = service.generate_recruiter_response_twiml(call_id, Digits)
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in recruiter-response webhook: {e}")
+        from twilio.twiml.voice_response import VoiceResponse
+        response = VoiceResponse()
+        response.say("Sorry, there was an error.", voice="Polly.Matthew")
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+
+
+@router.post("/twilio/call-complete/{call_id}")
+async def twilio_call_complete(
+    call_id: str,
+    DialCallStatus: str = Form("completed")
+):
+    """
+    Twilio webhook: Call to candidate completed.
+
+    Records the outcome and generates final TwiML.
+    """
+    try:
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
+
+        with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            twiml = service.generate_call_complete_twiml(call_id, DialCallStatus)
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error in call-complete webhook: {e}")
+        from twilio.twiml.voice_response import VoiceResponse
+        response = VoiceResponse()
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+
+
+@router.post("/twilio/status/{call_id}")
+async def twilio_status_callback(
+    call_id: str,
+    CallStatus: str = Form(""),
+    CallDuration: Optional[int] = Form(None),
+    CallSid: str = Form("")
+):
+    """
+    Twilio webhook: Call status update.
+
+    Tracks call progress (initiated, ringing, answered, completed, etc.)
+    """
+    try:
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
+
+        with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            service.handle_status_callback(
+                call_id=call_id,
+                call_status=CallStatus,
+                call_duration=CallDuration,
+                call_sid=CallSid,
+            )
+
+        return {"received": True, "call_id": call_id, "status": CallStatus}
+
+    except Exception as e:
+        logger.error(f"Error in status callback: {e}")
+        return {"received": True, "error": str(e)}
+
+
+@router.post("/twilio/candidate-status/{call_id}")
+async def twilio_candidate_status(
+    call_id: str,
+    CallStatus: str = Form(""),
+    CallDuration: Optional[int] = Form(None)
+):
+    """
+    Twilio webhook: Candidate leg status update.
+
+    Tracks when candidate answers, hangs up, etc.
+    """
+    logger.info(f"Candidate status for {call_id}: {CallStatus}")
+
+    # Update call record with candidate-specific status
+    with get_db_connection() as conn:
+        if CallStatus in ["answered", "in-progress"]:
             conn.execute(
-                text("UPDATE recruiting_call_history SET status = 'connecting' WHERE id = :id"),
+                text("UPDATE recruiting_call_history SET status = 'in_progress' WHERE id = :id"),
                 {"id": call_id}
             )
-            conn.commit()
+        conn.commit()
 
-        return {
-            "call_id": call_id,
-            "status": "connecting",
-            "message": "Twilio is connecting the call"
-        }
+    return {"received": True, "call_id": call_id, "status": CallStatus}
+
+
+@router.post("/twilio/recording/{call_id}")
+async def twilio_recording_callback(
+    call_id: str,
+    RecordingUrl: str = Form(""),
+    RecordingSid: str = Form(""),
+    RecordingDuration: int = Form(0)
+):
+    """
+    Twilio webhook: Recording completed.
+
+    Stores the recording URL for later playback.
+    """
+    try:
+        from services.recruiting_twilio_service import get_recruiting_twilio_service
+
+        with get_db_connection() as conn:
+            service = get_recruiting_twilio_service(conn)
+            service.handle_recording_callback(
+                call_id=call_id,
+                recording_url=RecordingUrl,
+                recording_sid=RecordingSid,
+                recording_duration=RecordingDuration,
+            )
+
+        return {"received": True, "call_id": call_id, "recording_sid": RecordingSid}
+
     except Exception as e:
-        return {
-            "call_id": call_id,
-            "status": "simulated",
-            "message": f"Call simulation mode - Twilio not configured: {str(e)}"
-        }
+        logger.error(f"Error in recording callback: {e}")
+        return {"received": True, "error": str(e)}
 
 
 # =============================================================================
@@ -218,7 +448,8 @@ async def get_candidate_call_history(
                 SELECT ch.id, ch.candidate_id, ch.caller_user_id,
                        u.full_name as caller_name, ch.direction,
                        ch.duration_seconds, ch.outcome, ch.notes,
-                       ch.called_at, ch.status
+                       ch.called_at, ch.status, ch.recording_url,
+                       ch.twilio_call_sid
                 FROM recruiting_call_history ch
                 LEFT JOIN users u ON u.id = ch.caller_user_id
                 WHERE ch.candidate_id = :candidate_id
@@ -240,7 +471,8 @@ async def get_candidate_call_history(
             "outcome": row.outcome,
             "notes": row.notes,
             "called_at": row.called_at.isoformat() if row.called_at else None,
-            "status": row.status
+            "status": row.status,
+            "recording_url": getattr(row, 'recording_url', None),
         }
         for row in rows
     ]
@@ -415,7 +647,7 @@ async def get_recruiting_dialer_queue(
 
 @router.post("/admin/run-migration")
 async def run_dialer_migration(admin_key: str = Query(...)):
-    """Create call history table if it doesn't exist."""
+    """Create call history table if it doesn't exist and add Twilio columns."""
     if admin_key != "perennia-admin-2024":
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -433,6 +665,8 @@ async def run_dialer_migration(admin_key: str = Query(...)):
         outcome VARCHAR(50),
         notes TEXT,
         recording_url TEXT,
+        recording_sid VARCHAR(50),
+        twilio_call_sid VARCHAR(50),
         called_at TIMESTAMP DEFAULT NOW(),
         completed_at TIMESTAMP,
         CONSTRAINT fk_call_candidate FOREIGN KEY (candidate_id)
@@ -443,15 +677,34 @@ async def run_dialer_migration(admin_key: str = Query(...)):
         ON recruiting_call_history(candidate_id);
     CREATE INDEX IF NOT EXISTS idx_call_history_caller
         ON recruiting_call_history(caller_user_id);
+    CREATE INDEX IF NOT EXISTS idx_call_history_twilio_sid
+        ON recruiting_call_history(twilio_call_sid);
     """
+
+    # Also add columns if table exists but columns don't
+    alter_sql = [
+        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS twilio_call_sid VARCHAR(50)",
+        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS recording_sid VARCHAR(50)",
+        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS phone_to VARCHAR(20)",
+        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS phone_from VARCHAR(20)",
+    ]
 
     try:
         with get_db_connection() as conn:
+            # Create table
             for statement in migration_sql.split(';'):
                 statement = statement.strip()
                 if statement:
                     conn.execute(text(statement))
+
+            # Add columns if missing
+            for alter in alter_sql:
+                try:
+                    conn.execute(text(alter))
+                except Exception:
+                    pass  # Column may already exist
+
             conn.commit()
-        return {"status": "success", "message": "Call history table created"}
+        return {"status": "success", "message": "Call history table created/updated with Twilio columns"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
