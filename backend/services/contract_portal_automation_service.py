@@ -110,11 +110,10 @@ class ContractPortalAutomationService:
         return results
 
     def _get_loan_info(self, loan_id: int) -> Optional[Dict]:
-        """Get loan and associated lead information."""
+        """Get loan and associated information."""
         result = self.db.execute(text("""
             SELECT
                 l.id as loan_id,
-                l.lead_id,
                 l.amount,
                 l.stage,
                 l.property_address,
@@ -124,16 +123,15 @@ class ContractPortalAutomationService:
                 l.contract_received_date,
                 l.target_close_date,
                 l.owner_id,
-                ld.id as lead_id_actual,
-                ld.name as borrower_name,
-                ld.email as borrower_email,
-                ld.phone as borrower_phone,
-                ld.referral_partner_id,
+                l.borrower_name,
+                l.borrower_email,
+                l.borrower_phone,
+                l.referral_partner_id,
+                l.loan_number,
                 u.full_name as lo_name,
                 u.email as lo_email,
                 u.organization_id
             FROM loans l
-            LEFT JOIN leads ld ON ld.id = l.lead_id
             LEFT JOIN users u ON u.id = l.owner_id
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
@@ -163,15 +161,14 @@ class ContractPortalAutomationService:
         }
 
         loan_id = loan_info["loan_id"]
-        lead_id = loan_info.get("lead_id") or loan_info.get("lead_id_actual")
 
         # Check if workspace already exists
         existing = self.db.execute(text("""
             SELECT id, slug, status
             FROM purl_workspaces
-            WHERE loan_id = :loan_id OR lead_id = :lead_id
+            WHERE loan_id = :loan_id
             LIMIT 1
-        """), {"loan_id": loan_id, "lead_id": lead_id}).fetchone()
+        """), {"loan_id": loan_id}).fetchone()
 
         if existing:
             result["status"] = "exists"
@@ -189,14 +186,13 @@ class ContractPortalAutomationService:
 
             self.db.execute(text("""
                 INSERT INTO purl_workspaces (
-                    lead_id, loan_id, slug, status,
+                    loan_id, slug, status,
                     organization_id, created_at, updated_at
                 ) VALUES (
-                    :lead_id, :loan_id, :slug, 'active_loan',
+                    :loan_id, :slug, 'active_loan',
                     :org_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
             """), {
-                "lead_id": lead_id,
                 "loan_id": loan_id,
                 "slug": slug,
                 "org_id": loan_info.get("organization_id", 1)
@@ -235,7 +231,6 @@ class ContractPortalAutomationService:
         }
 
         loan_id = loan_info["loan_id"]
-        lead_id = loan_info.get("lead_id") or loan_info.get("lead_id_actual")
 
         # Check if referral partner (buyer's agent) is assigned
         partner_id = loan_info.get("referral_partner_id")
@@ -251,7 +246,7 @@ class ContractPortalAutomationService:
             if partner:
                 result["status"] = "ready"
                 result["partner_id"] = partner[0]
-                result["portal_url"] = f"/partner-portal/{partner[0]}/client/{lead_id}"
+                result["portal_url"] = f"/partner-portal/{partner[0]}/loan/{loan_id}"
 
                 # Send invitation if they have email
                 if partner[2]:  # email
@@ -283,7 +278,7 @@ class ContractPortalAutomationService:
                     partner_id = self._create_referral_partner_from_team_member(team_realtor, loan_id)
                     if partner_id:
                         result["partner_id"] = partner_id
-                        result["portal_url"] = f"/partner-portal/{partner_id}/client/{lead_id}"
+                        result["portal_url"] = f"/partner-portal/{partner_id}/loan/{loan_id}"
                         # Send invitation
                         invitation = self._send_realtor_invitation(
                             loan_info=loan_info,
@@ -456,10 +451,10 @@ class ContractPortalAutomationService:
                     UPDATE loan_team_members SET referral_partner_id = :partner_id WHERE id = :tm_id
                 """), {"partner_id": partner[0], "tm_id": team_member[0]})
 
-                # Link to lead
+                # Also update the loan's referral_partner_id
                 self.db.execute(text("""
-                    UPDATE leads SET referral_partner_id = :partner_id
-                    WHERE id = (SELECT lead_id FROM loans WHERE id = :loan_id)
+                    UPDATE loans SET referral_partner_id = :partner_id, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :loan_id AND referral_partner_id IS NULL
                 """), {"partner_id": partner[0], "loan_id": loan_id})
                 self.db.commit()
 
@@ -481,17 +476,16 @@ class ContractPortalAutomationService:
         """Create an AI task to enter missing realtor information."""
         try:
             loan_id = loan_info["loan_id"]
-            lead_id = loan_info.get("lead_id") or loan_info.get("lead_id_actual")
             owner_id = loan_info.get("owner_id")
 
             self.db.execute(text("""
                 INSERT INTO tasks (
                     title, description, status, priority,
-                    due_date, owner_id, lead_id, loan_id,
+                    due_date, owner_id, loan_id,
                     task_type, created_at, updated_at
                 ) VALUES (
                     :title, :description, 'pending', 'high',
-                    :due_date, :owner_id, :lead_id, :loan_id,
+                    :due_date, :owner_id, :loan_id,
                     :task_type, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
             """), {
@@ -499,7 +493,6 @@ class ContractPortalAutomationService:
                 "description": task_description,
                 "due_date": datetime.now(timezone.utc) + timedelta(days=1),
                 "owner_id": owner_id,
-                "lead_id": lead_id,
                 "loan_id": loan_id,
                 "task_type": f"enter_{realtor_type}_info"
             })
@@ -573,8 +566,8 @@ class ContractPortalAutomationService:
                     "token": token,
                     "expires_at": expires_at
                 })
-                lead_id = loan_info.get("lead_id") or loan_info.get("lead_id_actual")
-                portal_url = f"/partner-portal/{partner_id}/client/{lead_id}?token={token}"
+                loan_id = loan_info.get("loan_id")
+                portal_url = f"/partner-portal/{partner_id}/loan/{loan_id}?token={token}"
 
             self.db.commit()
 
@@ -780,15 +773,15 @@ class ContractPortalAutomationService:
                     partner_id = new_partner[0] if new_partner else None
 
             if partner_id:
-                # Link partner to lead
-                lead_id = loan_info.get("lead_id") or loan_info.get("lead_id_actual")
+                # Update loan's referral_partner_id
                 self.db.execute(text("""
-                    UPDATE leads SET referral_partner_id = :partner_id WHERE id = :lead_id
-                """), {"partner_id": partner_id, "lead_id": lead_id})
+                    UPDATE loans SET referral_partner_id = :partner_id, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :loan_id
+                """), {"partner_id": partner_id, "loan_id": loan_id})
                 self.db.commit()
 
                 result["portal_created"] = True
-                result["portal_url"] = f"/partner-portal/{partner_id}/client/{lead_id}"
+                result["portal_url"] = f"/partner-portal/{partner_id}/loan/{loan_id}"
 
                 # Send invitation
                 invitation = self._send_realtor_invitation(

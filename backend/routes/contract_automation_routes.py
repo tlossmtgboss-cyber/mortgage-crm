@@ -233,10 +233,9 @@ async def get_pending_realtor_tasks(
                 t.due_date,
                 l.loan_number,
                 l.property_address,
-                ld.name as borrower_name
+                l.borrower_name
             FROM tasks t
             LEFT JOIN loans l ON l.id = t.loan_id
-            LEFT JOIN leads ld ON ld.id = l.lead_id
             WHERE {where_sql}
             ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
             LIMIT :limit
@@ -285,10 +284,9 @@ async def get_loan_portal_status(
                 l.id,
                 l.loan_number,
                 l.contract_received_date,
-                l.lead_id,
-                ld.referral_partner_id
+                l.referral_partner_id,
+                l.borrower_name
             FROM loans l
-            LEFT JOIN leads ld ON ld.id = l.lead_id
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
 
@@ -298,23 +296,23 @@ async def get_loan_portal_status(
         # Check client portal
         client_portal = db.execute(text("""
             SELECT id, slug, status FROM purl_workspaces
-            WHERE loan_id = :loan_id OR lead_id = :lead_id
+            WHERE loan_id = :loan_id
             LIMIT 1
-        """), {"loan_id": loan_id, "lead_id": loan[3]}).fetchone()
+        """), {"loan_id": loan_id}).fetchone()
 
         # Check buyer's agent portal
         buyers_agent = None
-        if loan[4]:  # referral_partner_id
+        if loan[3]:  # referral_partner_id
             partner = db.execute(text("""
                 SELECT id, name, email FROM referral_partners WHERE id = :partner_id
-            """), {"partner_id": loan[4]}).fetchone()
+            """), {"partner_id": loan[3]}).fetchone()
             if partner:
                 buyers_agent = {
                     "exists": True,
                     "partner_id": partner[0],
                     "partner_name": partner[1],
                     "partner_email": partner[2],
-                    "portal_url": f"/partner-portal/{partner[0]}/client/{loan[3]}"
+                    "portal_url": f"/partner-portal/{partner[0]}/loan/{loan_id}"
                 }
 
         if not buyers_agent:
