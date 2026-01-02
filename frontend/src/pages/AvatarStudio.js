@@ -9,7 +9,27 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import avatarApi, { AVATAR_STATUS, JOB_STATUS, EMOTIONS } from '../services/avatarApi';
+import vidyardApi, { VIDYARD_STATUS, VIDYARD_VIDEO_STATUS, VIDYARD_LANGUAGES } from '../services/vidyardApi';
 import './AvatarStudio.css';
+
+// Provider options
+const PROVIDERS = {
+  LOCAL: 'local',
+  VIDYARD: 'vidyard',
+};
+
+const PROVIDER_INFO = {
+  [PROVIDERS.LOCAL]: {
+    name: 'Local ML Services',
+    description: 'Self-hosted XTTS + Wav2Lip (requires GPU)',
+    features: ['Full control', 'No API limits', 'Requires GPU server'],
+  },
+  [PROVIDERS.VIDYARD]: {
+    name: 'Vidyard',
+    description: 'Cloud-based AI Avatar generation',
+    features: ['No GPU needed', '25+ languages', '~10 min/min video', 'Requires API key'],
+  },
+};
 
 // ============ Status Badge Component ============
 const StatusBadge = ({ status }) => {
@@ -44,6 +64,225 @@ const ProgressBar = ({ progress, label }) => (
     <span className="progress-text">{progress}%</span>
   </div>
 );
+
+// ============ Provider Selector Component ============
+const ProviderSelector = ({ provider, onSelect, providerStatus }) => (
+  <div className="provider-selector">
+    <label>Video Generation Provider</label>
+    <div className="provider-options">
+      {Object.entries(PROVIDER_INFO).map(([key, info]) => (
+        <div
+          key={key}
+          className={`provider-option ${provider === key ? 'selected' : ''} ${
+            providerStatus[key] === 'healthy' ? 'available' : 'unavailable'
+          }`}
+          onClick={() => onSelect(key)}
+        >
+          <div className="provider-header">
+            <span className="provider-name">{info.name}</span>
+            <span className={`provider-status ${providerStatus[key] || 'unknown'}`}>
+              {providerStatus[key] === 'healthy' ? 'Connected' :
+               providerStatus[key] === 'not_configured' ? 'Not Configured' :
+               providerStatus[key] || 'Unknown'}
+            </span>
+          </div>
+          <p className="provider-description">{info.description}</p>
+          <ul className="provider-features">
+            {info.features.map((f, i) => (
+              <li key={i}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ============ Vidyard Video Generator Component ============
+const VidyardVideoGenerator = ({ onJobCreated }) => {
+  const [avatars, setAvatars] = useState([]);
+  const [selectedAvatarId, setSelectedAvatarId] = useState('');
+  const [script, setScript] = useState('');
+  const [language, setLanguage] = useState('en');
+  const [title, setTitle] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [validation, setValidation] = useState(null);
+  const [jobStatus, setJobStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadVidyardAvatars();
+  }, []);
+
+  useEffect(() => {
+    // Validate script as user types
+    if (script.length > 0) {
+      vidyardApi.validateScript(script).then(setValidation).catch(console.error);
+    } else {
+      setValidation(null);
+    }
+  }, [script]);
+
+  const loadVidyardAvatars = async () => {
+    try {
+      const result = await vidyardApi.listAvatars();
+      setAvatars(result.avatars || []);
+      if (result.avatars?.length > 0) {
+        setSelectedAvatarId(result.avatars[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to load Vidyard avatars:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!selectedAvatarId || !script.trim()) return;
+
+    setGenerating(true);
+    setJobStatus({ status: 'queued', progress: 0 });
+
+    try {
+      const result = await vidyardApi.generateVideo({
+        avatar_id: selectedAvatarId,
+        script: script.trim(),
+        language,
+        title: title || undefined,
+      });
+
+      if (result.error) {
+        alert('Generation failed: ' + result.message);
+        setGenerating(false);
+        return;
+      }
+
+      // Poll for completion
+      await vidyardApi.pollVideoStatus(
+        result.job_id,
+        (status, progress, data) => {
+          setJobStatus({ status, progress, ...data });
+        }
+      );
+
+      alert('Video generated successfully!');
+      if (onJobCreated) onJobCreated();
+    } catch (error) {
+      console.error('Generation failed:', error);
+      alert('Generation failed: ' + error.message);
+    } finally {
+      setGenerating(false);
+      setJobStatus(null);
+    }
+  };
+
+  if (loading) {
+    return <div className="vidyard-generator loading">Loading Vidyard avatars...</div>;
+  }
+
+  return (
+    <div className="vidyard-generator">
+      <h3>Generate Video with Vidyard</h3>
+
+      <div className="generator-form">
+        <div className="form-group">
+          <label>Select Avatar</label>
+          <select
+            value={selectedAvatarId}
+            onChange={(e) => setSelectedAvatarId(e.target.value)}
+          >
+            {avatars.length === 0 ? (
+              <option value="">No avatars available</option>
+            ) : (
+              avatars.map((avatar) => (
+                <option key={avatar.id} value={avatar.id}>
+                  {avatar.name} {avatar.type === 'stock' ? '(Stock)' : ''}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>
+            Script
+            <span className="char-count">
+              {script.length} / {vidyardApi.MAX_SCRIPT_LENGTH}
+            </span>
+          </label>
+          <textarea
+            value={script}
+            onChange={(e) => setScript(e.target.value)}
+            rows={6}
+            placeholder="Enter your script (max 1000 characters, ~1 minute video)..."
+            maxLength={vidyardApi.MAX_SCRIPT_LENGTH}
+          />
+          {validation && (
+            <div className="validation-feedback">
+              {validation.warnings?.map((w, i) => (
+                <p key={i} className="warning">{w}</p>
+              ))}
+              {validation.issues?.map((issue, i) => (
+                <p key={i} className="error">{issue}</p>
+              ))}
+              {validation.valid && (
+                <p className="info">
+                  Estimated duration: ~{validation.estimated_duration_seconds}s
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label>Language</label>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {VIDYARD_LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Video Title (optional)</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="My AI Video"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={handleGenerate}
+          className="primary generate-btn"
+          disabled={generating || !script.trim() || !selectedAvatarId || (validation && !validation.valid)}
+        >
+          {generating ? 'Generating...' : 'Generate Video'}
+        </button>
+
+        <p className="generation-note">
+          Video generation takes approximately 10 minutes per minute of video.
+        </p>
+      </div>
+
+      {jobStatus && (
+        <div className="job-progress">
+          <ProgressBar progress={jobStatus.progress || 0} label={jobStatus.status} />
+          {jobStatus.video_url && (
+            <a href={jobStatus.video_url} target="_blank" rel="noopener noreferrer" className="download-btn">
+              Download Video
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ============ Avatar Card Component ============
 const AvatarCard = ({ avatar, onSelect, onDelete, selected }) => (
@@ -591,10 +830,42 @@ const AvatarStudio = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [activeTab, setActiveTab] = useState('upload');
+  const [provider, setProvider] = useState(PROVIDERS.VIDYARD); // Default to Vidyard since local ML not available
+  const [providerStatus, setProviderStatus] = useState({});
 
   useEffect(() => {
     loadAvatars();
+    checkProviderStatus();
   }, []);
+
+  const checkProviderStatus = async () => {
+    const status = {};
+
+    // Check local ML services
+    try {
+      const response = await fetch('http://localhost:5501/health');
+      status[PROVIDERS.LOCAL] = response.ok ? 'healthy' : 'unavailable';
+    } catch {
+      status[PROVIDERS.LOCAL] = 'unavailable';
+    }
+
+    // Check Vidyard
+    try {
+      const result = await vidyardApi.checkHealth();
+      status[PROVIDERS.VIDYARD] = result.status;
+    } catch {
+      status[PROVIDERS.VIDYARD] = 'error';
+    }
+
+    setProviderStatus(status);
+
+    // Auto-select available provider
+    if (status[PROVIDERS.VIDYARD] === 'healthy') {
+      setProvider(PROVIDERS.VIDYARD);
+    } else if (status[PROVIDERS.LOCAL] === 'healthy') {
+      setProvider(PROVIDERS.LOCAL);
+    }
+  };
 
   const loadAvatars = async () => {
     try {
@@ -664,8 +935,22 @@ const AvatarStudio = () => {
       <div className="studio-header">
         <h1>Avatar Studio</h1>
         <p>Create AI avatars from your videos and generate content automatically</p>
+        <ProviderSelector
+          provider={provider}
+          onSelect={setProvider}
+          providerStatus={providerStatus}
+        />
       </div>
 
+      {/* Vidyard Mode */}
+      {provider === PROVIDERS.VIDYARD && (
+        <div className="vidyard-mode">
+          <VidyardVideoGenerator onJobCreated={() => {}} />
+        </div>
+      )}
+
+      {/* Local ML Mode */}
+      {provider === PROVIDERS.LOCAL && (
       <div className="studio-layout">
         {/* Sidebar - Avatar List */}
         <div className="studio-sidebar">
@@ -788,6 +1073,7 @@ const AvatarStudio = () => {
           )}
         </div>
       </div>
+      )}
 
       {showCreateModal && (
         <CreateAvatarModal

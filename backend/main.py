@@ -20453,6 +20453,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Avatar routes not loaded: {e}")
 
+# Vidyard routes (AI Avatar video generation via Vidyard API)
+try:
+    from routes.vidyard_routes import router as vidyard_router
+    app.include_router(vidyard_router, tags=["Vidyard"])
+    logger.info("✅ Vidyard routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Vidyard routes not loaded: {e}")
+
 # Agent Governance routes (Agent Management & Monitoring)
 try:
     from routes.agent_governance_routes import router as agent_governance_router

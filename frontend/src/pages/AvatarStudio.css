@@ -733,3 +733,151 @@ button.secondary:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============ Provider Selector ============ */
+.provider-selector {
+  margin-top: 20px;
+}
+
+.provider-selector > label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 12px;
+}
+
+.provider-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.provider-option {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.provider-option:hover {
+  border-color: #94a3b8;
+}
+
+.provider-option.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.provider-option.unavailable {
+  opacity: 0.6;
+}
+
+.provider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.provider-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.provider-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.provider-status.healthy {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.provider-status.not_configured {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.provider-status.unavailable,
+.provider-status.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.provider-description {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 12px 0;
+}
+
+.provider-features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.provider-features li {
+  font-size: 11px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* ============ Vidyard Mode ============ */
+.vidyard-mode {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.vidyard-generator h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.vidyard-generator .char-count {
+  font-size: 12px;
+  font-weight: normal;
+  color: #64748b;
+  margin-left: 8px;
+}
+
+.validation-feedback {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.validation-feedback .warning {
+  color: #b45309;
+  margin: 4px 0;
+}
+
+.validation-feedback .error {
+  color: #dc2626;
+  margin: 4px 0;
+}
+
+.validation-feedback .info {
+  color: #0284c7;
+  margin: 4px 0;
+}
+
+.generation-note {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 12px;
+  text-align: center;
+}
