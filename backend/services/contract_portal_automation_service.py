@@ -482,27 +482,26 @@ class ContractPortalAutomationService:
                 INSERT INTO tasks (
                     title, description, status, priority,
                     due_date, owner_id, loan_id,
-                    task_type, created_at, updated_at
+                    created_at, updated_at
                 ) VALUES (
                     :title, :description, 'pending', 'high',
                     :due_date, :owner_id, :loan_id,
-                    :task_type, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
             """), {
                 "title": task_title,
                 "description": task_description,
                 "due_date": datetime.now(timezone.utc) + timedelta(days=1),
                 "owner_id": owner_id,
-                "loan_id": loan_id,
-                "task_type": f"enter_{realtor_type}_info"
+                "loan_id": loan_id
             })
             self.db.commit()
 
-            # Get task ID
+            # Get task ID by title pattern (task_type column may not exist in production)
             task = self.db.execute(text("""
-                SELECT id FROM tasks WHERE loan_id = :loan_id AND task_type = :task_type
+                SELECT id FROM tasks WHERE loan_id = :loan_id AND title = :title
                 ORDER BY id DESC LIMIT 1
-            """), {"loan_id": loan_id, "task_type": f"enter_{realtor_type}_info"}).fetchone()
+            """), {"loan_id": loan_id, "title": task_title}).fetchone()
 
             return {
                 "task_id": task[0] if task else None,

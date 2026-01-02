@@ -213,7 +213,7 @@ async def get_pending_realtor_tasks(
     try:
         params = {"limit": limit}
         filters = [
-            "t.task_type IN ('enter_buyers_agent_info', 'enter_listing_agent_info')",
+            "(t.title ILIKE '%buyer%agent%' OR t.title ILIKE '%listing%agent%')",
             "t.status = 'pending'"
         ]
 
@@ -228,7 +228,6 @@ async def get_pending_realtor_tasks(
                 t.id as task_id,
                 t.loan_id,
                 t.title,
-                t.task_type,
                 t.created_at,
                 t.due_date,
                 l.loan_number,
@@ -247,12 +246,12 @@ async def get_pending_realtor_tasks(
                     "task_id": t[0],
                     "loan_id": t[1],
                     "title": t[2],
-                    "realtor_type": "buyers_agent" if "buyers_agent" in (t[3] or "") else "listing_agent",
-                    "created_at": t[4].isoformat() if t[4] else None,
-                    "due_date": t[5].isoformat() if t[5] else None,
-                    "loan_number": t[6],
-                    "property_address": t[7],
-                    "borrower_name": t[8]
+                    "realtor_type": "buyers_agent" if "buyer" in (t[2] or "").lower() else "listing_agent",
+                    "created_at": t[3].isoformat() if t[3] else None,
+                    "due_date": t[4].isoformat() if t[4] else None,
+                    "loan_number": t[5],
+                    "property_address": t[6],
+                    "borrower_name": t[7]
                 }
                 for t in tasks
             ],
