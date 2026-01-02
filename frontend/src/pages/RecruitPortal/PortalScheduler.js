@@ -85,7 +85,21 @@ const PortalScheduler = ({ slug, recruiterName, compact = false }) => {
         setSuccess(true);
       } else {
         const data = await response.json();
-        setError(data.detail || 'Failed to book appointment');
+        // Handle both string and object error formats (Pydantic validation errors)
+        let errorMessage = 'Failed to book appointment';
+        if (data.detail) {
+          if (typeof data.detail === 'string') {
+            errorMessage = data.detail;
+          } else if (Array.isArray(data.detail)) {
+            // Pydantic validation errors come as array of {loc, msg, type}
+            errorMessage = data.detail.map(e => e.msg || JSON.stringify(e)).join(', ');
+          } else if (typeof data.detail === 'object') {
+            errorMessage = data.detail.msg || data.detail.message || JSON.stringify(data.detail);
+          }
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+        setError(errorMessage);
       }
     } catch (err) {
       console.error('Booking error:', err);

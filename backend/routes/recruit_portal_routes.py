@@ -564,7 +564,7 @@ async def get_purl_availability(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/purl/{slug}/schedule", response_model=Appointment)
+@router.post("/purl/{slug}/schedule")
 async def schedule_purl_appointment(
     slug: str,
     appointment: AppointmentCreate,
@@ -576,9 +576,14 @@ async def schedule_purl_appointment(
         if not portal_data:
             raise HTTPException(status_code=404, detail="Portal not found")
 
+        # Convert datetime to ISO string for the service
+        scheduled_at_str = appointment.scheduled_at.isoformat() if hasattr(appointment.scheduled_at, 'isoformat') else str(appointment.scheduled_at)
+
         created = portal_service.schedule_appointment(
             workspace_id=portal_data.workspace_id,
-            appointment_data=appointment
+            scheduled_at=scheduled_at_str,
+            appointment_type=appointment.appointment_type,
+            notes=appointment.notes
         )
         return created
     except Exception as e:
