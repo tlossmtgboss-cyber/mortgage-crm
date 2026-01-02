@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
-const PortalScheduler = ({ slug, recruiterName }) => {
+const PortalScheduler = ({ slug, recruiterName, compact = false }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [availableSlots, setAvailableSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -145,12 +145,14 @@ const PortalScheduler = ({ slug, recruiterName }) => {
   }
 
   return (
-    <div className="scheduler-section">
+    <div className={`scheduler-section ${compact ? 'compact' : ''}`}>
       <h3>Schedule a Call</h3>
-      <p className="scheduler-intro">
-        Book a time to speak with {recruiterName || 'our team'} about the opportunity.
-        We'll discuss your goals, answer your questions, and explore how we can help you grow.
-      </p>
+      {!compact && (
+        <p className="scheduler-intro">
+          Book a time to speak with {recruiterName || 'our team'} about the opportunity.
+          We'll discuss your goals, answer your questions, and explore how we can help you grow.
+        </p>
+      )}
 
       <div className="scheduler-form">
         {/* Appointment Type */}

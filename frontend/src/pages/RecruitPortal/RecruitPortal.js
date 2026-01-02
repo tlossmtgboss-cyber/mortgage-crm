@@ -243,8 +243,140 @@ const RecruitPortal = () => {
           />
         )}
 
-        {activeTab === 'social' && (
-          <SocialFeed />
+        {activeTab === 'programs' && (
+          <div className="tab-section programs-section">
+            <h3>Programs & Products</h3>
+            <p className="section-intro">Comprehensive loan programs to serve every client</p>
+            <div className="programs-grid">
+              <div className="program-card">
+                <div className="program-icon">🏠</div>
+                <h4>Conventional Loans</h4>
+                <p>Competitive rates with flexible terms for qualified borrowers</p>
+              </div>
+              <div className="program-card">
+                <div className="program-icon">🎖️</div>
+                <h4>VA Loans</h4>
+                <p>Zero down payment options for veterans and active military</p>
+              </div>
+              <div className="program-card">
+                <div className="program-icon">🏡</div>
+                <h4>FHA Loans</h4>
+                <p>Low down payment options for first-time homebuyers</p>
+              </div>
+              <div className="program-card">
+                <div className="program-icon">💎</div>
+                <h4>Jumbo Loans</h4>
+                <p>High-value financing for luxury properties</p>
+              </div>
+              <div className="program-card">
+                <div className="program-icon">🔄</div>
+                <h4>Non-QM Loans</h4>
+                <p>Alternative documentation programs for self-employed borrowers</p>
+              </div>
+              <div className="program-card">
+                <div className="program-icon">🌾</div>
+                <h4>USDA Loans</h4>
+                <p>Rural development financing with zero down payment</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'technology' && (
+          <div className="tab-section technology-section">
+            <h3>Technology Stack</h3>
+            <p className="section-intro">Industry-leading tools to close more loans faster</p>
+            <div className="tech-features">
+              <div className="tech-card">
+                <div className="tech-icon">🤖</div>
+                <h4>AI-Powered CRM</h4>
+                <p>Intelligent lead management with automated follow-ups and smart prioritization</p>
+              </div>
+              <div className="tech-card">
+                <div className="tech-icon">📱</div>
+                <h4>Mobile App</h4>
+                <p>Full-featured mobile access to manage your pipeline anywhere</p>
+              </div>
+              <div className="tech-card">
+                <div className="tech-icon">📄</div>
+                <h4>Digital Document Management</h4>
+                <p>Seamless document collection with e-signatures and automated verification</p>
+              </div>
+              <div className="tech-card">
+                <div className="tech-icon">📊</div>
+                <h4>Real-Time Analytics</h4>
+                <p>Dashboard insights to track performance and identify opportunities</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'operations' && (
+          <div className="tab-section operations-section">
+            <h3>Operations Support</h3>
+            <p className="section-intro">Dedicated teams to help you focus on selling</p>
+            <div className="ops-features">
+              <div className="ops-card">
+                <h4>Processing Team</h4>
+                <p>Experienced processors handle file management so you can focus on clients</p>
+                <span className="ops-stat">Avg. 15-day close time</span>
+              </div>
+              <div className="ops-card">
+                <h4>Underwriting Support</h4>
+                <p>In-house underwriters with fast turnaround and scenario analysis</p>
+                <span className="ops-stat">24-hour initial review</span>
+              </div>
+              <div className="ops-card">
+                <h4>Closing Coordination</h4>
+                <p>Dedicated closers ensure smooth transactions every time</p>
+                <span className="ops-stat">98% on-time closing rate</span>
+              </div>
+              <div className="ops-card">
+                <h4>Compliance Team</h4>
+                <p>Expert compliance support to keep you protected</p>
+                <span className="ops-stat">Zero audit findings</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'marketing' && (
+          <div className="tab-section marketing-section">
+            <h3>Marketing Resources</h3>
+            <p className="section-intro">Everything you need to build your brand and grow your business</p>
+            <div className="marketing-features">
+              <div className="marketing-card">
+                <div className="marketing-icon">🎨</div>
+                <h4>Personal Branding</h4>
+                <p>Custom websites, business cards, and branded materials</p>
+              </div>
+              <div className="marketing-card">
+                <div className="marketing-icon">📧</div>
+                <h4>Email Campaigns</h4>
+                <p>Pre-built drip campaigns and newsletters ready to send</p>
+              </div>
+              <div className="marketing-card">
+                <div className="marketing-icon">📱</div>
+                <h4>Social Media Content</h4>
+                <p>Ready-to-post content library with graphics and videos</p>
+              </div>
+              <div className="marketing-card">
+                <div className="marketing-icon">🎬</div>
+                <h4>Video Production</h4>
+                <p>Professional video creation and AI-powered content</p>
+              </div>
+              <div className="marketing-card">
+                <div className="marketing-icon">🎯</div>
+                <h4>Lead Generation</h4>
+                <p>Digital advertising and lead capture landing pages</p>
+              </div>
+              <div className="marketing-card">
+                <div className="marketing-icon">📚</div>
+                <h4>Educational Content</h4>
+                <p>Branded guides, calculators, and homebuyer resources</p>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === 'updates' && (
@@ -281,20 +413,7 @@ const RecruitPortal = () => {
             )}
           </div>
         )}
-
-        {activeTab === 'schedule' && (
-          <PortalScheduler
-            slug={slug}
-            recruiterName={portalData?.recruiter_name}
-          />
-        )}
       </main>
-
-      {/* AI Chat Widget */}
-      <PortalChat
-        slug={slug}
-        candidateName={portalData?.candidate_name}
-      />
 
       {/* Footer */}
       <footer className="portal-footer">

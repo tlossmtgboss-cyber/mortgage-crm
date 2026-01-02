@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
-const PortalChat = ({ slug, candidateName }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const PortalChat = ({ slug, candidateName, inline = false }) => {
+  const [isOpen, setIsOpen] = useState(inline); // Auto-open if inline
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -84,6 +84,88 @@ const PortalChat = ({ slug, candidateName }) => {
     'What is the compensation structure?',
     'What support do you offer new team members?',
   ];
+
+  // Inline mode - always visible embedded chat
+  if (inline) {
+    return (
+      <div className="inline-chat-container">
+        <div className="inline-chat-header">
+          <span className="chat-icon">💬</span>
+          <span>Chat with Our AI Assistant</span>
+        </div>
+
+        <div className="inline-chat-messages">
+          {messages.map((message, index) => (
+            <div key={index} className={`message ${message.role}`}>
+              {message.role === 'assistant' && (
+                <div className="message-avatar">
+                  <span>🤖</span>
+                </div>
+              )}
+              <div className="message-content">
+                <p>{message.content}</p>
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="message assistant">
+              <div className="message-avatar">
+                <span>🤖</span>
+              </div>
+              <div className="message-content typing">
+                <span className="dot"></span>
+                <span className="dot"></span>
+                <span className="dot"></span>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {messages.length === 1 && (
+          <div className="suggested-questions">
+            <p>Suggested questions:</p>
+            <div className="suggestions">
+              {suggestedQuestions.map((question, index) => (
+                <button
+                  key={index}
+                  className="suggestion-btn"
+                  onClick={() => {
+                    setInputValue(question);
+                    setTimeout(() => sendMessage(), 100);
+                  }}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="inline-chat-input">
+          <textarea
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your question..."
+            rows={1}
+            disabled={loading}
+          />
+          <button
+            className="send-btn"
+            onClick={sendMessage}
+            disabled={!inputValue.trim() || loading}
+          >
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
