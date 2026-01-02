@@ -1603,11 +1603,33 @@
 
 .recruit-ai-task {
   display: flex;
+  align-items: center;
   gap: 12px;
   padding: 12px;
   background: #f8fafc;
   border-radius: 8px;
+  border: none;
   border-left: 3px solid #3b82f6;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recruit-ai-task:hover:not(:disabled) {
+  background: #eff6ff;
+  border-left-color: #2563eb;
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.recruit-ai-task:active:not(:disabled) {
+  transform: translateX(2px);
+}
+
+.recruit-ai-task:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .recruit-ai-task-icon {
@@ -1631,6 +1653,21 @@
   font-size: 13px;
   color: #6b7280;
   line-height: 1.4;
+}
+
+.recruit-ai-task-arrow {
+  font-size: 16px;
+  color: #3b82f6;
+  font-weight: 600;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: all 0.2s ease;
+}
+
+.recruit-ai-task:hover:not(:disabled) .recruit-ai-task-arrow {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .recruit-ai-success {

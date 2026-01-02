@@ -756,110 +756,164 @@ const RecruitDetail = () => {
               <div className="recruit-ai-task-list">
                 {candidate.status === 'new' && (
                   <>
-                    <div className="recruit-ai-task">
+                    <button
+                      className="recruit-ai-task"
+                      onClick={handleClickToCall}
+                      disabled={!candidate.phone || isCallInProgress}
+                    >
                       <span className="recruit-ai-task-icon">📞</span>
                       <div className="recruit-ai-task-content">
                         <strong>Initial Contact</strong>
                         <p>Make first contact call to introduce yourself and gauge interest</p>
                       </div>
-                    </div>
-                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setShowEditProduction(true)}
+                    >
                       <span className="recruit-ai-task-icon">📋</span>
                       <div className="recruit-ai-task-content">
                         <strong>Review Profile</strong>
                         <p>Review production history and social media presence</p>
                       </div>
-                    </div>
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
                   </>
                 )}
                 {candidate.status === 'screening' && (
                   <>
-                    <div className="recruit-ai-task">
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setShowEditProduction(true)}
+                    >
                       <span className="recruit-ai-task-icon">📊</span>
                       <div className="recruit-ai-task-content">
                         <strong>Verify Production</strong>
                         <p>Confirm annual volume and units with NMLS lookup</p>
                       </div>
-                    </div>
-                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setShowScheduleInterviewModal(true)}
+                    >
                       <span className="recruit-ai-task-icon">📅</span>
                       <div className="recruit-ai-task-content">
                         <strong>Schedule Phone Screen</strong>
                         <p>Set up 15-minute phone screening call</p>
                       </div>
-                    </div>
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
                   </>
                 )}
                 {candidate.status === 'phone_screen' && (
                   <>
-                    <div className="recruit-ai-task">
+                    <button
+                      className="recruit-ai-task"
+                      onClick={handleClickToCall}
+                      disabled={!candidate.phone || isCallInProgress}
+                    >
                       <span className="recruit-ai-task-icon">🎯</span>
                       <div className="recruit-ai-task-content">
                         <strong>Complete Phone Screen</strong>
                         <p>Discuss goals, motivations, and interest level</p>
                       </div>
-                    </div>
-                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => {
+                        setPendingStatusChange('interview');
+                        setShowQuizModal(true);
+                      }}
+                    >
                       <span className="recruit-ai-task-icon">✅</span>
                       <div className="recruit-ai-task-content">
                         <strong>Complete Assessment Quiz</strong>
                         <p>Grade candidate on initial impressions</p>
                       </div>
-                    </div>
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
                   </>
                 )}
                 {candidate.status === 'interview' && (
                   <>
-                    <div className="recruit-ai-task">
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setShowScheduleInterviewModal(true)}
+                    >
                       <span className="recruit-ai-task-icon">🎥</span>
                       <div className="recruit-ai-task-content">
                         <strong>Schedule Interview</strong>
                         <p>Set up formal interview with hiring manager</p>
                       </div>
-                    </div>
-                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setShowVideoRecorder(true)}
+                    >
                       <span className="recruit-ai-task-icon">📝</span>
                       <div className="recruit-ai-task-content">
                         <strong>Send Video Message</strong>
                         <p>Record personalized video to share company culture</p>
                       </div>
-                    </div>
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
                   </>
                 )}
                 {candidate.status === 'assessment' && (
                   <>
-                    <div className="recruit-ai-task">
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setActiveTab('assessment')}
+                    >
                       <span className="recruit-ai-task-icon">📋</span>
                       <div className="recruit-ai-task-content">
                         <strong>Complete Full Assessment</strong>
                         <p>Fill out all grading categories for final evaluation</p>
                       </div>
-                    </div>
-                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setActiveTab('assessment')}
+                    >
                       <span className="recruit-ai-task-icon">🤖</span>
                       <div className="recruit-ai-task-content">
                         <strong>Run AI Analysis</strong>
                         <p>Get AI-powered insights and recommendations</p>
                       </div>
-                    </div>
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
                   </>
                 )}
                 {candidate.status === 'offer' && (
                   <>
-                    <div className="recruit-ai-task">
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => setActiveTab('assessment')}
+                    >
                       <span className="recruit-ai-task-icon">💰</span>
                       <div className="recruit-ai-task-content">
                         <strong>Prepare Offer Package</strong>
                         <p>Generate compensation proposal based on production</p>
                       </div>
-                    </div>
-                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
+                    <button
+                      className="recruit-ai-task"
+                      onClick={() => window.open(`mailto:${candidate.email}?subject=Offer%20from%20Perennia`, '_blank')}
+                      disabled={!candidate.email}
+                    >
                       <span className="recruit-ai-task-icon">📄</span>
                       <div className="recruit-ai-task-content">
                         <strong>Send Offer Letter</strong>
                         <p>Present formal offer and discuss terms</p>
                       </div>
-                    </div>
+                      <span className="recruit-ai-task-arrow">→</span>
+                    </button>
                   </>
                 )}
                 {candidate.status === 'hired' && (
