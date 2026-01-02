@@ -822,3 +822,131 @@ async def run_disc_migration(admin_key: str = Query(...)):
         return {"success": True, "message": "Migration completed"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# PDF REPORT
+# =============================================================================
+
+@router.get("/results/{candidate_id}/pdf")
+async def download_disc_pdf(candidate_id: int):
+    """Generate and download DISC + Motivators PDF report."""
+    from fastapi.responses import Response
+    from services.disc.report_generator import generate_disc_report
+
+    with engine.connect() as conn:
+        # Get candidate name
+        candidate = conn.execute(text("""
+            SELECT first_name, last_name, name FROM mm_candidates WHERE id = :id
+        """), {"id": candidate_id}).fetchone()
+
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        candidate_name = f"{candidate[0] or ''} {candidate[1] or ''}".strip() or candidate[2] or "Unknown"
+
+        # Get DISC results
+        disc = conn.execute(text("""
+            SELECT adapted_d, adapted_i, adapted_s, adapted_c, adapted_style,
+                   natural_d, natural_i, natural_s, natural_c, natural_style,
+                   wheel_zone, wheel_position, calibration_score, quality_tier,
+                   characteristics, communication_tips, strengths, stress_behaviors,
+                   areas_for_improvement
+            FROM disc_results
+            WHERE candidate_id = :candidate_id
+            ORDER BY computed_at DESC LIMIT 1
+        """), {"candidate_id": candidate_id}).fetchone()
+
+        if not disc:
+            raise HTTPException(status_code=404, detail="No DISC results found")
+
+        # Get Motivator results
+        motivator = conn.execute(text("""
+            SELECT aesthetic, economic, individualistic, political,
+                   altruistic, regulatory, theoretical, ranking
+            FROM motivator_results
+            WHERE candidate_id = :candidate_id
+            ORDER BY computed_at DESC LIMIT 1
+        """), {"candidate_id": candidate_id}).fetchone()
+
+        if not motivator:
+            raise HTTPException(status_code=404, detail="No Motivator results found")
+
+        # Build DISCResult object
+        disc_result = DISCResult(
+            adapted_d=disc[0],
+            adapted_i=disc[1],
+            adapted_s=disc[2],
+            adapted_c=disc[3],
+            adapted_style=disc[4],
+            natural_d=disc[5],
+            natural_i=disc[6],
+            natural_s=disc[7],
+            natural_c=disc[8],
+            natural_style=disc[9],
+            wheel_zone=disc[10],
+            wheel_position=disc[11],
+            calibration_score=float(disc[12] or 0.8),
+            consistency_score=0.9,
+            quality_tier=disc[13] or "MEDIUM"
+        )
+
+        motivator_scores = {
+            'aesthetic': motivator[0],
+            'economic': motivator[1],
+            'individualistic': motivator[2],
+            'political': motivator[3],
+            'altruistic': motivator[4],
+            'regulatory': motivator[5],
+            'theoretical': motivator[6],
+        }
+
+        motivator_ranking = motivator[7] if isinstance(motivator[7], dict) else {}
+
+        # Parse generated content if available
+        generated_content = {}
+        if disc[14]:  # characteristics
+            generated_content['characteristics'] = disc[14]
+        if disc[15]:  # communication_tips
+            import json
+            try:
+                generated_content['communication_tips'] = json.loads(disc[15]) if isinstance(disc[15], str) else disc[15]
+            except:
+                pass
+        if disc[16]:  # strengths
+            import json
+            try:
+                generated_content['strengths'] = json.loads(disc[16]) if isinstance(disc[16], str) else disc[16]
+            except:
+                pass
+        if disc[17]:  # stress_behaviors
+            import json
+            try:
+                generated_content['stress_behaviors'] = json.loads(disc[17]) if isinstance(disc[17], str) else disc[17]
+            except:
+                pass
+        if disc[18]:  # improvements
+            import json
+            try:
+                generated_content['improvements'] = json.loads(disc[18]) if isinstance(disc[18], str) else disc[18]
+            except:
+                pass
+
+        # Generate PDF
+        pdf_bytes = await generate_disc_report(
+            candidate_name=candidate_name,
+            disc_result=disc_result,
+            motivator_scores=motivator_scores,
+            motivator_ranking=motivator_ranking,
+            generated_content=generated_content if generated_content else None
+        )
+
+        filename = f"DISC_Report_{candidate_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
