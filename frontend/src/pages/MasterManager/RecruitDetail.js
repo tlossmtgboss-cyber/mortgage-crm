@@ -885,52 +885,52 @@ const RecruitDetail = () => {
                 onClick={handleClickToCall}
                 disabled={!candidate.phone || isCallInProgress}
               >
-                📞 {isCallInProgress ? 'Calling...' : 'Call'}
+                {isCallInProgress ? 'Calling...' : 'Call'}
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => window.open(`mailto:${candidate.email}`, '_blank')}
                 disabled={!candidate.email}
               >
-                ✉️ Email
+                Email
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowScheduleInterviewModal(true)}
               >
-                📅 Interview
+                Schedule
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowVideoRecorder(true)}
               >
-                🎥 Video
+                Video
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => window.open(`sms:${candidate.phone}`, '_blank')}
                 disabled={!candidate.phone}
               >
-                💬 SMS
+                SMS
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => handleStatusChange('rejected')}
                 disabled={candidate.status === 'rejected' || candidate.status === 'hired'}
               >
-                ❌ Reject
+                Reject
               </button>
               <button
                 className="recruit-quick-action-btn"
                 onClick={() => setShowEscalateModal(true)}
               >
-                ⚠️ Escalate
+                Escalate
               </button>
               <button
-                className="recruit-quick-action-btn recruit-portal-btn"
-                onClick={() => window.open(`/recruit/${candidate.purl_slug || `candidate-${candidate.id}`}`, '_blank')}
+                className="recruit-quick-action-btn"
+                onClick={() => window.open(`/recruit-portal/${candidate.purl_slug || `candidate-${candidate.id}`}`, '_blank')}
               >
-                👁️ View Portal
+                View Portal
               </button>
             </div>
           </div>
