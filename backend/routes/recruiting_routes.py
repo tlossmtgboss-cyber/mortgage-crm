@@ -933,6 +933,99 @@ async def debug_schedule_interview(
         return {"success": False, "error": str(e), "traceback": tb}
 
 
+@router.post("/debug/test-notify/{interview_id}")
+async def debug_send_notifications(
+    interview_id: int,
+    db: Session = Depends(get_db)
+):
+    """DEBUG: Test sending interview notifications without auth."""
+    import logging
+    from services.notification_service import NotificationService
+
+    logger = logging.getLogger(__name__)
+
+    # Get interview details
+    interview = db.execute(text("""
+        SELECT
+            i.id, i.interview_type, i.scheduled_at, i.duration_minutes,
+            i.location, i.meeting_link, i.timezone, i.title,
+            i.interviewer_user_ids, i.primary_interviewer_id,
+            c.id as candidate_id, c.first_name, c.last_name, c.email as candidate_email,
+            c.phone as candidate_phone
+        FROM mm_interviews i
+        JOIN mm_candidates c ON c.id = i.candidate_id
+        WHERE i.id = :interview_id
+    """), {"interview_id": interview_id}).fetchone()
+
+    if not interview:
+        return {"success": False, "error": "Interview not found"}
+
+    notifications_sent = []
+    notification_service = NotificationService()
+
+    # Format interview time
+    scheduled_time = interview.scheduled_at
+    if isinstance(scheduled_time, str):
+        scheduled_time = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+
+    formatted_date = scheduled_time.strftime("%A, %B %d, %Y")
+    formatted_time = scheduled_time.strftime("%I:%M %p")
+
+    interview_title = interview.title or f"{interview.interview_type.replace('_', ' ').title()} Interview"
+
+    # Send to candidate
+    if interview.candidate_email:
+        subject = f"Interview Scheduled: {interview_title}"
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #3b82f6;">Your Interview is Scheduled!</h2>
+            <p>Hello {interview.first_name},</p>
+            <p>Your interview has been scheduled. Here are the details:</p>
+
+            <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <p><strong>Interview Type:</strong> {interview_title}</p>
+                <p><strong>Date:</strong> {formatted_date}</p>
+                <p><strong>Time:</strong> {formatted_time} ({interview.timezone})</p>
+                <p><strong>Duration:</strong> {interview.duration_minutes} minutes</p>
+                {f'<p><strong>Location:</strong> {interview.location}</p>' if interview.location else ''}
+                {f'<p><strong>Meeting Link:</strong> <a href="{interview.meeting_link}">{interview.meeting_link}</a></p>' if interview.meeting_link else ''}
+            </div>
+
+            <p>We look forward to speaking with you!</p>
+        </div>
+        """
+
+        try:
+            result = notification_service.send_email(
+                to_email=interview.candidate_email,
+                subject=subject,
+                html_content=html_content
+            )
+            notifications_sent.append({
+                "type": "email",
+                "recipient": "candidate",
+                "email": interview.candidate_email,
+                "result": result
+            })
+            logger.info(f"DEBUG: Sent notification to candidate: {interview.candidate_email}, result: {result}")
+        except Exception as e:
+            logger.error(f"DEBUG: Error sending candidate email: {e}")
+            notifications_sent.append({
+                "type": "email",
+                "recipient": "candidate",
+                "email": interview.candidate_email,
+                "error": str(e)
+            })
+
+    return {
+        "success": True,
+        "interview_id": interview_id,
+        "candidate": f"{interview.first_name} {interview.last_name}",
+        "candidate_email": interview.candidate_email,
+        "notifications_sent": notifications_sent
+    }
+
+
 @router.post("/candidates/{candidate_id}/interviews")
 async def schedule_interview(
     candidate_id: int,
