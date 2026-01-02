@@ -4,8 +4,6 @@ import './RecruitPortal.css';
 import ProductionCalculator from './ProductionCalculator';
 import PortalChat from './PortalChat';
 import PortalScheduler from './PortalScheduler';
-import MoneyLostTimer from './MoneyLostTimer';
-import SocialFeed from './SocialFeed';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -115,10 +113,10 @@ const RecruitPortal = () => {
         </p>
       </section>
 
-      {/* Personal Video Message with Timer */}
+      {/* Personal Video Message with Scheduler */}
       {videos.length > 0 && (
         <section className="personal-video-section">
-          <div className="video-and-timer-row">
+          <div className="video-and-scheduler-row">
             <div className="personal-video-container">
               <div className="personal-video-header">
                 <div>
@@ -149,12 +147,21 @@ const RecruitPortal = () => {
                 </div>
               )}
             </div>
-            <div className="timer-side">
-              <MoneyLostTimer
+            <div className="scheduler-side">
+              <PortalScheduler
                 slug={slug}
-                estimatedAnnualProduction={portalData?.estimated_production || 5000000}
+                recruiterName={portalData?.recruiter_name}
+                compact={true}
               />
             </div>
+          </div>
+          {/* AI Chat below video */}
+          <div className="inline-chat-section">
+            <PortalChat
+              slug={slug}
+              candidateName={portalData?.candidate_name}
+              inline={true}
+            />
           </div>
         </section>
       )}
@@ -176,11 +183,6 @@ const RecruitPortal = () => {
               <div className="recruiter-info">
                 <h4>Your Recruiter</h4>
                 <p className="recruiter-name">{portalData.recruiter_name}</p>
-                {portalData.recruiter_phone && (
-                  <a href={`tel:${portalData.recruiter_phone}`} className="recruiter-contact">
-                    {portalData.recruiter_phone}
-                  </a>
-                )}
                 {portalData.recruiter_email && (
                   <a href={`mailto:${portalData.recruiter_email}`} className="recruiter-contact">
                     {portalData.recruiter_email}
@@ -201,22 +203,34 @@ const RecruitPortal = () => {
           Production Calculator
         </button>
         <button
-          className={`tab-button ${activeTab === 'social' ? 'active' : ''}`}
-          onClick={() => setActiveTab('social')}
+          className={`tab-button ${activeTab === 'programs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('programs')}
         >
-          Social Feed
+          Programs & Products
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'technology' ? 'active' : ''}`}
+          onClick={() => setActiveTab('technology')}
+        >
+          Technology
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'operations' ? 'active' : ''}`}
+          onClick={() => setActiveTab('operations')}
+        >
+          Operations
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'marketing' ? 'active' : ''}`}
+          onClick={() => setActiveTab('marketing')}
+        >
+          Marketing
         </button>
         <button
           className={`tab-button ${activeTab === 'updates' ? 'active' : ''}`}
           onClick={() => setActiveTab('updates')}
         >
           Company News
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'schedule' ? 'active' : ''}`}
-          onClick={() => setActiveTab('schedule')}
-        >
-          Schedule a Call
         </button>
       </nav>
 
