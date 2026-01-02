@@ -1014,8 +1014,8 @@ const RecruitDetail = () => {
                 {/* Overall Grade Circle */}
                 <div className="recruit-assessment-overall">
                   <CandidateGradeCircle
-                    score={assessment?.overall_score}
-                    grade={assessment?.overall_grade}
+                    score={assessment?.overall?.score}
+                    grade={assessment?.overall?.grade}
                     label="Overall Grade"
                     size="xl"
                   />

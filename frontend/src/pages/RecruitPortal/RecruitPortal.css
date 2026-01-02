@@ -461,7 +461,7 @@
 }
 
 .tab-button.active {
-  color: #3b82f6;
+  color: #ffffff;
 }
 
 .tab-button.active::after {
@@ -471,7 +471,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: #3b82f6;
+  background: #ffffff;
 }
 
 /* Portal Content */
@@ -554,7 +554,7 @@
 
 .input-group input:focus,
 .input-wrapper:focus-within {
-  border-color: #3b82f6;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .input-hint {
@@ -564,10 +564,10 @@
 
 .calculate-btn {
   padding: 1rem 2rem;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: #ffffff;
   border: none;
   border-radius: 0.5rem;
-  color: white;
+  color: #18181b;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -630,14 +630,14 @@
 }
 
 .comparison-column.projected {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .comparison-arrow {
   display: flex;
   align-items: center;
-  color: #3b82f6;
+  color: #a1a1aa;
 }
 
 .comparison-arrow svg {
@@ -687,8 +687,8 @@
 
 .highlight-box {
   display: inline-block;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(59, 130, 246, 0.2));
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(63, 63, 70, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 1rem;
   padding: 1.5rem 3rem;
 }
@@ -755,7 +755,7 @@
 .cta-section {
   text-align: center;
   padding: 1.5rem;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(63, 63, 70, 0.5);
   border-radius: 1rem;
 }
 
@@ -765,10 +765,10 @@
 
 .cta-button {
   padding: 1rem 2rem;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: #ffffff;
   border: none;
   border-radius: 0.5rem;
-  color: white;
+  color: #18181b;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -814,7 +814,7 @@
 
 .update-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .update-card.featured {
@@ -840,8 +840,8 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.75rem;
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  background: rgba(161, 161, 170, 0.2);
+  color: #d4d4d8;
 }
 
 .category-success_stories { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
@@ -888,8 +888,8 @@
 
 .scheduler-section.compact {
   padding: 1.25rem;
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(59, 130, 246, 0.2);
+  background: rgba(39, 39, 42, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .scheduler-section.compact h3 {
@@ -971,8 +971,8 @@
 }
 
 .type-btn.active {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #ffffff;
 }
 
 .type-icon {
@@ -1013,8 +1013,9 @@
 }
 
 .date-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #18181b;
 }
 
 .date-day {
@@ -1024,7 +1025,7 @@
 }
 
 .date-btn.active .date-day {
-  color: rgba(255, 255, 255, 0.8);
+  color: #52525b;
 }
 
 .date-num {
@@ -1053,8 +1054,9 @@
 }
 
 .time-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #18181b;
 }
 
 .loading-slots,
@@ -1079,7 +1081,7 @@
 }
 
 .form-group textarea:focus {
-  border-color: #3b82f6;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .booking-summary {
@@ -1087,8 +1089,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(63, 63, 70, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 0.75rem;
 }
 
@@ -1104,10 +1106,10 @@
 
 .book-btn {
   padding: 0.75rem 2rem;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: #ffffff;
   border: none;
   border-radius: 0.5rem;
-  color: white;
+  color: #18181b;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s;
@@ -1194,11 +1196,11 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: #ffffff;
   border: none;
-  color: white;
+  color: #18181b;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   transition: transform 0.2s, box-shadow 0.2s;
   z-index: 1000;
   display: flex;
@@ -1221,7 +1223,7 @@
   right: 2rem;
   width: 380px;
   max-height: 500px;
-  background: #1e293b;
+  background: #27272a;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 1rem;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
@@ -1295,7 +1297,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(161, 161, 170, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1313,7 +1315,7 @@
 }
 
 .message.user .message-content {
-  background: #3b82f6;
+  background: #52525b;
 }
 
 .message-content p {
@@ -1365,17 +1367,17 @@
 
 .suggestion-btn {
   padding: 0.5rem 0.75rem;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(161, 161, 170, 0.1);
+  border: 1px solid rgba(161, 161, 170, 0.3);
   border-radius: 9999px;
-  color: #60a5fa;
+  color: #d4d4d8;
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .suggestion-btn:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(161, 161, 170, 0.2);
 }
 
 .chat-input {
@@ -1398,16 +1400,16 @@
 }
 
 .chat-input textarea:focus {
-  border-color: #3b82f6;
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .send-btn {
   width: 40px;
   height: 40px;
-  background: #3b82f6;
+  background: #ffffff;
   border: none;
   border-radius: 0.5rem;
-  color: white;
+  color: #18181b;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1474,7 +1476,7 @@
 
 .video-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
@@ -1489,7 +1491,7 @@
 }
 
 .video-card.playing {
-  border-color: #3b82f6;
+  border-color: #a1a1aa;
 }
 
 .video-new-badge {
@@ -1541,7 +1543,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, #52525b, #3f3f46);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1658,7 +1660,7 @@
 
 .program-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .program-icon {
@@ -1686,8 +1688,8 @@
 }
 
 .tech-card {
-  background: rgba(59, 130, 246, 0.05);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(63, 63, 70, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0.75rem;
   padding: 1.5rem;
   transition: transform 0.2s, border-color 0.2s;
@@ -1695,7 +1697,7 @@
 
 .tech-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .tech-icon {
@@ -1706,7 +1708,7 @@
 .tech-card h4 {
   margin: 0 0 0.5rem;
   font-size: 1.125rem;
-  color: #60a5fa;
+  color: #ffffff;
 }
 
 .tech-card p {
@@ -1724,8 +1726,8 @@
 }
 
 .ops-card {
-  background: rgba(34, 197, 94, 0.05);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: rgba(63, 63, 70, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0.75rem;
   padding: 1.5rem;
   transition: transform 0.2s, border-color 0.2s;
@@ -1733,13 +1735,13 @@
 
 .ops-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(34, 197, 94, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .ops-card h4 {
   margin: 0 0 0.5rem;
   font-size: 1.125rem;
-  color: #4ade80;
+  color: #ffffff;
 }
 
 .ops-card p {
@@ -1752,8 +1754,8 @@
 .ops-stat {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
+  background: rgba(161, 161, 170, 0.2);
+  color: #d4d4d8;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1767,8 +1769,8 @@
 }
 
 .marketing-card {
-  background: rgba(168, 85, 247, 0.05);
-  border: 1px solid rgba(168, 85, 247, 0.2);
+  background: rgba(63, 63, 70, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0.75rem;
   padding: 1.5rem;
   transition: transform 0.2s, border-color 0.2s;
@@ -1776,7 +1778,7 @@
 
 .marketing-card:hover {
   transform: translateY(-4px);
-  border-color: rgba(168, 85, 247, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .marketing-icon {
@@ -1787,7 +1789,7 @@
 .marketing-card h4 {
   margin: 0 0 0.5rem;
   font-size: 1.125rem;
-  color: #a78bfa;
+  color: #ffffff;
 }
 
 .marketing-card p {
@@ -1880,9 +1882,9 @@
 
 .connect-social-btn {
   padding: 0.5rem 1rem;
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #60a5fa;
+  background: rgba(161, 161, 170, 0.2);
+  border: 1px solid rgba(161, 161, 170, 0.3);
+  color: #d4d4d8;
   border-radius: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1891,14 +1893,14 @@
 }
 
 .connect-social-btn:hover {
-  background: rgba(59, 130, 246, 0.3);
-  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(161, 161, 170, 0.3);
+  border-color: rgba(161, 161, 170, 0.5);
 }
 
 .social-info-note {
   margin-top: 2rem;
   padding: 1rem;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(63, 63, 70, 0.5);
   border-radius: 0.5rem;
   text-align: center;
 }

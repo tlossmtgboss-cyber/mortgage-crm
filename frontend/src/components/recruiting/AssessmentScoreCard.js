@@ -101,7 +101,6 @@ function AssessmentScoreCard({
     <div className={`assessment-score-card ${isExpanded ? 'expanded' : ''}`}>
       <div className="score-card-header" onClick={toggleExpand}>
         <div className="score-card-left">
-          <span className="score-card-icon">{config.icon}</span>
           <div className="score-card-info">
             <span className="score-card-label">{config.label}</span>
             <span className="score-card-weight">{config.weightLabel} weight</span>
