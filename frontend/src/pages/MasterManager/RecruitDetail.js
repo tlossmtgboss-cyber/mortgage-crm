@@ -1611,27 +1611,42 @@ const RecruitDetail = () => {
           currentScore={assessment?.[editingCategory.key]?.score ? Math.round(assessment[editingCategory.key].score / 20) : undefined}
           onSave={async (score, notes) => {
             try {
-              // Map category key to API field name
-              const categoryToField = {
-                'production': 'production_score',
-                'character': 'character_score',
-                'skills': 'skills_score',
-                'culture_fit': 'culture_fit_score'
-              };
-              const fieldName = categoryToField[editingCategory.key];
-              if (!fieldName) {
-                throw new Error(`Unknown category: ${editingCategory.key}`);
-              }
-
               // Scale score from 1-5 to 0-100 (modal uses 1-5, API expects 0-100)
               const scaledScore = score * 20;
-              const updateData = { [fieldName]: scaledScore };
 
-              // Check if assessment exists - if not, create it first
-              if (!assessment || assessment.has_assessment === false) {
-                await createAssessment(candidateId, updateData, currentUserId || 1);
+              // Special handling for DISC - has 4 separate scores
+              if (editingCategory.key === 'disc') {
+                const { updateDISCScores } = await import('../../services/candidateGradingApi');
+                // Set all DISC scores to the same value for simple 1-5 rating
+                await updateDISCScores(candidateId, {
+                  d_score: scaledScore,
+                  i_score: scaledScore,
+                  s_score: scaledScore,
+                  c_score: scaledScore,
+                  notes: notes || null,
+                  assessment_source: 'manual'
+                }, currentUserId || 1);
               } else {
-                await updateAssessment(candidateId, updateData, currentUserId || 1);
+                // Map category key to API field name
+                const categoryToField = {
+                  'production': 'production_score',
+                  'character': 'character_score',
+                  'skills': 'skills_score',
+                  'culture_fit': 'culture_fit_score'
+                };
+                const fieldName = categoryToField[editingCategory.key];
+                if (!fieldName) {
+                  throw new Error(`Unknown category: ${editingCategory.key}`);
+                }
+
+                const updateData = { [fieldName]: scaledScore };
+
+                // Check if assessment exists - if not, create it first
+                if (!assessment || assessment.has_assessment === false) {
+                  await createAssessment(candidateId, updateData, currentUserId || 1);
+                } else {
+                  await updateAssessment(candidateId, updateData, currentUserId || 1);
+                }
               }
               await loadAssessment();
               setShowEditCategoryModal(false);
