@@ -609,10 +609,10 @@ const RecruitDetail = () => {
             <div className="recruit-score-main">
               <div
                 className="recruit-score-circle"
-                style={{ borderColor: getScoreColor(candidate.scores?.overall) }}
+                style={{ borderColor: getScoreColor(assessment?.overall?.score) }}
               >
-                <span className="recruit-score-value" style={{ color: getScoreColor(candidate.scores?.overall) }}>
-                  {getOverallScoreDisplay()}
+                <span className="recruit-score-value" style={{ color: getScoreColor(assessment?.overall?.score) }}>
+                  {getOverallGradeDisplay()}
                 </span>
                 <span className="recruit-score-label">Overall</span>
               </div>
@@ -624,38 +624,38 @@ const RecruitDetail = () => {
                   <span
                     className="recruit-score-fill"
                     style={{
-                      width: `${(candidate.scores?.culture_fit || 0) * 10}%`,
-                      backgroundColor: getScoreColor(candidate.scores?.culture_fit)
+                      width: `${assessment?.culture_fit?.score || 0}%`,
+                      backgroundColor: getScoreColor(assessment?.culture_fit?.score)
                     }}
                   />
                 </span>
-                <span className="recruit-score-num">{candidate.scores?.culture_fit?.toFixed(1) || '-'}</span>
+                <span className="recruit-score-num">{assessment?.culture_fit?.score?.toFixed(0) || '-'}</span>
               </div>
               <div className="recruit-score-item">
-                <span className="recruit-score-name">Technical</span>
+                <span className="recruit-score-name">Skills</span>
                 <span className="recruit-score-bar">
                   <span
                     className="recruit-score-fill"
                     style={{
-                      width: `${(candidate.scores?.technical || 0) * 10}%`,
-                      backgroundColor: getScoreColor(candidate.scores?.technical)
+                      width: `${assessment?.skills?.score || 0}%`,
+                      backgroundColor: getScoreColor(assessment?.skills?.score)
                     }}
                   />
                 </span>
-                <span className="recruit-score-num">{candidate.scores?.technical?.toFixed(1) || '-'}</span>
+                <span className="recruit-score-num">{assessment?.skills?.score?.toFixed(0) || '-'}</span>
               </div>
               <div className="recruit-score-item">
-                <span className="recruit-score-name">Behavioral</span>
+                <span className="recruit-score-name">Character</span>
                 <span className="recruit-score-bar">
                   <span
                     className="recruit-score-fill"
                     style={{
-                      width: `${(candidate.scores?.behavioral || 0) * 10}%`,
-                      backgroundColor: getScoreColor(candidate.scores?.behavioral)
+                      width: `${assessment?.character?.score || 0}%`,
+                      backgroundColor: getScoreColor(assessment?.character?.score)
                     }}
                   />
                 </span>
-                <span className="recruit-score-num">{candidate.scores?.behavioral?.toFixed(1) || '-'}</span>
+                <span className="recruit-score-num">{assessment?.character?.score?.toFixed(0) || '-'}</span>
               </div>
             </div>
           </div>
