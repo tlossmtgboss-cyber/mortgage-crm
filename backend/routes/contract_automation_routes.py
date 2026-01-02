@@ -282,9 +282,8 @@ async def get_loan_portal_status(
             SELECT
                 l.id,
                 l.loan_number,
-                l.contract_received_date,
-                l.referral_partner_id,
-                l.borrower_name
+                l.borrower_name,
+                l.realtor_agent
             FROM loans l
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
@@ -299,12 +298,20 @@ async def get_loan_portal_status(
             LIMIT 1
         """), {"loan_id": loan_id}).fetchone()
 
-        # Check buyer's agent portal
+        # Check buyer's agent portal - look for realtor in loan_team_members
         buyers_agent = None
-        if loan[3]:  # referral_partner_id
+        team_realtor = db.execute(text("""
+            SELECT ltm.id, ltm.name, ltm.email, ltm.referral_partner_id
+            FROM loan_team_members ltm
+            WHERE ltm.loan_id = :loan_id
+            AND (ltm.role ILIKE '%buyer%' OR ltm.role ILIKE '%realtor%')
+            LIMIT 1
+        """), {"loan_id": loan_id}).fetchone()
+
+        if team_realtor and team_realtor[3]:  # Has referral_partner_id
             partner = db.execute(text("""
                 SELECT id, name, email FROM referral_partners WHERE id = :partner_id
-            """), {"partner_id": loan[3]}).fetchone()
+            """), {"partner_id": team_realtor[3]}).fetchone()
             if partner:
                 buyers_agent = {
                     "exists": True,
@@ -313,12 +320,21 @@ async def get_loan_portal_status(
                     "partner_email": partner[2],
                     "portal_url": f"/partner-portal/{partner[0]}/loan/{loan_id}"
                 }
+        elif team_realtor:
+            buyers_agent = {
+                "exists": True,
+                "team_member_id": team_realtor[0],
+                "name": team_realtor[1],
+                "email": team_realtor[2],
+                "portal_url": None,
+                "needs_partner_setup": True
+            }
 
         if not buyers_agent:
             # Check for pending task
             task = db.execute(text("""
                 SELECT id, status FROM tasks
-                WHERE loan_id = :loan_id AND task_type = 'enter_buyers_agent_info'
+                WHERE loan_id = :loan_id AND title ILIKE '%buyer%agent%'
                 ORDER BY id DESC LIMIT 1
             """), {"loan_id": loan_id}).fetchone()
             buyers_agent = {
@@ -348,7 +364,7 @@ async def get_loan_portal_status(
         else:
             task = db.execute(text("""
                 SELECT id, status FROM tasks
-                WHERE loan_id = :loan_id AND task_type = 'enter_listing_agent_info'
+                WHERE loan_id = :loan_id AND title ILIKE '%listing%agent%'
                 ORDER BY id DESC LIMIT 1
             """), {"loan_id": loan_id}).fetchone()
             listing_agent = {
@@ -360,7 +376,8 @@ async def get_loan_portal_status(
         return {
             "loan_id": loan_id,
             "loan_number": loan[1],
-            "contract_received_date": loan[2].isoformat() if loan[2] else None,
+            "borrower_name": loan[2],
+            "realtor_agent": loan[3],
             "portals": {
                 "client": {
                     "exists": client_portal is not None,

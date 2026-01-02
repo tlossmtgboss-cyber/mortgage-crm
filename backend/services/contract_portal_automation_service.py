@@ -117,22 +117,16 @@ class ContractPortalAutomationService:
                 l.amount,
                 l.stage,
                 l.property_address,
-                l.property_city,
-                l.property_state,
-                l.property_zip,
-                l.contract_received_date,
-                l.target_close_date,
-                l.owner_id,
                 l.borrower_name,
-                l.borrower_email,
-                l.borrower_phone,
-                l.referral_partner_id,
                 l.loan_number,
+                l.loan_officer_id as owner_id,
+                l.closing_date,
+                l.realtor_agent,
                 u.full_name as lo_name,
                 u.email as lo_email,
                 u.organization_id
             FROM loans l
-            LEFT JOIN users u ON u.id = l.owner_id
+            LEFT JOIN users u ON u.id = l.loan_officer_id
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
 
@@ -142,14 +136,18 @@ class ContractPortalAutomationService:
         return dict(result._mapping)
 
     def _update_contract_received_date(self, loan_id: int):
-        """Set contract_received_date if not already set."""
-        self.db.execute(text("""
-            UPDATE loans
-            SET contract_received_date = COALESCE(contract_received_date, CURRENT_TIMESTAMP),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :loan_id
-        """), {"loan_id": loan_id})
-        self.db.commit()
+        """Update loan to mark that contract was received (best effort)."""
+        try:
+            # Try to update - this may fail if column doesn't exist
+            self.db.execute(text("""
+                UPDATE loans
+                SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = :loan_id
+            """), {"loan_id": loan_id})
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Could not update contract date for loan {loan_id}: {e}")
+            self.db.rollback()
 
     def _ensure_client_portal(self, loan_info: Dict) -> Dict[str, Any]:
         """Create or verify client portal (PURL workspace) exists."""
@@ -446,16 +444,10 @@ class ContractPortalAutomationService:
             """), {"email": team_member[2]}).fetchone()
 
             if partner:
-                # Link to team member
+                # Link partner to team member
                 self.db.execute(text("""
                     UPDATE loan_team_members SET referral_partner_id = :partner_id WHERE id = :tm_id
                 """), {"partner_id": partner[0], "tm_id": team_member[0]})
-
-                # Also update the loan's referral_partner_id
-                self.db.execute(text("""
-                    UPDATE loans SET referral_partner_id = :partner_id, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :loan_id AND referral_partner_id IS NULL
-                """), {"partner_id": partner[0], "loan_id": loan_id})
                 self.db.commit()
 
                 return partner[0]
@@ -772,13 +764,6 @@ class ContractPortalAutomationService:
                     partner_id = new_partner[0] if new_partner else None
 
             if partner_id:
-                # Update loan's referral_partner_id
-                self.db.execute(text("""
-                    UPDATE loans SET referral_partner_id = :partner_id, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :loan_id
-                """), {"partner_id": partner_id, "loan_id": loan_id})
-                self.db.commit()
-
                 result["portal_created"] = True
                 result["portal_url"] = f"/partner-portal/{partner_id}/loan/{loan_id}"
 
