@@ -126,19 +126,15 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
 
     // Check listing agent portal
     try {
-      console.log('[PortalSelector] Checking listing agent portal for loan:', loan.id);
       const response = await fetch(
         `${API_BASE_URL}/api/v1/listing-portal/transactions?loan_id=${loan.id}`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
-        console.log('[PortalSelector] Listing portal API response:', data);
         // Use loose equality to handle string/number type differences
         const transaction = data.data?.transactions?.find(t => String(t.loan_id) === String(loan.id));
-        console.log('[PortalSelector] Found transaction:', transaction);
         const portalUrl = transaction ? `/listing-portal/transactions/${transaction.id}` : null;
-        console.log('[PortalSelector] Setting listing portal URL:', portalUrl);
         setPortalStatus(prev => ({
           ...prev,
           listingAgent: {
@@ -149,7 +145,6 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
           },
         }));
       } else {
-        console.warn('[PortalSelector] Listing portal API returned non-OK:', response.status);
         setPortalStatus(prev => ({
           ...prev,
           listingAgent: { exists: false, loading: false, url: null },
@@ -171,16 +166,16 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
       listingAgent: portalStatus.listingAgent.url,
     };
 
-    console.log('[PortalSelector] Opening portal:', type);
-    console.log('[PortalSelector] Portal status:', portalStatus);
-    console.log('[PortalSelector] URL for type:', urls[type]);
-
-    if (urls[type]) {
-      const fullUrl = `${window.location.origin}${urls[type]}`;
-      console.log('[PortalSelector] Opening URL:', fullUrl);
+    const url = urls[type];
+    if (url) {
+      const fullUrl = `${window.location.origin}${url}`;
+      // Debug: temporarily show URL in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[PortalSelector] Opening:', type, url);
+      }
       window.open(fullUrl, '_blank');
     } else {
-      console.warn('[PortalSelector] No URL found for portal type:', type);
+      setError(`No URL found for ${type} portal. Please try creating the portal first.`);
     }
   };
 

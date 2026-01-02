@@ -1912,6 +1912,202 @@
 }
 
 /* =============================================================================
+   CONVERSATION LOG TAB
+============================================================================= */
+
+.conversation-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+}
+
+.conversation-log-container {
+  margin-top: 1.5rem;
+  min-height: 500px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+/* =============================================================================
+   SOCIAL MEDIA TAB
+============================================================================= */
+
+.social-media-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+}
+
+.social-media-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.ai-coach-container {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-coach-container h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  color: #f1f5f9;
+}
+
+.ai-coach-container .section-intro {
+  margin: 0 0 1rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.social-profiles-container {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.social-profiles-container h4 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: #f1f5f9;
+}
+
+.social-profiles-grid.compact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.social-profiles-grid.compact .social-profile-card {
+  padding: 1rem;
+}
+
+.social-profiles-grid.compact .social-profile-card h4 {
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.social-profiles-grid.compact .social-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.social-profiles-grid.compact .social-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.not-connected {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* =============================================================================
+   VIDEO LIBRARY TAB
+============================================================================= */
+
+.video-library-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+}
+
+.video-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.video-library-card {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.video-library-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.video-thumbnail {
+  position: relative;
+  background: #000;
+}
+
+.video-thumbnail video {
+  width: 100%;
+  display: block;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+}
+
+.video-thumbnail .new-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  background: #10b981;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.video-info {
+  padding: 1rem 1.25rem;
+}
+
+.video-info h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #f1f5f9;
+  line-height: 1.4;
+}
+
+.video-info .video-from {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.video-info .video-date {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.no-videos {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #94a3b8;
+}
+
+.no-videos .empty-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.no-videos p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* =============================================================================
    RESPONSIVE DESIGN
 ============================================================================= */
 
@@ -1995,5 +2191,21 @@
 
   .video-card {
     max-width: 100%;
+  }
+
+  .social-media-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .social-profiles-grid.compact {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .video-library-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-log-container {
+    min-height: 400px;
   }
 }
