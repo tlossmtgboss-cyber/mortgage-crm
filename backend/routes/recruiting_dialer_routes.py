@@ -651,7 +651,8 @@ async def run_dialer_migration(admin_key: str = Query(...)):
     if admin_key != "perennia-admin-2024":
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
-    migration_sql = """
+    # Step 1: Create table if it doesn't exist (without Twilio columns for backwards compat)
+    create_table_sql = """
     CREATE TABLE IF NOT EXISTS recruiting_call_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         candidate_id INTEGER NOT NULL,
@@ -665,23 +666,14 @@ async def run_dialer_migration(admin_key: str = Query(...)):
         outcome VARCHAR(50),
         notes TEXT,
         recording_url TEXT,
-        recording_sid VARCHAR(50),
-        twilio_call_sid VARCHAR(50),
         called_at TIMESTAMP DEFAULT NOW(),
         completed_at TIMESTAMP,
         CONSTRAINT fk_call_candidate FOREIGN KEY (candidate_id)
             REFERENCES mm_candidates(id) ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_call_history_candidate
-        ON recruiting_call_history(candidate_id);
-    CREATE INDEX IF NOT EXISTS idx_call_history_caller
-        ON recruiting_call_history(caller_user_id);
-    CREATE INDEX IF NOT EXISTS idx_call_history_twilio_sid
-        ON recruiting_call_history(twilio_call_sid);
+    )
     """
 
-    # Also add columns if table exists but columns don't
+    # Step 2: Add Twilio columns if missing
     alter_sql = [
         "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS twilio_call_sid VARCHAR(50)",
         "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS recording_sid VARCHAR(50)",
@@ -689,13 +681,17 @@ async def run_dialer_migration(admin_key: str = Query(...)):
         "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS phone_from VARCHAR(20)",
     ]
 
+    # Step 3: Create indexes
+    index_sql = [
+        "CREATE INDEX IF NOT EXISTS idx_call_history_candidate ON recruiting_call_history(candidate_id)",
+        "CREATE INDEX IF NOT EXISTS idx_call_history_caller ON recruiting_call_history(caller_user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_call_history_twilio_sid ON recruiting_call_history(twilio_call_sid)",
+    ]
+
     try:
         with get_db_connection() as conn:
             # Create table
-            for statement in migration_sql.split(';'):
-                statement = statement.strip()
-                if statement:
-                    conn.execute(text(statement))
+            conn.execute(text(create_table_sql))
 
             # Add columns if missing
             for alter in alter_sql:
@@ -703,6 +699,13 @@ async def run_dialer_migration(admin_key: str = Query(...)):
                     conn.execute(text(alter))
                 except Exception:
                     pass  # Column may already exist
+
+            # Create indexes
+            for idx in index_sql:
+                try:
+                    conn.execute(text(idx))
+                except Exception:
+                    pass  # Index may already exist
 
             conn.commit()
         return {"status": "success", "message": "Call history table created/updated with Twilio columns"}
