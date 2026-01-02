@@ -182,8 +182,10 @@ class RecruitingService:
                 c.has_mortgage_experience,
                 c.placement_recommendation,
                 (SELECT COUNT(*) FROM mm_interviews WHERE candidate_id = c.id) as interview_count,
-                (SELECT COUNT(*) FROM mm_offers WHERE candidate_id = c.id AND status NOT IN ('declined', 'withdrawn', 'expired')) as offer_count
+                (SELECT COUNT(*) FROM mm_offers WHERE candidate_id = c.id AND status NOT IN ('declined', 'withdrawn', 'expired')) as offer_count,
+                ras.overall_score as assessment_score
             FROM mm_candidates c
+            LEFT JOIN recruit_assessment_scores ras ON ras.candidate_id = c.id
             WHERE c.is_active = true
             AND (:org_id IS NULL OR c.organization_id = :org_id)
             AND (:status IS NULL OR c.status = :status)
@@ -207,6 +209,23 @@ class RecruitingService:
             "offset": offset
         }).fetchall()
 
+        def get_grade(score):
+            """Convert score to letter grade."""
+            if score is None:
+                return None
+            if score >= 90:
+                return "A"
+            elif score >= 80:
+                return "B+"
+            elif score >= 70:
+                return "B"
+            elif score >= 60:
+                return "C"
+            elif score >= 50:
+                return "D"
+            else:
+                return "F"
+
         return [
             {
                 "id": r.id,
@@ -224,7 +243,9 @@ class RecruitingService:
                 "has_mortgage_experience": r.has_mortgage_experience,
                 "placement_recommendation": r.placement_recommendation,
                 "interview_count": r.interview_count,
-                "has_offer": r.offer_count > 0
+                "has_offer": r.offer_count > 0,
+                "assessment_score": float(r.assessment_score) if r.assessment_score else None,
+                "assessment_grade": get_grade(float(r.assessment_score)) if r.assessment_score else None
             }
             for r in results
         ]

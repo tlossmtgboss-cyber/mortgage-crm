@@ -603,7 +603,7 @@ const RecruitingDashboard = () => {
                   <th>Target Role</th>
                   <th>Source</th>
                   <th>Experience</th>
-                  <th>Applied</th>
+                  <th>Score</th>
                   <th>Interviews</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -641,7 +641,30 @@ const RecruitingDashboard = () => {
                         {candidate.years_experience ? `${candidate.years_experience} yrs` : '-'}
                         {candidate.has_mortgage_experience && <span className="mm-badge mm-badge-info">Mortgage</span>}
                       </td>
-                      <td>{candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : '-'}</td>
+                      <td>
+                        {candidate.assessment_score ? (
+                          <span
+                            className="mm-score-badge"
+                            style={{
+                              backgroundColor: candidate.assessment_score >= 80 ? '#dcfce7' :
+                                             candidate.assessment_score >= 60 ? '#fef3c7' :
+                                             candidate.assessment_score >= 40 ? '#ffedd5' : '#fee2e2',
+                              color: candidate.assessment_score >= 80 ? '#166534' :
+                                    candidate.assessment_score >= 60 ? '#92400e' :
+                                    candidate.assessment_score >= 40 ? '#9a3412' : '#991b1b',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontWeight: '600',
+                              fontSize: '13px'
+                            }}
+                          >
+                            {candidate.assessment_score}
+                            {candidate.assessment_grade && ` (${candidate.assessment_grade})`}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#9ca3af' }}>-</span>
+                        )}
+                      </td>
                       <td>{candidate.interview_count || 0}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <select
