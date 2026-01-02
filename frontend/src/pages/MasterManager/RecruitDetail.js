@@ -934,7 +934,11 @@ const RecruitDetail = () => {
               </button>
               <button
                 className="recruit-quick-action-btn"
-                onClick={() => window.open(`/recruit-portal/${candidate.purl_slug || `candidate-${candidate.id}`}`, '_blank')}
+                onClick={() => {
+                  const slug = candidate.purl_slug ||
+                    `${candidate.first_name}-${candidate.last_name}`.toLowerCase().replace(/\s+/g, '-');
+                  window.open(`/join/${slug}`, '_blank');
+                }}
               >
                 View Portal
               </button>

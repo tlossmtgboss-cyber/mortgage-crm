@@ -654,6 +654,75 @@ async def create_purl_portal_workspace(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/admin/workspaces/by-candidate/{candidate_id}/slug")
+async def update_workspace_slug_by_candidate(
+    candidate_id: int,
+    new_slug: str = Query(..., description="New slug for the workspace"),
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Update workspace slug by candidate ID (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        result = db.execute(
+            text("""
+                UPDATE recruit_portal_workspaces
+                SET slug = :new_slug
+                WHERE candidate_id = :candidate_id
+                RETURNING id, slug, candidate_id
+            """),
+            {"candidate_id": candidate_id, "new_slug": new_slug}
+        )
+        row = result.fetchone()
+        db.commit()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Workspace not found for this candidate")
+
+        return {"id": row.id, "slug": row.slug, "candidate_id": row.candidate_id}
+    except Exception as e:
+        logger.error(f"Error updating workspace slug: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/workspaces/by-candidate/{candidate_id}")
+async def get_workspace_by_candidate(
+    candidate_id: int,
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Get workspace info by candidate ID (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        result = db.execute(
+            text("""
+                SELECT id, slug, candidate_id, is_active, created_at
+                FROM recruit_portal_workspaces
+                WHERE candidate_id = :candidate_id
+            """),
+            {"candidate_id": candidate_id}
+        )
+        row = result.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Workspace not found for this candidate")
+
+        return {
+            "id": row.id,
+            "slug": row.slug,
+            "candidate_id": row.candidate_id,
+            "is_active": row.is_active,
+            "created_at": str(row.created_at)
+        }
+    except Exception as e:
+        logger.error(f"Error getting workspace: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/admin/workspaces")
 async def list_purl_portal_workspaces(
     admin_key: str = Query(...),
