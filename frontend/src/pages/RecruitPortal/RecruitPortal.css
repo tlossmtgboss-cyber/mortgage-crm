@@ -211,8 +211,24 @@
 /* Personal Video Section - Inline above tabs */
 .personal-video-section {
   padding: 2rem;
-  max-width: 800px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+.video-and-timer-row {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.video-and-timer-row .personal-video-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.timer-side {
+  flex-shrink: 0;
+  width: 320px;
 }
 
 .personal-video-container {
@@ -1440,6 +1456,14 @@
 ============================================================================= */
 
 @media (max-width: 768px) {
+  .video-and-timer-row {
+    flex-direction: column;
+  }
+
+  .timer-side {
+    width: 100%;
+  }
+
   .portal-header {
     flex-direction: column;
     gap: 1rem;

@@ -115,44 +115,51 @@ const RecruitPortal = () => {
         </p>
       </section>
 
-      {/* Personal Video Message - Right Below Welcome */}
+      {/* Personal Video Message with Timer */}
       {videos.length > 0 && (
         <section className="personal-video-section">
-          <div className="personal-video-container">
-            <div className="personal-video-header">
-              <span className="video-emoji">🎬</span>
-              <div>
-                <h3>A Personal Message for You</h3>
-                <p>Your recruiter recorded this just for you</p>
+          <div className="video-and-timer-row">
+            <div className="personal-video-container">
+              <div className="personal-video-header">
+                <div>
+                  <h3>A Personal Message for You</h3>
+                  <p>Your recruiter recorded this just for you</p>
+                </div>
               </div>
-            </div>
-            <div className="personal-video-player">
-              <video
-                controls
-                poster={videos[0].recruiter_photo || undefined}
-                onPlay={() => {
-                  setPlayingVideoId(videos[0].id);
-                  if (videos[0].is_new) {
-                    markVideoViewed(videos[0].id);
-                  }
-                }}
-                onEnded={() => setPlayingVideoId(null)}
-              >
-                <source src={videos[0].video_url} type="video/webm" />
-                Your browser does not support video playback.
-              </video>
-            </div>
-            {videos[0].message && (
-              <div className="personal-video-message">
-                <p>"{videos[0].message}"</p>
-                <span className="video-from">— {videos[0].recruiter_name}</span>
+              <div className="personal-video-player">
+                <video
+                  controls
+                  poster={videos[0].recruiter_photo || undefined}
+                  onPlay={() => {
+                    setPlayingVideoId(videos[0].id);
+                    if (videos[0].is_new) {
+                      markVideoViewed(videos[0].id);
+                    }
+                  }}
+                  onEnded={() => setPlayingVideoId(null)}
+                >
+                  <source src={videos[0].video_url} type="video/webm" />
+                  Your browser does not support video playback.
+                </video>
               </div>
-            )}
+              {videos[0].message && (
+                <div className="personal-video-message">
+                  <p>"{videos[0].message}"</p>
+                  <span className="video-from">— {videos[0].recruiter_name}</span>
+                </div>
+              )}
+            </div>
+            <div className="timer-side">
+              <MoneyLostTimer
+                slug={slug}
+                estimatedAnnualProduction={portalData?.estimated_production || 5000000}
+              />
+            </div>
           </div>
         </section>
       )}
 
-      {/* Hero Section with Timer */}
+      {/* Hero Section with Recruiter Card */}
       <section className="portal-hero">
         <div className="hero-cards">
           {portalData?.recruiter_name && (
@@ -182,10 +189,6 @@ const RecruitPortal = () => {
               </div>
             </div>
           )}
-          <MoneyLostTimer
-            slug={slug}
-            estimatedAnnualProduction={portalData?.estimated_production || 5000000}
-          />
         </div>
       </section>
 
