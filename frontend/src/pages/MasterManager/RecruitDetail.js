@@ -861,6 +861,245 @@ const RecruitDetail = () => {
       </div>
       )}
 
+      {/* Pipeline Tab */}
+      {activeTab === 'pipeline' && (
+        <div className="recruit-tab-content">
+          <div className="recruit-pipeline-section">
+            <div className="recruit-section-header">
+              <h3>Recruiting Pipeline</h3>
+            </div>
+
+            {/* Pipeline Tracker */}
+            <div className="recruit-pipeline-tracker">
+              {PIPELINE_STAGES.map((stage, index) => {
+                const stageInfo = CANDIDATE_STATUSES.find(s => s.value === stage);
+                const currentIndex = getCurrentStageIndex();
+                const isCompleted = currentIndex > index;
+                const isCurrent = currentIndex === index;
+                const isTerminal = ['rejected', 'withdrawn'].includes(candidate.status);
+
+                return (
+                  <div
+                    key={stage}
+                    className={`recruit-pipeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''} ${isTerminal && isCurrent ? 'terminal' : ''}`}
+                    onClick={() => handleStatusChange(stage)}
+                  >
+                    <div
+                      className="recruit-step-marker"
+                      style={{
+                        backgroundColor: isCompleted || isCurrent ? stageInfo?.color : '#e5e7eb',
+                        borderColor: isCurrent ? stageInfo?.color : 'transparent'
+                      }}
+                    >
+                      {isCompleted ? '✓' : stageInfo?.icon || (index + 1)}
+                    </div>
+                    <span className="recruit-step-label">{stageInfo?.label}</span>
+                    {index < PIPELINE_STAGES.length - 1 && (
+                      <div className={`recruit-step-connector ${isCompleted ? 'completed' : ''}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Terminal Status Warning */}
+            {['rejected', 'withdrawn'].includes(candidate.status) && (
+              <div className="recruit-terminal-status">
+                <span className="recruit-terminal-icon">
+                  {candidate.status === 'rejected' ? '❌' : '🚫'}
+                </span>
+                <span>
+                  Candidate was {candidate.status === 'rejected' ? 'rejected' : 'withdrawn'}
+                </span>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            <div className="recruit-quick-actions" style={{ marginTop: '2rem' }}>
+              <div className="recruit-section-header">
+                <h3>Quick Actions</h3>
+              </div>
+              <div className="recruit-quick-actions-grid">
+                <button
+                  className="recruit-quick-action-btn"
+                  onClick={handleClickToCall}
+                  disabled={!candidate.phone || isCallInProgress}
+                >
+                  {isCallInProgress ? 'Calling...' : 'Call'}
+                </button>
+                <button
+                  className="recruit-quick-action-btn"
+                  onClick={() => window.open(`mailto:${candidate.email}`, '_blank')}
+                  disabled={!candidate.email}
+                >
+                  Email
+                </button>
+                <button
+                  className="recruit-quick-action-btn"
+                  onClick={() => setShowScheduleInterviewModal(true)}
+                >
+                  Schedule
+                </button>
+                <button
+                  className="recruit-quick-action-btn"
+                  onClick={() => setShowVideoRecorder(true)}
+                >
+                  Video
+                </button>
+                <button
+                  className="recruit-quick-action-btn"
+                  onClick={() => window.open(`sms:${candidate.phone}`, '_blank')}
+                  disabled={!candidate.phone}
+                >
+                  SMS
+                </button>
+                <button
+                  className="recruit-quick-action-btn"
+                  onClick={() => handleStatusChange('rejected')}
+                  disabled={candidate.status === 'rejected' || candidate.status === 'hired'}
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interviews Tab */}
+      {activeTab === 'interviews' && (
+        <div className="recruit-tab-content">
+          <div className="recruit-interviews-section">
+            <div className="recruit-section-header">
+              <h3>Interview History</h3>
+              <button
+                className="mm-btn mm-btn-primary"
+                onClick={() => setShowScheduleInterviewModal(true)}
+              >
+                Schedule Interview
+              </button>
+            </div>
+
+            {!candidate.interviews?.length ? (
+              <div className="recruit-empty-state">
+                <span className="recruit-empty-icon">📅</span>
+                <p>No interviews scheduled yet</p>
+                <button
+                  className="mm-btn mm-btn-primary"
+                  onClick={() => setShowScheduleInterviewModal(true)}
+                >
+                  Schedule First Interview
+                </button>
+              </div>
+            ) : (
+              <div className="recruit-interviews-list-full">
+                {candidate.interviews.map((interview) => (
+                  <div key={interview.id} className="recruit-interview-card">
+                    <div className="recruit-interview-header">
+                      <span className="recruit-interview-round">Round {interview.round}</span>
+                      <span
+                        className="recruit-interview-status"
+                        style={{
+                          backgroundColor: interview.status === 'completed' ? '#dcfce7' :
+                                          interview.status === 'scheduled' ? '#dbeafe' : '#f3f4f6',
+                          color: interview.status === 'completed' ? '#16a34a' :
+                                interview.status === 'scheduled' ? '#1d4ed8' : '#6b7280'
+                        }}
+                      >
+                        {interview.status}
+                      </span>
+                    </div>
+                    <div className="recruit-interview-body">
+                      <div className="recruit-interview-type">{interview.type}</div>
+                      <div className="recruit-interview-date">
+                        {interview.scheduled_at ? new Date(interview.scheduled_at).toLocaleString() : '-'}
+                      </div>
+                      {interview.score && (
+                        <div className="recruit-interview-score">
+                          Score: <strong>{interview.score.toFixed(1)}</strong>
+                        </div>
+                      )}
+                      {interview.notes && (
+                        <div className="recruit-interview-notes">{interview.notes}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Notes Tab */}
+      {activeTab === 'notes' && (
+        <div className="recruit-tab-content">
+          <div className="recruit-notes-section-full">
+            <div className="recruit-section-header">
+              <h3>Notes & Activity</h3>
+            </div>
+
+            {/* Add Note */}
+            <div className="recruit-add-note">
+              <textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Add a note about this candidate..."
+                className="mm-textarea"
+                rows="4"
+              />
+              <button
+                className="mm-btn mm-btn-primary"
+                onClick={handleAddNote}
+                disabled={!newNote.trim()}
+              >
+                Add Note
+              </button>
+            </div>
+
+            {/* Notes List */}
+            <div className="recruit-notes-list-full">
+              {candidate.notes?.length > 0 ? (
+                candidate.notes.map((note) => (
+                  <div key={note.id} className="recruit-note-card">
+                    <p className="recruit-note-content">{note.content}</p>
+                    <div className="recruit-note-meta">
+                      <span className="recruit-note-author">{note.created_by_name || 'Team Member'}</span>
+                      <span className="recruit-note-date">
+                        {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="recruit-empty-text">No notes yet</p>
+              )}
+            </div>
+
+            {/* Activity Timeline */}
+            {candidate.activities?.length > 0 && (
+              <div className="recruit-activity-section">
+                <h4>Activity Timeline</h4>
+                <div className="recruit-activity-timeline-full">
+                  {candidate.activities.map((activity) => (
+                    <div key={activity.id} className="recruit-activity-item">
+                      <div className="recruit-activity-marker" />
+                      <div className="recruit-activity-content">
+                        <span className="mm-badge">{activity.type}</span>
+                        <p>{activity.description}</p>
+                        <span className="recruit-activity-date">
+                          {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : ''}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Assessment & Grading Tab */}
       {activeTab === 'assessment' && (
         <div className="recruit-assessment-tab">

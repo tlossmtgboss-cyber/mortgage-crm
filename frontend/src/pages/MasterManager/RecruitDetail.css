@@ -1323,3 +1323,189 @@
   padding: 16px 20px;
   border-top: 1px solid #e5e7eb;
 }
+
+/* New Tab Content Styles */
+.recruit-tab-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Empty State */
+.recruit-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.recruit-empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.recruit-empty-state p {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+/* Interviews Tab */
+.recruit-interviews-list-full {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.recruit-interview-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.recruit-interview-card .recruit-interview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.recruit-interview-round {
+  font-weight: 600;
+  font-size: 16px;
+  color: #1f2937;
+}
+
+.recruit-interview-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.recruit-interview-type {
+  font-weight: 500;
+  color: #374151;
+}
+
+.recruit-interview-date {
+  color: #6b7280;
+}
+
+.recruit-interview-score {
+  color: #059669;
+}
+
+.recruit-interview-notes {
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Notes Tab */
+.recruit-notes-section-full {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.recruit-notes-section-full .recruit-add-note {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recruit-notes-section-full .recruit-add-note .mm-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.recruit-notes-section-full .recruit-add-note .mm-btn {
+  align-self: flex-end;
+}
+
+.recruit-notes-list-full {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recruit-note-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.recruit-note-card .recruit-note-content {
+  margin: 0 0 12px 0;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.recruit-note-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.recruit-note-author {
+  font-weight: 500;
+}
+
+/* Activity Section in Notes Tab */
+.recruit-activity-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.recruit-activity-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #1f2937;
+}
+
+.recruit-activity-timeline-full {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-left: 20px;
+  border-left: 2px solid #e5e7eb;
+}
+
+.recruit-activity-timeline-full .recruit-activity-item {
+  display: flex;
+  gap: 12px;
+  position: relative;
+}
+
+.recruit-activity-timeline-full .recruit-activity-marker {
+  position: absolute;
+  left: -26px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.recruit-activity-timeline-full .recruit-activity-content {
+  flex: 1;
+}
+
+.recruit-activity-timeline-full .recruit-activity-content p {
+  margin: 8px 0;
+  color: #374151;
+}
+
+.recruit-activity-timeline-full .recruit-activity-date {
+  font-size: 12px;
+  color: #9ca3af;
+}
