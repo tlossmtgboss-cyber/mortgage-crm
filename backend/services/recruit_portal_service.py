@@ -434,6 +434,7 @@ Candidate's current status: {candidate.status}
     ) -> Dict:
         """Schedule an appointment from the portal."""
         with SessionLocal() as conn:
+            # Insert the appointment
             result = conn.execute(
                 text("""
                     INSERT INTO recruit_portal_appointments
@@ -451,10 +452,75 @@ Candidate's current status: {candidate.status}
             appointment_id = result.fetchone().id
             conn.commit()
 
+            # Get candidate and recruiter info for email
+            portal_info = conn.execute(
+                text("""
+                    SELECT
+                        w.candidate_id,
+                        c.first_name as candidate_first_name,
+                        c.last_name as candidate_last_name,
+                        c.email as candidate_email,
+                        u.full_name as recruiter_name,
+                        u.email as recruiter_email
+                    FROM recruit_portal_workspaces w
+                    LEFT JOIN mm_candidates c ON c.id = w.candidate_id
+                    LEFT JOIN users u ON u.id = w.recruiter_id
+                    WHERE w.id = :workspace_id
+                """),
+                {"workspace_id": workspace_id}
+            ).fetchone()
+
+        # Send confirmation email
+        email_sent = False
+        if portal_info and portal_info.candidate_email:
+            try:
+                from services.notification_service import NotificationService
+                notification_service = NotificationService()
+
+                # Format appointment time nicely
+                appt_time = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
+                formatted_time = appt_time.strftime("%A, %B %d, %Y at %I:%M %p")
+
+                # Map appointment type to friendly name
+                type_names = {
+                    "discovery_call": "Discovery Call",
+                    "deep_dive": "Deep Dive Session",
+                    "tech_demo": "Technology Demo",
+                    "phone_call": "Phone Call"
+                }
+                friendly_type = type_names.get(appointment_type, appointment_type.replace("_", " ").title())
+
+                # Build email content
+                html_content = f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #2563eb;">Your Appointment is Confirmed!</h2>
+                    <p>Hi {portal_info.candidate_first_name or 'there'},</p>
+                    <p>Your <strong>{friendly_type}</strong> has been scheduled.</p>
+                    <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> {formatted_time}</p>
+                        <p style="margin: 0 0 10px 0;"><strong>Type:</strong> {friendly_type}</p>
+                        <p style="margin: 0;"><strong>With:</strong> {portal_info.recruiter_name or 'Your Recruiter'}</p>
+                    </div>
+                    {f'<p><strong>Notes:</strong> {notes}</p>' if notes else ''}
+                    <p>We're looking forward to speaking with you!</p>
+                    <p>Best regards,<br>{portal_info.recruiter_name or 'The Recruiting Team'}</p>
+                </div>
+                """
+
+                notification_service.send_email(
+                    to_email=portal_info.candidate_email,
+                    subject=f"Appointment Confirmed: {friendly_type} on {appt_time.strftime('%B %d')}",
+                    html_content=html_content
+                )
+                email_sent = True
+            except Exception as e:
+                print(f"Failed to send confirmation email: {e}")
+
         return {
             "appointment_id": appointment_id,
             "scheduled_at": scheduled_at,
             "status": "scheduled",
+            "email_sent": email_sent,
             "message": "Your appointment has been scheduled! You'll receive a confirmation email shortly."
         }
 
