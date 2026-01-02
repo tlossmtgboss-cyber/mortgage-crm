@@ -19718,6 +19718,17 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Realtor Portal routes: {e}")
 
+# Include Contract Portal Automation routes
+try:
+    from routes.contract_automation_routes import router as contract_automation_router, set_dependencies as set_contract_automation_deps
+    from services.notification_service import NotificationService
+    notification_service = NotificationService()
+    set_contract_automation_deps(get_db, notification_service)
+    app.include_router(contract_automation_router, tags=["Contract Automation"])
+    logger.info("✅ Contract Portal Automation routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Contract Automation routes: {e}")
+
 # Include Workflow System routes
 from workflow_routes import router as workflow_router
 app.include_router(workflow_router, tags=["Workflow"])
@@ -20046,6 +20057,14 @@ try:
     logger.info("✅ Recruit Assessment routes loaded")
 except Exception as e:
     logger.warning(f"Could not load Recruit Assessment routes: {e}")
+
+# Include DISC + Motivators Assessment routes
+try:
+    from routes.disc_assessment_routes import router as disc_assessment_router
+    app.include_router(disc_assessment_router, tags=["DISC Assessment"])
+    logger.info("✅ DISC Assessment routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load DISC Assessment routes: {e}")
 
 # Include Recruiting Workflow routes (Automated Tasks)
 try:
@@ -45696,6 +45715,43 @@ async def create_loan_team_member(
 
         logger.info(f"Team member added to loan {loan_id}: {member.name} ({member.role})")
 
+        # TRIGGER: If this is a realtor role, check if portal automation should run
+        portal_automation_result = None
+        role_lower = member.role.lower() if member.role else ""
+        is_realtor_role = any(keyword in role_lower for keyword in ['realtor', 'buyer', 'listing', 'agent', 'seller'])
+
+        if is_realtor_role and member.email and not member.is_employee:
+            try:
+                from services.contract_portal_automation_service import ContractPortalAutomationService
+                from services.notification_service import NotificationService
+
+                # Determine realtor type
+                if any(keyword in role_lower for keyword in ['listing', 'seller']):
+                    realtor_type = "listing_agent"
+                else:
+                    realtor_type = "buyers_agent"
+
+                notification_service = NotificationService()
+                automation_service = ContractPortalAutomationService(db, notification_service)
+
+                realtor_info = {
+                    "name": member.name,
+                    "email": member.email,
+                    "phone": member.phone,
+                    "company": member.company,
+                    "partner_id": referral_partner_id
+                }
+
+                portal_automation_result = automation_service.on_realtor_added(
+                    loan_id=loan_id,
+                    realtor_type=realtor_type,
+                    realtor_info=realtor_info
+                )
+                logger.info(f"Portal automation triggered for {realtor_type} on loan {loan_id}: {portal_automation_result}")
+            except Exception as automation_error:
+                logger.error(f"Portal automation failed for loan {loan_id}: {automation_error}")
+                portal_automation_result = {"error": str(automation_error)}
+
         return {
             "success": True,
             "team_member": {
@@ -45711,7 +45767,8 @@ async def create_loan_team_member(
                 "is_new": db_member.is_new,
                 "created_at": db_member.created_at.isoformat() if db_member.created_at else None
             },
-            "referral_partner_created": referral_partner_id is not None and not member.is_employee
+            "referral_partner_created": referral_partner_id is not None and not member.is_employee,
+            "portal_automation": portal_automation_result
         }
     except HTTPException:
         raise

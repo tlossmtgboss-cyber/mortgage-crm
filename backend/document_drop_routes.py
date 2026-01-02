@@ -271,6 +271,23 @@ async def upload_document(
         # In production, upload file to cloud storage here
         # For now, we just store the metadata
 
+        # TRIGGER: If this is a purchase contract, initiate portal automation
+        if doc_type_enum.name == 'PURCHASE_CONTRACT' and loan_id:
+            try:
+                from services.contract_portal_automation_service import ContractPortalAutomationService
+                from services.notification_service import NotificationService
+
+                notification_service = NotificationService()
+                automation_service = ContractPortalAutomationService(db, notification_service)
+                automation_result = automation_service.process_contract_received(
+                    loan_id=loan_id,
+                    triggered_by="document_upload"
+                )
+                logger.info(f"Contract portal automation triggered for loan {loan_id}: {automation_result}")
+            except Exception as automation_error:
+                # Don't fail the upload if automation fails
+                logger.error(f"Contract portal automation failed for loan {loan_id}: {automation_error}")
+
         return DocumentUploadResponse(
             success=True,
             document_id=doc.id,
