@@ -176,8 +176,16 @@ function AssessmentScoreCard({
               className="score-card-edit-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                // Pass full category object with key and config
-                onEdit && onEdit({ key: category, ...config });
+                // Pass explicit category object with all needed properties
+                const categoryData = {
+                  key: category,
+                  label: config.label,
+                  description: config.description,
+                  weight: config.weight,
+                  weightLabel: config.weightLabel
+                };
+                console.log('[AssessmentScoreCard] Passing category:', categoryData);
+                onEdit && onEdit(categoryData);
               }}
             >
               Edit Scores
