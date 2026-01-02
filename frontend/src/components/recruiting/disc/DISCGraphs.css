@@ -1,0 +1,224 @@
+/* DISC Graphs - Adapted & Natural Style Charts */
+
+.disc-graphs-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.disc-graph {
+  flex: 1;
+  min-width: 180px;
+}
+
+.disc-graph.compact {
+  min-width: 140px;
+}
+
+.disc-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.disc-graph-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+}
+
+.disc-graph-num {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.disc-graph-bars {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 160px;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.disc-graph.compact .disc-graph-bars {
+  height: 120px;
+}
+
+.disc-graph-bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.disc-graph-bar-wrapper {
+  width: 100%;
+  height: 120px;
+  background: #f3f4f6;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.disc-graph.compact .disc-graph-bar-wrapper {
+  height: 90px;
+}
+
+.disc-graph-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease;
+  min-height: 4px;
+}
+
+.disc-graph-bar-label {
+  font-weight: 700;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.disc-graph-bar-value {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.disc-graph-footer {
+  margin-top: 16px;
+  text-align: center;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.disc-graph-style {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: 1px;
+}
+
+.disc-graph-style-desc {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.disc-graphs-divider {
+  width: 1px;
+  height: 200px;
+  background: #e5e7eb;
+  margin: 0 8px;
+}
+
+.disc-graphs-combined {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #f9fafb;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.disc-combined-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.disc-combined-style {
+  font-weight: 700;
+  font-size: 16px;
+  color: #111827;
+}
+
+/* Single Bar Chart */
+.disc-bar-chart {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.disc-bar-chart-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.disc-bar-chart-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  height: calc(100% - 40px);
+}
+
+.disc-bar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  max-width: 50px;
+}
+
+.disc-bar-column {
+  width: 32px;
+  height: 100%;
+  background: #f3f4f6;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.disc-bar-fill {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease;
+}
+
+.disc-bar-dim {
+  font-weight: 700;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.disc-bar-score {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .disc-graphs-container {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .disc-graphs-divider {
+    width: 100%;
+    height: 1px;
+    margin: 8px 0;
+  }
+
+  .disc-graph-bars {
+    height: 120px;
+  }
+}

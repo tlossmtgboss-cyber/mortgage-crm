@@ -585,6 +585,74 @@ async def fix_video_urls(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/admin/add-test-video")
+async def add_test_video(
+    admin_key: str = Query(...),
+    candidate_id: int = Query(...),
+    message: str = Query(default="Welcome to the team! We're excited about the opportunity to work with you."),
+    db=Depends(get_db)
+):
+    """Add a test video for a candidate (admin only)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        # Use a public sample video URL for testing
+        test_video_url = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+
+        # Get a recruiter (first admin user)
+        recruiter_result = db.execute(text("""
+            SELECT id, full_name FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1
+        """))
+        recruiter = recruiter_result.fetchone()
+        recruiter_id = recruiter.id if recruiter else 1
+        recruiter_name = recruiter.full_name if recruiter else "Tim Loss"
+
+        # Insert test video
+        result = db.execute(text("""
+            INSERT INTO recruit_video_messages (
+                candidate_id,
+                recruiter_id,
+                video_key,
+                video_url,
+                message,
+                duration_seconds,
+                created_at
+            ) VALUES (
+                :candidate_id,
+                :recruiter_id,
+                'test-video',
+                :video_url,
+                :message,
+                15,
+                NOW()
+            )
+            RETURNING id
+        """), {
+            "candidate_id": candidate_id,
+            "recruiter_id": recruiter_id,
+            "video_url": test_video_url,
+            "message": message
+        })
+
+        video_id = result.fetchone().id
+        db.commit()
+
+        return {
+            "success": True,
+            "video_id": video_id,
+            "candidate_id": candidate_id,
+            "message": message,
+            "video_url": test_video_url,
+            "recruiter_name": recruiter_name
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to add test video: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/portal/{slug}/videos")
 async def get_portal_videos(
     slug: str,

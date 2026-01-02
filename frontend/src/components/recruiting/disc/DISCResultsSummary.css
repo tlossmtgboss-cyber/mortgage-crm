@@ -1,0 +1,350 @@
+/* DISC Results Summary Card */
+
+.disc-summary {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.disc-summary.compact {
+  padding: 16px;
+}
+
+.disc-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.disc-summary-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.disc-quality-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.disc-quality-badge.high {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.disc-quality-badge.medium {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.disc-quality-badge.low {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+/* Empty State */
+.disc-summary-empty-content {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.disc-summary-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.disc-summary-empty-content p {
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.disc-summary-invite-btn {
+  padding: 10px 20px;
+  background: #3B82F6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.disc-summary-invite-btn:hover {
+  background: #2563EB;
+}
+
+/* Content Layout */
+.disc-summary-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.disc-summary-wheel {
+  display: flex;
+  justify-content: center;
+}
+
+.disc-summary-info {
+  display: flex;
+  justify-content: space-around;
+  text-align: center;
+}
+
+.disc-summary-style,
+.disc-summary-zone {
+  display: flex;
+  flex-direction: column;
+}
+
+.disc-style-code {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: 1px;
+}
+
+.disc-style-label,
+.disc-zone-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.disc-zone-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* Mini Bars */
+.disc-summary-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.disc-mini-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.disc-mini-bar-label {
+  font-weight: 700;
+  font-size: 12px;
+  width: 16px;
+}
+
+.disc-mini-bar-track {
+  flex: 1;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.disc-mini-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.disc-mini-bar-value {
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  width: 24px;
+  text-align: right;
+}
+
+/* Motivators */
+.disc-summary-motivators {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.disc-motivators-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Date */
+.disc-summary-date {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* Actions */
+.disc-summary-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.disc-summary-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.disc-summary-btn-primary {
+  background: #3B82F6;
+  color: #fff;
+  border: none;
+}
+
+.disc-summary-btn-primary:hover {
+  background: #2563EB;
+}
+
+.disc-summary-btn-secondary {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.disc-summary-btn-secondary:hover {
+  background: #f9fafb;
+}
+
+/* Profile Card */
+.disc-profile-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.disc-profile-header {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.disc-profile-info {
+  flex: 1;
+}
+
+.disc-profile-style {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px 0;
+  letter-spacing: 1px;
+}
+
+.disc-profile-zone {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.disc-profile-motivator {
+  font-size: 14px;
+  color: #374151;
+  margin: 0;
+}
+
+.disc-profile-characteristics,
+.disc-profile-strengths {
+  margin-bottom: 16px;
+}
+
+.disc-profile-characteristics h4,
+.disc-profile-strengths h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 0;
+}
+
+.disc-profile-characteristics p {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.disc-profile-strengths ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.disc-profile-strengths li {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.disc-profile-btn {
+  width: 100%;
+  padding: 12px;
+  background: #3B82F6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.disc-profile-btn:hover {
+  background: #2563EB;
+}
+
+/* Badge */
+.disc-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.disc-badge-small {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.disc-badge-medium {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.disc-badge-large {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .disc-summary-info {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .disc-profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+}
