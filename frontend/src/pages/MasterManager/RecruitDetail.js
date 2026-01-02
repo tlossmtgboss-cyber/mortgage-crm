@@ -136,12 +136,12 @@ const RecruitDetail = () => {
     loadCandidate();
   }, [loadCandidate]);
 
-  // Load assessment when tab changes to assessment
+  // Load assessment on component mount (for sidebar display)
   useEffect(() => {
-    if (activeTab === 'assessment' && !assessment && !assessmentLoading) {
+    if (!assessment && !assessmentLoading) {
       loadAssessment();
     }
-  }, [activeTab, assessment, assessmentLoading, loadAssessment]);
+  }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStatusChange = async (newStatus) => {
     // Check if quiz is required for this disposition change
