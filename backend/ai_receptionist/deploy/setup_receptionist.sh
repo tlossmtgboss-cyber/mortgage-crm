@@ -398,9 +398,26 @@ from fastapi.responses import Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from contextlib import contextmanager
 
 # Load environment variables
 load_dotenv()
+
+# Database setup
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+
+@contextmanager
+def get_db():
+    """Database session context manager."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # Configure logging
 logging.basicConfig(
@@ -545,7 +562,39 @@ async def handle_call_status(request: Request):
     logger.info(f"Call status update: {call_sid} -> {call_status}")
 
     # Update call log in database
-    # TODO: Implement database update
+    try:
+        with get_db() as db:
+            # Map Twilio status to our status
+            ended_statuses = ["completed", "busy", "failed", "no-answer", "canceled"]
+            update_data = {"status": call_status}
+
+            if call_status in ended_statuses:
+                update_data["ended_at"] = datetime.utcnow()
+                # Get duration if available
+                duration = form_data.get("CallDuration")
+                if duration:
+                    update_data["duration_seconds"] = int(duration)
+
+            db.execute(
+                text("""
+                    UPDATE call_logs
+                    SET status = :status,
+                        ended_at = COALESCE(:ended_at, ended_at),
+                        duration_seconds = COALESCE(:duration_seconds, duration_seconds),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE call_sid = :call_sid
+                """),
+                {
+                    "call_sid": call_sid,
+                    "status": call_status,
+                    "ended_at": update_data.get("ended_at"),
+                    "duration_seconds": update_data.get("duration_seconds"),
+                }
+            )
+            db.commit()
+            logger.info(f"Updated call log for {call_sid}")
+    except Exception as e:
+        logger.error(f"Failed to update call log: {e}")
 
     return {"status": "received"}
 
@@ -589,22 +638,147 @@ async def voice_stream(websocket: WebSocket, call_sid: str):
 @app.get("/api/calls")
 async def get_recent_calls(limit: int = 20):
     """Get recent call logs."""
-    # TODO: Implement database query
-    return {"calls": [], "total": 0}
+    try:
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    SELECT id, call_sid, from_number, to_number, direction,
+                           status, started_at, ended_at, duration_seconds,
+                           outcome, notes, created_at
+                    FROM call_logs
+                    ORDER BY started_at DESC
+                    LIMIT :limit
+                """),
+                {"limit": limit}
+            )
+            calls = [dict(row._mapping) for row in result.fetchall()]
+
+            # Get total count
+            count_result = db.execute(text("SELECT COUNT(*) FROM call_logs"))
+            total = count_result.scalar()
+
+            return {
+                "calls": [
+                    {
+                        **call,
+                        "started_at": call["started_at"].isoformat() if call.get("started_at") else None,
+                        "ended_at": call["ended_at"].isoformat() if call.get("ended_at") else None,
+                        "created_at": call["created_at"].isoformat() if call.get("created_at") else None,
+                    }
+                    for call in calls
+                ],
+                "total": total
+            }
+    except Exception as e:
+        logger.error(f"Failed to get recent calls: {e}")
+        return {"calls": [], "total": 0, "error": str(e)}
 
 
 @app.get("/api/calls/{call_sid}")
 async def get_call_details(call_sid: str):
     """Get details for a specific call."""
-    # TODO: Implement database query
-    return {"call_sid": call_sid, "status": "not_found"}
+    try:
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    SELECT id, call_sid, from_number, to_number, direction,
+                           status, started_at, ended_at, duration_seconds,
+                           recording_url, transcript, sentiment_score,
+                           caller_id, loan_officer_id, transferred_to,
+                           transfer_reason, outcome, notes, metadata,
+                           created_at, updated_at
+                    FROM call_logs
+                    WHERE call_sid = :call_sid
+                """),
+                {"call_sid": call_sid}
+            )
+            row = result.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Call not found")
+
+            call = dict(row._mapping)
+
+            # Get call events
+            events_result = db.execute(
+                text("""
+                    SELECT event_type, event_data, timestamp
+                    FROM call_events
+                    WHERE call_log_id = :call_id
+                    ORDER BY timestamp ASC
+                """),
+                {"call_id": call["id"]}
+            )
+            events = [dict(e._mapping) for e in events_result.fetchall()]
+
+            return {
+                **call,
+                "started_at": call["started_at"].isoformat() if call.get("started_at") else None,
+                "ended_at": call["ended_at"].isoformat() if call.get("ended_at") else None,
+                "created_at": call["created_at"].isoformat() if call.get("created_at") else None,
+                "updated_at": call["updated_at"].isoformat() if call.get("updated_at") else None,
+                "events": [
+                    {
+                        **event,
+                        "timestamp": event["timestamp"].isoformat() if event.get("timestamp") else None,
+                    }
+                    for event in events
+                ],
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get call details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/callbacks")
 async def get_pending_callbacks():
     """Get pending callback requests."""
-    # TODO: Implement database query
-    return {"callbacks": [], "total": 0}
+    try:
+        with get_db() as db:
+            result = db.execute(
+                text("""
+                    SELECT cr.id, cr.call_log_id, cr.caller_name, cr.caller_phone,
+                           cr.reason, cr.urgency, cr.assigned_to, cr.status,
+                           cr.scheduled_at, cr.notes, cr.created_at,
+                           cl.call_sid, cl.from_number
+                    FROM callback_requests cr
+                    LEFT JOIN call_logs cl ON cl.id = cr.call_log_id
+                    WHERE cr.status = 'pending'
+                    ORDER BY
+                        CASE cr.urgency
+                            WHEN 'urgent' THEN 1
+                            WHEN 'high' THEN 2
+                            WHEN 'normal' THEN 3
+                            WHEN 'low' THEN 4
+                            ELSE 5
+                        END,
+                        cr.created_at ASC
+                """)
+            )
+            callbacks = [dict(row._mapping) for row in result.fetchall()]
+
+            # Get total count of pending callbacks
+            count_result = db.execute(
+                text("SELECT COUNT(*) FROM callback_requests WHERE status = 'pending'")
+            )
+            total = count_result.scalar()
+
+            return {
+                "callbacks": [
+                    {
+                        **cb,
+                        "scheduled_at": cb["scheduled_at"].isoformat() if cb.get("scheduled_at") else None,
+                        "created_at": cb["created_at"].isoformat() if cb.get("created_at") else None,
+                    }
+                    for cb in callbacks
+                ],
+                "total": total
+            }
+    except Exception as e:
+        logger.error(f"Failed to get pending callbacks: {e}")
+        return {"callbacks": [], "total": 0, "error": str(e)}
 
 
 @app.get("/api/metrics")
