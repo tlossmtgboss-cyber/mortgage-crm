@@ -5,6 +5,7 @@ Endpoints for:
 - Workflow task management
 - Dialer queue
 - Task completion
+- Email automation processing
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -12,6 +13,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 from workflows.recruiting_workflows import recruiting_workflow_service, RECRUITING_WORKFLOWS
+from services.recruiting_email_service import get_recruiting_email_service
 
 router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workflow"])
 
@@ -301,6 +303,20 @@ async def get_workflow_dashboard(
         )
         dialer_count = result.fetchone().count
 
+        # Get email queue count
+        result = conn.execute(
+            text(f"""
+                SELECT COUNT(*) as count
+                FROM recruiting_tasks
+                WHERE organization_id = :org_id
+                    AND status = 'pending'
+                    AND route_to = 'email_automation'
+                    {user_filter}
+            """),
+            params
+        )
+        email_count = result.fetchone().count
+
     return {
         "task_counts": {
             "pending": status_counts.get("pending", 0),
@@ -310,5 +326,315 @@ async def get_workflow_dashboard(
         },
         "overdue_count": overdue_count,
         "today_count": today_count,
-        "dialer_queue_count": dialer_count
+        "dialer_queue_count": dialer_count,
+        "email_queue_count": email_count
     }
+
+
+# =============================================================================
+# Email Automation Endpoints
+# =============================================================================
+
+@router.get("/email-queue")
+async def get_email_queue(
+    assigned_to: Optional[int] = None,
+    organization_id: int = 1
+):
+    """
+    Get tasks routed to email automation that are pending.
+
+    Returns candidates that need automated emails sent.
+    """
+    from database import get_db_connection
+    from sqlalchemy import text
+
+    params = {"org_id": organization_id}
+    filters = [
+        "rt.organization_id = :org_id",
+        "rt.status = 'pending'",
+        "rt.route_to = 'email_automation'"
+    ]
+
+    if assigned_to:
+        filters.append("rt.assigned_to = :assigned_to")
+        params["assigned_to"] = assigned_to
+
+    where_sql = " AND ".join(filters)
+
+    with get_db_connection() as conn:
+        result = conn.execute(
+            text(f"""
+                SELECT rt.id, rt.candidate_id, rt.title, rt.description,
+                       rt.due_date, rt.priority, rt.assigned_to,
+                       rc.first_name, rc.last_name, rc.email
+                FROM recruiting_tasks rt
+                JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                WHERE {where_sql}
+                ORDER BY rt.due_date ASC,
+                         CASE rt.priority
+                            WHEN 'high' THEN 1
+                            WHEN 'medium' THEN 2
+                            ELSE 3
+                         END
+            """),
+            params
+        )
+        rows = result.fetchall()
+
+    queue = [
+        {
+            "id": row.id,
+            "candidate_id": row.candidate_id,
+            "candidate_name": f"{row.first_name} {row.last_name}",
+            "candidate_email": row.email,
+            "title": row.title,
+            "description": row.description,
+            "due_date": row.due_date.isoformat() if row.due_date else None,
+            "priority": row.priority
+        }
+        for row in rows
+    ]
+
+    return {
+        "queue_length": len(queue),
+        "queue": queue
+    }
+
+
+@router.post("/email-queue/{task_id}/send")
+async def send_email_for_task(task_id: int, user_id: int = Query(...)):
+    """
+    Process and send an email for a specific email automation task.
+
+    This marks the task as completed after successful send.
+    """
+    from database import get_db_connection
+    from sqlalchemy import text
+
+    with get_db_connection() as conn:
+        email_service = get_recruiting_email_service(conn)
+
+        # Process the email task
+        result = email_service.process_workflow_email_task(task_id, conn)
+
+        if result.success:
+            # Mark task as completed
+            conn.execute(
+                text("""
+                    UPDATE recruiting_tasks
+                    SET status = 'completed',
+                        completed_at = NOW(),
+                        completed_by = :user_id
+                    WHERE id = :task_id
+                """),
+                {"task_id": task_id, "user_id": user_id}
+            )
+            conn.commit()
+
+            return {
+                "success": True,
+                "message": result.message,
+                "email_type": result.email_type,
+                "recipient": result.recipient,
+                "task_id": task_id
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send email: {result.error}"
+            )
+
+
+@router.post("/email-queue/process-all")
+async def process_all_pending_emails(
+    user_id: int = Query(...),
+    organization_id: int = 1,
+    limit: int = 50
+):
+    """
+    Process all pending email automation tasks.
+
+    Sends emails for all tasks in the queue and marks them complete.
+    Returns summary of processed tasks.
+    """
+    from database import get_db_connection
+    from sqlalchemy import text
+
+    results = {
+        "processed": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "details": []
+    }
+
+    with get_db_connection() as conn:
+        # Get pending email tasks
+        tasks = conn.execute(
+            text("""
+                SELECT id, title FROM recruiting_tasks
+                WHERE organization_id = :org_id
+                    AND status = 'pending'
+                    AND route_to = 'email_automation'
+                ORDER BY due_date ASC
+                LIMIT :limit
+            """),
+            {"org_id": organization_id, "limit": limit}
+        ).fetchall()
+
+        email_service = get_recruiting_email_service(conn)
+
+        for task in tasks:
+            results["processed"] += 1
+
+            try:
+                result = email_service.process_workflow_email_task(task.id, conn)
+
+                if result.success:
+                    # Mark as completed
+                    conn.execute(
+                        text("""
+                            UPDATE recruiting_tasks
+                            SET status = 'completed',
+                                completed_at = NOW(),
+                                completed_by = :user_id
+                            WHERE id = :task_id
+                        """),
+                        {"task_id": task.id, "user_id": user_id}
+                    )
+                    results["succeeded"] += 1
+                    results["details"].append({
+                        "task_id": task.id,
+                        "title": task.title,
+                        "status": "sent",
+                        "email_type": result.email_type
+                    })
+                else:
+                    results["failed"] += 1
+                    results["details"].append({
+                        "task_id": task.id,
+                        "title": task.title,
+                        "status": "failed",
+                        "error": result.error
+                    })
+
+            except Exception as e:
+                results["failed"] += 1
+                results["details"].append({
+                    "task_id": task.id,
+                    "title": task.title,
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        conn.commit()
+
+    return results
+
+
+@router.post("/email-queue/{task_id}/preview")
+async def preview_email_for_task(task_id: int):
+    """
+    Preview the email that would be sent for a task without actually sending it.
+
+    Useful for reviewing email content before sending.
+    """
+    from database import get_db_connection
+    from sqlalchemy import text
+    from services.recruiting_email_service import RecruitingEmailTemplates
+    import os
+
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
+
+    with get_db_connection() as conn:
+        # Get task and candidate info
+        task = conn.execute(
+            text("""
+                SELECT rt.id, rt.candidate_id, rt.title, rt.description,
+                       rt.assigned_to,
+                       rc.first_name, rc.last_name, rc.email as candidate_email
+                FROM recruiting_tasks rt
+                JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                WHERE rt.id = :task_id
+            """),
+            {"task_id": task_id}
+        ).fetchone()
+
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Get recruiter info
+        recruiter = conn.execute(
+            text("SELECT full_name, email, phone FROM users WHERE id = :user_id"),
+            {"user_id": task.assigned_to}
+        ).fetchone()
+
+        # Get portal URL if exists
+        portal = conn.execute(
+            text("""
+                SELECT slug FROM recruit_portal_workspaces
+                WHERE candidate_id = :candidate_id AND is_active = true
+                LIMIT 1
+            """),
+            {"candidate_id": task.candidate_id}
+        ).fetchone()
+
+        candidate_name = f"{task.first_name} {task.last_name}"
+        recruiter_name = recruiter.full_name if recruiter else "Recruiting Team"
+        recruiter_email = recruiter.email if recruiter else "recruiting@perenniaai.com"
+        recruiter_phone = recruiter.phone if recruiter else None
+        portal_url = f"{FRONTEND_URL}/recruit/{portal.slug}" if portal else f"{FRONTEND_URL}/recruit"
+
+        templates = RecruitingEmailTemplates()
+        title_lower = task.title.lower()
+
+        # Determine template and generate preview
+        if "follow-up email" in title_lower or "followup" in title_lower:
+            template = templates.phone_screen_followup(
+                candidate_name=candidate_name,
+                recruiter_name=recruiter_name,
+                recruiter_email=recruiter_email,
+                recruiter_phone=recruiter_phone,
+            )
+            email_type = "phone_screen_followup"
+
+        elif "portal invitation" in title_lower or ("portal" in title_lower and "send" in title_lower):
+            template = templates.portal_invitation(
+                candidate_name=candidate_name,
+                recruiter_name=recruiter_name,
+                portal_url=portal_url,
+            )
+            email_type = "portal_invitation"
+
+        elif "assessment" in title_lower or "technical" in title_lower:
+            assessment_url = f"{FRONTEND_URL}/recruit/{portal.slug}/assessment" if portal else f"{FRONTEND_URL}/recruit"
+            template = templates.assessment_invitation(
+                candidate_name=candidate_name,
+                recruiter_name=recruiter_name,
+                assessment_url=assessment_url,
+            )
+            email_type = "assessment_invitation"
+
+        elif "welcome" in title_lower or "offer acceptance" in title_lower or "confirmation" in title_lower:
+            onboarding_url = f"{FRONTEND_URL}/recruit/{portal.slug}/onboarding" if portal else None
+            template = templates.offer_acceptance_welcome(
+                candidate_name=candidate_name,
+                recruiter_name=recruiter_name,
+                onboarding_url=onboarding_url,
+            )
+            email_type = "welcome_email"
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown email type for task: {task.title}"
+            )
+
+        return {
+            "task_id": task_id,
+            "email_type": email_type,
+            "recipient": task.candidate_email,
+            "candidate_name": candidate_name,
+            "subject": template["subject"],
+            "html_content": template["html_content"],
+            "plain_content": template["plain_content"]
+        }
