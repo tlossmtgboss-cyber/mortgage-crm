@@ -3,6 +3,8 @@
  * Handles all API calls related to DISC + Motivators assessments
  */
 
+import React from 'react';
+
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 /**
@@ -271,9 +273,6 @@ export function useDISCResults(candidateId) {
 
   return { data, loading, error, refetch: () => getDISCResults(candidateId).then(setData) };
 }
-
-// Need to import React for the hook
-import React from 'react';
 
 export default {
   startAssessmentSession,
