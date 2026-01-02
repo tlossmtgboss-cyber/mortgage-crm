@@ -735,6 +735,166 @@ const RecruitDetail = () => {
           </div>
         </div>
 
+        {/* Center Column - AI Recruiting Agent */}
+        <div className="recruit-body-section recruit-ai-section">
+          <div className="recruit-section-header">
+            <h3>AI Recruiting Agent</h3>
+          </div>
+          <div className="recruit-ai-content">
+            <div className="recruit-ai-status">
+              <div className="recruit-ai-avatar">
+                <span>🤖</span>
+              </div>
+              <div className="recruit-ai-info">
+                <span className="recruit-ai-label">Agent Status</span>
+                <span className="recruit-ai-status-badge active">Active</span>
+              </div>
+            </div>
+
+            <div className="recruit-ai-instructions">
+              <h4>Next Steps</h4>
+              <div className="recruit-ai-task-list">
+                {candidate.status === 'new' && (
+                  <>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📞</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Initial Contact</strong>
+                        <p>Make first contact call to introduce yourself and gauge interest</p>
+                      </div>
+                    </div>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📋</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Review Profile</strong>
+                        <p>Review production history and social media presence</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {candidate.status === 'screening' && (
+                  <>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📊</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Verify Production</strong>
+                        <p>Confirm annual volume and units with NMLS lookup</p>
+                      </div>
+                    </div>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📅</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Schedule Phone Screen</strong>
+                        <p>Set up 15-minute phone screening call</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {candidate.status === 'phone_screen' && (
+                  <>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">🎯</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Complete Phone Screen</strong>
+                        <p>Discuss goals, motivations, and interest level</p>
+                      </div>
+                    </div>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">✅</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Complete Assessment Quiz</strong>
+                        <p>Grade candidate on initial impressions</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {candidate.status === 'interview' && (
+                  <>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">🎥</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Schedule Interview</strong>
+                        <p>Set up formal interview with hiring manager</p>
+                      </div>
+                    </div>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📝</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Send Video Message</strong>
+                        <p>Record personalized video to share company culture</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {candidate.status === 'assessment' && (
+                  <>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📋</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Complete Full Assessment</strong>
+                        <p>Fill out all grading categories for final evaluation</p>
+                      </div>
+                    </div>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">🤖</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Run AI Analysis</strong>
+                        <p>Get AI-powered insights and recommendations</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {candidate.status === 'offer' && (
+                  <>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">💰</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Prepare Offer Package</strong>
+                        <p>Generate compensation proposal based on production</p>
+                      </div>
+                    </div>
+                    <div className="recruit-ai-task">
+                      <span className="recruit-ai-task-icon">📄</span>
+                      <div className="recruit-ai-task-content">
+                        <strong>Send Offer Letter</strong>
+                        <p>Present formal offer and discuss terms</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {candidate.status === 'hired' && (
+                  <div className="recruit-ai-success">
+                    <span className="recruit-ai-success-icon">🎉</span>
+                    <div>
+                      <strong>Candidate Hired!</strong>
+                      <p>Begin onboarding process</p>
+                    </div>
+                  </div>
+                )}
+                {(candidate.status === 'rejected' || candidate.status === 'withdrawn') && (
+                  <div className="recruit-ai-closed">
+                    <span className="recruit-ai-closed-icon">📁</span>
+                    <div>
+                      <strong>File Closed</strong>
+                      <p>Candidate is no longer active in pipeline</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="recruit-ai-tips">
+              <h4>Talking Points</h4>
+              <ul>
+                <li>Technology stack: Perennia AI platform, automated workflows</li>
+                <li>Lead generation: AI-powered prospecting and nurturing</li>
+                <li>Compensation: Competitive splits + volume bonuses</li>
+                <li>Support: Dedicated ops team, 24/7 processing</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Right Column - Quick Actions + Notes */}
         <div className="recruit-body-section recruit-notes-section">
           {/* Quick Actions */}
