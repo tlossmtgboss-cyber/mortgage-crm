@@ -742,6 +742,39 @@ async def list_purl_portal_workspaces(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/admin/candidates/{candidate_id}/email")
+async def update_candidate_email(
+    candidate_id: int,
+    email: str = Query(..., description="New email address"),
+    admin_key: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Update candidate email address (admin)."""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    try:
+        result = db.execute(
+            text("""
+                UPDATE mm_candidates
+                SET email = :email
+                WHERE id = :candidate_id
+                RETURNING id, first_name, last_name, email
+            """),
+            {"candidate_id": candidate_id, "email": email}
+        )
+        row = result.fetchone()
+        db.commit()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+        return {"id": row.id, "name": f"{row.first_name} {row.last_name}", "email": row.email}
+    except Exception as e:
+        logger.error(f"Error updating candidate email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/admin/workspaces/{workspace_id}/tokens")
 async def create_purl_portal_token(
     workspace_id: int,
