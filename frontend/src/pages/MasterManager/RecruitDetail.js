@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   getCandidateFullProfile,
   updateCandidateStatus,
-  updateCandidateSocialMedia,
   updateCandidateProduction,
   addCandidateNote,
   scheduleInterview
@@ -51,7 +50,6 @@ const RecruitDetail = () => {
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showEditSocial, setShowEditSocial] = useState(false);
   const [showEditProduction, setShowEditProduction] = useState(false);
   const [newNote, setNewNote] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
@@ -88,18 +86,7 @@ const RecruitDetail = () => {
   // Video recorder modal state
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
 
-  // Social feed state
-  const [socialPosts, setSocialPosts] = useState([]);
-  const [socialPostsLoading, setSocialPostsLoading] = useState(false);
-
   // Edit form states
-  const [socialForm, setSocialForm] = useState({
-    linkedin_url: '',
-    facebook_url: '',
-    instagram_url: '',
-    twitter_url: ''
-  });
-
   const [productionForm, setProductionForm] = useState({
     annual_volume: '',
     annual_units: '',
@@ -115,13 +102,6 @@ const RecruitDetail = () => {
       setCandidate(data);
 
       // Initialize form states
-      setSocialForm({
-        linkedin_url: data.social_media?.linkedin || '',
-        facebook_url: data.social_media?.facebook || '',
-        instagram_url: data.social_media?.instagram || '',
-        twitter_url: data.social_media?.twitter || ''
-      });
-
       setProductionForm({
         annual_volume: data.production?.annual_volume || '',
         annual_units: data.production?.annual_units || '',
@@ -162,26 +142,6 @@ const RecruitDetail = () => {
       loadAssessment();
     }
   }, [activeTab, assessment, assessmentLoading, loadAssessment]);
-
-  // Load social posts
-  useEffect(() => {
-    const fetchSocialPosts = async () => {
-      setSocialPostsLoading(true);
-      try {
-        const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
-        const response = await fetch(`${API_URL}/api/v1/recruit-social/public/feed?limit=6`);
-        if (response.ok) {
-          const data = await response.json();
-          setSocialPosts(data.posts || []);
-        }
-      } catch (err) {
-        console.error('Error fetching social posts:', err);
-      } finally {
-        setSocialPostsLoading(false);
-      }
-    };
-    fetchSocialPosts();
-  }, []);
 
   const handleStatusChange = async (newStatus) => {
     // Check if quiz is required for this disposition change
@@ -394,16 +354,6 @@ const RecruitDetail = () => {
       loadCallHistory();
     } catch (err) {
       setError('Failed to save call notes: ' + err.message);
-    }
-  };
-
-  const handleSaveSocial = async () => {
-    try {
-      await updateCandidateSocialMedia(candidateId, socialForm);
-      await loadCandidate();
-      setShowEditSocial(false);
-    } catch (err) {
-      setError(err.message);
     }
   };
 
@@ -671,6 +621,24 @@ const RecruitDetail = () => {
           Overview
         </button>
         <button
+          className={`recruit-tab ${activeTab === 'pipeline' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pipeline')}
+        >
+          Pipeline
+        </button>
+        <button
+          className={`recruit-tab ${activeTab === 'interviews' ? 'active' : ''}`}
+          onClick={() => setActiveTab('interviews')}
+        >
+          Interviews
+        </button>
+        <button
+          className={`recruit-tab ${activeTab === 'notes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('notes')}
+        >
+          Notes
+        </button>
+        <button
           className={`recruit-tab ${activeTab === 'assessment' ? 'active' : ''}`}
           onClick={() => setActiveTab('assessment')}
         >
@@ -763,117 +731,6 @@ const RecruitDetail = () => {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Middle Column - Social Media */}
-        <div className="recruit-body-section recruit-social-section">
-          <div className="recruit-section-header">
-            <h3>Social Media</h3>
-            <button className="mm-btn mm-btn-small mm-btn-secondary" onClick={() => setShowEditSocial(true)}>
-              Edit
-            </button>
-          </div>
-
-          <div className="recruit-social-grid">
-            {/* LinkedIn */}
-            <a
-              href={candidate.social_media?.linkedin || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`recruit-social-card ${candidate.social_media?.linkedin ? 'connected' : 'not-connected'}`}
-            >
-              <div className="recruit-social-icon linkedin">in</div>
-              <span className="recruit-social-name">LinkedIn</span>
-              <span className="recruit-social-status">
-                {candidate.social_media?.linkedin ? 'View Profile' : 'Not Connected'}
-              </span>
-            </a>
-
-            {/* Facebook */}
-            <a
-              href={candidate.social_media?.facebook || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`recruit-social-card ${candidate.social_media?.facebook ? 'connected' : 'not-connected'}`}
-            >
-              <div className="recruit-social-icon facebook">f</div>
-              <span className="recruit-social-name">Facebook</span>
-              <span className="recruit-social-status">
-                {candidate.social_media?.facebook ? 'View Profile' : 'Not Connected'}
-              </span>
-            </a>
-
-            {/* Instagram */}
-            <a
-              href={candidate.social_media?.instagram || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`recruit-social-card ${candidate.social_media?.instagram ? 'connected' : 'not-connected'}`}
-            >
-              <div className="recruit-social-icon instagram">ig</div>
-              <span className="recruit-social-name">Instagram</span>
-              <span className="recruit-social-status">
-                {candidate.social_media?.instagram ? 'View Profile' : 'Not Connected'}
-              </span>
-            </a>
-
-            {/* Twitter */}
-            <a
-              href={candidate.social_media?.twitter || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`recruit-social-card ${candidate.social_media?.twitter ? 'connected' : 'not-connected'}`}
-            >
-              <div className="recruit-social-icon twitter">X</div>
-              <span className="recruit-social-name">Twitter/X</span>
-              <span className="recruit-social-status">
-                {candidate.social_media?.twitter ? 'View Profile' : 'Not Connected'}
-              </span>
-            </a>
-          </div>
-
-          {/* Company Social Feed */}
-          <div className="recruit-social-feed">
-            <h4>Company Social Feed</h4>
-            {socialPostsLoading ? (
-              <div className="recruit-social-loading">Loading posts...</div>
-            ) : socialPosts.length > 0 ? (
-              <div className="recruit-posts-list">
-                {socialPosts.slice(0, 4).map((post) => (
-                  <div key={post.id} className="recruit-post-item">
-                    <div className="recruit-post-header">
-                      <div className="recruit-post-platforms">
-                        {post.platforms?.map((platform, idx) => (
-                          <span key={idx} className={`platform-tag ${platform.trim()}`}>
-                            {platform.trim() === 'linkedin' && '🔗'}
-                            {platform.trim() === 'facebook' && '📘'}
-                            {platform.trim() === 'instagram' && '📷'}
-                            {platform.trim() === 'twitter' && '🐦'}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="recruit-post-date">
-                        {post.posted_at ? new Date(post.posted_at).toLocaleDateString() : ''}
-                      </span>
-                    </div>
-                    <p className="recruit-post-content">{post.content}</p>
-                    {post.image_url && (
-                      <img src={post.image_url} alt="Post" className="recruit-post-image" />
-                    )}
-                    {post.engagement && (
-                      <div className="recruit-post-engagement">
-                        <span>👍 {post.engagement.likes || 0}</span>
-                        <span>💬 {post.engagement.comments || 0}</span>
-                        <span>↗️ {post.engagement.shares || 0}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="recruit-social-empty">No posts yet</div>
             )}
           </div>
         </div>
@@ -1053,10 +910,10 @@ const RecruitDetail = () => {
                   {assessment?.disc ? (
                     <DISCProfileChart
                       scores={{
-                        d: assessment.disc.d_score,
-                        i: assessment.disc.i_score,
-                        s: assessment.disc.s_score,
-                        c: assessment.disc.c_score,
+                        D: assessment.disc.d_score || 0,
+                        I: assessment.disc.i_score || 0,
+                        S: assessment.disc.s_score || 0,
+                        C: assessment.disc.c_score || 0,
                       }}
                       primaryStyle={assessment.disc.primary_style}
                       secondaryStyle={assessment.disc.secondary_style}
@@ -1175,63 +1032,6 @@ const RecruitDetail = () => {
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Edit Social Media Modal */}
-      {showEditSocial && (
-        <div className="mm-modal-overlay">
-          <div className="mm-modal">
-            <h3>Edit Social Media</h3>
-            <div className="mm-form-group">
-              <label>LinkedIn URL</label>
-              <input
-                type="url"
-                value={socialForm.linkedin_url}
-                onChange={(e) => setSocialForm({ ...socialForm, linkedin_url: e.target.value })}
-                className="mm-input"
-                placeholder="https://linkedin.com/in/..."
-              />
-            </div>
-            <div className="mm-form-group">
-              <label>Facebook URL</label>
-              <input
-                type="url"
-                value={socialForm.facebook_url}
-                onChange={(e) => setSocialForm({ ...socialForm, facebook_url: e.target.value })}
-                className="mm-input"
-                placeholder="https://facebook.com/..."
-              />
-            </div>
-            <div className="mm-form-group">
-              <label>Instagram URL</label>
-              <input
-                type="url"
-                value={socialForm.instagram_url}
-                onChange={(e) => setSocialForm({ ...socialForm, instagram_url: e.target.value })}
-                className="mm-input"
-                placeholder="https://instagram.com/..."
-              />
-            </div>
-            <div className="mm-form-group">
-              <label>Twitter/X URL</label>
-              <input
-                type="url"
-                value={socialForm.twitter_url}
-                onChange={(e) => setSocialForm({ ...socialForm, twitter_url: e.target.value })}
-                className="mm-input"
-                placeholder="https://twitter.com/..."
-              />
-            </div>
-            <div className="mm-modal-actions">
-              <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditSocial(false)}>
-                Cancel
-              </button>
-              <button className="mm-btn mm-btn-primary" onClick={handleSaveSocial}>
-                Save
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
