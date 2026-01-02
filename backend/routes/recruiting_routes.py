@@ -936,6 +936,7 @@ async def debug_schedule_interview(
 @router.post("/debug/test-notify/{interview_id}")
 async def debug_send_notifications(
     interview_id: int,
+    override_email: Optional[str] = Query(None, description="Override recipient email for testing"),
     db: Session = Depends(get_db)
 ):
     """DEBUG: Test sending interview notifications without auth."""
@@ -973,8 +974,9 @@ async def debug_send_notifications(
 
     interview_title = interview.title or f"{interview.interview_type.replace('_', ' ').title()} Interview"
 
-    # Send to candidate
-    if interview.candidate_email:
+    # Send to candidate (use override_email if provided)
+    recipient_email = override_email or interview.candidate_email
+    if recipient_email:
         subject = f"Interview Scheduled: {interview_title}"
         html_content = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -997,23 +999,23 @@ async def debug_send_notifications(
 
         try:
             result = notification_service.send_email(
-                to_email=interview.candidate_email,
+                to_email=recipient_email,
                 subject=subject,
                 html_content=html_content
             )
             notifications_sent.append({
                 "type": "email",
                 "recipient": "candidate",
-                "email": interview.candidate_email,
+                "email": recipient_email,
                 "result": result
             })
-            logger.info(f"DEBUG: Sent notification to candidate: {interview.candidate_email}, result: {result}")
+            logger.info(f"DEBUG: Sent notification to: {recipient_email}, result: {result}")
         except Exception as e:
-            logger.error(f"DEBUG: Error sending candidate email: {e}")
+            logger.error(f"DEBUG: Error sending email: {e}")
             notifications_sent.append({
                 "type": "email",
                 "recipient": "candidate",
-                "email": interview.candidate_email,
+                "email": recipient_email,
                 "error": str(e)
             })
 

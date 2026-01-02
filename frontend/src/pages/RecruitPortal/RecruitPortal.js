@@ -203,6 +203,24 @@ const RecruitPortal = () => {
           Production Calculator
         </button>
         <button
+          className={`tab-button ${activeTab === 'conversation' ? 'active' : ''}`}
+          onClick={() => setActiveTab('conversation')}
+        >
+          Conversation Log
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'social' ? 'active' : ''}`}
+          onClick={() => setActiveTab('social')}
+        >
+          Social Media
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'videos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('videos')}
+        >
+          Video Library
+        </button>
+        <button
           className={`tab-button ${activeTab === 'programs' ? 'active' : ''}`}
           onClick={() => setActiveTab('programs')}
         >
@@ -225,12 +243,6 @@ const RecruitPortal = () => {
           onClick={() => setActiveTab('marketing')}
         >
           Marketing
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'social' ? 'active' : ''}`}
-          onClick={() => setActiveTab('social')}
-        >
-          My Social Profiles
         </button>
         <button
           className={`tab-button ${activeTab === 'updates' ? 'active' : ''}`}
