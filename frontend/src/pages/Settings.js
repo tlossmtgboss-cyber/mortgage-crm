@@ -1418,6 +1418,7 @@ const API_BASE_URL = isProduction
       let successCount = 0;
       let failCount = 0;
 
+      const errors = [];
       for (const userId of selectedUsers) {
         try {
           const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
@@ -1429,10 +1430,21 @@ const API_BASE_URL = isProduction
             successCount++;
           } else {
             failCount++;
+            try {
+              const errorData = await response.json();
+              errors.push(`User ${userId}: ${errorData.detail || response.statusText}`);
+            } catch {
+              errors.push(`User ${userId}: ${response.statusText}`);
+            }
           }
         } catch (err) {
           failCount++;
+          errors.push(`User ${userId}: ${err.message}`);
         }
+      }
+
+      if (errors.length > 0) {
+        console.error('Delete errors:', errors);
       }
 
       setSelectedUsers([]);
@@ -1441,7 +1453,8 @@ const API_BASE_URL = isProduction
       if (failCount === 0) {
         alert(`Successfully deleted ${successCount} user(s)`);
       } else {
-        alert(`Deleted ${successCount} user(s). Failed to delete ${failCount} user(s).`);
+        const errorDetails = errors.length > 0 ? `\n\nErrors:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}` : '';
+        alert(`Deleted ${successCount} user(s). Failed to delete ${failCount} user(s).${errorDetails}`);
       }
     } catch (err) {
       console.error('Bulk delete failed:', err);
