@@ -10,6 +10,7 @@ const AcquisitionDashboard = lazy(() => import('./AcquisitionDashboard'));
 const ConversationIntelligence = lazy(() => import('./ConversationIntelligence'));
 const AIDailyBlog = lazy(() => import('./AIDailyBlog'));
 const AIReceptionistDashboard = lazy(() => import('./AIReceptionistDashboard'));
+const PowerDialer = lazy(() => import('./PowerDialer'));
 
 // Marketing settings components (inline for now, can be extracted)
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
@@ -27,6 +28,7 @@ const MARKETING_TOOLS = [
     tools: [
       { id: 'ai-outreach', name: 'AI Outreach', description: 'Automated AI-powered outreach campaigns' },
       { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
+      { id: 'power-dialer', name: 'Power Dialer', description: 'High-volume outbound calling' },
       { id: 'communication', name: 'Communication Hub', description: 'Email and SMS management' },
       { id: 'call-qa', name: 'Call QA', description: 'Call quality analysis and coaching' },
     ]
@@ -103,6 +105,8 @@ function Marketing() {
         return <AIOutreach />;
       case 'ai-receptionist':
         return <AIReceptionistDashboard />;
+      case 'power-dialer':
+        return <PowerDialer />;
       case 'avatar-studio':
         return <AvatarStudio />;
       case 'communication':
