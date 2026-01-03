@@ -1996,6 +1996,101 @@
   gap: 16px;
 }
 
+/* Role Dashboard Container */
+.role-dashboard-container {
+  margin-top: 24px;
+}
+
+/* Role Switcher - imported from RoleDashboards.css but additional overrides here */
+.role-switcher {
+  position: relative;
+  z-index: 100;
+}
+
+.role-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a2e;
+  transition: all 0.2s;
+  min-width: 180px;
+}
+
+.role-switcher-trigger:hover {
+  border-color: #c9a227;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.current-role-icon {
+  font-size: 16px;
+}
+
+.current-role-label {
+  flex: 1;
+  text-align: left;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.role-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.role-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1a1a2e;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.role-option:hover {
+  background: #f9fafb;
+}
+
+.role-option.active {
+  background: rgba(201, 162, 39, 0.1);
+}
+
+.role-icon {
+  font-size: 14px;
+}
+
+.role-label {
+  flex: 1;
+}
+
+.check-mark {
+  color: #c9a227;
+  font-weight: bold;
+}
+
 /* Purchase Application Button */
 .purchase-app-btn {
   display: flex;
