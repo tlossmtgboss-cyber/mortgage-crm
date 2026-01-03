@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './RoleDashboards.css';
 
@@ -1001,7 +1001,7 @@ export const getDashboardByRole = (roleId) => {
   }
 };
 
-export default {
+const RoleDashboards = {
   LoanOfficerDashboard,
   ProcessorDashboard,
   UnderwriterDashboard,
@@ -1011,3 +1011,5 @@ export default {
   RoleDashboardSwitcher,
   getDashboardByRole
 };
+
+export default RoleDashboards;
