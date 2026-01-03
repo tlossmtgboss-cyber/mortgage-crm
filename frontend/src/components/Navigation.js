@@ -63,55 +63,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Smart Docs
           </Link>
 
-          {/* Marketing Dropdown */}
-          <div className="nav-dropdown" ref={marketingRef}>
-            <button
-              className={`nav-link nav-dropdown-trigger ${isMarketingActive ? 'active' : ''}`}
-              onClick={() => setMarketingOpen(!marketingOpen)}
-            >
-              Marketing
-              <span className={`dropdown-arrow ${marketingOpen ? 'open' : ''}`}>▼</span>
-            </button>
-            {marketingOpen && (
-              <div className="nav-dropdown-menu">
-                <Link
-                  to="/ai-outreach"
-                  className={`nav-dropdown-item ${isActive('/ai-outreach') ? 'active' : ''}`}
-                  onClick={() => setMarketingOpen(false)}
-                >
-                  AI Outreach
-                </Link>
-                <Link
-                  to="/avatar-studio"
-                  className={`nav-dropdown-item ${isActive('/avatar-studio') ? 'active' : ''}`}
-                  onClick={() => setMarketingOpen(false)}
-                >
-                  Avatar Studio
-                </Link>
-                <Link
-                  to="/communication-intelligence"
-                  className={`nav-dropdown-item ${isActive('/communication-intelligence') || isActive('/email-intelligence') ? 'active' : ''}`}
-                  onClick={() => setMarketingOpen(false)}
-                >
-                  Communication
-                </Link>
-                <Link
-                  to="/acquisition"
-                  className={`nav-dropdown-item ${isActive('/acquisition') ? 'active' : ''}`}
-                  onClick={() => setMarketingOpen(false)}
-                >
-                  Acquisition
-                </Link>
-                <Link
-                  to="/conversation-intelligence"
-                  className={`nav-dropdown-item ${isActive('/conversation-intelligence') || location.pathname.startsWith('/conversation-intelligence/') ? 'active' : ''}`}
-                  onClick={() => setMarketingOpen(false)}
-                >
-                  Call QA
-                </Link>
-              </div>
-            )}
-          </div>
+          <Link
+            to="/marketing"
+            className={`nav-link ${startsWithPath('/marketing') ? 'active' : ''}`}
+          >
+            Marketing
+          </Link>
 
           <Link
             to="/calendar"
