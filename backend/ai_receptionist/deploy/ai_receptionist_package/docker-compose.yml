@@ -1,0 +1,79 @@
+# =============================================================================
+# PERENNIA AI RECEPTIONIST - DOCKER COMPOSE
+# =============================================================================
+version: '3.8'
+
+services:
+  receptionist:
+    build: .
+    container_name: perennia-receptionist
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER}
+      - STT_PROVIDER=${STT_PROVIDER:-deepgram}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - TTS_PROVIDER=${TTS_PROVIDER:-elevenlabs}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - COMPANY_NAME=${COMPANY_NAME:-Perennia Mortgage}
+      - RECEPTIONIST_NAME=${RECEPTIONIST_NAME:-Sarah}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - perennia-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: perennia-db
+    environment:
+      - POSTGRES_USER=${DB_USER:-perennia}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-perennia_secure_password}
+      - POSTGRES_DB=${DB_NAME:-perennia}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-perennia}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - perennia-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: perennia-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - perennia-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  perennia-network:
+    driver: bridge

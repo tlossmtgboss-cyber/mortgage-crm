@@ -38647,6 +38647,29 @@ async def delete_user(
             "UPDATE workspace_settings SET updated_by_id = NULL WHERE updated_by_id = :user_id",
             "UPDATE team_invitations SET invited_by_user_id = NULL WHERE invited_by_user_id = :user_id",
             "UPDATE team_invitations SET user_id = NULL WHERE user_id = :user_id",
+            # Master Manager tables (nullable columns)
+            "UPDATE mm_talent_state SET state_changed_by = NULL WHERE state_changed_by = :user_id",
+            "UPDATE mm_talent_state SET manager_user_id = NULL WHERE manager_user_id = :user_id",
+            "UPDATE mm_talent_state_history SET changed_by = NULL WHERE changed_by = :user_id",
+            "UPDATE mm_capacity_alerts SET acknowledged_by_user_id = NULL WHERE acknowledged_by_user_id = :user_id",
+            "UPDATE mm_candidates SET hired_as_user_id = NULL WHERE hired_as_user_id = :user_id",
+            "UPDATE mm_candidates SET referrer_user_id = NULL WHERE referrer_user_id = :user_id",
+            "UPDATE mm_job_postings SET hiring_manager_user_id = NULL WHERE hiring_manager_user_id = :user_id",
+            "UPDATE mm_interviews SET interviewer_user_id = NULL WHERE interviewer_user_id = :user_id",
+            "UPDATE mm_offers SET created_by_user_id = NULL WHERE created_by_user_id = :user_id",
+            # CI tables (nullable columns)
+            "UPDATE ci_call_recordings SET reviewer_user_id = NULL WHERE reviewer_user_id = :user_id",
+            "UPDATE ci_qa_scorecards SET scorer_user_id = NULL WHERE scorer_user_id = :user_id",
+            "UPDATE ci_coaching_assignments SET assigned_by_user_id = NULL WHERE assigned_by_user_id = :user_id",
+            "UPDATE ci_coaching_comments SET user_id = NULL WHERE user_id = :user_id",
+            # Video avatar profiles (nullable user_id)
+            "UPDATE video_avatar_profiles SET user_id = NULL WHERE user_id = :user_id",
+            # Blog tables (nullable user_id)
+            "UPDATE blog_posts SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE blog_topics SET user_id = NULL WHERE user_id = :user_id",
+            "UPDATE blog_voice_profiles SET user_id = NULL WHERE user_id = :user_id",
+            # Recruiting tables (nullable columns)
+            "UPDATE mm_recruiting_pipelines SET reports_to_user_id = NULL WHERE reports_to_user_id = :user_id",
         ]
 
         for query in nullify_queries:
@@ -38780,6 +38803,43 @@ async def delete_user(
             "DELETE FROM user_integrations WHERE user_id = :user_id",
             # Guideline bookmarks
             "DELETE FROM guideline_bookmarks WHERE user_id = :user_id",
+            # Master Manager tables (NOT NULL user_id without CASCADE in SQL version)
+            "DELETE FROM mm_talent_performance WHERE user_id = :user_id",
+            "DELETE FROM mm_talent_state_history WHERE user_id = :user_id",
+            "DELETE FROM mm_talent_state WHERE user_id = :user_id",
+            "DELETE FROM mm_talent_capacity WHERE user_id = :user_id",
+            "DELETE FROM mm_coverage_map WHERE primary_user_id = :user_id",
+            # Conversation Intelligence additional tables (NOT NULL agent_user_id without CASCADE)
+            "DELETE FROM ci_coaching_comments WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_coaching_clips WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_compliance_violations WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_compliance_rules WHERE user_id = :user_id",
+            "DELETE FROM ci_agent_metrics WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_audit_log WHERE user_id = :user_id",
+            "DELETE FROM ci_qa_scorecards WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_realtime_suggestions WHERE session_id IN (SELECT id FROM ci_realtime_sessions WHERE agent_user_id = :user_id)",
+            "DELETE FROM ci_realtime_sessions WHERE agent_user_id = :user_id",
+            "DELETE FROM ci_call_analyses WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id)",
+            "DELETE FROM ci_transcription_segments WHERE transcription_id IN (SELECT id FROM ci_call_transcriptions WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id))",
+            "DELETE FROM ci_call_transcriptions WHERE recording_id IN (SELECT id FROM ci_call_recordings WHERE agent_user_id = :user_id)",
+            "DELETE FROM ci_call_recordings WHERE agent_user_id = :user_id",
+            # Page permissions (user_page_overrides - should have CASCADE but adding just in case)
+            "DELETE FROM page_access_log WHERE user_id = :user_id",
+            "DELETE FROM user_page_overrides WHERE user_id = :user_id",
+            # Video avatar profiles (nullable user_id - handled in Phase 1 but adding DELETE for safety)
+            "DELETE FROM video_avatar_jobs WHERE avatar_id IN (SELECT id FROM video_avatar_profiles WHERE user_id = :user_id)",
+            "DELETE FROM video_avatar_profiles WHERE user_id = :user_id",
+            # Video OS tables
+            "DELETE FROM video_project_scenes WHERE project_id IN (SELECT id FROM video_projects WHERE user_id = :user_id)",
+            "DELETE FROM video_projects WHERE user_id = :user_id",
+            # Recruiting/Candidates tables
+            "DELETE FROM mm_candidate_notes WHERE added_by_user_id = :user_id",
+            "DELETE FROM mm_candidate_activities WHERE user_id = :user_id",
+            "DELETE FROM mm_interviews WHERE created_by_user_id = :user_id",
+            # AI Daily Blog tables (nullable user_id but cleaning just in case)
+            "DELETE FROM blog_posts WHERE user_id = :user_id",
+            "DELETE FROM blog_topics WHERE user_id = :user_id",
+            "DELETE FROM blog_voice_profiles WHERE user_id = :user_id",
         ]
 
         for query in delete_queries:

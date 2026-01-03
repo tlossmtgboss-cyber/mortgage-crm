@@ -1,890 +1,953 @@
 """
 Page Permissions API Routes
-Role-Based Access Control (RBAC) for page-level permissions
-Perennia AI - TL Development LLC
 
-Handles CRUD operations for role permissions and page access control.
+API endpoints for the page-level access control system.
+Provides endpoints for:
+- Getting user's accessible pages
+- Checking page access
+- Managing user page overrides (admin)
+- Managing page permissions by role (admin)
+- Pinning/unpinning pages
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import Optional, List, Callable, Any
+from pydantic import BaseModel
 from datetime import datetime
-import logging
 import json
 
-from database import get_db
+import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/page-permissions", tags=["Page Permissions"])
 
-
 # ============================================================================
-# PYDANTIC MODELS
+# DEPENDENCY INJECTION STORAGE
 # ============================================================================
 
-class PageInfo(BaseModel):
-    """Information about a single page"""
-    key: str
-    name: str
-    path: str
-    category: str
-    stage: str
+_get_db: Callable = None
+_get_current_user: Callable = None
+_User: Any = None
 
 
-class RoleInfo(BaseModel):
-    """Information about a role"""
-    key: str
+def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, user_model: Any):
+    """Set dependencies from main.py to avoid circular imports."""
+    global _get_db, _get_current_user, _User
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func
+    _User = user_model
+    logger.info("Page permissions routes dependencies set")
+
+
+def get_db():
+    """Get database session dependency - wrapper for injected dependency."""
+    if _get_db is None:
+        raise RuntimeError("Page permissions routes not initialized. Call set_dependencies first.")
+    yield from _get_db()
+
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Get current user dependency - wrapper for injected dependency."""
+    if _get_current_user is None:
+        raise RuntimeError("Page permissions routes not initialized. Call set_dependencies first.")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await _get_current_user(token=token, request=request, db=db)
+
+
+# =============================================================================
+# REQUEST/RESPONSE MODELS
+# =============================================================================
+
+class PageCategory(BaseModel):
+    id: int
+    code: str
     name: str
     description: Optional[str] = None
-    color: Optional[str] = None
     icon: Optional[str] = None
-    hierarchy_level: int = 0
-    permissions: List[str] = []
-    enabled_count: int = 0
-    total_pages: int = 0
-    is_custom: bool = False
+    display_order: int
+    default_visible: bool
 
 
-class RolePermissionsResponse(BaseModel):
-    """Response for role permissions"""
-    role: str
-    role_name: str
-    permissions: List[str]
-    total_pages: int
-    enabled_count: int
-    last_modified: Optional[datetime] = None
-    modified_by: Optional[str] = None
-
-
-class UpdatePermissionsRequest(BaseModel):
-    """Request to update permissions for a role"""
-    permissions: List[str] = Field(..., description="List of page keys to enable")
-
-
-class PermissionCheckRequest(BaseModel):
-    """Request to check if user has access to a page"""
-    page_key: str
-
-
-class PermissionCheckResponse(BaseModel):
-    """Response for permission check"""
-    page_key: str
-    has_access: bool
-    page_info: Optional[PageInfo] = None
-
-
-class BulkPermissionCheckRequest(BaseModel):
-    """Request to check multiple pages at once"""
-    page_keys: List[str]
-
-
-class BulkPermissionCheckResponse(BaseModel):
-    """Response for bulk permission check"""
-    results: Dict[str, bool]
-
-
-class AllRolesResponse(BaseModel):
-    """Response containing all roles and their permissions"""
-    roles: List[Dict[str, Any]]
-    pages: List[PageInfo]
-    categories: List[str]
-
-
-class AuditLogEntry(BaseModel):
-    """Audit log entry"""
+class PageInfo(BaseModel):
     id: int
-    timestamp: datetime
-    user_id: int
-    user_email: Optional[str]
-    target_type: str
-    target_name: Optional[str]
-    action: str
-    changes: Dict[str, Any]
-
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-def get_role_id(db: Session, role_key: str) -> Optional[int]:
-    """Get role ID by role key"""
-    result = db.execute(text(
-        "SELECT id FROM permission_roles WHERE role_key = :role_key AND is_active = true"
-    ), {"role_key": role_key})
-    row = result.fetchone()
-    return row[0] if row else None
-
-
-def get_page_id(db: Session, page_key: str) -> Optional[int]:
-    """Get page ID by page key"""
-    result = db.execute(text(
-        "SELECT id FROM pages WHERE page_key = :page_key AND is_active = true"
-    ), {"page_key": page_key})
-    row = result.fetchone()
-    return row[0] if row else None
-
-
-def get_role_permissions(db: Session, role_key: str) -> List[str]:
-    """Get all page keys for a role"""
-    result = db.execute(text("""
-        SELECT p.page_key
-        FROM role_page_permissions rpp
-        JOIN permission_roles r ON r.id = rpp.role_id
-        JOIN pages p ON p.id = rpp.page_id
-        WHERE r.role_key = :role_key
-        AND rpp.can_view = true
-        AND r.is_active = true
-        AND p.is_active = true
-        ORDER BY p.display_order
-    """), {"role_key": role_key})
-
-    return [row[0] for row in result.fetchall()]
-
-
-def log_permission_change(
-    db: Session,
-    user_id: int,
-    user_email: str,
-    target_type: str,
-    target_id: int,
-    target_name: str,
-    action: str,
-    changes: Dict[str, Any],
-    request: Optional[Request] = None
-):
-    """Log permission changes for audit trail"""
-    ip_address = None
-    user_agent = None
-
-    if request:
-        ip_address = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent")
-
-    try:
-        db.execute(text("""
-            INSERT INTO page_permission_audit_log
-            (user_id, user_email, target_type, target_id, target_name, action, changes, ip_address, user_agent)
-            VALUES (:user_id, :user_email, :target_type, :target_id, :target_name, :action, :changes::jsonb, :ip_address, :user_agent)
-        """), {
-            "user_id": user_id,
-            "user_email": user_email,
-            "target_type": target_type,
-            "target_id": target_id,
-            "target_name": target_name,
-            "action": action,
-            "changes": json.dumps(changes),
-            "ip_address": ip_address,
-            "user_agent": user_agent
-        })
-        db.commit()
-    except Exception as e:
-        logger.error(f"Failed to log permission change: {e}")
-
-
-# ============================================================================
-# API ROUTES
-# ============================================================================
-
-@router.get("/pages", response_model=List[PageInfo])
-async def get_all_pages(db: Session = Depends(get_db)):
-    """
-    Get all available pages in the system.
-    Returns page metadata organized for the permissions UI.
-    """
-    result = db.execute(text("""
-        SELECT page_key, name, path, category, stage
-        FROM pages
-        WHERE is_active = true
-        ORDER BY display_order, name
-    """))
-
-    pages = []
-    for row in result.fetchall():
-        pages.append(PageInfo(
-            key=row[0],
-            name=row[1],
-            path=row[2],
-            category=row[3],
-            stage=row[4]
-        ))
-
-    return pages
-
-
-@router.get("/roles", response_model=AllRolesResponse)
-async def get_all_roles(db: Session = Depends(get_db)):
-    """
-    Get all roles with their current permissions.
-    Used to populate the permissions management UI.
-    """
-    # Get total page count
-    total_result = db.execute(text("SELECT COUNT(*) FROM pages WHERE is_active = true"))
-    total_pages = total_result.fetchone()[0]
-
-    # Get all roles
-    roles_result = db.execute(text("""
-        SELECT role_key, name, description, color, icon, hierarchy_level, is_system_role
-        FROM permission_roles
-        WHERE is_active = true
-        ORDER BY hierarchy_level
-    """))
-
-    roles = []
-    for row in roles_result.fetchall():
-        role_key = row[0]
-        perms = get_role_permissions(db, role_key)
-
-        roles.append({
-            "key": role_key,
-            "name": row[1],
-            "description": row[2],
-            "color": row[3],
-            "icon": row[4],
-            "hierarchy_level": row[5],
-            "is_system_role": row[6],
-            "permissions": perms,
-            "enabled_count": len(perms),
-            "total_pages": total_pages,
-            "is_custom": False  # Could track if role has custom overrides
-        })
-
-    # Get all pages
-    pages_result = db.execute(text("""
-        SELECT page_key, name, path, category, stage
-        FROM pages
-        WHERE is_active = true
-        ORDER BY display_order, name
-    """))
-
-    pages = []
-    for row in pages_result.fetchall():
-        pages.append(PageInfo(
-            key=row[0],
-            name=row[1],
-            path=row[2],
-            category=row[3],
-            stage=row[4]
-        ))
-
-    # Get unique categories
-    categories_result = db.execute(text("""
-        SELECT DISTINCT category FROM pages WHERE is_active = true ORDER BY category
-    """))
-    categories = [row[0] for row in categories_result.fetchall()]
-
-    return AllRolesResponse(roles=roles, pages=pages, categories=categories)
-
-
-@router.get("/role/{role_key}", response_model=RolePermissionsResponse)
-async def get_role_permissions_endpoint(
-    role_key: str,
-    db: Session = Depends(get_db)
-):
-    """
-    Get permissions for a specific role.
-    """
-    # Validate role exists
-    role_id = get_role_id(db, role_key)
-    if not role_id:
-        raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
-
-    # Get role info
-    role_result = db.execute(text(
-        "SELECT name FROM permission_roles WHERE role_key = :role_key"
-    ), {"role_key": role_key})
-    role_name = role_result.fetchone()[0]
-
-    # Get total pages
-    total_result = db.execute(text("SELECT COUNT(*) FROM pages WHERE is_active = true"))
-    total_pages = total_result.fetchone()[0]
-
-    # Get permissions
-    perms = get_role_permissions(db, role_key)
-
-    return RolePermissionsResponse(
-        role=role_key,
-        role_name=role_name,
-        permissions=perms,
-        total_pages=total_pages,
-        enabled_count=len(perms)
-    )
-
-
-@router.put("/role/{role_key}", response_model=RolePermissionsResponse)
-async def update_role_permissions(
-    role_key: str,
-    request_data: UpdatePermissionsRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    # TODO: Add authentication dependency
-    # current_user: User = Depends(get_current_user)
-):
-    """
-    Update permissions for a specific role.
-    Only administrators can update permissions.
-    """
-    # Validate role exists
-    role_id = get_role_id(db, role_key)
-    if not role_id:
-        raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
-
-    # Get role info
-    role_result = db.execute(text(
-        "SELECT name FROM permission_roles WHERE role_key = :role_key"
-    ), {"role_key": role_key})
-    role_name = role_result.fetchone()[0]
-
-    # Get old permissions for audit
-    old_perms = get_role_permissions(db, role_key)
-
-    # Validate all page keys exist
-    invalid_keys = []
-    for page_key in request_data.permissions:
-        if not get_page_id(db, page_key):
-            invalid_keys.append(page_key)
-
-    if invalid_keys:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid page keys: {invalid_keys}"
-        )
-
-    # Clear existing permissions for this role
-    db.execute(text(
-        "DELETE FROM role_page_permissions WHERE role_id = :role_id"
-    ), {"role_id": role_id})
-
-    # Insert new permissions
-    for page_key in request_data.permissions:
-        page_id = get_page_id(db, page_key)
-        if page_id:
-            db.execute(text("""
-                INSERT INTO role_page_permissions (role_id, page_id, can_view)
-                VALUES (:role_id, :page_id, true)
-            """), {"role_id": role_id, "page_id": page_id})
-
-    db.commit()
-
-    # Log the change
-    added = set(request_data.permissions) - set(old_perms)
-    removed = set(old_perms) - set(request_data.permissions)
-
-    log_permission_change(
-        db=db,
-        user_id=1,  # TODO: Use actual user ID from auth
-        user_email="admin@example.com",  # TODO: Use actual user email
-        target_type="role",
-        target_id=role_id,
-        target_name=role_key,
-        action="updated",
-        changes={
-            "added": list(added),
-            "removed": list(removed),
-            "old_count": len(old_perms),
-            "new_count": len(request_data.permissions)
-        },
-        request=request
-    )
-
-    # Get total pages
-    total_result = db.execute(text("SELECT COUNT(*) FROM pages WHERE is_active = true"))
-    total_pages = total_result.fetchone()[0]
-
-    return RolePermissionsResponse(
-        role=role_key,
-        role_name=role_name,
-        permissions=request_data.permissions,
-        total_pages=total_pages,
-        enabled_count=len(request_data.permissions),
-        last_modified=datetime.utcnow()
-    )
-
-
-@router.post("/role/{role_key}/reset", response_model=RolePermissionsResponse)
-async def reset_role_to_default(
-    role_key: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Reset a role's permissions to default.
-    This re-runs the seeding logic for the specified role.
-    """
-    # Import the default permissions
-    from migrations.add_page_permissions_system import get_default_permissions, get_all_pages
-
-    # Validate role exists
-    role_id = get_role_id(db, role_key)
-    if not role_id:
-        raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
-
-    role_result = db.execute(text(
-        "SELECT name FROM permission_roles WHERE role_key = :role_key"
-    ), {"role_key": role_key})
-    role_name = role_result.fetchone()[0]
-
-    # Get old permissions
-    old_perms = get_role_permissions(db, role_key)
-
-    # Get default permissions
-    default_permissions = get_default_permissions()
-    if role_key == "administrator":
-        default_perms = [p["page_key"] for p in get_all_pages()]
-    else:
-        default_perms = default_permissions.get(role_key, [])
-
-    # Clear existing permissions
-    db.execute(text(
-        "DELETE FROM role_page_permissions WHERE role_id = :role_id"
-    ), {"role_id": role_id})
-
-    # Insert default permissions
-    for page_key in default_perms:
-        page_id = get_page_id(db, page_key)
-        if page_id:
-            db.execute(text("""
-                INSERT INTO role_page_permissions (role_id, page_id, can_view)
-                VALUES (:role_id, :page_id, true)
-            """), {"role_id": role_id, "page_id": page_id})
-
-    db.commit()
-
-    # Log the change
-    log_permission_change(
-        db=db,
-        user_id=1,  # TODO: Use actual user ID
-        user_email="admin@example.com",
-        target_type="role",
-        target_id=role_id,
-        target_name=role_key,
-        action="reset_to_default",
-        changes={
-            "old_permissions": old_perms,
-            "new_permissions": default_perms
-        },
-        request=request
-    )
-
-    # Get total pages
-    total_result = db.execute(text("SELECT COUNT(*) FROM pages WHERE is_active = true"))
-    total_pages = total_result.fetchone()[0]
-
-    return RolePermissionsResponse(
-        role=role_key,
-        role_name=role_name,
-        permissions=default_perms,
-        total_pages=total_pages,
-        enabled_count=len(default_perms),
-        last_modified=datetime.utcnow()
-    )
-
-
-@router.post("/role/{role_key}/copy-from/{source_role}", response_model=RolePermissionsResponse)
-async def copy_permissions_from_role(
-    role_key: str,
-    source_role: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Copy permissions from one role to another.
-    """
-    # Validate both roles exist
-    role_id = get_role_id(db, role_key)
-    source_role_id = get_role_id(db, source_role)
-
-    if not role_id:
-        raise HTTPException(status_code=404, detail=f"Target role not found: {role_key}")
-    if not source_role_id:
-        raise HTTPException(status_code=404, detail=f"Source role not found: {source_role}")
-
-    role_result = db.execute(text(
-        "SELECT name FROM permission_roles WHERE role_key = :role_key"
-    ), {"role_key": role_key})
-    role_name = role_result.fetchone()[0]
-
-    # Get old permissions
-    old_perms = get_role_permissions(db, role_key)
-
-    # Get source permissions
-    source_perms = get_role_permissions(db, source_role)
-
-    # Clear existing permissions
-    db.execute(text(
-        "DELETE FROM role_page_permissions WHERE role_id = :role_id"
-    ), {"role_id": role_id})
-
-    # Copy source permissions
-    for page_key in source_perms:
-        page_id = get_page_id(db, page_key)
-        if page_id:
-            db.execute(text("""
-                INSERT INTO role_page_permissions (role_id, page_id, can_view)
-                VALUES (:role_id, :page_id, true)
-            """), {"role_id": role_id, "page_id": page_id})
-
-    db.commit()
-
-    # Log the change
-    log_permission_change(
-        db=db,
-        user_id=1,
-        user_email="admin@example.com",
-        target_type="role",
-        target_id=role_id,
-        target_name=role_key,
-        action=f"copied_from_{source_role}",
-        changes={
-            "source_role": source_role,
-            "old_permissions": old_perms,
-            "new_permissions": source_perms
-        },
-        request=request
-    )
-
-    # Get total pages
-    total_result = db.execute(text("SELECT COUNT(*) FROM pages WHERE is_active = true"))
-    total_pages = total_result.fetchone()[0]
-
-    return RolePermissionsResponse(
-        role=role_key,
-        role_name=role_name,
-        permissions=source_perms,
-        total_pages=total_pages,
-        enabled_count=len(source_perms),
-        last_modified=datetime.utcnow()
-    )
-
-
-@router.post("/check", response_model=PermissionCheckResponse)
-async def check_permission(
-    request_data: PermissionCheckRequest,
-    user_role: str = Query(..., description="User's role key"),
-    user_id: Optional[int] = Query(None, description="User ID for override checking"),
-    db: Session = Depends(get_db)
-):
-    """
-    Check if a user with a given role can access a specific page.
-    Use this in your route guards and navigation rendering.
-    """
-    # Validate page exists
-    page_result = db.execute(text("""
-        SELECT id, page_key, name, path, category, stage
-        FROM pages
-        WHERE page_key = :page_key AND is_active = true
-    """), {"page_key": request_data.page_key})
-
-    page_row = page_result.fetchone()
-    if not page_row:
-        raise HTTPException(status_code=400, detail=f"Invalid page key: {request_data.page_key}")
-
-    page_id = page_row[0]
-    page_info = PageInfo(
-        key=page_row[1],
-        name=page_row[2],
-        path=page_row[3],
-        category=page_row[4],
-        stage=page_row[5]
-    )
-
-    # Check for user-specific override first
-    if user_id:
-        override_result = db.execute(text("""
-            SELECT can_view
-            FROM user_page_overrides
-            WHERE user_id = :user_id
-            AND page_id = :page_id
-            AND (expires_at IS NULL OR expires_at > NOW())
-        """), {"user_id": user_id, "page_id": page_id})
-
-        override_row = override_result.fetchone()
-        if override_row and override_row[0] is not None:
-            return PermissionCheckResponse(
-                page_key=request_data.page_key,
-                has_access=override_row[0],
-                page_info=page_info if override_row[0] else None
-            )
-
-    # Check role permissions
-    perms = get_role_permissions(db, user_role)
-    has_access = request_data.page_key in perms
-
-    return PermissionCheckResponse(
-        page_key=request_data.page_key,
-        has_access=has_access,
-        page_info=page_info if has_access else None
-    )
-
-
-@router.post("/check-bulk", response_model=BulkPermissionCheckResponse)
-async def check_permissions_bulk(
-    request_data: BulkPermissionCheckRequest,
-    user_role: str = Query(..., description="User's role key"),
-    user_id: Optional[int] = Query(None, description="User ID for override checking"),
-    db: Session = Depends(get_db)
-):
-    """
-    Check multiple pages at once - useful for navigation rendering.
-    """
-    perms = get_role_permissions(db, user_role)
-
-    # Check for user overrides if user_id provided
-    overrides = {}
-    if user_id:
-        override_result = db.execute(text("""
-            SELECT p.page_key, upo.can_view
-            FROM user_page_overrides upo
-            JOIN pages p ON p.id = upo.page_id
-            WHERE upo.user_id = :user_id
-            AND (upo.expires_at IS NULL OR upo.expires_at > NOW())
-            AND upo.can_view IS NOT NULL
-        """), {"user_id": user_id})
-
-        for row in override_result.fetchall():
-            overrides[row[0]] = row[1]
-
-    results = {}
-    for key in request_data.page_keys:
-        if key in overrides:
-            results[key] = overrides[key]
-        else:
-            results[key] = key in perms
-
-    return BulkPermissionCheckResponse(results=results)
-
-
-@router.get("/user/accessible-pages")
-async def get_user_accessible_pages(
-    user_role: str = Query(..., description="User's role key"),
-    user_id: Optional[int] = Query(None, description="User ID for override checking"),
-    db: Session = Depends(get_db)
-):
-    """
-    Get all pages a user can access based on their role.
-    Use this to build the navigation menu.
-    """
-    perms = get_role_permissions(db, user_role)
-
-    # Get page details
-    pages_result = db.execute(text("""
-        SELECT page_key, name, path, category, stage
-        FROM pages
-        WHERE is_active = true
-        ORDER BY display_order, name
-    """))
-
-    all_pages = []
-    for row in pages_result.fetchall():
-        all_pages.append({
-            "key": row[0],
-            "name": row[1],
-            "path": row[2],
-            "category": row[3],
-            "stage": row[4]
-        })
-
-    # Get user overrides if provided
-    overrides = {}
-    if user_id:
-        override_result = db.execute(text("""
-            SELECT p.page_key, upo.can_view
-            FROM user_page_overrides upo
-            JOIN pages p ON p.id = upo.page_id
-            WHERE upo.user_id = :user_id
-            AND (upo.expires_at IS NULL OR upo.expires_at > NOW())
-            AND upo.can_view IS NOT NULL
-        """), {"user_id": user_id})
-
-        for row in override_result.fetchall():
-            overrides[row[0]] = row[1]
-
-    # Filter accessible pages
-    accessible_pages = []
-    for page in all_pages:
-        key = page["key"]
-        if key in overrides:
-            if overrides[key]:
-                accessible_pages.append(page)
-        elif key in perms:
-            accessible_pages.append(page)
-
-    # Group by category
-    grouped = {}
-    for page in accessible_pages:
-        cat = page["category"]
-        if cat not in grouped:
-            grouped[cat] = []
-        grouped[cat].append(page)
-
-    return {
-        "role": user_role,
-        "pages": accessible_pages,
-        "grouped": grouped,
-        "total_accessible": len(accessible_pages)
-    }
-
-
-@router.get("/audit-log")
-async def get_audit_log(
-    role_key: Optional[str] = None,
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
-):
-    """
-    Get permission change audit log.
-    Optionally filter by role.
-    """
-    params = {"limit": limit, "offset": offset}
-    where_clause = ""
-
-    if role_key:
-        where_clause = "WHERE target_name = :role_key"
-        params["role_key"] = role_key
-
-    # Get total count
-    count_result = db.execute(text(f"""
-        SELECT COUNT(*) FROM page_permission_audit_log {where_clause}
-    """), params)
-    total = count_result.fetchone()[0]
-
-    # Get entries
-    result = db.execute(text(f"""
-        SELECT id, timestamp, user_id, user_email, target_type, target_name, action, changes
-        FROM page_permission_audit_log
-        {where_clause}
-        ORDER BY timestamp DESC
-        LIMIT :limit OFFSET :offset
-    """), params)
-
-    entries = []
-    for row in result.fetchall():
-        entries.append({
-            "id": row[0],
-            "timestamp": row[1].isoformat() if row[1] else None,
-            "user_id": row[2],
-            "user_email": row[3],
-            "target_type": row[4],
-            "target_name": row[5],
-            "action": row[6],
-            "changes": row[7] if row[7] else {}
-        })
-
-    return {
-        "entries": entries,
-        "total": total,
-        "limit": limit,
-        "offset": offset
-    }
-
-
-# ============================================================================
-# USER OVERRIDE ROUTES
-# ============================================================================
-
-class UserOverrideRequest(BaseModel):
-    """Request to set user-specific page permission override"""
-    page_key: str
+    path: str
+    name: str
+    description: Optional[str] = None
+    category: str
+    icon: Optional[str] = None
+    parent_path: Optional[str] = None
+    display_order: int
+    min_role: str
+    can_view: bool = True
+    can_edit: bool = False
+    is_pinned: bool = False
+    pin_order: Optional[int] = None
+
+
+class PageAccessCheck(BaseModel):
+    can_view: bool
+    can_edit: bool
+    is_nav_visible: bool
+    access_source: str
+
+
+class UserPageOverrideRequest(BaseModel):
     can_view: Optional[bool] = None
-    reason: Optional[str] = None
+    can_edit: Optional[bool] = None
+    is_nav_visible: Optional[bool] = None
+    override_reason: Optional[str] = None
     expires_at: Optional[datetime] = None
 
 
-@router.post("/user/{user_id}/override")
-async def set_user_override(
-    user_id: int,
-    request_data: UserOverrideRequest,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Set a user-specific permission override for a page.
-    Can_view=True grants access, False denies, None removes the override.
-    """
-    page_id = get_page_id(db, request_data.page_key)
-    if not page_id:
-        raise HTTPException(status_code=400, detail=f"Invalid page key: {request_data.page_key}")
+class PinPageRequest(BaseModel):
+    is_pinned: bool
+    pin_order: Optional[int] = None
 
-    if request_data.can_view is None:
-        # Remove override
-        db.execute(text("""
-            DELETE FROM user_page_overrides
-            WHERE user_id = :user_id AND page_id = :page_id
-        """), {"user_id": user_id, "page_id": page_id})
-        action = "removed_override"
-    else:
-        # Set or update override
-        db.execute(text("""
-            INSERT INTO user_page_overrides (user_id, page_id, can_view, reason, expires_at, granted_by)
-            VALUES (:user_id, :page_id, :can_view, :reason, :expires_at, :granted_by)
-            ON CONFLICT (user_id, page_id)
-            DO UPDATE SET
-                can_view = EXCLUDED.can_view,
-                reason = EXCLUDED.reason,
-                expires_at = EXCLUDED.expires_at,
-                granted_by = EXCLUDED.granted_by,
-                granted_at = NOW()
+
+class RolePagePermissionRequest(BaseModel):
+    can_view: bool
+    can_edit: bool
+    is_nav_visible: bool
+
+
+class BulkPagePermissionRequest(BaseModel):
+    page_ids: List[int]
+    role: str
+    can_view: bool
+    can_edit: bool
+
+
+# =============================================================================
+# PUBLIC ENDPOINTS (for authenticated users)
+# =============================================================================
+
+@router.get("/categories")
+async def get_page_categories(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all page categories."""
+    try:
+        result = db.execute(text("""
+            SELECT id, code, name, description, icon, display_order, default_visible
+            FROM page_categories
+            ORDER BY display_order
+        """))
+
+        categories = [
+            {
+                "id": row[0],
+                "code": row[1],
+                "name": row[2],
+                "description": row[3],
+                "icon": row[4],
+                "display_order": row[5],
+                "default_visible": bool(row[6]),
+            }
+            for row in result.fetchall()
+        ]
+
+        return {"categories": categories}
+    except Exception as e:
+        logger.error(f"Error fetching page categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/my-pages")
+async def get_my_accessible_pages(
+    category: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all pages accessible by the current user."""
+    try:
+        user_id = current_user.id
+        user_role = getattr(current_user, 'permission_role', 'sales') or 'sales'
+
+        # Build query
+        query = """
+            SELECT
+                p.id,
+                p.path,
+                p.name,
+                p.description,
+                p.category,
+                p.icon,
+                p.parent_path,
+                p.display_order,
+                p.min_role,
+                COALESCE(upo.can_view, pp.can_view, 1) as can_view,
+                COALESCE(upo.can_edit, pp.can_edit, 0) as can_edit,
+                COALESCE(upo.is_pinned, 0) as is_pinned,
+                upo.pin_order
+            FROM pages p
+            LEFT JOIN user_page_overrides upo ON upo.page_id = p.id
+                AND upo.user_id = :user_id
+                AND (upo.expires_at IS NULL OR upo.expires_at > CURRENT_TIMESTAMP)
+            LEFT JOIN page_permissions pp ON pp.page_id = p.id
+                AND pp.role = :role
+            WHERE p.is_active = 1
+                AND COALESCE(upo.is_nav_visible, pp.is_nav_visible, 1) = 1
+        """
+
+        params = {"user_id": user_id, "role": user_role}
+
+        if category:
+            query += " AND p.category = :category"
+            params["category"] = category
+
+        query += """
+            ORDER BY
+                COALESCE(upo.is_pinned, 0) DESC,
+                upo.pin_order NULLS LAST,
+                p.display_order
+        """
+
+        result = db.execute(text(query), params)
+
+        pages = [
+            {
+                "id": row[0],
+                "path": row[1],
+                "name": row[2],
+                "description": row[3],
+                "category": row[4],
+                "icon": row[5],
+                "parent_path": row[6],
+                "display_order": row[7],
+                "min_role": row[8],
+                "can_view": bool(row[9]),
+                "can_edit": bool(row[10]),
+                "is_pinned": bool(row[11]),
+                "pin_order": row[12],
+            }
+            for row in result.fetchall()
+        ]
+
+        # Group by category
+        by_category = {}
+        for page in pages:
+            cat = page["category"]
+            if cat not in by_category:
+                by_category[cat] = []
+            by_category[cat].append(page)
+
+        return {
+            "pages": pages,
+            "by_category": by_category,
+            "total": len(pages),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user pages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/check/{page_path:path}")
+async def check_page_access(
+    page_path: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Check if current user can access a specific page."""
+    try:
+        user_id = current_user.id
+        user_role = getattr(current_user, 'permission_role', 'sales') or 'sales'
+
+        # Normalize path
+        if not page_path.startswith("/"):
+            page_path = "/" + page_path
+
+        # Check for exact match or pattern match (for paths with :id)
+        result = db.execute(text("""
+            SELECT id, path, min_role, is_active
+            FROM pages
+            WHERE path = :path OR path LIKE :pattern
+            LIMIT 1
         """), {
+            "path": page_path,
+            "pattern": page_path.rsplit("/", 1)[0] + "/%"
+        })
+
+        page = result.fetchone()
+
+        if not page:
+            return {
+                "can_view": False,
+                "can_edit": False,
+                "is_nav_visible": False,
+                "access_source": "page_not_found",
+            }
+
+        page_id = page[0]
+
+        # Check user override first
+        override = db.execute(text("""
+            SELECT can_view, can_edit, is_nav_visible
+            FROM user_page_overrides
+            WHERE user_id = :user_id AND page_id = :page_id
+                AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        """), {"user_id": user_id, "page_id": page_id}).fetchone()
+
+        if override:
+            return {
+                "can_view": bool(override[0]) if override[0] is not None else True,
+                "can_edit": bool(override[1]) if override[1] is not None else False,
+                "is_nav_visible": bool(override[2]) if override[2] is not None else True,
+                "access_source": "user_override",
+            }
+
+        # Check role permission
+        role_perm = db.execute(text("""
+            SELECT can_view, can_edit, is_nav_visible
+            FROM page_permissions
+            WHERE page_id = :page_id AND role = :role
+        """), {"page_id": page_id, "role": user_role}).fetchone()
+
+        if role_perm:
+            return {
+                "can_view": bool(role_perm[0]),
+                "can_edit": bool(role_perm[1]),
+                "is_nav_visible": bool(role_perm[2]),
+                "access_source": "role_permission",
+            }
+
+        # Default based on role hierarchy
+        role_hierarchy = {"sales": 1, "operations": 2, "management": 3, "admin": 4}
+        min_role = page[2] or "sales"
+        user_level = role_hierarchy.get(user_role, 1)
+        min_level = role_hierarchy.get(min_role, 1)
+
+        can_view = user_level >= min_level
+
+        return {
+            "can_view": can_view,
+            "can_edit": user_role == "management" or user_level > min_level,
+            "is_nav_visible": can_view,
+            "access_source": "default",
+        }
+    except Exception as e:
+        logger.error(f"Error checking page access: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pin/{page_id}")
+async def pin_page(
+    page_id: int,
+    request: PinPageRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Pin or unpin a page for the current user."""
+    try:
+        user_id = current_user.id
+
+        # Check if override exists
+        existing = db.execute(text("""
+            SELECT id FROM user_page_overrides
+            WHERE user_id = :user_id AND page_id = :page_id
+        """), {"user_id": user_id, "page_id": page_id}).fetchone()
+
+        if existing:
+            db.execute(text("""
+                UPDATE user_page_overrides
+                SET is_pinned = :is_pinned, pin_order = :pin_order, updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = :user_id AND page_id = :page_id
+            """), {
+                "user_id": user_id,
+                "page_id": page_id,
+                "is_pinned": 1 if request.is_pinned else 0,
+                "pin_order": request.pin_order,
+            })
+        else:
+            db.execute(text("""
+                INSERT INTO user_page_overrides (user_id, page_id, is_pinned, pin_order)
+                VALUES (:user_id, :page_id, :is_pinned, :pin_order)
+            """), {
+                "user_id": user_id,
+                "page_id": page_id,
+                "is_pinned": 1 if request.is_pinned else 0,
+                "pin_order": request.pin_order,
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "page_id": page_id,
+            "is_pinned": request.is_pinned,
+            "pin_order": request.pin_order,
+        }
+    except Exception as e:
+        logger.error(f"Error pinning page: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/pinned")
+async def get_pinned_pages(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get user's pinned pages."""
+    try:
+        user_id = current_user.id
+
+        result = db.execute(text("""
+            SELECT
+                p.id, p.path, p.name, p.icon, p.category,
+                upo.pin_order
+            FROM user_page_overrides upo
+            JOIN pages p ON p.id = upo.page_id
+            WHERE upo.user_id = :user_id
+                AND upo.is_pinned = 1
+                AND p.is_active = 1
+            ORDER BY upo.pin_order NULLS LAST, p.name
+        """), {"user_id": user_id})
+
+        pinned = [
+            {
+                "id": row[0],
+                "path": row[1],
+                "name": row[2],
+                "icon": row[3],
+                "category": row[4],
+                "pin_order": row[5],
+            }
+            for row in result.fetchall()
+        ]
+
+        return {"pinned_pages": pinned}
+    except Exception as e:
+        logger.error(f"Error fetching pinned pages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# ADMIN ENDPOINTS (for managing permissions)
+# =============================================================================
+
+@router.get("/admin/pages")
+async def get_all_pages(
+    category: Optional[str] = None,
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all pages (admin view)."""
+    # Check admin permission
+    user_role = getattr(current_user, 'permission_role', 'sales')
+    if user_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        query = """
+            SELECT
+                p.id, p.path, p.name, p.description, p.category,
+                p.icon, p.parent_path, p.display_order, p.is_active,
+                p.requires_auth, p.min_role, p.default_permissions,
+                pc.name as category_name
+            FROM pages p
+            LEFT JOIN page_categories pc ON pc.code = p.category
+            WHERE 1=1
+        """
+        params = {}
+
+        if not include_inactive:
+            query += " AND p.is_active = 1"
+
+        if category:
+            query += " AND p.category = :category"
+            params["category"] = category
+
+        query += " ORDER BY p.display_order"
+
+        result = db.execute(text(query), params)
+
+        pages = [
+            {
+                "id": row[0],
+                "path": row[1],
+                "name": row[2],
+                "description": row[3],
+                "category": row[4],
+                "icon": row[5],
+                "parent_path": row[6],
+                "display_order": row[7],
+                "is_active": bool(row[8]),
+                "requires_auth": bool(row[9]),
+                "min_role": row[10],
+                "default_permissions": json.loads(row[11]) if row[11] else [],
+                "category_name": row[12],
+            }
+            for row in result.fetchall()
+        ]
+
+        return {"pages": pages, "total": len(pages)}
+    except Exception as e:
+        logger.error(f"Error fetching all pages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/pages/{page_id}/permissions")
+async def get_page_permissions(
+    page_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all permissions for a specific page."""
+    user_role = getattr(current_user, 'permission_role', 'sales')
+    if user_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Get page info
+        page = db.execute(text("""
+            SELECT id, path, name, min_role FROM pages WHERE id = :page_id
+        """), {"page_id": page_id}).fetchone()
+
+        if not page:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        # Get role permissions
+        role_perms = db.execute(text("""
+            SELECT role, can_view, can_edit, is_nav_visible
+            FROM page_permissions
+            WHERE page_id = :page_id
+        """), {"page_id": page_id}).fetchall()
+
+        # Get user overrides
+        user_overrides = db.execute(text("""
+            SELECT
+                upo.id, u.id as user_id, u.email, u.full_name,
+                upo.can_view, upo.can_edit, upo.is_nav_visible,
+                upo.override_reason, upo.expires_at
+            FROM user_page_overrides upo
+            JOIN users u ON u.id = upo.user_id
+            WHERE upo.page_id = :page_id
+        """), {"page_id": page_id}).fetchall()
+
+        return {
+            "page": {
+                "id": page[0],
+                "path": page[1],
+                "name": page[2],
+                "min_role": page[3],
+            },
+            "role_permissions": [
+                {
+                    "role": r[0],
+                    "can_view": bool(r[1]),
+                    "can_edit": bool(r[2]),
+                    "is_nav_visible": bool(r[3]),
+                }
+                for r in role_perms
+            ],
+            "user_overrides": [
+                {
+                    "id": o[0],
+                    "user_id": o[1],
+                    "email": o[2],
+                    "name": o[3],
+                    "can_view": bool(o[4]) if o[4] is not None else None,
+                    "can_edit": bool(o[5]) if o[5] is not None else None,
+                    "is_nav_visible": bool(o[6]) if o[6] is not None else None,
+                    "override_reason": o[7],
+                    "expires_at": o[8].isoformat() if o[8] else None,
+                }
+                for o in user_overrides
+            ],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching page permissions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/admin/pages/{page_id}/role/{role}")
+async def update_role_permission(
+    page_id: int,
+    role: str,
+    request: RolePagePermissionRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Update role-based permission for a page."""
+    user_role = getattr(current_user, 'permission_role', 'sales')
+    if user_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if role not in ['sales', 'operations', 'management']:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    try:
+        # Check if exists
+        existing = db.execute(text("""
+            SELECT id FROM page_permissions WHERE page_id = :page_id AND role = :role
+        """), {"page_id": page_id, "role": role}).fetchone()
+
+        if existing:
+            db.execute(text("""
+                UPDATE page_permissions
+                SET can_view = :can_view, can_edit = :can_edit,
+                    is_nav_visible = :is_nav_visible, updated_at = CURRENT_TIMESTAMP
+                WHERE page_id = :page_id AND role = :role
+            """), {
+                "page_id": page_id,
+                "role": role,
+                "can_view": 1 if request.can_view else 0,
+                "can_edit": 1 if request.can_edit else 0,
+                "is_nav_visible": 1 if request.is_nav_visible else 0,
+            })
+        else:
+            db.execute(text("""
+                INSERT INTO page_permissions (page_id, role, can_view, can_edit, is_nav_visible)
+                VALUES (:page_id, :role, :can_view, :can_edit, :is_nav_visible)
+            """), {
+                "page_id": page_id,
+                "role": role,
+                "can_view": 1 if request.can_view else 0,
+                "can_edit": 1 if request.can_edit else 0,
+                "is_nav_visible": 1 if request.is_nav_visible else 0,
+            })
+
+        db.commit()
+
+        # Log the change
+        logger.info(f"User {current_user.id} updated page {page_id} permissions for role {role}")
+
+        return {
+            "success": True,
+            "page_id": page_id,
+            "role": role,
+            "permissions": {
+                "can_view": request.can_view,
+                "can_edit": request.can_edit,
+                "is_nav_visible": request.is_nav_visible,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error updating role permission: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/users/{user_id}/pages/{page_id}/override")
+async def create_user_page_override(
+    user_id: int,
+    page_id: int,
+    request: UserPageOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Create or update a user-specific page override."""
+    admin_role = getattr(current_user, 'permission_role', 'sales')
+    if admin_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Check if override exists
+        existing = db.execute(text("""
+            SELECT id FROM user_page_overrides WHERE user_id = :user_id AND page_id = :page_id
+        """), {"user_id": user_id, "page_id": page_id}).fetchone()
+
+        if existing:
+            db.execute(text("""
+                UPDATE user_page_overrides
+                SET can_view = :can_view, can_edit = :can_edit, is_nav_visible = :is_nav_visible,
+                    override_reason = :reason, expires_at = :expires_at,
+                    granted_by = :granted_by, updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = :user_id AND page_id = :page_id
+            """), {
+                "user_id": user_id,
+                "page_id": page_id,
+                "can_view": 1 if request.can_view else 0 if request.can_view is not None else None,
+                "can_edit": 1 if request.can_edit else 0 if request.can_edit is not None else None,
+                "is_nav_visible": 1 if request.is_nav_visible else 0 if request.is_nav_visible is not None else None,
+                "reason": request.override_reason,
+                "expires_at": request.expires_at,
+                "granted_by": current_user.id,
+            })
+        else:
+            db.execute(text("""
+                INSERT INTO user_page_overrides
+                    (user_id, page_id, can_view, can_edit, is_nav_visible, override_reason, expires_at, granted_by)
+                VALUES
+                    (:user_id, :page_id, :can_view, :can_edit, :is_nav_visible, :reason, :expires_at, :granted_by)
+            """), {
+                "user_id": user_id,
+                "page_id": page_id,
+                "can_view": 1 if request.can_view else 0 if request.can_view is not None else None,
+                "can_edit": 1 if request.can_edit else 0 if request.can_edit is not None else None,
+                "is_nav_visible": 1 if request.is_nav_visible else 0 if request.is_nav_visible is not None else None,
+                "reason": request.override_reason,
+                "expires_at": request.expires_at,
+                "granted_by": current_user.id,
+            })
+
+        db.commit()
+
+        logger.info(f"User {current_user.id} created page override for user {user_id} on page {page_id}")
+
+        return {
+            "success": True,
             "user_id": user_id,
             "page_id": page_id,
-            "can_view": request_data.can_view,
-            "reason": request_data.reason,
-            "expires_at": request_data.expires_at,
-            "granted_by": 1  # TODO: Use actual admin user ID
-        })
-        action = "granted" if request_data.can_view else "denied"
-
-    db.commit()
-
-    # Log the change
-    log_permission_change(
-        db=db,
-        user_id=1,
-        user_email="admin@example.com",
-        target_type="user",
-        target_id=user_id,
-        target_name=str(user_id),
-        action=f"override_{action}",
-        changes={
-            "page_key": request_data.page_key,
-            "can_view": request_data.can_view,
-            "reason": request_data.reason
-        },
-        request=request
-    )
-
-    return {"status": "success", "action": action}
+            "override": {
+                "can_view": request.can_view,
+                "can_edit": request.can_edit,
+                "is_nav_visible": request.is_nav_visible,
+                "expires_at": request.expires_at.isoformat() if request.expires_at else None,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error creating user page override: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/user/{user_id}/overrides")
+@router.delete("/admin/users/{user_id}/pages/{page_id}/override")
+async def delete_user_page_override(
+    user_id: int,
+    page_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Delete a user-specific page override."""
+    admin_role = getattr(current_user, 'permission_role', 'sales')
+    if admin_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        result = db.execute(text("""
+            DELETE FROM user_page_overrides WHERE user_id = :user_id AND page_id = :page_id
+        """), {"user_id": user_id, "page_id": page_id})
+
+        db.commit()
+
+        return {"success": True, "deleted": result.rowcount > 0}
+    except Exception as e:
+        logger.error(f"Error deleting user page override: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/admin/users/{user_id}/overrides")
 async def get_user_overrides(
     user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
-    """
-    Get all permission overrides for a user.
-    """
-    result = db.execute(text("""
-        SELECT p.page_key, p.name, upo.can_view, upo.reason, upo.expires_at, upo.granted_at
-        FROM user_page_overrides upo
-        JOIN pages p ON p.id = upo.page_id
-        WHERE upo.user_id = :user_id
-        ORDER BY p.display_order
-    """), {"user_id": user_id})
+    """Get all page overrides for a specific user."""
+    admin_role = getattr(current_user, 'permission_role', 'sales')
+    if admin_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
 
-    overrides = []
-    for row in result.fetchall():
-        overrides.append({
-            "page_key": row[0],
-            "page_name": row[1],
-            "can_view": row[2],
-            "reason": row[3],
-            "expires_at": row[4].isoformat() if row[4] else None,
-            "granted_at": row[5].isoformat() if row[5] else None
+    try:
+        result = db.execute(text("""
+            SELECT
+                upo.id, p.id as page_id, p.path, p.name,
+                upo.can_view, upo.can_edit, upo.is_nav_visible,
+                upo.is_pinned, upo.override_reason, upo.expires_at,
+                g.full_name as granted_by_name
+            FROM user_page_overrides upo
+            JOIN pages p ON p.id = upo.page_id
+            LEFT JOIN users g ON g.id = upo.granted_by
+            WHERE upo.user_id = :user_id
+            ORDER BY p.display_order
+        """), {"user_id": user_id})
+
+        overrides = [
+            {
+                "id": row[0],
+                "page_id": row[1],
+                "path": row[2],
+                "name": row[3],
+                "can_view": bool(row[4]) if row[4] is not None else None,
+                "can_edit": bool(row[5]) if row[5] is not None else None,
+                "is_nav_visible": bool(row[6]) if row[6] is not None else None,
+                "is_pinned": bool(row[7]),
+                "override_reason": row[8],
+                "expires_at": row[9].isoformat() if row[9] else None,
+                "granted_by": row[10],
+            }
+            for row in result.fetchall()
+        ]
+
+        return {"user_id": user_id, "overrides": overrides}
+    except Exception as e:
+        logger.error(f"Error fetching user overrides: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/bulk-update")
+async def bulk_update_permissions(
+    request: BulkPagePermissionRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Bulk update permissions for multiple pages."""
+    admin_role = getattr(current_user, 'permission_role', 'sales')
+    if admin_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if request.role not in ['sales', 'operations', 'management']:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    try:
+        updated = 0
+        for page_id in request.page_ids:
+            # Check if exists
+            existing = db.execute(text("""
+                SELECT id FROM page_permissions WHERE page_id = :page_id AND role = :role
+            """), {"page_id": page_id, "role": request.role}).fetchone()
+
+            if existing:
+                db.execute(text("""
+                    UPDATE page_permissions
+                    SET can_view = :can_view, can_edit = :can_edit, updated_at = CURRENT_TIMESTAMP
+                    WHERE page_id = :page_id AND role = :role
+                """), {
+                    "page_id": page_id,
+                    "role": request.role,
+                    "can_view": 1 if request.can_view else 0,
+                    "can_edit": 1 if request.can_edit else 0,
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO page_permissions (page_id, role, can_view, can_edit, is_nav_visible)
+                    VALUES (:page_id, :role, :can_view, :can_edit, :can_view)
+                """), {
+                    "page_id": page_id,
+                    "role": request.role,
+                    "can_view": 1 if request.can_view else 0,
+                    "can_edit": 1 if request.can_edit else 0,
+                })
+            updated += 1
+
+        db.commit()
+
+        return {"success": True, "updated_count": updated}
+    except Exception as e:
+        logger.error(f"Error bulk updating permissions: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# ACCESS LOGGING
+# =============================================================================
+
+@router.post("/log-access")
+async def log_page_access(
+    page_path: str,
+    access_granted: bool,
+    denial_reason: Optional[str] = None,
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Log a page access attempt."""
+    try:
+        # Get page ID
+        page = db.execute(text("""
+            SELECT id FROM pages WHERE path = :path
+        """), {"path": page_path}).fetchone()
+
+        page_id = page[0] if page else None
+
+        db.execute(text("""
+            INSERT INTO page_access_log
+                (user_id, page_id, page_path, access_type, access_granted, denial_reason, ip_address, user_agent)
+            VALUES
+                (:user_id, :page_id, :page_path, :access_type, :access_granted, :denial_reason, :ip, :ua)
+        """), {
+            "user_id": current_user.id,
+            "page_id": page_id,
+            "page_path": page_path,
+            "access_type": "view" if access_granted else "denied",
+            "access_granted": 1 if access_granted else 0,
+            "denial_reason": denial_reason,
+            "ip": request.client.host if request else None,
+            "ua": request.headers.get("User-Agent") if request else None,
         })
 
-    return {"user_id": user_id, "overrides": overrides}
+        db.commit()
+
+        return {"logged": True}
+    except Exception as e:
+        logger.error(f"Error logging page access: {e}")
+        # Don't fail the request if logging fails
+        return {"logged": False, "error": str(e)}
+
+
+@router.get("/admin/access-log")
+async def get_access_log(
+    user_id: Optional[int] = None,
+    page_id: Optional[int] = None,
+    denied_only: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get page access logs (admin only)."""
+    admin_role = getattr(current_user, 'permission_role', 'sales')
+    if admin_role != 'management':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        query = """
+            SELECT
+                pal.id, pal.user_id, u.email, u.full_name,
+                pal.page_id, p.path, p.name,
+                pal.access_type, pal.access_granted, pal.denial_reason,
+                pal.ip_address, pal.accessed_at
+            FROM page_access_log pal
+            LEFT JOIN users u ON u.id = pal.user_id
+            LEFT JOIN pages p ON p.id = pal.page_id
+            WHERE 1=1
+        """
+        params = {"limit": limit, "offset": offset}
+
+        if user_id:
+            query += " AND pal.user_id = :user_id"
+            params["user_id"] = user_id
+
+        if page_id:
+            query += " AND pal.page_id = :page_id"
+            params["page_id"] = page_id
+
+        if denied_only:
+            query += " AND pal.access_granted = 0"
+
+        query += " ORDER BY pal.accessed_at DESC LIMIT :limit OFFSET :offset"
+
+        result = db.execute(text(query), params)
+
+        logs = [
+            {
+                "id": row[0],
+                "user_id": row[1],
+                "email": row[2],
+                "user_name": row[3],
+                "page_id": row[4],
+                "page_path": row[5],
+                "page_name": row[6],
+                "access_type": row[7],
+                "access_granted": bool(row[8]),
+                "denial_reason": row[9],
+                "ip_address": row[10],
+                "accessed_at": row[11].isoformat() if row[11] else None,
+            }
+            for row in result.fetchall()
+        ]
+
+        return {"logs": logs, "limit": limit, "offset": offset}
+    except Exception as e:
+        logger.error(f"Error fetching access logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

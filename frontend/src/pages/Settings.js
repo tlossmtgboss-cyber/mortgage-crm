@@ -353,8 +353,6 @@ function Settings() {
     { id: 'agent-governance', label: 'Agent Governance', type: 'parent', section: 'agentGovernance' },
     { id: 'document-intake', label: 'Document Intake', type: 'standalone', section: 'document-intake' },
     { id: 'email-monitor', label: 'Email Monitor', type: 'standalone', section: 'email-monitor' },
-    { id: 'ai-email-training', label: 'AI Email Training', type: 'standalone', section: 'ai-email-training' },
-    { id: 'ai-email-setup', label: 'AI Email Setup', type: 'standalone', section: 'ai-email-setup' },
     { id: 'marketing', label: 'Marketing', type: 'standalone', section: 'marketing' },
     { id: 'it-helpdesk', label: 'IT Helpdesk', type: 'standalone', section: 'it-helpdesk' },
     { id: 'production', label: 'Production Widgets', type: 'parent', section: 'production' },
@@ -2668,6 +2666,8 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'agent-governance-alerts' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-alerts')}><span>Alerts & Notifications</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'agent-governance-compliance' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-compliance')}><span>Compliance</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'agent-governance-gym' ? 'active' : ''}`} onClick={() => setActiveSection('agent-governance-gym')}><span>Agent Gym Settings</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'ai-email-training' ? 'active' : ''}`} onClick={() => setActiveSection('ai-email-training')}><span>AI Email Training</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'ai-email-setup' ? 'active' : ''}`} onClick={() => setActiveSection('ai-email-setup')}><span>AI Email Setup</span></button>
                     </div>
                   )}
                 </div>
