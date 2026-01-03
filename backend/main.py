@@ -20477,6 +20477,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Agent Governance Settings routes not loaded: {e}")
 
+# Page Permissions routes (Role-based page access control)
+try:
+    from routes.page_permissions_routes import router as page_permissions_router
+    app.include_router(page_permissions_router, tags=["Page Permissions"])
+    logger.info("✅ Page Permissions routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Page Permissions routes not loaded: {e}")
+
 # Smart Scheduler Settings routes (Comprehensive error handling pattern)
 try:
     from routes.smart_scheduler_settings_routes import router as smart_scheduler_settings_router

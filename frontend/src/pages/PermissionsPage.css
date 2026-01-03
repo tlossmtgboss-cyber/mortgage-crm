@@ -1,0 +1,519 @@
+.permissions-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.page-header p {
+  color: #666;
+  font-size: 14px;
+}
+
+/* Loading and Error States */
+.loading-container,
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-container {
+  color: #c62828;
+}
+
+.error-container h2 {
+  margin-bottom: 8px;
+}
+
+/* Toolbar */
+.permissions-toolbar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 250px;
+  max-width: 400px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.filter-dropdown select {
+  padding: 10px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.filter-dropdown select:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.btn-secondary,
+.btn-primary,
+.btn-warning,
+.btn-danger {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background-color: #2196f3;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #1976d2;
+}
+
+.btn-secondary {
+  background-color: #f5f5f5;
+  color: #424242;
+  border: 1px solid #e0e0e0;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.btn-warning {
+  background-color: #ff9800;
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background-color: #f57c00;
+}
+
+.btn-danger {
+  background-color: #f44336;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Permissions Container */
+.permissions-container {
+  display: flex;
+  gap: 24px;
+}
+
+/* Role Tabs */
+.role-tabs {
+  flex-shrink: 0;
+  width: 220px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  height: fit-content;
+}
+
+.role-tabs h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-tab {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  transition: background-color 0.2s;
+}
+
+.role-tab:hover {
+  background-color: #f5f5f5;
+}
+
+.role-tab.active {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.role-tab .role-name {
+  display: block;
+  font-weight: 500;
+}
+
+.role-tab .role-level {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.role-tab.active .role-level {
+  color: #64b5f6;
+}
+
+/* Permissions Matrix */
+.permissions-matrix {
+  flex: 1;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow-x: auto;
+}
+
+.matrix-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.matrix-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* Copy Permissions */
+.copy-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-section label {
+  font-size: 13px;
+  color: #666;
+}
+
+.copy-section select {
+  padding: 6px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+}
+
+.btn-copy {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Category Sections */
+.category-section {
+  margin-bottom: 24px;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.category-header h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.category-toggle {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.category-toggle:hover {
+  background-color: #e0e0e0;
+}
+
+/* Permissions Table */
+.permissions-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.permissions-table th,
+.permissions-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.permissions-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.permissions-table tr:hover {
+  background-color: #fafafa;
+}
+
+.page-info .page-name {
+  font-weight: 500;
+  color: #212121;
+}
+
+.page-info .page-path {
+  font-size: 12px;
+  color: #999;
+  font-family: monospace;
+}
+
+/* Permission Checkbox */
+.permission-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.permission-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #2196f3;
+}
+
+/* Unsaved Changes Bar */
+.unsaved-changes-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+  color: white;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+}
+
+.unsaved-changes-bar span {
+  font-weight: 500;
+}
+
+.unsaved-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.unsaved-actions .btn-secondary {
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.unsaved-actions .btn-secondary:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.unsaved-actions .btn-primary {
+  background: white;
+  color: #1976d2;
+}
+
+.unsaved-actions .btn-primary:hover {
+  background: #f5f5f5;
+}
+
+/* Empty States */
+.no-results {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.modal-content p {
+  color: #666;
+  margin-bottom: 24px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .permissions-container {
+    flex-direction: column;
+  }
+
+  .role-tabs {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .role-tabs h3 {
+    width: 100%;
+  }
+
+  .role-tab {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .permissions-toolbar {
+    flex-direction: column;
+  }
+
+  .search-box {
+    max-width: none;
+    width: 100%;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .matrix-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .copy-section {
+    width: 100%;
+  }
+
+  .unsaved-changes-bar {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+}
