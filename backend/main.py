@@ -38489,6 +38489,59 @@ async def create_user(
         "created_at": new_user.created_at.isoformat() if new_user.created_at else None
     }
 
+@app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
+async def get_user_deletion_blockers(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Check what tables would block user deletion"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    blockers = []
+    try:
+        fk_query = """
+            SELECT tc.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+                AND ccu.table_name = 'users'
+                AND tc.table_schema = 'public'
+                AND tc.table_name != 'users'
+        """
+        result = db.execute(text(fk_query))
+        for table_name, column_name in result.fetchall():
+            try:
+                count_result = db.execute(
+                    text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
+                    {"user_id": user_id}
+                ).scalar()
+                if count_result and count_result > 0:
+                    blockers.append({
+                        "table": table_name,
+                        "column": column_name,
+                        "count": count_result
+                    })
+            except Exception as e:
+                blockers.append({
+                    "table": table_name,
+                    "column": column_name,
+                    "error": str(e)[:100]
+                })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check blockers: {str(e)}")
+
+    return {
+        "user_id": user_id,
+        "email": user.email,
+        "can_delete": len(blockers) == 0,
+        "blockers": blockers
+    }
+
+
 @app.delete("/api/v1/admin/users/{user_id}")
 async def delete_user(
     user_id: int,
@@ -38505,11 +38558,19 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     def safe_execute(query, params):
-        """Execute query, ignoring errors if table doesn't exist"""
+        """Execute query using savepoint to handle errors without aborting transaction"""
         try:
+            # Use savepoint to isolate query failures
+            db.execute(text("SAVEPOINT safe_exec_sp"))
             db.execute(text(query), params)
+            db.execute(text("RELEASE SAVEPOINT safe_exec_sp"))
             return True
         except Exception as e:
+            # Rollback to savepoint to keep transaction valid
+            try:
+                db.execute(text("ROLLBACK TO SAVEPOINT safe_exec_sp"))
+            except:
+                pass
             error_str = str(e).lower()
             if "does not exist" not in error_str and "no such table" not in error_str:
                 # Log the full error for debugging
@@ -38518,6 +38579,35 @@ async def delete_user(
 
     try:
         params = {"user_id": user_id}
+
+        # Pre-check: Find all tables with references to this user
+        blocking_tables = []
+        try:
+            fk_check_query = """
+                SELECT tc.table_name, kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = 'users'
+                    AND tc.table_schema = 'public'
+                    AND tc.table_name != 'users'
+            """
+            result = db.execute(text(fk_check_query))
+            for table_name, column_name in result.fetchall():
+                try:
+                    count_result = db.execute(
+                        text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
+                        params
+                    ).scalar()
+                    if count_result and count_result > 0:
+                        blocking_tables.append(f"{table_name}.{column_name}={count_result}")
+                except:
+                    pass
+            if blocking_tables:
+                logger.info(f"User {user_id} has references in: {', '.join(blocking_tables)}")
+        except Exception as pre_check_e:
+            logger.warning(f"Pre-check failed: {pre_check_e}")
 
         # =========================================================================
         # PHASE 1: SET NULL on nullable foreign key columns

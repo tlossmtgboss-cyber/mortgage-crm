@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import NotificationBell from './NotificationBell';
@@ -7,35 +7,9 @@ import './Navigation.css';
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
   const { userRole } = usePermissions();
-  const [marketingOpen, setMarketingOpen] = useState(false);
-  const marketingRef = useRef(null);
 
   const isActive = (path) => location.pathname === path;
-
-  // Marketing dropdown paths
-  const marketingPaths = [
-    '/ai-outreach',
-    '/avatar-studio',
-    '/communication-intelligence',
-    '/email-intelligence',
-    '/acquisition',
-    '/conversation-intelligence'
-  ];
-
-  const isMarketingActive = marketingPaths.some(path =>
-    location.pathname === path || location.pathname.startsWith(path + '/')
-  );
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (marketingRef.current && !marketingRef.current.contains(event.target)) {
-        setMarketingOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const startsWithPath = (path) => location.pathname.startsWith(path);
 
   const renderBadge = (count) => {
     if (!count || count === 0) return null;
