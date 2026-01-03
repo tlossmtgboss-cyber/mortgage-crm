@@ -38489,6 +38489,62 @@ async def create_user(
         "created_at": new_user.created_at.isoformat() if new_user.created_at else None
     }
 
+@app.get("/api/v1/debug/user-deletion-blockers/{user_id}")
+async def debug_user_deletion_blockers(
+    user_id: int,
+    admin_key: str = None,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check what blocks user deletion (protected by admin_key)"""
+    if admin_key != "perennia-admin-2024":
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    blockers = []
+    try:
+        fk_query = """
+            SELECT tc.table_name, kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+                AND ccu.table_name = 'users'
+                AND tc.table_schema = 'public'
+                AND tc.table_name != 'users'
+        """
+        result = db.execute(text(fk_query))
+        for table_name, column_name in result.fetchall():
+            try:
+                count_result = db.execute(
+                    text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"),
+                    {"user_id": user_id}
+                ).scalar()
+                if count_result and count_result > 0:
+                    blockers.append({
+                        "table": table_name,
+                        "column": column_name,
+                        "count": count_result
+                    })
+            except Exception as e:
+                blockers.append({
+                    "table": table_name,
+                    "column": column_name,
+                    "error": str(e)[:100]
+                })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check blockers: {str(e)}")
+
+    return {
+        "user_id": user_id,
+        "email": user.email,
+        "can_delete": len(blockers) == 0,
+        "blockers": blockers
+    }
+
+
 @app.get("/api/v1/admin/users/{user_id}/deletion-blockers")
 async def get_user_deletion_blockers(
     user_id: int,
