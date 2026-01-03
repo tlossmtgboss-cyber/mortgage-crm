@@ -2730,6 +2730,7 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'it-helpdesk-admin' ? 'active' : ''}`} onClick={() => setActiveSection('it-helpdesk-admin')}><span>IT Helpdesk Admin</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'api-keys' ? 'active' : ''}`} onClick={() => { setActiveSection('api-keys'); fetchApiKeys(); }}><span>API Keys</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'business-ops' ? 'active' : ''}`} onClick={() => setActiveSection('business-ops')}><span>Business Operations</span></button>
+                      <button className={`sidebar-btn child`} onClick={() => navigate('/settings/account-management')}><span>Account Management</span></button>
                     </div>
                   )}
                 </div>

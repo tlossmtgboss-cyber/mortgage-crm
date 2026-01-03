@@ -139,6 +139,7 @@ const CommunicationPreferences = lazy(() => import('./pages/CommunicationPrefere
 const IntegrationSettings = lazy(() => import('./pages/IntegrationSettings'));
 const APIKeysSettings = lazy(() => import('./pages/APIKeysSettings'));
 const CompanyBrandingSettings = lazy(() => import('./pages/CompanyBrandingSettings'));
+const AccountManagement = lazy(() => import('./pages/AccountManagement'));
 const PURLDashboard = lazy(() => import('./pages/PURLDashboard'));
 const PURLApplication = lazy(() => import('./pages/PURLApplication'));
 const PortalContainer = lazy(() => import('./pages/portal/PortalContainer'));
@@ -1546,6 +1547,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><CompanyBrandingSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/account-management"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><AccountManagement /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
