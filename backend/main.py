@@ -19762,6 +19762,18 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Workflow SLA routes: {e}")
 
+# Include Page Permissions routes
+try:
+    from routes.page_permissions_routes import router as page_permissions_router, set_dependencies as set_page_permissions_deps
+
+    # Set dependencies for page permissions routes to avoid circular imports
+    set_page_permissions_deps(get_db, get_current_user, User)
+
+    app.include_router(page_permissions_router, tags=["Page Permissions"])
+    logger.info("✅ Page Permissions routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Page Permissions routes: {e}")
+
 # Include Master Manager routes (Talent & Capacity OS)
 try:
     from routes.master_manager_routes import router as master_manager_router
