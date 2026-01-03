@@ -20502,6 +20502,15 @@ try:
 except Exception as e:
     logger.warning(f"User Profile Settings routes not loaded: {e}")
 
+# Account Management routes (Master Administrator)
+try:
+    from routes.account_management_routes import router as account_management_router, set_dependencies as set_account_mgmt_deps
+    set_account_mgmt_deps(User, get_current_user)
+    app.include_router(account_management_router, tags=["Account Management"])
+    logger.info("Account Management routes loaded")
+except Exception as e:
+    logger.warning(f"Account Management routes not loaded: {e}")
+
 # Document Upload Settings routes (Comprehensive error handling pattern)
 try:
     from routes.document_upload_settings_routes import router as document_upload_settings_router, set_dependencies as set_document_upload_deps

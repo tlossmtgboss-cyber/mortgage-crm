@@ -2,12 +2,52 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import PendingPermissionRequests from '../components/PendingPermissionRequests';
+import {
+  RoleDashboardSwitcher,
+  getDashboardByRole,
+  LoanOfficerDashboard,
+  ProcessorDashboard,
+  UnderwriterDashboard,
+  CloserDashboard,
+  ManagerDashboard,
+  AdminDashboard
+} from '../components/dashboards/RoleDashboards';
 import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
   const { hasPermission, userRole } = usePermissions();
   const [loading, setLoading] = useState(true);
+
+  // State for admin role view switcher
+  const [selectedDashboardView, setSelectedDashboardView] = useState(() => {
+    // Load saved preference from localStorage
+    const saved = localStorage.getItem('adminDashboardView');
+    return saved || 'default';
+  });
+
+  // Check if current user is admin/management (can switch views)
+  const isAdminUser = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.email === 'admin@perenniaai.com' ||
+               user.role === 'admin' ||
+               user.role === 'management' ||
+               userRole === 'management';
+      }
+    } catch (error) {
+      console.error('Error checking admin user:', error);
+    }
+    return userRole === 'management';
+  };
+
+  // Handle view change
+  const handleViewChange = (viewId) => {
+    setSelectedDashboardView(viewId);
+    localStorage.setItem('adminDashboardView', viewId);
+  };
 
   // Check if current user is demo user
   const isDemoUser = () => {
@@ -949,11 +989,46 @@ function Dashboard() {
     );
   }
 
+  // Render role-specific dashboard if admin has selected one
+  const renderSelectedDashboard = () => {
+    if (!isAdminUser() || selectedDashboardView === 'default') {
+      return null;
+    }
+
+    switch (selectedDashboardView) {
+      case 'loan_officer':
+        return <LoanOfficerDashboard />;
+      case 'processor':
+        return <ProcessorDashboard />;
+      case 'underwriter':
+        return <UnderwriterDashboard />;
+      case 'closer':
+        return <CloserDashboard />;
+      case 'manager':
+        return <ManagerDashboard />;
+      case 'admin':
+        return <AdminDashboard />;
+      default:
+        return null;
+    }
+  };
+
+  // Check if showing a role-specific dashboard
+  const showingRoleDashboard = isAdminUser() && selectedDashboardView !== 'default';
+
   return (
     <div className="dashboard">
       <div className="dashboard-header-compact">
         <h1>Today's Command Center</h1>
         <div className="header-actions">
+          {/* Role Switcher for Admin Users */}
+          {isAdminUser() && (
+            <RoleDashboardSwitcher
+              currentView={selectedDashboardView}
+              onViewChange={handleViewChange}
+              isAdmin={true}
+            />
+          )}
           <div className="header-date">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
@@ -967,17 +1042,29 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Permission Requests Widget - Managers Only */}
-      {(userRole === 'management' || userRole === 'manager') && (
-        <div style={{ marginBottom: '2rem' }}>
-          <PendingPermissionRequests />
+      {/* Role-Specific Dashboard (when admin selects a role view) */}
+      {showingRoleDashboard && (
+        <div className="role-dashboard-container">
+          {renderSelectedDashboard()}
         </div>
       )}
 
-      {/* Draggable Containers */}
-      <div className="draggable-containers-wrapper">
-        {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
-      </div>
+      {/* Default Dashboard Content (when not viewing a role-specific dashboard) */}
+      {!showingRoleDashboard && (
+        <>
+          {/* Permission Requests Widget - Managers Only */}
+          {(userRole === 'management' || userRole === 'manager') && (
+            <div style={{ marginBottom: '2rem' }}>
+              <PendingPermissionRequests />
+            </div>
+          )}
+
+          {/* Draggable Containers */}
+          <div className="draggable-containers-wrapper">
+            {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

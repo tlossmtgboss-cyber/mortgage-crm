@@ -1,0 +1,769 @@
+/* Role Dashboards Styles */
+
+/* ============================================================================
+   BASE STYLES
+   ============================================================================ */
+.role-dashboard {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.role-dashboard.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border, #e5e7eb);
+  border-top-color: var(--color-primary, #c9a227);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+  margin: 0 0 8px 0;
+}
+
+.dashboard-header .subtitle {
+  font-size: 14px;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 0;
+}
+
+/* ============================================================================
+   KPI GRID
+   ============================================================================ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kpi-card {
+  background: var(--color-bg-card, #ffffff);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-primary, #c9a227);
+}
+
+.kpi-card.primary {
+  background: linear-gradient(135deg, var(--color-primary, #c9a227) 0%, #b08d1f 100%);
+  border: none;
+}
+
+.kpi-card.primary .kpi-label,
+.kpi-card.primary .kpi-value,
+.kpi-card.primary .kpi-subtext,
+.kpi-card.primary .kpi-icon {
+  color: #ffffff;
+}
+
+.kpi-card.success {
+  border-left: 4px solid #10b981;
+}
+
+.kpi-card.alert {
+  border-left: 4px solid #ef4444;
+}
+
+.kpi-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.kpi-content {
+  flex: 1;
+}
+
+.kpi-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #6b7280);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a2e);
+  line-height: 1.2;
+}
+
+.kpi-subtext {
+  font-size: 13px;
+  color: var(--color-text-secondary, #6b7280);
+  margin-top: 4px;
+}
+
+.kpi-progress {
+  margin-top: 8px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.kpi-card.primary .progress-bar {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-primary, #c9a227);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.kpi-card.primary .progress-fill {
+  background: #ffffff;
+}
+
+/* ============================================================================
+   DASHBOARD SECTIONS
+   ============================================================================ */
+.dashboard-sections {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .dashboard-sections {
+    grid-template-columns: 1fr;
+  }
+}
+
+.section {
+  background: var(--color-bg-card, #ffffff);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.section-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+  margin: 0;
+}
+
+.view-all-btn {
+  font-size: 13px;
+  color: var(--color-primary, #c9a227);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.view-all-btn:hover {
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   QUICK STATS
+   ============================================================================ */
+.quick-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+/* ============================================================================
+   ACTIVITY LIST
+   ============================================================================ */
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+}
+
+.activity-icon {
+  font-size: 16px;
+}
+
+.activity-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.activity-time {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 14px;
+}
+
+/* ============================================================================
+   PROCESSOR DASHBOARD SPECIFICS
+   ============================================================================ */
+.queue-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.queue-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+}
+
+.queue-label {
+  font-size: 14px;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.queue-count {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.queue-count.warning {
+  color: #f59e0b;
+}
+
+.queue-count.danger {
+  color: #ef4444;
+}
+
+.queue-count.success {
+  color: #10b981;
+}
+
+.workload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workload-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.workload-item:hover {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.workload-stage {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.workload-count {
+  font-size: 14px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.workload-alert {
+  font-size: 12px;
+  color: #ef4444;
+}
+
+/* ============================================================================
+   UNDERWRITER DASHBOARD SPECIFICS
+   ============================================================================ */
+.decision-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.decision-bar {
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 120px;
+  transition: width 0.5s ease;
+}
+
+.decision-bar.approved {
+  background: #10b981;
+}
+
+.decision-bar.conditioned {
+  background: #f59e0b;
+}
+
+.decision-bar.denied {
+  background: #ef4444;
+}
+
+.risk-breakdown {
+  display: flex;
+  gap: 16px;
+}
+
+.risk-item {
+  flex: 1;
+  padding: 16px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.risk-item.high {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+}
+
+.risk-item.medium {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid #f59e0b;
+}
+
+.risk-item.low {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid #10b981;
+}
+
+.risk-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.risk-count {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.risk-item.high .risk-count { color: #ef4444; }
+.risk-item.medium .risk-count { color: #f59e0b; }
+.risk-item.low .risk-count { color: #10b981; }
+
+/* ============================================================================
+   CLOSER DASHBOARD SPECIFICS
+   ============================================================================ */
+.pipeline-flow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.flow-stage {
+  flex: 1;
+  min-width: 100px;
+  padding: 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.flow-stage.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid #10b981;
+}
+
+.stage-name {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.stage-count {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.flow-stage.success .stage-count {
+  color: #10b981;
+}
+
+.flow-arrow {
+  font-size: 20px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.issue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+}
+
+.issue-icon {
+  font-size: 16px;
+}
+
+.issue-label {
+  flex: 1;
+  font-size: 14px;
+}
+
+.issue-count {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+/* ============================================================================
+   MANAGER DASHBOARD SPECIFICS
+   ============================================================================ */
+.performance-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.perf-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perf-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+}
+
+.perf-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.perf-value.warning {
+  color: #f59e0b;
+}
+
+.action-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.action-item:hover {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.action-icon {
+  font-size: 18px;
+}
+
+.action-label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.action-count {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-primary, #c9a227);
+}
+
+/* ============================================================================
+   ADMIN DASHBOARD SPECIFICS
+   ============================================================================ */
+.company-stats {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.company-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.company-stat .stat-value.warning {
+  color: #f59e0b;
+}
+
+.links-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.quick-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-link:hover {
+  background: var(--color-bg-hover, #f3f4f6);
+  border-color: var(--color-primary, #c9a227);
+}
+
+.link-icon {
+  font-size: 20px;
+}
+
+.link-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+/* ============================================================================
+   ROLE SWITCHER
+   ============================================================================ */
+.role-switcher {
+  position: relative;
+  z-index: 100;
+}
+
+.role-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--color-bg-card, #ffffff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1a1a2e);
+  transition: all 0.2s;
+  min-width: 200px;
+}
+
+.role-switcher-trigger:hover {
+  border-color: var(--color-primary, #c9a227);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.current-role-icon {
+  font-size: 18px;
+}
+
+.current-role-label {
+  flex: 1;
+  text-align: left;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.role-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--color-bg-card, #ffffff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.role-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text-primary, #1a1a2e);
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.role-option:hover {
+  background: var(--color-bg-base, #f9fafb);
+}
+
+.role-option.active {
+  background: rgba(201, 162, 39, 0.1);
+}
+
+.role-icon {
+  font-size: 16px;
+}
+
+.role-label {
+  flex: 1;
+}
+
+.check-mark {
+  color: var(--color-primary, #c9a227);
+  font-weight: bold;
+}
+
+/* ============================================================================
+   DARK MODE SUPPORT
+   ============================================================================ */
+@media (prefers-color-scheme: dark) {
+  .kpi-card {
+    background: var(--color-bg-card, #1e1e2f);
+    border-color: var(--color-border, #2d2d44);
+  }
+
+  .kpi-label,
+  .kpi-subtext {
+    color: var(--color-text-secondary, #9ca3af);
+  }
+
+  .kpi-value {
+    color: var(--color-text-primary, #ffffff);
+  }
+
+  .section {
+    background: var(--color-bg-card, #1e1e2f);
+    border-color: var(--color-border, #2d2d44);
+  }
+
+  .activity-item,
+  .queue-item,
+  .workload-item,
+  .flow-stage,
+  .issue-item,
+  .action-item,
+  .quick-link {
+    background: var(--color-bg-base, #16162a);
+  }
+
+  .role-switcher-trigger,
+  .role-switcher-dropdown {
+    background: var(--color-bg-card, #1e1e2f);
+    border-color: var(--color-border, #2d2d44);
+  }
+
+  .role-option:hover {
+    background: var(--color-bg-base, #16162a);
+  }
+}
