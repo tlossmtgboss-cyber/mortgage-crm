@@ -42,9 +42,18 @@ export const LoanOfficerDashboard = () => {
   const [data, setData] = useState({
     production: { mtd: 0, ytd: 0, goal: 0, progress: 0 },
     pipeline: { total: 0, volume: 0, avgDaysToClose: 0 },
+    pipelineStats: [],
     leads: { new: 0, hot: 0, followUpToday: 0 },
-    tasks: { urgent: 0, today: 0, overdue: 0 },
-    recentActivity: []
+    tasks: { urgent: 0, today: 0, overdue: 0, total: 0 },
+    recentActivity: [],
+    efficiency: {
+      overallScore: 0,
+      avgTimeToClose: 0,
+      pullThroughRate: 0,
+      loansFallingBehind: 0,
+      stages: []
+    },
+    referralStats: { top_partners: [] }
   });
 
   useEffect(() => {
@@ -55,20 +64,38 @@ export const LoanOfficerDashboard = () => {
     try {
       setLoading(true);
       const result = await fetchWithAuth('/api/v1/dashboard');
+
+      // Calculate total tasks
+      const prioritizedTasks = result.prioritized_tasks || [];
+      const loanIssues = result.loan_issues || [];
+      const aiTasks = result.ai_tasks || { pending: [], waiting: [] };
+      const totalTasks = prioritizedTasks.length + loanIssues.length +
+                        (aiTasks.pending?.length || 0) + (aiTasks.waiting?.length || 0);
+
       setData({
         production: result.production || { mtd: 0, ytd: 0, goal: 0, progress: 0 },
         pipeline: {
           total: result.pipeline_stats?.reduce((sum, s) => sum + (s.count || 0), 0) || 0,
           volume: result.pipeline_stats?.reduce((sum, s) => sum + (s.volume || 0), 0) || 0,
-          avgDaysToClose: 28
+          avgDaysToClose: result.efficiency?.avgTimeToClose || 28
         },
+        pipelineStats: result.pipeline_stats || [],
         leads: result.lead_metrics || { new: 0, hot: 0, followUpToday: 0 },
         tasks: {
-          urgent: result.prioritized_tasks?.filter(t => t.priority === 'urgent').length || 0,
-          today: result.prioritized_tasks?.length || 0,
-          overdue: result.loan_issues?.length || 0
+          urgent: prioritizedTasks.filter(t => t.priority === 'urgent').length,
+          today: prioritizedTasks.length,
+          overdue: loanIssues.length,
+          total: totalTasks
         },
-        recentActivity: result.messages || []
+        recentActivity: result.messages || [],
+        efficiency: result.efficiency || {
+          overallScore: 0,
+          avgTimeToClose: 0,
+          pullThroughRate: 0,
+          loansFallingBehind: 0,
+          stages: []
+        },
+        referralStats: result.referral_stats || { top_partners: [] }
       });
     } catch (error) {
       console.error('Failed to load LO dashboard:', error);
@@ -77,98 +104,249 @@ export const LoanOfficerDashboard = () => {
     }
   };
 
+  // Format goal number
+  const formatGoalNumber = (value) => {
+    if (!value) return '0.00';
+    return Number(value).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   if (loading) {
     return <div className="role-dashboard loading"><div className="loading-spinner" /></div>;
   }
 
   return (
     <div className="role-dashboard loan-officer-dashboard">
-      <div className="dashboard-header">
-        <h1>Loan Officer Dashboard</h1>
-        <p className="subtitle">Your sales performance and pipeline at a glance</p>
+      {/* Monthly Production Tracker */}
+      <div className="lo-section production-tracker-section">
+        <div className="section-header clickable" onClick={() => navigate('/goal-tracker')}>
+          <h2>Monthly Production Tracker</h2>
+        </div>
+        <div className="production-kpis">
+          <div className="kpi-card">
+            <div className="kpi-label">Annual Origination Goal</div>
+            <div className="kpi-values">
+              <div className="kpi-row">
+                <span className="kpi-caption">Goal:</span>
+                <span className="kpi-number">{formatGoalNumber(data.production.annualGoal)}</span>
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-caption">Actual:</span>
+                <span className="kpi-number highlight">{formatGoalNumber(data.production.annualActual)}</span>
+              </div>
+              <div className="kpi-progress-bar">
+                <div className="kpi-progress-fill" style={{ width: `${Math.min(data.production.annualProgress || 0, 100)}%` }}></div>
+              </div>
+              <div className="kpi-percentage">{data.production.annualProgress || 0}% of Goal</div>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Monthly Units Goal</div>
+            <div className="kpi-values">
+              <div className="kpi-row">
+                <span className="kpi-caption">Goal:</span>
+                <span className="kpi-number">{formatGoalNumber(data.production.monthlyGoal)}</span>
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-caption">Actual:</span>
+                <span className="kpi-number highlight">{formatGoalNumber(data.production.monthlyActual)}</span>
+              </div>
+              <div className="kpi-progress-bar">
+                <div className="kpi-progress-fill" style={{ width: `${Math.min(data.production.monthlyProgress || 0, 100)}%` }}></div>
+              </div>
+              <div className="kpi-percentage">{data.production.monthlyProgress || 0}% of Goal</div>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Weekly Units Goal</div>
+            <div className="kpi-values">
+              <div className="kpi-row">
+                <span className="kpi-caption">Goal:</span>
+                <span className="kpi-number">{formatGoalNumber(data.production.weeklyGoal)}</span>
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-caption">Actual:</span>
+                <span className="kpi-number highlight">{formatGoalNumber(data.production.weeklyActual)}</span>
+              </div>
+              <div className="kpi-progress-bar">
+                <div className="kpi-progress-fill" style={{ width: `${Math.min(data.production.weeklyProgress || 0, 100)}%` }}></div>
+              </div>
+              <div className="kpi-percentage">{data.production.weeklyProgress || 0}% of Goal</div>
+            </div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label">Daily Units Goal</div>
+            <div className="kpi-values">
+              <div className="kpi-row">
+                <span className="kpi-caption">Goal:</span>
+                <span className="kpi-number">{formatGoalNumber(data.production.dailyGoal)}</span>
+              </div>
+              <div className="kpi-row">
+                <span className="kpi-caption">Actual:</span>
+                <span className="kpi-number highlight">{formatGoalNumber(data.production.dailyActual)}</span>
+              </div>
+              <div className="kpi-progress-bar">
+                <div className="kpi-progress-fill" style={{ width: `${Math.min(data.production.dailyProgress || 0, 100)}%` }}></div>
+              </div>
+              <div className="kpi-percentage">{data.production.dailyProgress || 0}% of Goal</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="kpi-grid">
-        <div className="kpi-card primary" onClick={() => navigate('/goal-tracker')}>
-          <div className="kpi-icon">📈</div>
-          <div className="kpi-content">
-            <div className="kpi-label">MTD Production</div>
-            <div className="kpi-value">{data.production.monthlyActual || 0} units</div>
-            <div className="kpi-subtext">{formatPercent(data.production.monthlyProgress)} of monthly goal</div>
+      {/* Pipeline Efficiency Report - NEW */}
+      <div className="lo-section efficiency-report-section">
+        <div className="section-header clickable" onClick={() => navigate('/dashboard/efficiency')}>
+          <h2>Pipeline Efficiency Report</h2>
+        </div>
+        <div className="efficiency-summary">
+          <div className="efficiency-score-card">
+            <div className="score-circle">
+              <span className="score-value">{data.efficiency.overallScore || 0}</span>
+              <span className="score-label">Efficiency Score</span>
+            </div>
           </div>
-          <div className="kpi-progress">
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${Math.min(data.production.monthlyProgress || 0, 100)}%` }} />
+          <div className="efficiency-metrics-grid">
+            <div className="efficiency-metric">
+              <div className="metric-label">Avg. Time to Close</div>
+              <div className="metric-value">{data.efficiency.avgTimeToClose || 0} days</div>
+              <div className={`metric-indicator ${(data.efficiency.avgTimeToClose || 0) <= 30 ? 'good' : 'warning'}`}>
+                {(data.efficiency.avgTimeToClose || 0) <= 30 ? '✓ On Track' : '⚠ Above Target'}
+              </div>
+            </div>
+            <div className="efficiency-metric">
+              <div className="metric-label">Pull-Through Rate</div>
+              <div className="metric-value">{data.efficiency.pullThroughRate || 0}%</div>
+              <div className={`metric-indicator ${(data.efficiency.pullThroughRate || 0) >= 70 ? 'good' : 'warning'}`}>
+                {(data.efficiency.pullThroughRate || 0) >= 70 ? '✓ Strong' : '⚠ Needs Improvement'}
+              </div>
+            </div>
+            <div className="efficiency-metric">
+              <div className="metric-label">Loans Falling Behind</div>
+              <div className="metric-value">{data.efficiency.loansFallingBehind || 0}</div>
+              <div className={`metric-indicator ${(data.efficiency.loansFallingBehind || 0) <= 2 ? 'good' : 'warning'}`}>
+                {(data.efficiency.loansFallingBehind || 0) <= 2 ? '✓ Healthy' : '⚠ Attention Needed'}
+              </div>
+            </div>
+            <div className="efficiency-metric">
+              <div className="metric-label">Conversion Rate</div>
+              <div className="metric-value">{data.efficiency.conversionRate || 0}%</div>
+              <div className={`metric-indicator ${(data.efficiency.conversionRate || 0) >= 25 ? 'good' : 'warning'}`}>
+                {(data.efficiency.conversionRate || 0) >= 25 ? '✓ Above Average' : '⚠ Below Target'}
+              </div>
             </div>
           </div>
         </div>
-
-        <div className="kpi-card" onClick={() => navigate('/loans')}>
-          <div className="kpi-icon">🏠</div>
-          <div className="kpi-content">
-            <div className="kpi-label">Active Pipeline</div>
-            <div className="kpi-value">{data.pipeline.total} loans</div>
-            <div className="kpi-subtext">{formatCurrency(data.pipeline.volume)} volume</div>
-          </div>
-        </div>
-
-        <div className="kpi-card" onClick={() => navigate('/leads')}>
-          <div className="kpi-icon">🔥</div>
-          <div className="kpi-content">
-            <div className="kpi-label">Hot Leads</div>
-            <div className="kpi-value">{data.leads.hot || 0}</div>
-            <div className="kpi-subtext">{data.leads.new || 0} new this week</div>
-          </div>
-        </div>
-
-        <div className="kpi-card alert" onClick={() => navigate('/tasks')}>
-          <div className="kpi-icon">⚡</div>
-          <div className="kpi-content">
-            <div className="kpi-label">Urgent Tasks</div>
-            <div className="kpi-value">{data.tasks.urgent}</div>
-            <div className="kpi-subtext">{data.tasks.overdue} overdue</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-sections">
-        <div className="section pipeline-section">
-          <div className="section-header">
-            <h2>Pipeline Overview</h2>
-            <button className="view-all-btn" onClick={() => navigate('/loans')}>View All →</button>
-          </div>
-          <div className="quick-stats">
-            <div className="stat">
-              <span className="stat-label">Avg Days to Close</span>
-              <span className="stat-value">{data.pipeline.avgDaysToClose} days</span>
-            </div>
-            <div className="stat">
-              <span className="stat-label">Today's Follow-ups</span>
-              <span className="stat-value">{data.leads.followUpToday || 0}</span>
-            </div>
-            <div className="stat">
-              <span className="stat-label">Tasks Due Today</span>
-              <span className="stat-value">{data.tasks.today}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="section activity-section">
-          <div className="section-header">
-            <h2>Recent Activity</h2>
-          </div>
-          <div className="activity-list">
-            {data.recentActivity.slice(0, 5).map((activity, idx) => (
-              <div key={idx} className="activity-item">
-                <span className="activity-icon">📋</span>
-                <span className="activity-text">{activity.subject || activity.text}</span>
-                <span className="activity-time">{activity.time || 'Just now'}</span>
+        {/* Stage Performance Bars */}
+        <div className="stage-performance">
+          <h4>Stage Performance</h4>
+          <div className="stage-bars">
+            {(data.efficiency.stages || []).slice(0, 5).map((stage, idx) => (
+              <div key={idx} className="stage-bar-row">
+                <span className="stage-name">{stage.name}</span>
+                <div className="stage-bar-container">
+                  <div
+                    className={`stage-bar ${stage.efficiency >= 80 ? 'good' : stage.efficiency >= 60 ? 'medium' : 'low'}`}
+                    style={{ width: `${stage.efficiency || 0}%` }}
+                  ></div>
+                </div>
+                <span className="stage-percent">{stage.efficiency || 0}%</span>
               </div>
             ))}
-            {data.recentActivity.length === 0 && (
-              <div className="empty-state">No recent activity</div>
+            {(!data.efficiency.stages || data.efficiency.stages.length === 0) && (
+              <div className="empty-state">No stage data available</div>
             )}
           </div>
+        </div>
+        <button className="btn-view-full" onClick={() => navigate('/dashboard/efficiency')}>
+          View Full Efficiency Report →
+        </button>
+      </div>
+
+      {/* AI Prioritized Tasks */}
+      <div className="lo-section ai-tasks-section">
+        <div className="section-header clickable" onClick={() => navigate('/tasks')}>
+          <h2>AI Prioritized Tasks (Today)</h2>
+          <span className="task-badge">{data.tasks.total} tasks</span>
+        </div>
+        <div className="task-summary" onClick={() => navigate('/tasks')}>
+          <div className="task-count-display">
+            <div className="count-number">{data.tasks.total}</div>
+            <div className="count-label">Outstanding Tasks</div>
+          </div>
+          <div className="click-to-view">Click to view all tasks →</div>
+        </div>
+      </div>
+
+      {/* Live Loan Pipeline */}
+      <div className="lo-section pipeline-section">
+        <div className="section-header">
+          <h2>Live Loan Pipeline</h2>
+        </div>
+        <div className="pipeline-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Count</th>
+                <th>Alerts</th>
+                <th>Funding $</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.pipelineStats.filter(stage => stage && stage.name).map((stage, idx) => (
+                <tr key={idx} className="clickable-row" onClick={() => navigate(`/loans?stage=${stage.id}`)}>
+                  <td><strong>{stage.name}</strong></td>
+                  <td>{stage.count}</td>
+                  <td>
+                    {stage.alerts > 0 ? (
+                      <span className="alert-count">{stage.alerts} {stage.alert_text}</span>
+                    ) : (
+                      <span className="no-issues">no issues</span>
+                    )}
+                  </td>
+                  <td>
+                    {stage.volume ? (
+                      <strong>${(stage.volume / 1000000).toFixed(1)}M</strong>
+                    ) : '—'}
+                  </td>
+                </tr>
+              ))}
+              {data.pipelineStats.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="empty-state">No pipeline data</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Referral Scoreboard */}
+      <div className="lo-section referral-section">
+        <div className="section-header">
+          <h2>Referral Scoreboard</h2>
+        </div>
+        <div className="referral-list">
+          {(data.referralStats.top_partners || []).slice(0, 5).map((partner, idx) => (
+            <div
+              key={idx}
+              className="referral-row clickable"
+              onClick={() => navigate(`/referral-partners/${partner.id || idx + 1}`)}
+            >
+              <span className="rank">{idx + 1}</span>
+              <span className="partner-name">{partner.name}</span>
+              <span className="partner-score">
+                <span className="received">↓{partner.received || 0}</span>
+                <span className="sent">↑{partner.sent || 0}</span>
+              </span>
+            </div>
+          ))}
+          {(!data.referralStats.top_partners || data.referralStats.top_partners.length === 0) && (
+            <div className="empty-state">No referral partners yet</div>
+          )}
         </div>
       </div>
     </div>

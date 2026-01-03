@@ -727,6 +727,695 @@
 /* ============================================================================
    DARK MODE SUPPORT
    ============================================================================ */
+/* ============================================================================
+   LOAN OFFICER DASHBOARD SPECIFICS
+   ============================================================================ */
+.lo-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.lo-section {
+  background: var(--color-bg-card, #ffffff);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.lo-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.lo-section .section-header.clickable {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.lo-section .section-header.clickable:hover h2 {
+  color: var(--color-primary, #c9a227);
+}
+
+.lo-section .section-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+  margin: 0;
+}
+
+/* Production KPIs Grid */
+.production-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1200px) {
+  .production-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .production-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+.production-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 10px;
+  border-left: 4px solid var(--color-primary, #c9a227);
+}
+
+.production-kpi .kpi-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.production-kpi .kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.production-kpi .kpi-goal {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.production-kpi .progress-bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.production-kpi .progress-fill {
+  height: 100%;
+  background: var(--color-primary, #c9a227);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* Efficiency Report Section */
+.efficiency-report-section .efficiency-summary {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+@media (max-width: 900px) {
+  .efficiency-report-section .efficiency-summary {
+    flex-direction: column;
+  }
+}
+
+.efficiency-score-card {
+  flex-shrink: 0;
+}
+
+.score-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary, #c9a227) 0%, #b08d1f 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 15px rgba(201, 162, 39, 0.3);
+}
+
+.score-circle .score-value {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-circle .score-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.efficiency-metrics-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .efficiency-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.efficiency-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+}
+
+.efficiency-metric .metric-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.efficiency-metric .metric-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.efficiency-metric .metric-value.success {
+  color: #10b981;
+}
+
+.efficiency-metric .metric-value.warning {
+  color: #f59e0b;
+}
+
+.efficiency-metric .metric-value.danger {
+  color: #ef4444;
+}
+
+/* Stage Performance */
+.stage-performance {
+  margin-top: 20px;
+}
+
+.stage-performance h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #6b7280);
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stage-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stage-bar-item .stage-name {
+  width: 100px;
+  font-size: 13px;
+  color: var(--color-text-primary, #1a1a2e);
+  flex-shrink: 0;
+}
+
+.stage-bar-item .stage-bar {
+  flex: 1;
+  height: 24px;
+  background: var(--color-bg-base, #f0f0f0);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.stage-bar-item .stage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  min-width: 40px;
+}
+
+.stage-bar-item .stage-bar-fill.good {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.stage-bar-item .stage-bar-fill.warning {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.stage-bar-item .stage-bar-fill.danger {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+/* AI Tasks Section */
+.ai-tasks-section .task-count-display {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
+}
+
+.task-count-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.task-count-circle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.task-count-circle .count {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.task-count-circle .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+/* Pipeline Section */
+.pipeline-section .pipeline-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pipeline-table th,
+.pipeline-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.pipeline-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--color-bg-base, #f9fafb);
+}
+
+.pipeline-table td {
+  font-size: 14px;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.pipeline-table tr:hover td {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.pipeline-table .count-cell {
+  font-weight: 600;
+}
+
+.pipeline-table .alert-cell {
+  color: #ef4444;
+  font-size: 13px;
+}
+
+.pipeline-table .amount-cell {
+  font-weight: 600;
+  color: var(--color-primary, #c9a227);
+}
+
+/* Production KPI Enhanced Styles */
+.production-tracker-section .kpi-card {
+  padding: 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 10px;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
+.kpi-values {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpi-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kpi-caption {
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.kpi-number {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.kpi-number.highlight {
+  color: var(--color-primary, #c9a227);
+}
+
+.kpi-progress-bar {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.kpi-progress-fill {
+  height: 100%;
+  background: var(--color-primary, #c9a227);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.kpi-percentage {
+  font-size: 11px;
+  color: var(--color-text-secondary, #6b7280);
+  text-align: right;
+}
+
+/* Metric Indicators */
+.metric-indicator {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.metric-indicator.good {
+  color: #10b981;
+}
+
+.metric-indicator.warning {
+  color: #f59e0b;
+}
+
+.metric-indicator.danger {
+  color: #ef4444;
+}
+
+/* Stage Performance Enhanced */
+.stage-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stage-bar-container {
+  flex: 1;
+  height: 20px;
+  background: var(--color-bg-base, #f0f0f0);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stage-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.stage-bar.good {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.stage-bar.medium {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.stage-bar.low {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.stage-percent {
+  width: 45px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+  text-align: right;
+}
+
+/* View Full Report Button */
+.btn-view-full {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-top: 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  color: var(--color-primary, #c9a227);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-view-full:hover {
+  background: var(--color-primary, #c9a227);
+  color: white;
+  border-color: var(--color-primary, #c9a227);
+}
+
+/* AI Tasks Section Enhanced */
+.task-badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: var(--color-primary, #c9a227);
+  color: white;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.task-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  cursor: pointer;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.task-summary:hover {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.task-count-display {
+  text-align: center;
+}
+
+.count-number {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--color-primary, #c9a227);
+  line-height: 1;
+}
+
+.count-label {
+  font-size: 14px;
+  color: var(--color-text-secondary, #6b7280);
+  margin-top: 8px;
+}
+
+.click-to-view {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--color-primary, #c9a227);
+  font-weight: 500;
+}
+
+/* Pipeline Table Enhanced */
+.pipeline-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.clickable-row:hover td {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.alert-count {
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.no-issues {
+  color: #10b981;
+  font-size: 13px;
+}
+
+/* Referral Section Enhanced */
+.referral-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.referral-row.clickable {
+  cursor: pointer;
+}
+
+.referral-row.clickable:hover {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.referral-row .rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary, #c9a227);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.referral-row .partner-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.partner-score {
+  display: flex;
+  gap: 12px;
+}
+
+.partner-score .received {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.partner-score .sent {
+  color: var(--color-primary, #c9a227);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Referral Section */
+.referral-section .referral-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.referral-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-bg-base, #f9fafb);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.referral-item:hover {
+  background: var(--color-bg-hover, #f3f4f6);
+}
+
+.referral-rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary, #c9a227);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.referral-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.referral-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.referral-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.referral-stat .stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.referral-stat .stat-label {
+  font-size: 10px;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+}
+
+/* ============================================================================
+   DARK MODE SUPPORT
+   ============================================================================ */
 @media (prefers-color-scheme: dark) {
   .kpi-card {
     background: var(--color-bg-card, #1e1e2f);
@@ -742,7 +1431,8 @@
     color: var(--color-text-primary, #ffffff);
   }
 
-  .section {
+  .section,
+  .lo-section {
     background: var(--color-bg-card, #1e1e2f);
     border-color: var(--color-border, #2d2d44);
   }
@@ -753,8 +1443,19 @@
   .flow-stage,
   .issue-item,
   .action-item,
-  .quick-link {
+  .quick-link,
+  .production-kpi,
+  .efficiency-metric,
+  .referral-item {
     background: var(--color-bg-base, #16162a);
+  }
+
+  .pipeline-table th {
+    background: var(--color-bg-base, #16162a);
+  }
+
+  .pipeline-table tr:hover td {
+    background: var(--color-bg-hover, #1e1e2f);
   }
 
   .role-switcher-trigger,
