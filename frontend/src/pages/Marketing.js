@@ -9,6 +9,7 @@ const CommunicationIntelligence = lazy(() => import('./CommunicationIntelligence
 const AcquisitionDashboard = lazy(() => import('./AcquisitionDashboard'));
 const ConversationIntelligence = lazy(() => import('./ConversationIntelligence'));
 const AIDailyBlog = lazy(() => import('./AIDailyBlog'));
+const AIReceptionistDashboard = lazy(() => import('./AIReceptionistDashboard'));
 
 // Marketing settings components (inline for now, can be extracted)
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
@@ -24,34 +25,35 @@ const MARKETING_TOOLS = [
   {
     category: 'Outreach & Communication',
     tools: [
-      { id: 'ai-outreach', name: 'AI Outreach', icon: '🤖', description: 'Automated AI-powered outreach campaigns' },
-      { id: 'communication', name: 'Communication Hub', icon: '💬', description: 'Email and SMS management' },
-      { id: 'call-qa', name: 'Call QA', icon: '📞', description: 'Call quality analysis and coaching' },
+      { id: 'ai-outreach', name: 'AI Outreach', description: 'Automated AI-powered outreach campaigns' },
+      { id: 'ai-receptionist', name: 'AI Receptionist', description: 'AI-powered phone receptionist' },
+      { id: 'communication', name: 'Communication Hub', description: 'Email and SMS management' },
+      { id: 'call-qa', name: 'Call QA', description: 'Call quality analysis and coaching' },
     ]
   },
   {
     category: 'Content & Media',
     tools: [
-      { id: 'avatar-studio', name: 'Avatar Studio', icon: '🎬', description: 'AI video avatar creation' },
-      { id: 'ai-blog', name: 'AI Blog', icon: '📝', description: 'AI-generated blog content' },
+      { id: 'avatar-studio', name: 'Avatar Studio', description: 'AI video avatar creation' },
+      { id: 'ai-blog', name: 'AI Blog', description: 'AI-generated blog content' },
     ]
   },
   {
     category: 'Lead Generation',
     tools: [
-      { id: 'acquisition', name: 'Acquisition Engine', icon: '🎯', description: 'Lead acquisition campaigns' },
-      { id: 'landing-pages', name: 'Landing Pages', icon: '📄', description: 'Create and manage landing pages' },
-      { id: 'microsite', name: 'Microsite Builder', icon: '🌐', description: 'Personal marketing microsites' },
+      { id: 'acquisition', name: 'Acquisition Engine', description: 'Lead acquisition campaigns' },
+      { id: 'landing-pages', name: 'Landing Pages', description: 'Create and manage landing pages' },
+      { id: 'microsite', name: 'Microsite Builder', description: 'Personal marketing microsites' },
     ]
   },
   {
     category: 'Templates & Assets',
     tools: [
-      { id: 'email-marketing', name: 'Email Templates', icon: '📧', description: 'Email marketing templates' },
-      { id: 'text-marketing', name: 'SMS Templates', icon: '📱', description: 'Text message templates' },
-      { id: 'voicemail', name: 'Voicemail Drops', icon: '🎙️', description: 'Ringless voicemail templates' },
-      { id: 'pre-approval-letter', name: 'Pre-Approval Letters', icon: '✉️', description: 'Customize pre-approval letters' },
-      { id: 'application-slides', name: 'Application Slides', icon: '🖼️', description: 'Loan application presentation' },
+      { id: 'email-marketing', name: 'Email Templates', description: 'Email marketing templates' },
+      { id: 'text-marketing', name: 'SMS Templates', description: 'Text message templates' },
+      { id: 'voicemail', name: 'Voicemail Drops', description: 'Ringless voicemail templates' },
+      { id: 'pre-approval-letter', name: 'Pre-Approval Letters', description: 'Customize pre-approval letters' },
+      { id: 'application-slides', name: 'Application Slides', description: 'Loan application presentation' },
     ]
   }
 ];
@@ -99,6 +101,8 @@ function Marketing() {
     switch (activeTool) {
       case 'ai-outreach':
         return <AIOutreach />;
+      case 'ai-receptionist':
+        return <AIReceptionistDashboard />;
       case 'avatar-studio':
         return <AvatarStudio />;
       case 'communication':
@@ -133,7 +137,7 @@ function Marketing() {
       {/* Sidebar */}
       <aside className="marketing-sidebar">
         <div className="sidebar-header">
-          <h2>Marketing Hub</h2>
+          <h2>Marketing Lab</h2>
           <button
             className="collapse-btn"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -155,7 +159,6 @@ function Marketing() {
                       onClick={() => setActiveTool(tool.id)}
                       title={tool.description}
                     >
-                      <span className="tool-icon">{tool.icon}</span>
                       <span className="tool-name">{tool.name}</span>
                     </button>
                   </li>
@@ -170,7 +173,6 @@ function Marketing() {
       <main className="marketing-main">
         <div className="main-header">
           <div className="header-info">
-            <span className="header-icon">{activeToolInfo?.icon}</span>
             <div>
               <h1>{activeToolInfo?.name}</h1>
               <p className="header-description">{activeToolInfo?.description}</p>
