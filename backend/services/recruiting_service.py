@@ -333,6 +333,8 @@ class RecruitingService:
             "talent_profile": result.talent_profile,
             "resume_url": result.resume_url,
             "linkedin_url": result.linkedin_url,
+            "portal_token": getattr(result, 'portal_token', None),
+            "portal_url": f"/recruit-portal/{result.portal_token}" if getattr(result, 'portal_token', None) else None,
             "interviews": [
                 {
                     "id": i.id,
@@ -387,19 +389,25 @@ class RecruitingService:
         created_by: int,
         organization_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Create a new candidate."""
+        """Create a new candidate with auto-generated portal token."""
+        import secrets
+
+        # Generate a secure portal token for the candidate
+        portal_token = secrets.token_urlsafe(32)
 
         query = text("""
             INSERT INTO mm_candidates (
                 organization_id, first_name, last_name, email, phone,
                 source, referrer_user_id, target_role_id, target_role_name,
                 years_experience, years_mortgage_experience, has_mortgage_experience,
-                resume_url, linkedin_url, status, applied_at
+                resume_url, linkedin_url, status, applied_at,
+                portal_token, portal_token_created_at
             ) VALUES (
                 :org_id, :first_name, :last_name, :email, :phone,
                 :source, :referrer_id, :role_id, :role_name,
                 :years_exp, :years_mortgage, :has_mortgage,
-                :resume_url, :linkedin_url, 'new', CURRENT_TIMESTAMP
+                :resume_url, :linkedin_url, 'new', CURRENT_TIMESTAMP,
+                :portal_token, CURRENT_TIMESTAMP
             )
             RETURNING id
         """)
@@ -418,7 +426,8 @@ class RecruitingService:
             "years_mortgage": data.get("years_mortgage_experience"),
             "has_mortgage": data.get("has_mortgage_experience", False),
             "resume_url": data.get("resume_url"),
-            "linkedin_url": data.get("linkedin_url")
+            "linkedin_url": data.get("linkedin_url"),
+            "portal_token": portal_token
         }).fetchone()
 
         candidate_id = result.id
@@ -432,9 +441,23 @@ class RecruitingService:
             organization_id=organization_id
         )
 
+        # Log portal creation
+        await self._log_activity(
+            candidate_id=candidate_id,
+            activity_type="portal_created",
+            description="Candidate portal automatically created",
+            performed_by=created_by,
+            organization_id=organization_id
+        )
+
         self.db.commit()
 
-        return {"id": candidate_id, "status": "new"}
+        return {
+            "id": candidate_id,
+            "status": "new",
+            "portal_token": portal_token,
+            "portal_url": f"/recruit-portal/{portal_token}"
+        }
 
     async def update_candidate_status(
         self,

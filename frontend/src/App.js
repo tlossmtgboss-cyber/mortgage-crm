@@ -303,8 +303,8 @@ function App() {
           <Route path="/listing-agent-portal" element={<LazyPage><ListingAgentPortal /></LazyPage>} />
 
           {/* Recruit Portal (public - candidate PURL portal with calculator) */}
-          <Route path="/recruit-portal/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />
-          <Route path="/join/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />
+          <Route path="/recruit-portal/:token" element={<LazyPage><RecruitPortal /></LazyPage>} />
+          <Route path="/join/:token" element={<LazyPage><RecruitPortal /></LazyPage>} />
 
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />

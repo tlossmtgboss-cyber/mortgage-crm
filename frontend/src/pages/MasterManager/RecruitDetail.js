@@ -167,6 +167,36 @@ const RecruitDetail = () => {
     }
   };
 
+  const handleGeneratePortal = async () => {
+    const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+    try {
+      const response = await fetch(`${API_URL}/api/v1/recruit-portal/generate-token/${candidateId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate portal');
+      }
+
+      const data = await response.json();
+      // Update candidate with new portal token
+      setCandidate(prev => ({
+        ...prev,
+        portal_token: data.token,
+        portal_url: data.portal_url
+      }));
+
+      // Open the portal in a new tab
+      window.open(`/recruit-portal/${data.token}`, '_blank');
+    } catch (err) {
+      setError(`Failed to generate portal: ${err.message}`);
+    }
+  };
+
   const handleQuizComplete = async (scores) => {
     // Update the quiz scores
     setQuizScores(scores);
@@ -440,6 +470,23 @@ const RecruitDetail = () => {
           >
             Workflow CRM
           </button>
+          {candidate.portal_token ? (
+            <button
+              className="mm-btn mm-btn-primary"
+              onClick={() => window.open(`/recruit-portal/${candidate.portal_token}`, '_blank')}
+              title="View the candidate's portal page"
+            >
+              View Portal
+            </button>
+          ) : (
+            <button
+              className="mm-btn mm-btn-secondary"
+              onClick={handleGeneratePortal}
+              title="Generate a portal for this candidate"
+            >
+              Generate Portal
+            </button>
+          )}
           <button className="mm-btn mm-btn-secondary" onClick={() => setShowEditProduction(true)}>
             Edit Production
           </button>
