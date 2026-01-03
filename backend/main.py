@@ -20118,6 +20118,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not load Recruiting Video routes: {e}")
 
+# Include Partner Recruiting routes (LO partner recruitment)
+try:
+    from routes.partner_recruiting_routes import router as partner_recruiting_router
+    app.include_router(partner_recruiting_router, tags=["Partner Recruiting"])
+    logger.info("✅ Partner Recruiting routes loaded")
+except Exception as e:
+    logger.warning(f"Could not load Partner Recruiting routes: {e}")
+
 # Include Portal Video routes (video recording for client/realtor portals)
 try:
     from routes.portal_video_routes import router as portal_video_router
@@ -38921,6 +38929,9 @@ async def delete_user(
             "DELETE FROM onboarding_audit_log WHERE performed_by = :user_id",
             "DELETE FROM onboarding_documents WHERE uploaded_by = :user_id",
             "DELETE FROM user_creation_requests WHERE created_by = :user_id",
+            "DELETE FROM onboarding_user_profiles WHERE user_id = :user_id",
+            # Scheduler resources (NOT NULL user_id)
+            "DELETE FROM scheduler_resources WHERE user_id = :user_id",
             # Email response training tables (NOT NULL user_id)
             "DELETE FROM email_response_learning WHERE user_id = :user_id",
             "DELETE FROM email_response_patterns WHERE user_id = :user_id",
